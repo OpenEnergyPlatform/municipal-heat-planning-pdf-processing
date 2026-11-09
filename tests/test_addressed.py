@@ -1,32 +1,57 @@
 """One document read in pieces of numbered lines, one question per request,
-every answer an address (addressed.py, owner decisions 2026-11-08, plan of
+every answer an address (addressed.py, owner decisions 2026-11-08 and
 2026-11-09), each promise with a case that breaks it by construction.
 
+3. A figure is transcribed once into its caption and its numbers, AND one
+   kept in the form of one list is transcribed again.
 4. A find whose address names no shown line is `not_an_address`, AND one
    whose words do not stand in its line `words_not_in_line`, AND a cell with
    two numbers is asked again; a table value's quote is its row, AND its
-   `head` the head of its column.
+   `head` the head of its column. A field with a list is asked with it, AND
+   its find names the number of its entry, AND a number off the list is
+   `not_an_option` and asked again, AND no list request follows a find with
+   its number, AND the find of a group asks its member.
 5. A coordinate's request is its instruction and exactly one message, AND
    it shows of the plan only the value's line with its table's title and
    head, or the sentences beside it, the headings, the title page, the
-   settings and what the value has read.
-6. A search sentence that is a question is searched and counted, AND the
-   search after a coordinate nothing shown says goes with the answer's
-   sentence and only without one with the field's.
+   settings and what the value has read. Every request that finds values
+   shows two replies: a find at an address it shows, and none.
+6. The search after a coordinate nothing shown says goes with a sentence a
+   request of its own writes (`phrase`) from the value's words and lines and
+   the question, once per field, coordinate and wording, AND a coordinate's
+   0 carries no sentence and is not asked again for one, AND a sentence
+   that is a question is searched and counted, AND without a sentence the
+   search goes with the field's.
 7. A number off the list is `not_an_option` and asked once more, AND 0 is no
    entry, AND one wording of one field is asked once per document, AND a
    list longer than a request shows with meanings shows names only, AND one
-   whose entries name groups is asked group first.
-8. A field a document has once is never asked per piece, AND its ranking
-   runs out before it is left without a value; a coordinate's search ends
-   `unstated` where its ranking runs out AND `exhausted` at its budget.
+   whose entries name groups is asked group first, AND the list is shown as
+   it is, never with an earlier wording.
+8. A field a document has once is never asked per piece, AND is asked over
+   at most the run's budget of pieces, five a request, a field with a list
+   over twice that.
 9. Two equal names of two works are two entries, AND the list is shown by
-   work.
+   work. Words that name no such thing (0) are no entry, AND the value keeps
+   an empty note the graph makes no scenario of, AND a name of an entry
+   takes the work its entry was read with, AND a new name without a work is
+   no entry of this publication.
+10. A search shows at most its budget of pieces, the best of each kind up to
+    its share, then the best of any kind, ordered once by the reranker, five
+    a request, AND a piece a reply fetches comes first and outside the
+    budget, AND no piece twice; it ends `unstated` where no piece is left,
+    `exhausted` where the budget left some, `unbacked` where a find does not
+    hold after its follow-up. The run's settings set the budget, the shares,
+    the pieces a request and the attempts, by default 50, 20/15/15, 5 and 3.
 11. An answer that does not hold is asked once more, once, AND then the
     coordinate is `unbacked`.
-13. A work beside the publication is asked its title, organisation and year
-    at its own line, AND never by a field's request per piece, AND its
-    values do not reach the graph.
+13. Each piece is asked once whose results its lines state (`work`), AND a
+    value in the line of a work takes it, read, quoted with that line, AND a
+    heading's work covers the piece, AND a value of no work's line is this
+    publication's only with the line that says so, AND else it asks its
+    work as a choice of the document's works, 0 `unstated` and never
+    searched, AND no value takes a work without a line. The details of the
+    new works are asked side by side, all before any value is read, and
+    their values do not reach the graph.
 14. Words of a group of scenarios take the members the document names, one
     row each, where the field takes groups, AND stay with the group's words
     for a description, AND such a description reaches no scenario.
@@ -34,6 +59,7 @@ A coordinate that reads a value as another entry than the one it must have
 closes those after it (`out_of_slice`), and the reasons a find or a
 coordinate can fail stand in the trace schema.
 """
+import collections
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -115,21 +141,25 @@ class Model:
 
     DEFAULT = {"find": lambda p, n: {"found": []},
                "docfield": lambda p, n: {"found": []},
-               "coord": lambda p, n: {"at": 0, "hyde": "Der Plan sagt es."},
+               "coord": lambda p, n: {"at": 0},
                "search": lambda p, n: {"at": 0},
                "list": lambda p, n: {"entry": 0},
                "names": lambda p, n: {"entry": "new"},
                "check": lambda p, n: {"about": "yes"},
+               "work": lambda p, n: {"found": [], "own": {"at": 0}},
+               "phrase": lambda p, n: {"phrase": "Der Plan sagt es."},
                "follow": lambda p, n: None}
 
     def __init__(self, **replies):
         self.replies = {**self.DEFAULT, **replies}
         self.calls: list = []
+        self.examples: list = []
 
     def asks(self, check: bool = True) -> Asks:
         def asker(kind):
             def ask(payload, document_id, /, *, shape, example, **noted):
                 self.calls.append((kind, payload, noted))
+                self.examples.append((kind, example))
                 return self.replies[kind](payload, noted)
             return ask
 
@@ -142,7 +172,8 @@ class Model:
                     coord=asker("coord"), list=asker("list"),
                     search=asker("search"), follow=follow,
                     names=asker("names"),
-                    check=asker("check") if check else None)
+                    check=asker("check") if check else None,
+                    work=asker("work"), phrase=asker("phrase"))
 
     def of(self, kind: str) -> list:
         return [(payload, noted) for k, payload, noted in self.calls
@@ -303,27 +334,51 @@ def test_a_request_is_its_prompt_and_one_message(monkeypatch):
 
 # -- 6. the search -------------------------------------------------------------
 
-def searching(hyde: str, probes=None):
+def searching(phrase: str, probes=None, second: str = ""):
+    """(the sentences a search was ordered with, the counts, the model) of a
+    plan whose table value's year and carrier nothing shown says, the
+    sentence written by a request of its own (*phrase*); with *second* a
+    second table with a value of these words."""
     sentences = []
 
     def order(document_id, said, chunks):
         sentences.append(list(said))
         return list(chunks)
-    model = Model(
-        find=lambda p, n: {"found": [{"at": "3.2", "words": "1.200"}]}
-        if p["passage"]["kind"] == "table" else {"found": []},
-        coord=coordinate_answers(year={"at": 0, "hyde": hyde}))
+    other = Source("table", 4, "Tabelle 5: Verbrauch der Bäder\n"
+                               "| Gebäude | Erdgas MWh/a |\n| --- | --- |\n"
+                               f"| Bad | {second} |",
+                   {"document_id": 7, "page": 5, "section_title": "Bilanz"})
+
+    def find(payload, noted):
+        if noted.get("owner") == 3:
+            return {"found": [{"at": "3.2", "words": "1.200"}]}
+        if second and noted.get("owner") == 4:
+            return {"found": [{"at": "3.2", "words": second}]}
+        return {"found": []}
+    model = Model(find=find, phrase=lambda p, n: {"phrase": phrase})
     reader = Reader(SPEC, model.asks(), in_order, search_order=order,
                     probes=probes)
     counts = addressed.Counts()
-    reader(plan_of(TEXT, TABLE), [ENERGY], counts=counts)
+    sources = [TEXT, TABLE] + ([other] if second else [])
+    reader(plan_of(*sources), [ENERGY], counts=counts)
     return sentences, counts, model
 
 
-def test_a_search_goes_with_the_answer_s_sentence_and_counts_a_question():
+def test_a_search_goes_with_the_sentence_a_request_of_its_own_writes():
     said = "Die Verbrauchswerte der Liegenschaften gelten für 2021."
-    sentences, counts, _model = searching(said)
+    sentences, counts, model = searching(said)
     assert [said] in sentences and counts.questions == 0
+    # The sentence is asked with the value's words, its lines and the
+    # question of the coordinate.
+    (payload,) = [p for p, n in model.of("phrase")
+                  if n["coordinate"] == "year"]
+    assert payload["value"]["words"] == "1.200"
+    assert payload["value"]["lines"][-1] == "| Rathaus | 1.200 | 27 |"
+    assert payload["question"] == SLOTS["year"].question
+    # A coordinate's 0 carries no sentence and is not asked again for one.
+    assert "hyde" not in json.dumps(addressed.coord_format(False))
+    assert not [n for _, n in model.of("follow")
+                if n.get("coordinate") == "year"]
     question = "Für welches Jahr gelten die Verbrauchswerte?"
     sentences, counts, _model = searching(question)
     assert [question] in sentences
@@ -333,6 +388,17 @@ def test_a_search_goes_with_the_answer_s_sentence_and_counts_a_question():
     sentences, counts, _model = searching(
         " ", probes=lambda parameter, document: ["Der Satz des Felds."])
     assert ["Der Satz des Felds."] in sentences
+
+
+def test_one_wording_asks_its_sentence_once_per_coordinate_and_document():
+    def asked(second):
+        _sentences, _counts, model = searching("Ein Satz.", second=second)
+        return collections.Counter(n["coordinate"]
+                                   for _, n in model.of("phrase"))
+    # Two values of the same words: one sentence per coordinate.
+    assert asked("1.200") == {"year": 1, "carrier": 1}
+    # the failure by construction: other words are a sentence of their own
+    assert asked("950") == {"year": 2, "carrier": 2}
 
 
 # -- 7. the list -----------------------------------------------------------------
@@ -420,8 +486,9 @@ def test_a_long_list_shows_names_and_one_with_groups_is_asked_group_first():
 
 # -- 8. a field asked once, the end of a search ---------------------------------
 
-def test_a_field_asked_once_is_never_asked_per_piece_and_runs_its_ranking():
+def test_a_field_asked_once_is_never_asked_per_piece_and_runs_its_budget():
     title = SCENARIOS.by_uri["publication_title"]
+    sector = SCENARIOS.by_uri["study_sector"]
     many = [Source("section", 10 + i, f"Abschnitt {i}. Er nennt nichts.",
                    {"document_id": 7, "page": 2 + i}) for i in range(12)]
     model = Model()
@@ -429,20 +496,31 @@ def test_a_field_asked_once_is_never_asked_per_piece_and_runs_its_ranking():
     reads = reader(plan_of(TITLE, *many), [title])
     assert not model.of("find")
     shown = [payload for payload, _ in model.of("docfield")]
-    # The title page first, then five pieces at a time to the last one.
+    # The title page first, then five pieces at a time to the last one:
+    # thirteen pieces are three requests.
     assert "title_page" in shown[0] and "title_page" not in shown[1]
     assert [len(p.get("passages", {})) for p in shown] == [5, 5, 3]
     assert all(not read.claims for read in reads)
+
+    # At most the run's budget of pieces, a field with a list twice that.
+    def pieces(field_):
+        model = Model()
+        reader_of(model, spec=SCENARIOS, budget=4)(plan_of(TITLE, *many),
+                                                   [field_])
+        return [len(p.get("passages", {})) for p, _ in model.of("docfield")]
+    assert pieces(title) == [4]
+    assert pieces(sector) == [5, 3]
 
 
 def test_a_search_ends_unstated_where_its_ranking_runs_out_or_at_its_budget():
     many = [Source("section", 10 + i, f"Abschnitt {i}. Er nennt nichts.",
                    {"document_id": 7, "page": 4 + i}) for i in range(30)]
 
-    def read(budget):
+    def read(budget, **replies):
         model = Model(
             find=lambda p, n: {"found": [{"at": "3.2", "words": "1.200"}]}
-            if p["passage"]["kind"] == "table" else {"found": []})
+            if p["passage"]["kind"] == "table" else {"found": []},
+            **replies)
         reader = Reader(SPEC, model.asks(), in_order, budget=budget)
         reads = reader(plan_of(TABLE, *many), [ENERGY])
         (claim,) = [c for r in reads for c in r.claims]
@@ -454,14 +532,92 @@ def test_a_search_ends_unstated_where_its_ranking_runs_out_or_at_its_budget():
     assert not [n for _, n in model.of("search") if n["coordinate"] == "unit"]
     claim, model = read(budget=2)
     assert claim["year_state"] == fields.EXHAUSTED
+    # A find that does not hold after its follow-up ends the search
+    # `unbacked`, and nothing more is shown.
+    claim, model = read(
+        budget=100,
+        search=lambda p, n: {"at": "A1", "words": "1999"}
+        if n["coordinate"] == "year" else {"at": 0},
+        follow=lambda p, n: {"at": "A1", "words": "1998"}
+        if n.get("coordinate") == "year" else None)
+    assert claim["year_state"] == fields.UNBACKED
+    assert len([n for _, n in model.of("search")
+                if n["coordinate"] == "year"]) == 1
 
 
-def test_the_search_has_at_least_100_rounds_whatever_a_run_sets(monkeypatch):
-    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 12)
-    assert runner.search_rounds() == 100
-    # the failure by construction: a run that sets more keeps more
-    monkeypatch.setattr(runner, "REST_MAX_WINDOWS", 400)
-    assert runner.search_rounds() == 400
+def test_the_run_s_settings_set_the_search_and_default_to_the_owner_s(
+        monkeypatch):
+    from docpipe import settings
+    default = {setting.env: setting.default for setting in settings.SETTINGS}
+    assert [default[name] for name in (
+        "EXTRACT_SEARCH_PIECES", "EXTRACT_SEARCH_SHARES",
+        "EXTRACT_SEARCH_CHUNKS", "EXTRACT_MAX_RETRIES")] \
+        == ["50", "20,15,15", "5", "3"]
+    assert (addressed.SEARCH_PIECES, addressed.SEARCH_SHARES,
+            addressed.PER_REQUEST) == (50, {"table": 20, "figure": 15,
+                                            "section": 15}, 5)
+    # the failure by construction: a run that sets its own reads them
+    monkeypatch.setattr(runner, "SEARCH_PIECES", 7)
+    monkeypatch.setattr(runner, "SEARCH_SHARES", "1,2,3")
+    monkeypatch.setattr(runner, "SEARCH_CHUNKS", 2)
+    assert runner.search_budget() == (7, {"table": 1, "figure": 2,
+                                          "section": 3}, 2)
+    # A pass that reads to the end shows every piece.
+    runner.read_to_end()
+    assert runner.search_budget()[0] == runner.REST_TO_END
+
+
+def test_a_search_shows_its_budget_by_kind_first_then_the_best_of_any():
+    def ranked(kinds):
+        return [SimpleNamespace(passage=SimpleNamespace(kind=kind), key=(i,))
+                for i, kind in enumerate(kinds)]
+    shares = {"table": 20, "figure": 15, "section": 15}
+    order = ranked(["section"] * 40 + ["table"] * 30 + ["figure"] * 30)
+    got = addressed.budgeted(order, 50, shares)
+    assert collections.Counter(c.passage.kind for c in got) == {
+        "table": 20, "figure": 15, "section": 15}
+    assert got == [c for c in order if c in got]
+    # A document of three table pieces still shows fifty, the best of the
+    # rest of any kind.
+    few = ranked(["section"] * 80 + ["table"] * 3)
+    got = addressed.budgeted(few, 50, shares)
+    assert len(got) == 50
+    assert sum(c.passage.kind == "table" for c in got) == 3
+    # the failure by construction: fewer pieces than the budget are all
+    # shown, each once
+    small = ranked(["section"] * 7)
+    assert addressed.budgeted(small, 50, shares) == small
+
+
+def test_a_search_reranks_its_budget_once_and_shows_no_piece_twice():
+    many = [Source("section", 10 + i, f"Abschnitt {i}. Er nennt nichts.",
+                   {"document_id": 7, "page": 10 + i}) for i in range(30)]
+    reranked = []
+
+    def rerank(document_id, sentences, chunks):
+        reranked.append(len(chunks))
+        return list(reversed(chunks))
+    fetch = iter([{"at": 0, "more": [{"get": "search",
+                                      "pattern": "Abschnitt 29[.]"}]}])
+    model = Model(
+        find=lambda p, n: {"found": [{"at": "3.2", "words": "1.200"}]}
+        if n.get("owner") == 3 else {"found": []},
+        search=lambda p, n: next(fetch, {"at": 0})
+        if n["coordinate"] == "year" else {"at": 0})
+    reader = Reader(SPEC, model.asks(), in_order, rerank=rerank, budget=10)
+    (claim,) = [c for r in reader(plan_of(TABLE, *many), [ENERGY])
+                for c in r.claims]
+    pages = [[block["page"] for block in p["passages"].values()]
+             for p, n in model.of("search") if n["coordinate"] == "year"]
+    # The piece after the value's, the piece its answer fetched, then the
+    # budget of ten in the reranker's order, five a request; the value's
+    # own piece and the pieces shown before are not shown again.
+    assert pages == [[10], [39], [18, 17, 16, 15, 14], [13, 12, 11]]
+    # One order of the reranker per search, of the budget's pieces.
+    assert reranked == [10, 10]
+    # the failure by construction: pieces of the plan stay unshown, so the
+    # budget, not the plan, ended it.
+    assert claim["year_state"] == fields.EXHAUSTED
 
 
 def test_a_coordinate_request_without_an_answer_leaves_it_unanswered():
@@ -582,45 +738,151 @@ def test_a_year_read_as_another_year_is_not_asked_its_scenario():
     assert [n for _, n in model.of("coord") if n["coordinate"] == "scenario"]
 
 
-# -- 13. the works beside the publication -----------------------------------------
+# -- 13. the work of a value --------------------------------------------------------
 
-def test_a_work_is_asked_its_details_at_its_line_and_stays_out_of_the_graph():
-    line = Source("table", 12, "Table 4: Studies compared\n"
-                               "| Study | Published by |\n| --- | --- |\n"
-                               "| TYNDP 2018 Scenario Report | ENTSO-E, 2018 |",
-                  {"document_id": 7, "page": 5})
-    detail = {"publication_title": {"at": "3.1",
-                                    "words": "TYNDP 2018 Scenario Report"},
-              "study_organisation": {"at": "3.2", "words": "ENTSO-E"},
-              "publication_date": {"at": "3.2", "words": "2018"}}
+WORK_PLAN = (
+    Source("section", 1, "Net zero pathways for Europe",
+           {"document_id": 7, "page": 1}),
+    Source("table", 12, "Table 7: Studies compared\n"
+                        "| Study | Scenario | 2050 |\n| --- | --- | --- |\n"
+                        "| IRENA 2018 | REmap | 80 |\n"
+                        "| IEA 2020 | NZE | 90 |",
+           {"document_id": 7, "page": 5}),
+    Source("section", 20, "Our scenarios are Central and High.",
+           {"document_id": 7, "page": 6, "section_title": "4 Results"}),
+    Source("section", 30, "The Delayed case reaches net zero in 2060.",
+           {"document_id": 7, "page": 7, "section_title": "5 Outlook"}),
+    Source("section", 40, "Its scenario Tech15 is the most ambitious.",
+           {"document_id": 7, "page": 8,
+            "section_title": "EC 2018 - A Clean Planet for all"}))
+# The scenario names each passage of WORK_PLAN prints, by its owner.
+NAMES_IN = {12: [("3.2", "REmap"), ("4.2", "NZE")], 20: [("1", "Central")],
+            30: [("1", "Delayed")], 40: [("1", "Tech15")]}
+
+
+def work_of_piece(payload, noted):
+    """What a piece's work request answers in WORK_PLAN: the studies of the
+    table row by row, the work a heading names, the line that says the
+    publication's own scenarios, nothing elsewhere."""
+    owner = noted.get("owner")
+    if owner == 12:
+        return {"found": [{"at": "3.1", "words": "IRENA 2018"},
+                          {"at": "4.1", "words": "IEA 2020"}],
+                "own": {"at": 0}}
+    if owner == 40:
+        heading = next(line for line in payload["headings"]
+                       if "EC 2018" in line)
+        return {"found": [{"at": heading.split(" ", 1)[0],
+                           "words": "EC 2018"}], "own": {"at": 0}}
+    if owner == 20:
+        return {"found": [], "own": {"at": "1", "words": "Our scenarios"}}
+    return {"found": [], "own": {"at": 0}}
+
+
+def read_works(choice, each=None, detail=None):
+    """(the scenario names read in WORK_PLAN by their words, the model, the
+    reads): a value no line attributes answers *choice* when asked its
+    work, a detail of a new work *detail(payload, noted)*."""
+    label = SCENARIOS.by_uri["scenario_label"]
+
+    def coord(payload, noted):
+        if "list" in payload:
+            return choice
+        if "work" in payload and detail is not None:
+            return detail(payload, noted)
+        return {"at": 0}
     model = Model(
-        find=lambda p, n: {"found": [{"at": "3.1", "words": "TYNDP 2018 "
-                                                           "Scenario Report"}]}
-        if n.get("parameter") == "work" else {"found": []},
-        coord=lambda p, n: detail.get(n["parameter"], {"at": 0, "hyde": "x"})
-        if n.get("coordinate") == "work" else {"at": 0, "hyde": "x"})
+        work=work_of_piece,
+        find=lambda p, n: {"found": [{"at": at, "words": words}
+                                     for at, words in NAMES_IN.get(
+                                         n.get("owner"), ())]}
+        if n.get("parameter") == label.uri else {"found": []},
+        coord=coord)
     reader = reader_of(model, spec=SCENARIOS,
-                       works=scenarios_extraction.WORKS)
-    reads = reader(plan_of(TITLE, line), [])
-    rows = {claim["parameter"] if "parameter" in claim
-            else read.batch.parameter.uri: claim
-            for read in reads for claim in read.claims}
-    assert set(rows) == {"publication_title", "study_organisation",
-                         "publication_date"}
-    assert rows["study_organisation"]["value"] == "ENTSO-E"
-    assert rows["publication_title"]["work_means"] == [
-        "TYNDP 2018 Scenario Report"]
-    # Never asked per piece as a field of this publication.
-    assert {n["parameter"] for _, n in model.of("find")} == {"work"}
-    assert not model.of("docfield")
-    # A value of another work does not reach the graph.
-    another = next(o.label for s in fields.axis_slots(
+                       works=scenarios_extraction.WORKS,
+                       **({"each": each} if each is not None else {}))
+    reads = reader(plan_of(*WORK_PLAN), [label])
+    names = {c["value"]: c for r in reads if r.batch.parameter is label
+             for c in r.claims}
+    return names, model, reads
+
+
+def work_label(uri: str) -> str:
+    return next(o.label for s in fields.axis_slots(
         SCENARIOS.by_uri["publication_title"]) if s.name == "work"
-        for o in s.options if o.uri == addressed.ANOTHER_WORK)
-    for parameter, claim in rows.items():
-        assert claim["work"] == another
-        assert kg.held_back({"parameter": parameter, **claim}) \
-            == f"work:{another}"
+        for o in s.options if o.uri == uri)
+
+
+def test_a_value_takes_the_work_of_its_line_and_asks_only_where_none_shows():
+    names, model, _reads = read_works({"entry": 0})
+    another = work_label(addressed.ANOTHER_WORK)
+    this = work_label(addressed.THIS_PUBLICATION)
+    # Each piece is asked once.
+    pieces = plan_of(*WORK_PLAN).pieces(False)
+    assert sorted(n["owner"] for _, n in model.of("work")) \
+        == sorted(c.owner[1] for c in pieces)
+    # A value in the row of a work takes it, read, quoted with the row.
+    remap = names["REmap"]
+    assert (remap["work"], remap["work_state"], remap["work_means"]) \
+        == (another, fields.READ, ["IRENA 2018"])
+    assert remap["work_quote"] == "| IRENA 2018 | REmap | 80 |"
+    assert names["NZE"]["work_means"] == ["IEA 2020"]
+    # A heading that names a work speaks for its whole piece.
+    assert names["Tech15"]["work_means"] == ["EC 2018"]
+    assert names["Tech15"]["work_quote"].startswith("EC 2018")
+    # A value of no work's line is this publication's only with the line
+    # that says so as its quote.
+    central = names["Central"]
+    assert (central["work"], central["work_means"]) \
+        == (this, ["this publication"])
+    assert central["work_quote"] == "Our scenarios are Central and High."
+    # Only the value no line attributes asks its work, as a choice of the
+    # document's works; 0 leaves it unstated, and it is never searched.
+    asked = [p for p, _ in model.of("coord") if "list" in p]
+    assert [p["value"]["words"] for p in asked] == ["Delayed"]
+    assert asked[0]["list"][0] == "1 this publication"
+    assert names["Delayed"]["work_state"] == fields.SAID_UNSTATED
+    assert not [n for _, n in model.of("search")
+                if n.get("coordinate") == "work"]
+    # the failure by construction: no value takes a work without a line,
+    names, _model, _reads = read_works({"entry": 2})
+    assert names["Delayed"]["work_state"] == fields.SAID_UNSTATED
+    # and one with the line that shows it reads it.
+    names, _model, _reads = read_works({"entry": 3, "at": "1",
+                                        "words": "Delayed"})
+    assert names["Delayed"]["work_means"] == ["IEA 2020"]
+
+
+def test_the_details_of_new_works_run_side_by_side_before_any_value_is_read():
+    batches = []
+
+    def each(jobs, run):
+        jobs = list(jobs)
+        batches.append(jobs)
+        return [run(job) for job in jobs]
+
+    def detail(payload, noted):
+        if payload["work"] == "IRENA 2018" \
+                and noted["parameter"] == "study_organisation":
+            return {"at": "3.1", "words": "IRENA"}
+        return {"at": 0}
+    _names, model, reads = read_works({"entry": 0}, each=each, detail=detail)
+    (details,) = [jobs for jobs in batches if jobs
+                  and isinstance(jobs[0], tuple) and len(jobs[0]) == 6]
+    # Every detail of the three new works in one turn of side by side.
+    assert len(details) == 3 * len(scenarios_extraction.WORKS["fields"])
+    first_find = next(i for i, (kind, _p, _n) in enumerate(model.calls)
+                      if kind == "find")
+    assert all(i < first_find for i, (kind, p, _n) in enumerate(model.calls)
+               if kind == "work" or (kind == "coord" and "work" in p))
+    # A value of another work does not reach the graph.
+    (organisation,) = [c for r in reads
+                       if r.batch.parameter.uri == "study_organisation"
+                       for c in r.claims]
+    assert organisation["value"] == "IRENA"
+    assert organisation["work_means"] == ["IRENA 2018"]
+    assert kg.held_back({"parameter": "study_organisation", **organisation}) \
+        == f"work:{work_label(addressed.ANOTHER_WORK)}"
 
 
 # -- 14. words of a group of scenarios --------------------------------------------
@@ -684,36 +946,45 @@ def test_group_words_take_their_members_except_for_a_description():
 FIGURE = Source("figure", 5, "Abbildung 3: Wärmebedarf nach Energieträger\n"
                              "Das Balkendiagramm zeigt den Bedarf.",
                 {"document_id": 7, "page": 4})
-LINES = ["Abbildung 3: Wärmebedarf nach Energieträger 2021",
-         "Erdgas: 1.200 MWh", "Heizöl: 27 MWh"]
+CAPTION = ["Abbildung 3: Wärmebedarf nach Energieträger 2021"]
+NUMBERS = ["Erdgas: 1.200 MWh", "Heizöl: 27 MWh"]
 
 
 def transcripts(store, asked: list, prompt="p1", image="img1"):
     def ask(source, document_id):
         asked.append(source.owner_id)
-        return {"lines": LINES}
+        return {"caption": CAPTION, "numbers": NUMBERS}
     return addressed.Transcripts(ask, store, prompt, lambda source: image)
 
 
-def test_a_figure_is_transcribed_once_and_its_value_is_drawn(tmp_path):
+def test_a_figure_is_transcribed_once_in_two_lists_and_its_value_is_drawn(
+        tmp_path):
     asked: list = []
+    lines = {"caption": CAPTION, "numbers": NUMBERS}
     got, n = transcripts(tmp_path, asked)(7, [FIGURE])
-    assert got == {5: LINES} and n == 1 and asked == [5]
+    assert got == {5: lines} and n == 1 and asked == [5]
     # A second run with the same image and prompt asks nothing.
     again, n = transcripts(tmp_path, asked)(7, [FIGURE])
-    assert again == {5: LINES} and n == 0 and asked == [5]
+    assert again == {5: lines} and n == 0 and asked == [5]
     # the failure by construction: another prompt or another image is asked
     assert transcripts(tmp_path, asked, prompt="p2")(7, [FIGURE])[1] == 1
     assert transcripts(tmp_path, asked, image="img2")(7, [FIGURE])[1] == 1
-    # A value read off it stands in a line of the transcription, drawn,
-    # and is a C.
+    # One kept in the form of one list is asked again.
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "7.json").write_text(json.dumps({"5": {
+        "image": "img1", "prompt": "p1", "lines": CAPTION + NUMBERS}}),
+        encoding="utf-8")
+    assert transcripts(old, asked)(7, [FIGURE])[1] == 1
+    # A value read off it stands in a line of its numbers, drawn, and is a
+    # C.
     model = Model(find=lambda p, n: {"found": [{"at": "2",
                                                  "words": "1.200"}]})
     plan = Plan(7, [FIGURE], got, 8)
     (claim,) = [c for r in reader_of(model)(plan, [ENERGY])
                 for c in r.claims]
     assert claim["drawn"] is True and claim["quote"] == "Erdgas: 1.200 MWh"
-    checked = verify.verify_tuple(claim, ENERGY, "\n".join(LINES),
+    checked = verify.verify_tuple(claim, ENERGY, "\n".join(CAPTION + NUMBERS),
                                   owner_kind="figure")
     row = {**checked.tuple, "flags": checked.flags, "tier": checked.tier}
     assert trust.trust(row)["level"] == trust.LEVEL_C
@@ -727,3 +998,210 @@ def test_the_reasons_of_an_address_stand_and_those_of_a_quote_are_gone():
     assert {"quote_not_unique", "value_not_once"}.isdisjoint(
         wording.REQUIRED)
     assert {"not_an_address", "words_not_in_line"} <= wording.REQUIRED
+
+
+# -- 4. a field with a list ---------------------------------------------------------
+
+def test_a_closed_field_s_find_names_its_entry_of_the_list_it_is_shown():
+    kind = SCENARIOS.by_uri["scenario_type"]
+    text = Source("section", 4, "The Reference scenario continues current "
+                                "policies.", {"document_id": 7, "page": 2})
+    lines, choices, _grouped = Reader(SCENARIOS, Model().asks(),
+                                      in_order).listed(kind)
+    reference = choices.index("reference scenario") + 1
+
+    def read(entry):
+        model = Model(
+            find=lambda p, n: {"found": [{"entry": entry, "at": "1",
+                                          "words": "Reference scenario"}]}
+            if n.get("parameter") == kind.uri else {"found": []},
+            follow=lambda p, n: {"found": [{"entry": reference, "at": "1",
+                                            "words": "Reference scenario"}]}
+            if n.get("asked") == "find" else None)
+        reads = reader_of(model, spec=SCENARIOS)(plan_of(text), [kind])
+        return reads, model
+    reads, model = read(reference)
+    (payload,) = [p for p, n in model.of("find")
+                  if n.get("parameter") == kind.uri]
+    assert payload["list"] == lines
+    (claim,) = [c for r in reads for c in r.claims]
+    assert claim["value"] == "reference scenario"
+    assert claim["value_raw"] == "Reference scenario"
+    # A find with its number asks no list request for its value.
+    assert not [n for _, n in model.of("list")
+                if n.get("parameter") == kind.uri
+                and n.get("coordinate") == "value"]
+    # the failure by construction: a number off the list is refused and
+    # asked again with its reason
+    reads, model = read(len(choices) + 5)
+    assert sum(r.failed.get(addressed.NOT_AN_OPTION, 0) for r in reads) == 1
+    (claim,) = [c for r in reads for c in r.claims]
+    assert claim["value"] == "reference scenario"
+
+
+def test_the_find_of_a_group_asks_its_member_among_the_group_s_entries():
+    sector = SCENARIOS.by_uri["study_sector"]
+    text = Source("section", 4, "The study covers the energy industries.",
+                  {"document_id": 7, "page": 2})
+    _lines, groups, grouped = Reader(SCENARIOS, Model().asks(),
+                                     in_order).listed(sector)
+    crf = next(i for i, g in enumerate(groups, start=1)
+               if g.startswith("CRF"))
+    members = [o.label for o in fields.value_choice(sector).options
+               if o.group == groups[crf - 1]]
+
+    def docfield(payload, noted):
+        for block in (payload.get("passages") or {}).values():
+            for line in block["lines"]:
+                if "energy industries" in line:
+                    return {"found": [{"entry": crf,
+                                       "at": line.split(" ", 1)[0],
+                                       "words": "energy industries"}]}
+        return {"found": []}
+    model = Model(docfield=docfield, list=lambda p, n: {"entry": 2})
+    reads = reader_of(model, spec=SCENARIOS)(plan_of(TITLE, text), [sector])
+    (claim,) = [c for r in reads for c in r.claims]
+    (asked,) = [p for p, n in model.of("list")
+                if n.get("parameter") == sector.uri]
+    # The find names the group, the list request shows its members only.
+    assert grouped and len(members) > 1
+    assert len(asked["list"]) == len(members)
+    assert claim["value"] == members[1]
+
+
+# -- 5. two replies shown -------------------------------------------------------------
+
+def shown_addresses(payload) -> set:
+    """The addresses of the lines a request shows."""
+    blocks = [payload.get("passage") or {}] \
+        + list((payload.get("passages") or {}).values())
+    lines = [line for block in blocks for line in block.get("lines", [])] \
+        + list(payload.get("title_page") or []) \
+        + list(payload.get("headings") or [])
+    return {line.split(" ", 1)[0] for line in lines}
+
+
+def shows_two(example, payload) -> bool:
+    """Does a request show two replies: a find at an address it shows, and
+    one without finds?"""
+    if not isinstance(example, tuple) or len(example) != 2:
+        return False
+    one, nothing = example
+    if not one.get("found") or nothing.get("found") != []:
+        return False
+    at = str(one["found"][0]["at"]).split(".")[0]
+    return at in shown_addresses(payload)
+
+
+def test_every_request_that_finds_values_shows_a_find_of_its_own_and_none():
+    label = SCENARIOS.by_uri["scenario_label"]
+    title = SCENARIOS.by_uri["publication_title"]
+    model = Model()
+    reader_of(model, spec=SCENARIOS, works=scenarios_extraction.WORKS)(
+        plan_of(*WORK_PLAN), [label, title])
+    kinds = ("find", "docfield", "work")
+    examples = [(kind, example) for kind, example in model.examples
+                if kind in kinds]
+    payloads = [p for kind, p, _n in model.calls if kind in kinds]
+    assert {kind for kind, _ in examples} == set(kinds)
+    for (kind, example), payload in zip(examples, payloads):
+        assert shows_two(example, payload), kind
+    # the failure by construction: one reply, or a find at a line the
+    # request does not show, is not two
+    example, payload = examples[0][1], payloads[0]
+    assert not shows_two(example[0], payload)
+    assert not shows_two(({"found": [{"at": "99", "words": "x"}]},
+                          {"found": []}), payload)
+
+
+# -- 7. the list as it is --------------------------------------------------------------
+
+def test_a_list_request_shows_the_list_as_it_is_and_no_earlier_wording():
+    model = Model(list=lambda p, n: {"entry": [1]})
+    plan = plan_of(TEXT)
+    entry_of(model, SLOTS["carrier"], "Gas", plan=plan, several=True)
+    entry_of(model, SLOTS["carrier"], "Erdöl", plan=plan, several=True)
+    first, second = [payload for payload, _ in model.of("list")]
+    assert second["list"] == first["list"]
+    assert "in this document" not in json.dumps(second, ensure_ascii=False)
+
+
+# -- 9. a name that names nothing, a name of an entry ------------------------------------
+
+def test_a_name_that_names_no_scenario_is_no_entry_and_the_graph_takes_none():
+    label = SCENARIOS.by_uri["scenario_label"]
+    text = Source("section", 4, "Source: JRC.\nThe Central scenario reaches "
+                                "net zero.", {"document_id": 7, "page": 2})
+
+    def names_reply(payload, noted):
+        if noted.get("kind") == "scenario" \
+                and payload["name"] == "Source: JRC.":
+            return {"entry": 0}
+        return {"entry": "new"}
+    model = Model(
+        work=lambda p, n: {"found": [], "own": {
+            "at": "2", "words": "The Central scenario"}},
+        find=lambda p, n: {"found": [{"at": "1", "words": "Source: JRC."},
+                                     {"at": "2", "words": "Central"}]}
+        if n.get("parameter") == label.uri else {"found": []},
+        names=names_reply)
+    plan = plan_of(text)
+    reads = reader_of(model, spec=SCENARIOS,
+                      works=scenarios_extraction.WORKS)(plan, [label])
+    named = {c["value"]: c for r in reads for c in r.claims}
+    # 0 is taken: no entry, the value stays read with an empty note.
+    assert named["Source: JRC."]["value_means"] == []
+    assert [e.name for e in plan.names["scenario"].entries] == ["Central"]
+    assert named["Central"]["value_means"] == ["Central"]
+    # The graph makes no scenario of it, and one of a name it was never
+    # asked about, as before.
+    assert kg.scenario_names({"parameter": label.uri,
+                              **named["Source: JRC."]}) == []
+    assert kg.scenario_names({"parameter": label.uri,
+                              **named["Central"]}) == ["Central"]
+    # the failure by construction: without the note the name is a scenario
+    unasked = {k: v for k, v in named["Source: JRC."].items()
+               if k != "value_means"}
+    assert kg.scenario_names({"parameter": label.uri, **unasked}) \
+        == ["Source: JRC."]
+
+
+def test_a_name_of_an_entry_takes_its_work_and_one_without_work_stays_apart():
+    label = SCENARIOS.by_uri["scenario_label"]
+    text = Source("section", 4, "The Delayed case and the Rapid case end in "
+                                "2060.", {"document_id": 7, "page": 2})
+
+    def names_reply(payload, noted):
+        if payload["name"] == "Delayed":
+            return {"entry": next(i for i, line in enumerate(
+                payload["list"], start=1) if line.endswith(": Delayed"))}
+        return {"entry": "new"}
+    model = Model(
+        find=lambda p, n: {"found": [{"at": "1", "words": "Delayed"},
+                                     {"at": "1", "words": "Rapid"}]}
+        if n.get("parameter") == label.uri else {"found": []},
+        coord=lambda p, n: {"entry": 0} if "list" in p else {"at": 0},
+        names=names_reply)
+    reader = reader_of(model, spec=SCENARIOS,
+                       works=scenarios_extraction.WORKS)
+    plan = plan_of(text)
+    reader.lists_of(plan)
+    iea = plan.names["work"].add("IEA 2020")
+    read_as = {"work": work_label(addressed.ANOTHER_WORK),
+               "work_state": fields.READ, "work_raw": "IEA 2020",
+               "work_quote": "| IEA 2020 | Delayed | 90 |",
+               "work_means": ["IEA 2020"]}
+    plan.names["scenario"].add("Delayed", work=iea,
+                               quote="| IEA 2020 | Delayed | 90 |",
+                               work_read=read_as)
+    reads = reader(plan, [label])
+    named = {c["value"]: c for r in reads for c in r.claims}
+    # The entry decides last: the name takes the work its entry was read
+    # with, its own work left open.
+    assert {k: named["Delayed"][k] for k in read_as} == read_as
+    assert named["Delayed"]["work_window"] == ["entry", 1]
+    # the failure by construction: a new name whose work stayed open is an
+    # entry of no work, not of this publication
+    rapid = plan.names["scenario"].entries[-1]
+    assert (rapid.name, rapid.work) == ("Rapid", 0)
+    assert named["Rapid"]["work_state"] == fields.SAID_UNSTATED

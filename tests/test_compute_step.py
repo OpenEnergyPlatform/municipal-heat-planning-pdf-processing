@@ -5,6 +5,7 @@ promise has a case that breaks it by construction beside the one that keeps
 it."""
 import json
 import re
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -389,8 +390,9 @@ def printed(number):
 
 
 def computing(monkeypatch, *said, ran=None, plan=None, rank=None):
-    """A compute step whose model says *said* in turn. Its requests, the code
-    runs with what they were handed, and the trace. *ran* is what every run
+    """A compute step whose model says *said* in turn, a callable saying
+    what it returns. Its requests, the code runs with what they were handed,
+    and the trace. *ran* is what every run
     prints, or a list of what each prints in turn. *plan* is the plan's
     passages, which give the request its tools, and *rank* how the run ranks
     them for a sentence."""
@@ -400,6 +402,8 @@ def computing(monkeypatch, *said, ran=None, plan=None, rank=None):
     def create(**request):
         asked.append(request)
         said = next(told)
+        if callable(said):
+            said = said()
         if isinstance(said, Exception):
             raise said
         return SimpleNamespace(usage=None, choices=[SimpleNamespace(
@@ -649,15 +653,35 @@ def test_a_refused_request_is_asked_once(monkeypatch, waits):
     assert runner.UNSERVED.of(7) == 0
 
 
+def test_a_server_error_is_asked_again_without_a_limit(monkeypatch, waits):
+    # More failures than the question has requests: each is waited out on
+    # the long curve and asked again, and the server that is back answers
+    # (owner decision 2026-11-09).
+    failing = [Status(503)] * (TRIES + 2)
+    step, asked, _runs, _events = computing(monkeypatch, *failing, CODE,
+                                            ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == len(failing) + 2
+    assert waits == [(n, True) for n in range(1, len(failing) + 1)]
+    assert report.tuples[-1]["computed"] is True
+    assert runner.UNSERVED.of(7) == 0
+
+
 def test_a_request_the_server_never_served_leaves_its_document_unfinished(
         monkeypatch, waits):
-    tries = runner.MAX_RETRIES + runner.CODE_ROUNDS + 1
-    step, asked, _runs, events = computing(monkeypatch,
-                                           *[Status(503)] * tries)
+    # The server fails until the run halts: the request ends unanswered and
+    # its document unfinished.
+    monkeypatch.setattr(runner, "HALT", threading.Event())
+
+    def halting():
+        runner.HALT.set()
+        return Status(503)
+    failing = [Status(503)] * (TRIES + 2)
+    step, asked, _runs, events = computing(monkeypatch, *failing, halting)
     report, _done = run_step(step, share(21), amount(185200))
-    assert len(asked) == tries
+    assert len(asked) == len(failing) + 1
     # A wait before every attempt but the first.
-    assert waits == [(n, True) for n in range(1, tries)]
+    assert waits == [(n, True) for n in range(1, len(failing) + 1)]
     assert len(report.tuples) == 2
     assert events[-1]["outcome"] == "unanswered"
     assert runner.UNSERVED.of(7) == 1

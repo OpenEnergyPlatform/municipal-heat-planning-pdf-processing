@@ -10,3 +10,9 @@ Write ONE short sentence as it might stand in exactly this form in this publicat
 * 12 to 35 words, one sentence, two at most.
 Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {"phrase":"..."}
+
+<!-- with: question -->
+"question" asks a detail of the value under "value" that its own lines ("lines") do not say. Write the sentence as this publication would print the answer for THIS value: the value in the words of its lines, together with an answer to the question, such as the region, the year or the scenario it stands for. The answer may be made up: the sentence is only used to search the rest of the publication.
+
+<!-- with: headings -->
+"headings" are the publication's headings up to the value's place, its own last. Take the publication's words from them too.

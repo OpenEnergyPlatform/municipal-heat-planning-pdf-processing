@@ -15,6 +15,7 @@ import pytest
 from docpipe import providers
 from docpipe.extraction import runner, scheduler
 from docpipe.inference import pool
+from docpipe.prompts import Prompt
 
 ROOT = Path(__file__).resolve().parent.parent
 STAGE = ROOT / "docpipe" / "extraction"
@@ -157,7 +158,8 @@ def test_a_request_handed_a_client_repeats_by_the_rule_in_every_thread():
                         vocabulary={})
         for uri in ("a", "b", "c")])
     out = runner.document_anchor(spec, client=client,
-                                 prompt=SimpleNamespace(meta={}, text="x"))
+                                 prompt=Prompt("phrase", "x", {}, "",
+                                               Path("phrase.md")))
     assert set(out) == {"a", "b", "c"}
     assert list(times.values()) == [[None, runner.RETRY_TIMEOUT]] * 3
 

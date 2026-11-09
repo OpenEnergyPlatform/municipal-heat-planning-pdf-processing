@@ -5,7 +5,7 @@ max_tokens: 1536
 Beantworte die Frage unter "question" für den Wert unter "value" mit der Adresse einer Zeile unter "passages", die die Antwort für diesen Wert sagt, und ihren Worten; sagt keine sie, ist "at" 0.
 
 * "value" nennt die Worte des Werts und seine Adresse unter "passage", seiner eigenen Stelle; dort steht die Antwort nicht. "passages" sind weitere Stücke des Plans, jedes unter seinem Buchstaben, mit Art, Seite und Titel.
-* Vor jeder Zeile steht ihre Adresse mit dem Buchstaben ihres Blocks. In einer Tabellenzeile trennt "|" die Zellen, ab 1 gezählt: A19.2 ist die zweite Zelle der Zeile A19.
+* Vor jeder Zeile steht ihre Adresse mit dem Buchstaben ihres Blocks. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: A19.2 ist die zweite Zelle der Zeile A19.
 * Eine Zeile zählt nur, wenn sie über DIESEN Wert spricht: über dieselbe Aussage, über die Tabelle oder Abbildung, in der er steht, oder über den Abschnitt oder den Zustand, von dem seine Stelle spricht. Eine Zeile über eine andere Tabelle, ein anderes Jahr, eine andere Aussage oder den Plan im Allgemeinen zählt nicht, auch wenn sie die gesuchte Angabe nennt.
 * "words" sind die Worte dieser Zeile, die die Antwort sagen, Zeichen für Zeichen. Zeigt die Form unten eine Liste "found", nenne darin jede Antwort einzeln.
 * "more" holt Stücke, die du noch brauchst: {"get":"next"} das Stück nach dem letzten gezeigten, {"get":"previous"} das davor, {"get":"item","id":"p17_img1"} die Tabelle oder Abbildung, die eine Zeile mit „[p17_img1 …]“ nennt, {"get":"search","pattern":"Bilanzjahr"} die Stücke, in denen ein Muster steht, {"get":"similar","text":"…"} die Stücke, die einem Satz am nächsten sind; der Satz steht so da, wie der Plan ihn drucken würde, nie als Frage.

@@ -209,8 +209,9 @@ PHRASES = {
         'passt.'),
     "name_not_listed": (
         'Dein "entry" {given!r} ist keine Nummer aus "list". '
-        'Antworte mit einer Nummer aus "list" oder mit "new", wenn '
-        'der Name keiner ihrer Einträge ist.'),
+        'Antworte mit einer Nummer aus "list", mit "new", wenn der '
+        'Name keiner ihrer Einträge ist, oder mit 0, wenn die Worte '
+        'kein solches Ding nennen.'),
     "wrong_type": (
         'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
         'genau wie die Passage es schreibt.'),

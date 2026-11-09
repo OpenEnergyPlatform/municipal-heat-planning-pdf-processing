@@ -49,8 +49,8 @@ PHRASES = {
         'with a number from "list", 0 if no entry fits.'),
     "name_not_listed": (
         'Your "entry" {given!r} is no number of "list". Answer '
-        'with a number from "list", or "new" if the name is none '
-        'of its entries.'),
+        'with a number from "list", "new" if the name is none of its '
+        'entries, or 0 if the words name no such thing.'),
     "wrong_type": (
         'Your "value" {given!r} is not {wrong}. Answer with {wrong}, '
         'exactly as the passage writes it.'),

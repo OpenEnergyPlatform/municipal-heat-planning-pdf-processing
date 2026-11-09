@@ -469,8 +469,11 @@ def scenario_names(row: dict) -> list:
     of the publication's list of scenarios a name is was asked while it was
     read (`value_means`, `scenario_means`, docpipe/extraction/addressed.py,
     owner decisions 2026-11-08): a name means the entry it is, the words of a
-    group of scenarios each member, one row each. A row read before that was
-    asked belongs to the scenario of its own name.
+    group of scenarios each member, one row each, and words the request
+    found to name no scenario (an empty list) none (owner decision
+    2026-11-09: "Nichts falsches im Graphen aber wir wollen auch viele
+    Werte": the row stays in the harvest). A row read before that was asked
+    belongs to the scenario of its own name.
     """
     if row.get("parameter") == "scenario_label":
         name, quote, means = (row.get("value"), row.get("quote"),
@@ -492,9 +495,8 @@ def scenario_names(row: dict) -> list:
             or not _quoted(name, quote):
         return []
     if isinstance(means, list):
-        named = [one for one in means if isinstance(one, str) and one.strip()]
-        if named:
-            return list(dict.fromkeys(named))
+        return list(dict.fromkeys(
+            one for one in means if isinstance(one, str) and one.strip()))
     return [name.strip()]
 
 

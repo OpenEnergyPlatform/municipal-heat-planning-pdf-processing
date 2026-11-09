@@ -320,7 +320,9 @@ SETTINGS = (
       "Context window assumed when the server does not report one.",
       stages=("extract",)),
     S("EXTRACT_MAX_RETRIES", "extract.max_retries", "int", "3",
-      "Attempts per extraction request before it is given up.",
+      "Replies out of their form an extraction request takes before it is "
+      "left unanswered; a server's failure is asked again until the run "
+      "halts.",
       stages=("extract",)),
     S("EXTRACT_MAX_SOURCE_CHARS", "extract.max_source_chars", "int", "16000",
       "Longest passage one request carries; longer sections are split into "
@@ -339,9 +341,6 @@ SETTINGS = (
       "Write the provenance of every value beside the graph "
       "(<graph>.prov.ttl); 0 writes the graph only.",
       stages=("extract",)),
-    S("EXTRACT_REST_MAX_WINDOWS", "extract.rest_max_windows", "int", "12",
-      "Windows the last search stage may spend per coordinate.",
-      stages=("extract",)),
     S("EXTRACT_RETRY_TEMPERATURE_STEP", "extract.retry_temperature_step",
       "float", "0.1",
       "Temperature added per unreadable reply on the next attempt, capped "
@@ -355,6 +354,17 @@ SETTINGS = (
       stages=("extract",)),
     S("EXTRACT_RETRY_WAIT_MAX", "extract.retry_wait_max", "float", "6",
       "Longest wait in seconds after a bad reply.",
+      stages=("extract",)),
+    S("EXTRACT_SEARCH_CHUNKS", "extract.search_chunks", "int", "5",
+      "Pieces one request of a search shows.",
+      stages=("extract",)),
+    S("EXTRACT_SEARCH_PIECES", "extract.search_pieces", "int", "50",
+      "Pieces a search for an open coordinate or a field the document has "
+      "once shows; a field with a list reads twice as many.",
+      stages=("extract",)),
+    S("EXTRACT_SEARCH_SHARES", "extract.search_shares", "str", "20,15,15",
+      "How many of a search's pieces come first from tables, figures and "
+      "text, scaled to its pieces; the rest are the best of any kind.",
       stages=("extract",)),
     S("EXTRACT_SERVER_DEAD_AFTER", "extract.server_dead_after", "float", "180",
       "Seconds without any reply from the server before the run ends.",

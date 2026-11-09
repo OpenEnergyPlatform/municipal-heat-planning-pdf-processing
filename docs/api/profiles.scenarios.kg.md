@@ -167,8 +167,11 @@ A scenario_label row names one by its value, any other row by its
 of the publication's list of scenarios a name is was asked while it was
 read (`value_means`, `scenario_means`, docpipe/extraction/addressed.py,
 owner decisions 2026-11-08): a name means the entry it is, the words of a
-group of scenarios each member, one row each. A row read before that was
-asked belongs to the scenario of its own name.
+group of scenarios each member, one row each, and words the request
+found to name no scenario (an empty list) none (owner decision
+2026-11-09: "Nichts falsches im Graphen aber wir wollen auch viele
+Werte": the row stays in the harvest). A row read before that was asked
+belongs to the scenario of its own name.
 
 ### held_back
 

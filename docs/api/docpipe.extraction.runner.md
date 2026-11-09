@@ -93,10 +93,14 @@ after a server error, asked a refused request again, and left its
 document stamped as finished when no attempt of it was served.
 
 A failure that is the server's (`server_side`) is asked again, after the
-long wait (`retry_wait`). Any other refuses the request itself, every
-time, and is not asked again. A request given up on whose last attempt
-the server did not serve (`unserved`) leaves its document unfinished
-(`UNSERVED`): the stamp is withheld and a resume reads it again.
+long wait (`retry_wait`), without a limit until the run halts (`halted`,
+owner decision 2026-11-09: "Wenn es aber Codefehler etc. sind, dann
+immer wiederholen. Es wird nichts abgebrochen"); a reply that could not
+be read is asked again `MAX_RETRIES` times at most (`attempts`). Any
+other failure refuses the request itself, every time, and is not asked
+again. A request given up on whose last attempt the server did not
+serve (`unserved`) leaves its document unfinished (`UNSERVED`): the
+stamp is withheld and a resume reads it again.
 
 *document_id* is the document the request reads, None for a request of
 the run itself. *noted* is False for a request whose end is told another
@@ -109,6 +113,19 @@ harvest, `not_happened`). It still waits and stops by the rule.
 ```python
 def __init__(self, document_id=None, noted: bool = True)
 ```
+
+#### Failures.attempts
+
+```python
+def attempts(self, replies: int = 0)
+```
+
+The attempts of one request, 1, 2, ...: after a failure that is
+the server's (`failed` True) the next one after the long wait, until
+the run halts; after a reply that could not be read (`fault`) the
+next one after the short wait, *replies* (`MAX_RETRIES`) such
+replies at most. The caller ends the loop on an answer and on any
+other failure.
 
 #### Failures.failed
 
@@ -125,6 +142,14 @@ def answered(self) -> None
 ```
 
 The server answered the request, whatever its reply says.
+
+#### Failures.fault
+
+```python
+def fault(self) -> int
+```
+
+The reply could not be read: how many such replies so far.
 
 #### Failures.wait
 
@@ -190,6 +215,21 @@ the server's multimodal cache (vLLM before 0.28, CVE-2026-105753).
 
 ```python
 def __init__(self, tokenizer)
+```
+
+### Persistent
+
+```python
+class Persistent
+```
+
+A reranker whose every order is asked again until it answers or the
+run halts (`persistently`).
+
+#### Persistent.\_\_init\_\_
+
+```python
+def __init__(self, reranker)
 ```
 
 ## Functions
@@ -265,15 +305,27 @@ Whether a failure is the server's: it never arrived, or was `unserved`.
 These wait on the long curve and count towards the dead-server streak. A
 429 retried after two seconds is the same 429.
 
-### search_rounds
+### halted
 
 ```python
-def search_rounds() -> int
+def halted() -> bool
 ```
 
-How many rounds of pieces the search after an open coordinate may
-ask (`addressed.Reader.search`): the run's budget, at least
-`SEARCH_MIN_ROUNDS`.
+Does the run stop: a SIGTERM, or a server that answers no more?
+
+### persistently
+
+```python
+def persistently(what: str, call: Callable) -> Callable
+```
+
+*call*, asked again after every failure until it answers or the run
+halts (owner decision 2026-11-09: "Wenn es aber Codefehler etc. sind,
+dann immer wiederholen. Es wird nichts abgebrochen, wir brauchen die
+Werte"): a search, an embedding or a reranker that failed is never
+replaced by another order or by nothing. Each failure is logged and
+waited for on the long curve (`retry_wait`); a run that halts raises
+the last one.
 
 ### read_to_end
 
@@ -281,8 +333,8 @@ ask (`addressed.Reader.search`): the run's budget, at least
 def read_to_end() -> None
 ```
 
-Every sweep from here on reads the rest of its document to the end, so
-a coordinate ends read or `unstated` and never `exhausted`.
+Every search from here on shows every piece of its document, so a
+coordinate ends read or `unstated` and never `exhausted`.
 
 ### embedder
 
@@ -781,24 +833,26 @@ document_id -> its page count in the catalog, None where unknown.
 ### system_text
 
 ```python
-def system_text(prompt, example: Optional[dict]) -> str
+def system_text(prompt, example) -> str
 ```
 
 The system prompt one request sends: the prompt with its example
 reply ({{example}}) written for this request, as one line of JSON (owner
 decisions 2026-11-06: every request's example shows exactly the
-coordinates it asks, each read, so the model has no key to leave out). A
-prompt without that place is sent as it is written; one with it and no
-example is an error before anything is sent, as every open placeholder
-is (`prompts.Prompt.render`).
+coordinates it asks, each read, so the model has no key to leave out).
+A request that finds values gives two, a pair (owner decision
+2026-11-09: "immer ein Positiv und ein Negativbeispiel"): the first
+goes to {{example}}, the second to {{nothing}}. A prompt without such a
+place is sent as it is written; one with it and no example for it is an
+error before anything is sent, as every open placeholder is
+(`prompts.Prompt.render`).
 
 ### ask_in_grammar
 
 ```python
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                    document_id: int, where: str, key: str, /,
-                   example: Optional[dict] = None,
-                   lacking: Optional[Callable] = None, **noted)
+                   example: Optional[dict] = None, **noted)
 ```
 
 One request of the harvest: the reply as a dict, "cut_off" when it
@@ -808,17 +862,18 @@ request is its prompt and *conversation*, one message (owner decisions
 2026-11-08: no request is a conversation).
 
 Asked again with the cause when the reply is no JSON object, or one
-without a key its schema requires (`_lacking`) or one *lacking(answer)*
-names (a coordinate's sentence where it found nothing,
-`addressed.hyde_missing`), as every request of the stage is; a reply cut
-off at its limit is not rescued. Each answer is traced as
-`<where>_ask` with *noted*.
+without a key its schema requires (`_lacking`), `MAX_RETRIES` such
+replies at most, as every request of the stage is; a reply cut off at
+its limit is not rescued. Each answer is traced
+as `<where>_ask` with *noted*.
 
-A request whose last attempt ended on a 429, a 5xx or a timeout was
-never answered, so its document is noted (`UNSERVED`) and goes
-unstamped, as for every request of the run. One that timed out is asked
-again with the time a repeat gets (`_repeating`), whatever client it was
-handed, as every request of the harvest is.
+A 429, a 5xx or a timeout is asked again until the server answers or
+the run halts (`Failures.attempts`, owner decision 2026-11-09); a
+request whose last attempt ended on one was never answered, so its
+document is noted (`UNSERVED`) and goes unstamped, as for every request
+of the run. One that timed out is asked again with the time a repeat
+gets (`_repeating`), whatever client it was handed, as every request of
+the harvest is.
 
 ### worded
 
@@ -859,11 +914,11 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]
 The requests of the harvest (`addressed.Asks`), each with a prompt of
 its own and its payload as one message, no conversation (owner decisions
 2026-11-08); None where the profile writes one of their prompts not,
-those of `addressed.OPTIONAL` aside. A coordinate's answer that says
-nothing shown states it and gives no sentence of how the plan would
-print it is asked again (`addressed.hyde_missing`). A request asked once
-more (`follow`) goes under the prompt of the request it follows, its
-words after the payload.
+those of `addressed.OPTIONAL` aside. A request asked once more
+(`follow`) goes under the prompt of the request it follows, its words
+after the payload. The sentence a search goes with is a request of its
+own (`phrase`, owner decision 2026-11-09), under the prompt the
+document's search sentences are written with.
 
 ### image_path_of
 
@@ -882,22 +937,39 @@ def make_transcribe(profile, image_root: Optional[Path]) -> tuple
 
 (ask(source, document_id), fingerprint): the request that writes a
 figure as lines once per run (`addressed.Transcripts`, owner decision
-2026-11-08, e), its crop and its description shown, and what names the
+2026-11-08, e), its caption apart from its numbers (owner decision
+2026-11-09), its crop and its description shown, and what names the
 prompt and model that wrote a kept transcription; (None, "") where the
 profile writes no prompt for it.
+
+### search_budget
+
+```python
+def search_budget() -> tuple
+```
+
+(pieces, shares, per request) of every search of the run: how many
+pieces a search for an open coordinate or a field the document has
+once shows, how many of them each kind of passage gets first, and how
+many a request shows (owner decisions 2026-11-09: 50, 20 of tables, 15
+of figures, 15 of text, 5 a request); a pass that reads to the end
+shows every piece (`read_to_end`).
 
 ### make_reader
 
 ```python
 def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
-                probes: Optional[Callable] = None)
+                probes: Optional[Callable] = None,
+                rerank: Optional[Callable] = None,
+                context: Optional[Callable] = None)
 ```
 
 The reading of a document piece by piece (`addressed.Reader`), or
 None where its spec names no groups or the profile writes no prompts
 for it. What the profile asks once of a plan beside its fields
 (`PLAN_FIELDS`) and the field that names other works (`WORKS`) come
-from the profile.
+from the profile; how much a search shows from the run
+(`search_budget`).
 
 ### make_chunk_reranker
 
@@ -906,8 +978,9 @@ def make_chunk_reranker() -> Optional[Callable]
 ```
 
 () -> one thread's reranker of the pieces of a plan, which scores
-every piece it is given (`rerank.Reranker`), or None where the run is
-given no RERANK_BASE_URL.
+every piece it is given (`rerank.Reranker`), asked again until it
+answers (`Persistent`), or None where the run is given no
+RERANK_BASE_URL.
 
 ### make_harvest
 
@@ -926,7 +999,8 @@ as a run and a probe make it: the order of the pieces by the reranker
 sentences (`make_seek_probes`), the figures transcribed once and kept
 under *out* (`transcripts/`), the orders kept there too (`survey/`), and
 the size of the pieces the profile gives (`CHUNK_UNITS`). *every(
-document_id, exclude)* is the plan's passages in its order.
+document_id, exclude)* is the plan's passages in its order. A search
+that fails is asked again until it answers (`persistently`).
 
 ### frame_slots_of
 

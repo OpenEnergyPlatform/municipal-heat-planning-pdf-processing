@@ -5,12 +5,18 @@ max_tokens: 2048
 Nenne jede gezeigte Zeile, die einen Wert des Felds unter "field" sagt, mit ihrer Adresse und den Worten des Werts.
 
 * Ein Wert ist, was das Feld nach seiner Bedeutung ("means") ist.
-* Vor jeder Zeile steht ihre Adresse mit dem Buchstaben ihres Blocks. In einer Tabellenzeile trennt "|" die Zellen, ab 1 gezählt: A19.2 ist die zweite Zelle der Zeile A19.
+* Vor jeder Zeile steht ihre Adresse mit dem Buchstaben ihres Blocks. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: A19.2 ist die zweite Zelle der Zeile A19.
+* Worte, die nur benennen, worum es im Feld geht, etwa ein Titel oder eine Überschrift, die das Thema der Zeilen darunter nennt, sind kein Wert.
 * "words" sind die Worte des Werts, wie die Zeile sie druckt, Zeichen für Zeichen. Geht eine Angabe über mehrere Zeilen, reicht "at" von der ersten bis zur letzten, etwa A3-A5.
-* Mehrere Werte, etwa zwei Organisationen, sind mehrere Einträge. Sagt keine Zeile einen Wert, ist "found" leer.
+* Mehrere Werte, etwa zwei Organisationen, sind mehrere Einträge.
 
-Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! Wo Zeilen Werte drucken, in dieser Form:
 {{example}}
+Wo keine Zeile einen druckt, in dieser Form:
+{{nothing}}
+
+<!-- with: list -->
+"list" nennt die Einträge, die ein Wert dieses Felds sein kann, jeden unter seiner Nummer. "entry" ist die Nummer des Eintrags, den die Worte eines Werts meinen, nach der Bedeutung, nicht nach der Schreibweise: der genaueste Eintrag, den die Worte tragen, 0 wenn keiner passt. Nennt "list" Gruppen von Einträgen, ist "entry" die Nummer der Gruppe.
 
 <!-- with: title_page -->
 "title_page" sind die ersten Zeilen der ersten Seite des Plans, unter dem Buchstaben T.

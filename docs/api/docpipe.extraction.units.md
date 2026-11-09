@@ -17,14 +17,19 @@ an ordinal ("3. Oktober") end no sentence, and a number ("1.155 MWh") never
 breaks, since a sentence ends only where a mark is followed by a space. A
 table is its title lines, its head lines and its body rows, numbered in that
 order from 1 (the rule under the head counts not), each body row a line
-whose cells are numbered from 1; lines under the table are lines as well. A
-figure is the lines a model transcribed it into once, its title first
-(`transcripts`), else the lines of its description.
+whose cells are numbered from 1; lines under the table are lines as well.
+Any line that "|" divides has cells, wherever it stands: a table row, a
+figure's line, a sentence (owner decision 2026-11-09). A figure is the
+lines a model transcribed it into once (`transcripts`): its caption (title,
+axes, legend) and its numbers, each a line of its own; else the lines of
+its description.
 
 A piece (`Chunk`) is at most `CHUNK_UNITS` lines of its passage, a table's
-title and head lines shown with every piece of it under the same numbers, a
-figure's title line likewise. Every line of a passage keeps one number in
-every request that shows it.
+title and head lines shown with every piece of it under the same numbers. A
+figure with numbers is one piece of its caption and pieces of its numbers,
+each shown with the caption; a field whose values are no numbers reads only
+the caption, a field of numbers only the pieces of numbers (`pieces_for`).
+Every line of a passage keeps one number in every request that shows it.
 
 A request shows besides its own passage other blocks of lines, each under a
 letter of its own so that no two lines of a request share an address: the
@@ -43,14 +48,15 @@ class Line
 ```
 
 One numbered line of a passage: a sentence, a heading, a table's
-title, head or body row, a line under a table, or a figure's line.
+title, head or body row, a line under a table, a line of a figure's
+caption or one of its numbers.
 
 Fields:
 
 - `number: int`
 - `text: str`
 - `cells: tuple = ()`
-- `role: str = "text"`: "text", "title", "head", "body", "foot", "figure"
+- `role: str = "text"`: "text", "title", "head", "body", "foot", "figure", "number"
 
 ### Passage
 
@@ -91,6 +97,15 @@ def kind(self) -> str
 @property
 def page(self) -> Optional[int]
 ```
+
+#### Passage.has_numbers
+
+```python
+@property
+def has_numbers(self) -> bool
+```
+
+Is this a figure transcribed with its numbers, each a line?
 
 #### Passage.title
 
@@ -170,6 +185,25 @@ def text(self) -> str
 ```
 
 Its lines as the reranker reads them, without numbers.
+
+#### Chunk.of_numbers
+
+```python
+@property
+def of_numbers(self) -> bool
+```
+
+Is this a piece of a figure's numbers?
+
+#### Chunk.of_caption
+
+```python
+@property
+def of_caption(self) -> bool
+```
+
+Is this the piece of a figure's caption alone, beside the pieces
+of its numbers?
 
 ### Address
 
@@ -324,6 +358,17 @@ list item it runs on into: every piece a line, none empty.
 def cells_of(line: str) -> tuple
 ```
 
+### line_cells
+
+```python
+def line_cells(text: str) -> tuple
+```
+
+The cells of a line that "|" divides, wherever it stands (owner
+decision 2026-11-09: "26 JRC GECO 1.5C | Other | 11 (read off)" is
+addressed as 26.1 to 26.3 like a table row); () for a line of fewer
+than two.
+
 ### table_lines
 
 ```python
@@ -333,15 +378,28 @@ def table_lines(text: str) -> Optional[tuple]
 ([Line], fixed) of a table's text, None where it holds no Markdown
 table with a rule under its head.
 
+### figure_lines
+
+```python
+def figure_lines(transcript) -> tuple
+```
+
+([caption lines], [number lines]) of a figure's transcription
+(`addressed.Transcripts`, owner decision 2026-11-09): its title, axes
+and legend, and each number it shows; a transcription that is one list
+is all caption.
+
 ### passage_of
 
 ```python
-def passage_of(source: Source, transcript: Optional[list] = None) -> Passage
+def passage_of(source: Source, transcript=None) -> Passage
 ```
 
 *source* as numbered lines: a table's title, head and rows, a
-figure's transcribed lines (*transcript*, its title first), else its
-sentences.
+figure's transcribed lines (*transcript*, `figure_lines`: its caption,
+its title first, then its numbers), else its sentences. The caption of
+a figure with numbers is shown with every piece of it, as a table's
+title and head are.
 
 ### chunks_of
 
@@ -350,7 +408,21 @@ def chunks_of(passage: Passage, size: int = CHUNK_UNITS) -> list
 ```
 
 The pieces of *passage*: its lines but the fixed ones, *size* at a
-time, in order; a passage of fixed lines only is one piece.
+time, in order; a passage of fixed lines only is one piece. A figure
+with numbers is first the piece of its caption, then the pieces of its
+numbers, each shown with the caption.
+
+### pieces_for
+
+```python
+def pieces_for(chunks: list, numbers: bool) -> list
+```
+
+The pieces a field reads, in their order (owner decision 2026-11-09):
+a field whose values are numbers reads a figure in the pieces of its
+numbers, each shown with the caption; any other field reads it in the
+piece of its caption alone (title, axes, legend), whose names its
+numbers only repeat.
 
 ### neighbours
 

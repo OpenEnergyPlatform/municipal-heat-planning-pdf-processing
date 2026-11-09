@@ -4,7 +4,7 @@ max_tokens: 512
 ---
 Nenne die Nummer des Eintrags unter "list", den die Worte unter "words" als Antwort auf die Frage unter "question" bedeuten.
 
-* Entscheide nach der Bedeutung, nicht nach der Schreibweise: was ein Eintrag bedeutet, steht hinter "means", wie dieser Plan ihn schon genannt hat, hinter "in this document". „Gigawattstunden“ meint GWh, „Wärmebedarf“ einen Verbrauch.
+* Entscheide nach der Bedeutung, nicht nach der Schreibweise: was ein Eintrag bedeutet, steht hinter "means". „Gigawattstunden“ meint GWh, „Wärmebedarf“ einen Verbrauch.
 * Wähle den genauesten Eintrag, den die Worte tragen. Ob eine Menge je Jahr gilt, sagt oft erst die Zeile: „pro Jahr“ oder „im Jahr 2021“ machen aus kWh den Eintrag kWh/a. Rechne nie um.
 * 0 heißt: kein Eintrag meint diese Worte, etwa eine Einheit je Fläche, je Einwohner oder je Kilowattstunde.
 * Zeigt die Form unten eine Liste, nenne jeden Eintrag, den die Worte meinen, etwa zwei Energieträger.

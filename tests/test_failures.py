@@ -14,6 +14,7 @@ import openai
 import pytest
 
 from docpipe.extraction import runner
+from docpipe.prompts import Prompt
 
 ROOT = Path(__file__).resolve().parent.parent
 STAGE = ROOT / "docpipe" / "extraction"
@@ -113,7 +114,7 @@ def flaky(first, reply):
         completions=SimpleNamespace(create=create))), asked
 
 
-PHRASE = SimpleNamespace(meta={}, text="x")
+PHRASE = Prompt("phrase", "x", {}, "", Path("phrase.md"))
 SENTENCE = json.dumps({"phrase": "Ein Satz."})
 
 
@@ -159,7 +160,8 @@ def _request(call: ast.Call) -> bool:
 
 def _lacking(top: ast.AST) -> set:
     """What of the rule *top* does not follow: no `Failures` made, or the
-    parts of it it never calls."""
+    parts of it it never calls; its attempts (`Failures.attempts`) wait as
+    the rule says."""
     names = {target.id for node in ast.walk(top)
              if isinstance(node, ast.Assign)
              and isinstance(node.value, ast.Call)
@@ -173,6 +175,8 @@ def _lacking(top: ast.AST) -> set:
               and isinstance(node.func, ast.Attribute)
               and isinstance(node.func.value, ast.Name)
               and node.func.value.id in names}
+    if "attempts" in called:
+        called.add("wait")
     return RULE - called
 
 
@@ -225,6 +229,17 @@ def test_a_request_without_the_rule_or_part_of_it_is_found(tmp_path):
         "    except Exception as exc:\n"
         "        if failures.failed(exc):\n"
         "            failures.wait(1)\n"
+        "    failures.given_up()\n"
+        "def attempted():\n"
+        "    failures = Failures(1)\n"
+        "    client = _client()\n"
+        "    for attempt in failures.attempts():\n"
+        "        try:\n"
+        "            return client.chat.completions.create(model='m')\n"
+        "        except Exception as exc:\n"
+        "            failures.answered()\n"
+        "            if not failures.failed(exc):\n"
+        "                break\n"
         "    failures.given_up()\n",
         encoding="utf-8")
     assert requests_without_the_rule(tmp_path) == ["made.py:ask:Failures",

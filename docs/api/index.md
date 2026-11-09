@@ -95,7 +95,7 @@ is for and what it hands to what; this is the reference.
 
 - [docpipe.extraction](docpipe.extraction.md): Marks the extraction package as the OBIE stage.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
-- [docpipe.extraction.addressed](docpipe.extraction.addressed.md): One document read in pieces of numbered lines, one question per request, every answer an address (owner decisions 2026-11-08 evening, both profiles). (10 classes, 22 functions)
+- [docpipe.extraction.addressed](docpipe.extraction.addressed.md): One document read in pieces of numbered lines, one question per request, every answer an address (owner decisions 2026-11-08 evening, both profiles). (11 classes, 31 functions)
 - [docpipe.extraction.archive](docpipe.extraction.archive.md): A harvest or stamp file is never overwritten. (3 functions)
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
 - [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 13 functions)
@@ -117,7 +117,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (10 functions)
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (3 functions)
 - [docpipe.extraction.review](docpipe.extraction.review.md): Reads again, under a narrower window, the values at the lowest trust level. (8 functions)
-- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (4 classes, 92 functions)
+- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (5 classes, 94 functions)
 - [docpipe.extraction.scheduler](docpipe.extraction.scheduler.md): One queue for every model request of a run, served oldest document first. (7 classes, 5 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.scratch](docpipe.extraction.scratch.md): Where a column of one's own lives, and why its harvest stays there. (1 function)
@@ -134,7 +134,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.topup_rest](docpipe.extraction.topup_rest.md): Reads the passages of a stored harvest that were never asked for values, and appends what they hold. (3 functions)
 - [docpipe.extraction.trace](docpipe.extraction.trace.md): Records what the harvest did as one JSON event per line, so it can be counted after the run. (12 functions)
 - [docpipe.extraction.trust](docpipe.extraction.trust.md): Grades every harvested value by how far the run can stand behind it. (8 functions)
-- [docpipe.extraction.units](docpipe.extraction.units.md): A plan's passages as numbered lines, cut into pieces of at most eight lines (owner decisions 2026-11-08 evening, both profiles). (6 classes, 13 functions)
+- [docpipe.extraction.units](docpipe.extraction.units.md): A plan's passages as numbered lines, cut into pieces of at most eight lines (owner decisions 2026-11-08 evening, both profiles). (6 classes, 16 functions)
 - [docpipe.extraction.verify](docpipe.extraction.verify.md): Checks a claimed tuple against the spec and the source text before it is written to the harvest. (2 classes, 16 functions)
 - [docpipe.extraction.wording](docpipe.extraction.wording.md): What the extraction stage says to the model outside its prompts. (2 functions)
 

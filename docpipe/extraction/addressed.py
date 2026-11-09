@@ -12,28 +12,38 @@ asked once more as a request of its own, with what did not hold (`follow`).
 The steps of a document (`Reader`):
 
 1. Its passages as numbered lines and pieces of at most eight
-   (`units.Chunk`); a figure transcribed into lines once per run and kept
-   under the harvest (`Transcripts`), its image sent to no other request.
+   (`units.Chunk`); a figure transcribed once per run into its caption and
+   its numbers and kept under the harvest (`Transcripts`), its image sent
+   to no other request. A field of numbers reads a figure in the pieces of
+   its numbers, any other field in the piece of its caption
+   (`units.pieces_for`).
 2. What the plan settles for all its values and its own years, where the
-   profile asks them (`PLAN_FIELDS`), and the fields a document has once
-   (`Parameter.once_per_document`): the title page and the five pieces a
-   search finds best for a sentence written for the field, then the next
-   five, until an answer holds or every piece was shown (`docfield`).
-3. Every other field in every piece, the pieces best first for the
-   field's sentences (`find`): each value an address and its words.
-4. Each coordinate of each value on its own (`coord`): the value's line
+   profile asks them (`PLAN_FIELDS`). Where the profile keeps a list of
+   works, every piece is asked once which of its lines speak of another
+   work and which line shows the rest are this publication's own (`work`,
+   owner decisions 2026-11-09): a value takes the work of the line it
+   stands in only from such a line, else asks its own (`work_coordinate`).
+3. The fields a document has once (`Parameter.once_per_document`): the
+   title page and the pieces a search finds best for a sentence written
+   for the field, the run's budget of them, five a request, every find
+   kept (`docfield`); a field with a list twice the budget.
+4. Every other field in every piece, the pieces best first for the
+   field's sentences (`find`): each value an address and its words, and
+   where the field has a list, its entry (owner decision 2026-11-09).
+5. Each coordinate of each value on its own (`coord`): the value's line
    with the head of its table or the sentences beside it, the headings up
    to it, the title page and the plan's settings; the answer an address and
-   words, or 0 with a sentence of how the plan would print what is missing
-   (HyDE). An entry of a list is asked once per wording (`list`), a name of
-   the document's list of scenarios or works once per name (`names`). A 0
-   is asked again with the pieces before and after the value's, then with
-   the pieces a search with that sentence finds best, five at a time
-   (`search`); what only the value's own passage can say is not searched.
-   A find from another passage is asked whether it speaks about the value
-   (`check`). A year still open is asked last with the plan's base and
-   target years.
-5. A value stated for a group of scenarios takes the members the document
+   words, or 0. An entry of a list is asked once per wording (`list`), a
+   name of the document's list of scenarios or works once per name
+   (`names`), 0 where the words name no such thing. A 0 is asked again
+   with the pieces before and after the value's, then with the pieces a
+   search finds best for a sentence of how the plan would print the answer
+   (HyDE, `phrase`): the run's budget of them by kind, five a request, the
+   model fetching more itself (`search`); what only the value's own passage
+   can say is not searched, and no work is. A find from another passage is
+   asked whether it speaks about the value (`check`). A year still open is
+   asked last with the plan's base and target years.
+6. A value stated for a group of scenarios takes the members the document
    names, one row each, where the field takes groups
    (`Parameter.takes_group`).
 
@@ -65,7 +75,8 @@ from .reading import (CUT, NO_ANSWER, Read, groups_of, in_group_order,
                       link_ranges, slots_of, span_rows)
 from .units import (HEADINGS, OTHERS, SETTINGS, TITLE_PAGE, Chunk, Line,
                     Passage, Shown, address_of, chunks_of, own_lines,
-                    passage_lines, passage_of, short_quote, title_page_of)
+                    passage_lines, passage_of, pieces_for, short_quote,
+                    title_page_of)
 from .verify import MIN_QUOTE_CHARS, canonical_number, flat, numbers_in
 from .wording import say
 
@@ -73,12 +84,13 @@ log = logging.getLogger(__name__)
 
 # The requests and their prompts, one task each.
 KINDS = ("transcribe", "find", "docfield", "coord", "list", "names",
-         "search", "check", "follow")
+         "search", "check", "follow", "work", "phrase")
 PROMPT_IDS = {kind: f"extraction/{kind}" for kind in KINDS}
 # Requests a profile may leave unwritten: the check of a find from another
-# passage, and the names request of a run that builds no list of names
-# (`runner.names_asked`).
-OPTIONAL = ("check", "names")
+# passage, the names request and the work request of a run that builds no
+# list of names or works (`runner.names_asked`), and the sentence a search
+# goes with, without which it goes with the field's.
+OPTIONAL = ("check", "names", "work", "phrase")
 
 # Why a find or a coordinate's answer does not hold beyond the two checks of
 # the harvest: its address names no line the request showed, or its words
@@ -86,12 +98,12 @@ OPTIONAL = ("check", "names")
 NOT_AN_ADDRESS = "not_an_address"
 WORDS_NOT_IN_LINE = "words_not_in_line"
 
-# Pieces a document field's request shows besides the title page, and a
-# search's request (owner decisions 2026-11-08).
-DOCFIELD_CHUNKS = 5
-SEARCH_CHUNKS = 5
-# Passages of a search whose pieces the reranker orders before the rest.
-SEARCH_PASSAGES = 10
+# What a search shows (owner decisions 2026-11-09): this many pieces, first
+# the best of each kind up to its share, then the best of the rest; this
+# many a request. A run sets its own (`runner.search_budget`).
+SEARCH_PIECES = 50
+SEARCH_SHARES = {"table": 20, "figure": 15, "section": 15}
+PER_REQUEST = 5
 # Entries of a list shown with what each means; a longer list shows its
 # names only, and one whose entries name groups is asked group first.
 LIST_WITH_MEANS = 24
@@ -117,6 +129,35 @@ def told(why: str, entry) -> str:
     the address and the words it gave."""
     entry = entry if isinstance(entry, dict) else {}
     return say(why, at=entry.get("at"), words=entry.get("words"))
+
+
+def refusals(refused: list) -> list:
+    """What a follow-up tells of the finds that did not hold: each as it
+    was given, and why in the profile's words."""
+    out = []
+    for entry, why in refused:
+        text = say(why, given=entry.get("entry")) if why == "not_an_option" \
+            else told(why, entry)
+        out.append({**entry, "why": text})
+    return out
+
+
+def joined(held: list, more: list) -> list:
+    """*held* and those finds of *more* that are not among them: a line,
+    its cell and its words once."""
+    def key(got) -> tuple:
+        return (id(got.lines[0][0]), got.cell, flat(got.words).casefold())
+    taken = {key(got) for got in held}
+    return held + [got for got in more if key(got) not in taken]
+
+
+def work_read(claim: dict) -> Optional[dict]:
+    """How a value read its work, its `work` fields, None where it read
+    none."""
+    if claim.get("work_state") != READ:
+        return None
+    return {key: copy.deepcopy(value) for key, value in claim.items()
+            if key == "work" or key.startswith("work_")}
 
 
 def number_of(words: str) -> Optional[str]:
@@ -170,27 +211,72 @@ def more_schema() -> dict:
         "required": ["get"], "additionalProperties": False}}
 
 
-def found_format() -> dict:
+# A find of a field with a list: the number of its entry beside its address
+# and words (owner decision 2026-11-09).
+_ENTRY_FOUND = {"type": "object",
+                "properties": {"entry": {"type": "integer"},
+                               "at": {"type": "string"},
+                               "words": {"type": "string"}},
+                "required": ["entry", "at", "words"],
+                "additionalProperties": False}
+
+
+def found_format(closed: bool = False) -> dict:
     """The finds of a request: each an address and the words of the value,
-    an empty list where nothing shown holds one."""
+    and where the field has a list the number of its entry (*closed*); an
+    empty list where nothing shown holds one."""
     return _format("found_reply", {
         "type": "object",
-        "properties": {"found": {"type": "array", "items": _FOUND}},
+        "properties": {"found": {"type": "array", "items":
+                                 _ENTRY_FOUND if closed else _FOUND}},
         "required": ["found"], "additionalProperties": False})
 
 
+def work_format() -> dict:
+    """The answer of a piece's work request: the lines of other works, each
+    an address and the name as a line prints it, and the line that shows
+    the rest are this publication's own (`own`), 0 where none does."""
+    return _format("work_reply", {
+        "type": "object",
+        "properties": {"found": {"type": "array", "items": _FOUND},
+                       "own": {"type": "object",
+                               "properties": {
+                                   "at": {"type": ["string", "integer"]},
+                                   "words": {"type": "string"}},
+                               "required": ["at"],
+                               "additionalProperties": False}},
+        "required": ["found", "own"], "additionalProperties": False})
+
+
+def work_choice_format() -> dict:
+    """The work of one value, asked as an entry of the document's list of
+    works: its number, 0 for none, and the line that shows it."""
+    return _format("work_choice_reply", {
+        "type": "object",
+        "properties": {"entry": {"type": "integer"},
+                       "at": {"type": ["string", "integer"]},
+                       "words": {"type": "string"}},
+        "required": ["entry"], "additionalProperties": False})
+
+
+def phrase_format() -> dict:
+    """A sentence as the plan would print what a search looks for."""
+    return _format("phrase_reply", {
+        "type": "object", "properties": {"phrase": {"type": "string"}},
+        "required": ["phrase"], "additionalProperties": False})
+
+
 def coord_format(several: bool, more: bool = False) -> dict:
-    """A coordinate's answer: an address and its words, or 0 and the
-    sentence of how the plan would print it (`hyde`); one that may name
-    several entries lists its finds."""
+    """A coordinate's answer: an address and its words, or 0 (owner
+    decision 2026-11-09: the sentence a search goes with is a request of
+    its own, `phrase`); one that may name several entries lists its
+    finds."""
     if several:
-        properties = {"found": {"type": "array", "items": _FOUND},
-                      "hyde": {"type": "string"}}
+        properties = {"found": {"type": "array", "items": _FOUND}}
         required = ["found"]
     else:
         properties = {"at": {"type": ["string", "integer"]},
-                      "words": {"type": "string"},
-                      "hyde": {"type": "string"}}
+                      "words": {"type": "string"}}
         required = ["at"]
     if more:
         properties["more"] = more_schema()
@@ -223,11 +309,13 @@ def year_format() -> dict:
 
 
 def lines_format() -> dict:
+    """A figure transcribed: its caption (title, axes, legend) and its
+    numbers, each a line (owner decision 2026-11-09)."""
+    lines = {"type": "array", "items": {"type": "string"}}
     return _format("lines_reply", {
         "type": "object",
-        "properties": {"lines": {"type": "array",
-                                 "items": {"type": "string"}}},
-        "required": ["lines"], "additionalProperties": False})
+        "properties": {"caption": lines, "numbers": lines},
+        "required": ["caption", "numbers"], "additionalProperties": False})
 
 
 def about_format() -> dict:
@@ -235,25 +323,6 @@ def about_format() -> dict:
         "type": "object", "properties": {"about": {"enum": ["yes", "no"]}},
         "required": ["about"], "additionalProperties": False})
 
-
-def nothing_found(reply) -> bool:
-    """Does a coordinate's answer say nothing shown states it?"""
-    if not isinstance(reply, dict):
-        return False
-    if isinstance(reply.get("found"), list):
-        return not reply["found"]
-    return address_of(reply.get("at")) is None
-
-
-def hyde_missing(reply) -> Optional[str]:
-    """"hyde" where a coordinate's answer says nothing shown states it and
-    gives no sentence and fetches nothing: such a reply is asked again
-    (owner decision 2026-11-08, test 6); None where it holds."""
-    if not isinstance(reply, dict) or not nothing_found(reply) \
-            or reply.get("more"):
-        return None
-    hyde = reply.get("hyde")
-    return None if isinstance(hyde, str) and hyde.strip() else "hyde"
 
 
 # -- what a request shows ----------------------------------------------------
@@ -281,19 +350,33 @@ def block_payload(passage: Optional[Passage], shown: Shown,
     return out
 
 
-def first_address(shown: Shown, table: bool, letter: str = "") -> str:
+def first_address(shown: Shown, cells: bool, letter: str = "") -> str:
     """An address for a request's example: the first of its own lines that
-    is no title or head, a cell of it in a table."""
+    is no title or head, with *cells* a cell of it where it has cells."""
     block = shown.blocks.get(letter) \
         or next(iter(shown.blocks.values()), None)
     if block is None or not block.entries:
         return "1"
     entries = [e for e in block.entries
-               if e[1].role in ("body", "text", "figure", "foot")] \
+               if e[1].role in ("body", "text", "figure", "number",
+                                "foot")] \
         or block.entries
     number, line, _ = entries[0]
-    cell = ".2" if table and line.cells and len(line.cells) > 1 else ""
+    cell = ".2" if cells and line.cells and len(line.cells) > 1 else ""
     return f"{block.letter}{number}{cell}"
+
+
+def find_example(shown: Shown, closed: bool = False,
+                 letter: str = "") -> tuple:
+    """The two replies a request that finds values shows (owner decision
+    2026-11-09: "immer ein Positiv und ein Negativbeispiel"): one find at
+    the request's own first line, and where the field has a list with the
+    number of its entry; and the empty one, where no shown line prints a
+    value."""
+    one = {"at": first_address(shown, True, letter), "words": fields.SAID}
+    if closed:
+        one = {"entry": 1, **one}
+    return {"found": [one]}, {"found": []}
 
 
 @dataclass
@@ -309,6 +392,9 @@ class Found:
     # The lines its quote is: the named ones, and where they are too short
     # to name a place, the shown lines around them (`Shown.around`).
     quoted: list = field(default_factory=list)
+    # The number of the entry of the request's list a find names, where the
+    # field has a list (owner decision 2026-11-09), 0 for none.
+    entry: Optional[int] = None
 
     @property
     def quote(self) -> str:
@@ -317,6 +403,77 @@ class Found:
     @property
     def source(self) -> Optional[Source]:
         return self.lines[0][1] if self.lines else None
+
+
+# A find's entry that is no number of its request's list (`not_an_option`,
+# owner decision 2026-09-11).
+NOT_AN_OPTION = "not_an_option"
+
+
+def listing(options) -> tuple:
+    """(lines, choices, grouped) of a list as a request shows it (owner
+    decisions 2026-11-08): a list longer than `LIST_WITH_MEANS` whose
+    entries name groups is shown by its groups, each a choice; a shorter
+    one with what each entry means, a longer one by its names. *choices*
+    are what a number picks, labels or group names."""
+    options = list(options)
+    groups: list = []
+    for option in options:
+        group = getattr(option, "group", "") or ""
+        if group and group not in groups:
+            groups.append(group)
+    if len(options) > LIST_WITH_MEANS and len(groups) > 1:
+        return ([f"{i} {group}" for i, group in enumerate(groups, start=1)],
+                groups, True)
+    lines = []
+    for i, option in enumerate(options, start=1):
+        text = f"{i} {option.label}"
+        if option.definition and len(options) <= LIST_WITH_MEANS:
+            text += f" (means: {option.definition})"
+        lines.append(text)
+    return lines, [option.label for option in options], False
+
+
+def picked_entry(entry, size: int) -> Optional[int]:
+    """The number a find names of a list of *size*, 0 for none; None where
+    it names no number of the list."""
+    if isinstance(entry, bool):
+        return None
+    try:
+        number = int(str(entry).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if 0 <= number <= size else None
+
+
+def share_of(chunk: Chunk) -> str:
+    """The kind of passage a piece counts under in a search's shares: a
+    table, a figure, else text ("section")."""
+    kind = chunk.passage.kind
+    return kind if kind in ("table", "figure") else "section"
+
+
+def budgeted(ranked: list, budget: int, shares: dict) -> list:
+    """The pieces a search shows of *ranked*, best first (owner decisions
+    2026-11-09: 50 pieces, 20 of tables, 15 of figures, 15 of text, filled
+    up): the best of each kind of passage up to its share, the shares
+    scaled to *budget*, then the best of the rest up to *budget*; in the
+    order of *ranked*."""
+    budget = max(0, int(budget))
+    total = sum(max(0, int(n)) for n in shares.values()) or 1
+    room = {kind: max(0, int(n)) * budget // total
+            for kind, n in shares.items()}
+    picked: set = set()
+    for chunk in ranked:
+        kind = share_of(chunk)
+        if room.get(kind, 0) > 0:
+            room[kind] -= 1
+            picked.add(chunk.key)
+    for chunk in ranked:
+        if len(picked) >= budget:
+            break
+        picked.add(chunk.key)
+    return [chunk for chunk in ranked if chunk.key in picked]
 
 
 def resolve(shown: Shown, entry, passages: dict) -> Found:
@@ -367,10 +524,11 @@ def resolve(shown: Shown, entry, passages: dict) -> Found:
 # -- the plan's figures, transcribed once ------------------------------------
 
 class Transcripts:
-    """figure -> its lines, transcribed once per run and kept under the
-    harvest (`transcripts/<document>.json`): a figure whose image and prompt
-    are those of the kept transcription is not asked again (owner decision
-    2026-11-08, e).
+    """figure -> its caption and its numbers, transcribed once per run and
+    kept under the harvest (`transcripts/<document>.json`): a figure whose
+    image and prompt are those of the kept transcription is not asked again
+    (owner decision 2026-11-08, e); one kept in another form is (owner
+    decision 2026-11-09: caption and numbers apart).
 
     *ask(source, document_id)* is the transcription request, the reply as
     a dict or None; *fingerprint* says which prompt and model wrote it,
@@ -399,9 +557,9 @@ class Transcripts:
 
     def __call__(self, document_id: int, figures: list,
                  each: Optional[Callable] = None) -> tuple:
-        """({figure id: [lines]}, asked) of *figures*: the kept ones read,
-        the others asked (*each(jobs, run)* runs them side by side) and
-        kept."""
+        """({figure id: {"caption": [lines], "numbers": [lines]}}, asked)
+        of *figures*: the kept ones read, the others asked (*each(jobs,
+        run)* runs them side by side) and kept."""
         kept = self._load(document_id)
         out: dict = {}
         wanted = []
@@ -412,27 +570,35 @@ class Transcripts:
             entry = kept.get(str(source.owner_id)) or {}
             if entry.get("image") == key \
                     and entry.get("prompt") == self.fingerprint \
-                    and isinstance(entry.get("lines"), list):
-                out[source.owner_id] = list(entry["lines"])
+                    and isinstance(entry.get("caption"), list) \
+                    and isinstance(entry.get("numbers"), list):
+                out[source.owner_id] = {"caption": list(entry["caption"]),
+                                        "numbers": list(entry["numbers"])}
             elif self.ask is not None:
                 wanted.append((source, key))
+
+        def lines_of(reply, name: str) -> Optional[list]:
+            lines = reply.get(name) if isinstance(reply, dict) else None
+            if not isinstance(lines, list):
+                return None
+            return [str(line).strip() for line in lines if str(line).strip()]
 
         def one(job):
             source, key = job
             reply = self.ask(source, document_id)
-            lines = reply.get("lines") if isinstance(reply, dict) else None
-            if not isinstance(lines, list):
+            caption, numbers = lines_of(reply, "caption"), \
+                lines_of(reply, "numbers")
+            if caption is None or numbers is None:
                 return source, key, None
-            return source, key, [str(line).strip() for line in lines
-                                 if str(line).strip()]
+            return source, key, {"caption": caption, "numbers": numbers}
         done = (each(wanted, one) if each is not None
                 else [one(job) for job in wanted])
         changed = False
         for source, key, lines in done:
-            if not lines:
+            if not lines or not (lines["caption"] or lines["numbers"]):
                 continue
             out[source.owner_id] = lines
-            kept[str(source.owner_id)] = {"image": key, "lines": lines,
+            kept[str(source.owner_id)] = {"image": key, **lines,
                                           "prompt": self.fingerprint}
             changed = True
         path = self._path(document_id)
@@ -460,12 +626,28 @@ def image_key(path: Optional[str]) -> Optional[str]:
 @dataclass
 class Entry:
     """One entry of a document's list of names: what it is called in
-    requests and in the graph, the work it belongs to, and the line it was
-    first read at."""
+    requests and in the graph, the work it belongs to, the line it was
+    first read at, and how the value it was first read for read its work
+    (its `work*` fields), which a later name of the entry whose own work
+    stayed open takes (owner decision 2026-11-09)."""
     label: str
     name: str
     work: int = 0
     quote: str = ""
+    work_read: Optional[dict] = None
+
+
+@dataclass
+class PieceWork:
+    """What a piece's work request answered (owner decisions 2026-11-09):
+    the finds of other works, each (the (passage, line) pairs it covers or
+    None for the whole piece, the number of its entry of the document's
+    list of works, the find), the line that shows the rest of the piece is
+    this publication's own (None where none does), and what the request
+    showed, which a work read from it is checked against."""
+    finds: list = field(default_factory=list)
+    own: Optional["Found"] = None
+    evidence: list = field(default_factory=list)
 
 
 class Names:
@@ -480,7 +662,8 @@ class Names:
         self.lock = threading.Lock()
         self.asked: dict = {}
 
-    def add(self, name: str, work: int = 0, quote: str = "") -> int:
+    def add(self, name: str, work: int = 0, quote: str = "",
+            work_read: Optional[dict] = None) -> int:
         """The number of a new entry for *name*, or of the entry a request
         beside this one added for the same name of the same work; a label
         another entry has already is told apart by its work."""
@@ -492,7 +675,7 @@ class Names:
             label = name
             if any(e.label == label for e in self.entries):
                 label = f"{name} ({work})"
-            self.entries.append(Entry(label, name, work, quote))
+            self.entries.append(Entry(label, name, work, quote, work_read))
             return len(self.entries)
 
     def shown(self, works: Optional["Names"] = None) -> list:
@@ -533,14 +716,26 @@ class Plan:
             self.chunks.extend(chunks_of(passage, chunk_units))
         self.by_key = {chunk.key: chunk for chunk in self.chunks}
         self.position = {chunk.key: i for i, chunk in enumerate(self.chunks)}
+        # The pieces a field of numbers reads, and those any other field
+        # reads (`units.pieces_for`), each with the place of its pieces.
+        self.views = {numbers: pieces_for(self.chunks, numbers)
+                      for numbers in (True, False)}
+        self.places = {numbers: {chunk.key: i for i, chunk in
+                                 enumerate(view)}
+                       for numbers, view in self.views.items()}
         self.title_page = title_page_of(list(self.passages.values()))
         self.settings: list = []          # [(Line, Source)]
         self.bases: list = []             # `pipeline.named_years` entries
         self.lists: dict = {}
         self.names: dict = {}             # kind -> Names
+        self.works_of: dict = {}          # piece key -> PieceWork
         self.lock = threading.Lock()
         self._locks: dict = {}
         self._headings: dict = {}
+
+    def pieces(self, numbers: bool) -> list:
+        """The pieces a field reads, of numbers or not (`pieces_for`)."""
+        return self.views[bool(numbers)]
 
     def key_lock(self, key) -> threading.Lock:
         with self.lock:
@@ -564,19 +759,24 @@ class Plan:
             self._headings[owner] = got
         return got
 
-    def chunk_of(self, owner: tuple, number: int) -> Optional[Chunk]:
-        """The piece of a passage that holds its line *number*."""
-        pieces = [c for c in self.chunks if c.owner == tuple(owner)]
+    def chunk_of(self, owner: tuple, number: int,
+                 numbers: Optional[bool] = None) -> Optional[Chunk]:
+        """The piece of a passage that holds its line *number*, of those a
+        field of numbers or another field reads where *numbers* says which;
+        a line every piece shows is the first piece's."""
+        chunks = self.chunks if numbers is None else self.pieces(numbers)
+        pieces = [c for c in chunks if c.owner == tuple(owner)]
         return next((c for c in pieces if number in c.numbers),
                     pieces[0] if pieces else None)
 
-    def beside(self, chunk: Chunk) -> list:
-        """The pieces right before and after *chunk* in the plan's order."""
-        at = self.position.get(chunk.key)
+    def beside(self, chunk: Chunk, numbers: bool = False) -> list:
+        """The pieces right before and after *chunk* among those a field of
+        numbers or another field reads."""
+        view = self.pieces(numbers)
+        at = self.places[bool(numbers)].get(chunk.key)
         if at is None:
             return []
-        return [self.chunks[i] for i in (at - 1, at + 1)
-                if 0 <= i < len(self.chunks)]
+        return [view[i] for i in (at - 1, at + 1) if 0 <= i < len(view)]
 
 
 def show_value(plan: Plan, claim: dict, headings: bool = True) -> tuple:
@@ -617,10 +817,12 @@ def show_value(plan: Plan, claim: dict, headings: bool = True) -> tuple:
 @dataclass
 class Asks:
     """The requests of the harvest, each (payload, document_id, *, shape,
-    example, **noted) -> the reply as a dict, CUT or None. *follow* is a
-    request asked once more with what did not hold: (kind, payload,
-    document_id, *, shape, example, **noted). *check* and *names* are None
-    where the profile writes no prompt for them (`OPTIONAL`)."""
+    example, **noted) -> the reply as a dict, CUT or None; a request that
+    finds values shows two replies, *example* a pair (`find_example`).
+    *follow* is a request asked once more with what did not hold: (kind,
+    payload, document_id, *, shape, example, **noted). *check*, *names*,
+    *work* and *phrase* are None where the profile writes no prompt for them
+    (`OPTIONAL`)."""
     find: Callable
     docfield: Callable
     coord: Callable
@@ -629,6 +831,8 @@ class Asks:
     follow: Callable
     names: Optional[Callable] = None
     check: Optional[Callable] = None
+    work: Optional[Callable] = None
+    phrase: Optional[Callable] = None
 
 
 @dataclass
@@ -672,12 +876,18 @@ class Reader:
     whose finds name other works and the fields each of them is asked
     ({"name", "means", "fields": {uri: question}}), None where the profile
     keeps no list of works. *frame_slots* date a value by the plan's years.
-    *each(jobs, run)* runs jobs side by side; *budget* is how many lists of
-    a search one coordinate walks before it is `exhausted`.
+    *each(jobs, run)* runs jobs side by side. *rerank(document_id,
+    sentences, chunks)* orders the pieces a search shows; *budget* is how
+    many pieces a search shows, *shares* how many of them each kind of
+    passage gets first ("table", "figure", "section"), *per_request* how
+    many a request shows (owner decisions 2026-11-09: 50, 20/15/15, 5).
+    *context(document_id)* is what the document says of itself (its title,
+    its municipality), which a search sentence is written with.
     """
 
     def __init__(self, spec, asks: Asks, order: Callable, *,
                  search_order: Optional[Callable] = None,
+                 rerank: Optional[Callable] = None,
                  probes: Optional[Callable] = None,
                  known: Optional[Callable] = None,
                  span_marks: Optional[dict] = None,
@@ -685,11 +895,16 @@ class Reader:
                  works: Optional[dict] = None,
                  frame_slots: Optional[list] = None,
                  each: Optional[Callable] = None, trace=None,
-                 budget: int = 12):
+                 budget: int = SEARCH_PIECES,
+                 shares: Optional[dict] = None,
+                 per_request: int = PER_REQUEST,
+                 context: Optional[Callable] = None):
         self.spec = spec
         self.asks = asks
         self.order = order
         self.search_order = search_order or order
+        self.rerank = rerank or (lambda document_id, sentences, chunks:
+                                 list(chunks))
         self.probes = probes or (lambda parameter, document_id: [])
         self.known = known or (lambda claim, asked: {})
         self.span_marks = dict(span_marks or {})
@@ -699,6 +914,9 @@ class Reader:
         self.each = each or (lambda jobs, run: [run(job) for job in jobs])
         self.trace = trace
         self.budget = max(1, int(budget))
+        self.shares = dict(SEARCH_SHARES if shares is None else shares)
+        self.per_request = max(1, int(per_request))
+        self.context = context or (lambda document_id: {})
 
     def _traced(self, event: str, document_id: int, /,
                 **values) -> None:
@@ -761,7 +979,7 @@ class Reader:
         if self.works_field is not None and "work" in plan.names \
                 and (chunks is None or isinstance(chunks, dict)
                      and any(v is None for v in chunks.values())):
-            reads.extend(self.works(plan, list(plan.chunks), counts))
+            reads.extend(self.works(plan, plan.pieces(False), counts))
         once = [p for p in parameters
                 if getattr(p, "once_per_document", False)]
         for parameter in once:
@@ -769,7 +987,8 @@ class Reader:
         located = [p for p in parameters if p not in once]
         jobs = []
         for parameter in located:
-            chosen = pieces_of(parameter.uri)
+            view = set(plan.pieces(parameter.is_numeric))
+            chosen = [c for c in pieces_of(parameter.uri) if c in view]
             held = set(chosen)
             ranked = (order_of or {}).get(parameter.uri) or []
             pieces = [plan.by_key[tuple(key)] for key in ranked
@@ -875,61 +1094,78 @@ class Reader:
         heads = plan.headings(chunk.owner)
         shown.add(HEADINGS, "headings", heads, renumber=True)
         shown.add("", "passage", own_lines(chunk))
+        listed = self.listed(parameter)
         payload = {"field": field_shown(parameter),
+                   **({"list": listed[0]} if listed else {}),
                    **({"headings": shown.rendered(HEADINGS)}
                       if heads else {}),
                    "passage": block_payload(chunk.passage, shown)}
-        example = {"found": [{"at": first_address(
-            shown, chunk.passage.kind == "table"), "words": fields.SAID}]}
+        example = find_example(shown, listed is not None)
+        shape = found_format(listed is not None)
         noted = {"parameter": parameter.uri, "kind": chunk.passage.kind,
                  "owner": chunk.passage.source.owner_id, "chunk": chunk.index}
         out = {"claims": [], "asked": 1, "failed": collections.Counter(),
                "lost": None}
-        reply = self._ask("find", payload, plan.document_id, found_format(),
+        reply = self._ask("find", payload, plan.document_id, shape,
                           example, counts, **noted)
         if not isinstance(reply, dict):
             out["lost"] = CUT if reply == CUT else NO_ANSWER
             return out
-        held, refused = self._finds(plan, parameter, shown, reply)
+        held, refused = self._finds(plan, shown, reply, listed,
+                                    parameter.is_numeric)
         if refused:
             out["failed"].update(why for _, why in refused)
             for _, why in refused:
                 counts.fail(why)
             again = self._follow(
-                "find", payload, plan.document_id, found_format(), example,
-                reply, [{**entry, "why": told(why, entry)}
-                        for entry, why in refused],
-                counts, **noted)
+                "find", payload, plan.document_id, shape, example,
+                reply, refusals(refused), counts, **noted)
             out["asked"] += 1
             if isinstance(again, dict):
-                more, _ = self._finds(plan, parameter, shown, again)
-                taken = {(id(g.lines[0][0]), g.cell, g.words) for g in held}
-                held += [g for g in more if (id(g.lines[0][0]), g.cell,
-                                             g.words) not in taken]
+                more, _ = self._finds(plan, shown, again, listed,
+                                      parameter.is_numeric)
+                held = joined(held, more)
         for got in held:
             claim = self.claim(plan, parameter, got, counts)
             if claim is not None:
                 out["claims"].append(claim)
         return out
 
-    def _finds(self, plan: Plan, parameter, shown: Shown, reply) -> tuple:
+    def listed(self, parameter) -> Optional[tuple]:
+        """The list a field's finds name their entry in (`listing`), None
+        for a field without one (owner decision 2026-11-09: a field with a
+        list is asked with it, the answer the number of its entry)."""
+        if parameter.value_type != "category":
+            return None
+        options = fields.value_choice(parameter).options
+        return listing(options) if options else None
+
+    @staticmethod
+    def _finds(plan: Plan, shown: Shown, reply, listed=None,
+               numeric: bool = False) -> tuple:
         """([Found] that hold, [(entry, why)] that do not) of a reply: a
-        number's words name exactly one number."""
+        number's words name exactly one number, and a find of a field with
+        a list names a number of it (`not_an_option`)."""
         held, refused = [], []
         for entry in reply.get("found") or ():
             if not isinstance(entry, dict):
                 continue
             got = resolve(shown, entry, plan.passages)
-            if got.why is None and parameter.is_numeric \
+            if got.why is None and numeric \
                     and number_of(got.words) is None:
                 got.why = WORDS_NOT_IN_LINE
             if got.why is None and got.passage is None:
                 got.why = NOT_AN_ADDRESS
+            if got.why is None and listed is not None:
+                got.entry = picked_entry(entry.get("entry"), len(listed[1]))
+                if got.entry is None:
+                    got.why = NOT_AN_OPTION
             if got.why is None:
                 held.append(got)
             else:
-                refused.append(({"at": entry.get("at"),
-                                 "words": entry.get("words")}, got.why))
+                refused.append(({key: entry.get(key) for key in
+                                 ("entry", "at", "words") if key in entry},
+                                got.why))
         return held, refused
 
     def claim(self, plan: Plan, parameter, got: Found,
@@ -937,7 +1173,9 @@ class Reader:
         """The claim of a value found: its number or words, the line as its
         quote, its address, the head of its column, and for a figure that a
         model read it off a picture (`drawn`, trust level C). A value of a
-        list is asked its entry (`list`)."""
+        list is the entry its find named, the entry of a group named asked
+        among the group's (`list`); one found without its entry is asked
+        it."""
         passage = got.passage
         if passage is None:
             return None
@@ -952,9 +1190,18 @@ class Reader:
             claim["value_raw"] = got.words
         elif parameter.value_type == "category":
             slot = fields.value_choice(parameter)
-            entry = self.entry(plan, parameter.uri, "value", slot,
-                               got.words, got, counts) \
-                if slot.options else ""
+            entry = ""
+            if slot.options and got.entry is not None:
+                _lines, choices, grouped = listing(slot.options)
+                if got.entry and grouped:
+                    entry = self.entry(plan, parameter.uri, "value", slot,
+                                       got.words, got, counts,
+                                       group=choices[got.entry - 1])
+                elif got.entry:
+                    entry = choices[got.entry - 1]
+            elif slot.options:
+                entry = self.entry(plan, parameter.uri, "value", slot,
+                                   got.words, got, counts)
             claim["value"] = entry or ""
             claim["value_raw"] = got.words
         else:
@@ -973,22 +1220,48 @@ class Reader:
 
     # -- what a document has once ------------------------------------------------
 
+    def shown_order(self, plan: Plan, sentences: list, pieces: list,
+                    budget: Optional[int] = None) -> list:
+        """The pieces a search for *sentences* shows, in the order it shows
+        them (owner decisions 2026-11-09): of the pieces of the passages
+        the vector search finds best, the *budget* best by kind
+        (`budgeted`), ordered once by the reranker with the same
+        sentences."""
+        sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
+        ranked = self.search_order(plan.document_id, sentences, pieces)
+        picked = budgeted(ranked, budget or self.budget, self.shares)
+        if not sentences or len(picked) < 2:
+            return picked
+        return self.rerank(plan.document_id, sentences, picked)
+
     def ask_once(self, plan: Plan, field_: dict, sentences: list,
-                 counts: Counts, uri: str) -> tuple:
+                 counts: Counts, uri: str, *, numbers: bool = False,
+                 budget: Optional[int] = None, listed=None,
+                 until_held: bool = False) -> tuple:
         """([Found], lost) of a field asked once of the document
-        (`docfield`): the title page and the `DOCFIELD_CHUNKS` pieces a
-        search finds best for *sentences*, then the next ones, until an
-        answer holds or every piece was shown. *lost* is CUT or NO_ANSWER
-        where a request came to nothing, else None."""
-        ranked = self.search_order(plan.document_id, list(sentences),
-                                   plan.chunks)
-        first = True
-        for start in range(0, max(len(ranked), 1), DOCFIELD_CHUNKS):
-            batch = ranked[start:start + DOCFIELD_CHUNKS]
-            if not batch and not first:
+        (`docfield`): the title page, then the pieces a search finds best
+        for *sentences* (`shown_order`, *budget* of them), `per_request` a
+        request, every find that holds kept; with *until_held* those of the
+        first request that finds one, the rest of the plan after the budget
+        (what the plan settles, `settled`). *listed* is the field's list
+        (`listing`), whose entry a find names. *lost* is CUT or NO_ANSWER
+        where a request came to nothing and nothing was found, else
+        None."""
+        pieces = plan.pieces(numbers)
+        order = self.shown_order(plan, list(sentences), pieces, budget)
+        if until_held:
+            taken = set(order)
+            order += [c for c in self.search_order(
+                plan.document_id, list(sentences), pieces) if c not in taken]
+        shape = found_format(listed is not None)
+        found: list = []
+        lost = None
+        for start in range(0, max(len(order), 1), self.per_request):
+            batch = order[start:start + self.per_request]
+            if not batch and start:
                 break
             shown = Shown()
-            if first:
+            if not start:
                 shown.add(TITLE_PAGE, "title_page", plan.title_page,
                           renumber=True)
             letters: list = []
@@ -1004,41 +1277,35 @@ class Reader:
                                    .owner_id)), shown, letter)
                 for letter in letters}
             payload = {"field": field_,
+                       **({"list": listed[0]} if listed else {}),
                        **({"title_page": shown.rendered(TITLE_PAGE)}
                           if TITLE_PAGE in shown.blocks else {}),
                        **({"passages": blocks} if blocks else {})}
-            example = {"found": [{"at": first_address(
-                shown, False, TITLE_PAGE if first and plan.title_page
-                else (letters[0] if letters else "")),
-                "words": fields.SAID}]}
-            first = False
-            reply = self._ask("docfield", payload, plan.document_id,
-                              found_format(), example, counts,
-                              parameter=uri, chunks=len(batch))
+            example = find_example(
+                shown, listed is not None,
+                TITLE_PAGE if TITLE_PAGE in shown.blocks
+                else (letters[0] if letters else ""))
+            reply = self._ask("docfield", payload, plan.document_id, shape,
+                              example, counts, parameter=uri,
+                              chunks=len(batch))
             if not isinstance(reply, dict):
-                return [], CUT if reply == CUT else NO_ANSWER
-            entries = [e for e in reply.get("found") or ()
-                       if isinstance(e, dict)]
-            got = [resolve(shown, e, plan.passages) for e in entries]
-            held = [g for g in got if g.why is None]
-            refused = [(e, g.why) for e, g in zip(entries, got) if g.why]
+                lost = lost or (CUT if reply == CUT else NO_ANSWER)
+                continue
+            held, refused = self._finds(plan, shown, reply, listed, numbers)
             if refused:
                 for _, why in refused:
                     counts.fail(why)
                 again = self._follow(
-                    "docfield", payload, plan.document_id, found_format(),
-                    example, reply,
-                    [{"at": e.get("at"), "words": e.get("words"),
-                      "why": told(why, e)} for e, why in refused], counts,
-                    parameter=uri)
+                    "docfield", payload, plan.document_id, shape, example,
+                    reply, refusals(refused), counts, parameter=uri)
                 if isinstance(again, dict):
-                    held += [g for g in (resolve(shown, e, plan.passages)
-                                         for e in again.get("found") or ()
-                                         if isinstance(e, dict))
-                             if g.why is None]
-            if held:
-                return held, None
-        return [], None
+                    more, _ = self._finds(plan, shown, again, listed,
+                                          numbers)
+                    held = joined(held, more)
+            found = joined(found, held)
+            if until_held and found:
+                return found, None
+        return found, (lost if not found else None)
 
     def docfield(self, plan: Plan, parameter, counts: Counts) -> list:
         """[Read] of a field the document has once (owner decision
@@ -1048,8 +1315,13 @@ class Reader:
         unread with its reason where a request came to nothing."""
         sentences = list(self.probes(parameter, plan.document_id) or ()) \
             or [parameter.label]
-        found, lost = self.ask_once(plan, field_shown(parameter, full=True),
-                                    sentences, counts, parameter.uri)
+        listed = self.listed(parameter)
+        # A field with a list reads twice the budget (owner decision
+        # 2026-11-09: "dann aber doppeltes Budget bei Chunks").
+        found, lost = self.ask_once(
+            plan, field_shown(parameter, full=True), sentences, counts,
+            parameter.uri, numbers=parameter.is_numeric,
+            budget=self.budget * (2 if listed else 1), listed=listed)
         reads: dict = {}
         for got in found:
             source = got.source
@@ -1089,7 +1361,8 @@ class Reader:
         if field_:
             found, _ = self.ask_once(plan, field_shown_of(field_),
                                      [field_.get("sentence")
-                                      or field_["name"]], counts, "settings")
+                                      or field_["name"]], counts, "settings",
+                                     until_held=True)
             lines: list = []
             for got in found:
                 for line, source in got.lines:
@@ -1105,7 +1378,7 @@ class Reader:
             found, _ = self.ask_once(plan, field_shown_of(field_),
                                      [field_.get("sentence")
                                       or field_["name"]], counts,
-                                     f"{state}_year")
+                                     f"{state}_year", until_held=True)
             for got in found:
                 for number in YEAR.findall(got.words):
                     value = int(number)
@@ -1128,22 +1401,28 @@ class Reader:
     # -- lists ---------------------------------------------------------------------
 
     def entry(self, plan: Plan, uri: str, name: str, slot, words: str,
-              got: Optional[Found], counts: Counts, several: bool = False):
+              got: Optional[Found], counts: Counts, several: bool = False,
+              group: Optional[str] = None):
         """The entry of *slot*'s list a wording means, asked once per
-        document, field, coordinate and wording (`list`, owner decision
-        2026-11-08): its label, a list of labels where several may be
-        meant, "" where none fits (0)."""
-        key = ("list", uri, name, flat(words).casefold())
+        document, field, coordinate, wording and group (`list`, owner
+        decision 2026-11-08): its label, a list of labels where several may
+        be meant, "" where none fits (0). With *group* (a find named it,
+        owner decision 2026-11-09) the entries of that group are asked."""
+        key = ("list", uri, name, flat(words).casefold(), group or "")
         with plan.key_lock(key):
             if key not in plan.lists:
                 plan.lists[key] = self._entry(plan, uri, name, slot, words,
-                                              got, counts, several)
+                                              got, counts, several, group)
             return copy.copy(plan.lists[key])
 
     def _entry(self, plan: Plan, uri: str, name: str, slot, words: str,
-               got: Optional[Found], counts: Counts, several: bool):
-        options = [(o.label, o.definition, getattr(o, "group", "") or "")
-                   for o in slot.options]
+               got: Optional[Found], counts: Counts, several: bool,
+               group: Optional[str] = None):
+        """The list as it is: each entry by its name and what it means,
+        never by how this document named it before (owner decision
+        2026-11-09: what an earlier answer wrote beside an entry steered
+        every later one)."""
+        options = list(slot.options)
         if not options:
             return [words] if several else words
         shown_line: dict = {}
@@ -1151,58 +1430,47 @@ class Reader:
             shown_line["lines"] = [line.text for line, _ in got.lines]
             if got.passage is not None and got.passage.kind == "table":
                 shown_line["table"] = got.passage.title
-        groups: list = []
-        for _label, _means, group in options:
-            if group and group not in groups:
-                groups.append(group)
-        chosen = options
         noted = {"parameter": uri, "coordinate": name}
-        if len(options) > LIST_WITH_MEANS and len(groups) > 1:
-            # A long list in two steps: its groups, then the entries of the
-            # group chosen, with what each means.
-            payload = {"words": words, "question": slot.question or name,
-                       **shown_line, **settings_of(plan),
-                       "list": [f"{i} {g}" for i, g in enumerate(groups, 1)]}
-            reply = self._ask("list", payload, plan.document_id,
-                              entry_format(), {"entry": 1}, counts,
-                              **noted, step="group")
-            picks = self._picks(reply, len(groups), False) or []
-            if picks:
-                chosen = [o for o in options if o[2] == groups[picks[0] - 1]]
-        listed = []
-        for i, (label, means, _group) in enumerate(chosen, start=1):
-            text = f"{i} {label}"
-            if means and len(chosen) <= LIST_WITH_MEANS:
-                text += f" (means: {means})"
-            with plan.lock:
-                said = list(plan.lists.get(("said", uri, name, label), ()))
-            if said:
-                text += f" (in this document: {', '.join(said[:3])})"
-            listed.append(text)
+        chosen = options
+        if group is not None:
+            chosen = [o for o in options
+                      if (getattr(o, "group", "") or "") == group] or options
+        else:
+            lines, choices, grouped = listing(options)
+            if grouped:
+                # A long list in two steps: its groups, then the entries of
+                # the group chosen, with what each means.
+                payload = {"words": words,
+                           "question": slot.question or name,
+                           **shown_line, **settings_of(plan), "list": lines}
+                reply = self._ask("list", payload, plan.document_id,
+                                  entry_format(), {"entry": 1}, counts,
+                                  **noted, step="group")
+                picks = self._picks(reply, len(choices), False) or []
+                if picks:
+                    chosen = [o for o in options
+                              if (getattr(o, "group", "") or "")
+                              == choices[picks[0] - 1]]
+        listed, labels, _grouped = listing(chosen)
         payload = {"words": words, "question": slot.question or name,
                    **shown_line, **settings_of(plan), "list": listed}
         example = {"entry": [1]} if several else {"entry": 1}
         shape = entry_format(several)
         reply = self._ask("list", payload, plan.document_id, shape, example,
                           counts, **noted)
-        picks = self._picks(reply, len(chosen), several)
+        picks = self._picks(reply, len(labels), several)
         if picks is None:
-            counts.fail("not_an_option")
+            counts.fail(NOT_AN_OPTION)
             given = reply.get("entry") if isinstance(reply, dict) else None
             again = self._follow("list", payload, plan.document_id, shape,
                                  example, reply,
-                                 [say("not_an_option", given=given)],
+                                 [say(NOT_AN_OPTION, given=given)],
                                  counts, **noted)
-            picks = self._picks(again, len(chosen), several) or []
-        labels = [chosen[i - 1][0] for i in picks]
-        with plan.lock:
-            for label in labels:
-                said = plan.lists.setdefault(("said", uri, name, label), [])
-                if words not in said:
-                    said.append(words)
+            picks = self._picks(again, len(labels), several) or []
+        picked = [labels[i - 1] for i in picks]
         if several:
-            return labels
-        return labels[0] if labels else ""
+            return picked
+        return picked[0] if picked else ""
 
     @staticmethod
     def _picks(reply, size: int, several: bool) -> Optional[list]:
@@ -1231,12 +1499,15 @@ class Reader:
     def name_of(self, plan: Plan, kind: str, words: str,
                 got: Optional[Found], counts: Counts, work: int = 0,
                 besides: tuple = (), group: bool = False,
-                uri: str = "") -> list:
+                uri: str = "", work_read: Optional[dict] = None):
         """The entries of the document's list of *kind* a name means
         (`names`): [(label, number)], a new entry where the name is not on
         the list yet, ("out", label) for an entry *besides* the names
-        ((label, means)); with *group* the words may name several entries.
-        Each name is asked once per document and work."""
+        ((label, means)); with *group* the words may name several entries;
+        [] where they name no such thing (0, owner decision 2026-11-09);
+        None where no answer came. Each name is asked once per document and
+        work. A new entry keeps *work_read*, how the value it is read for
+        read its work."""
         names = plan.names[kind]
         if self.asks.names is None:
             return []
@@ -1266,21 +1537,26 @@ class Reader:
                      **({"parameter": uri} if uri else {})}
             reply = self._ask("names", payload, plan.document_id, shape,
                               example, counts, **noted)
+            if not isinstance(reply, dict):
+                return None
             picks = self._name_picks(reply, len(listed))
             if picks is None:
                 counts.fail("name_not_listed")
-                given = reply.get("entry") if isinstance(reply, dict) \
-                    else None
                 again = self._follow("names", payload, plan.document_id,
                                      shape, example, reply,
-                                     [say("name_not_listed", given=given)],
+                                     [say("name_not_listed",
+                                          given=reply.get("entry"))],
                                      counts, **noted)
-                picks = self._name_picks(again, len(listed)) or []
+                picks = self._name_picks(again, len(listed)) \
+                    if isinstance(again, dict) else None
+                if picks is None:
+                    return None
             out = []
             for pick in picks:
                 if pick == NEW:
                     number = names.add(words, work,
-                                       got.quote if got is not None else "")
+                                       got.quote if got is not None else "",
+                                       work_read)
                     out.append((names.entries[number - 1].label, number))
                 elif pick <= offset:
                     out.append(("out", besides[pick - 1][0]))
@@ -1360,13 +1636,18 @@ class Reader:
         """One coordinate of one value (`coord`), [the rows made beside
         it]: its own place first; a 0 then, unless only its own passage can
         say it, the pieces beside it and a search with the sentence of how
-        the plan would print it; a year still open the plan's years."""
+        the plan would print it (`phrase`); a year still open the plan's
+        years. The work of a value is the work of the line it stands in,
+        else asked as an entry of the document's list of works, and never
+        searched (`work_coordinate`, owner decisions 2026-11-09)."""
         parameter = read.batch.parameter
         if slot.name == "quantity" and slot.is_closed:
             self.quantity(plan, parameter, row, slot, counts)
             return []
-        shown, payload = show_value(plan, row.claim,
-                                    headings=slot.name != "work")
+        if slot.name == "work" and "work" in plan.names:
+            self.work_coordinate(plan, read, row, slot, counts)
+            return []
+        shown, payload = show_value(plan, row.claim)
         if not shown.blocks:
             return []
         known = self.known(row.claim, [slot.name])
@@ -1383,9 +1664,9 @@ class Reader:
         if not isinstance(reply, dict):
             # No answer for this value: `unanswered` (`mark_unanswered`).
             return []
-        made, held, hyde = self.take(plan, read, row, slot, shown, reply,
-                                     payload, "coord", example, counts,
-                                     clone, ("own", 1), noted)
+        made, held = self.take(plan, read, row, slot, shown, reply, payload,
+                               "coord", example, counts, clone, ("own", 1),
+                               noted)
         if held:
             return made
         own = slot.name in tuple(getattr(group, "own_passage", ()) or ()) \
@@ -1393,8 +1674,8 @@ class Reader:
         if row.claim.get(f"{slot.name}_state") == UNBACKED:
             pass
         elif not own:
-            made += self.search(plan, read, row, slot, payload, hyde,
-                                counts, clone, noted)
+            made += self.search(plan, read, row, slot, payload, counts,
+                                clone, noted)
         else:
             row.claim[f"{slot.name}_state"] = SAID_UNSTATED
         if slot.kind == NUMBER and row.claim.get(f"{slot.name}_state") \
@@ -1429,16 +1710,13 @@ class Reader:
              reply: dict, payload: dict, kind: str, example: dict,
              counts: Counts, clone: Callable, window: tuple,
              noted: dict) -> tuple:
-        """(rows made, held, hyde) of a coordinate's answer: its finds each
-        read onto the row, one row per entry where several are named, and
+        """(rows made, held) of a coordinate's answer: its finds each read
+        onto the row, one row per entry where several are named, and
         checked (`merge_field`); what does not hold is asked once more with
-        its reason (`follow`), then stays `unbacked`. *hyde* is the
-        answer's sentence where it found nothing."""
+        its reason (`follow`), then stays `unbacked`."""
         finds = self.coord_finds(reply)
-        hyde = reply.get("hyde") if isinstance(reply.get("hyde"), str) \
-            else ""
         if not finds:
-            return [], False, hyde
+            return [], False
         made, held, failed = self.settle(plan, read, row, slot, shown, finds,
                                          counts, clone, window)
         if failed and not held:
@@ -1451,12 +1729,9 @@ class Reader:
                 more, held, _ = self.settle(plan, read, row, slot, shown,
                                             finds, counts, clone, window)
                 made += more
-            elif isinstance(again, dict) and isinstance(again.get("hyde"),
-                                                        str):
-                hyde = again["hyde"]
             if not held:
                 row.claim[f"{slot.name}_state"] = UNBACKED
-        return made, held, hyde
+        return made, held
 
     def settle(self, plan: Plan, read: Read, row: Row, slot, shown: Shown,
                finds: list, counts: Counts, clone: Callable,
@@ -1515,16 +1790,6 @@ class Reader:
             if len(years) > 1 and SPAN.search(words) and years[-1] > years[0]:
                 answer["until"] = years[-1]
             return [(answer, None)]
-        if slot.name == "work" and "work" in plan.names:
-            picked = self.name_of(plan, "work", words, got, counts,
-                                  uri=parameter.uri)
-            if not picked:
-                return [({"value": "", **base}, None)]
-            label, number = picked[0]
-            uri = THIS_PUBLICATION if number == 1 else ANOTHER_WORK
-            option = next((o.label for o in slot.options if o.uri == uri),
-                          uri)
-            return [({"value": option, **base}, [label])]
         merged = getattr(slot, "merged", None)
         if merged and merged in plan.names:
             besides = tuple((o.label, o.definition) for o in slot.options)
@@ -1533,8 +1798,12 @@ class Reader:
                                   work=self.work_of(plan, row),
                                   besides=besides, group=group,
                                   uri=parameter.uri)
-            if not picked:
+            if picked is None:
                 return [({"value": words, **base}, None)]
+            if not picked:
+                # The words name no such thing (0): read as they stand,
+                # meaning no entry (owner decision 2026-11-09).
+                return [({"value": words, **base}, [])]
             outs = [label for kind, label in picked if kind == "out"]
             names = [label for label, _n in picked if label != "out"]
             several = next((o.label for o in slot.options
@@ -1664,61 +1933,105 @@ class Reader:
     # -- search --------------------------------------------------------------------
 
     def search(self, plan: Plan, read: Read, row: Row, slot, payload: dict,
-               hyde: str, counts: Counts, clone: Callable,
-               noted: dict) -> list:
+               counts: Counts, clone: Callable, noted: dict) -> list:
         """A coordinate its value's own place does not state (owner
-        decisions 2026-11-08): the pieces right before and after the
-        value's, then the pieces a search finds best for the answer's
-        sentence of how the plan would print it (HyDE; the field's own
-        sentence where it wrote none), `SEARCH_CHUNKS` at a time, until a
-        find holds, one does not hold after its follow-up (`unbacked`),
-        the ranking ends (`unstated`) or the budget does (`exhausted`). What
-        a request asks to fetch itself (`more`) is shown in the next. [the
-        rows made]."""
+        decisions 2026-11-08 and 2026-11-09): the pieces right before and
+        after the value's, then the pieces a search finds best for a
+        sentence of how the plan would print the answer (`sentence`), the
+        run's budget of them by kind (`shown_order`), `per_request` at a
+        time, the pieces a request fetches itself first in the next, until
+        a find holds, one does not hold after its follow-up (`unbacked`),
+        or nothing is left to show: `unstated` where every piece of the
+        plan was shown, `exhausted` where the budget left some unshown.
+        [the rows made]."""
+        numbers = read.batch.parameter.is_numeric
+        pieces = plan.pieces(numbers)
         at = row.claim.get("at") or {}
         chunk = plan.chunk_of(tuple(at.get("owner") or ()),
-                              int(at.get("line") or 1))
+                              int(at.get("line") or 1), numbers)
         seen = {chunk.key} if chunk is not None else set()
-        sentence = hyde.strip() if hyde and hyde.strip() else ""
-        if not sentence:
-            sentence = next(iter(self.probes(read.batch.parameter,
-                                             plan.document_id) or ()), "") \
-                or slot.question or slot.name
+        sentence = self.sentence(plan, read, row, slot, counts)
         if is_question(sentence):
             counts.question()
             log.info("   search of %s/%s in document %s with a question: %s",
                      read.batch.parameter.uri, slot.name, plan.document_id,
                      sentence)
-        batch = plan.beside(chunk) if chunk is not None else []
+        batch = plan.beside(chunk, numbers) if chunk is not None else []
         window = ("near", 1)
-        ranking: Optional[list] = None
-        rounds = 0
+        order: Optional[list] = None
         fetched: list = []
         while True:
-            batch = [c for c in fetched + batch if c.key not in seen]
+            batch = [c for c in dict.fromkeys(fetched + batch)
+                     if c.key not in seen]
             fetched = []
             if not batch:
-                if ranking is None:
-                    ranking = self.search_order(plan.document_id, [sentence],
-                                                plan.chunks)
+                if order is None:
+                    order = self.shown_order(plan, [sentence], pieces)
                     window = ("found", 1)
-                left = [c for c in ranking if c.key not in seen]
+                left = [c for c in order if c.key not in seen]
                 if not left:
-                    row.claim[f"{slot.name}_state"] = SAID_UNSTATED
+                    rest = any(c.key not in seen for c in pieces)
+                    row.claim[f"{slot.name}_state"] = \
+                        EXHAUSTED if rest else SAID_UNSTATED
                     return []
-                if rounds >= self.budget:
-                    row.claim[f"{slot.name}_state"] = EXHAUSTED
-                    return []
-                batch = left[:SEARCH_CHUNKS]
+                batch = left[:self.per_request]
             seen.update(c.key for c in batch)
-            rounds += 1
             made, held, more = self.search_round(plan, read, row, slot,
                                                  payload, batch, counts,
                                                  clone, window, noted)
             if held or row.claim.get(f"{slot.name}_state") == UNBACKED:
                 return made
-            fetched = self.fetch(plan, more, batch, seen)
+            fetched = self.fetch(plan, more, batch, seen, numbers)
             batch = []
+
+    def sentence(self, plan: Plan, read: Read, row: Row, slot,
+                 counts: Counts) -> str:
+        """The sentence a search for one coordinate goes with: as the plan
+        would print the answer for this value (HyDE), written by a request
+        of its own once per document, field, coordinate and wording of the
+        value (`phrase`, owner decision 2026-11-09); the field's own
+        sentence where none was written."""
+        parameter = read.batch.parameter
+        words = str(row.claim.get("value_raw") or row.claim.get("value")
+                    or "")
+        key = ("phrase", parameter.uri, slot.name, flat(words).casefold())
+        with plan.key_lock(key):
+            if key not in plan.lists:
+                plan.lists[key] = self._sentence(plan, parameter, slot, row,
+                                                 words, counts)
+            sentence = plan.lists[key]
+        if sentence:
+            return sentence
+        return next(iter(self.probes(parameter, plan.document_id) or ()),
+                    "") or slot.question or slot.name
+
+    def _sentence(self, plan: Plan, parameter, slot, row: Row, words: str,
+                  counts: Counts) -> str:
+        if self.asks.phrase is None:
+            return ""
+        at = row.claim.get("at") or {}
+        owner = tuple(at.get("owner") or ())
+        shown, _payload = show_value(plan, row.claim, headings=False)
+        own = shown.blocks.get("")
+        lines = [line.text for line, _ in own.lines] if own else []
+        context = {key: value for key, value
+                   in (self.context(plan.document_id) or {}).items()
+                   if isinstance(value, str) and value.strip()}
+        if not context and plan.title_page:
+            context = {"name": plan.title_page[0][0].text}
+        heads = [line.text for line, _ in plan.headings(owner)] \
+            if owner else []
+        payload = {"label": parameter.label,
+                   "description": parameter.description,
+                   **({"document": context} if context else {}),
+                   "question": slot.question or slot.name,
+                   "value": {"words": words, "lines": lines},
+                   **({"headings": heads} if heads else {})}
+        reply = self._ask("phrase", payload, plan.document_id,
+                          phrase_format(), None, counts,
+                          parameter=parameter.uri, coordinate=slot.name)
+        phrase = reply.get("phrase") if isinstance(reply, dict) else ""
+        return phrase.strip() if isinstance(phrase, str) else ""
 
     def search_round(self, plan: Plan, read: Read, row: Row, slot,
                      payload: dict, batch: list, counts: Counts,
@@ -1762,7 +2075,7 @@ class Reader:
             return [], False, more
         answer = {**reply, "found": kept} if several \
             else {**reply, **kept[0]}
-        made, held, _ = self.take(plan, read, row, slot, shown, answer,
+        made, held = self.take(plan, read, row, slot, shown, answer,
                                   ask_payload, "search", example, counts,
                                   clone, window, noted)
         return made, held, [] if held else more
@@ -1781,11 +2094,14 @@ class Reader:
                           about_format(), {"about": "yes"}, counts, **noted)
         return isinstance(reply, dict) and reply.get("about") == "yes"
 
-    def fetch(self, plan: Plan, more, batch: list, seen: set) -> list:
+    def fetch(self, plan: Plan, more, batch: list, seen: set,
+              numbers: bool = False) -> list:
         """The pieces a reply asks for itself (`more`), those not shown
-        yet: the piece before or after a shown one, a table or figure by
-        its placeholder, the pieces a pattern stands in, the pieces best
-        for a sentence of its own."""
+        yet, of the pieces its field reads: the piece before or after a
+        shown one, a table or figure by its placeholder, the pieces a
+        pattern stands in, the pieces best for a sentence of its own."""
+        pieces = plan.pieces(numbers)
+        places = plan.places[bool(numbers)]
         out: list = []
         for ask in more if isinstance(more, list) else ():
             if not isinstance(ask, dict) or not batch:
@@ -1793,15 +2109,15 @@ class Reader:
             get = ask.get("get")
             if get in ("next", "previous"):
                 anchor = batch[-1] if get == "next" else batch[0]
-                at = plan.position.get(anchor.key)
+                at = places.get(anchor.key)
                 if at is not None:
                     i = at + (1 if get == "next" else -1)
-                    if 0 <= i < len(plan.chunks):
-                        out.append(plan.chunks[i])
+                    if 0 <= i < len(pieces):
+                        out.append(pieces[i])
             elif get == "item":
                 found = lookup.item(plan.sources, ask.get("id") or "")
                 if found is not None:
-                    out += [c for c in plan.chunks
+                    out += [c for c in pieces
                             if c.owner == (found.owner_kind,
                                            found.owner_id)][:1]
             elif get == "search":
@@ -1810,15 +2126,15 @@ class Reader:
                 except re.error:
                     continue
                 if wanted.pattern:
-                    out += [c for c in plan.chunks
+                    out += [c for c in pieces
                             if c.key not in seen
-                            and wanted.search(c.text())][:SEARCH_CHUNKS]
+                            and wanted.search(c.text())][:self.per_request]
             elif get == "similar":
                 text = ask.get("text") or ""
                 if text.strip():
                     out += [c for c in self.search_order(
-                        plan.document_id, [text], plan.chunks)
-                        if c.key not in seen][:SEARCH_CHUNKS]
+                        plan.document_id, [text], pieces)
+                        if c.key not in seen][:self.per_request]
         return [c for c in dict.fromkeys(out) if c.key not in seen]
 
     # -- names -----------------------------------------------------------------------
@@ -1841,117 +2157,328 @@ class Reader:
         got = Found(lines=lines, passage=passage, words=claim["value"])
         picked = self.name_of(plan, parameter.merged, claim["value"], got,
                               counts, work=self.work_of(plan, row),
-                              uri=parameter.uri)
-        if picked and picked[0][0] != "out":
-            claim["value_means"] = [picked[0][0]]
+                              uri=parameter.uri, work_read=work_read(claim))
+        if picked is None or (picked and picked[0][0] == "out"):
+            return
+        # A name the request says names no such thing is no entry: the value
+        # stays as read and the graph makes no scenario of it (owner
+        # decision 2026-11-09: "Nichts falsches im Graphen aber wir wollen
+        # auch viele Werte").
+        claim["value_means"] = [label for label, _number in picked[:1]]
+        if picked and claim.get("work_state") != READ:
+            # The entry decides last: a name of an entry whose own work
+            # stayed open takes the work the entry was read with (owner
+            # decision 2026-11-09).
+            entry = plan.names[parameter.merged].entries[picked[0][1] - 1]
+            if entry.work_read:
+                claim.update({**entry.work_read, "work_window": ["entry", 1]})
 
     def works(self, plan: Plan, chunks: list, counts: Counts) -> list:
         """The works the document presents, compares or cites beside itself
-        (owner decision 2026-11-08, h): found piece by piece (the profile's
-        `WORKS` field), each asked against the document's list of works,
-        and each new one asked at its line for what the profile asks of a
-        work (its title, its organisation, its year, its short name):
-        values of that work, never of this publication, which the graph
-        does not take. [Read] of those values."""
+        (owner decisions 2026-11-08, h, and 2026-11-09): every piece asked
+        once which of its lines speak of another work and which line shows
+        the rest are this publication's own (`work_piece`), kept for the
+        values found in it (`Plan.works_of`, `inherit_work`); each name of
+        a work asked against the document's list of works, piece by piece in
+        the plan's order, and each new work asked at its line for what the
+        profile asks of a work (its title, its organisation, its year, its
+        short name), side by side: values of that work, never of this
+        publication, which the graph does not take. [Read] of those
+        values."""
+        if self.asks.work is None:
+            return []
         field_ = self.works_field or {}
         shown_field = {"name": field_.get("name", "work"),
                        "means": field_.get("means", "")}
-        finds = self.each(list(chunks), lambda chunk: self.work_finds(
+        chunks = list(chunks)
+        asked = self.each(chunks, lambda chunk: self.work_piece(
             plan, shown_field, chunk, counts))
+        works = plan.names["work"]
         new: list = []
-        for found in finds:
-            for one in found:
-                before = len(plan.names["work"].entries)
+        for chunk, got in zip(chunks, asked):
+            if got is None:
+                continue
+            shown, payload, held, own = got
+            finds = []
+            for one in held:
+                before = len(works.entries)
                 picked = self.name_of(plan, "work", one.words, one, counts)
-                if picked and picked[0][1] > before:
-                    new.append((picked[0][1], one))
+                if not picked:
+                    continue
+                number = picked[0][1]
+                if number > before:
+                    new.append((number, one, shown, payload))
+                finds.append((self.covered(chunk, one), number, one))
+            plan.works_of[chunk.key] = PieceWork(finds, own,
+                                                 shown.evidence())
+        jobs = [(number, one, shown, payload, uri, question)
+                for number, one, shown, payload in new
+                for uri, question in (field_.get("fields") or {}).items()
+                if self.spec.by_uri.get(uri) is not None]
+        made = self.each(jobs, lambda job: self.work_value(
+            plan, self.spec.by_uri[job[4]], job[5], job[1],
+            works.entries[job[0] - 1].label, counts, job[2], job[3]))
         reads: dict = {}
-        for number, one in new:
-            label = plan.names["work"].entries[number - 1].label
-            for uri, question in (field_.get("fields") or {}).items():
-                parameter = self.spec.by_uri.get(uri)
-                if parameter is None:
-                    continue
-                claim = self.work_value(plan, parameter, question, one,
-                                        label, counts)
-                if claim is None:
-                    continue
-                owner = one.passage.owner
-                read = reads.get((uri, owner))
-                if read is None:
-                    read = reads[(uri, owner)] = Read(Batch(
-                        plan.document_id, parameter,
-                        [WorkItem(plan.document_id, parameter,
-                                  one.passage.source)], spec=self.spec), [])
-                read.claims.append(claim)
+        for job, got in zip(jobs, made):
+            if got is None:
+                continue
+            claim, source = got
+            parameter = self.spec.by_uri[job[4]]
+            key = (parameter.uri, source.owner_kind, source.owner_id,
+                   source.text if claim.get("at") is None else None)
+            read = reads.get(key)
+            if read is None:
+                read = reads[key] = Read(Batch(
+                    plan.document_id, parameter,
+                    [WorkItem(plan.document_id, parameter, source)],
+                    spec=self.spec), [])
+            read.claims.append(claim)
         self._traced("works", plan.document_id,
-                     works=len(plan.names["work"].entries), new=len(new))
+                     works=len(works.entries), new=len(new))
         return list(reads.values())
 
-    def work_finds(self, plan: Plan, shown_field: dict, chunk: Chunk,
-                   counts: Counts) -> list:
-        """[Found] of the names of other works in one piece (`find`)."""
+    def work_piece(self, plan: Plan, shown_field: dict, chunk: Chunk,
+                   counts: Counts) -> Optional[tuple]:
+        """(shown, payload, [Found] of other works, the line of this
+        publication's own or None) of one piece's work request (`work`):
+        the piece with the headings up to it and the title page; what does
+        not hold is asked once more with its reason. None where no answer
+        came."""
         shown = Shown()
+        heads = plan.headings(chunk.owner)
+        shown.add(HEADINGS, "headings", heads, renumber=True)
+        shown.add(TITLE_PAGE, "title_page", plan.title_page, renumber=True)
         shown.add("", "passage", own_lines(chunk))
         payload = {"field": shown_field,
+                   **({"headings": shown.rendered(HEADINGS)}
+                      if heads else {}),
+                   **({"title_page": shown.rendered(TITLE_PAGE)}
+                      if plan.title_page else {}),
                    "passage": block_payload(chunk.passage, shown)}
-        example = {"found": [{"at": first_address(
-            shown, chunk.passage.kind == "table"), "words": fields.SAID}]}
-        reply = self._ask("find", payload, plan.document_id, found_format(),
-                          example, counts, parameter="work",
-                          kind=chunk.passage.kind,
-                          owner=chunk.passage.source.owner_id,
-                          chunk=chunk.index)
+        other, _ = find_example(shown)
+        own_at = f"{HEADINGS}{len(heads)}" if heads \
+            else first_address(shown, False)
+        example = ({**other, "own": {"at": 0, "words": ""}},
+                   {"found": [], "own": {"at": own_at,
+                                         "words": fields.SAID}})
+        noted = {"parameter": "work", "kind": chunk.passage.kind,
+                 "owner": chunk.passage.source.owner_id, "chunk": chunk.index}
+        reply = self._ask("work", payload, plan.document_id, work_format(),
+                          example, counts, **noted)
         if not isinstance(reply, dict):
-            return []
-        out = []
-        for entry in reply.get("found") or ():
-            got = resolve(shown, entry, plan.passages) \
-                if isinstance(entry, dict) else None
-            if got is not None and got.why is None and got.passage:
-                out.append(got)
-        return out
+            return None
+        held, refused = self._finds(plan, shown, reply)
+        own, why = self.own_line(plan, shown, chunk, reply.get("own"))
+        if why is not None:
+            refused.append((reply.get("own"), why))
+        if refused:
+            for _, reason in refused:
+                counts.fail(reason)
+            again = self._follow("work", payload, plan.document_id,
+                                 work_format(), example, reply,
+                                 refusals(refused), counts, **noted)
+            if isinstance(again, dict):
+                more, _ = self._finds(plan, shown, again)
+                held = joined(held, more)
+                if own is None:
+                    own, _ = self.own_line(plan, shown, chunk,
+                                           again.get("own"))
+        return shown, payload, held, own
+
+    @staticmethod
+    def own_line(plan: Plan, shown: Shown, chunk: Chunk, raw) -> tuple:
+        """(Found or None, why or None) of the line a piece's work request
+        names as showing the rest of the piece is this publication's own:
+        it counts where it stands among the piece's lines or headings, or
+        on the title page in the piece itself; 0 names none."""
+        if not isinstance(raw, dict) or address_of(raw.get("at")) is None:
+            return None, None
+        got = resolve(shown, raw, plan.passages)
+        if got.why is not None:
+            return None, got.why
+        source = got.source
+        if got.letter in ("", HEADINGS) or (
+                got.letter == TITLE_PAGE and source is not None
+                and (source.owner_kind, source.owner_id) == chunk.owner):
+            return got, None
+        return None, None
+
+    @staticmethod
+    def covered(chunk: Chunk, found: Found) -> Optional[set]:
+        """The (passage, line) places a find of a piece's work request
+        speaks for: the whole piece (None) where it stands in a heading or
+        in what every piece of its passage shows (a table's title and head,
+        a figure's caption), else its own lines."""
+        if found.letter == HEADINGS:
+            return None
+        if found.letter == "" and found.lines and all(
+                line.number in chunk.passage.fixed
+                for line, _ in found.lines):
+            return None
+        return {((source.owner_kind, source.owner_id), line.number)
+                for line, source in found.lines}
 
     def work_value(self, plan: Plan, parameter, question: str, one: Found,
-                   label: str, counts: Counts) -> Optional[dict]:
-        """One detail of a work, asked at its line (`coord`): the claim of
-        a value of *parameter* whose work is that work, with the line as its
-        quote; None where the line does not give it."""
-        passage = one.passage
-        numbers = [line.number for line, _ in one.lines]
-        shown = Shown()
-        shown.add("", "passage", passage_lines(passage, numbers))
-        payload = {"work": label, "field": field_shown(parameter),
-                   "question": question,
-                   "passage": block_payload(passage, shown)}
-        example = {"at": first_address(shown, passage.kind == "table"),
-                   "words": fields.SAID}
-        reply = self._ask("coord", payload, plan.document_id,
+                   label: str, counts: Counts, shown: Shown,
+                   payload: dict) -> Optional[tuple]:
+        """One detail of a work, asked with the piece that names it (`coord`):
+        (the claim of a value of *parameter* whose work is that work, with
+        the line as its quote, the passage it is checked against); None
+        where no line gives it. A heading is quoted as it is shown, and
+        checked against itself."""
+        ask_payload = {**payload, "work": label,
+                       "field": field_shown(parameter), "question": question}
+        example = {"at": first_address(shown, False), "words": fields.SAID}
+        reply = self._ask("coord", ask_payload, plan.document_id,
                           coord_format(False), example, counts,
                           parameter=parameter.uri, coordinate="work")
         finds = self.coord_finds(reply)
         if not finds:
             return None
         got = resolve(shown, finds[0], plan.passages)
-        if got.why is not None:
+        if got.why is not None or got.passage is None:
             return None
-        claim = self.claim(plan, parameter, got, counts)
+        if got.letter == HEADINGS:
+            claim = {"source": "Q1", "value": got.words, "quote": got.quote}
+            source = got.source
+        else:
+            claim = self.claim(plan, parameter, got, counts)
+            source = got.passage.source
         work = next((s for s in fields.axis_slots(parameter)
                      if s.name == "work"), None)
         if claim is None or work is None:
-            return claim
+            return (claim, source) if claim is not None else None
         option = next((o.label for o in work.options
                        if o.uri == ANOTHER_WORK), ANOTHER_WORK)
+        named = one.words if flat(one.words).casefold() \
+            in flat(one.quote).casefold() else label
         claim.update({"work": option, "work_state": READ,
-                      "work_raw": got.words if flat(got.words).casefold()
-                      in flat(claim["quote"]).casefold() else label,
-                      "work_quote": claim["quote"],
-                      "work_source": list(passage.owner),
-                      "work_window": ["own", 1], "work_means": [label]})
-        if flat(claim["work_raw"]).casefold() \
-                not in flat(claim["quote"]).casefold():
-            claim["work_raw"] = got.words
-        return claim
+                      "work_raw": named, "work_quote": one.quote,
+                      "work_source": [one.source.owner_kind,
+                                      one.source.owner_id],
+                      "work_window": ["piece", 1], "work_means": [label]})
+        return claim, source
+
+    def work_coordinate(self, plan: Plan, read: Read, row: Row, slot,
+                        counts: Counts) -> None:
+        """The work of one value (owner decisions 2026-11-09): the work of
+        the line it stands in where its piece's work request named one
+        (`inherit_work`), else asked as an entry of the document's list of
+        works with the value's line, the headings and the title page, the
+        answer the entry and the line that shows it; 0 leaves it
+        `unstated`, and it is never searched. What does not hold is asked
+        once more with its reason, then stays `unbacked`."""
+        if self.inherit_work(plan, row, slot):
+            return
+        parameter = read.batch.parameter
+        works = plan.names["work"]
+        shown, payload = show_value(plan, row.claim)
+        if not shown.blocks:
+            return
+        listed = [f"{number} {text}" for number, text in works.shown()]
+        payload = {**payload, "field": field_shown(parameter),
+                   "question": slot.question or slot.name, "list": listed}
+        example = {"entry": 1, "at": first_address(shown, False),
+                   "words": fields.SAID}
+        noted = {"parameter": parameter.uri, "coordinate": slot.name,
+                 "owner": ((row.claim.get("at") or {}).get("owner")
+                           or [None, None])[1], "value": row.label}
+        reply = self._ask("coord", payload, plan.document_id,
+                          work_choice_format(), example, counts, **noted)
+        if not isinstance(reply, dict):
+            return
+        failed = self.read_work(plan, row, slot, shown, reply)
+        if failed:
+            again = self._follow("coord", payload, plan.document_id,
+                                 work_choice_format(), example, reply,
+                                 failed, counts, **noted)
+            if not isinstance(again, dict) \
+                    or self.read_work(plan, row, slot, shown, again):
+                row.claim[f"{slot.name}_state"] = UNBACKED
+
+    def read_work(self, plan: Plan, row: Row, slot, shown: Shown,
+                  reply: dict) -> list:
+        """[what did not hold] of an answer to a value's work, [] where it
+        read the work or said none (0, `unstated`)."""
+        works = plan.names["work"]
+        pick = picked_entry(reply.get("entry"), len(works.entries))
+        if pick is None:
+            return [say(NOT_AN_OPTION, given=reply.get("entry"))]
+        if pick == 0 or address_of(reply.get("at")) is None:
+            row.claim[f"{slot.name}_state"] = SAID_UNSTATED
+            return []
+        got = resolve(shown, reply, plan.passages)
+        if got.why is not None:
+            return [{"at": reply.get("at"), "words": reply.get("words"),
+                     "why": told(got.why, reply)}]
+        return self.take_work(row, slot, pick, got, shown.evidence(),
+                              ("own", 1), works)
+
+    @staticmethod
+    def take_work(row: Row, slot, number: int, got: Found, evidence: list,
+                  window: tuple, works: "Names") -> list:
+        """The work *number* of the document's list read onto a value with
+        the line *got* names as its quote (`merge_field`): [] where it holds,
+        [what did not hold] else."""
+        uri = THIS_PUBLICATION if number == 1 else ANOTHER_WORK
+        option = next((o.label for o in slot.options if o.uri == uri), uri)
+        row.claim.pop(f"{slot.name}_state", None)
+        result = merge_field([row], evidence, slot, {"answers": {row.label: {
+            "value": option, "value_raw": got.words, "quote": got.quote}}},
+            window=window)
+        if row.claim.get(f"{slot.name}_state") == READ:
+            row.claim[f"{slot.name}_means"] = [works.entries[number - 1].label]
+            return []
+        row.claim.pop(f"{slot.name}_state", None)
+        return [{"words": failure.get("raw") or failure.get("given"),
+                 "why": failure.get("reason")}
+                for failure in result["failed"]] or [{"why": UNBACKED}]
+
+    def inherit_work(self, plan: Plan, row: Row, slot) -> bool:
+        """Does the value take the work of the line it stands in (owner
+        decisions 2026-11-09: nothing without a line)? The work its piece's
+        work request named for that line, read with that find as its
+        quote: a find of the line itself before one of the whole piece,
+        the line of this publication's own after both; a line two works
+        are named for, or none, is the value's own to ask."""
+        got = self.piece_work(plan, row.claim)
+        if got is None:
+            return False
+        number, found, evidence = got
+        works = plan.names["work"]
+        if not 0 < number <= len(works.entries):
+            return False
+        return not self.take_work(row, slot, number, found, evidence,
+                                  ("piece", 1), works)
+
+    @staticmethod
+    def piece_work(plan: Plan, claim: dict) -> Optional[tuple]:
+        """(number of the work, the find, what its request showed) a
+        value's piece names for the line it stands in, None where it names
+        none or two."""
+        at = claim.get("at") or {}
+        owner = tuple(at.get("owner") or ())
+        line = int(at.get("line") or 0)
+        if len(owner) != 2 or line <= 0:
+            return None
+        chunk = plan.chunk_of(owner, line, False)
+        info = plan.works_of.get(chunk.key) if chunk is not None else None
+        if info is None:
+            return None
+        place = (owner, line)
+        own_lines_ = [(number, found) for cover, number, found in info.finds
+                      if cover is not None and place in cover]
+        whole = [(number, found) for cover, number, found in info.finds
+                 if cover is None]
+        for named in (own_lines_, whole):
+            numbers = {number for number, _ in named}
+            if len(numbers) == 1:
+                return named[0][0], named[0][1], info.evidence
+            if numbers:
+                return None
+        if info.own is not None:
+            return 1, info.own, info.evidence
+        return None
 
 
 def settings_of(plan: Plan) -> dict:
@@ -1982,20 +2509,24 @@ class ChunkDoc:
 
 def make_order(reranker: Optional[Callable], rank: Optional[Callable]
                ) -> tuple:
-    """(order, search_order), each (document_id, sentences, chunks) -> the
-    pieces best first. *order* has the reranker score every piece with
-    every sentence, keeping each piece's best (owner decisions 2026-11-08:
-    all pieces, best first); *search_order* takes the passages the vector
-    search finds best (*rank*, with its reranker over passages), has the
-    reranker order the pieces of the first `SEARCH_PASSAGES` and puts the
-    rest after them in the plan's order (owner decision 2026-11-08: "Treffer
-    werden in ihre Stücke zerlegt und vom Reranker mit demselben Satz
-    geordnet"). Without a reranker the pieces keep their passages' order;
-    without either, the plan's."""
+    """(order, search_order, rerank), each (document_id, sentences, chunks)
+    -> the pieces best first. *order* has the reranker score every piece
+    with every sentence, keeping each piece's best (owner decisions
+    2026-11-08: all pieces, best first); *search_order* takes the passages
+    the vector search finds best (*rank*, with its reranker over passages,
+    100 of each kind) and gives their pieces in that order, the rest of the
+    plan after them; *rerank* orders the pieces a search shows with the
+    same sentences (owner decisions 2026-11-09: "der Reranker ordnet diese
+    höchstens 50 Stücke einmal mit demselben Satz"). Without a reranker the
+    pieces keep their passages' order; without either, the plan's. A
+    reranker or a search that fails raises: what is handed in asks again
+    until it answers (`runner.persistently`, owner decision 2026-11-09:
+    nothing is read in another order instead)."""
     local = threading.local()
 
-    def reranked(document_id: int, sentences: list, chunks: list) -> list:
-        if reranker is None or not chunks:
+    def rerank(document_id: int, sentences: list, chunks: list) -> list:
+        sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
+        if reranker is None or not sentences or len(chunks) < 2:
             return list(chunks)
         if getattr(local, "reranker", None) is None:
             local.reranker = reranker()
@@ -2003,54 +2534,35 @@ def make_order(reranker: Optional[Callable], rank: Optional[Callable]
             return list(chunks)
         docs = [ChunkDoc(c.passage.kind, c.key, c.text()) for c in chunks]
         by = {doc.owner_id: c for doc, c in zip(docs, chunks)}
-        try:
-            return [by[doc.owner_id] for doc in local.reranker.order(
-                document_id, sentences, docs)]
-        except Exception as exc:       # the order only
-            log.warning("   order of the pieces of %s failed, read in the "
-                        "plan's order: %s", document_id, exc)
-            return list(chunks)
+        return [by[doc.owner_id] for doc in local.reranker.order(
+            document_id, sentences, docs)]
 
-    def passages_first(document_id: int, sentences: list,
-                       chunks: list) -> tuple:
-        if rank is None:
-            return [], list(chunks)
-        try:
-            passages = rank(document_id, sentences, set())
-        except Exception as exc:
-            log.warning("   search of %s failed: %s", document_id, exc)
-            return [], list(chunks)
-        first: list = []
-        for source in passages[:SEARCH_PASSAGES]:
-            owner = (source.owner_kind, source.owner_id)
-            first += [c for c in chunks if c.owner == owner]
-        later: list = []
-        for source in passages[SEARCH_PASSAGES:]:
-            owner = (source.owner_kind, source.owner_id)
-            later += [c for c in chunks if c.owner == owner]
-        taken = set(first) | set(later)
-        return first, later + [c for c in chunks if c not in taken]
+    def search_order(document_id: int, sentences: list,
+                     chunks: list) -> list:
+        sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
+        if rank is None or not sentences or not chunks:
+            return list(chunks)
+        by_owner: dict = collections.defaultdict(list)
+        for chunk in chunks:
+            by_owner[chunk.owner].append(chunk)
+        out: list = []
+        taken: set = set()
+        for source in rank(document_id, sentences, set()):
+            for chunk in by_owner.get((source.owner_kind,
+                                       source.owner_id), ()):
+                if chunk.key not in taken:
+                    taken.add(chunk.key)
+                    out.append(chunk)
+        return out + [c for c in chunks if c.key not in taken]
 
     def order(document_id: int, sentences: list, chunks: list) -> list:
         sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
         if not sentences or not chunks:
             return list(chunks)
         if reranker is not None:
-            return reranked(document_id, sentences, chunks)
-        first, rest = passages_first(document_id, sentences, chunks)
-        return first + rest
-
-    def search_order(document_id: int, sentences: list,
-                     chunks: list) -> list:
-        sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
-        if not sentences or not chunks:
-            return list(chunks)
-        first, rest = passages_first(document_id, sentences, chunks)
-        if not first:
-            return reranked(document_id, sentences, chunks)
-        return reranked(document_id, sentences, first) + rest
-    return order, search_order
-
+            return rerank(document_id, sentences, chunks)
+        return search_order(document_id, sentences, chunks)
+    return order, search_order, rerank
 
 def order_key(parameters: list, chunk_units: int, written: str = "") -> str:
     """The key an order of the pieces is kept under: the fields it ranked,
@@ -2064,10 +2576,11 @@ def order_key(parameters: list, chunk_units: int, written: str = "") -> str:
 
 class Orders:
     """(plan, parameters, chunk_units, scope, chunks) -> {field uri:
-    [piece key]}: the pieces of each field best first for its sentences,
-    kept under the harvest (`survey/<document>[.<scope>].json`) with the
-    passages each field was read in, which the passes over a stored harvest
-    read (`surveyed.surveyed_owners`)."""
+    [piece key]}: the pieces each field reads (`Plan.pieces`) best first
+    for its sentences, kept under the harvest
+    (`survey/<document>[.<scope>].json`) with the passages each field was
+    read in, which the passes over a stored harvest read
+    (`surveyed.surveyed_owners`)."""
 
     def __init__(self, order: Callable, probes: Callable,
                  store: Optional[Path], trace=None, written: str = ""):
@@ -2080,6 +2593,10 @@ class Orders:
     def __call__(self, plan: Plan, parameters: list, chunk_units: int,
                  scope: str = "", chunks: Optional[list] = None) -> dict:
         chunks = list(plan.chunks if chunks is None else chunks)
+        read_by = {numbers: set(plan.pieces(numbers))
+                   for numbers in (True, False)}
+        pieces = {p.uri: [c for c in chunks if c in read_by[p.is_numeric]]
+                  for p in parameters}
         key = order_key(parameters, chunk_units, self.written)
         path = None
         if self.store is not None:
@@ -2094,10 +2611,10 @@ class Orders:
                     kept = None
             if kept and kept.get("key") == key:
                 order = kept.get("order") or {}
-                wanted = {tuple(c.key) for c in chunks}
-                if set(order) == {p.uri for p in parameters} and all(
-                        {tuple(k) for k in keys} == wanted
-                        for keys in order.values()):
+                if set(order) == set(pieces) and all(
+                        {tuple(k) for k in keys}
+                        == {tuple(c.key) for c in pieces[uri]}
+                        for uri, keys in order.items()):
                     return {uri: [tuple(k) for k in keys]
                             for uri, keys in order.items()}
         out: dict = {}
@@ -2105,7 +2622,7 @@ class Orders:
             sentences = list(self.probes(parameter, plan.document_id) or ()) \
                 or [parameter.label]
             out[parameter.uri] = [c.key for c in self.order(
-                plan.document_id, sentences, chunks)]
+                plan.document_id, sentences, pieces[parameter.uri])]
         if self.trace is not None:
             self.trace("order", plan.document_id, scope=scope or None,
                        passages=len({c.owner for c in chunks}),

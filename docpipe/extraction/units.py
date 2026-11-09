@@ -14,14 +14,19 @@ an ordinal ("3. Oktober") end no sentence, and a number ("1.155 MWh") never
 breaks, since a sentence ends only where a mark is followed by a space. A
 table is its title lines, its head lines and its body rows, numbered in that
 order from 1 (the rule under the head counts not), each body row a line
-whose cells are numbered from 1; lines under the table are lines as well. A
-figure is the lines a model transcribed it into once, its title first
-(`transcripts`), else the lines of its description.
+whose cells are numbered from 1; lines under the table are lines as well.
+Any line that "|" divides has cells, wherever it stands: a table row, a
+figure's line, a sentence (owner decision 2026-11-09). A figure is the
+lines a model transcribed it into once (`transcripts`): its caption (title,
+axes, legend) and its numbers, each a line of its own; else the lines of
+its description.
 
 A piece (`Chunk`) is at most `CHUNK_UNITS` lines of its passage, a table's
-title and head lines shown with every piece of it under the same numbers, a
-figure's title line likewise. Every line of a passage keeps one number in
-every request that shows it.
+title and head lines shown with every piece of it under the same numbers. A
+figure with numbers is one piece of its caption and pieces of its numbers,
+each shown with the caption; a field whose values are no numbers reads only
+the caption, a field of numbers only the pieces of numbers (`pieces_for`).
+Every line of a passage keeps one number in every request that shows it.
 
 A request shows besides its own passage other blocks of lines, each under a
 letter of its own so that no two lines of a request share an address: the
@@ -52,6 +57,8 @@ SETTINGS = "F"
 RESERVED = (TITLE_PAGE, HEADINGS, SETTINGS)
 OTHERS = tuple(letter for letter in "ABCDEGIJKLMNOPQRSUVWXYZ"
                if letter not in RESERVED)
+# The role of a line that is one number a figure shows.
+NUMBER_LINE = "number"
 
 # Abbreviations whose point ends no sentence, both languages, written as
 # the plan prints them; matched at the end of the text before a break.
@@ -133,14 +140,26 @@ def cells_of(line: str) -> tuple:
     return tuple(cell.strip() for cell in line.strip().strip("|").split("|"))
 
 
+def line_cells(text: str) -> tuple:
+    """The cells of a line that "|" divides, wherever it stands (owner
+    decision 2026-11-09: "26 JRC GECO 1.5C | Other | 11 (read off)" is
+    addressed as 26.1 to 26.3 like a table row); () for a line of fewer
+    than two."""
+    if "|" not in (text or ""):
+        return ()
+    cells = cells_of(text)
+    return cells if len(cells) > 1 else ()
+
+
 @dataclass(frozen=True)
 class Line:
     """One numbered line of a passage: a sentence, a heading, a table's
-    title, head or body row, a line under a table, or a figure's line."""
+    title, head or body row, a line under a table, a line of a figure's
+    caption or one of its numbers."""
     number: int
     text: str
     cells: tuple = ()
-    # "text", "title", "head", "body", "foot", "figure"
+    # "text", "title", "head", "body", "foot", "figure", "number"
     role: str = "text"
 
 
@@ -167,6 +186,11 @@ class Passage:
     def page(self) -> Optional[int]:
         page = (self.source.provenance or {}).get("page")
         return page if isinstance(page, int) else None
+
+    @property
+    def has_numbers(self) -> bool:
+        """Is this a figure transcribed with its numbers, each a line?"""
+        return any(line.role == NUMBER_LINE for line in self.lines)
 
     @property
     def title(self) -> str:
@@ -211,7 +235,8 @@ def table_lines(text: str) -> Optional[tuple]:
         head_start -= 1
     for line in raw[:head_start]:
         for sentence in sentences_of(line):
-            lines.append(Line(len(lines) + 1, sentence, (), "title"))
+            lines.append(Line(len(lines) + 1, sentence, line_cells(sentence),
+                              "title"))
             fixed.append(len(lines))
     for line in raw[head_start:at]:
         lines.append(Line(len(lines) + 1, line.strip(), cells_of(line),
@@ -227,33 +252,60 @@ def table_lines(text: str) -> Optional[tuple]:
             continue
         after = True
         for sentence in sentences_of(line):
-            lines.append(Line(len(lines) + 1, sentence, (), "foot"))
+            lines.append(Line(len(lines) + 1, sentence, line_cells(sentence),
+                              "foot"))
     if not any(line.role == "body" for line in lines):
         return None
     return lines, tuple(fixed)
 
 
-def passage_of(source: Source, transcript: Optional[list] = None) -> Passage:
+def figure_lines(transcript) -> tuple:
+    """([caption lines], [number lines]) of a figure's transcription
+    (`addressed.Transcripts`, owner decision 2026-11-09): its title, axes
+    and legend, and each number it shows; a transcription that is one list
+    is all caption."""
+    if isinstance(transcript, dict):
+        caption = transcript.get("caption")
+        numbers = transcript.get("numbers")
+    else:
+        caption, numbers = transcript, ()
+
+    def clean(texts) -> list:
+        return [text.strip() for text in (texts or ())
+                if isinstance(text, str) and text.strip()]
+    return clean(caption), clean(numbers)
+
+
+def passage_of(source: Source, transcript=None) -> Passage:
     """*source* as numbered lines: a table's title, head and rows, a
-    figure's transcribed lines (*transcript*, its title first), else its
-    sentences."""
+    figure's transcribed lines (*transcript*, `figure_lines`: its caption,
+    its title first, then its numbers), else its sentences. The caption of
+    a figure with numbers is shown with every piece of it, as a table's
+    title and head are."""
     if source.owner_kind == "table":
         got = table_lines(source.text)
         if got is not None:
             return Passage(source, got[0], got[1])
     if source.owner_kind == "figure":
-        texts = [line.strip() for line in (transcript or ()) if
-                 isinstance(line, str) and line.strip()]
-        if texts:
-            lines = [Line(i, text, (), "figure")
-                     for i, text in enumerate(texts, start=1)]
+        caption, numbers = figure_lines(transcript)
+        if caption or numbers:
+            lines = [Line(i, text, line_cells(text), "figure")
+                     for i, text in enumerate(caption, start=1)]
+            lines += [Line(len(caption) + i, text, line_cells(text),
+                           NUMBER_LINE)
+                      for i, text in enumerate(numbers, start=1)]
+            if numbers:
+                fixed = tuple(range(1, len(caption) + 1))
+            else:
+                fixed = (1,) if caption else ()
             # What a value read from it stands in: its transcription.
-            seen = replace(source, text="\n".join(texts), body=None)
-            return Passage(seen, lines, (1,), drawn=True)
-        lines = [Line(i, text, (), "figure") for i, text
+            seen = replace(source, text="\n".join(caption + numbers),
+                           body=None)
+            return Passage(seen, lines, fixed, drawn=True)
+        lines = [Line(i, text, line_cells(text), "figure") for i, text
                  in enumerate(sentences_of(source.text), start=1)]
         return Passage(source, lines, (1,) if lines else (), drawn=True)
-    lines = [Line(i, text) for i, text
+    lines = [Line(i, text, line_cells(text)) for i, text
              in enumerate(sentences_of(source.text), start=1)]
     return Passage(source, lines)
 
@@ -298,17 +350,43 @@ class Chunk:
         """Its lines as the reranker reads them, without numbers."""
         return "\n".join(line.text for line in self.lines())
 
+    @property
+    def of_numbers(self) -> bool:
+        """Is this a piece of a figure's numbers?"""
+        return bool(self.numbers) and self.passage.has_numbers
+
+    @property
+    def of_caption(self) -> bool:
+        """Is this the piece of a figure's caption alone, beside the pieces
+        of its numbers?"""
+        return not self.numbers and self.passage.has_numbers
+
 
 def chunks_of(passage: Passage, size: int = CHUNK_UNITS) -> list:
     """The pieces of *passage*: its lines but the fixed ones, *size* at a
-    time, in order; a passage of fixed lines only is one piece."""
+    time, in order; a passage of fixed lines only is one piece. A figure
+    with numbers is first the piece of its caption, then the pieces of its
+    numbers, each shown with the caption."""
     size = max(1, int(size))
     own = [line.number for line in passage.lines
            if line.number not in passage.fixed]
     if not own:
         return [Chunk(passage, 0, ())] if passage.lines else []
-    return [Chunk(passage, i, tuple(own[start:start + size]))
-            for i, start in enumerate(range(0, len(own), size))]
+    first = 1 if passage.has_numbers and passage.fixed else 0
+    pieces = [Chunk(passage, first + i, tuple(own[start:start + size]))
+              for i, start in enumerate(range(0, len(own), size))]
+    return ([Chunk(passage, 0, ())] if first else []) + pieces
+
+
+def pieces_for(chunks: list, numbers: bool) -> list:
+    """The pieces a field reads, in their order (owner decision 2026-11-09):
+    a field whose values are numbers reads a figure in the pieces of its
+    numbers, each shown with the caption; any other field reads it in the
+    piece of its caption alone (title, axes, legend), whose names its
+    numbers only repeat."""
+    if numbers:
+        return [chunk for chunk in chunks if not chunk.of_caption]
+    return [chunk for chunk in chunks if not chunk.of_numbers]
 
 
 def neighbours(chunks: list, chunk: Chunk) -> list:

@@ -52,7 +52,7 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, `CHUNK_UNITS`, `PLAN_FIELDS`, `WORKS`, 13 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the lines of a piece (8), what a publication settles for all its values, the field that finds other works, the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, `CHUNK_UNITS`, `PLAN_FIELDS`, `WORKS`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the lines of a piece (8), what a publication settles for all its values, the field that finds other works, the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -60,17 +60,19 @@ A run harvests a publication piece by piece (owner decisions 2026-11-04,
 2026-11-08, see [extraction](../stages/extraction.md)): the spec names three
 groups, `work`, `year_kind` and `scenario`, each a coordinate of its own, and
 English prompts serve it. The publication is cut into pieces of at most eight
-numbered lines, its figures are written into lines once per run
+numbered lines, its figures are written once per run into a caption and numbers
 (`extraction/transcribe`), and every piece is read for every parameter, the
 publication's own fields (title, authors, date) and its study or its own
 scenarios included, in the order a reranker gives the pieces for each
 parameter. `extraction/find` asks for all values of a parameter in a piece as
 addresses and words, what the publication states for itself and not what it
 attributes to other works unless the field asks for them;
-`extraction/docfield` asks the fields a publication has once, the nine spec
+`extraction/docfield` asks the fields a publication has once, the thirteen spec
 parameters marked `once_per_document` (title, authors, date, DOI, abstract, the
-study's organisation, funder, project name and acronym), once per publication
-with its title page and the best pieces; and `extraction/coord` answers for each
+study's organisation, funder, project name and acronym, and the four study fields:
+descriptor, sector division, sector and technology), once per publication
+with its title page and the best pieces of a budget (50, twice that for a field with
+a list); and `extraction/coord` answers for each
 value, in a request of its own and with no history, each coordinate: the work it
 belongs to, the kind of year where it is one, and the scenario it refers to by
 the name the publication prints, each as the address of the line that says it and
@@ -97,15 +99,17 @@ scenario's description is what the publication says the scenario assumes, not th
 scenario's name (owner decision 2026-11-04), and an author value is one author's
 name: a person, or the institution where the publication names no person.
 `extraction/search` looks for a coordinate the value's own place does not state,
-first in the pieces beside the value's and then in the pieces a search finds for
-a sentence as the publication would print the answer, which the `coord` answer
-wrote (`hyde`); it ends `unstated` only after every piece of the publication was
-shown. A find quoted from another passage than the value's own is checked first by
+first in the pieces beside the value's and then in the budget of pieces (50) a
+search finds for a sentence as the publication would print the answer, which
+`extraction/phrase` writes in a request of its own; it ends `unstated` only after
+every piece of the publication was shown, and `exhausted` where the budget ends
+first. A find quoted from another passage than the value's own is checked first by
 `extraction/check`, which asks whether the line is about this value (owner
 decision 2026-11-07). No field of this profile holds numbers, so a table is read
 by `find` and `coord` too, as a table is in every profile, and a field with a list
-is asked in a list request of its own (`extraction/list`) and answers one entry,
-or `""` with its wording in `value_raw`.
+is asked with its list in the `find` and `docfield` requests and the reply names
+the entry's number, or `""` with its wording in `value_raw`; a find that names a
+group is asked in a list request of its own (`extraction/list`).
 
 The profile has no number coordinates (no unit, `what`, `qualifier` and no
 conversion), so a value is asked three coordinates at most. As in kwp (see
@@ -113,7 +117,7 @@ conversion), so a value is asked three coordinates at most. As in kwp (see
 settles for all its values (the settings only, no years), asked once per
 publication as a field a document has once, and every request about a value shows
 it under `F`; a value only a figure's image shows is read from the lines the
-figure was written into, trust level C. `WORKS` names the field that finds the
+figure was written into (caption and numbers), trust level C. `WORKS` names the field that finds the
 works a publication presents, compares or cites beside itself (below).
 
 The search that orders a publication's pieces for a parameter ranks with a
@@ -128,7 +132,7 @@ harvest (a heading with no body, or the heading of a section the model
 removed; see [refinement](../stages/refinement.md)), and one because the
 model left it out of a crowded request.
 
-Two of the 13 extraction prompts, `review` and `example`, are parts files (see
+Two of the 14 extraction prompts, `review` and `example`, are parts files (see
 [profiles](../profiles.md), The extraction prompts): each names its template of
 the core in its front matter, and `CONTRACT_LANGUAGE = "en"` in
 `profiles/scenarios/extraction.py` says that the templates are the English ones.
@@ -327,7 +331,11 @@ publication keeps a list of its scenarios built piece by piece, and a list of th
 works it presents beside itself whose first entry is the publication; an entry
 belongs to the work its value was read for. A name is asked against the list so far: the
 request shows the name, the lines it stands in, its work and the list, and answers
-the number of the entry or "new" where the list holds none for it. The entries
+the number of the entry, "new" where the list holds none for it, or 0 where the
+words name no such thing (a source note, a year, a number, a sentence): no entry is
+made, the row stays read with an empty `scenario_means` or `value_means` and the
+graph makes no scenario of it (`scenario_names` in `kg.py`, owner decision
+2026-11-09); a new name whose work stayed open is an entry of no work. The entries
 beside the names (`out:status_quo`, `out:several`) stand first with what each
 means. A name is an entry where both name the same thing, a short and a long form
 of one scenario, the same work cited twice; the same name in another work is
@@ -357,14 +365,23 @@ marked a short name of its scenario; the graph still reads it from older harvest
 ## Works beside the publication
 
 A publication presents, compares, reviews or cites other works, and a value may be
-about one of them. `WORKS` in `extraction.py` names the field that finds them in
-every piece, and each name is asked against the list of works with the `names`
-request; each new work is then asked at its own line for its title, its
-organisation, its year and its short name, one `coord` request each (owner decision
-2026-11-08, h). Those values are values of that work, with `work` "another work"
-and the work's name under `work_means`; the harvest keeps them, the graph does not
-(`kg.held_back`, since the `work` coordinate keeps this publication only). A value
-of the publication itself is asked its `work` like any coordinate.
+about one of them. Before any value is read, `extraction/work` asks every piece once
+which shown lines name another work whose results the lines of the piece state
+(`found`) and which line shows that the rest are this publication's own (`own`, an
+address or 0); `WORKS` in `extraction.py` names the field and the details of a
+work. Each name is asked against the list of works with the `names` request; each
+new work is then asked at its own line for its title, its organisation, its year
+and its short name (`WORKS["fields"]`), side by side, one `coord` request each
+(owner decisions 2026-11-08, h, and 2026-11-09). Those values are values of that
+work, with `work` "another work" and the work's name under `work_means`; the
+harvest keeps them, the graph does not (`kg.held_back`, since the `work`
+coordinate keeps this publication only). A value's own work: a find whose lines
+cover the value's line gives that work (a find in a heading, a table's title or
+head or a figure's caption covers the whole piece), else the `own` line gives this
+publication, else the value asks its work as a choice from the list of works in a
+`coord` request (reply entry, address, words); 0, or an entry without a line,
+leaves it `unstated`, and a work is never searched. Only the 13 publication and
+study fields and the scenario name have a `work` coordinate.
 
 ## The graph: one report, one bundle, a factsheet per scenario
 

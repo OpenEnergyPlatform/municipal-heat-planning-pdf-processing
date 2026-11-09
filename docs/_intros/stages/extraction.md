@@ -27,7 +27,7 @@ a harvest already written can use without starting a document over.
 | | |
 |---|---|
 | **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
-| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, a `survey/<document id>.json` per document, the order its pieces are read in, a `transcripts/<document id>.json` per document with figures, the lines its figures were transcribed into, `query_cache.db` once per run, a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile with a strict serializer, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
+| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, a `survey/<document id>.json` per document, the order its pieces are read in, a `transcripts/<document id>.json` per document with figures, the caption and numbers its figures were transcribed into, `query_cache.db` once per run, a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile with a strict serializer, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
 | **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchors key and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, or timed out, is not stamped, which the run counts as a failure and answers with exit code 1. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
 
@@ -42,11 +42,11 @@ One document, from its order to its summary row:
 
 ```mermaid
 flowchart TD
-    cut[Pieces: the plan as numbered lines, pieces of at most eight; each figure transcribed into lines once per run] --> settled[What the plan settles: its settings and its base and target years]
+    cut[Pieces: the plan as numbered lines, pieces of at most eight; each figure transcribed once per run into its caption and its numbers] --> settled[What the plan settles: its settings and its base and target years]
     settled --> order[Order: every piece ranked for each field by a reranker]
     order --> find[Find: each field in each piece, its values as addresses and words; a field a document has once, asked once]
-    find --> coord[Coordinate: each coordinate of each value on its own, an address and words, or 0 and a HyDE sentence]
-    coord -->|0, and not only the value's own place can say it| search[Search: the pieces beside it, then the pieces a search finds, five at a time]
+    find --> coord[Coordinate: each coordinate of each value on its own, an address and words, or 0]
+    coord -->|0, and not only the value's own place can say it| search[Search: the pieces beside it, then the pieces a sentence written for it finds, five at a time]
     coord --> check{Checked as answered: the address names a shown line, the words stand in it, the answer stands in the quote}
     search --> check
     check -->|does not hold| follow[Follow-up: asked once more as a request of its own, with the reasons]
@@ -157,9 +157,11 @@ sentence, and a number such as "1.155 MWh" never breaks, since a sentence ends
 only where a mark is followed by a space. A table is its title lines, its head
 lines and its body rows, numbered in that order from 1 (the rule under the
 head counts not), each body row one line whose cells are numbered from 1; the
-lines under a table are lines as well (`units.table_lines`). A figure is the
-lines a model wrote it into once, its title first (see Transcribing the
-figures), else the sentences of its description. A table the layout cut at a
+lines under a table are lines as well (`units.table_lines`). Every line that
+"|" divides has cells, wherever it stands and not only a table row
+(`units.line_cells`): "26 2019 | Erdgas | 11" is addressed 26.1 to 26.3. A figure
+is the lines a model wrote it into once, its caption first and then its
+numbers (see Transcribing the figures), else the sentences of its description. A table the layout cut at a
 page break is cut alone: `lookup.continued` still marks the table it may
 continue, but no request of this flow shows that table's title or head.
 
@@ -177,8 +179,12 @@ A piece (`units.Chunk`) is at most `CHUNK_UNITS` = 8 lines of its passage (a
 profile may say another number with `extraction.CHUNK_UNITS`; owner decision
 2026-11-08: eight, and twelve only where a probe loses values against the runs
 before). A table's title and head lines are shown with every piece of it under
-the same numbers, a figure's title line likewise, and a passage that holds
-fixed lines only is one piece. What an address a model gave names is code's
+the same numbers, the caption lines of a figure with numbers likewise, and a passage
+that holds fixed lines only is one piece. A figure with numbers is first the
+piece of its caption, then the pieces of its numbers, each shown with the caption
+(`units.chunks_of`); a field whose values are not numbers reads the figure in the
+piece of its caption alone, a numeric field in the pieces of its numbers
+(`units.pieces_for`, `Plan.pieces`). What an address a model gave names is code's
 (`addressed.resolve`): the lines it names, which have to be lines the request
 showed, are the quote; the passage and the page are the passage's own; the
 head of a cell's column is the words over it in the table's head lines
@@ -190,16 +196,21 @@ and are never used in place of them (see Finding a field's values in a piece).
 A figure goes through the model once per run, before the document is read
 (`addressed.Transcripts`, prompt `extraction/transcribe`, owner decision
 2026-11-08): its crop and its description go out, and the reply is
-`{"lines": [...]}`, the title first, then a line for each axis with its unit, each
-legend entry and each number with what it stands for, as the image prints them; a
-number the image only draws is written with the mark that it was read off. The lines are kept under the harvest in
+`{"caption": [...], "numbers": [...]}` (owner decision 2026-11-09). The caption is
+the title, a line for each axis with its unit and the names on it, and a line for
+each legend entry; the numbers are a line for each number with what it stands for,
+as the image prints them; a number the image only draws is written with the mark
+that it was read off. The lines are kept under the harvest in
 `transcripts/<document id>.json`, per figure with the hash of the image and a
 fingerprint of the prompt and the model that wrote them; a figure whose image
-and fingerprint are those of the kept lines is not asked again. A figure
+and fingerprint are those of the kept lines is not asked again, and a
+transcription kept in the older one-list form is transcribed again
+(`units.figure_lines` reads such a list as all caption). A figure
 without an image (`EXTRACT_ATTACH_IMAGES=0`, or none stored) is not asked, and
 its description stands in its place. Its image goes to no other request of the
 harvest: from then on a figure is read as a table or a section is, from its
-lines, and what a value is checked against is that text. A value read from a
+lines (its caption lines shown with every piece of its numbers, as a table's
+title and head are), and what a value is checked against is that text. A value read from a
 figure, whether from its lines or from its description, carries `drawn`, which
 sets the flag `read_off` (`verify.verify_tuple`) and makes the value a level C
 (see Trust levels). A transcription that came to nothing, or a reply that did
@@ -209,7 +220,8 @@ requests are counted as `transcribe` (`transcribe_ask`).
 ### The order of a whole plan
 
 The next step of the harvest (`addressed.Orders`, `survey.py`). Every piece of
-a plan is read for every field of the spec (owner decisions 2026-11-08). No
+a plan is read for every field of the spec, the pieces of a figure by what the
+field takes (`units.pieces_for`; owner decisions 2026-11-08 and 2026-11-09). No
 request asks which fields stand in a piece: the survey that did left about 120
 values of the probe of one plan never asked, because it named no field for 34 of
 207 passages, and a field it did not name was not read there. What this step
@@ -218,7 +230,10 @@ plan with the field's search sentences and each piece keeps its best score
 (`addressed.make_order`); the pieces are read in that order, best first, and
 nothing is left out for its rank. Without a reranker (no `RERANK_BASE_URL`) the
 pieces of the passages the vector search finds best come first and the pieces
-of the other passages follow, and without the search the plan's order stands (see Reranking a search).
+of the other passages follow, and without the search the plan's order stands (see Reranking a search). A reranker, an embedding or a search that
+fails is asked again until it answers or the run halts (`runner.persistently`,
+`runner.Persistent`) and is never replaced by the plan's order or by an empty
+result: `addressed.make_order` has no fallback for a failure.
 
 The sentences are HyDE sentences, as a document would print the value (owner
 decision 2026-11-05, `runner.make_seek_probes`). Every field gets one written for
@@ -302,11 +317,28 @@ decisions 2026-11-08). Every field is asked of every piece, best first
 (see The order of a whole plan), one request per field and piece. The request
 shows the field, what a value of it is (its `brief` where the spec writes one,
 else its description), the headings up to the piece (`H`) and the piece's lines
-with their addresses, and nothing else. The reply is
+with their addresses, and nothing else; a field with a list shows the list too
+(see below). The reply is
 `{"found": [{"at": ..., "words": ...}]}`: one entry for each value, its address
-(the cell where the value stands in a table row, else the line, a stretch where
+(the cell where the value stands in a cell line, else the line, a stretch where
 it runs over several) and its words as the line prints them; an empty list says
-the piece holds none. No code reads a number by its place, and a table is read
+the piece holds none. Every request that finds values (find, docfield, work) shows
+two example replies in its prompt: one with a find at the request's own first line
+(a cell where that line has cells) and one with no finds
+(`addressed.find_example`; the prompt places `{{example}}` and `{{nothing}}`,
+`runner.system_text`).
+
+A field with a list (value type `category`: a scenario's type, a study's
+descriptor, sector division, sector, technology) is asked with its list in the find
+and the docfield request, and the reply names the entry's number beside the
+address and the words: `{"found": [{"entry": n, "at": ..., "words": ...}]}`
+(`addressed.listing`, `Reader.listed`; owner decision 2026-11-09). A list of more
+than 24 entries (`addressed.LIST_WITH_MEANS`) whose entries name more than one
+group is shown by its groups, a list of up to 24 entries with what each means
+("(means: ...)"). A number that is no number of the list is `not_an_option` and is
+asked once more in the follow-up. A find with its number needs no list request; a
+find that names a group asks the member in a list request that shows only that
+group's entries (see Entries of a list). No code reads a number by its place, and a table is read
 like a section (owner decisions 2026-11-04 and 2026-11-05).
 
 What the answer names is looked up and checked (`addressed.resolve`). An
@@ -330,8 +362,9 @@ quote is the line itself, the lines before it as well where one line is shorter
 than `verify.MIN_QUOTE_CHARS`, so that a quote names a place
 (`units.short_quote`); a table row's quote is the row. A free-text value is its
 own wording (`verify.wording_of`) and is not asked twice. A value of a list
-field is one entry of the list, which the next request chooses (see Entries of a
-list), or `""` where none fits, and the fold keeps such a wording without an
+field is the entry its find named, or `""` where it named none; a find that named a
+group, or no number, asks the entry in a list request of its own (see Entries of a
+list), and the fold keeps such a wording without an
 entry (`unmapped:value`) as it does everywhere. A value is what its field asks
 for and never a coordinate's answer: the year of a number is a coordinate, not a
 value.
@@ -365,13 +398,18 @@ of the rows it used (`profiles/kwp/compute.qualified`).
 
 A field the spec marks `once_per_document` (a publication's title, its authors,
 its organisation; kwp: the planning organisation) is asked once per document,
-never per piece (`Reader.docfield`, prompt `extraction/docfield`, owner decision
-2026-11-08): the first request shows the field in full (its whole description),
-the title page (`T`) and the `DOCFIELD_CHUNKS` = 5 pieces a search finds best for
-the field's sentence (`search_order`, the same search as the one below); if
-no answer holds, the next five follow, and so on until an answer holds or every
-piece was shown. The reply is a list of finds, as in the find request, and an
-answer that does not hold goes back once. Each value found is a claim and is asked
+never per piece (`Reader.docfield`, prompt `extraction/docfield`, owner decisions
+2026-11-08 and 2026-11-09): the first request shows the field in full (its whole
+description) and the title page (`T`); the pieces are those the search finds best
+for the field's sentence, the run's budget of them (`EXTRACT_SEARCH_PIECES`,
+default 50, by kind as in the search below: `Reader.shown_order`,
+`Reader.ask_once`), five to a request (`EXTRACT_SEARCH_CHUNKS`), and every find
+that holds is kept. A field with a list reads twice the budget (100) and shows its
+list, whose entry a find names (see Finding a field's values in a piece). The reply
+is a list of finds, as in the find request, and an answer that does not hold goes
+back once. In the scenarios profile the four study fields (`study_descriptor`,
+`study_sector_division`, `study_sector`, `study_technology`) are `once_per_document`
+as well. Each value found is a claim and is asked
 its coordinates, like any other. A field nothing came of is a read without values,
 `unread` with its reason where a request came to nothing. The trace event is
 `docfield` (`parameter`, `values`, and `why` where a request came to nothing); the
@@ -408,12 +446,9 @@ can only come from what the request shows, and whatever it shows may be quoted
 (owner decision 2026-11-05).
 
 **The answer** is `{"at": ..., "words": ...}`: the address of the line that says
-the answer and its words, or `0` and `"hyde"`, a sentence as the plan would print
-what is missing. A coordinate that may name several things (`several` on a list
+the answer and its words, or `0`. A coordinate that may name several things (`several` on a list
 axis, or a `merged` axis of names) answers `{"found": [...]}` and gives one row per
-entry, each with its own address, checked on its own. A reply of `0` without a
-sentence, and no `more`, is asked again, the reason `hyde` (`addressed.hyde_missing`).
-The line the address names is the quote of the coordinate, the words are its
+entry, each with its own address, checked on its own. The line the address names is the quote of the coordinate, the words are its
 answer; `merge_field` checks them as it checks every answer: the quote stands in
 what the request showed, long enough, and the answer stands in the quote; a
 closed list's answer is one of its entries, found by the entries' list request
@@ -421,7 +456,8 @@ closed list's answer is one of its entries, found by the entries' list request
 reasons (see Asking again: follow-ups), and then ends `unbacked`.
 
 **What a `0` leads to.** A coordinate whose own place does not state it goes on
-to the search (see Searching for what a value's place does not say), unless only
+to the search (see Searching for what a value's place does not say), which goes
+with a sentence a request of its own writes (`phrase`), unless only
 the place of the value can say it: the coordinates a group names under
 `own_passage` or `own_value` (owner decision 2026-11-06; kwp: `unit`, `what`,
 `subject`, `aggregation` and `role` are `own_passage`, `qualifier` is `own_value`)
@@ -518,14 +554,17 @@ per document, field, coordinate and wording, whichever value it stands with
 stand in (and the title of their table), the plan's settings, and the list, each
 entry under a number with what it means (`means`: the spec's `gloss` where it has
 one, one line in the profile's language, else its English definition,
-`fields._options`) and, once the document used it, how it named it before
-("in this document"). The reply is `{"entry": n}`, the number of the entry, 0 for
+`fields._options`). The list is shown as it is, each entry by its name and what it
+means and never with how the document named it before (owner decision 2026-11-09).
+A value of a field with a list does not come to this request where its find named
+the entry (see Finding a field's values in a piece). The reply is `{"entry": n}`, the number of the entry, 0 for
 none, or a list of numbers where several may be meant (`several`). A list of more
 than 24 entries (`addressed.LIST_WITH_MEANS`) shows its names only, and one whose
 entries carry a `group` in the spec (an entry object may say `"group"`;
-`fields.Option.group`) is asked group first: a first request chooses among the
-groups, a second among the entries of the group chosen, with what each means (the
-step `group`). A number that is no number of the list is asked once more with the
+`fields.Option.group`) and name more than one group is asked group first
+(`addressed.listing`): a first request chooses among the groups, a second among
+the entries of the group chosen, with what each means (the step `group`); a find
+that names a group asks the second only. A number that is no number of the list is asked once more with the
 reason `not_an_option` and then leaves the coordinate without an entry, which the
 check ends as it ends any answer off its list. The unit is such a list, so is the
 value of a category parameter and the quantity; so is the choice among the plan's
@@ -552,7 +591,12 @@ stands in, the work the value belongs to, and the list, each entry under its num
 names first, each with what it means. The reply is the number of the entry, or
 `"new"` where the list holds none for it, which makes a new entry of that name and
 work (`{"entry": n}`; a list of numbers where the field takes a group, see Words
-for a group). A name is an entry where both name the same thing, a short and a long
+for a group), or `0`: the words name no such thing (a source note, a year, a number,
+a sentence). Then no entry is made, the value stays read with an empty note
+(`value_means: []`, `scenario_means: []`) and the graph makes no scenario of it
+(`profiles/scenarios/kg.py` `scenario_names`; owner decision 2026-11-09); a name
+never asked keeps its own scenario. A new name whose work stayed open becomes an
+entry of no work (work 0), not of this publication. A name is an entry where both name the same thing, a short and a long
 form of one scenario, the same work cited twice; the same name in another work is
 another entry, and two equal names of two works are two entries (nothing is merged
 by its spelling); words such as "this report" or "we" name this publication. A name
@@ -578,35 +622,42 @@ number of entries shown).
 A coordinate the value's own place left open (a `0` answer), and not one only the
 place can say, is searched for in the rest of the plan (`Reader.search`, prompt
 `extraction/search`, owner decisions 2026-11-04 to 2026-11-08). Every search runs
-with a sentence in the form of the plan, never with a question (HyDE): the one the
-`coord` answer wrote as the plan would print what is missing, the model writing
-it with the names of the document; the field's own sentence where it wrote none;
-and where no sentence can be had at all a question may be searched, which the run
-counts (`question_queries`; owner decision 2026-11-08: a question may be searched
-where no sentence can be had).
+with a sentence in the form of the plan, never with a question (HyDE). The `coord`
+answer writes none: a request of its own, `phrase` (prompt `extraction/phrase`,
+with the parts `with: question` and `with: headings`; `Reader.sentence`), writes
+it from the field, the question, the value's words and lines, the headings up to
+the value and what the document says of itself, once per document, field,
+coordinate and wording of the value (kept in `plan.lists`); the trace writes it as
+`phrase_ask` with the parameter and the coordinate. Without a sentence the search
+goes with the field's sentence, and where no sentence can be had at all a question
+may be searched, which the run counts (`question_queries`; owner decision
+2026-11-08: a question may be searched where no sentence can be had).
 
-The pieces are shown in this order, `SEARCH_CHUNKS` = 5 at a time, each request
-showing the value and its own place (as in the coordinate's request) and the pieces
-under a letter of their own, with their kind, page and title:
+The pieces are shown in this order, `EXTRACT_SEARCH_CHUNKS` = 5 to a request, each
+request showing the value and its own place (as in the coordinate's request) and the
+pieces under a letter of their own, with their kind, page and title:
 
-1. the pieces right before and after the value's piece (window `near`);
-2. the pieces a search finds best for the sentence (`search_order`: the plan's
-   passages ranked by the vector search, the pieces of the first
-   `SEARCH_PASSAGES` = 10 reordered by the reranker with the sentence, then the
-   rest of the plan's pieces in the plan's order; window `found`).
+1. the pieces right before and after the value's piece, one request (window
+   `near`; `Plan.beside`);
+2. the run's budget of pieces (`EXTRACT_SEARCH_PIECES`, default 50): the pieces of
+   the passages the vector search finds best for the sentence, the best of each
+   kind first up to its share (`EXTRACT_SEARCH_SHARES`, default `20,15,15`: tables,
+   figures, text, scaled to the budget), then the best of any kind up to the budget
+   (`addressed.budgeted`), ordered once by the reranker with the same sentence
+   (`Reader.shown_order`); window `found`.
 
 The reply is the coordinate's reply, an address under one of the letters and its
 words, or `0`, and may ask to fetch itself (`more`): the piece before or after the
 last shown, a table or figure by its placeholder, the pieces a pattern stands in,
-the pieces closest to a sentence of its own, which the next request shows
+the pieces closest to a sentence of its own, which the next request shows first
 (`addressed.GETS`, `Reader.fetch`; at most five pieces for a pattern or a sentence).
-The search ends when a find holds (`read`), when an answer does not hold after
-its follow-up (`unbacked`), when every piece of the plan was shown (`unstated`: the
-finding is about the plan), or when the search has asked `budget` requests, at
-least 100 in a harvest (`runner.search_rounds`: `EXTRACT_REST_MAX_WINDOWS`, never
-fewer than `SEARCH_MIN_ROUNDS`, owner decision 2026-11-09) and none in
-`--top-up-open`, which reads to the end (`exhausted`: the finding is about the
-run).
+Pieces a reply fetches itself do not count against the budget, and no piece is
+shown twice. The search ends when a find holds (`read`), when an answer does not
+hold after its follow-up (`unbacked`), or when nothing of the budget is left:
+`exhausted` where pieces of the plan stay unshown (the finding is about the run),
+`unstated` where every piece was shown (the finding is about the plan).
+`--top-up-open` sets the budget to every piece (`runner.read_to_end`), so a
+coordinate ends `read` or `unstated` there.
 
 A find from another passage than the value's own is asked whether that place speaks
 about this value (`Reader.about`, prompt `extraction/check`, answer `yes` or `no`,
@@ -629,27 +680,40 @@ the payload. What holds after it is taken. What does not ends `unbacked` for a
 coordinate and is left for a find, and no third request follows. A request whose
 reply is no object, an object without its key or cut off is asked again as every
 request of the stage is (`runner.ask_in_grammar`, `_reply_fault`), the cause named,
-and no JSON is repaired. The follow-ups are traced as `follow_ask` with the
+and no JSON is repaired; the limits of that are in The adaptive request limit and
+Requests the server did not serve. The follow-ups are traced as `follow_ask` with the
 request they follow (`asked`) and counted under `follow`.
 
 ### Works beside the publication
 
 A scenarios publication presents, compares, reviews or cites works beside itself,
-and its values may be about any of them. The profile names the field that finds
-them (`extraction.WORKS`; owner decision 2026-11-08, h): every piece is asked for
-the names of other works (a `find` request with that field), each name is asked
-against the document's list of works, whose first entry is the publication itself
-(`Reader.works`), and each new work is asked at its own line for what the profile
-asks of a work, its title, its organisation, its year and its short name: one `coord`
-request per detail, the question the profile wrote, the answer an address and
-words. Those values are values of that work: their `work` coordinate is the entry
-"another work" with the work's name under `work_means`. The harvest keeps them, the
-graph does not, since `work` keeps this publication only (`kg.held_back`). A value
-of the publication itself is asked its `work` as any coordinate is, the list of
-works deciding whether it is "this publication" or "another work". The works are
-asked before the other fields, in every read that is not restricted to chosen
-passages. The trace event is
-`works` (the entries of the list, the new ones).
+and its values may be about any of them (the KWP profile has no works). The profile
+names the field and the details of a work (`extraction.WORKS`; owner decisions
+2026-11-08, h, and 2026-11-09). Before any value is read, a request `work` (prompt
+`extraction/work`, optional like `names`; `Reader.work_piece`) asks every piece once
+which shown lines name another work whose results the lines of the piece state
+(`found`: a cell, a line or a stretch and the work's name) and which line shows
+that the rest of the piece is this publication's own (`own`: an address, or `0`).
+Each name is asked against the document's list of works, whose first entry is the
+publication itself (`Reader.works`), and the details of each new work (title,
+organisation, year, short name: `WORKS["fields"]`) are asked side by side, one
+`coord` request per detail, the question the profile wrote, the answer an address
+and words. Those values are values of that work: their `work` coordinate is the
+entry "another work" with the work's name under `work_means`. The harvest keeps
+them, the graph does not, since `work` keeps this publication only (`kg.held_back`).
+
+The work of a value (`Reader.work_coordinate`): a find whose lines cover the
+value's line gives that work, read and quoted with the find's line, window
+`["piece", 1]`; a find in a heading, or in a table's title or head or a figure's
+caption, covers the whole piece. Else the `own` line gives this publication. Else
+the value asks its own work as a choice from the document's list of works, a
+`coord` request with `list` whose reply is `{"entry", "at", "words"}`
+(`addressed.work_choice_format`); `0`, or an entry without a line, leaves it
+`unstated`, and a work is never searched. A scenario name that is an existing
+entry of the scenario list takes the work its entry was read with when its own
+work stayed open (window `["entry", 1]`). Only the 13 publication and study fields
+and the scenario name have a `work` coordinate. The trace writes `work_ask` per
+request and the event `works` (the entries of the list, the new ones).
 
 ### Words for a group
 
@@ -682,13 +746,16 @@ for every field its follow-ups carry (`compute.FOLLOWS`) and stops with a
 `LookupError` otherwise. The prompt shows the reply of its request (the
 `{{example}}`) where it has the place for it, written for this request with
 exactly the keys its own grammar asks, an address shown by the first line of the
-request's own passage (`runner.system_text`); a place without an example, or an
-example without a place, is an error before anything is sent.
+request's own passage (`runner.system_text`); a request that finds values (find,
+docfield, work) shows two, `{{example}}` with a find and `{{nothing}}` with none
+(`addressed.find_example`); a place without an example, or an example without a
+place, is an error before anything is sent.
 
 The prompts are one for each kind of request, `extraction/<kind>`: `transcribe`,
-`find`, `docfield`, `coord`, `search`, `list`, `follow` and, where a profile
-writes them, `check`, and `names` for a run that builds a list of names
-(`addressed.KINDS`, `addressed.OPTIONAL`). A profile whose spec names groups and
+`find`, `docfield`, `coord`, `list`, `search`, `follow` and, where a profile
+writes them, `check`, `phrase` (the sentence a search goes with; without it the
+search goes with the field's sentence), and `names` and `work` for a run that builds
+lists of names and works (`addressed.KINDS`, `addressed.OPTIONAL`). A profile whose spec names groups and
 lacks one of the required ones is broken, and the run stops at the start and names
 the prompt, as `spec.load` stops at a broken group (owner decision 2026-11-04;
 `runner.surveyed_flow`). The prompts are compact, the result first, and none shows a backtick in its
@@ -710,7 +777,8 @@ name groups), and then the profile must write the prompts `extraction/transcribe
 `find`, `docfield`, `coord`, `list`, `search` and `follow`
 (`runner.SURVEY_PROMPT_IDS`), `extraction/names` where its spec merges names or
 the profile keeps a list of works (`runner.names_asked`), and may write
-`extraction/check` (`runner.survey_prompt_ids` lists the ones a profile has).
+`extraction/check`, `extraction/phrase` and `extraction/work`
+(`runner.survey_prompt_ids` lists the ones a profile has).
 kwp and scenarios do, scenarios with `names`. A profile whose spec names groups
 and lacks a required one is broken, and the run stops at the start and names
 the prompt, for every run and every probe, as `spec.load` stops at a broken group
@@ -756,7 +824,8 @@ request that timed out is asked again with the time of a repeat
 stage is: the eight-plan probe asked three times within the same 180 s and
 lost the replies that take longer.
 
-The stamp records the prompts of the flow the run harvested with, and every
+The stamp records the prompts of the flow the run harvested with (the optional
+`extraction/work` and `extraction/phrase` where the profile writes them), and every
 producer entry carries `flow` ("survey"; the stamps of older harvests say
 "fieldwise"); it is recorded and
 never compared (owner rule of 2026-09-10), so a stamp of the other flow does
@@ -785,17 +854,18 @@ the gained parameters (scope `parameters`).
 The server's window is measured over the prompts of this flow
 (`runner.request_budget`, `runner.survey_prompt_ids`, see Configuration). The
 trace names each request by its kind, `<kind>_ask` for `transcribe`, `find`,
-`docfield`, `coord`, `list`, `names`, `search`, `check` and `follow`, each with
-what its kind names: the field (`parameter`), the passage (`kind`, `owner`) and
-the piece (`chunk`) of a `find`, the coordinate and the value of a `coord`, the
+`docfield`, `coord`, `list`, `names`, `search`, `check`, `follow` and `work`, each
+with what its kind names: the field (`parameter`), the passage (`kind`, `owner`) and
+the piece (`chunk`) of a `find` or a `work` (`parameter` "work"), the coordinate and the value of a `coord`, the
 step (`group` or `plan_years`) of a `list`, the kind of names and how many were
 shown of a `names`, the number of pieces a `docfield` or a `search` showed, and
 the request a `follow` follows (`asked`). The harvest's events of a document are
 `order`, `settled`, `works`, `docfield` (per field asked once), `read` (per field
 and passage: `values`, `asked`, `failed` per reason, `unanswered`, and `unread`
 with its `why`) and `asked` (once per reading: `requests` per kind, `refused` per
-reason, `question_queries`, `chunks`, `scope`). The requests for a search sentence,
-the review and the compute step write `phrase_ask`, `review_ask` and `compute_ask`
+reason, `question_queries`, `chunks`, `scope`). The requests for a search sentence
+(`phrase_ask`, with the parameter and the coordinate it is written for), the review
+and the compute step write `phrase_ask`, `review_ask` and `compute_ask`
 (`runner._asked`, one per reply, with its tokens). The events of the
 field-by-field flow, `plan`, `anchor`, `frame`, `rows`, `field`, `sweep`, `drop`
 and `places`, are written no more and stay in the schema for older traces, as do
@@ -871,29 +941,37 @@ each is one request over the pool, and a passage keeps its best score, as the ve
 search keeps a passage's best. A figure goes with its picture where the run attaches
 figures, any other passage as its text; the server cuts a pair that outgrows the model
 to the model's length. Scores are kept per thread for the document in hand, so a
-search asked again with fewer passages left scores nothing twice. A failed request
-fails the search as a failed embedding does: a warning, and no passages for it.
+search asked again with fewer passages left scores nothing twice. A search, an
+embedding or a reranker request that fails is asked again until it answers or the run
+halts (`runner.persistently`, owner decision 2026-11-09) and is replaced by no other
+order and by no empty result.
 
 The pieces: the order of a plan's pieces for a field has the reranker score every
 piece with each of the field's sentences (`runner.make_chunk_reranker`, a pool that
 holds the whole plan), a piece keeping its best score, and a search for an open
-coordinate takes the passages the first function finds, the first
-`SEARCH_PASSAGES` = 10 of them, and has the reranker order their pieces with the
-search sentence, the pieces of the other passages after them (owner decision
-2026-11-08: pieces are ordered by the reranker with the same sentence). A piece goes
-as its text, a figure's as its transcribed lines. A failed request leaves the pieces in
-the order the search has, with a warning. Without `RERANK_BASE_URL` the vector
-search's order stands.
+coordinate or a field a document has once takes the pieces of the passages the first
+function finds best, the run's budget of them by kind (`addressed.budgeted`: 50
+pieces, 20 of tables, 15 of figures, 15 of text, `EXTRACT_SEARCH_PIECES` and
+`EXTRACT_SEARCH_SHARES`), and has the reranker order them once with the search
+sentence (owner decisions 2026-11-08 and 2026-11-09: pieces are ordered by the
+reranker with the same sentence; `Reader.shown_order`). A piece goes as its text, a
+figure's as its transcribed lines. A failed reranker request is asked again
+(`runner.Persistent`), and the pieces never stay in another order for it. Without
+`RERANK_BASE_URL` the vector search's order stands.
 
 ### The reply grammar
 
 A request goes out with `response_format`, a JSON schema built for its kind
 (`addressed.found_format` for `find` and `docfield`, `coord_format` for `coord` and
 `search`, `entry_format` for `list` and `names`, `year_format` for the last
-question of a year, `lines_format` for `transcribe`, `about_format` for `check`; the compute step's
-are in `replies.py`): a find is a list of `{at, words}`, a coordinate's answer an `at`
-that is an address or 0 with its `words` and its `hyde` sentence (a list `found`
-where it may name several entries, and `more` in a search), a list's answer the
+question of a year, `lines_format` for `transcribe`, `about_format` for `check`,
+`work_format` for `work`, `work_choice_format` for a value's own work and
+`phrase_format` for `phrase`; the compute step's
+are in `replies.py`): a find is a list of `{at, words}` (`{entry, at, words}` where
+the field has a list), a coordinate's answer an `at` that is an address or 0 with its
+`words` (a list `found` where it may name several entries, and `more` in a search),
+a `phrase` answer `{"phrase": ...}`, a `transcribe` answer `{"caption": [...],
+"numbers": [...]}`, a list's answer the
 number of an entry or a list of them (and `"new"` for a name), and nothing beyond
 that: `additionalProperties: False` throughout. vLLM generates the reply inside
 that shape rather than around it, sent on every attempt. Nothing in the grammar is
@@ -924,13 +1002,17 @@ at once, refused the rest outright (1,110 requests of one probe).
 
 Every request loop of this stage hands a failed request to one rule,
 `runner.Failures`, which reads the exception's HTTP status to tell three ends
-apart. A request that never arrived has no status and is the server's:
+apart. A failure that is the server's is asked again without a limit until the run
+halts (`runner.Failures.attempts`, `runner.halted`: a stop signal or a server that
+answers no more); a reply that cannot be read is asked again at most
+`EXTRACT_MAX_RETRIES` = 3 times and then given up, the coordinate being
+`unanswered` (owner decision 2026-11-09). A request that never arrived has no status and is the server's:
 `server_side` is true, and the loop waits on the long curve,
 `retry_wait(attempt, transport=True)`, rather than the short one a reply the
 model got wrong gets (`runner.py`). A 429, a 5xx or a timeout is `unserved`:
 the server was asked and did not do the work, which says nothing about the
 request, so it is `server_side` too, waits on the long curve, and ends the
-request as unserved if the last attempt still got it. Any other 4xx refuses
+request as unserved if the run halts while the last attempt still got it. Any other 4xx refuses
 the request itself, and every retry would be refused alike, so it is not
 asked again, and a passage ends as `no_answer`. The compute request waits by
 the failures alone: a round of code, of fetching or of taking is no failure.
@@ -949,7 +1031,7 @@ request that ends unserved leaves a hole for the field and passage with
 which carries the cause to the stamp (`not_happened`). The other requests, the
 coordinate, list, names, search, check and follow requests and the search-sentence
 and compute requests, return nothing, as they do for any failure (a coordinate whose
-request did not answer ends `exhausted`); what marks the document is
+request did not answer ends `unanswered`); what marks the document is
 `Failures.given_up`, which counts it in the registry `UNSERVED` (`runner.py`), so
 the document is not stamped and a resume reads it again. The search sentence the
 run writes once per parameter belongs to no document and is counted under
@@ -1684,7 +1766,7 @@ First every coordinate a stored row left `exhausted`, `unanswered` or
 `unbacked` (`topup.OPEN`, chosen by `topup.open_coordinates`) is asked again
 as the harvest asks it, `topup._sweep_one` (`SurveyedHarvest.sweep`), the search
 running until every piece of the plan was shown (the harvest's budget of
-requests per search, `runner.search_rounds`, does not apply: `runner.read_to_end`). An answer replaces the open block,
+pieces per search, `runner.search_budget`, does not apply: `runner.read_to_end`). An answer replaces the open block,
 `unstated` after the whole document included; a coordinate still open keeps its
 old block, so a cut-short run leaves the file as it was. Documents are swept side
 by side, as many as the server has room for and at most `EXTRACT_BATCH_DOCS`
@@ -1931,7 +2013,8 @@ stops the run before the first request.
 
 Every other prompt of the run is the profile's own file in full, with no
 template: `transcribe`, `find`, `docfield`, `coord`, `list`, `search`, `follow`,
-`check`, `names` (where the profile asks names) and the compute prompts
+`check`, `phrase`, `names` and `work` (where the profile asks names and works) and
+the compute prompts
 (`runner.SURVEY_PROMPT_IDS`, see The run harvests from the survey and What a
 request shows for their marked parts). What each shipped profile
 words itself and what it leaves out is in its parts files and is listed by
@@ -2007,7 +2090,7 @@ A harvest line is one of four kinds, named by its `kind` field.
 
 | Kind | Carries | Written by |
 |---|---|---|
-| `tuple` | A resolved value, every filled coordinate (`_state`, `_raw`, `_quote`, `_source`, `_window` each), an evidence tier, non-fatal flags, provenance, its `at` (the address of its place: passage, line, cell, last line of a stretch) and `head` (the words over its table column), and `drawn` where a figure's value was read from lines a model wrote or from a description | `verify.verify_tuple`, folded by `pipeline.fold_claims` |
+| `tuple` | A resolved value, every filled coordinate (`_state`, `_raw`, `_quote`, `_source`, `_window` each; a window is `own`, `near`, `found`, `base_year`, `target_year` among others, and for a work `piece` or `entry`), an evidence tier, non-fatal flags, provenance, its `at` (the address of its place: passage, line, cell, last line of a stretch) and `head` (the words over its table column), and `drawn` where a figure's value was read from lines a model wrote or from a description | `verify.verify_tuple`, folded by `pipeline.fold_claims` |
 | `refusal` | The raw claim plus a reason from a closed family | `verify.verify_tuple`, or `pipeline.route_claims` if unroutable |
 | `parameter_state` | One line per spec parameter, whatever it came to: its state (`read`, `unbacked`, `exhausted` or `unstated`) and its tuple and refusal counts. The pass for a new parameter writes one for each parameter it appended and takes it as the proof that the parameter was read | `trust.parameter_states` |
 | `summary` | The document's trust-level distribution and reason counts, the image origin and `unlisted_units` (numbers read with a printed unit that is no entry of their list, per printed unit), the last line | `trust.document_summary` |
@@ -2069,7 +2152,7 @@ field a review asked about, named by `review.COLUMNS`.
 
 A harvest directory (`out`) holds, per document,
 `<name>.jsonl`, `<name>.stamp.json`, `trace/<name>.trace.jsonl.gz` and
-`survey/<document id>.json`, the order of its pieces, and `transcripts/<document id>.json`, the lines its figures were transcribed into; per run, `query_cache.db`; and,
+`survey/<document id>.json`, the order of its pieces, and `transcripts/<document id>.json`, the caption and the numbers its figures were transcribed into; per run, `query_cache.db`; and,
 only after a pass over a stored harvest, a trace directory of its own beside
 `trace/`: `trace-topup/` after `--top-up` or `--top-up-parameters`, `trace-open/`
 and `trace-rest/` after `--top-up-open`, each holding `<name>.trace.jsonl.gz`.
@@ -2084,11 +2167,11 @@ and `places/<document id>.json`.
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: attempts every retry loop of this stage gets per request. `RETRY_TIMEOUT`: client timeout (seconds) the repeat of a request that timed out gets, every request of the stage alike; a request's own longer time stays, and one that ended on a server error keeps its time | `runner.py`, `runner._client`, `scheduler.Repeats` |
+| `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: replies out of their form a request takes before it is left unanswered; a failure that is the server's is asked again until the run halts (`runner.Failures.attempts`). `RETRY_TIMEOUT`: client timeout (seconds) the repeat of a request that timed out gets, every request of the stage alike; a request's own longer time stays, and one that ended on a server error keeps its time | `runner.py`, `runner._client`, `scheduler.Repeats` |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT` | env var | `http://localhost:8000/v1` / `EMPTY` / `Qwen/Qwen3.5-122B-A10B-FP8` / `180` | The address, the key and the model name every request of the stage goes out with (the model name is written into the stamp), and the client timeout in seconds, which starts when a request is sent and not while it waits; a retry after a timeout gets `EXTRACT_RETRY_TIMEOUT` instead | `runner.py`, `runner._client` |
 | `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429, a 5xx or a timeout | `runner.retry_wait` |
 | `EXTRACT_SPLIT_DEPTH` | env var | `3` | Listed in `docpipe/settings.py`; no request of the extraction halves by it any more (`runner._split_harvest` is gone, and the chat's `llm_client` has a constant of its own) | `docpipe/settings.py` |
-| `EXTRACT_REST_MAX_WINDOWS` | env var | `12` | Listed in `docpipe/settings.py` and read into `runner.REST_MAX_WINDOWS`, the budget of a coordinate's search: how many requests of up to five pieces it asks before the coordinate ends `exhausted`; `runner.read_to_end` lifts it for `--top-up-open` | `runner.make_reader`, `addressed.Reader.search` |
+| `EXTRACT_SEARCH_PIECES` / `EXTRACT_SEARCH_SHARES` / `EXTRACT_SEARCH_CHUNKS` | env var | `50` / `20,15,15` / `5` | The budget of every search, read by `runner.search_budget`: how many pieces a search for an open coordinate or a field a document has once shows (a field with a list reads twice as many); how many of them come first from tables, figures and text, scaled to the budget, the rest being the best of any kind; and how many pieces a request shows. A coordinate whose budget ends with pieces unshown is `exhausted`; `runner.read_to_end` sets the budget to every piece for `--top-up-open` | `runner.make_reader`, `addressed.Reader.search`, `addressed.Reader.ask_once` |
 | `EXTRACT_BATCH_SOURCES` / `EXTRACT_BATCH_CHARS` | env var | `6` / `14000` | Passages and characters of passage text a value request was sized for; they only enter the context budget (`runner.context_budget`) | `runner.py` |
 | `EXTRACT_PRIOR_MAX` | env var | `24` | Earlier values a request was told it has; it only enters the context budget (`runner.context_budget`) now | `runner.py` |
 | `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text a request was sized for; it only enters the context budget now. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.context_budget`, `runner.make_parents` |
@@ -2175,9 +2258,9 @@ unit, flagged `unmapped:unit:<print>`, without `value_target`.
 In the search, a find that does not hold ends a coordinate: it is told once with
 its reason in a follow-up and, where it still does not hold, the coordinate is
 `unbacked`; a piece that holds no answer lets the search go on, until every piece of
-the plan was shown (`unstated`) or the search has asked its budget of requests
-(`exhausted`); a search request that came to no reply goes on with the next pieces,
-and a coordinate request that came to no reply ends `exhausted`. A reply that
+the plan was shown (`unstated`) or the budget of pieces is spent with pieces of the
+plan unshown (`exhausted`); a search request that came to no reply goes on with the
+next pieces, and a coordinate request that came to no reply ends `unanswered`. A reply that
 does not parse, is empty, or arrives as a non-dict is asked again with the cause
 named (`_reply_fault`), and no JSON is repaired.
 

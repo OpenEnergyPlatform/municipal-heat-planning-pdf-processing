@@ -10,3 +10,9 @@ Schreibe EINEN kurzen Satz, wie er genau so in diesem Wärmeplan stehen könnte 
 * 12 bis 35 Wörter, ein Satz, höchstens zwei.
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {"phrase":"..."}
+
+<!-- with: question -->
+"question" fragt nach einer Angabe zum Wert unter "value", die seine eigenen Zeilen ("lines") nicht sagen. Schreib den Satz so, wie dieser Plan die Antwort für DIESEN Wert drucken würde: den Wert in den Worten seiner Zeilen, zusammen mit einer Antwort auf die Frage, etwa dem Jahr, dem Energieträger oder dem Szenario, für das er steht. Die Antwort darf erdacht sein: mit dem Satz wird nur im übrigen Plan gesucht.
+
+<!-- with: headings -->
+"headings" sind die Überschriften des Plans bis zur Stelle des Werts, die eigene zuletzt. Nimm die Wörter des Plans auch aus ihnen.

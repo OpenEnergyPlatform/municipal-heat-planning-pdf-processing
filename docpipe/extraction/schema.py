@@ -224,8 +224,10 @@ def _means(name: str) -> dict:
                        f"(its scenarios, its works) '{name}' means: the "
                        f"entry its name is, or the entry of each member "
                        f"where its words name a group; empty where they "
-                       f"name a group the field takes no members for. The "
-                       f"graph writes the row to each of them."}
+                       f"name a group the field takes no members for, or "
+                       f"where the request found they name no such thing "
+                       f"(owner decision 2026-11-09). The graph writes the "
+                       f"row to each of them, an empty list to none."}
 
 
 def _slot_properties(name: str, slot, doc: str) -> dict:
@@ -268,8 +270,9 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"axis' own rule (own | local | any)."},
         f"{name}_window": {
             "type": "array",
-            "prefixItems": [{"enum": ["own", "near", "found", "retrieval",
-                                      "rest", "places", "frame", "table",
+            "prefixItems": [{"enum": ["own", "near", "found", "piece",
+                                      "entry", "retrieval", "rest",
+                                      "places", "frame", "table",
                                       "base_year", "target_year", "head",
                                       "plan_years"]},
                             {"type": "integer"}],
@@ -280,7 +283,12 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"with the sentences beside it. `near`: in the "
                            f"pieces right before and after it. `found`: in "
                            f"the pieces a search found for the sentence of "
-                           f"how the plan would print it. `plan_years`: a "
+                           f"how the plan would print it. `piece`: a work "
+                           f"read once for the value's piece, the line that "
+                           f"names it or shows the piece is this "
+                           f"publication's own. `entry`: the work of the "
+                           f"entry of the document's list the value's name "
+                           f"is. `plan_years`: a "
                            f"year none of these found, read from the plan's "
                            f"base and target years in a request of its own. "
                            f"The other stages are those of harvests made "
@@ -853,14 +861,14 @@ def stamp_schema() -> dict:
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
             "|survey|read_values|read_text|comb|match|settings|seek"
             "|transcribe|find|docfield|coord|list|names|search|check"
-            "|follow)$":
+            "|follow|work)$":
                 {**sha, "description": "sha256 of the prompt file; "
                                        "`transcribe`, `find`, `docfield`, "
                                        "`coord`, `list`, `names`, `search`, "
-                                       "`check` and `follow` are the "
-                                       "prompts of a harvest piece by piece; "
-                                       "the others are in stamps of older "
-                                       "releases"},
+                                       "`check`, `follow`, `work` and "
+                                       "`phrase` are the prompts of a "
+                                       "harvest piece by piece; the others "
+                                       "are in stamps of older releases"},
             "^question_text/[^/]+$": {
                 "type": "array", "items": {"type": "string"},
                 "description": "The sentence THIS document was searched "
@@ -920,10 +928,11 @@ def stamp_schema() -> dict:
 
 # The stages whose every request writes `<stage>_ask` to the trace: the
 # requests of the harvest piece by piece (`runner.ask_in_grammar`,
-# addressed.py), and the search sentences, the frame, the review and the
-# compute step (`runner._asked`).
+# addressed.py), and the search sentences of a document's fields and of a
+# coordinate's search, the frame, the review and the compute step
+# (`runner._asked`, `phrase`).
 PIECE_ASKS = ("transcribe", "find", "docfield", "coord", "list", "names",
-              "search", "check", "follow")
+              "search", "check", "follow", "work")
 ASK_STAGES = PIECE_ASKS + ("phrase", "frame", "review", "compute")
 
 
@@ -1122,7 +1131,9 @@ def trace_schema() -> dict:
                                 "step": {"enum": ["group", "plan_years"]},
                                 "names": {"type": "integer"},
                                 "asked": {"type": "string"}}
-                               if stage in PIECE_ASKS else {}),
+                               if stage in PIECE_ASKS
+                               else {"coordinate": {"type": "string"}}
+                               if stage == "phrase" else {}),
                             "prompt_tokens": {"type": ["integer", "null"]},
                             "completion_tokens": {"type": ["integer", "null"]},
                             "ms": {"type": "integer"}}
@@ -1202,9 +1213,11 @@ def trace_schema() -> dict:
                             "asked"}
            for stage in PIECE_ASKS},
         # A search sentence, the frame, the review and the compute step say
-        # their attempt and what it cost; a parameter where they have one.
+        # their attempt and what it cost; a parameter where they have one,
+        # and a sentence for a coordinate's search its coordinate.
         **{f"{stage}_ask": {"parameter", "owner", "kind", "value"}
-           for stage in ("phrase", "frame", "review", "compute")},
+           for stage in ("frame", "review", "compute")},
+        "phrase_ask": {"parameter", "owner", "kind", "value", "coordinate"},
         "docfield": {"why"},
         "asked": {"scope"},
         "read": {"failed", "unanswered", "unread", "why"},

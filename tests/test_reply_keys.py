@@ -2,10 +2,10 @@
 the object that was asked for: it is asked again as missing_key, the retry
 naming the key, in every kind of request of the harvest piece by piece
 (addressed.py). A reply that has every key the top requires is taken as it
-is. A coordinate's answer that says nothing shown states it (at 0) without
-the sentence of how the plan would print it is asked again naming "hyde"
-(owner decision 2026-11-08, test 6). Each promise has a case that breaks it
-by construction beside the one that keeps it."""
+is. A coordinate's answer that says nothing shown states it (at 0) is taken
+as it is: the sentence a search goes with is a request of its own (owner
+decision 2026-11-09). Each promise has a case that breaks it by
+construction beside the one that keeps it."""
 import json
 from types import SimpleNamespace
 
@@ -25,8 +25,17 @@ REQUESTS = (
     (addressed.entry_format(), "list", "entry", {"entry": 2}),
     (addressed.entry_format(several=True, new=True), "names", "entry",
      {"entry": ["new"]}),
-    (addressed.lines_format(), "transcribe", "lines", {"lines": ["Titel"]}),
+    (addressed.lines_format(), "transcribe", "caption",
+     {"caption": ["Titel"], "numbers": ["2019 | Erdgas | 245 GWh"]}),
     (addressed.about_format(), "check", "about", {"about": "no"}),
+    (addressed.found_format(closed=True), "find", "found",
+     {"found": [{"entry": 2, "at": "3.2", "words": "Erdgas"}]}),
+    (addressed.work_format(), "work", "found",
+     {"found": [{"at": "3.1", "words": "IRENA 2018"}], "own": {"at": 0}}),
+    (addressed.work_choice_format(), "coord", "entry",
+     {"entry": 1, "at": "2", "words": "our scenarios"}),
+    (addressed.phrase_format(), "phrase", "phrase",
+     {"phrase": "Der Endenergieverbrauch betrug 2022 rund 512 GWh/a."}),
 )
 
 
@@ -77,20 +86,22 @@ def test_a_reply_with_every_key_the_top_requires_is_taken_as_it_is(faults):
         assert len(sent) == 1 and faults == [], where
 
 
-def test_a_coordinate_found_nowhere_without_its_sentence_is_asked_again(
-        faults):
-    shape = addressed.coord_format(False)
-    hyde = {"at": 0, "hyde": "Die Werte gelten für das Jahr 2019."}
-    client, sent = replying(json.dumps({"at": 0}), json.dumps(hyde))
-    assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, "coord", "at",
-                                 lacking=addressed.hyde_missing) == hyde
-    assert faults == ["missing_key"] and '"hyde"' in told(sent[1])
-    # One that found its answer, or fetches more, needs no sentence.
-    for whole in ({"at": "3", "words": "2019"},
-                  {"at": 0, "more": [{"get": "next"}]}):
+def test_a_coordinate_found_nowhere_is_taken_without_a_sentence(faults):
+    for shape, where, whole in (
+            (addressed.coord_format(False), "coord", {"at": 0}),
+            (addressed.coord_format(False, more=True), "search",
+             {"at": 0, "more": [{"get": "next"}]})):
         faults.clear()
         client, sent = replying(json.dumps(whole))
-        assert runner.ask_in_grammar(
-            client, PROMPT, [], addressed.coord_format(False, more=True), 7,
-            "search", "at", lacking=addressed.hyde_missing) == whole
-        assert len(sent) == 1 and faults == []
+        assert runner.ask_in_grammar(client, PROMPT, [], shape, 7, where,
+                                     "at") == whole
+        assert len(sent) == 1 and faults == [], where
+    # the failure by construction: an answer without its address is asked
+    # again
+    faults.clear()
+    client, sent = replying(json.dumps({"words": "2019"}),
+                            json.dumps({"at": 0}))
+    assert runner.ask_in_grammar(client, PROMPT, [],
+                                 addressed.coord_format(False), 7, "coord",
+                                 "at") == {"at": 0}
+    assert faults == ["missing_key"] and '"at"' in told(sent[1])

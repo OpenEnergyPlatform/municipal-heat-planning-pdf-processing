@@ -716,7 +716,8 @@
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
       },
-      "brief": "A keyword that describes the study."
+      "brief": "A keyword that describes the study.",
+      "once_per_document": true
     },
     {
       "uri": "study_sector_division",
@@ -852,7 +853,8 @@
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
       },
-      "brief": "A sector division the study is based on: a specific way to subdivide a system, such as the CRF, an energy balance or the study's own list of sectors."
+      "brief": "A sector division the study is based on: a specific way to subdivide a system, such as the CRF, an energy balance or the study's own list of sectors.",
+      "once_per_document": true
     },
     {
       "uri": "study_sector",
@@ -1869,7 +1871,8 @@
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
       },
-      "brief": "A sector the study covers."
+      "brief": "A sector the study covers.",
+      "once_per_document": true
     },
     {
       "uri": "study_technology",
@@ -2164,7 +2167,8 @@
         },
         "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
       },
-      "brief": "A technology the study covers."
+      "brief": "A technology the study covers.",
+      "once_per_document": true
     },
     {
       "uri": "scenario_label",

@@ -244,7 +244,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -276,7 +276,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `at`
 
@@ -483,7 +483,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -515,7 +515,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -561,7 +561,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -593,7 +593,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -630,7 +630,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -662,7 +662,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -697,7 +697,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -729,7 +729,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -786,7 +786,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -818,7 +818,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -878,7 +878,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -910,7 +910,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -948,7 +948,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -980,7 +980,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -1000,7 +1000,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -1032,7 +1032,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -1089,7 +1089,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -1121,7 +1121,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -1151,7 +1151,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -1183,7 +1183,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -1211,7 +1211,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -1243,7 +1243,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -1274,7 +1274,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -1306,7 +1306,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -1362,7 +1362,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -1394,7 +1394,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `at`
 
@@ -1601,7 +1601,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -1633,7 +1633,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -1679,7 +1679,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1711,7 +1711,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -1748,7 +1748,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -1780,7 +1780,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -1830,7 +1830,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -1862,7 +1862,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -1919,7 +1919,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1951,7 +1951,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -2011,7 +2011,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -2043,7 +2043,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -2081,7 +2081,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -2113,7 +2113,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -2133,7 +2133,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -2165,7 +2165,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -2222,7 +2222,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -2254,7 +2254,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -2351,7 +2351,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -2383,7 +2383,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -2411,7 +2411,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -2443,7 +2443,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -2474,7 +2474,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -2506,7 +2506,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -2562,7 +2562,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -2594,7 +2594,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `at`
 
@@ -2801,7 +2801,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -2833,7 +2833,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -2879,7 +2879,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2911,7 +2911,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -2948,7 +2948,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -2980,7 +2980,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -3051,7 +3051,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -3083,7 +3083,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -3140,7 +3140,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -3172,7 +3172,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -3232,7 +3232,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -3264,7 +3264,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -3302,7 +3302,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -3334,7 +3334,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -3354,7 +3354,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -3386,7 +3386,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -3443,7 +3443,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -3475,7 +3475,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -3526,7 +3526,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -3558,7 +3558,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -3586,7 +3586,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -3618,7 +3618,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -3649,7 +3649,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -3681,7 +3681,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -3737,7 +3737,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -3769,7 +3769,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `aggregation_window`
 
-[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'aggregation' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `at`
 
@@ -3976,7 +3976,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -4008,7 +4008,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -4054,7 +4054,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -4086,7 +4086,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -4123,7 +4123,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -4155,7 +4155,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -4219,7 +4219,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -4251,7 +4251,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -4308,7 +4308,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -4340,7 +4340,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -4400,7 +4400,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -4432,7 +4432,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -4470,7 +4470,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -4502,7 +4502,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -4522,7 +4522,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -4554,7 +4554,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -4611,7 +4611,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -4643,7 +4643,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -4681,7 +4681,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -4713,7 +4713,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -4741,7 +4741,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -4773,7 +4773,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -4804,7 +4804,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -4836,7 +4836,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -4897,7 +4897,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -4929,7 +4929,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -4982,7 +4982,7 @@ Which source 'role_link_quote' was found in.
 
 ### `role_means`
 
-The entries of the document's list of names (its scenarios, its works) 'role' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'role' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `role_producer`
 
@@ -5014,7 +5014,7 @@ How the coordinate 'role' ended. Always present: a missing key and a refused rea
 
 ### `role_window`
 
-[stage, index] of the window 'role' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'role' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -5256,7 +5256,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -5288,7 +5288,7 @@ How the coordinate 'carrier' ended. Always present: a missing key and a refused 
 
 ### `carrier_window`
 
-[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'carrier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `catalogue`
 
@@ -5334,7 +5334,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -5366,7 +5366,7 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
@@ -5403,7 +5403,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -5435,7 +5435,7 @@ How the coordinate 'qualifier' ended. Always present: a missing key and a refuse
 
 ### `qualifier_window`
 
-[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'qualifier' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quantity`
 
@@ -5485,7 +5485,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -5517,7 +5517,7 @@ How the coordinate 'quantity' ended. Always present: a missing key and a refused
 
 ### `quantity_window`
 
-[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'quantity' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `quote`
 
@@ -5574,7 +5574,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -5606,7 +5606,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `sector`
 
@@ -5666,7 +5666,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -5698,7 +5698,7 @@ How the coordinate 'sector' ended. Always present: a missing key and a refused r
 
 ### `sector_window`
 
-[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'sector' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `spatial_scope`
 
@@ -5736,7 +5736,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -5768,7 +5768,7 @@ How the coordinate 'spatial_scope' ended. Always present: a missing key and a re
 
 ### `spatial_scope_window`
 
-[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'spatial_scope' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `subject`
 
@@ -5788,7 +5788,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -5820,7 +5820,7 @@ How the coordinate 'subject' ended. Always present: a missing key and a refused 
 
 ### `subject_window`
 
-[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'subject' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `technology`
 
@@ -5877,7 +5877,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -5909,7 +5909,7 @@ How the coordinate 'technology' ended. Always present: a missing key and a refus
 
 ### `technology_window`
 
-[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'technology' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -5940,7 +5940,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -5972,7 +5972,7 @@ How the coordinate 'unit' ended. Always present: a missing key and a refused rea
 
 ### `unit_window`
 
-[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'unit' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `value`
 
@@ -6000,7 +6000,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -6032,7 +6032,7 @@ How the coordinate 'what' ended. Always present: a missing key and a refused rea
 
 ### `what_window`
 
-[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'what' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `whole`
 
@@ -6052,7 +6052,7 @@ Which source 'whole_link_quote' was found in.
 
 ### `whole_means`
 
-The entries of the document's list of names (its scenarios, its works) 'whole' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'whole' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `whole_producer`
 
@@ -6084,7 +6084,7 @@ How the coordinate 'whole' ended. Always present: a missing key and a refused re
 
 ### `whole_window`
 
-[stage, index] of the window 'whole' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'whole' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `year`
 
@@ -6115,7 +6115,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for. The graph writes the row to each of them.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -6147,7 +6147,7 @@ How the coordinate 'year' ended. Always present: a missing key and a refused rea
 
 ### `year_window`
 
-[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+[stage, index] of the window 'year' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
@@ -6167,7 +6167,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek\|transcribe\|find\|docfield\|coord\|list\|names\|search\|check\|follow)$` | sha256 of the prompt file; `transcribe`, `find`, `docfield`, `coord`, `list`, `names`, `search`, `check` and `follow` are the prompts of a harvest piece by piece; the others are in stamps of older releases |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek\|transcribe\|find\|docfield\|coord\|list\|names\|search\|check\|follow\|work)$` | sha256 of the prompt file; `transcribe`, `find`, `docfield`, `coord`, `list`, `names`, `search`, `check`, `follow`, `work` and `phrase` are the prompts of a harvest piece by piece; the others are in stamps of older releases |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
@@ -6178,7 +6178,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-36 record kinds, told apart by `t`:
+37 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
@@ -6204,7 +6204,8 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `search_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
 - `check_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
 - `follow_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
-- `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `work_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `step`, `value`
+- `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
 - `frame_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
 - `review_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
 - `compute_ask`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
