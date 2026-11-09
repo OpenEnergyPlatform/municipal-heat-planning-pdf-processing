@@ -235,7 +235,10 @@ pieces of the passages the vector search finds best come first and the pieces
 of the other passages follow, and without the search the plan's order stands (see Reranking a search). A reranker, an embedding or a search that
 fails is asked again until it answers or the run halts (`runner.persistently`,
 `runner.Persistent`) and is never replaced by the plan's order or by an empty
-result: `addressed.make_order` has no fallback for a failure.
+result: `addressed.make_order` has no fallback for a failure. One the server
+refuses (a 4xx other than 429) is asked three times at most and then fails
+its document, which stays unfinished for a later run (owner decision
+2026-11-09).
 
 The sentences are HyDE sentences, as a document would print the value (owner
 decision 2026-11-05, `runner.make_seek_probes`). Every field gets one written for
@@ -946,7 +949,8 @@ to the model's length. Scores are kept per thread for the document in hand, so a
 search asked again with fewer passages left scores nothing twice. A search, an
 embedding or a reranker request that fails is asked again until it answers or the run
 halts (`runner.persistently`, owner decision 2026-11-09) and is replaced by no other
-order and by no empty result.
+order and by no empty result; one the server refuses is asked three times at most and
+then fails its document, which stays unfinished.
 
 The pieces: the order of a plan's pieces for a field has the reranker score every
 piece with each of the field's sentences (`runner.make_chunk_reranker`, a pool that
@@ -1015,15 +1019,23 @@ model got wrong gets (`runner.py`). A 429, a 5xx or a timeout is `unserved`:
 the server was asked and did not do the work, which says nothing about the
 request, so it is `server_side` too, waits on the long curve, and ends the
 request as unserved if the run halts while the last attempt still got it. Any other 4xx refuses
-the request itself, and every retry would be refused alike, so it is not
-asked again, and a passage ends as `no_answer`. The compute request waits by
-the failures alone: a round of code, of fetching or of taking is no failure.
+the request itself (`runner.refused`, its status read from the exception or
+from its response): a request too long for the model, or one our code built
+wrong ("System message must be at the beginning.", a probe of 2026-11-01).
+It is asked again after the short wait, `EXTRACT_MAX_RETRIES` = 3 times at
+most, and a request refused to the end leaves its document unfinished like
+an unserved one: the stamp is withheld, a later run reads the document again,
+and the log names the request and the server's reason (owner decision
+2026-11-09, so that nothing is lost without a word and a code error does not
+hold the run until its time ends). Its passage ends as `no_answer`. The
+compute request waits by the failures alone: a round of code, of fetching or
+of taking is no failure.
 
 The rule stands once and not in each loop. Of nine loops three kept all of
-it: the search-sentence requests asked a refused request again,
-and the compute request asked again at once after a server error, asked a
-refused request again and left its document stamped as finished when no
-attempt of it was served. A source check holds every request of the stage to
+it: the search-sentence requests asked a refused request again without a
+limit, and the compute request asked again at once after a server error,
+asked a refused request again without a limit and left its document stamped
+as finished when no attempt of it was served. A source check holds every request of the stage to
 the rule (`tests/test_failures.py`).
 
 What an unserved end means depends on the request. A find or a document field's

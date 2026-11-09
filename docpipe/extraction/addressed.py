@@ -2521,7 +2521,8 @@ def make_order(reranker: Optional[Callable], rank: Optional[Callable]
     pieces keep their passages' order; without either, the plan's. A
     reranker or a search that fails raises: what is handed in asks again
     until it answers (`runner.persistently`, owner decision 2026-11-09:
-    nothing is read in another order instead)."""
+    nothing is read in another order instead), and one the server refuses
+    three times fails its document, which stays unfinished."""
     local = threading.local()
 
     def rerank(document_id: int, sentences: list, chunks: list) -> list:

@@ -157,14 +157,17 @@ PHRASES = {
         '"quote".'),
     # a round of the values of a passage, one value each
     "not_an_address": (
-        'The address {at!r} names no line or cell of what you were shown. '
-        'Give the address as it stands before the line: its number, a '
-        'letter before it where the block has one, a point and the number '
-        'of the cell in a table row.'),
+        'This does not say your value is wrong: check its quote, the line '
+        'its address names. The address {at!r} names no line or cell of '
+        'what you were shown. Give the address as it stands before the '
+        'line: its number, a letter before it where the block has one, and '
+        'in a line that "|" divides a point and the number of the cell.'),
     "words_not_in_line": (
-        'The words {words!r} do not stand in the line {at!r} names, or they '
-        'name more than one number. Give the address and the words of '
-        'exactly one value as that line prints them.'),
+        'This does not say your value is wrong: check its quote, the line '
+        'its address names. The words {words!r} do not stand in the line '
+        '{at!r} names, or they name more than one number. Give the address '
+        'of the line that prints them and the words of exactly one value as '
+        'that line prints them.'),
     "shorter_field": (
         'Put rows with the same answer together in "groups" and quote '
         'only the short place where the field stands.'),

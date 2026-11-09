@@ -1194,7 +1194,8 @@ höchstens 50 Stücke einmal mit demselben Satz"). Without a reranker the
 pieces keep their passages' order; without either, the plan's. A
 reranker or a search that fails raises: what is handed in asks again
 until it answers (`runner.persistently`, owner decision 2026-11-09:
-nothing is read in another order instead).
+nothing is read in another order instead), and one the server refuses
+three times fails its document, which stays unfinished.
 
 ### order_key
 

@@ -1,8 +1,10 @@
 """A request the server failed is asked again after the long wait, a refused
-one is not asked again, and one given up on that the server never served
-leaves its document unfinished. The rule stands once (`runner.Failures`), and
-every request of the stage follows it. Each promise has a case that breaks it
-beside the one that keeps it."""
+one is asked again three times at most after the short wait, and one given up
+on that the server never served or refused to the end leaves its document
+unfinished (owner decision 2026-11-09). The rule stands once
+(`runner.Failures`), and every request of the stage follows it; a search
+refused to the end fails its document (`runner.persistently`). Each promise
+has a case that breaks it beside the one that keeps it."""
 import ast
 import json
 import threading
@@ -62,11 +64,38 @@ def test_a_reply_after_it_waits_the_short_curve(waits):
     assert waits == [(2, False)]
 
 
-def test_a_refusal_is_not_asked_again(waits):
+def test_a_refusal_is_asked_again_three_times_at_most_after_the_short_wait(
+        waits):
     failures = runner.Failures(7)
-    assert failures.failed(Status(400)) is False
+    said = [failures.failed(Status(400)) for _ in range(runner.MAX_RETRIES)]
+    assert runner.MAX_RETRIES == 3
+    assert said == [True, True, False]
+    failures.wait(1)
+    assert waits == [(1, False)]
+    # Refused to the end: its document is left unfinished.
+    failures.given_up()
+    assert runner.UNSERVED.of(7) == 1
+
+
+def test_an_answer_after_a_refusal_leaves_nothing_unfinished(waits):
+    failures = runner.Failures(7)
+    assert failures.failed(Status(422)) is True
+    failures.answered()
     failures.given_up()
     assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_refusal_is_known_by_the_status_of_its_response_too():
+    request = httpx.Request("POST", "http://x/rerank")
+    refusal = httpx.HTTPStatusError(
+        "400", request=request,
+        response=httpx.Response(400, request=request))
+    assert runner.refused(refusal) and not runner.server_side(refusal)
+    # the failure by construction: a rate limit, a server error and a
+    # request that never arrived are no refusals
+    assert not runner.refused(Status(429))
+    assert not runner.refused(Status(503))
+    assert not runner.refused(ConnectionError("refused"))
 
 
 @pytest.mark.parametrize("failure", [Status(503), Status(429), slow()])
@@ -125,13 +154,36 @@ def parameters(*uris):
         for uri in uris])
 
 
-def test_a_refused_search_sentence_is_asked_once(waits):
+def refusing(failure):
+    """A client that raises *failure* at every request, and its requests."""
+    asked = []
+
+    def create(**request):
+        asked.append(request)
+        raise failure
+
+    return SimpleNamespace(chat=SimpleNamespace(
+        completions=SimpleNamespace(create=create))), asked
+
+
+def test_a_refused_search_sentence_is_asked_again_after_the_short_wait(waits):
     client, asked = flaky(Status(400), SENTENCE)
     out = runner.document_anchor(parameters("a", "b"), client=client,
                                  prompt=PHRASE, document_id=7)
-    assert sorted(asked.values()) == [1, 1]
-    assert out == {}
+    assert sorted(asked.values()) == [2, 2]
+    assert out == {"a": ["Ein Satz."], "b": ["Ein Satz."]}
+    assert waits == [(1, False), (1, False)]
     assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_search_sentence_refused_to_the_end_leaves_its_document_unfinished(
+        waits):
+    client, asked = refusing(Status(400))
+    out = runner.document_anchor(parameters("a"), client=client,
+                                 prompt=PHRASE, document_id=7)
+    assert len(asked) == runner.MAX_RETRIES
+    assert out == {}
+    assert runner.UNSERVED.of(7) == 1
 
 
 def test_a_search_sentence_the_server_failed_is_asked_again(waits):
@@ -141,6 +193,56 @@ def test_a_search_sentence_the_server_failed_is_asked_again(waits):
     assert sorted(asked.values()) == [2, 2]
     assert out == {"a": ["Ein Satz."], "b": ["Ein Satz."]}
     assert waits == [(1, True), (1, True)]
+
+
+def test_a_request_of_the_harvest_refused_to_the_end_leaves_its_document_unfinished(
+        waits):
+    # Every request of the harvest goes out here (a find, a coordinate, a
+    # list entry): refused each time, it is given up as the rule says.
+    client, asked = refusing(Status(400))
+    prompt = Prompt("extraction/find", "Find.", {"max_tokens": 2048}, "",
+                    Path("find.md"))
+    out = runner.ask_in_grammar(client, prompt,
+                                [{"role": "user", "content": "{}"}],
+                                {"type": "object"}, 7, "find", "found")
+    assert out is None
+    assert len(asked) == runner.MAX_RETRIES
+    assert runner.UNSERVED.of(7) == 1
+
+
+# -- a search, an embedding, a reranker (`runner.persistently`) --------------
+
+def calling(*said):
+    """A call that answers or raises *said* in turn, and its calls."""
+    told, calls = iter(said), []
+
+    def call(*args):
+        calls.append(args)
+        out = next(told)
+        if isinstance(out, Exception):
+            raise out
+        return out
+
+    return call, calls
+
+
+def test_a_search_the_server_failed_is_asked_again_until_it_answers(waits):
+    call, calls = calling(Status(503), ConnectionError("gone"), ["p1"])
+    assert runner.persistently("search", call)(7) == ["p1"]
+    assert len(calls) == 3
+    assert waits == [(1, True), (2, True)]
+
+
+def test_a_search_refused_to_the_end_fails_its_document(waits):
+    call, calls = calling(*[Status(400)] * runner.MAX_RETRIES, ["p1"])
+    with pytest.raises(Status):
+        runner.persistently("search", call)(7)
+    assert len(calls) == runner.MAX_RETRIES
+    assert waits == [(1, False), (2, False)]
+    # the failure by construction: a refusal fewer than three times is
+    # asked again and answered
+    call, calls = calling(Status(400), ["p1"])
+    assert runner.persistently("search", call)(7) == ["p1"]
 
 
 # -- every request of the stage ----------------------------------------------

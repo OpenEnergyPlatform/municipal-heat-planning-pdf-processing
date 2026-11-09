@@ -49,7 +49,8 @@ Author: Felix Vossel
 class Unserved
 ```
 
-Documents one of whose requests ended on a 429, a 5xx or a timeout.
+Documents one of whose requests ended on a 429, a 5xx or a timeout,
+or on a refusal asked `MAX_RETRIES` times (`refused`).
 
 Such a request was never answered, so its document is not finished,
 whichever request it was: a passage's rows, one coordinate, the frame, a
@@ -96,11 +97,12 @@ A failure that is the server's (`server_side`) is asked again, after the
 long wait (`retry_wait`), without a limit until the run halts (`halted`,
 owner decision 2026-11-09: "Wenn es aber Codefehler etc. sind, dann
 immer wiederholen. Es wird nichts abgebrochen"); a reply that could not
-be read is asked again `MAX_RETRIES` times at most (`attempts`). Any
-other failure refuses the request itself, every time, and is not asked
-again. A request given up on whose last attempt the server did not
-serve (`unserved`) leaves its document unfinished (`UNSERVED`): the
-stamp is withheld and a resume reads it again.
+be read is asked again `MAX_RETRIES` times at most (`attempts`), and so
+is a request the server refuses (`refused`, owner decision 2026-11-09),
+after the short wait. Any other failure is not asked again. A request
+given up on whose last attempt the server did not serve (`unserved`) or
+refused leaves its document unfinished (`UNSERVED`): the stamp is
+withheld and a resume reads it again.
 
 *document_id* is the document the request reads, None for a request of
 the run itself. *noted* is False for a request whose end is told another
@@ -124,8 +126,9 @@ The attempts of one request, 1, 2, ...: after a failure that is
 the server's (`failed` True) the next one after the long wait, until
 the run halts; after a reply that could not be read (`fault`) the
 next one after the short wait, *replies* (`MAX_RETRIES`) such
-replies at most. The caller ends the loop on an answer and on any
-other failure.
+replies at most; after a refusal the next one after the short wait,
+as long as `failed` says so. The caller ends the loop on an answer
+and where `failed` says no more.
 
 #### Failures.failed
 
@@ -133,7 +136,9 @@ other failure.
 def failed(self, exc: BaseException) -> bool
 ```
 
-Whether the request that raised *exc* is asked again.
+Whether the request that raised *exc* is asked again: after the
+server's failure until the run halts (`attempts`), after a refusal
+until it is the `MAX_RETRIES`th, after any other failure never.
 
 #### Failures.answered
 
@@ -224,7 +229,7 @@ class Persistent
 ```
 
 A reranker whose every order is asked again until it answers or the
-run halts (`persistently`).
+run halts, a refused one three times at most (`persistently`).
 
 #### Persistent.\_\_init\_\_
 
@@ -292,7 +297,9 @@ recovers, and the same request is answered then. A request that timed out
 was never answered either: a server whose engine stopped taking requests
 kept its connections open until every one of them timed out, and their
 documents were stamped with the coordinates never read. Every other 4xx
-refuses the request itself, and refuses it every time.
+refuses the request itself (`refused`). The status is read as the
+providers read it (`governor.status_of`): the client's own or that of
+its response, the reranker's.
 
 ### server_side
 
@@ -304,6 +311,19 @@ Whether a failure is the server's: it never arrived, or was `unserved`.
 
 These wait on the long curve and count towards the dead-server streak. A
 429 retried after two seconds is the same 429.
+
+### refused
+
+```python
+def refused(exc: BaseException) -> bool
+```
+
+A 4xx other than 429: the server refused the request itself, such as
+one too long for the model or one our code built wrong ("System message
+must be at the beginning."). It is asked again `MAX_RETRIES` times at
+most, and a request refused to the end leaves its document unfinished
+(owner decision 2026-11-09): a later run reads it again, and nothing is
+lost without a word.
 
 ### halted
 
@@ -325,7 +345,10 @@ dann immer wiederholen. Es wird nichts abgebrochen, wir brauchen die
 Werte"): a search, an embedding or a reranker that failed is never
 replaced by another order or by nothing. Each failure is logged and
 waited for on the long curve (`retry_wait`); a run that halts raises
-the last one.
+the last one. A request the server refuses (`refused`) is asked
+`MAX_RETRIES` times at most and then raised: its document fails and
+stays unfinished, and a later run reads it again (owner decision
+2026-11-09).
 
 ### read_to_end
 
@@ -868,10 +891,10 @@ its limit is not rescued. Each answer is traced
 as `<where>_ask` with *noted*.
 
 A 429, a 5xx or a timeout is asked again until the server answers or
-the run halts (`Failures.attempts`, owner decision 2026-11-09); a
-request whose last attempt ended on one was never answered, so its
-document is noted (`UNSERVED`) and goes unstamped, as for every request
-of the run. One that timed out is asked again with the time a repeat
+the run halts (`Failures.attempts`, owner decision 2026-11-09), a
+refusal `MAX_RETRIES` times at most; a request whose last attempt ended
+on one was never answered, so its document is noted (`UNSERVED`) and
+goes unstamped, as for every request of the run. One that timed out is asked again with the time a repeat
 gets (`_repeating`), whatever client it was handed, as every request of
 the harvest is.
 
@@ -1000,7 +1023,8 @@ sentences (`make_seek_probes`), the figures transcribed once and kept
 under *out* (`transcripts/`), the orders kept there too (`survey/`), and
 the size of the pieces the profile gives (`CHUNK_UNITS`). *every(
 document_id, exclude)* is the plan's passages in its order. A search
-that fails is asked again until it answers (`persistently`).
+that fails is asked again until it answers, a refused one three times at
+most (`persistently`).
 
 ### frame_slots_of
 
@@ -1457,7 +1481,8 @@ in the unit the message needs: "unreachable" is the sources that never
 reached the server, of the sources the plan held; "no_reply" is the
 sources planned, when not one batch came back (`answered` is how many did;
 None means the caller does not track it and the count is not checked);
-"unserved" is the requests that ended on a 429, a 5xx or a timeout, `lost` of them
+"unserved" is the requests that ended on a 429, a 5xx, a timeout or a
+refusal asked `MAX_RETRIES` times, `lost` of them
 noted beside the report and the rest in its sentinels. None when the
 reading happened. `finish_document` withholds the stamp on any of them
 and the pass for a new parameter writes nothing.
@@ -1489,7 +1514,8 @@ stamps an empty file. That is how a dead server turned 872 planned
 documents into 0-byte results a resume would have skipped.
 
 `lost` is how many of the document's other requests (a coordinate,
-the frame, a search sentence) ended on a 429 or a 5xx, or timed out; the passages that
+the frame, a search sentence) ended on a 429 or a 5xx, timed out or
+were refused to the end; the passages that
 ended there carry it in their sentinel. One is enough to withhold the
 stamp: the request was never answered and nothing says it cannot be.
 

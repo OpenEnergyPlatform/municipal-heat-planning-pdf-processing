@@ -315,14 +315,18 @@ PHRASES = {
         'er steht, als "quote".'),
     # die Werte einer Passage
     "not_an_address": (
-        'Die Adresse {at!r} nennt keine Zeile und keine Zelle dessen, was '
-        'dir gezeigt wurde. Gib die Adresse an, wie sie vor der Zeile '
-        'steht: ihre Nummer, davor der Buchstabe des Blocks, wo er einen '
-        'hat, in einer Tabellenzeile ein Punkt und die Nummer der Zelle.'),
+        'Das heißt nicht, dass dein Wert falsch ist: Prüfe sein Zitat, die '
+        'Zeile seiner Adresse. Die Adresse {at!r} nennt keine Zeile und '
+        'keine Zelle dessen, was dir gezeigt wurde. Gib die Adresse an, wie '
+        'sie vor der Zeile steht: ihre Nummer, davor der Buchstabe des '
+        'Blocks, wo er einen hat, in einer Zeile, die „|“ teilt, ein Punkt '
+        'und die Nummer der Zelle.'),
     "words_not_in_line": (
-        'Die Worte {words!r} stehen nicht in der Zeile, die {at!r} nennt, '
-        'oder sie nennen mehr als eine Zahl. Gib die Adresse und die Worte '
-        'genau eines Werts an, wie die Zeile sie druckt.'),
+        'Das heißt nicht, dass dein Wert falsch ist: Prüfe sein Zitat, die '
+        'Zeile seiner Adresse. Die Worte {words!r} stehen nicht in der '
+        'Zeile, die {at!r} nennt, oder sie nennen mehr als eine Zahl. Gib '
+        'die Adresse der Zeile an, die sie druckt, und die Worte genau '
+        'eines Werts, wie die Zeile sie druckt.'),
     "shorter_field": (
         'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
         'zitiere nur die kurze Stelle, an der die Angabe steht.'),

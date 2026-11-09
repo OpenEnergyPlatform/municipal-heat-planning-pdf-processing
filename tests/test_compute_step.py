@@ -642,15 +642,29 @@ def test_a_server_error_is_waited_out_before_the_request_is_asked_again(
     assert runner.UNSERVED.of(7) == 0
 
 
-def test_a_refused_request_is_asked_once(monkeypatch, waits):
-    step, asked, _runs, events = computing(monkeypatch, Status(400), CODE,
+def test_a_refused_request_is_asked_again_and_answered(monkeypatch, waits):
+    # A refusal is asked again after the short wait and takes no round
+    # (owner decision 2026-11-09).
+    step, asked, _runs, _events = computing(monkeypatch, Status(400), CODE,
+                                            ANSWER)
+    report, _done = run_step(step, share(21), amount(185200))
+    assert len(asked) == 3
+    assert waits == [(1, False)]
+    assert report.tuples[-1]["computed"] is True
+    assert runner.UNSERVED.of(7) == 0
+
+
+def test_a_request_refused_to_the_end_leaves_its_document_unfinished(
+        monkeypatch, waits):
+    refusals = [Status(400)] * runner.MAX_RETRIES
+    step, asked, _runs, events = computing(monkeypatch, *refusals, CODE,
                                            ANSWER)
     report, _done = run_step(step, share(21), amount(185200))
-    assert len(asked) == 1
-    assert waits == []
+    assert len(asked) == runner.MAX_RETRIES
+    assert waits == [(1, False), (2, False)]
     assert len(report.tuples) == 2
     assert events[-1]["outcome"] == "unanswered"
-    assert runner.UNSERVED.of(7) == 0
+    assert runner.UNSERVED.of(7) == 1
 
 
 def test_a_server_error_is_asked_again_without_a_limit(monkeypatch, waits):
