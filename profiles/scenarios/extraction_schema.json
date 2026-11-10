@@ -2592,7 +2592,7 @@
     "x-kg": {
      "class": "OEO_00020012",
      "node": "studyreport",
-     "note": "Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.",
+     "note": "Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.",
      "property": {
       "label": "label",
       "predicate": "label",
@@ -7939,7 +7939,7 @@
     "x-kg": {
      "class": "OEO_00020227",
      "node": "scenariobundle",
-     "note": "Mints the bundle and labels it. Falls back to the publication title where the document names no project.",
+     "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07).",
      "property": {
       "label": "label",
       "predicate": "label",

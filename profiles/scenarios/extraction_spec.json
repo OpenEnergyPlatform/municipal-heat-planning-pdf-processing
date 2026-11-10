@@ -99,7 +99,7 @@
           "predicate": "label",
           "label": "label"
         },
-        "note": "Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
+        "note": "Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
       },
       "brief": "The title of this publication, as it prints it.",
       "once_per_document": true
@@ -434,7 +434,7 @@
           "predicate": "label",
           "label": "label"
         },
-        "note": "Mints the bundle and labels it. Falls back to the publication title where the document names no project."
+        "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07)."
       },
       "brief": "The name of the study this publication reports on; a study is a project with the goal to methodologically investigate something.",
       "once_per_document": true

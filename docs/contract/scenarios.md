@@ -996,7 +996,7 @@ How the row becomes a node:
 
 <details><summary>Why</summary>
 
-Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.
+Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.
 
 </details>
 
@@ -3277,7 +3277,7 @@ How the row becomes a node:
 
 <details><summary>Why</summary>
 
-Mints the bundle and labels it. Falls back to the publication title where the document names no project.
+Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07).
 
 </details>
 
