@@ -48,7 +48,7 @@ def concerns(prompt_id: str, request: dict) -> bool
 
 Whether the prompt has a say in a recorded request: it makes its
 instruction, or it is the follow-up prompt and the request is one
-asked once more.
+asked again.
 
 ### kinds_of
 
@@ -57,7 +57,7 @@ def kinds_of(prompt_id: str) -> list
 ```
 
 The kinds of recorded requests a prompt has a say in: the requests
-of its own kind, and for the follow-up prompt those asked once more.
+of its own kind, and for the follow-up prompt those asked again.
 
 ### listing
 
@@ -184,7 +184,7 @@ def preview(profile, request: dict, sent: dict, edits: dict,
 ```
 
 What a recorded request would be sent with: the instruction, and for
-a request asked once more its message, as the files on disk make them
+a request asked again its message, as the files on disk make them
 (`file`) and as the texts in *edits* ({prompt id: text}) make them
 (`edit`).
 

@@ -547,10 +547,10 @@ docpipe compile spec --shapes shapes.ttl --out draft.json
 - `compile` drafts an extraction spec from the shapes of a graph; see [the
   spec compiler](stages/compile.md).
 - `edit` shows a profile's extraction spec, its prompts and the sentences its
-  stages say outside their prompts as a page in the browser; for the spec it
-  says what an edit costs the next run before it is saved, and for a prompt it
-  shows the recorded requests the edit reaches; see [editing a
-  profile](stages/editor.md).
+  stages say outside their prompts, and the numbers of the reading's flow, as a
+  page in the browser; for the spec it says what an edit costs the next run
+  before it is saved, and for a prompt it shows the recorded requests the edit
+  reaches; see [editing a profile](stages/editor.md).
 
 ## Configuration reference
 
@@ -569,7 +569,7 @@ their values and where each value comes from.
 | Chunking | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF model id for every embedding | `docpipe/embedding/config.py:21` |
 | Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:94` |
 | Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:96` |
-| Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:98` |
+| Extraction | `EXTRACT_MAX_RETRIES` | none (unset: the `replies` of the profile's `flow.json`) | replies out of their form a request takes before it is left unanswered; where set it wins over the flow file | `docpipe/extraction/runner.py`, `docpipe/extraction/flow.py` |
 | Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:103` |
 | Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one rows request; lowered at the start where the rows prompt's `max_tokens` cannot hold the reply for that many | `docpipe/extraction/runner.py:253` |
 | Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5620` |

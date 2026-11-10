@@ -307,8 +307,8 @@ function renderHeader() {
     st.branch ? h('span', { class: 'meta' }, 'branch ', h('code', { text: st.branch })) : null,
     st.harvest ? h('span', { class: 'meta', title: st.harvest }, 'harvest: ', st.harvest_documents == null ? '' : st.harvest_documents + ' documents') : null,
     (st.changed && st.changed.length) ? h('span', { class: 'meta changed', title: st.changed.join('\n') }, 'uncommitted: ' + st.changed.join(', ')) : null,
-    h('span', { class: 'tabs' }, ['spec', 'prompts'].map(t => h('button', { class: t === S.tab ? 'on' : '',
-      text: t.charAt(0).toUpperCase() + t.slice(1) + ((t === 'spec' ? S.dirty : promptsDirty()) ? ' •' : ''), onclick: () => setTab(t) }))),
+    h('span', { class: 'tabs' }, (st.tabs || ['spec', 'prompts']).map(t => h('button', { class: t === S.tab ? 'on' : '',
+      text: t.charAt(0).toUpperCase() + t.slice(1) + ((t === 'spec' ? S.dirty : t === 'flow' ? flowDirty() : promptsDirty()) ? ' •' : ''), onclick: () => setTab(t) }))),
     h('span', { class: 'spacer' }),
     anyDirty() ? h('span', { class: 'dirty', text: 'Unsaved edits' }) : h('span', { class: 'clean', text: 'No unsaved edits' }),
     S.tab === 'spec' ? h('button', { text: 'Reload from disk', disabled: S.busy, onclick: () => reload() }) : null,
@@ -538,6 +538,49 @@ function widgetQuestions(f, obj) {
   return box;
 }
 
+/* entry_of: {"<coordinate>": "<entry key>"} as two selects; any other shape is edited as JSON */
+function vocabOf(c) {
+  const p = (S.data.parameters || []).find(x => isObj(x.axes) && own(x.axes, c));
+  const ax = p && p.axes[c];
+  return isObj(ax) && isObj(ax.vocabulary) ? ax.vocabulary : null;
+}
+function widgetEntryOf(f, obj, wrap) {
+  const cur = obj[f.key];
+  if (own(obj, f.key)) {
+    const ks = isObj(cur) ? Object.keys(cur) : [];
+    if (ks.length !== 1 || typeof cur[ks[0]] !== 'string') return widgetJson(f, obj, wrap);
+  }
+  const coords = [];
+  for (const g of Object.values(isObj(S.data.groups) ? S.data.groups : {})) {
+    for (const c of (isObj(g) && Array.isArray(g.pair) ? g.pair : [])) if (!coords.includes(c) && vocabOf(c)) coords.push(c);
+  }
+  let coord = own(obj, f.key) ? Object.keys(cur)[0] : '';
+  if (coord && !coords.includes(coord)) coords.push(coord);
+  const cSel = h('select', {}, h('option', { value: '', text: '(none)' }), coords.map(c => h('option', { value: c, text: c })));
+  const eSel = h('select');
+  cSel.value = coord;
+  const drawEntries = () => {
+    const voc = coord ? vocabOf(coord) || {} : {};
+    const keys = Object.keys(voc);
+    const now = coord && own(obj, f.key) ? obj[f.key][coord] : '';
+    if (now && !keys.includes(now)) keys.push(now);
+    put(eSel, h('option', { value: '', text: coord ? '(choose)' : '' }), keys.map(k => {
+      const nm = own(voc, k) ? entryParts(voc[k]).name : '';
+      return h('option', { value: k, text: nm ? nm + ' (' + k + ')' : k });
+    }));
+    eSel.value = now || ''; eSel.disabled = !coord;
+  };
+  cSel.addEventListener('change', () => {
+    coord = cSel.value;
+    if (!coord) delete obj[f.key];
+    else obj[f.key] = { [coord]: Object.keys(vocabOf(coord) || {})[0] || '' };
+    drawEntries(); markDirty();
+  });
+  eSel.addEventListener('change', () => { if (coord) { obj[f.key] = { [coord]: eSel.value }; markDirty(); } });
+  drawEntries();
+  return h('div', { class: 'row2' }, cSel, eSel);
+}
+
 function renderWidget(f, obj, orig, ctx) {
   const wrap = h('div', { class: 'field', 'data-key': f.key });
   let ctl;
@@ -552,6 +595,7 @@ function renderWidget(f, obj, orig, ctx) {
     case 'json': ctl = widgetJson(f, obj, wrap); break;
     case 'units': ctl = widgetUnits(f, obj, orig); break;
     case 'questions': ctl = widgetQuestions(f, obj); break;
+    case 'entry_of': ctl = widgetEntryOf(f, obj, wrap); break;
     case 'entries': ctl = entriesTable(ctx.refFor ? ctx.refFor(f.key) : null); break;
     default: ctl = h('div', { class: 'warn', text: 'Unknown widget "' + f.widget + '" for this key; it is kept as it is.' });
   }
@@ -568,6 +612,7 @@ function renderForm(fields, obj, orig, ctx) {
   const shown = new Set();
   for (const f of fields || []) {
     if (skip.has(f.key)) { shown.add(f.key); continue; }
+    if (f.only && !(S.sel.t === 'plan' && f.only.includes(S.sel.key))) continue;
     shown.add(f.key);
     box.append(renderWidget(f, obj, orig, ctx));
   }
@@ -1037,7 +1082,7 @@ function promptsDirty() {
   for (const X of P.phs.values()) if (phDirty(X)) return true;
   return false;
 }
-function anyDirty() { return S.dirty || promptsDirty(); }
+function anyDirty() { return S.dirty || promptsDirty() || flowDirty(); }
 function dirtySig() {
   const a = [];
   for (const [id, E] of P.eds) if (edDirty(E)) a.push('p:' + id);
@@ -1859,14 +1904,297 @@ function tryNodes(res, listed) {
   return out;
 }
 
+/* ---------- flow tab ---------- */
+
+/* State. F.cur holds each number as the page has it: a whole number, or the text typed where that is none (the server
+   refuses it and names the number). All inputs of one number share F.cur[name]; F.ui holds the nodes of the last drawing. */
+const F = {
+  loaded: false, loading: false, data: null, num: {}, cur: {}, report: null,
+  meas: null, counting: false, trace: null, mSeq: 0, mTimer: null, busy: false, dirty: false, ui: null,
+};
+const flowDirty = () => !!F.data && F.data.numbers.some(n => F.cur[n.name] !== n.value);
+const numVal = t => { const s = String(t).trim(); return /^-?\d+$/.test(s) && Number.isSafeInteger(Number(s)) ? Number(s) : t; };
+function flowNumbers() { const o = {}; for (const n of F.data.numbers) o[n.name] = F.cur[n.name]; return o; }
+const flowSig = () => JSON.stringify(flowNumbers());
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function loadFlow(keep) {
+  if (F.loading) return;
+  F.loading = true;
+  if (!F.loaded) put($('fl-wrap'), h('div', { class: 'help fl-pad', text: 'Loading…' }));
+  try {
+    const d = await api('GET', '/api/flow');
+    const prev = F.cur;
+    F.data = d; F.num = {}; F.cur = {};
+    for (const n of d.numbers) { F.num[n.name] = n; F.cur[n.name] = keep && own(prev, n.name) ? prev[n.name] : n.value; }
+    F.report = null; F.loaded = true;
+    if (F.trace && !(d.traces || []).some(t => t.name === F.trace)) F.trace = null;
+  } catch (e) {
+    F.loading = false;
+    if (F.loaded) showError(e); else put($('fl-wrap'), h('div', { class: 'box bad', text: e.message }));
+    return;
+  }
+  F.loading = false;
+  renderFlow(); renderHeader();
+  runMeasured();
+}
+
+function openSpec(to) { setTab('spec'); if (to) select(to); }
+async function openPrompt(id) {
+  const p = setTab('prompts');
+  if (p) await p;
+  while (P.loading) await sleep(50);
+  if (P.loaded) selectPrompt(id);
+}
+
+function renderFlow() {
+  const d = F.data;
+  const ui = F.ui = { inputs: new Map(), seen: new Set(), meas: [], counts: [] };
+  F.dirty = flowDirty();
+  const ownN = d.numbers.filter(n => n.own).length;
+  const fileLine = !d.exists ? 'not written yet: every number is inherited from ' + d.starts_from
+    : d.whole ? 'the whole flow of this profile' : 'sets ' + plural(ownN, 'number') + ' of its own';
+  ui.check = h('button', { text: 'Check', title: 'Ctrl+Enter', onclick: flowCheck });
+  ui.save = h('button', { class: 'primary', text: 'Save', title: 'Ctrl+S', onclick: flowSave });
+  ui.discard = h('button', { text: 'Discard', onclick: flowDiscard });
+  ui.stale = h('div', { class: 'warn', text: 'A number was edited after this result.', hidden: true });
+  ui.report = h('div', { class: 'pr-report' });
+  ui.why = h('span', { class: 'help' });
+  ui.mnotes = h('div');
+  const tr = d.traces || [];
+  let traceBox = null;
+  if (d.harvest && tr.length > 1) {
+    const sel = h('select', { style: 'width:auto' }, h('option', { value: '', text: 'all traces' }), tr.map(t => h('option', { value: t.name, text: t.name + ' (' + mb(t.bytes || 0) + ')' })));
+    sel.value = F.trace || '';
+    sel.addEventListener('change', () => { F.trace = sel.value || null; runMeasured(); });
+    traceBox = h('span', {}, 'Measured on: ', sel);
+  }
+  const bar = h('div', { class: 'fl-bar toolbar' }, h('code', { text: d.file }), h('span', { class: 'help', text: fileLine }),
+    h('span', { class: 'spacer' }), traceBox, ui.why, ui.check, ui.save, ui.discard);
+  const diagram = h('div', { class: 'fl-steps fl-diagram' }, stepList(d.steps || []));
+  const loose = d.numbers.filter(n => !ui.inputs.has(n.name));
+  const looseBox = loose.length ? h('div', { class: 'fl-loose' }, h('div', { class: 'section', text: 'Numbers no step shows' }),
+    loose.map(n => h('div', { class: 'fl-extra' }, h('code', { text: n.name }), ' ', numInput(n.name), ' ', h('span', { class: 'help', text: n.help || '' }), numExtras(n.name)))) : null;
+  const below = h('div', { class: 'fl-below' },
+    (d.notes || []).map(n => h('p', { class: 'fl-notep' }, n.says, n.to ? [' ', h('button', { class: 'link', text: 'open in Spec', onclick: () => openSpec(n.to) })] : null)),
+    h('details', { class: 'fl-settings' }, h('summary', { text: 'Other settings of a run (shown, not edited here)' }),
+      h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, ['key', 'value', 'origin', 'environment', 'help'].map(t => h('th', { text: t })))),
+        h('tbody', {}, (d.settings || []).map(s => h('tr', {}, h('td', { class: 'mono', text: s.key }),
+          h('td', { text: s.secret ? (s.set ? '(set, not shown)' : '(unset)') : (s.value == null ? '(unset)' : String(s.value)) }),
+          h('td', { text: s.origin || '' }), h('td', { class: 'mono', text: s.env || '' }), h('td', { text: s.help || '' })))))),
+    ui.mnotes);
+  put($('fl-wrap'), bar, ui.report, diagram, looseBox, below);
+  syncFlowButtons(); paintReport(); paintMeasured();
+}
+
+function stepList(steps) {
+  const out = [];
+  steps.forEach((st, i) => {
+    if (i > 0 || st.when) out.push(h('div', { class: 'fl-conn' + (st.when ? ' when' : '') }, st.when ? h('span', { class: 'fl-when', text: 'when: ' + st.when }) : null));
+    out.push(stepEl(st));
+  });
+  return out;
+}
+function stepEl(st) {
+  const ui = F.ui;
+  const isFrame = Array.isArray(st.steps), isBox = !isFrame && st.ask != null;
+  const kids = [];
+  if (isFrame) kids.push(h('div', { class: 'fl-says' }, st.each ? h('b', { text: 'each ' + st.each + ' ' }) : null, st.says));
+  else if (isBox) {
+    const pr = st.prompt, count = h('span', { class: 'fl-count' });
+    ui.counts.push({ el: count, id: st.id });
+    kids.push(h('div', { class: 'fl-head' },
+      pr && pr.written ? h('button', { class: 'link fl-kind', text: st.ask, title: 'Open the prompt ' + pr.id, onclick: () => openPrompt(pr.id) }) : h('b', { class: 'fl-kind', text: st.ask }), count),
+      h('div', { class: 'fl-says', text: st.says }));
+  } else kids.push(h('div', { class: 'fl-says', text: st.says }));
+  if (st.off) kids.push(h('div', { class: 'fl-offsays', text: st.off }));
+  if (Array.isArray(st.bound) && st.bound.length) {
+    const names = [...new Set(st.bound.filter(isObj).map(p => p.number))];
+    kids.push(h('div', { class: 'fl-bound' }, st.bound.map(p => typeof p === 'string' ? p : numInput(p.number))));
+    const extras = names.map(numExtras).filter(Boolean);
+    if (extras.length) kids.push(h('div', { class: 'fl-extras' }, extras));
+  }
+  if (!isFrame) {
+    const box = h('div', { class: 'fl-meas' });
+    ui.meas.push({ el: box, id: st.id });
+    kids.push(box);
+  }
+  for (const sw of st.switches || []) {
+    const items = sw.items || [];
+    kids.push(h('div', { class: 'fl-switch' }, sw.label + ': ', items.length
+      ? items.flatMap((it, i) => [i ? ', ' : null, it.to ? h('button', { class: 'link', text: it.label, onclick: () => openSpec(it.to) }) : it.label])
+      : sw.none));
+  }
+  const card = h('div', { class: 'fl-step ' + (isFrame ? 'fl-frame' : isBox ? 'fl-box' : 'fl-note') + (st.off ? ' off' : ''), 'data-step': st.id }, kids);
+  if (isFrame) card.append(h('div', { class: 'fl-steps' }, stepList(st.steps)));
+  if (isBox && st.each) return h('div', {}, h('div', { class: 'fl-each', text: 'each ' + st.each }), card);
+  return card;
+}
+
+function numInput(name) {
+  const n = F.num[name];
+  if (!n) return h('code', { text: String(name) });
+  const el = h('input', { type: 'number', class: 'fl-num', min: n.least, step: '1', title: n.help || '', value: String(F.cur[name]), 'data-number': name });
+  el.classList.toggle('edited', F.cur[name] !== n.value);
+  el.addEventListener('input', () => setNumber(name, numVal(el.value), el));
+  if (!F.ui.inputs.has(name)) F.ui.inputs.set(name, []);
+  F.ui.inputs.get(name).push(el);
+  return el;
+}
+/* what is said once per number, at its first place: set by this profile, a setting that wins */
+function numExtras(name) {
+  const n = F.num[name], ui = F.ui;
+  if (!n || ui.seen.has(name)) return null;
+  ui.seen.add(name);
+  const bits = [];
+  if (n.own) {
+    bits.push(h('span', { class: 'badge ok', text: 'set by this profile' }));
+    if (!F.data.whole && n.inherited != null) bits.push(' ', h('button', { text: 'use inherited (' + n.inherited + ')', onclick: () => setNumber(name, n.inherited, null) }));
+  }
+  if (n.setting && (n.in_effect !== n.value || !String(n.origin || '').startsWith('flow.json'))) {
+    bits.push(' ', h('span', { class: 'badge changed', text: n.setting + ' = ' + n.in_effect + ' wins here (' + n.origin + ')' }));
+  }
+  return bits.length ? h('div', { class: 'fl-extra' }, h('code', { text: name }), ' ', bits) : null;
+}
+/* one number changed: the other inputs of it and the markers are updated in place, nothing is redrawn */
+function setNumber(name, v, from) {
+  F.cur[name] = v;
+  const edited = v !== F.num[name].value;
+  for (const el of F.ui.inputs.get(name) || []) {
+    if (el !== from) el.value = from ? from.value : String(v);
+    el.classList.toggle('edited', edited);
+  }
+  syncFlowButtons();
+  F.ui.stale.hidden = !(F.report && F.report.stamp !== flowSig());
+  const d = flowDirty();
+  if (d !== F.dirty) { F.dirty = d; renderHeader(); }
+  scheduleMeasured();
+}
+function syncFlowButtons() {
+  const u = F.ui;
+  if (!u) return;
+  u.check.disabled = F.busy; u.save.disabled = F.busy || !flowDirty(); u.discard.disabled = F.busy || !flowDirty();
+}
+
+/* measured: sentences written by the server for the numbers as they stand; an answer for older numbers is dropped */
+function paintMeasured() {
+  const ui = F.ui, M = F.meas;
+  if (!ui) return;
+  for (const b of ui.meas) {
+    const said = M && isObj(M.says) && Array.isArray(M.says[b.id]) ? M.says[b.id] : [];
+    put(b.el, F.counting && (b.el.childNodes.length || said.length) ? h('div', { class: 'help', text: 'counting ...' })
+      : said.map(s => h('div', { class: 'help fl-sent', text: s })));
+  }
+  for (const c of ui.counts) {
+    const v = M && isObj(M.steps) && own(M.steps, c.id) ? M.steps[c.id] : null;
+    c.el.textContent = v == null ? '' : v.toLocaleString('en-US') + (v === 1 ? ' request' : ' requests') + ' in the last run';
+  }
+  put(ui.why, M && M.why ? M.why : null);
+  put(ui.mnotes, (M && M.notes || []).map(t => h('p', { class: 'help', text: t })));
+}
+function scheduleMeasured() {
+  clearTimeout(F.mTimer);
+  if (F.meas && !F.meas.harvest) return;
+  F.mSeq++; F.counting = true; paintMeasured();
+  F.mTimer = setTimeout(runMeasured, 400);
+}
+async function runMeasured() {
+  clearTimeout(F.mTimer);
+  if (!F.data) return;
+  const my = ++F.mSeq;
+  F.counting = true; paintMeasured();
+  try {
+    const r = await apiR('/api/flow/measured', { numbers: flowNumbers(), trace: F.trace });
+    if (my !== F.mSeq) return;
+    F.meas = r;
+  } catch (e) {
+    if (my !== F.mSeq) return;
+    F.meas = null; showError(e);
+  }
+  F.counting = false; paintMeasured();
+}
+
+/* check, save, discard */
+function focusNumber(name) {
+  const el = ((F.ui && F.ui.inputs.get(name)) || [])[0];
+  if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
+}
+const fmtN = v => v == null ? '(none)' : String(v);
+const writesText = (w, file) => ({ created: 'Saving creates ', changed: 'Saving changes ', removed: 'Saving removes ', unchanged: 'Saving writes nothing to ' }[w] || ('Saving: ' + w + ' '))
+  + (file || 'the file') + (w === 'removed' ? ' (nothing would differ from the inherited numbers any more).' : '.');
+function paintReport() {
+  const ui = F.ui, R = F.report;
+  if (!ui) return;
+  ui.stale.hidden = !(R && R.stamp !== flowSig());
+  put(ui.report, R ? [ui.stale, ...reportNodes(R)] : null);
+}
+function reportNodes(R) {
+  if (R.error) return [h('div', { class: 'box bad', text: R.error })];
+  const r = R.r || {}, out = [];
+  if (R.source === 'save') {
+    if (r.reason === 'moved') return [h('div', { class: 'box bad' }, h('div', { text: r.message || 'The file changed on disk since the page loaded it. Nothing was written.' }),
+      h('button', { text: 'Reload from disk', onclick: () => reloadFlow() }))];
+    if (!r.saved) out.push(h('div', { class: 'box bad', text: 'Not saved: ' + (r.message || r.reason || 'the server refused the numbers.') }));
+  }
+  const errs = r.errors || [];
+  if (errs.length) out.push(h('div', { class: 'box bad' }, h('b', { text: 'The server refuses these numbers: ' }),
+    errs.map(e => h('div', {}, e.name ? [h('button', { class: 'link', text: e.name, onclick: () => focusNumber(e.name) }), ': '] : null, e.message))));
+  else if (r.ok) out.push(h('div', { class: 'box ok', text: 'The numbers are accepted.' }));
+  if (!errs.length && Array.isArray(r.changed)) out.push(h('div', { class: 'box' }, h('b', { text: 'Changes (' + r.changed.length + ')' }),
+    r.changed.length ? r.changed.map(c => h('div', {}, h('code', { text: c.name }), ': ' + fmtN(c.from) + ' → ' + fmtN(c.to)))
+      : h('div', { class: 'help', text: 'No number differs from the files on disk.' })));
+  if (!errs.length && r.writes) out.push(h('div', { class: 'help', text: writesText(r.writes, r.file) }));
+  if ((r.diff || []).length) out.push(h('details', { open: true }, h('summary', { text: 'Diff of ' + (r.file || 'the file') }), diffPre(r.diff.join('\n'))));
+  for (const s of r.says || []) out.push(h('div', { class: 'help', text: s }));
+  return out;
+}
+async function flowCheck() {
+  if (!F.data || F.busy) return;
+  const stamp = flowSig();
+  F.busy = true; syncFlowButtons();
+  try { F.report = { source: 'check', r: await apiR('/api/flow/check', { numbers: flowNumbers() }), stamp }; }
+  catch (e) { F.report = { source: 'check', error: e.message, stamp }; }
+  F.busy = false; syncFlowButtons(); paintReport();
+}
+async function flowSave() {
+  if (!F.data || F.busy || !flowDirty()) return;
+  const stamp = flowSig();
+  const body = { numbers: flowNumbers(), base: F.data.base == null ? null : F.data.base };
+  F.busy = true; syncFlowButtons();
+  let saved = null;
+  try {
+    const r = await apiR('/api/flow/save', body);
+    if (r.saved) saved = r; else F.report = { source: 'save', r, stamp };
+  } catch (e) { F.report = { source: 'save', error: e.message, stamp }; }
+  F.busy = false;
+  if (saved) {
+    showInfo('Saved ' + (saved.file || 'the flow file') + ' (' + (saved.writes || 'written') + ').');
+    await loadFlow(flowSig() !== stamp);   // numbers edited while the save ran are kept
+  } else { syncFlowButtons(); paintReport(); }
+}
+async function flowDiscard() {
+  if (!flowDirty() || F.busy) return;
+  if (!await askConfirm('Discard changes', 'Discard the edited numbers?', 'Discard')) return;
+  for (const n of F.data.numbers) F.cur[n.name] = n.value;
+  F.report = null;
+  renderFlow(); renderHeader();
+  runMeasured();
+}
+async function reloadFlow() {
+  if (flowDirty() && !await askConfirm('Reload from disk', 'The flow file changed on disk. Reloading drops the edited numbers.', 'Drop my edits and reload')) return;
+  await loadFlow(false);
+}
+
 /* ---------- tabs ---------- */
 
 function setTab(t) {
   S.tab = t;
   $('layout').hidden = t !== 'spec';
   $('prompts').hidden = t !== 'prompts';
+  $('flow').hidden = t !== 'flow';
   renderHeader();
-  if (t === 'prompts' && !P.loaded) loadPrompts();
+  if (t === 'flow' && !F.loaded) loadFlow();
+  if (t === 'prompts' && !P.loaded) return loadPrompts();
 }
 
 /* ---------- load ---------- */
@@ -1874,6 +2202,7 @@ function setTab(t) {
 async function reload() {
   if (S.dirty && !await askConfirm('Reload from disk', 'There are unsaved edits. Reloading discards them.', 'Discard and reload')) return;
   await run(loadAll);
+  if (F.loaded && !flowDirty()) loadFlow();
 }
 async function loadAll() {
   clearBar();
@@ -1888,6 +2217,11 @@ async function loadAll() {
 window.addEventListener('beforeunload', ev => { if (anyDirty()) { ev.preventDefault(); ev.returnValue = ''; } });
 window.addEventListener('keydown', ev => {
   if (!(ev.ctrlKey || ev.metaKey)) return;
+  if (S.tab === 'flow') {
+    if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); flowSave(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); flowCheck(); }
+    return;
+  }
   if (S.tab === 'prompts') {
     const X = currentX();
     if (!X) return;

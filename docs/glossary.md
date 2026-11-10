@@ -167,6 +167,14 @@ flag
   mapping gap. `docpipe/extraction/trust.py`'s `FLAG_REASONS` turns a
   handful of these into trust reasons; see [trust](contract/trust.md).
 
+flow (flow file)
+: The steps a document is read in and the whole numbers that bound them, in the
+  file `flow.json` of a profile: the default profile's file is the whole flow, and
+  a profile that extends it may set numbers only. A setting of the run wins over
+  the file; a changed flow makes no harvest stale. Read by
+  `docpipe.extraction.flow`, edited in the Flow tab of `docpipe edit`; see
+  [extraction](stages/extraction.md) and [the editor](stages/editor.md).
+
 fold (folding)
 : Turning a model reply's claims into a document's tuples and refusals by
   routing each claim to its real source and running it through the
@@ -174,10 +182,11 @@ fold (folding)
   and `fold_batch`; see [extraction](stages/extraction.md).
 
 follow-up
-: A batch's own request for more context: a `status: partial` reply naming
-  `need_more`, honoured by `docpipe.extraction.pipeline.follow_up` up to a
-  per-sweep budget of fresh passages. Distinct from top-up, which repairs
-  an already-written harvest; see [extraction](stages/extraction.md).
+: A request asked again, as a request of its own, when an answer did not hold:
+  it carries the answer that did not hold and why, and is asked as often as the
+  flow's `follow_ups` says (`docpipe.extraction.addressed.Reader._follow`, prompt
+  `extraction/follow`). Distinct from top-up, which repairs an already-written
+  harvest; see [extraction](stages/extraction.md).
 
 frame
 : The document-level coordinates, such as scenario and year for the kwp
@@ -434,12 +443,12 @@ segment
   [preprocessing](stages/preprocessing.md).
 
 slice
-: The profile-named coordinate, or coordinates, that decide first whether
-  a row belongs in the graph a run serializes at all, also called the
-  gate. A row that fails it is closed with state `out_of_slice` and never
-  asked its other axes, for example `profiles/kwp/extraction.py:28`'s
-  `SLICE = {"quantity": None}`. See [extraction](stages/extraction.md) and
-  [kwp](profiles/kwp.md).
+: A coordinate that closes a row: a row that fails it is closed with state
+  `out_of_slice` and never asked its other axes. No profile names one for a plan
+  any more (`SLICE` was deleted on 2026-11-10); what closes a row is a
+  coordinate with an entry a value must have, the spec's `keep` at a
+  coordinate (`fields.kept`, `fields.closed`). See
+  [extraction](stages/extraction.md) and [kwp](profiles/kwp.md).
 
 slot
 : One field of one parameter as a single question with a single answer: a

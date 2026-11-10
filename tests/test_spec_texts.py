@@ -1,7 +1,10 @@
 """The texts a model is shown beside a spec's fields stand in the spec (owner
 decision 2026-11-10): what a document settles once (`plan_fields`), its other
 works (`works`), and the fixed entries of a list closed per document
-(`beside`). They are loaded strictly and are in no stamp key.
+(`beside`). They are loaded strictly and are in no stamp key. So is the rule
+that says which pairs of a document's frame are its own state and its target
+(`plan_fields`, key `of`, owner decision 2026-11-10), which a pass over a
+stored harvest takes the document's years by.
 
 Each promise has a case that breaks it by construction beside the one that
 keeps it. That a reader asks with these words is in test_addressed.py."""
@@ -11,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from docpipe.extraction import runner
+from docpipe.extraction import fields, runner, topup
 from docpipe.extraction.spec import SpecError, fingerprints, load
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +50,9 @@ def test_the_texts_beside_the_fields_are_in_no_stamp_key():
         raw["plan_fields"]["settings"].update(means="Something else."),
         region(raw)["beside"]["out:other"].append("elsewhere")))
     assert fingerprints(load(reworded)) == fingerprints(load(SCENARIOS))
+    ruled = changed(KWP, lambda raw: raw["plan_fields"]["base_year"].update(
+        of={"scenario": "trend"}))
+    assert fingerprints(load(ruled)) == fingerprints(load(KWP))
     # the failure by construction: a spelling of a list a request shows does
     # move its key, so the comparison above can fail
     listed = changed(SCENARIOS, lambda raw: next(
@@ -95,6 +101,68 @@ def test_the_blocks_reach_the_run_as_the_file_writes_them():
                  "groups": KWP["groups"], "parameters": KWP["parameters"]})
     assert bare.plan_fields == {} and bare.works is None
     assert not runner.names_asked(bare)
+
+
+# -- which pairs of the frame are a document's own state and its target ---------
+
+@pytest.mark.parametrize("change, where", [
+    # at a field that is no year of the document
+    (lambda raw: raw["plan_fields"]["settings"].update(
+        of={"scenario": "status_quo"}), "spec.plan_fields.settings"),
+    (lambda raw: raw["plan_fields"]["base_year"].update(of={}),
+     "spec.plan_fields.base_year.of"),
+    (lambda raw: raw["plan_fields"]["base_year"].update(of="status_quo"),
+     "spec.plan_fields.base_year.of"),
+    # a coordinate that is none of the frame's, with an entry of its list
+    (lambda raw: raw["plan_fields"]["base_year"].update(
+        of={"carrier": "OEO_00000014"}),
+     "spec.plan_fields.base_year.of.carrier"),
+    # the frame's year, which has no list an entry could be of
+    (lambda raw: raw["plan_fields"]["target_year"].update(
+        of={"year": "2045"}), "spec.plan_fields.target_year.of.year"),
+    # the entry by its label and not by its key: no pair would match it
+    (lambda raw: raw["plan_fields"]["target_year"].update(
+        of={"scenario": "Zielszenario"}),
+     "spec.plan_fields.target_year.of.scenario"),
+])
+def test_a_rule_for_a_document_s_years_that_matches_no_pair_is_refused(
+        change, where):
+    load(KWP)
+    with pytest.raises(SpecError, match=where):
+        load(changed(KWP, change))
+
+
+def stored(index: int, scenario: str, year: int) -> dict:
+    """A stored row as the harvest wrote the pair *index* of the frame onto
+    it."""
+    return {"scenario": scenario, "scenario_window": ["frame", index],
+            "year": year, "year_window": ["frame", index],
+            "year_quote": f"im Jahr {year}", "year_source": ["section", 4]}
+
+
+def test_a_pass_over_a_stored_harvest_takes_the_years_the_spec_s_rule_names():
+    rows = [stored(0, "Bestand", 2022), stored(1, "Zielszenario", 2045),
+            stored(2, "Trendszenario", 2040)]
+
+    def years(raw) -> list:
+        spec = load(raw)
+        frame = fields.frame_slots(spec, ("scenario", "year"))
+        return [(found["state"], found["year"])
+                for found in topup.named_years_of(
+                    rows, frame, runner.year_states_of(spec))]
+    assert years(KWP) == [("base", 2022), ("target", 2045)]
+    # the failures by construction: another rule takes other years, a state
+    # without a rule has none, and a spec that says no rule has no years
+    assert years(changed(KWP, lambda raw: raw["plan_fields"]["base_year"]
+                         .update(of={"scenario": "trend"}))) == [
+        ("base", 2040), ("target", 2045)]
+    assert years(changed(KWP, lambda raw: raw["plan_fields"]["base_year"]
+                         .pop("of"))) == [("target", 2045)]
+    assert years(changed(KWP, lambda raw: [
+        raw["plan_fields"][key].pop("of")
+        for key in ("base_year", "target_year")])) == []
+    assert runner.year_states_of(load(SCENARIOS)) == {"base": None,
+                                                      "target": None}
 
 
 # -- the fixed entries of a list closed per document ---------------------------------

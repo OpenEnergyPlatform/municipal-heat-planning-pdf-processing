@@ -26,12 +26,18 @@
     "base_year": {
       "name": "Basisjahr des Plans",
       "means": "Das Jahr, für das der Plan seinen eigenen Stand aufnimmt (Basisjahr, Bilanzjahr, Ist-Zustand). Nimmt er seinen Stand als Mittel mehrerer Jahre auf, sind es diese Jahre.",
-      "sentence": "Das Basisjahr der Wärmeplanung ist das Jahr 2021."
+      "sentence": "Das Basisjahr der Wärmeplanung ist das Jahr 2021.",
+      "of": {
+        "scenario": "status_quo"
+      }
     },
     "target_year": {
       "name": "Zieljahr des Plans",
       "means": "Das Jahr, das der Plan selbst Zieljahr nennt oder in dem sein Ziel erreicht ist, kein Zwischenziel und kein Stützjahr; das Jahr eines Gesetzes, einer Förderung oder einer anderen Studie zählt nicht.",
-      "sentence": "Das Zieljahr der Wärmeplanung ist 2040, dann ist die Wärmeversorgung klimaneutral."
+      "sentence": "Das Zieljahr der Wärmeplanung ist 2040, dann ist die Wärmeversorgung klimaneutral.",
+      "of": {
+        "scenario": "target"
+      }
     }
   },
   "groups": {

@@ -68,9 +68,11 @@ closed (`runner.closed_spec`); *passages_of(document_id)* every passage
 of the document in its order; *transcripts(document_id, figures, each)*
 its figures' lines (`addressed.Transcripts`); *orders(plan, parameters,
 chunk_units, scope, chunks)* the pieces of each field best first
-(`addressed.Orders`); *halted()* whether the run stops. *chunk_units*
-is how many lines a piece holds; *each(jobs, run)* runs jobs side by
-side; *trace* writes what a document's requests came to.
+(`addressed.Orders`); *halted()* whether the run stops. *numbers* are
+the numbers of the flow a plan is cut by (`flow.Numbers`: the lines of
+a piece and of the title page, the headings shown up to a place), the
+default profile's where none are given; *each(jobs, run)* runs jobs
+side by side; *trace* writes what a document's requests came to.
 
 #### SurveyedHarvest.\_\_init\_\_
 
@@ -80,7 +82,7 @@ def __init__(self, spec, make_reader: Callable, passages_of: Callable,
              halted: Optional[Callable] = None,
              transcripts: Optional[Callable] = None,
              orders: Optional[Callable] = None,
-             chunk_units: int = CHUNK_UNITS,
+             numbers=None,
              each: Optional[Callable] = None, trace=None)
 ```
 

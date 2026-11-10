@@ -2,8 +2,8 @@
 
 `docpipe/editor/__init__.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-docpipe.editor: `docpipe edit`, a profile's extraction spec, prompts and
-sentences in the browser.
+docpipe.editor: `docpipe edit`, a profile's extraction spec, prompts,
+sentences and the numbers of its flow in the browser.
 
 Author: Felix Vossel
 

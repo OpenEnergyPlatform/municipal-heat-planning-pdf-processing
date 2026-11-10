@@ -10,7 +10,8 @@ Every request carries its instruction, the smallest part of the plan that
 answers its question, and one question; every answer is an address, a
 number or a few words, and code looks up what an address names
 (`units.py`). Nothing is a conversation: an answer that did not hold is
-asked once more as a request of its own, with what did not hold (`follow`).
+asked again as a request of its own, with what did not hold (`follow`), as
+often as the flow says, once by default (`flow.Numbers.follow_ups`).
 
 The steps of a document (`Reader`):
 
@@ -29,8 +30,9 @@ The steps of a document (`Reader`):
    own (`work_coordinate`).
 3. The fields a document has once (`Parameter.once_per_document`): the
    title page and the pieces a search finds best for a sentence written
-   for the field, the run's budget of them, five a request, every find
-   kept (`docfield`); a field with a list twice the budget.
+   for the field, the run's budget of them, as many a request as the flow
+   says, every find kept (`docfield`); a field with a list the budget times
+   the flow's factor (`flow.Numbers`).
 4. Every other field in every piece, the pieces best first for the
    field's sentences (`find`): each value an address and its words, and
    where the field has a list, its entry (owner decision 2026-11-09).
@@ -210,7 +212,7 @@ entries its wordings were read as, and its lists of names.
 
 ```python
 def __init__(self, document_id: int, sources: list, transcripts: dict,
-             chunk_units: int)
+             chunk_units: Optional[int] = None, *, numbers=None)
 ```
 
 #### Plan.pieces
@@ -266,7 +268,7 @@ class Asks
 The requests of the harvest, each (payload, document_id, *, shape,
 example, **noted) -> the reply as a dict, CUT or None; a request that
 finds values shows two replies, *example* a pair (`find_example`).
-*follow* is a request asked once more with what did not hold: (kind,
+*follow* is a request asked again with what did not hold: (kind,
 payload, document_id, *, shape, example, **noted). *check*, *names*,
 *work* and *phrase* are None where the profile writes no prompt for them
 (`OPTIONAL`).
@@ -349,7 +351,13 @@ many pieces a search shows, *shares* how many of them each kind of
 passage gets first ("table", "figure", "section"), *per_request* how
 many a request shows (owner decisions 2026-11-09: 50, 20/15/15, 5).
 *context(document_id)* is what the document says of itself (its title,
-its municipality), which a search sentence is written with.
+its municipality), which a search sentence is written with. *numbers*
+are the numbers of the flow the reading is bounded by (`flow.Numbers`,
+the default profile's where none are given): they say *budget*, *shares*
+and *per_request* where those are not given, how many times the budget
+a field with a list reads, up to how many entries a list is shown with
+what each means and how often an answer that did not hold is asked
+again.
 
 #### Reader.\_\_init\_\_
 
@@ -364,10 +372,10 @@ def __init__(self, spec, asks: Asks, order: Callable, *,
              works: Optional[dict] = None,
              frame_slots: Optional[list] = None,
              each: Optional[Callable] = None, trace=None,
-             budget: int = SEARCH_PIECES,
+             budget: Optional[int] = None,
              shares: Optional[dict] = None,
-             per_request: int = PER_REQUEST,
-             context: Optional[Callable] = None)
+             per_request: Optional[int] = None,
+             context: Optional[Callable] = None, numbers=None)
 ```
 
 #### Reader.lists_of
@@ -406,13 +414,25 @@ passage shows, until a single line is a hole of its own (owner
 decision 2026-09-12: a request is split, never its answer
 rescued).
 
+#### Reader.list_of
+
+```python
+def list_of(self, options) -> tuple
+```
+
+A list as every request of this reading shows it (`listing`):
+with what each entry means up to the flow's number of entries
+(`flow.Numbers.list_meanings`). Every place that shows a list or
+reads a number of one goes through here, so that a number is read
+against the list it was given for.
+
 #### Reader.listed
 
 ```python
 def listed(self, parameter) -> Optional[tuple]
 ```
 
-The list a field's finds name their entry in (`listing`), None
+The list a field's finds name their entry in (`list_of`), None
 for a field without one (owner decision 2026-11-09: a field with a
 list is asked with it, the answer the number of its entry).
 
@@ -579,8 +599,9 @@ def take(self, plan: Plan, read: Read, row: Row, slot, shown: Shown,
 
 (rows made, held) of a coordinate's answer: its finds each read
 onto the row, one row per entry where several are named, and
-checked (`merge_field`); what does not hold is asked once more with
-its reason (`follow`), then stays `unbacked`.
+checked (`merge_field`); what does not hold is asked again with its
+reason (`follow`, as often as the flow says), then stays
+`unbacked`.
 
 #### Reader.settle
 
@@ -758,8 +779,8 @@ def work_piece(self, plan: Plan, shown_field: dict, chunk: Chunk,
 (shown, payload, [Found] of other works, the line of this
 publication's own or None) of one piece's work request (`work`):
 the piece with the headings up to it and the title page; what does
-not hold is asked once more with its reason. None where no answer
-came.
+not hold is asked again with its reason (as often as the flow
+says). None where no answer came.
 
 #### Reader.own_line
 
@@ -812,7 +833,8 @@ the line it stands in where its piece's work request named one
 works with the value's line, the headings and the title page, the
 answer the entry and the line that shows it; 0 leaves it
 `unstated`, and it is never searched. What does not hold is asked
-once more with its reason, then stays `unbacked`.
+again with its reason (as often as the flow says), then stays
+`unbacked`.
 
 #### Reader.read_work
 
@@ -1087,14 +1109,15 @@ value.
 ### listing
 
 ```python
-def listing(options) -> tuple
+def listing(options, meanings: int) -> tuple
 ```
 
 (lines, choices, grouped) of a list as a request shows it (owner
-decisions 2026-11-08): a list longer than `LIST_WITH_MEANS` whose
-entries name groups is shown by its groups, each a choice; a shorter
-one with what each entry means, a longer one by its names. *choices*
-are what a number picks, labels or group names.
+decisions 2026-11-08): a list longer than *meanings* entries
+(`flow.Numbers.list_meanings`) whose entries name groups is shown by
+its groups, each a choice; a shorter one with what each entry means, a
+longer one by its names. *choices* are what a number picks, labels or
+group names.
 
 ### picked_entry
 
@@ -1196,7 +1219,8 @@ pieces keep their passages' order; without either, the plan's. A
 reranker or a search that fails raises: what is handed in asks again
 until it answers (`runner.persistently`, owner decision 2026-11-09:
 nothing is read in another order instead), and one the server refuses
-three times fails its document, which stays unfinished.
+as often as the flow's `replies` says fails its document, which stays
+unfinished.
 
 ### order_key
 

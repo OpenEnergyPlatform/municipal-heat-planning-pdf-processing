@@ -62,6 +62,7 @@ Fields:
 - `off: str = "0"`
 - `sep: str = ","`: what joins this list in the environment
 - `stages: tuple = ()`: the commands that read it
+- `flow: tuple = ()`: The numbers of the profile's flow file this setting wins over (`extraction.flow`): unset, the file says them, so there is no default here.
 
 ## Functions
 
@@ -139,6 +140,18 @@ def origin(env: str) -> str
 
 Where the value of `env` in effect comes from.
 
+### from_flow
+
+```python
+def from_flow(setting: Setting) -> Optional[tuple]
+```
+
+(value as the environment would spell it, where it comes from) of a
+setting that is not set and wins over numbers of the flow: what the
+flow file of the ambient profile says, the default profile's where
+there is none. None for any other setting, and where the flow cannot be
+read.
+
 ### rows
 
 ```python
@@ -146,6 +159,8 @@ def rows(stage: Optional[str] = None) -> list
 ```
 
 [(setting, value in effect or None, origin, what the file says or
-None)], for the settings one command reads or for all of them.
+None)], for the settings one command reads or for all of them. A
+setting that wins over numbers of the flow and is not set shows what
+the flow file says, and that file as its origin (`from_flow`).
 
 [Back to the index](../README.md)

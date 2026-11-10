@@ -325,8 +325,8 @@ def from_traces(trace_dirs: Iterable[Path],
         # Per kind of request: requests that got a reply, their tokens, and
         # those answered with the answer of the same request sent before in
         # the document, which were not sent (owner decision 2026-11-07). A
-        # request asked once more with what did not hold is a kind of its
-        # own ("follow").
+        # request asked again with what did not hold is a kind of its own
+        # ("follow").
         "requests_by_stage": {
             stage: {k: stages[stage][k] for k in (
                 "requests", "prompt_tokens", "completion_tokens",

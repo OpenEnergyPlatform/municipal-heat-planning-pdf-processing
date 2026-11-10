@@ -211,3 +211,42 @@ button.pr-req b { font-weight: 600; word-break: break-word; }
 .ln .key { color: var(--muted); }
 .pr-gonebox { margin-top: 6px; border-top: 1px dotted var(--line); padding-top: 4px; }
 .pr-pad { padding: 6px 12px; }
+
+/* ---------- Flow tab ---------- */
+#flow { flex: 1; overflow: auto; padding: 0 16px 24px; min-height: 0; }
+#fl-wrap { max-width: 900px; margin: 0 auto; }
+.fl-pad { padding: 12px 0; }
+.fl-bar { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0 6px; margin-bottom: 0; border-bottom: 1px solid var(--line); }
+.fl-bar .spacer { flex: 1; }
+.fl-diagram { margin-top: 12px; }
+.fl-steps { display: flex; flex-direction: column; align-items: stretch; }
+.fl-step { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); padding: 6px 10px; }
+.fl-box { border-left: 3px solid var(--accent); }
+.fl-note { border-style: dashed; }
+.fl-frame { background: var(--bg); border-color: var(--muted); padding: 8px 10px 10px 18px; }
+.fl-frame > .fl-steps { margin-top: 8px; }
+.fl-step.off { opacity: .55; }
+.fl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.fl-kind { font-family: var(--mono); font-size: 12px; font-weight: 600; }
+.fl-count { color: var(--muted); font-size: 11px; }
+.fl-each { color: var(--muted); font-size: 11px; margin: 0 0 2px 4px; }
+.fl-says { margin: 2px 0; }
+.fl-offsays { margin: 2px 0; font-style: italic; color: var(--muted); }
+.fl-bound { margin: 4px 0; line-height: 2; }
+input[type=number].fl-num { display: inline-block; width: 4.6em; padding: 1px 4px; margin: 0 3px; vertical-align: baseline; }
+input[type=number].fl-num.edited { border-color: var(--warn); background: var(--warn-bg); }
+.fl-extras, .fl-loose { margin: 2px 0; }
+.fl-extra { font-size: 12px; margin: 2px 0; }
+.fl-meas { margin: 2px 0; }
+.fl-sent { margin: 1px 0; }
+.fl-switch { font-size: 12px; margin: 3px 0; color: var(--muted); }
+.fl-conn { position: relative; height: 26px; }
+.fl-conn.when { height: 34px; }
+.fl-conn::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 5px; border-left: 1px solid var(--muted); }
+.fl-conn::after { content: ''; position: absolute; left: 50%; bottom: 0; margin-left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid var(--muted); }
+.fl-when { position: absolute; left: calc(50% + 10px); top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); max-width: 45%; }
+.fl-below { margin-top: 18px; }
+.fl-notep { margin: 6px 0; }
+.fl-settings { margin: 10px 0; }
+.fl-settings summary { cursor: pointer; font-weight: 600; }
+.fl-settings table.grid th { position: static; }

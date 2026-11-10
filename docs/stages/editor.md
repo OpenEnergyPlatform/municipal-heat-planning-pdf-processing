@@ -7,13 +7,14 @@ closed lists the answers are chosen from, the texts a model is shown about a
 document and the examples. It is a long file, and one line of it can make a
 stored harvest stale. A profile also holds its prompts, the files a model is
 told its task in, and the sentences its stages say to the model outside them.
-`docpipe edit` shows these as a page in the browser with two tabs. The Spec tab
+`docpipe edit` shows these as a page in the browser with three tabs. The Spec tab
 shows the spec, one form per question, and says what an edit costs the next run
 before it is written. The Prompts tab edits the prompt files and the sentence
 files of the profile; with a harvest folder it also shows what an edit does to
-the requests recorded there, and it can send a few of them once more. The flow
-of the reading, which step asks what, in which order, with which numbers, is
-code and is not in the page.
+the requests recorded there, and it can send a few of them once more. The Flow
+tab draws the steps a document is read in and edits the numbers that bound them,
+which stand in the profile's `flow.json`. The order of the steps and what a step
+does is code and is not in the page.
 
 ```
 docpipe edit --profile kwp
@@ -38,8 +39,8 @@ its end before the connection closes, so the refusal arrives instead of a
 reset connection. The page is one HTML file with plain JavaScript and one
 style sheet, with no build step, and loads nothing from outside.
 
-The header has two tabs, **Spec** and **Prompts**, marks a tab that holds edits
-not yet saved and says whether there are any. The rest of this section is the
+The header has three tabs, **Spec**, **Prompts** and **Flow**, marks a tab that
+holds edits not yet saved and says whether there are any. The rest of this section is the
 Spec tab. On the left is a tree, on the right the form of the selected node:
 
 - the top-level questions (`_comment`, `parameter_question`, `unit_question`);
@@ -96,8 +97,9 @@ since a browser moves such a key to the front of its object; Check says so.
 
 The stamp of a harvested document holds one fingerprint per question, and a
 run compares them one by one (see [the extraction stage](extraction.md)). So
-an edit that moves no question, such as a changed `_comment`, a `kg` block, or
-a text in `plan_fields`, `works` or `beside`, leaves every document current.
+an edit that moves no question, such as a changed `_comment`, a `kg` block, a
+text in `plan_fields`, `works` or `beside`, or the key `of` of a plan field that
+is a year (it is in no fingerprint), leaves every document current.
 Where a key moved, the page names the pass that settles it:
 
 | the key | the pass |
@@ -221,7 +223,7 @@ says so and has nothing to show.
 
 For the prompt that is selected, the list holds the requests it has a say in
 (`prompts.concerns`): the requests of its own kind, and for the follow-up prompt
-the requests asked once more. A request asked once more goes under the prompt of
+the requests asked again. A request asked again goes under the prompt of
 the request it follows, so it is listed under that prompt too. The list is
 filtered by field, by the fields a message carries (which is how the requests a
 part is told to are found) and by a text anywhere in the instruction, the
@@ -270,7 +272,7 @@ Which requests can be put together again:
   `check`, `work` and `phrase`, whose prompt is cut at its markers
   (`prompts.CUT`);
 - `transcribe`, whose prompt is sent whole (`prompts.WHOLE`);
-- a request asked once more (`follow`) of any of these: its instruction is that
+- a request asked again (`follow`) of any of these: its instruction is that
   of the request it follows, and the words after its payload are those of the
   follow-up prompt (`extraction/follow`).
 
@@ -287,7 +289,7 @@ from the text being edited, to see what a model answers (`trying.once`). What is
 sent is the recorded request: the same message, the same reply form
 (`response_format`) and the settings of the prompt, `temperature` and
 `max_tokens`, with the edited instruction in place of the recorded one, and for a
-request asked once more the edited follow-up words. A try writes nothing.
+request asked again the edited follow-up words. A try writes nothing.
 
 The model is the one the installation names (`trying.settings`):
 
@@ -397,11 +399,115 @@ that. What the trace showed belongs to the wording it was looked up with: once
 the sentence reads differently, the list is hidden until the button is pressed
 again.
 
+## Flow
+
+A document is read in steps: it is cut into numbered lines and pieces, the
+figures are written off, fields are asked per piece and per document, each
+coordinate of each value is asked on its own and searched for where it is open,
+and what the checked rows leave open is computed. The steps and the numbers that
+bound them stand in one file, `flow.json` (`extraction.flow`). The default
+profile's file is the whole flow: `numbers` and `steps`. A profile that extends
+it may have a `flow.json` of its own that holds `numbers` only, and only the ones
+it sets differently; it is laid over the inherited file number by number, and a
+file of a profile that writes steps is refused. The steps describe the flow; the
+order they are run in is still the code's. The loader is strict: every request
+the code sends stands in the `ask` of at least one step, a step asks no request
+the code does not send, every number bounds a step, and an
+unknown key, a key written twice, a value that is no whole number or lies below
+the number's least is refused by name.
+
+The Flow tab draws the steps top to bottom, one box per request, with what the
+step does, for what it is asked, when, and a frame around the steps asked per
+coordinate. The bound of a step is a sentence with its numbers as inputs. A step
+links to its prompt in the Prompts tab, and shows the switches of the spec that
+belong to it (the fields the document has once, the coordinates only the value's
+own passage says and so on), each entry a link into the Spec tab. A step that no
+run of the profile takes is drawn as off, with the reason: no profile of the
+line writes its prompt, or the spec has nothing for it.
+
+The flow has twelve numbers, each a whole number, and each says what it counts:
+
+| the number | what it counts |
+|---|---|
+| `piece_lines` | lines of a piece a document is read in; a table's head is shown with each of its pieces |
+| `title_page_lines` | lines of the document's first page that a request shows as its title page |
+| `headings` | headings a request shows up to a value's place, its own last |
+| `list_meanings` | entries up to which a list is shown with what each entry means; a longer list shows its names only |
+| `search_pieces` | pieces a search shows for an open coordinate or a field the document has once |
+| `search_tables`, `search_figures`, `search_text` | the share of a search's pieces that are the best pieces of tables, of figures and of text, taken first; the three are scaled to the pieces of the search, and the rest are the best of any kind |
+| `search_per_request` | pieces one request of a search shows |
+| `listed_field_factor` | times the pieces of a search that a field the document has once reads where its values come from a list |
+| `follow_ups` | times a request whose answer did not hold is asked again, each time with the answer and why it did not hold; 0 asks none |
+| `replies` | replies out of their form a request takes before it is left unanswered |
+
+For each number the tab says whether the profile sets it itself or inherits it
+and from which profile, and what a run started here would read with and why:
+six numbers have a setting, four settings in all (`EXTRACT_SEARCH_PIECES`,
+`EXTRACT_SEARCH_SHARES` for the three shares, `EXTRACT_SEARCH_CHUNKS`,
+`EXTRACT_MAX_RETRIES`), and where a setting is set it wins over both files,
+which the tab says. Editing a number
+marks the tab as unsaved.
+
+**Check** writes nothing. It refuses a number the flow does not take with the
+loader's words, lists what changed, says what a save would do to the file
+(created, changed, removed or unchanged), shows the diff, and says that a changed
+flow makes no harvest stale: a stamp names, for each pass that read the
+document, the numbers it read with, and compares none of them.
+
+**Save** writes only where every number holds and the file is as the page loaded
+it; otherwise the page says the file changed on disk and offers to reload. One
+refused number means that nothing of the edit is written. A profile that extends
+another gets only the numbers that differ from what it inherits: a number set
+back to the inherited value leaves the file, and a file that would hold no number
+is removed (`Files.remove`, inside the profile's own folder only). The default
+profile's own file is the whole flow, so a save there changes its number lines
+and keeps its steps. The file keeps its line endings; a new file is written with
+plain ones.
+
+With `--harvest` the tab says, beside the numbers, what the traces of that
+harvest measured, recounted as a number is typed (`measured.says`):
+
+- how many searches for an open coordinate ended with an answer that names a
+  place and how many without one, after how many shown pieces of the budget
+  those answers came (the least, the most and the middle one), and how many came
+  after more than the typed budget; how many requests the searches sent;
+- for the fields the document has once, how many requests found something and
+  how many of them only after more than the typed budget of shown pieces (for a
+  field with a list, the budget times `listed_field_factor`);
+- how many answers were asked again, per kind of request;
+- how many replies were read at the first, second and later attempt, and how many
+  could not be read, by cause;
+- how many lists were longer than the typed number of entries.
+
+Two limits belong to these counts. A trace does not record whether an answer
+held, so the tab counts an answer that names a place, and not a value read. And
+"came after more than N" estimates what a smaller budget would have cost, since
+a smaller budget also changes which pieces are picked. A trace written before a
+search noted which of its pieces count toward its budget (`shows`: `near` for the
+pieces beside the value, `found` for those of the budget, `fetched` for those the
+model fetched itself, which count toward no budget) is counted over all its
+pieces, and the tab says so. The traces are read by `measured.light`, which does
+not put the requests back together, and the counts of a trace are kept per state
+of its file. Without `--harvest`, or with a folder that holds no trace, the tab
+says that and counts nothing.
+
+Below the diagram the tab lists the year rules of the spec as notes (the key
+`of` of a plan field that is a year; see [the extraction stage](extraction.md)),
+each a link to the plan field in the Spec tab, and the other settings of an
+extraction run, read only, each with its value and where it comes from as
+`docpipe config` lists them. The value of a secret setting (a key, a token) is
+never sent to the page, which shows only whether one is set, and what an address
+carries before its host (a user, a password) is replaced by `***@`.
+
+The Spec tab's form of a plan field that is a year has the key `of`: a coordinate
+of a group's pair and an entry of its list.
+
 ## What the editor does not touch
 
-The editor writes three kinds of file through its own code: the spec, the
-prompt files and the sentence files, and the write guard (`server.Files`) lets
-that code write only inside the profile's folder. It reads only inside the
+The editor writes four kinds of file through its own code: the spec, the
+prompt files, the sentence files and the profile's `flow.json`, and the write
+guard (`server.Files`) lets that code write, and remove the flow file, only
+inside the profile's folder. It reads only inside the
 folders of the profiles in effect, the harvest it was given, its own page, the
 generated documentation and the folder the before and after comparison of the
 prompts writes into. A path is resolved first, so `..` and links cannot lead out.
@@ -428,9 +534,9 @@ its summary from there.
 
 ## What it does not contain yet
 
-The flow of the reading, which step asks what, in which order, with which
-numbers, cannot be edited in it: the flow stays code. The prompts, the sentences
-the stages say outside them and the spec are in the page.
+The order of the steps of the reading and what a step does cannot be edited in
+it: they stay code. The prompts, the sentences the stages say outside them, the
+spec and the numbers of the flow are in the page.
 
 ## Module reference
 
@@ -439,8 +545,8 @@ The docstring of each module of this stage, verbatim from the code and generated
 <details>
 <summary><code>docpipe/editor/__init__.py</code></summary>
 
-docpipe.editor: `docpipe edit`, a profile's extraction spec, prompts and
-sentences in the browser.
+docpipe.editor: `docpipe edit`, a profile's extraction spec, prompts,
+sentences and the numbers of its flow in the browser.
 
 Author: Felix Vossel
 
@@ -597,11 +703,14 @@ server.py: The local server of `docpipe edit` and the one file guard.
 
 `App` answers a request as plain data (method, path, query and body in, a
 status and an object out), so every promise of the endpoints can be held to
-without a socket. What an endpoint says comes from `specs.py`; this module
-only reads the file, asks the logic and, where the logic says so, writes.
+without a socket. What an endpoint says comes from the logic beside it
+(`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
+module only reads the file, asks the logic and, where the logic says so,
+writes.
 
-`Files` is the one place the editor touches a file: it may write only inside
-the profile's own folder and read only inside the folders of the profiles in
+`Files` is the one place the editor touches a file: it may write, and take a
+file away, only inside the profile's own folder and read only inside the
+folders of the profiles in
 effect, the harvest it was given, the page itself, the generated
 documentation and the folder the prompt review writes into
 (`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links

@@ -46,7 +46,7 @@ NO_STALE = ("A changed prompt makes no harvest stale: a stamp rests on the "
 CUT = ("find", "docfield", "coord", "list", "names", "search", "check",
        "work", "phrase")
 WHOLE = ("transcribe",)
-# The request asked once more goes under the prompt of the one it follows;
+# The request asked again goes under the prompt of the one it follows;
 # the words after its payload are those of this prompt.
 FOLLOW = "follow"
 # What is written as the marker of a part, wherever it stands. The run reads
@@ -64,7 +64,7 @@ class Refused(ValueError):
 def concerns(prompt_id: str, request: dict) -> bool:
     """Whether the prompt has a say in a recorded request: it makes its
     instruction, or it is the follow-up prompt and the request is one
-    asked once more."""
+    asked again."""
     from ..extraction import addressed
     if prompt_id == addressed.PROMPT_IDS[FOLLOW]:
         return request.get("kind") == FOLLOW
@@ -73,7 +73,7 @@ def concerns(prompt_id: str, request: dict) -> bool:
 
 def kinds_of(prompt_id: str) -> list:
     """The kinds of recorded requests a prompt has a say in: the requests
-    of its own kind, and for the follow-up prompt those asked once more."""
+    of its own kind, and for the follow-up prompt those asked again."""
     from ..extraction import addressed
     stage, _, name = prompt_id.partition("/")
     if stage != "extraction" or name not in addressed.KINDS:
@@ -474,7 +474,7 @@ def _prompt(profile, prompt_id: str, edits: dict, read: Callable) -> tuple:
 def preview(profile, request: dict, sent: dict, edits: dict,
             read: Callable) -> dict:
     """What a recorded request would be sent with: the instruction, and for
-    a request asked once more its message, as the files on disk make them
+    a request asked again its message, as the files on disk make them
     (`file`) and as the texts in *edits* ({prompt id: text}) make them
     (`edit`).
 

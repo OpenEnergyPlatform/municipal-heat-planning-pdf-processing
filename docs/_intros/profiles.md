@@ -232,9 +232,9 @@ shipped profile provides.
 | Reading the values out | `extraction.NOT_EXTRACTED` | optional (`component`), read by `docpipe preflight`: a mapping `(shape, property)` to one sentence, the properties of the profile's shapes it leaves out on purpose | not provided | 21 entries, each with its reason |
 | Reading the values out | `extraction.shapes_files` | optional (`component`), read by `docpipe preflight`: a callable returning the SHACL files the graph is held against | not provided; the shapes line says "skipped" | the shapes file of the last refresh of the OEKG sources |
 | Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5433-5436`) | `extraction_spec.json` | `extraction_spec.json` |
-| Reading the values out | `extraction.SLICE` | optional (`component`); no step reads it since 2026-11-08, the harvest has no slice gate | declared, `{"quantity": ..., "year": None}`, and not read | not provided |
 | Reading the values out | `extraction.FRAME` | optional (`component`, `runner.main`): the frame coordinates, the ones the plan's base and target years date a value by | `("scenario", "year")`; each value is asked them for itself | not provided |
-| Reading the values out | `extraction.BASE_YEAR`, `extraction.TARGET_YEAR` | optional (`component`): which frame pairs are the plan's own state and its target; they only say where the plan's own years are looked for. A year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read, in the last question of a year nothing found, when its number is one of the plan's years | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
+| Reading the values out | the key `of` of the spec's plan fields `base_year` and `target_year` (the profile hooks `BASE_YEAR` and `TARGET_YEAR` were deleted on 2026-11-10) | optional, checked by `spec.load` (`spec._validate_of`): which frame pairs are the plan's own state and its target; only the passes over a stored harvest (`--top-up`, `--top-up-open`) read it, to say where the plan's own years are looked for. A year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read when its number is one of the plan's years | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
+| Reading the values out | the file `flow.json` of the profile's folder | optional for a profile that extends another: `numbers` only, laid over the inherited file number by number; the default profile's file is the whole flow, `numbers` and `steps` (`extraction.flow`) | not provided; the default's numbers are read | not provided; the default's numbers are read |
 | Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | the study regions this publication names, out of 249 (`profiles/scenarios/regions.json`) |
 | Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5510`) | the plan's own municipality name | not provided |
 | The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:5371`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:5379-5383`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
@@ -387,8 +387,9 @@ word" (see [Running the pipeline](running.md)).
 | Facets in the answer app | `gemeinde`, `bundesland_lang`, `jahr` | `year`, `venue` |
 | `catalog.CATALOG` | `KwpCatalog` | `ScenarioCatalog` |
 | `--backfill-meta` | provided, refreshes `MunicipalityMeta` from a re-read KWW sheet | not provided |
-| `SLICE` / `FRAME` | declared and read by no step; the frame coordinates scenario and year | neither set |
-| `BASE_YEAR` / `TARGET_YEAR` | the pairs `{"scenario": "status_quo"}` and `{"scenario": "target"}` | neither set |
+| `FRAME` | the frame coordinates scenario and year | not set |
+| `of` at the plan fields `base_year` and `target_year` (spec) | the pairs `{"scenario": "status_quo"}` and `{"scenario": "target"}` | none |
+| `flow.json` of the profile's folder | none; the default's numbers are read | none; the default's numbers are read |
 | Per-document choice lists (`document_axes`) | not used | the study regions a publication names, out of 249 in `regions.json` (`profiles/scenarios/extraction.py`) |
 | Answer app's graph route (`kg_route`) | wired; a coordinate question can be answered straight from MHPKG | not wired; every answer comes from retrieval |
 

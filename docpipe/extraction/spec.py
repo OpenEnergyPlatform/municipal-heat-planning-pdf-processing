@@ -56,6 +56,9 @@ UNIT = "unit"
 # `plan_fields`: the settings that hold for every value, and the document's
 # own base and target year (`addressed.Reader.settled`).
 PLAN_FIELDS = ("settings", "base_year", "target_year")
+# Those of them that are a year of the document's own, each a state of it
+# that a spec can say which pairs of the frame are (`of`).
+YEAR_FIELDS = ("base_year", "target_year")
 
 
 def fold_label(raw) -> str:
@@ -161,7 +164,7 @@ class Axis:
     several: bool = False
     # uri -> the group an entry belongs to ("group" of an entry object, owner
     # decision 2026-11-08): a list longer than a request shows with what
-    # each entry means is asked group first (`addressed.LIST_WITH_MEANS`).
+    # each entry means is asked group first (`flow.Numbers.list_meanings`).
     groups: dict = field(default_factory=dict)
 
     def label_to_uri(self) -> dict:
@@ -357,8 +360,13 @@ class Spec:
     # the form of a document's field (spec: "plan_fields", owner decision
     # 2026-11-08): key of `PLAN_FIELDS` -> {"name", "means", "sentence"}. The
     # settings' lines stand beside every value's coordinates, the years are
-    # the document's own base and target years. Empty where a spec asks
-    # none. In no fingerprint.
+    # the document's own base and target years. A year may say which pairs
+    # of the document's frame are that state of it (`of`, coordinate -> the
+    # key of an entry of its list: {"scenario": "status_quo"}, owner decision
+    # 2026-11-10): a pass over a stored harvest, which asks no document its
+    # years, takes them from the stored pairs by it
+    # (`pipeline.state_years`); a run that reads a document asks them and
+    # does not read it. Empty where a spec asks none. In no fingerprint.
     plan_fields: dict = field(default_factory=dict)
     # The works a document presents, compares, reviews or cites beside
     # itself (spec: "works", owner decision 2026-11-08, h): {"name", "means",
@@ -802,7 +810,8 @@ def load(source: Union[Path, str, dict]) -> Spec:
     return Spec(parameters=parameters,
                 parameter_question=(question or None),
                 unit_question=(unit_question or None), groups=groups,
-                plan_fields=_validate_plan_fields(data.get("plan_fields")),
+                plan_fields=_validate_plan_fields(data.get("plan_fields"),
+                                                  parameters, groups),
                 works=_validate_works(data.get("works"), parameters))
 
 
@@ -815,8 +824,40 @@ def _validate_text(path: str, raw: dict, key: str, required: bool) -> None:
               else "a non-empty string when given")
 
 
-def _validate_plan_fields(raw) -> dict:
-    """key -> {"name", "means", "sentence"} of what a document settles once.
+def _validate_of(path: str, raw, parameters: list, groups: dict) -> None:
+    """`of` of a document's base or target year: coordinate -> the key of
+    an entry of its list, what a pair of the document's frame reads on its
+    other coordinates to be that state of it (`pipeline.state_years`).
+
+    A coordinate outside every group's pair or an entry its list does not
+    hold would match no pair, and the state would silently have no years;
+    so it is refused here.
+    """
+    where = f"{path}.of"
+    if not isinstance(raw, dict) or not raw:
+        _fail(where, "a non-empty object of coordinate -> the key of an "
+                     "entry of its list when given")
+    paired = sorted({name for group in groups.values()
+                     for name in group.pair})
+    for name, entry in raw.items():
+        if name not in paired:
+            _fail(f"{where}.{name}", f"is no coordinate of a group's pair; "
+                                     f"one of {paired}")
+        lists = [parameter.axes[name].vocabulary for parameter in parameters
+                 if name in parameter.axes
+                 and parameter.axes[name].vocabulary]
+        if not lists:
+            _fail(f"{where}.{name}", "has no list in any parameter")
+        if not isinstance(entry, str) or any(entry not in keys
+                                             for keys in lists):
+            _fail(f"{where}.{name}", f"{entry!r} is not a key of its list "
+                                     f"in every parameter that carries it")
+
+
+def _validate_plan_fields(raw, parameters=(), groups=None) -> dict:
+    """key -> {"name", "means", "sentence"} of what a document settles once,
+    and for a year of its own which pairs of its frame are that state of it
+    (`of`).
 
     A key no step asks is refused rather than carried: it would be a text
     somebody wrote for the model that no request ever shows.
@@ -833,12 +874,17 @@ def _validate_plan_fields(raw) -> dict:
             _fail(path, f"no step asks it; one of {PLAN_FIELDS}")
         if not isinstance(entry, dict):
             _fail(path, "must be an object")
-        extra = sorted(set(entry) - {"name", "means", "sentence"})
+        known = {"name", "means", "sentence"}
+        if key in YEAR_FIELDS:
+            known.add("of")
+        extra = sorted(set(entry) - known)
         if extra:
             _fail(path, f"has no key {extra}")
         _validate_text(path, entry, "name", True)
         _validate_text(path, entry, "means", True)
         _validate_text(path, entry, "sentence", False)
+        if "of" in entry:
+            _validate_of(path, entry["of"], list(parameters), groups or {})
         out[key] = dict(entry)
     return out
 

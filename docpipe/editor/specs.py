@@ -807,6 +807,13 @@ _OWN_HELP = {
     ("plan_field", "sentence"): "A sentence in the document's form, which "
                                 "the pieces it is asked over are found "
                                 "with.",
+    ("plan_field", "of"): "Which values of the document are of this state "
+                          "of it: a coordinate of a group's pair and the "
+                          "entry of its list. Read only by a pass over a "
+                          "stored harvest (--top-up, --top-up-open), which "
+                          "takes this year from the stored values; a run "
+                          "that reads a document asks it the year and does "
+                          "not read this.",
     ("works", "name"): "The name a request shows for another work.",
     ("works", "means"): "What counts as another work, as a request shows "
                         "it.",
@@ -864,7 +871,9 @@ _FORM = {
              ("target", "line", "unit_targets", {})],
     "plan_field": [("name", "line", None, {}),
                    ("means", "text", None, {}),
-                   ("sentence", "text", None, {})],
+                   ("sentence", "text", None, {}),
+                   ("of", "entry_of", None,
+                    {"only": list(spec_module.YEAR_FIELDS)})],
     "works": [("name", "line", None, {}),
               ("means", "text", None, {}),
               ("fields", "questions", None, {})],

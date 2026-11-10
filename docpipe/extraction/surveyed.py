@@ -45,12 +45,12 @@ from typing import Callable, Optional
 
 from .lookup import continued
 from . import fields
+from . import flow as flow_map
 from .addressed import Counts, Plan
 from .pipeline import (Batch, DocumentReport, Row, WorkItem, drop_repeats,
                        row_label)
 from .reading import NO_ANSWER, Read
 from .survey import Answer, Found
-from .units import CHUNK_UNITS
 from .verify import canonical_number, flat, quote_in
 
 log = logging.getLogger(__name__)
@@ -173,9 +173,11 @@ class SurveyedHarvest:
     of the document in its order; *transcripts(document_id, figures, each)*
     its figures' lines (`addressed.Transcripts`); *orders(plan, parameters,
     chunk_units, scope, chunks)* the pieces of each field best first
-    (`addressed.Orders`); *halted()* whether the run stops. *chunk_units*
-    is how many lines a piece holds; *each(jobs, run)* runs jobs side by
-    side; *trace* writes what a document's requests came to.
+    (`addressed.Orders`); *halted()* whether the run stops. *numbers* are
+    the numbers of the flow a plan is cut by (`flow.Numbers`: the lines of
+    a piece and of the title page, the headings shown up to a place), the
+    default profile's where none are given; *each(jobs, run)* runs jobs
+    side by side; *trace* writes what a document's requests came to.
     """
 
     def __init__(self, spec, make_reader: Callable, passages_of: Callable,
@@ -183,7 +185,7 @@ class SurveyedHarvest:
                  halted: Optional[Callable] = None,
                  transcripts: Optional[Callable] = None,
                  orders: Optional[Callable] = None,
-                 chunk_units: int = CHUNK_UNITS,
+                 numbers=None,
                  each: Optional[Callable] = None, trace=None):
         self.spec = spec
         self.make_reader = make_reader
@@ -192,7 +194,8 @@ class SurveyedHarvest:
         self.halted = halted or (lambda: False)
         self.transcripts = transcripts
         self.orders = orders
-        self.chunk_units = int(chunk_units)
+        self.numbers = numbers or flow_map.default()
+        self.chunk_units = int(self.numbers.piece_lines)
         self.each = each
         self.trace = trace
         self._made: dict = {}
@@ -222,7 +225,7 @@ class SurveyedHarvest:
         lines, asked = {}, 0
         if self.transcripts is not None and figures:
             lines, asked = self.transcripts(document_id, figures, self.each)
-        plan = Plan(document_id, sources, lines, self.chunk_units)
+        plan = Plan(document_id, sources, lines, numbers=self.numbers)
         counts = Counts()
         if asked:
             counts.ask("transcribe", asked)

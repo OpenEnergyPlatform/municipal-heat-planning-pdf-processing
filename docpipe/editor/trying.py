@@ -157,7 +157,7 @@ def addresses(answer, payload) -> list:
 
 def once(client, model: str, request: dict, sent: dict, view: dict) -> dict:
     """One call: the recorded request *sent* with the instruction (and,
-    for a request asked once more, the message) of *view*
+    for a request asked again, the message) of *view*
     (`prompts.preview`), and what came back."""
     from ..extraction import runner
     kind = request.get("asked") if request["kind"] == prompts.FOLLOW \

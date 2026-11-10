@@ -40,7 +40,7 @@ Fields:
 - `uri: str`: what the label resolves to
 - `synonyms: tuple = ()`: the other spellings the spec knows
 - `definition: str = ""`: What the term means, as the request shows it: the spec's gloss where it has one, else the definition (owner decision 2026-11-05, ticket 26).
-- `group: str = ""`: The group the entry belongs to, by which a long list is asked first (`addressed.LIST_WITH_MEANS`, owner decision 2026-11-08).
+- `group: str = ""`: The group the entry belongs to, by which a long list is asked first (`flow.Numbers.list_meanings`, owner decision 2026-11-08).
 
 ### Slot
 
@@ -234,7 +234,7 @@ first kind can be found once and then asked about; the second cannot.
 
 WHICH ones those are is the profile's business. The core never names a
 coordinate, so this takes a list of names and resolves it against the
-spec, exactly like `SLICE` does for the gate.
+spec.
 
 Read off the first parameter that has all of them, because a frame is one
 per document: a spec whose parameters disagreed about it would have two

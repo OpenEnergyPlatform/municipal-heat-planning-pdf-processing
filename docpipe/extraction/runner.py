@@ -70,6 +70,7 @@ from . import addressed as addressed_map
 from . import archive
 from . import compute as computing
 from . import fields
+from . import flow as flow_map
 from . import found as found_places
 from . import reading as reading_map
 from . import replies
@@ -79,7 +80,6 @@ from . import scheduler
 from . import scratch
 from . import lookup as lookup_map
 from . import trace
-from . import units as units_map
 from .wording import say
 from .pipeline import (YEAR_STATES, DocumentReport, Source,
                        cell_index as pipeline_cell_index, column_head,
@@ -94,7 +94,14 @@ LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "EMPTY")
 LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
-MAX_RETRIES = int(os.environ.get("EXTRACT_MAX_RETRIES", "3"))
+# The numbers of the flow the run reads with (`flow.Numbers`): what the
+# default profile's flow file says and the settings over it, until the
+# run's profile is known (`take_flow`).
+NUMBERS = flow_map.in_effect()
+# Replies out of their form a request takes before it is left unanswered,
+# and how often a request the server refuses is asked: the flow's `replies`,
+# which the setting EXTRACT_MAX_RETRIES wins over.
+MAX_RETRIES = NUMBERS.replies
 # What a retry may take after a request timed out. The first attempt keeps
 # LLM_TIMEOUT, which is sized for a slow but working generation; a request the
 # server did not answer in that time is unlikely to differ on its repeat, and
@@ -455,23 +462,49 @@ UNIT_ANCHOR = "#unit"
 # 64 was the bottleneck it looks like: 128 batch threads waiting on a pool of
 # 64 held the server at a quarter of what it schedules.
 FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "192"))
-# What a search shows (owner decisions 2026-11-09: "Bei 5 bleiben und das
-# mit 50 passt", "Ja als Einstellung"): the pieces of a search for an open
-# coordinate or a field the document has once, how many of them tables,
-# figures and text get first, and how many a request shows. A field the
-# document has once whose values come from a list reads twice the pieces.
-SEARCH_PIECES = int(os.environ.get("EXTRACT_SEARCH_PIECES", "50"))
-SEARCH_SHARES = os.environ.get("EXTRACT_SEARCH_SHARES", "20,15,15")
-SEARCH_CHUNKS = int(os.environ.get("EXTRACT_SEARCH_CHUNKS", "5"))
+# What a search shows are numbers of the flow (`NUMBERS`, owner decisions
+# 2026-11-09: "Bei 5 bleiben und das mit 50 passt", "Ja als Einstellung"):
+# the pieces of a search for an open coordinate or a field the document has
+# once, how many of them tables, figures and text get first, and how many a
+# request shows. The settings EXTRACT_SEARCH_PIECES, EXTRACT_SEARCH_SHARES
+# and EXTRACT_SEARCH_CHUNKS win over the flow's file for a run.
 # A search that only the end of the document stops: every piece is shown.
 REST_TO_END = 1_000_000
+# Set by a pass that reads to the end (`read_to_end`).
+TO_END = False
 
 
 def read_to_end() -> None:
     """Every search from here on shows every piece of its document, so a
     coordinate ends read or `unstated` and never `exhausted`."""
-    global SEARCH_PIECES
-    SEARCH_PIECES = REST_TO_END
+    global TO_END
+    TO_END = True
+
+
+_flow_logged: Optional[tuple] = None
+
+
+def take_flow(profile=None):
+    """The numbers of the flow a run of *profile* reads with
+    (`flow.in_effect`: its flow file, and the settings over it), taken for
+    every request from here on and returned. They are logged whenever they
+    differ from those logged before, each with where it comes from, so that
+    the log of a job says what it read with."""
+    global NUMBERS, MAX_RETRIES, _flow_logged
+    NUMBERS = flow_map.in_effect(profile)
+    MAX_RETRIES = NUMBERS.replies
+    said = (tuple(NUMBERS.as_dict().items()),
+            tuple(sorted(NUMBERS.origin.items())))
+    if said != _flow_logged:
+        _flow_logged = said
+        by_origin: dict = {}
+        for name, value in NUMBERS.as_dict().items():
+            by_origin.setdefault(NUMBERS.origin.get(name, "?"), []).append(
+                f"{name}={value}")
+        log.info("flow: %s", "; ".join(
+            f"{' '.join(numbers)} [{origin}]"
+            for origin, numbers in by_origin.items()))
+    return NUMBERS
 
 
 # ---------------------------------------------------------------------------
@@ -1777,7 +1810,7 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
     """The requests of the harvest (`addressed.Asks`), each with a prompt of
     its own and its payload as one message, no conversation (owner decisions
     2026-11-08); None where the profile writes one of their prompts not,
-    those of `addressed.OPTIONAL` aside. A request asked once more
+    those of `addressed.OPTIONAL` aside. A request asked again
     (`follow`) goes under the prompt of the request it follows, its words
     after the payload. The sentence a search goes with is a request of its
     own (`phrase`, owner decision 2026-11-09), under the prompt the
@@ -1875,11 +1908,10 @@ def search_budget() -> tuple:
     pieces a search for an open coordinate or a field the document has
     once shows, how many of them each kind of passage gets first, and how
     many a request shows (owner decisions 2026-11-09: 50, 20 of tables, 15
-    of figures, 15 of text, 5 a request); a pass that reads to the end
-    shows every piece (`read_to_end`)."""
-    shares = dict(zip(("table", "figure", "section"),
-                      (int(n) for n in SEARCH_SHARES.split(","))))
-    return SEARCH_PIECES, shares, SEARCH_CHUNKS
+    of figures, 15 of text, 5 a request), from the run's flow (`NUMBERS`);
+    a pass that reads to the end shows every piece (`read_to_end`)."""
+    pieces = REST_TO_END if TO_END else NUMBERS.search_pieces
+    return pieces, NUMBERS.shares(), NUMBERS.search_per_request
 
 
 def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
@@ -1891,7 +1923,8 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
     for it. What is asked once of a plan beside its fields
     (`Spec.plan_fields`) and the field that names other works
     (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
-    a search shows from the run (`search_budget`)."""
+    a search shows (`search_budget`) and every other number that bounds the
+    reading from the run's flow (`NUMBERS`)."""
     if not spec.groups:
         return None
     asks = make_asks(profile)
@@ -1904,12 +1937,13 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
         plan_fields=spec.plan_fields, works=spec.works,
         frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
         budget=pieces, shares=shares, per_request=per_request,
-        context=context)
+        context=context, numbers=NUMBERS)
 
 
 class Persistent:
     """A reranker whose every order is asked again until it answers or the
-    run halts, a refused one three times at most (`persistently`)."""
+    run halts, a refused one as often as the flow's `replies` says at most
+    (`persistently`)."""
 
     def __init__(self, reranker):
         self.reranker = reranker
@@ -1938,10 +1972,11 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
     (*rank*, `make_more_sources` with its reranker), a field's search
     sentences (`make_seek_probes`), the figures transcribed once and kept
     under *out* (`transcripts/`), the orders kept there too (`survey/`), and
-    the size of the pieces the profile gives (`CHUNK_UNITS`). *every(
+    the numbers of the profile's flow (`take_flow`: the lines of a piece
+    among them). *every(
     document_id, exclude)* is the plan's passages in its order. A search
-    that fails is asked again until it answers, a refused one three times at
-    most (`persistently`)."""
+    that fails is asked again until it answers, a refused one as often as
+    the flow's `replies` says (`persistently`)."""
     if rank is not None:
         rank = persistently("search", rank)
     order, search_order, rerank = addressed_map.make_order(reranker, rank)
@@ -1960,18 +1995,17 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
     written = f"document:{prompts.load(PHRASE_PROMPT_ID, profile).sha256}"
     orders = addressed_map.Orders(order, seek, Path(out) / "survey",
                                   trace=trace.event, written=written)
-    chunk_units = int(component("extraction", "CHUNK_UNITS")
-                      or units_map.CHUNK_UNITS)
+    numbers = take_flow(profile)
     log.info("harvest: pieces of %d lines, figures transcribed once under "
-             "%s, orders kept in %s", chunk_units, Path(out) / "transcripts",
-             Path(out) / "survey")
+             "%s, orders kept in %s", numbers.piece_lines,
+             Path(out) / "transcripts", Path(out) / "survey")
     return surveyed_map.SurveyedHarvest(
         spec,
         lambda doc_spec: make_reader(doc_spec, profile, order, search_order,
                                      seek, rerank, context_of),
         lambda document_id: every(document_id, set()),
         spec_for=spec_for, transcripts=transcripts, orders=orders,
-        chunk_units=chunk_units, each=run_each, trace=trace.event)
+        numbers=numbers, each=run_each, trace=trace.event)
 
 
 def frame_slots_of(spec: Spec) -> list:
@@ -3286,6 +3320,11 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     Without a spec the stamp keeps its old shape. That is for callers that
     have no spec to hand, and it is a coarser stamp, not a wrong one -- and
     with nothing finer to go on `spec` decides again.
+
+    The numbers of the flow are not among these keys. They belong to the
+    pass that read with them and stand in its entry (`producer`), so a pass
+    over a stored harvest neither carries them forward nor finds them
+    changed.
     """
     return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
             **prompts.versions(survey_prompt_ids()),
@@ -3351,13 +3390,19 @@ def producer(kind: str, model: Optional[str] = None) -> dict:
     list that names them all. A coordinate a top-up re-read points at its
     entry by position (`fields.PRODUCER`), so entries are never removed or
     reordered.
+
+    A pass that asks a model also names the flow it read with (`take_flow`):
+    `numbers`, every number in effect, a setting that won over the flow file
+    among them, and `flow_file`, the sha256 of the flow's files. For a
+    reader: a changed number makes no harvest stale.
     """
     from docpipe import __version__
     entry = {"pass": kind, "docpipe": __version__,
              "utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if model is not None:
         entry.update(model=model, provider=providers.provider("llm"),
-                     prompts=prompts.versions(survey_prompt_ids()), flow=FLOW)
+                     prompts=prompts.versions(survey_prompt_ids()), flow=FLOW,
+                     numbers=NUMBERS.as_dict(), flow_file=NUMBERS.sha256)
     return entry
 
 
@@ -3973,11 +4018,6 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple:
     return chosen, sorted(ids - {d[0] for d in chosen})
 
 
-# The constant of a profile's extraction.py that says which frame pairs are
-# which state of the plan (`pipeline.YEAR_STATES`).
-YEAR_STATE_CONSTANTS = {"base": "BASE_YEAR", "target": "TARGET_YEAR"}
-
-
 def span_marks_of() -> dict:
     """{coordinate: entry} a value stated for a span of years takes on each
     of its rows, as the active profile says it (`SPAN_MARKS`,
@@ -3987,12 +4027,14 @@ def span_marks_of() -> dict:
                 or {})
 
 
-def year_states_of(profile) -> dict:
-    """{state: which frame pairs are that state of the plan}, as the profile
-    says it: their years date a row that names the state by word
-    ("Basisjahr", "Zieljahr") and prints no year. None for a state the
-    profile does not name, which then has no years."""
-    return {state: profile.component("extraction", YEAR_STATE_CONSTANTS[state])
+def year_states_of(spec: Spec) -> dict:
+    """{state: which frame pairs are that state of the plan}, as the spec
+    says it at the plan field of the state's year (`plan_fields`, key `of`,
+    owner decision 2026-11-10): their years date a row that names the state
+    by word ("Basisjahr", "Zieljahr") and prints no year, in a pass over a
+    stored harvest, which asks no plan its years. None for a state the spec
+    does not say it of, which then has no years."""
+    return {state: (spec.plan_fields.get(f"{state}_year") or {}).get("of")
             for state in YEAR_STATES}
 
 
@@ -4200,6 +4242,7 @@ def main(argv: Optional[list] = None) -> int:
             parser.error(problem)
 
     profile = require_profile(args)
+    take_flow(profile)
     token_usage.begin("extraction")
     if args.recheck:
         raw_spec_path = run_spec_path(args, profile)
@@ -4419,7 +4462,7 @@ def main(argv: Optional[list] = None) -> int:
     # supported on a frame axis.
     frame_axes = fields.frame_slots(spec, profile.component("extraction",
                                                             "FRAME") or ())
-    year_states = year_states_of(profile)
+    year_states = year_states_of(spec)
 
     log.info("extraction: each plan in pieces: find, coordinates, lists, "
              "search")

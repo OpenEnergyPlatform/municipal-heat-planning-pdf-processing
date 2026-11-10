@@ -103,6 +103,6 @@ backed, `unbacked`, a `D`.
 | `UNANSWERED` | `unanswered` | the field reply never mentioned this row. A finding about the model |
 | `EXHAUSTED` | `exhausted` | still open when the window budget ended with the document unread. A finding about the run |
 | `UNBACKED` | `unbacked` | answered, but no shown passage carried the answer, or the passage belonged to another row, and no later window fixed it |
-| `OUT_OF_SLICE` | `out_of_slice` | never asked: a gate coordinate (the profile's SLICE) had already put the row outside what this run serializes |
+| `OUT_OF_SLICE` | `out_of_slice` | never asked: a coordinate asked before it had read the value as no value of its field (an entry other than the spec's `keep`) |
 
 [Back to the index](../README.md)

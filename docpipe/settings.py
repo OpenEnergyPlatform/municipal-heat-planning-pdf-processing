@@ -67,6 +67,10 @@ class Setting:
     off: str = "0"
     sep: str = ","              # what joins this list in the environment
     stages: tuple = ()          # the commands that read it
+    # The numbers of the profile's flow file this setting wins over
+    # (`extraction.flow`): unset, the file says them, so there is no default
+    # here.
+    flow: tuple = ()
 
 
 def S(env: str, key: str, kind: str, default: Optional[str], help: str,
@@ -330,11 +334,11 @@ SETTINGS = (
     S("EXTRACT_MAX_MODEL_LEN", "extract.max_model_len", "int", "32768",
       "Context window assumed when the server does not report one.",
       stages=("extract",)),
-    S("EXTRACT_MAX_RETRIES", "extract.max_retries", "int", "3",
+    S("EXTRACT_MAX_RETRIES", "extract.max_retries", "int", None,
       "Replies out of their form an extraction request takes before it is "
       "left unanswered; a server's failure is asked again until the run "
-      "halts.",
-      stages=("extract",)),
+      "halts. Unset: the profile's flow file says it (replies).",
+      stages=("extract",), flow=("replies",)),
     S("EXTRACT_MAX_SOURCE_CHARS", "extract.max_source_chars", "int", "16000",
       "Longest passage one request carries; longer sections are split into "
       "windows.",
@@ -366,17 +370,22 @@ SETTINGS = (
     S("EXTRACT_RETRY_WAIT_MAX", "extract.retry_wait_max", "float", "6",
       "Longest wait in seconds after a bad reply.",
       stages=("extract",)),
-    S("EXTRACT_SEARCH_CHUNKS", "extract.search_chunks", "int", "5",
-      "Pieces one request of a search shows.",
-      stages=("extract",)),
-    S("EXTRACT_SEARCH_PIECES", "extract.search_pieces", "int", "50",
+    S("EXTRACT_SEARCH_CHUNKS", "extract.search_chunks", "int", None,
+      "Pieces one request of a search shows. Unset: the profile's flow "
+      "file says it (search_per_request).",
+      stages=("extract",), flow=("search_per_request",)),
+    S("EXTRACT_SEARCH_PIECES", "extract.search_pieces", "int", None,
       "Pieces a search for an open coordinate or a field the document has "
-      "once shows; a field with a list reads twice as many.",
-      stages=("extract",)),
-    S("EXTRACT_SEARCH_SHARES", "extract.search_shares", "str", "20,15,15",
+      "once shows; a field with a list reads a multiple of them. Unset: "
+      "the profile's flow file says it (search_pieces).",
+      stages=("extract",), flow=("search_pieces",)),
+    S("EXTRACT_SEARCH_SHARES", "extract.search_shares", "str", None,
       "How many of a search's pieces come first from tables, figures and "
-      "text, scaled to its pieces; the rest are the best of any kind.",
-      stages=("extract",)),
+      "text, scaled to its pieces; the rest are the best of any kind. "
+      "Unset: the profile's flow file says them (search_tables, "
+      "search_figures, search_text).",
+      stages=("extract",),
+      flow=("search_tables", "search_figures", "search_text")),
     S("EXTRACT_SERVER_DEAD_AFTER", "extract.server_dead_after", "float", "180",
       "Seconds without any reply from the server before the run ends.",
       stages=("extract",)),
@@ -874,16 +883,41 @@ def origin(env: str) -> str:
     return "default"
 
 
+def from_flow(setting: Setting) -> Optional[tuple]:
+    """(value as the environment would spell it, where it comes from) of a
+    setting that is not set and wins over numbers of the flow: what the
+    flow file of the ambient profile says, the default profile's where
+    there is none. None for any other setting, and where the flow cannot be
+    read."""
+    if not setting.flow or setting.env in os.environ:
+        return None
+    try:
+        from .extraction import flow
+        from .profile import active_profile
+        numbers = flow.in_effect(active_profile())
+    except Exception:
+        return None
+    return (setting.sep.join(str(getattr(numbers, name))
+                             for name in setting.flow),
+            numbers.origin[setting.flow[0]])
+
+
 def rows(stage: Optional[str] = None) -> list:
     """[(setting, value in effect or None, origin, what the file says or
-    None)], for the settings one command reads or for all of them."""
+    None)], for the settings one command reads or for all of them. A
+    setting that wins over numbers of the flow and is not set shows what
+    the flow file says, and that file as its origin (`from_flow`)."""
     out = []
     for setting in SETTINGS:
         if stage and stage not in setting.stages:
             continue
         value = os.environ.get(setting.env, setting.default)
+        where = origin(setting.env)
         shadowed = _said.get(setting.env)
-        if origin(setting.env) == PROJECT_FILE:
+        if where == PROJECT_FILE:
             shadowed = None
-        out.append((setting, value, origin(setting.env), shadowed))
+        said = from_flow(setting)
+        if said is not None:
+            value, where = said
+        out.append((setting, value, where, shadowed))
     return out

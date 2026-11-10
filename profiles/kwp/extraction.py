@@ -1,61 +1,18 @@
-"""Extraction stage wiring: the kwp spec, the slice gate, the frame, and what
-a plan says about itself."""
-import json
+"""Extraction stage wiring: the kwp spec, the frame, and what a plan says
+about itself."""
 from pathlib import Path
 
 SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 
-# Which coordinates decide whether a value belongs in the graph at all, in the
-# order they are asked, and which answers keep the row. They are asked FIRST
-# and alone: a row that falls out here costs three requests instead of eight.
-# Measured on the 20-plan draft, of 6,763 harvested tuples the serializer
-# dropped 1,554 for a quantity the graph does not hold.
+# No coordinate closes a row of this profile: every value is asked all its
+# coordinates and the graph keeps what it holds (owner decision 2026-11-04).
+# A quantity the ontology has no class for yet (an avoided emission) is read
+# like any other and reaches the graph once a class exists (owner decision
+# 2026-11-03).
 #
-# THE SCENARIO NO LONGER GATES. It did, and it was the bigger half: 2,510 of
-# those 6,763 tuples were dropped for being a status quo, a trend or a
-# potential rather than the target scenario, and dropping them was a decision
-# about the graph rather than about the plan. MHPO names all three
-# (aggregated inventory analysis MHPO_00020005, aggregated potential analysis
-# MHPO_00020006) and OEO names the reference scenarios, so a heat plan's
-# inventory belongs in the graph as much as its target does and the row has
-# to be asked its coordinates to get there.
-#
-# What still gates is the quantity, and only through its out: entries: those
-# are deliberate non-classes the model chose (a share, a specific figure), and
-# no ontology term is waiting for them.
-#
-# None means "any class the graph takes", which is every entry that does not
-# start with out:. A tuple names the answers that keep the row.
-#
-# The year closes no row and stands here for its order alone: every axis behind
-# it reads with the year known. Asked side by side, up to 1,368 tuples of
-# corpus_m7_100 took the scenario of a chart's title for a year it does not
-# hold (owner decision 2026-11-02).
-#
-# Quantities of their own the ontology has no class for yet are read on every
-# axis into the harvest, and reach the graph once a class does (owner decision
-# 2026-11-03). Every other out: entry still closes its row. Generation, useful
-# energy and a saving left this list on 2026-11-07: each has an energy unit,
-# so each is an OEO energy value, and the list offers that class.
-READ_IN_FULL = ("out:avoided",)
-
-
-def kept_quantities() -> tuple:
-    """Every class of the spec's quantity lists, and READ_IN_FULL."""
-    spec = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
-    entries = {uri for parameter in spec["parameters"]
-               for uri in ((parameter.get("axes") or {}).get("quantity")
-                           or {}).get("vocabulary", {})}
-    return tuple(sorted(uri for uri in entries
-                        if not uri.startswith("out:") or uri in READ_IN_FULL))
-
-
-SLICE = {"quantity": kept_quantities(), "year": None}
-
-
-# Lines of a piece the plan is read in (owner decision 2026-11-08, f: eight;
-# twelve only measured where a probe loses values).
-CHUNK_UNITS = 8
+# How many lines a piece holds is a number of the flow (`flow.json`, owner
+# decision 2026-11-08, f: eight; twelve only measured where a probe loses
+# values).
 
 # What a plan settles for all its values and its own years
 # (`plan_fields`) stands in the spec, with the texts a request shows of each
@@ -107,27 +64,23 @@ def document_context(conn, document_id: int) -> dict:
 FRAME = ("scenario", "year")
 
 
-# Which frame pairs are the plan's own state. Their years are the plan's base
-# years, each with the frame's quote that prints it. A row whose table says
-# only "Basisjahr", "Ist-Zustand" or "Bilanzjahr" answers one of them and
-# cites the passage with that word; the number is proven by the frame's
-# passage (owner decision 2026-09-22, the model chooses among them). corpus_m5
-# dropped 127,233 year answers whose wording stood in their quote and whose
-# number did not, "Basisjahr" among the most common.
-BASE_YEAR = {"scenario": "status_quo"}
+# Which frame pairs are the plan's own state and which its target stands in
+# the spec, at the plan fields `base_year` and `target_year` (`of`, owner
+# decision 2026-11-10). Their years are the plan's base and target years, each
+# with the frame's quote that prints it: a row whose table says only
+# "Basisjahr", "Ist-Zustand", "Bilanzjahr" or "Zieljahr" answers one of them
+# and cites the passage with that word; the number is proven by the frame's
+# passage (owner decisions 2026-09-22 and 2026-10-06, the model chooses among
+# them). A run asks a plan its base and target years itself (the same plan
+# fields); a pass over a stored harvest takes them from the stored pairs by
+# that rule. corpus_m5 dropped 127,233 year answers whose wording stood in
+# their quote and whose number did not, "Basisjahr" among the most common, and
+# a later harvest about 14,500 for the target, "Zieljahr" 12,369 of them.
 
 # What counts as a year here: a zone number printed beside a value (169002)
 # was answered as its year, in the frame and on a row (owner decision
 # 2026-11-01).
 YEAR_RANGE = (1900, 2100)
-
-# Which frame pairs are the plan's target. Their years are the plan's target
-# years, each with the frame's quote that prints it. A row whose table says
-# only "Zieljahr" answers one of them the same way (owner decision
-# 2026-10-06, the model chooses among them): the current harvest dropped
-# about 14,500 year answers whose quote carried the plan's word for its
-# target and not the number, "Zieljahr" 12,369 of them.
-TARGET_YEAR = {"scenario": "target"}
 
 # What a value stated for a span of years takes on each of its rows, one per
 # year of the span (`reading.span_rows`, owner decision 2026-11-07: "als ca.

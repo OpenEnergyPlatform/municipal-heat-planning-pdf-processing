@@ -138,7 +138,7 @@ class Option:
     # has one, else the definition (owner decision 2026-11-05, ticket 26).
     definition: str = ""
     # The group the entry belongs to, by which a long list is asked first
-    # (`addressed.LIST_WITH_MEANS`, owner decision 2026-11-08).
+    # (`flow.Numbers.list_meanings`, owner decision 2026-11-08).
     group: str = ""
 
 
@@ -382,7 +382,7 @@ def frame_slots(spec, names) -> list:
 
     WHICH ones those are is the profile's business. The core never names a
     coordinate, so this takes a list of names and resolves it against the
-    spec, exactly like `SLICE` does for the gate.
+    spec.
 
     Read off the first parameter that has all of them, because a frame is one
     per document: a spec whose parameters disagreed about it would have two

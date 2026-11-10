@@ -629,8 +629,9 @@ profile default and always have to be spelled out.
 - **Editing a profile.** `docpipe edit` shows a profile's extraction spec in the
   browser and says which questions an edit moves and which stored documents it
   makes stale; its second tab edits the prompts and the sentences of the
-  stages and shows what an edit does to recorded requests; see [editing a
-  profile](stages/editor.md).
+  stages and shows what an edit does to recorded requests, and its third tab
+  draws the steps of the reading and edits the numbers that bound them; see
+  [editing a profile](stages/editor.md).
 - **Checking a profile.** `docpipe preflight` holds any profile to what a
   corpus run rests on, without a GPU: its spec, its prompts, the shape it
   publishes and the writer of its graph; see [the check before a

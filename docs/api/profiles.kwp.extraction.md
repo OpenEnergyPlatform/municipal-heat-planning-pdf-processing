@@ -2,18 +2,10 @@
 
 `profiles/kwp/extraction.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-Extraction stage wiring: the kwp spec, the slice gate, the frame, and what
-a plan says about itself.
+Extraction stage wiring: the kwp spec, the frame, and what a plan says
+about itself.
 
 ## Functions
-
-### kept_quantities
-
-```python
-def kept_quantities() -> tuple
-```
-
-Every class of the spec's quantity lists, and READ_IN_FULL.
 
 ### document_context
 

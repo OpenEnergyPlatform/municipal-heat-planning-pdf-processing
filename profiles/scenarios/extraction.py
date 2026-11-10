@@ -257,9 +257,9 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
 DECIMAL_MARK = "."
 
-# Lines of a piece a publication is read in (owner decision 2026-11-08, f:
-# eight; twelve only measured where a probe loses values).
-CHUNK_UNITS = 8
+# How many lines a piece holds is a number of the flow (`flow.json`, owner
+# decision 2026-11-08, f: eight; twelve only measured where a probe loses
+# values).
 
 # What a publication settles for all its values (`plan_fields`) and the
 # works it presents, compares, reviews or cites beside itself (`works`)

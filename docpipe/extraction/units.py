@@ -1,6 +1,7 @@
 """
 units.py: A plan's passages as numbered lines, cut into pieces of at most
-eight lines (owner decisions 2026-11-08 evening, both profiles).
+as many lines as the flow says (`flow.Numbers.piece_lines`, eight by
+default; owner decisions 2026-11-08 evening, both profiles).
 
 Every request of the harvest shows lines with their numbers and the model
 answers with an address, never with a copied quote: a line is `19`, a cell
@@ -21,7 +22,8 @@ lines a model transcribed it into once (`transcripts`): its caption (title,
 axes, legend) and its numbers, each a line of its own; else the lines of
 its description.
 
-A piece (`Chunk`) is at most `CHUNK_UNITS` lines of its passage, a table's
+A piece (`Chunk`) is at most as many lines of its passage as the run's flow
+says (`flow.Numbers.piece_lines`), a table's
 title and head lines shown with every piece of it under the same numbers. A
 figure with numbers is one piece of its caption and pieces of its numbers,
 each shown with the caption; a field whose values are no numbers reads only
@@ -44,11 +46,10 @@ from typing import Optional
 from .pipeline import Source
 from .verify import flat
 
-# Lines of a piece (owner decision 2026-11-08, f: 8, and 12 measured only
-# where a probe loses values against the runs before).
-CHUNK_UNITS = 8
-# Lines of the plan's first page a request shows as its title page.
-TITLE_PAGE_LINES = 12
+# How many lines a piece holds and how many lines of the plan's first page
+# are its title page are numbers of the flow (`flow.Numbers.piece_lines`,
+# `title_page_lines`; owner decision 2026-11-08, f: 8 lines, and 12 measured
+# only where a probe loses values against the runs before).
 
 # The letters of the blocks a request shows beside its own passage.
 TITLE_PAGE = "T"
@@ -362,7 +363,7 @@ class Chunk:
         return not self.numbers and self.passage.has_numbers
 
 
-def chunks_of(passage: Passage, size: int = CHUNK_UNITS) -> list:
+def chunks_of(passage: Passage, size: int) -> list:
     """The pieces of *passage*: its lines but the fixed ones, *size* at a
     time, in order; a passage of fixed lines only is one piece. A figure
     with numbers is first the piece of its caption, then the pieces of its
@@ -580,7 +581,7 @@ def passage_lines(passage: Passage, numbers) -> list:
     return [(passage.line(n), passage.source) for n in wanted]
 
 
-def title_page_of(passages: list, count: int = TITLE_PAGE_LINES) -> list:
+def title_page_of(passages: list, count: int) -> list:
     """[(Line, Source)] of the plan's title page: the first *count* lines
     of its first page, else of its second, each the line of its passage
     (`Passage`), in the plan's order; [] for a plan with no page."""

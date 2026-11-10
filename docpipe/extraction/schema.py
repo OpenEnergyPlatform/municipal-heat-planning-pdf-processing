@@ -86,9 +86,9 @@ STATE_DOC = {
     fields.UNBACKED: ("answered, but no shown passage carried the answer, or "
                       "the passage belonged to another row, and no later "
                       "window fixed it"),
-    fields.OUT_OF_SLICE: ("never asked: a gate coordinate (the profile's "
-                          "SLICE) had already put the row outside what this "
-                          "run serializes"),
+    fields.OUT_OF_SLICE: ("never asked: a coordinate asked before it had "
+                          "read the value as no value of its field (an "
+                          "entry other than the spec's `keep`)"),
 }
 STATES = list(STATE_DOC)
 
@@ -848,6 +848,24 @@ def stamp_schema() -> dict:
                             "description": "Which flow the pass harvested "
                                            "with, written whenever a model "
                                            "is named. Recorded and never "
+                                           "compared."},
+                        "numbers": {
+                            "type": "object",
+                            "additionalProperties": {"type": "integer"},
+                            "description": "The numbers of the flow the "
+                                           "pass read with, every one in "
+                                           "effect, a setting that won "
+                                           "over the flow file included; "
+                                           "written whenever a model is "
+                                           "named. Recorded and never "
+                                           "compared: a changed number "
+                                           "makes no harvest stale."},
+                        "flow_file": {
+                            **sha,
+                            "description": "sha256 of the profile's flow "
+                                           "file as laid over the ones it "
+                                           "extends, its steps and its "
+                                           "numbers. Recorded and never "
                                            "compared."}},
                     "required": ["pass"], "additionalProperties": False}},
             "page_text_transcribed": {

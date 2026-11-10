@@ -229,7 +229,8 @@ class Persistent
 ```
 
 A reranker whose every order is asked again until it answers or the
-run halts, a refused one three times at most (`persistently`).
+run halts, a refused one as often as the flow's `replies` says at most
+(`persistently`).
 
 #### Persistent.\_\_init\_\_
 
@@ -358,6 +359,18 @@ def read_to_end() -> None
 
 Every search from here on shows every piece of its document, so a
 coordinate ends read or `unstated` and never `exhausted`.
+
+### take_flow
+
+```python
+def take_flow(profile=None)
+```
+
+The numbers of the flow a run of *profile* reads with
+(`flow.in_effect`: its flow file, and the settings over it), taken for
+every request from here on and returned. They are logged whenever they
+differ from those logged before, each with where it comes from, so that
+the log of a job says what it read with.
 
 ### embedder
 
@@ -937,7 +950,7 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]
 The requests of the harvest (`addressed.Asks`), each with a prompt of
 its own and its payload as one message, no conversation (owner decisions
 2026-11-08); None where the profile writes one of their prompts not,
-those of `addressed.OPTIONAL` aside. A request asked once more
+those of `addressed.OPTIONAL` aside. A request asked again
 (`follow`) goes under the prompt of the request it follows, its words
 after the payload. The sentence a search goes with is a request of its
 own (`phrase`, owner decision 2026-11-09), under the prompt the
@@ -975,8 +988,8 @@ def search_budget() -> tuple
 pieces a search for an open coordinate or a field the document has
 once shows, how many of them each kind of passage gets first, and how
 many a request shows (owner decisions 2026-11-09: 50, 20 of tables, 15
-of figures, 15 of text, 5 a request); a pass that reads to the end
-shows every piece (`read_to_end`).
+of figures, 15 of text, 5 a request), from the run's flow (`NUMBERS`);
+a pass that reads to the end shows every piece (`read_to_end`).
 
 ### make_reader
 
@@ -992,7 +1005,8 @@ None where its spec names no groups or the profile writes no prompts
 for it. What is asked once of a plan beside its fields
 (`Spec.plan_fields`) and the field that names other works
 (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
-a search shows from the run (`search_budget`).
+a search shows (`search_budget`) and every other number that bounds the
+reading from the run's flow (`NUMBERS`).
 
 ### make_chunk_reranker
 
@@ -1021,10 +1035,11 @@ as a run and a probe make it: the order of the pieces by the reranker
 (*rank*, `make_more_sources` with its reranker), a field's search
 sentences (`make_seek_probes`), the figures transcribed once and kept
 under *out* (`transcripts/`), the orders kept there too (`survey/`), and
-the size of the pieces the profile gives (`CHUNK_UNITS`). *every(
+the numbers of the profile's flow (`take_flow`: the lines of a piece
+among them). *every(
 document_id, exclude)* is the plan's passages in its order. A search
-that fails is asked again until it answers, a refused one three times at
-most (`persistently`).
+that fails is asked again until it answers, a refused one as often as
+the flow's `replies` says (`persistently`).
 
 ### frame_slots_of
 
@@ -1322,6 +1337,11 @@ stamp's `model` names the first of them only. This is one entry of the
 list that names them all. A coordinate a top-up re-read points at its
 entry by position (`fields.PRODUCER`), so entries are never removed or
 reordered.
+
+A pass that asks a model also names the flow it read with (`take_flow`):
+`numbers`, every number in effect, a setting that won over the flow file
+among them, and `flow_file`, the sha256 of the flow's files. For a
+reader: a changed number makes no harvest stale.
 
 ### note_documents
 
@@ -1640,13 +1660,15 @@ of its rows, as the active profile says it (`SPAN_MARKS`,
 ### year_states_of
 
 ```python
-def year_states_of(profile) -> dict
+def year_states_of(spec: Spec) -> dict
 ```
 
-{state: which frame pairs are that state of the plan}, as the profile
-says it: their years date a row that names the state by word
-("Basisjahr", "Zieljahr") and prints no year. None for a state the
-profile does not name, which then has no years.
+{state: which frame pairs are that state of the plan}, as the spec
+says it at the plan field of the state's year (`plan_fields`, key `of`,
+owner decision 2026-11-10): their years date a row that names the state
+by word ("Basisjahr", "Zieljahr") and prints no year, in a pass over a
+stored harvest, which asks no plan its years. None for a state the spec
+does not say it of, which then has no years.
 
 ### fold_answers
 

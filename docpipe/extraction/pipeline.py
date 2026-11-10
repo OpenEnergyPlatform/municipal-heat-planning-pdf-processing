@@ -540,7 +540,7 @@ def _wrong_type(slot, given) -> Optional[str]:
 # The states of a plan whose year a row may name by a word instead of a
 # number, in the order their years are offered and matched, each with the key
 # a field request offers them under. Which frame pairs are which state is the
-# profile's to say: `BASE_YEAR`, `TARGET_YEAR`.
+# spec's to say: `plan_fields`, key `of`, at the state's year.
 YEAR_STATES = {"base": "base_years", "target": "target_years"}
 
 
@@ -548,12 +548,13 @@ def state_years(pairs, frame_axes, where: Optional[dict], state: str) -> list:
     """The years the document's frame found for one state of the plan, with
     proof.
 
-    *where* is what the profile says makes a pair that state: which values of
-    the other frame coordinates (`BASE_YEAR` for the plan's own state,
-    `TARGET_YEAR` for its target). Every such pair was read with a quote that
+    *where* is what the spec says makes a pair that state: which entries of
+    the other frame coordinates (`plan_fields`, key `of`, at `base_year` for
+    the plan's own state and at `target_year` for its target;
+    `runner.year_states_of`). Every such pair was read with a quote that
     prints its year, so each entry here carries that quote and its source:
     {"state", "axis", "year", "quote", "source", "index"}. One entry per
-    year, the first pair that proved it. Empty when the profile does not name
+    year, the first pair that proved it. Empty when the spec does not name
     the state or the frame has no number coordinate to date it with.
     """
     if not where or not pairs:
@@ -598,8 +599,8 @@ def named_years(pairs, frame_axes, states: Optional[dict]) -> list:
     """The years of the document a row may name by the plan's word for them:
     those of its own state, then those of its target (`YEAR_STATES`).
 
-    *states* is {state: what the profile says makes a pair that state}; a
-    state the profile does not name is absent or None and has no years. A
+    *states* is {state: what the spec says makes a pair that state}; a
+    state the spec does not name is absent or None and has no years. A
     year the frame found for both states stands once under each.
     """
     found: list = []

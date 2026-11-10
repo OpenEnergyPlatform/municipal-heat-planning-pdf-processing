@@ -6,11 +6,14 @@ server.py: The local server of `docpipe edit` and the one file guard.
 
 `App` answers a request as plain data (method, path, query and body in, a
 status and an object out), so every promise of the endpoints can be held to
-without a socket. What an endpoint says comes from `specs.py`; this module
-only reads the file, asks the logic and, where the logic says so, writes.
+without a socket. What an endpoint says comes from the logic beside it
+(`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
+module only reads the file, asks the logic and, where the logic says so,
+writes.
 
-`Files` is the one place the editor touches a file: it may write only inside
-the profile's own folder and read only inside the folders of the profiles in
+`Files` is the one place the editor touches a file: it may write, and take a
+file away, only inside the profile's own folder and read only inside the
+folders of the profiles in
 effect, the harvest it was given, the page itself, the generated
 documentation and the folder the prompt review writes into
 (`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links
@@ -71,6 +74,15 @@ def write(self, path, data: bytes) -> None
 
 The whole file or the old one: written beside it, then put in its
 place.
+
+#### Files.remove
+
+```python
+def remove(self, path) -> None
+```
+
+A file of the profile's own folder is taken away; one that is
+not there is left as it is.
 
 #### Files.digest
 

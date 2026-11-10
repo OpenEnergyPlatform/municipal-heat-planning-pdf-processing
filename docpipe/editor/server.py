@@ -3,11 +3,14 @@ server.py: The local server of `docpipe edit` and the one file guard.
 
 `App` answers a request as plain data (method, path, query and body in, a
 status and an object out), so every promise of the endpoints can be held to
-without a socket. What an endpoint says comes from `specs.py`; this module
-only reads the file, asks the logic and, where the logic says so, writes.
+without a socket. What an endpoint says comes from the logic beside it
+(`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
+module only reads the file, asks the logic and, where the logic says so,
+writes.
 
-`Files` is the one place the editor touches a file: it may write only inside
-the profile's own folder and read only inside the folders of the profiles in
+`Files` is the one place the editor touches a file: it may write, and take a
+file away, only inside the profile's own folder and read only inside the
+folders of the profiles in
 effect, the harvest it was given, the page itself, the generated
 documentation and the folder the prompt review writes into
 (`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links
@@ -43,8 +46,10 @@ from typing import Optional, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
 from .. import phrases as phrase_files
+from ..extraction import flow as flow_files
 from ..extraction import trace as trace_files
-from . import phrases, prompts, specs, trying
+from . import flow as flow_view
+from . import measured, phrases, prompts, specs, trying
 from . import requests as recorded
 
 LOG = logging.getLogger(__name__)
@@ -129,6 +134,15 @@ class Files:
                 pass
             raise
 
+    def remove(self, path) -> None:
+        """A file of the profile's own folder is taken away; one that is
+        not there is left as it is."""
+        target = self._resolve(path, True)
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            pass
+
     def digest(self, path) -> str:
         """The sha256 of a file's bytes, as hex."""
         sha = hashlib.sha256()
@@ -189,6 +203,8 @@ class App:
         self.spec_path = profile.component("extraction", "SPEC_PATH")
         self._snapshot: Optional[dict] = None
         self._loaded = False
+        # {trace name: (state of its file, what its requests say)}
+        self._measured: dict = {}
 
     # -- helpers --
 
@@ -276,6 +292,10 @@ class App:
             "/api/requests": ("GET", self._requests),
             "/api/request/preview": ("POST", self._request_preview),
             "/api/request/try": ("POST", self._request_try),
+            "/api/flow": ("GET", self._flow),
+            "/api/flow/check": ("POST", self._flow_check),
+            "/api/flow/save": ("POST", self._flow_save),
+            "/api/flow/measured": ("POST", self._flow_measured),
         }
         if path not in routes:
             raise _Refusal(404, f"no such endpoint: {path}")
@@ -309,7 +329,7 @@ class App:
             "harvest": self.harvest.as_posix() if self.harvest else None,
             "harvest_documents": (len(self.files.stamps(self.harvest))
                                   if self.harvest else None),
-            "tabs": ["spec", "prompts"],
+            "tabs": ["spec", "prompts", "flow"],
         }
 
     def _spec(self, query, body) -> dict:
@@ -494,14 +514,18 @@ class App:
 
     # -- the prompts --
 
+    def _no_trace(self) -> Optional[str]:
+        """Why the page has no recorded request to show, None where the
+        harvest folder holds a trace."""
+        if self.traces.names():
+            return None
+        return ("no harvest folder was given (--harvest)"
+                if self.harvest is None
+                else "the harvest folder holds no trace (*.trace.jsonl.gz)")
+
     def _prompts(self, query, body) -> dict:
         found = self.traces.names()
-        note = None
-        if not found:
-            note = ("no harvest folder was given (--harvest)"
-                    if self.harvest is None
-                    else "the harvest folder holds no trace "
-                         "(*.trace.jsonl.gz)")
+        note = self._no_trace()
         return {
             "profile": self.profile.name,
             "lineage": [one.name for one in self.profile.lineage()],
@@ -633,6 +657,82 @@ class App:
         old = row["text"][0] if isinstance(row["text"], list) \
             else row["text"]
         return phrases.shown_in(trace.requests, old, new)
+
+    # -- the flow --
+
+    def _flow_file(self) -> tuple:
+        """(the profile's own flow file, its bytes or None where it has
+        none), every file of the flow's line checked by the guard before
+        the run's loader reads it."""
+        for _name, path in flow_files.line(self.profile):
+            self.files.checked(path)
+        own = flow_files.path_of(self.profile)
+        return own, (self.files.read(own) if own.is_file() else None)
+
+    def _computes(self) -> bool:
+        return self.profile.component("compute", "questions") is not None
+
+    def _flow(self, query, body) -> dict:
+        own, raw = self._flow_file()
+        data = specs.parse(self.files.read(self.spec_path)) \
+            if self.spec_path else None
+        return {**flow_view.view(self.profile, raw, data, self.shown,
+                                 self._computes()),
+                "harvest": self.harvest is not None,
+                "traces": self.traces.names()}
+
+    def _flow_check(self, query, body) -> dict:
+        own, raw = self._flow_file()
+        report = flow_view.judge(self.profile, raw, body.get("numbers"),
+                                 self.shown(own))
+        report.pop("text", None)        # the page gets the diff
+        return report
+
+    def _flow_save(self, query, body) -> dict:
+        own, raw = self._flow_file()
+        report, written, remove = flow_view.save(
+            self.profile, raw, body.get("numbers"), body.get("base"),
+            self.shown(own))
+        if written is not None:
+            self.files.write(own, written)
+        elif remove:
+            self.files.remove(own)
+        return report
+
+    def _facts(self, name: str) -> dict:
+        """What the requests of the trace *name* say (`measured.facts`),
+        counted once per state of its file."""
+        path = self.traces.path_of(name)
+        if path is None:
+            raise _Refusal(404, f"no such trace: {name!r}")
+        stat = path.stat()
+        key = (stat.st_mtime_ns, stat.st_size)
+        hit = self._measured.get(name)
+        if hit is None or hit[0] != key:
+            hit = (key, measured.facts(measured.light(
+                trace_files.lines(self.files.checked(path)))))
+            self._measured[name] = hit
+        return hit[1]
+
+    def _flow_measured(self, query, body) -> dict:
+        numbers = body.get("numbers")
+        numbers = numbers if isinstance(numbers, dict) else {}
+        names = [one["name"] for one in self.traces.names()]
+        why = self._no_trace()
+        if why:
+            return {"harvest": self.harvest is not None, "why": why,
+                    "traces": 0, "requests": 0, "says": {}, "steps": {},
+                    "notes": []}
+        wanted = body.get("trace")
+        if wanted is not None and not isinstance(wanted, str):
+            raise _Refusal(400, "trace must be the name of a trace or null")
+        found = measured.joined([self._facts(name) for name
+                                 in ([wanted] if wanted else names)])
+        return {"harvest": True, "why": None,
+                "traces": 1 if wanted else len(names),
+                "requests": found["requests"],
+                "says": measured.says(found, numbers),
+                "steps": found["steps"], "notes": measured.notes(found)}
 
     # -- the recorded requests --
 
@@ -848,8 +948,9 @@ def command(rest: Sequence[str]) -> int:
     from ..profile import ENV_VAR, active_profile
     parser = argparse.ArgumentParser(
         prog="docpipe edit",
-        description="A profile's extraction spec, its prompts and the "
-                    "sentences beside them in the browser, on a local "
+        description="A profile's extraction spec, its prompts, the "
+                    "sentences beside them and the numbers of its flow in "
+                    "the browser, on a local "
                     "page (127.0.0.1 only). It writes only inside the "
                     "profile's folder. Nothing leaves this machine but "
                     "the requests of a click on Try, which go to the "
@@ -859,8 +960,9 @@ def command(rest: Sequence[str]) -> int:
                         help="a folder with a harvest, its stamps and "
                              "traces (a local copy): an edit of the spec "
                              "then says which documents it makes stale, "
-                             "and a prompt is shown with the requests "
-                             "recorded there")
+                             "a prompt is shown with the requests "
+                             "recorded there, and the flow says beside its "
+                             "numbers what that run measured")
     parser.add_argument("--port", type=int, default=8765,
                         help="default 8765; a free one if it is taken")
     parser.add_argument("--no-browser", action="store_true",

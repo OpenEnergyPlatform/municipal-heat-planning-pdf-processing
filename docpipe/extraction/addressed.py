@@ -7,7 +7,8 @@ Every request carries its instruction, the smallest part of the plan that
 answers its question, and one question; every answer is an address, a
 number or a few words, and code looks up what an address names
 (`units.py`). Nothing is a conversation: an answer that did not hold is
-asked once more as a request of its own, with what did not hold (`follow`).
+asked again as a request of its own, with what did not hold (`follow`), as
+often as the flow says, once by default (`flow.Numbers.follow_ups`).
 
 The steps of a document (`Reader`):
 
@@ -26,8 +27,9 @@ The steps of a document (`Reader`):
    own (`work_coordinate`).
 3. The fields a document has once (`Parameter.once_per_document`): the
    title page and the pieces a search finds best for a sentence written
-   for the field, the run's budget of them, five a request, every find
-   kept (`docfield`); a field with a list twice the budget.
+   for the field, the run's budget of them, as many a request as the flow
+   says, every find kept (`docfield`); a field with a list the budget times
+   the flow's factor (`flow.Numbers`).
 4. Every other field in every piece, the pieces best first for the
    field's sentences (`find`): each value an address and its words, and
    where the field has a list, its entry (owner decision 2026-11-09).
@@ -68,6 +70,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import archive, fields, lookup
+from . import flow as flow_map
 from .fields import (EXHAUSTED, NUMBER, OUT_OF_SLICE, READ, SAID_UNSTATED,
                      UNBACKED)
 from .pipeline import (Batch, Row, Source, WorkItem, mark_unanswered,
@@ -99,17 +102,14 @@ OPTIONAL = ("check", "names", "work", "phrase")
 NOT_AN_ADDRESS = "not_an_address"
 WORDS_NOT_IN_LINE = "words_not_in_line"
 
-# What a search shows (owner decisions 2026-11-09): this many pieces, first
-# the best of each kind up to its share, then the best of the rest; this
-# many a request. A run sets its own (`runner.search_budget`).
-SEARCH_PIECES = 50
-SEARCH_SHARES = {"table": 20, "figure": 15, "section": 15}
-PER_REQUEST = 5
-# Entries of a list shown with what each means; a longer list shows its
-# names only, and one whose entries name groups is asked group first.
-LIST_WITH_MEANS = 24
-# Headings shown up to a value's place, its own last.
-SECTION_TITLES = 10
+# What bounds the reading are numbers of the flow (`flow.Numbers`, owner
+# decisions 2026-11-08 and 2026-11-09), which a run reads from its profile's
+# file (`runner.take_flow`) and a reading made without one takes from the
+# default profile's (`flow.default`): the pieces a search shows, first the
+# best of each kind up to its share, then the best of the rest, and how many
+# a request shows; the entries up to which a list is shown with what each
+# means; the headings shown up to a value's place; the lines of a piece and
+# of the title page; how often an answer that did not hold is asked again.
 
 # A name not on the document's list yet.
 NEW = "new"
@@ -411,25 +411,26 @@ class Found:
 NOT_AN_OPTION = "not_an_option"
 
 
-def listing(options) -> tuple:
+def listing(options, meanings: int) -> tuple:
     """(lines, choices, grouped) of a list as a request shows it (owner
-    decisions 2026-11-08): a list longer than `LIST_WITH_MEANS` whose
-    entries name groups is shown by its groups, each a choice; a shorter
-    one with what each entry means, a longer one by its names. *choices*
-    are what a number picks, labels or group names."""
+    decisions 2026-11-08): a list longer than *meanings* entries
+    (`flow.Numbers.list_meanings`) whose entries name groups is shown by
+    its groups, each a choice; a shorter one with what each entry means, a
+    longer one by its names. *choices* are what a number picks, labels or
+    group names."""
     options = list(options)
     groups: list = []
     for option in options:
         group = getattr(option, "group", "") or ""
         if group and group not in groups:
             groups.append(group)
-    if len(options) > LIST_WITH_MEANS and len(groups) > 1:
+    if len(options) > meanings and len(groups) > 1:
         return ([f"{i} {group}" for i, group in enumerate(groups, start=1)],
                 groups, True)
     lines = []
     for i, option in enumerate(options, start=1):
         text = f"{i} {option.label}"
-        if option.definition and len(options) <= LIST_WITH_MEANS:
+        if option.definition and len(options) <= meanings:
             text += f" (means: {option.definition})"
         lines.append(text)
     return lines, [option.label for option in options], False
@@ -702,7 +703,13 @@ class Plan:
     entries its wordings were read as, and its lists of names."""
 
     def __init__(self, document_id: int, sources: list, transcripts: dict,
-                 chunk_units: int):
+                 chunk_units: Optional[int] = None, *, numbers=None):
+        # How many lines a piece and the title page hold and how many
+        # headings are shown up to a place are the flow's (`flow.Numbers`);
+        # *chunk_units* says another size of the pieces.
+        self.numbers = numbers or flow_map.default()
+        if chunk_units is None:
+            chunk_units = self.numbers.piece_lines
         self.document_id = document_id
         self.sources = list(sources)
         self.by_owner = {(s.owner_kind, s.owner_id): s for s in sources}
@@ -724,7 +731,8 @@ class Plan:
         self.places = {numbers: {chunk.key: i for i, chunk in
                                  enumerate(view)}
                        for numbers, view in self.views.items()}
-        self.title_page = title_page_of(list(self.passages.values()))
+        self.title_page = title_page_of(list(self.passages.values()),
+                                        self.numbers.title_page_lines)
         self.settings: list = []          # [(Line, Source)]
         self.bases: list = []             # `pipeline.named_years` entries
         self.lists: dict = {}
@@ -750,7 +758,7 @@ class Plan:
                 return self._headings[owner]
         got: list = []
         for section in lookup.sections_up_to(self.sources, tuple(owner),
-                                             SECTION_TITLES):
+                                             self.numbers.headings):
             title = lookup.title_of(section)
             if title:
                 got.append((Line(len(got) + 1, title, (), "heading"),
@@ -820,7 +828,7 @@ class Asks:
     """The requests of the harvest, each (payload, document_id, *, shape,
     example, **noted) -> the reply as a dict, CUT or None; a request that
     finds values shows two replies, *example* a pair (`find_example`).
-    *follow* is a request asked once more with what did not hold: (kind,
+    *follow* is a request asked again with what did not hold: (kind,
     payload, document_id, *, shape, example, **noted). *check*, *names*,
     *work* and *phrase* are None where the profile writes no prompt for them
     (`OPTIONAL`)."""
@@ -883,7 +891,13 @@ class Reader:
     passage gets first ("table", "figure", "section"), *per_request* how
     many a request shows (owner decisions 2026-11-09: 50, 20/15/15, 5).
     *context(document_id)* is what the document says of itself (its title,
-    its municipality), which a search sentence is written with.
+    its municipality), which a search sentence is written with. *numbers*
+    are the numbers of the flow the reading is bounded by (`flow.Numbers`,
+    the default profile's where none are given): they say *budget*, *shares*
+    and *per_request* where those are not given, how many times the budget
+    a field with a list reads, up to how many entries a list is shown with
+    what each means and how often an answer that did not hold is asked
+    again.
     """
 
     def __init__(self, spec, asks: Asks, order: Callable, *,
@@ -896,10 +910,10 @@ class Reader:
                  works: Optional[dict] = None,
                  frame_slots: Optional[list] = None,
                  each: Optional[Callable] = None, trace=None,
-                 budget: int = SEARCH_PIECES,
+                 budget: Optional[int] = None,
                  shares: Optional[dict] = None,
-                 per_request: int = PER_REQUEST,
-                 context: Optional[Callable] = None):
+                 per_request: Optional[int] = None,
+                 context: Optional[Callable] = None, numbers=None):
         self.spec = spec
         self.asks = asks
         self.order = order
@@ -914,9 +928,14 @@ class Reader:
         self.frame_slots = list(frame_slots or ())
         self.each = each or (lambda jobs, run: [run(job) for job in jobs])
         self.trace = trace
-        self.budget = max(1, int(budget))
-        self.shares = dict(SEARCH_SHARES if shares is None else shares)
-        self.per_request = max(1, int(per_request))
+        self.numbers = numbers or flow_map.default()
+        self.budget = max(1, int(self.numbers.search_pieces
+                                 if budget is None else budget))
+        self.shares = dict(self.numbers.shares() if shares is None
+                           else shares)
+        self.per_request = max(1, int(self.numbers.search_per_request
+                                      if per_request is None
+                                      else per_request))
         self.context = context or (lambda document_id: {})
 
     def _traced(self, event: str, document_id: int, /,
@@ -933,9 +952,11 @@ class Reader:
     def _follow(self, kind: str, payload: dict, document_id: int,
                 shape: dict, example: dict, answer, what: list,
                 counts: Counts, /, **noted):
-        """The request asked once more, as a request of its own: what it
+        """The request asked again, as a request of its own: what it
         showed, the answer that did not hold and why (owner decision
-        2026-11-08: "Rückfragen sind eigene Anfragen")."""
+        2026-11-08: "Rückfragen sind eigene Anfragen"). Its callers ask it
+        as often as the flow says (`flow.Numbers.follow_ups`), each time
+        with the answer before it."""
         counts.ask("follow")
         return self.asks.follow(kind, {**payload, "answer": answer,
                                        "what": what}, document_id,
@@ -1089,8 +1110,8 @@ class Reader:
     def _find_once(self, plan: Plan, parameter, chunk: Chunk,
                    counts: Counts) -> dict:
         """The values of *parameter* in one piece, asked once: {"claims",
-        "asked", "failed", "lost"}. What does not hold is asked once more
-        with its reason (`follow`), then left."""
+        "asked", "failed", "lost"}. What does not hold is asked again with
+        its reason (`follow`, as often as the flow says), then left."""
         shown = Shown()
         heads = plan.headings(chunk.owner)
         shown.add(HEADINGS, "headings", heads, renumber=True)
@@ -1114,32 +1135,43 @@ class Reader:
             return out
         held, refused = self._finds(plan, shown, reply, listed,
                                     parameter.is_numeric)
-        if refused:
-            out["failed"].update(why for _, why in refused)
-            for _, why in refused:
-                counts.fail(why)
-            again = self._follow(
+        out["failed"].update(why for _, why in refused)
+        for _, why in refused:
+            counts.fail(why)
+        for _ in range(self.numbers.follow_ups):
+            if not refused:
+                break
+            reply = self._follow(
                 "find", payload, plan.document_id, shape, example,
                 reply, refusals(refused), counts, **noted)
             out["asked"] += 1
-            if isinstance(again, dict):
-                more, _ = self._finds(plan, shown, again, listed,
-                                      parameter.is_numeric)
-                held = joined(held, more)
+            if not isinstance(reply, dict):
+                break
+            more, refused = self._finds(plan, shown, reply, listed,
+                                        parameter.is_numeric)
+            held = joined(held, more)
         for got in held:
             claim = self.claim(plan, parameter, got, counts)
             if claim is not None:
                 out["claims"].append(claim)
         return out
 
+    def list_of(self, options) -> tuple:
+        """A list as every request of this reading shows it (`listing`):
+        with what each entry means up to the flow's number of entries
+        (`flow.Numbers.list_meanings`). Every place that shows a list or
+        reads a number of one goes through here, so that a number is read
+        against the list it was given for."""
+        return listing(options, self.numbers.list_meanings)
+
     def listed(self, parameter) -> Optional[tuple]:
-        """The list a field's finds name their entry in (`listing`), None
+        """The list a field's finds name their entry in (`list_of`), None
         for a field without one (owner decision 2026-11-09: a field with a
         list is asked with it, the answer the number of its entry)."""
         if parameter.value_type != "category":
             return None
         options = fields.value_choice(parameter).options
-        return listing(options) if options else None
+        return self.list_of(options) if options else None
 
     @staticmethod
     def _finds(plan: Plan, shown: Shown, reply, listed=None,
@@ -1193,7 +1225,7 @@ class Reader:
             slot = fields.value_choice(parameter)
             entry = ""
             if slot.options and got.entry is not None:
-                _lines, choices, grouped = listing(slot.options)
+                _lines, choices, grouped = self.list_of(slot.options)
                 if got.entry and grouped:
                     entry = self.entry(plan, parameter.uri, "value", slot,
                                        got.words, got, counts,
@@ -1293,16 +1325,19 @@ class Reader:
                 lost = lost or (CUT if reply == CUT else NO_ANSWER)
                 continue
             held, refused = self._finds(plan, shown, reply, listed, numbers)
-            if refused:
-                for _, why in refused:
-                    counts.fail(why)
-                again = self._follow(
+            for _, why in refused:
+                counts.fail(why)
+            for _ in range(self.numbers.follow_ups):
+                if not refused:
+                    break
+                reply = self._follow(
                     "docfield", payload, plan.document_id, shape, example,
                     reply, refusals(refused), counts, parameter=uri)
-                if isinstance(again, dict):
-                    more, _ = self._finds(plan, shown, again, listed,
-                                          numbers)
-                    held = joined(held, more)
+                if not isinstance(reply, dict):
+                    break
+                more, refused = self._finds(plan, shown, reply, listed,
+                                            numbers)
+                held = joined(held, more)
             found = joined(found, held)
             if until_held and found:
                 return found, None
@@ -1317,12 +1352,14 @@ class Reader:
         sentences = list(self.probes(parameter, plan.document_id) or ()) \
             or [parameter.label]
         listed = self.listed(parameter)
-        # A field with a list reads twice the budget (owner decision
-        # 2026-11-09: "dann aber doppeltes Budget bei Chunks").
+        # A field with a list reads the budget times the flow's factor,
+        # twice by default (owner decision 2026-11-09: "dann aber doppeltes
+        # Budget bei Chunks").
+        factor = self.numbers.listed_field_factor if listed else 1
         found, lost = self.ask_once(
             plan, field_shown(parameter, full=True), sentences, counts,
             parameter.uri, numbers=parameter.is_numeric,
-            budget=self.budget * (2 if listed else 1), listed=listed)
+            budget=self.budget * factor, listed=listed)
         reads: dict = {}
         for got in found:
             source = got.source
@@ -1437,7 +1474,7 @@ class Reader:
             chosen = [o for o in options
                       if (getattr(o, "group", "") or "") == group] or options
         else:
-            lines, choices, grouped = listing(options)
+            lines, choices, grouped = self.list_of(options)
             if grouped:
                 # A long list in two steps: its groups, then the entries of
                 # the group chosen, with what each means.
@@ -1452,7 +1489,7 @@ class Reader:
                     chosen = [o for o in options
                               if (getattr(o, "group", "") or "")
                               == choices[picks[0] - 1]]
-        listed, labels, _grouped = listing(chosen)
+        listed, labels, _grouped = self.list_of(chosen)
         payload = {"words": words, "question": slot.question or name,
                    **shown_line, **settings_of(plan), "list": listed}
         example = {"entry": [1]} if several else {"entry": 1}
@@ -1462,13 +1499,16 @@ class Reader:
         picks = self._picks(reply, len(labels), several)
         if picks is None:
             counts.fail(NOT_AN_OPTION)
+        for _ in range(self.numbers.follow_ups):
+            if picks is not None:
+                break
             given = reply.get("entry") if isinstance(reply, dict) else None
-            again = self._follow("list", payload, plan.document_id, shape,
+            reply = self._follow("list", payload, plan.document_id, shape,
                                  example, reply,
                                  [say(NOT_AN_OPTION, given=given)],
                                  counts, **noted)
-            picks = self._picks(again, len(labels), several) or []
-        picked = [labels[i - 1] for i in picks]
+            picks = self._picks(reply, len(labels), several)
+        picked = [labels[i - 1] for i in picks or []]
         if several:
             return picked
         return picked[0] if picked else ""
@@ -1543,15 +1583,19 @@ class Reader:
             picks = self._name_picks(reply, len(listed))
             if picks is None:
                 counts.fail("name_not_listed")
-                again = self._follow("names", payload, plan.document_id,
+            for _ in range(self.numbers.follow_ups):
+                if picks is not None:
+                    break
+                reply = self._follow("names", payload, plan.document_id,
                                      shape, example, reply,
                                      [say("name_not_listed",
                                           given=reply.get("entry"))],
                                      counts, **noted)
-                picks = self._name_picks(again, len(listed)) \
-                    if isinstance(again, dict) else None
-                if picks is None:
-                    return None
+                if not isinstance(reply, dict):
+                    break
+                picks = self._name_picks(reply, len(listed))
+            if picks is None:
+                return None
             out = []
             for pick in picks:
                 if pick == NEW:
@@ -1713,23 +1757,29 @@ class Reader:
              noted: dict) -> tuple:
         """(rows made, held) of a coordinate's answer: its finds each read
         onto the row, one row per entry where several are named, and
-        checked (`merge_field`); what does not hold is asked once more with
-        its reason (`follow`), then stays `unbacked`."""
+        checked (`merge_field`); what does not hold is asked again with its
+        reason (`follow`, as often as the flow says), then stays
+        `unbacked`."""
         finds = self.coord_finds(reply)
         if not finds:
             return [], False
         made, held, failed = self.settle(plan, read, row, slot, shown, finds,
                                          counts, clone, window)
         if failed and not held:
-            again = self._follow(kind, payload, plan.document_id,
-                                 coord_format(self.several(slot),
-                                              more=kind == "search"),
-                                 example, reply, failed, counts, **noted)
-            finds = self.coord_finds(again)
-            if finds:
-                more, held, _ = self.settle(plan, read, row, slot, shown,
-                                            finds, counts, clone, window)
+            for _ in range(self.numbers.follow_ups):
+                reply = self._follow(kind, payload, plan.document_id,
+                                     coord_format(self.several(slot),
+                                                  more=kind == "search"),
+                                     example, reply, failed, counts, **noted)
+                finds = self.coord_finds(reply)
+                if not finds:
+                    break
+                more, held, failed = self.settle(plan, read, row, slot,
+                                                 shown, finds, counts, clone,
+                                                 window)
                 made += more
+                if held or not failed:
+                    break
             if not held:
                 row.claim[f"{slot.name}_state"] = UNBACKED
         return made, held
@@ -1959,6 +2009,11 @@ class Reader:
                      sentence)
         batch = plan.beside(chunk, numbers) if chunk is not None else []
         window = ("near", 1)
+        # Which pieces a request shows, noted with it (`shows`): those
+        # beside the value ("near"), those of the search's budget
+        # ("found"), or those the request before fetched itself
+        # ("fetched"), which count toward no budget.
+        shows = "near"
         order: Optional[list] = None
         fetched: list = []
         while True:
@@ -1976,14 +2031,16 @@ class Reader:
                         EXHAUSTED if rest else SAID_UNSTATED
                     return []
                 batch = left[:self.per_request]
+                shows = "found"
             seen.update(c.key for c in batch)
-            made, held, more = self.search_round(plan, read, row, slot,
-                                                 payload, batch, counts,
-                                                 clone, window, noted)
+            made, held, more = self.search_round(
+                plan, read, row, slot, payload, batch, counts, clone,
+                window, {**noted, "shows": shows})
             if held or row.claim.get(f"{slot.name}_state") == UNBACKED:
                 return made
             fetched = self.fetch(plan, more, batch, seen, numbers)
             batch = []
+            shows = "fetched"
 
     def sentence(self, plan: Plan, read: Read, row: Row, slot,
                  counts: Counts) -> str:
@@ -2243,8 +2300,8 @@ class Reader:
         """(shown, payload, [Found] of other works, the line of this
         publication's own or None) of one piece's work request (`work`):
         the piece with the headings up to it and the title page; what does
-        not hold is asked once more with its reason. None where no answer
-        came."""
+        not hold is asked again with its reason (as often as the flow
+        says). None where no answer came."""
         shown = Shown()
         heads = plan.headings(chunk.owner)
         shown.add(HEADINGS, "headings", heads, renumber=True)
@@ -2272,18 +2329,23 @@ class Reader:
         own, why = self.own_line(plan, shown, chunk, reply.get("own"))
         if why is not None:
             refused.append((reply.get("own"), why))
-        if refused:
-            for _, reason in refused:
-                counts.fail(reason)
-            again = self._follow("work", payload, plan.document_id,
+        for _, reason in refused:
+            counts.fail(reason)
+        for _ in range(self.numbers.follow_ups):
+            if not refused:
+                break
+            reply = self._follow("work", payload, plan.document_id,
                                  work_format(), example, reply,
                                  refusals(refused), counts, **noted)
-            if isinstance(again, dict):
-                more, _ = self._finds(plan, shown, again)
-                held = joined(held, more)
-                if own is None:
-                    own, _ = self.own_line(plan, shown, chunk,
-                                           again.get("own"))
+            if not isinstance(reply, dict):
+                break
+            more, refused = self._finds(plan, shown, reply)
+            held = joined(held, more)
+            if own is None:
+                own, why = self.own_line(plan, shown, chunk,
+                                         reply.get("own"))
+                if why is not None:
+                    refused.append((reply.get("own"), why))
         return shown, payload, held, own
 
     @staticmethod
@@ -2368,7 +2430,8 @@ class Reader:
         works with the value's line, the headings and the title page, the
         answer the entry and the line that shows it; 0 leaves it
         `unstated`, and it is never searched. What does not hold is asked
-        once more with its reason, then stays `unbacked`."""
+        again with its reason (as often as the flow says), then stays
+        `unbacked`."""
         if self.inherit_work(plan, row, slot):
             return
         parameter = read.batch.parameter
@@ -2390,11 +2453,16 @@ class Reader:
             return
         failed = self.read_work(plan, row, slot, shown, reply)
         if failed:
-            again = self._follow("coord", payload, plan.document_id,
-                                 work_choice_format(), example, reply,
-                                 failed, counts, **noted)
-            if not isinstance(again, dict) \
-                    or self.read_work(plan, row, slot, shown, again):
+            for _ in range(self.numbers.follow_ups):
+                reply = self._follow("coord", payload, plan.document_id,
+                                     work_choice_format(), example, reply,
+                                     failed, counts, **noted)
+                if not isinstance(reply, dict):
+                    break
+                failed = self.read_work(plan, row, slot, shown, reply)
+                if not failed:
+                    break
+            if failed:
                 row.claim[f"{slot.name}_state"] = UNBACKED
 
     def read_work(self, plan: Plan, row: Row, slot, shown: Shown,
@@ -2523,7 +2591,8 @@ def make_order(reranker: Optional[Callable], rank: Optional[Callable]
     reranker or a search that fails raises: what is handed in asks again
     until it answers (`runner.persistently`, owner decision 2026-11-09:
     nothing is read in another order instead), and one the server refuses
-    three times fails its document, which stays unfinished."""
+    as often as the flow's `replies` says fails its document, which stays
+    unfinished."""
     local = threading.local()
 
     def rerank(document_id: int, sentences: list, chunks: list) -> list:

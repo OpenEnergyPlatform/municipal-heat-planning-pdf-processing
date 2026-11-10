@@ -246,7 +246,7 @@
     "x-doc": {
      "derived": "not asked: the spec decides this coordinate from something already on the row (the unit), or the request names it (the parameter of a row read for one field)",
      "exhausted": "still open when the window budget ended with the document unread. A finding about the run",
-     "out_of_slice": "never asked: a gate coordinate (the profile's SLICE) had already put the row outside what this run serializes",
+     "out_of_slice": "never asked: a coordinate asked before it had read the value as no value of its field (an entry other than the spec's `keep`)",
      "read": "answered, and the cited passage carries the answer",
      "unanswered": "the field reply never mentioned this row. A finding about the model",
      "unbacked": "answered, but no shown passage carried the answer, or the passage belonged to another row, and no later window fixed it",
@@ -18721,6 +18721,11 @@
        ],
        "type": "string"
       },
+      "flow_file": {
+       "description": "sha256 of the profile's flow file as laid over the ones it extends, its steps and its numbers. Recorded and never compared.",
+       "pattern": "^[0-9a-f]{64}$",
+       "type": "string"
+      },
       "frame": {
        "description": "A pass that appended parameters to a stored harvest: where the frame's pairs of the document came from.",
        "type": "string"
@@ -18730,6 +18735,13 @@
         "string",
         "null"
        ]
+      },
+      "numbers": {
+       "additionalProperties": {
+        "type": "integer"
+       },
+       "description": "The numbers of the flow the pass read with, every one in effect, a setting that won over the flow file included; written whenever a model is named. Recorded and never compared: a changed number makes no harvest stale.",
+       "type": "object"
       },
       "parameters": {
        "description": "A pass that appended parameters to a stored harvest: their URIs.",

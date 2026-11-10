@@ -128,6 +128,17 @@ def test_files_write_only_inside_the_write_root(tmp_path):
     assert not (tmp_path / "elsewhere.json").exists()
     assert not (tmp_path / "escaped.json").exists()
     assert not (read / "b.json").exists()
+    # A file is taken away only there too: one of a read root or one
+    # reached by .. stays, one of the write root goes, and one that is not
+    # there is left alone.
+    (read / "kept.json").write_bytes(b"{}")
+    for target in (read / "kept.json", write / ".." / "r" / "kept.json"):
+        with pytest.raises(PermissionError):
+            files.remove(target)
+    assert (read / "kept.json").read_bytes() == b"{}"
+    files.remove(write / "a.json")
+    assert not (write / "a.json").exists()
+    files.remove(write / "a.json")
 
 
 def test_files_read_only_inside_the_roots(tmp_path):
@@ -188,9 +199,12 @@ def test_server_opens_files_in_one_place_only():
                    if isinstance(n, ast.FunctionDef) and n.name == "open")
     assert len(builtin) == 1
     assert opening.lineno <= builtin[0] <= opening.end_lineno
-    # the temporary file of a failed write is removed by its own path: the
-    # only other file call, and one that creates nothing
-    assert [name for name, _ in others] == ["unlink"]
+    # the temporary file of a failed write and a file that is taken away
+    # (`Files.remove`) are removed by their own path, inside the guard: the
+    # only other file calls, and ones that create nothing
+    assert [name for name, _ in others] == ["unlink", "unlink"]
+    assert all(guard.lineno <= line <= guard.end_lineno
+               for _, line in others)
 
 
 # -- 2. a save writes only what the check passes -------------------------------

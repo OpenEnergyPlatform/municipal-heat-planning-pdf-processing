@@ -60,12 +60,13 @@ closes those after it (`out_of_slice`), and the reasons a find or a
 coordinate can fail stand in the trace schema.
 """
 import collections
+import dataclasses
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from docpipe.extraction import (addressed, fields, runner, schema, trust,
-                                units, verify, wording)
+from docpipe.extraction import (addressed, fields, flow, runner, schema,
+                                trust, units, verify, wording)
 from docpipe.extraction.addressed import Asks, Names, Plan, Reader
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
@@ -481,6 +482,25 @@ def test_a_long_list_shows_names_and_one_with_groups_is_asked_group_first():
     entry_of(model, plain, "Sektor 0")
     ((ask, _noted),) = model.of("list")
     assert len(ask["list"]) == 30 and "(means: " not in ask["list"][0]
+    # How long a list may be to show what its entries mean is the flow's
+    # number: a reading told thirty shows it for these thirty, in one step.
+    def told(meanings):
+        return dataclasses.replace(flow.default(), list_meanings=meanings)
+    model = Model(list=lambda p, n: {"entry": 1})
+    reader_of(model, numbers=told(30)).entry(
+        plan_of(TEXT), ENERGY.uri, slot.name, slot, "Sektor 0", None,
+        addressed.Counts())
+    ((ask, _noted),) = model.of("list")
+    assert len(ask["list"]) == 30 and "(means: " in ask["list"][0]
+    # And the list a field's finds name their entry in is shown by it too.
+    kind = SCENARIOS.by_uri["scenario_type"]
+    entries = len(fields.value_choice(kind).options)
+
+    def lines(meanings):
+        return reader_of(Model(), spec=SCENARIOS,
+                         numbers=told(meanings)).listed(kind)[0]
+    assert "(means: " in lines(entries)[0]
+    assert "(means: " not in lines(entries - 1)[0]
 
 
 # -- 8. a field asked once, the end of a search ---------------------------------
@@ -544,26 +564,174 @@ def test_a_search_ends_unstated_where_its_ranking_runs_out_or_at_its_budget():
                 if n["coordinate"] == "year"]) == 1
 
 
-def test_the_run_s_settings_set_the_search_and_default_to_the_owner_s(
-        monkeypatch):
-    from docpipe import settings
-    default = {setting.env: setting.default for setting in settings.SETTINGS}
-    assert [default[name] for name in (
-        "EXTRACT_SEARCH_PIECES", "EXTRACT_SEARCH_SHARES",
-        "EXTRACT_SEARCH_CHUNKS", "EXTRACT_MAX_RETRIES")] \
-        == ["50", "20,15,15", "5", "3"]
-    assert (addressed.SEARCH_PIECES, addressed.SEARCH_SHARES,
-            addressed.PER_REQUEST) == (50, {"table": 20, "figure": 15,
-                                            "section": 15}, 5)
-    # the failure by construction: a run that sets its own reads them
-    monkeypatch.setattr(runner, "SEARCH_PIECES", 7)
-    monkeypatch.setattr(runner, "SEARCH_SHARES", "1,2,3")
-    monkeypatch.setattr(runner, "SEARCH_CHUNKS", 2)
-    assert runner.search_budget() == (7, {"table": 1, "figure": 2,
-                                          "section": 3}, 2)
-    # A pass that reads to the end shows every piece.
-    runner.read_to_end()
-    assert runner.search_budget()[0] == runner.REST_TO_END
+def test_a_reading_given_no_numbers_takes_the_default_flow_s():
+    numbers = flow.default()
+    reader = reader_of(Model())
+    assert (reader.budget, reader.shares, reader.per_request) == (
+        numbers.search_pieces, numbers.shares(), numbers.search_per_request)
+    # the failure by construction: the numbers it is given are the ones it
+    # reads with, and what a search is given itself wins over them
+    mine = dataclasses.replace(numbers, search_pieces=7, search_tables=1,
+                               search_figures=2, search_text=3,
+                               search_per_request=2)
+    reader = reader_of(Model(), numbers=mine)
+    assert (reader.budget, reader.shares, reader.per_request) == (
+        7, {"table": 1, "figure": 2, "section": 3}, 2)
+    assert reader_of(Model(), numbers=mine, budget=9).budget == 9
+
+
+def test_a_field_with_a_list_reads_the_budget_times_the_flow_s_factor():
+    sector = SCENARIOS.by_uri["study_sector"]
+    many = [Source("section", 10 + i, f"Abschnitt {i}. Er nennt nichts.",
+                   {"document_id": 7, "page": 2 + i}) for i in range(12)]
+
+    def pieces(factor):
+        model = Model()
+        numbers = dataclasses.replace(flow.default(),
+                                      listed_field_factor=factor)
+        reader_of(model, spec=SCENARIOS, budget=4, numbers=numbers)(
+            plan_of(TITLE, *many), [sector])
+        return [len(p.get("passages", {})) for p, _ in model.of("docfield")]
+    assert pieces(3) == [5, 5, 2]
+    # the failure by construction: a factor of one reads the budget itself
+    assert pieces(1) == [4]
+
+
+def test_an_answer_that_does_not_hold_is_asked_again_as_often_as_the_flow_says():
+    # A find at a line the request did not show, and follow-ups that name
+    # other such lines until the last one names the value's.
+    bad = [{"found": [{"at": f"{line}.2", "words": "1.200"}]}
+           for line in (9, 8, 7)]
+    good = {"found": [{"at": "3.2", "words": "1.200"}]}
+
+    def read(follow_ups, answers):
+        left = iter(answers)
+        model = Model(find=lambda p, n: bad[0], follow=lambda p, n: next(left))
+        numbers = dataclasses.replace(flow.default(), follow_ups=follow_ups)
+        reads = reader_of(model, numbers=numbers)(plan_of(TABLE), [ENERGY])
+        return model, [claim for read in reads for claim in read.claims]
+    model, claims = read(2, [bad[1], good])
+    first, second = [payload for payload, noted in model.of("follow")
+                     if noted["asked"] == "find"]
+    assert [claim["value"] for claim in claims] == [1200]
+    # each is asked with the answer before it and why that did not hold
+    assert first["answer"] == bad[0] and second["answer"] == bad[1]
+    assert "8.2" in json.dumps(second["what"])
+    # the failures by construction: with one follow-up the second is never
+    # asked and nothing is read, with none no follow-up is asked at all
+    model, claims = read(1, [bad[1], good])
+    assert len(model.of("follow")) == 1 and not claims
+    model, claims = read(0, [])
+    assert not model.of("follow") and not claims
+
+
+def test_a_coordinate_is_asked_again_as_often_as_the_flow_says():
+    def read(follow_ups, answers):
+        left = iter(answers)
+        model = Model(
+            find=lambda p, n: {"found": [{"at": "2", "words": "300"}]},
+            coord=coordinate_answers(year={"at": "2", "words": "2021"}),
+            follow=lambda p, n: next(left) if n.get("coordinate") == "year"
+            else None)
+        numbers = dataclasses.replace(flow.default(), follow_ups=follow_ups)
+        reads = reader_of(model, numbers=numbers)(plan_of(TEXT), [ENERGY])
+        (claim,) = [claim for read in reads for claim in read.claims]
+        asked = [payload for payload, noted in model.of("follow")
+                 if noted.get("coordinate") == "year"]
+        return claim, asked
+    wrong, right = {"at": "2", "words": "2020"}, {"at": "2", "words": "2022"}
+    claim, asked = read(2, [wrong, right])
+    assert (claim["year"], claim["year_state"]) == (2022, fields.READ)
+    assert [payload["answer"]["words"] for payload in asked] == ["2021",
+                                                                 "2020"]
+    # the failures by construction: one follow-up leaves it unbacked, and
+    # so does none, which asks nothing again
+    claim, asked = read(1, [wrong, right])
+    assert claim["year_state"] == fields.UNBACKED and len(asked) == 1
+    claim, asked = read(0, [])
+    assert claim["year_state"] == fields.UNBACKED and not asked
+
+
+def test_every_place_that_asks_again_does_so_as_often_as_the_flow_says():
+    # An answer that does not hold at each of the seven places, and
+    # follow-ups that never hold either.
+    again = {"find": {"found": [{"at": "9.2", "words": "1.200"}]},
+             "docfield": {"found": [{"at": "99", "words": "Titel"}]},
+             "work": {"found": [{"at": "9.9", "words": "IRENA 2018"}],
+                      "own": {"at": 0}},
+             "list": {"entry": 9}, "names": {"entry": 99}}
+
+    def follow(payload, noted):
+        if noted["asked"] == "coord":
+            return {"entry": 99} if noted["coordinate"] == "work" \
+                else {"at": "1", "words": "1999"}
+        return again[noted["asked"]]
+
+    def asked(follow_ups) -> dict:
+        numbers = dataclasses.replace(flow.default(), follow_ups=follow_ups)
+        models = []
+
+        def model(**replies):
+            models.append(Model(follow=follow, **replies))
+            return models[-1]
+        # a value and one of its coordinates
+        reader_of(model(
+            find=lambda p, n: {"found": [{"at": "9.2", "words": "1.200"},
+                                         {"at": "3.2", "words": "1.200"}]}
+            if p["passage"]["kind"] == "table" else {"found": []},
+            coord=coordinate_answers(year={"at": "1", "words": "1999"})),
+            numbers=numbers)(plan_of(TABLE), [ENERGY])
+        # an entry of a list
+        reader_of(model(list=lambda p, n: {"entry": 9}),
+                  numbers=numbers).entry(
+            plan_of(TEXT), ENERGY.uri, "carrier", SLOTS["carrier"], "Kohle",
+            None, addressed.Counts(), several=True)
+        # a field the document has once
+        reader_of(model(docfield=lambda p, n: again["docfield"]),
+                  spec=SCENARIOS, numbers=numbers)(
+            plan_of(TITLE), [SCENARIOS.by_uri["publication_title"]])
+        # the work of a piece, a name of the document's list, the work of
+        # a value
+        label = SCENARIOS.by_uri["scenario_label"]
+        reader_of(model(
+            work=lambda p, n: again["work"],
+            find=lambda p, n: {"found": [{"at": at, "words": words}
+                                         for at, words in NAMES_IN.get(
+                                             n.get("owner"), ())]}
+            if n.get("parameter") == label.uri else {"found": []},
+            names=lambda p, n: {"entry": 99},
+            coord=lambda p, n: {"entry": 99} if "list" in p else {"at": 0}),
+            spec=SCENARIOS, works=SCENARIOS.works, numbers=numbers)(
+            plan_of(*WORK_PLAN), [label])
+        return dict(collections.Counter(
+            "a value's work" if noted["asked"] == "coord"
+            and noted["coordinate"] == "work" else noted["asked"]
+            for one in models for _, noted in one.of("follow")))
+    once = asked(1)
+    assert set(once) == {"find", "docfield", "list", "names", "coord",
+                         "work", "a value's work"}
+    assert asked(2) == {place: 2 * n for place, n in once.items()}
+    # the failure by construction: where the flow says none, no place asks
+    assert asked(0) == {}
+
+
+def test_a_search_notes_which_pieces_each_request_shows():
+    many = [Source("section", 10 + i, f"Abschnitt {i}. Er nennt nichts.",
+                   {"document_id": 7, "page": 4 + i}) for i in range(12)]
+    fetch = iter([{"at": 0, "more": [{"get": "search",
+                                      "pattern": "Abschnitt 11[.]"}]}])
+    model = Model(
+        find=lambda p, n: {"found": [{"at": "3.2", "words": "1.200"}]}
+        if p["passage"]["kind"] == "table" else {"found": []},
+        search=lambda p, n: next(fetch, {"at": 0})
+        if n["coordinate"] == "year" else {"at": 0})
+    reader_of(model)(plan_of(many[0], TABLE, *many[1:]), [ENERGY])
+    shows = [noted["shows"] for _, noted in model.of("search")
+             if noted["coordinate"] == "year"]
+    # the pieces beside the value, then what its reply fetched, then the
+    # pieces of the search's budget
+    assert shows[:2] == ["near", "fetched"]
+    assert set(shows[2:]) == {"found"} and len(shows) > 2
 
 
 def test_a_search_shows_its_budget_by_kind_first_then_the_best_of_any():

@@ -50,15 +50,15 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `prompts/reading/phrases.json` | ten sentences | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; `prompts/extraction/phrases.json` is another file, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md`, `prompts/extraction/phrases.json` | `SPEC_PATH`, `document_axes`, `document_context`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, `CHUNK_UNITS`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags; its `plan_fields` block holds what a publication settles for all its values, its `works` block the field that finds other works, and the key `beside` of `scenario_region` the entries the region list always has), the per-document region list (the regions a publication names), the lines of a piece (8), the 46 sentences the stage writes to the model outside its prompts (the file), the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md`, `prompts/extraction/phrases.json` | `SPEC_PATH`, `document_axes`, `document_context`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags; its `plan_fields` block holds what a publication settles for all its values, its `works` block the field that finds other works, and the key `beside` of `scenario_region` the entries the region list always has), the per-document region list (the regions a publication names), the 46 sentences the stage writes to the model outside its prompts (the file), the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md`, `prompts/inference/phrases.json` | `READOFF_MARKER`, `READOFF_NOTE`, 32 sentences, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
 A run harvests a publication piece by piece (owner decisions 2026-11-04,
 2026-11-08, see [extraction](../stages/extraction.md)): the spec names three
 groups, `work`, `year_kind` and `scenario`, each a coordinate of its own, and
-English prompts serve it. The publication is cut into pieces of at most eight
-numbered lines, its figures are written once per run into a caption and numbers
+English prompts serve it. The publication is cut into pieces of at most `piece_lines`
+numbered lines (a number of the flow, which the profile inherits from the default), its figures are written once per run into a caption and numbers
 (`extraction/transcribe`), and every piece is read for every parameter, the
 publication's own fields (title, authors, date) and its study or its own
 scenarios included, in the order a reranker gives the pieces for each
@@ -69,12 +69,12 @@ attributes to other works unless the field asks for them;
 parameters marked `once_per_document` (title, authors, date, DOI, abstract, the
 study's organisation, funder, project name and acronym, and the four study fields:
 descriptor, sector division, sector and technology), once per publication
-with its title page and the best pieces of a budget (50, twice that for a field with
-a list); and `extraction/coord` answers for each
+with its title page and the best pieces of a budget (`search_pieces`, `listed_field_factor`
+times that for a field with a list); and `extraction/coord` answers for each
 value, in a request of its own and with no history, each coordinate: the work it
 belongs to, the kind of year where it is one, and the scenario it refers to by
 the name the publication prints, each as the address of the line that says it and
-its words. What does not hold is asked once more in a request of its own
+its words. What does not hold is asked again, as often as the flow says, in a request of its own
 (`extraction/follow`, owner decision 2026-11-08). The value of `scenario_label`
 and the `scenario` axis are `merged: "scenario"` in the spec (owner decisions
 2026-11-06, see [extraction](../stages/extraction.md)): a scenario is read as
@@ -97,8 +97,8 @@ scenario's description is what the publication says the scenario assumes, not th
 scenario's name (owner decision 2026-11-04), and an author value is one author's
 name: a person, or the institution where the publication names no person.
 `extraction/search` looks for a coordinate the value's own place does not state,
-first in the pieces beside the value's and then in the budget of pieces (50) a
-search finds for a sentence as the publication would print the answer, which
+first in the pieces beside the value's and then in the budget of pieces
+(`search_pieces`, a number of the flow) a search finds for a sentence as the publication would print the answer, which
 `extraction/phrase` writes in a request of its own; it ends `unstated` only after
 every piece of the publication was shown, and `exhausted` where the budget ends
 first. A find quoted from another passage than the value's own is checked first by
@@ -352,7 +352,7 @@ wrong one.
 Where the field takes groups (the default) the words of several scenarios give the
 numbers of every scenario they stand for, and each is a row of its own. An
 answer that is one of the entries beside the names alone keeps that entry and no
-scenario. A number that is none of the list is asked once more (`name_not_listed`).
+scenario. A number that is none of the list is asked again (`name_not_listed`).
 Each row keeps the name it was read as and gets the entries of the list it means
 under `<coordinate>_means` (`scenario_means`), or `value_means` for its own value
 (`scenario_label`). The harvest schema declares `_means` only for merged slots, and

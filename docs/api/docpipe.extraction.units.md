@@ -3,7 +3,8 @@
 `docpipe/extraction/units.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
 units.py: A plan's passages as numbered lines, cut into pieces of at most
-eight lines (owner decisions 2026-11-08 evening, both profiles).
+as many lines as the flow says (`flow.Numbers.piece_lines`, eight by
+default; owner decisions 2026-11-08 evening, both profiles).
 
 Every request of the harvest shows lines with their numbers and the model
 answers with an address, never with a copied quote: a line is `19`, a cell
@@ -24,7 +25,8 @@ lines a model transcribed it into once (`transcripts`): its caption (title,
 axes, legend) and its numbers, each a line of its own; else the lines of
 its description.
 
-A piece (`Chunk`) is at most `CHUNK_UNITS` lines of its passage, a table's
+A piece (`Chunk`) is at most as many lines of its passage as the run's flow
+says (`flow.Numbers.piece_lines`), a table's
 title and head lines shown with every piece of it under the same numbers. A
 figure with numbers is one piece of its caption and pieces of its numbers,
 each shown with the caption; a field whose values are no numbers reads only
@@ -404,7 +406,7 @@ title and head are.
 ### chunks_of
 
 ```python
-def chunks_of(passage: Passage, size: int = CHUNK_UNITS) -> list
+def chunks_of(passage: Passage, size: int) -> list
 ```
 
 The pieces of *passage*: its lines but the fixed ones, *size* at a
@@ -469,7 +471,7 @@ def passage_lines(passage: Passage, numbers) -> list
 ### title_page_of
 
 ```python
-def title_page_of(passages: list, count: int = TITLE_PAGE_LINES) -> list
+def title_page_of(passages: list, count: int) -> list
 ```
 
 [(Line, Source)] of the plan's title page: the first *count* lines

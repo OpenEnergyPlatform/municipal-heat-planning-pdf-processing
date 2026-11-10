@@ -46,10 +46,10 @@ flowchart TD
     settled --> order[Order: every piece ranked for each field by a reranker]
     order --> find[Find: each field in each piece, its values as addresses and words; a field a document has once, asked once]
     find --> coord[Coordinate: each coordinate of each value on its own, an address and words, or 0]
-    coord -->|0, and not only the value's own place can say it| search[Search: the pieces beside it, then the pieces a sentence written for it finds, five at a time]
+    coord -->|0, and not only the value's own place can say it| search[Search: the pieces beside it, then the pieces a sentence written for it finds, as many at a time as the flow says]
     coord --> check{Checked as answered: the address names a shown line, the words stand in it, the answer stands in the quote}
     search --> check
-    check -->|does not hold| follow[Follow-up: asked once more as a request of its own, with the reasons]
+    check -->|does not hold| follow[Follow-up: asked again as a request of its own, with the reasons, as often as the flow says]
     follow -->|still does not hold| unbacked[Coordinate left unbacked]
     check -->|holds| fold
     follow -->|holds| fold
@@ -171,14 +171,16 @@ passage under its own numbers and every other block of lines under a letter of
 its own, so that no two lines of a request share an address: the title page
 `T`, the headings up to the value's place `H`, the plan's settings `F`, and
 any other passage `A`, `B`, ... (`units.Shown`). The title page is the first
-12 lines of the plan's first page, else of its second (`units.TITLE_PAGE_LINES`).
+`title_page_lines` lines of the plan's first page, else of its second, and `H`
+holds the last `headings` headings up to the place, its own last (numbers of the
+flow, see The flow file).
 `H`, `T` and `F` are numbered from 1 in the block; every line of a passage keeps
 one number in every request that shows it.
 
-A piece (`units.Chunk`) is at most `CHUNK_UNITS` = 8 lines of its passage (a
-profile may say another number with `extraction.CHUNK_UNITS`; owner decision
-2026-11-08: eight, and twelve only where a probe loses values against the runs
-before). A table's title and head lines are shown with every piece of it under
+A piece (`units.Chunk`) is at most `piece_lines` lines of its passage, a number
+of the flow (a profile that wants another number writes it into its own
+`flow.json`; owner decision 2026-11-08: eight lines, and twelve only where a
+probe loses values against the runs before). A table's title and head lines are shown with every piece of it under
 the same numbers, the caption lines of a figure with numbers likewise, and a passage
 that holds fixed lines only is one piece. A figure with numbers is first the
 piece of its caption, then the pieces of its numbers, each shown with the caption
@@ -234,7 +236,8 @@ of the other passages follow, and without the search the plan's order stands (se
 fails is asked again until it answers or the run halts (`runner.persistently`,
 `runner.Persistent`) and is never replaced by the plan's order or by an empty
 result: `addressed.make_order` has no fallback for a failure. One the server
-refuses (a 4xx other than 429) is asked three times at most and then fails
+refuses (a 4xx other than 429) is asked `replies` times at most (a number of
+the flow, three by default) and then fails
 its document, which stays unfinished for a later run (owner decision
 2026-11-09).
 
@@ -285,10 +288,18 @@ The years are every year the words of the base-year or the target-year answer
 print, each with the line as its quote and its state (`base` or `target`,
 `plan.bases`; a year both asked states give stays under each). They are shown to two requests only, the list request for a year whose words
 print none and the last question of a year nothing found (see Asking a coordinate
-of a value). The profile's `BASE_YEAR` and `TARGET_YEAR` name which frame pairs are
-the plan's own state and its target (kwp: `{"scenario": "status_quo"}` and
-`{"scenario": "target"}`; `runner.year_states_of`), and a profile that sets no
-`TARGET_YEAR` has no target years. The trace event is `settled` (`settings`, the
+of a value). The key `of` of the plan field of a year names which frame pairs are
+the plan's own state and its target (owner decision 2026-11-10; until then the
+profile's Python said it): kwp's `base_year` has `{"scenario": "status_quo"}` and
+its `target_year` `{"scenario": "target"}`; scenarios has none, and a plan field
+without `of` has no years of that state. `of` is allowed only at the two year
+fields (`spec.YEAR_FIELDS`) and is checked strictly (`spec._validate_of`): each
+coordinate has to be one of a group's pair, and each entry a key of its list in
+every field that carries it. It is in no fingerprint and reaches no request. Only
+the passes over a stored harvest (`--top-up`, `--top-up-open`) read it, through
+`runner.year_states_of` and `topup.named_years_of`; a run that reads a document
+asks the document its base and target years (the step "settled") and does not
+read the rule. The trace event is `settled` (`settings`, the
 number of lines, and `base` and `target`, the years).
 
 A value's table sometimes names no year at all, only the plan's word for its own
@@ -337,10 +348,10 @@ descriptor, sector division, sector, technology) is asked with its list in the f
 and the docfield request, and the reply names the entry's number beside the
 address and the words: `{"found": [{"entry": n, "at": ..., "words": ...}]}`
 (`addressed.listing`, `Reader.listed`; owner decision 2026-11-09). A list of more
-than 24 entries (`addressed.LIST_WITH_MEANS`) whose entries name more than one
-group is shown by its groups, a list of up to 24 entries with what each means
-("(means: ...)"). A number that is no number of the list is `not_an_option` and is
-asked once more in the follow-up. A find with its number needs no list request; a
+than `list_meanings` entries (a number of the flow, shown by `Reader.list_of`)
+whose entries name more than one group is shown by its groups, a list of up to
+that many entries with what each means ("(means: ...)"). A number that is no
+number of the list is `not_an_option` and is asked again in the follow-up. A find with its number needs no list request; a
 find that names a group asks the member in a list request that shows only that
 group's entries (see Entries of a list). No code reads a number by its place, and a table is read
 like a section (owner decisions 2026-11-04 and 2026-11-05).
@@ -355,8 +366,9 @@ a row and only one of its cells holds the words, the cell is that one. A number
 is its words' one number, with its printed sign (`addressed.number_of`: "750.940
 kWh" is 750940, "-1.155" is -1155, "800 / 750" and "2019 bis 2021" are none), so
 a cell the model gave for two numbers is refused as `words_not_in_line` and
-asked again. What does not hold goes back once, in one request of its own,
-with its reasons (see Asking again: follow-ups); what holds after that is
+asked again. What does not hold goes back as often as the flow says (`follow_ups`,
+once by default), each time in one request of its own, with its reasons (see
+Asking again: follow-ups); what holds after that is
 taken, what still does not is left, and both are counted per reason.
 
 A value that holds becomes a claim (`Reader.claim`): the number or the words,
@@ -405,13 +417,14 @@ its organisation; kwp: the planning organisation) is asked once per document,
 never per piece (`Reader.docfield`, prompt `extraction/docfield`, owner decisions
 2026-11-08 and 2026-11-09): the first request shows the field in full (its whole
 description) and the title page (`T`); the pieces are those the search finds best
-for the field's sentence, the run's budget of them (`EXTRACT_SEARCH_PIECES`,
-default 50, by kind as in the search below: `Reader.shown_order`,
-`Reader.ask_once`), five to a request (`EXTRACT_SEARCH_CHUNKS`), and every find
-that holds is kept. A field with a list reads twice the budget (100) and shows its
-list, whose entry a find names (see Finding a field's values in a piece). The reply
-is a list of finds, as in the find request, and an answer that does not hold goes
-back once. In the scenarios profile the four study fields (`study_descriptor`,
+for the field's sentence, the run's budget of them (`search_pieces`, by kind as in
+the search below: `Reader.shown_order`, `Reader.ask_once`), `search_per_request`
+to a request, and every find that holds is kept. A field with a list reads
+`listed_field_factor` times the budget and shows its list, whose entry a find
+names (see Finding a field's values in a piece). The reply is a list of finds, as
+in the find request, and an answer that does not hold goes back as often as the
+flow says (`follow_ups`). The three numbers are the flow's; where a setting names
+one of them, the setting wins (see The flow file). In the scenarios profile the four study fields (`study_descriptor`,
 `study_sector_division`, `study_sector`, `study_technology`) are `once_per_document`
 as well. Each value found is a claim and is asked
 its coordinates, like any other. A field nothing came of is a read without values,
@@ -563,12 +576,12 @@ means and never with how the document named it before (owner decision 2026-11-09
 A value of a field with a list does not come to this request where its find named
 the entry (see Finding a field's values in a piece). The reply is `{"entry": n}`, the number of the entry, 0 for
 none, or a list of numbers where several may be meant (`several`). A list of more
-than 24 entries (`addressed.LIST_WITH_MEANS`) shows its names only, and one whose
+than `list_meanings` entries (a number of the flow) shows its names only, and one whose
 entries carry a `group` in the spec (an entry object may say `"group"`;
 `fields.Option.group`) and name more than one group is asked group first
 (`addressed.listing`): a first request chooses among the groups, a second among
 the entries of the group chosen, with what each means (the step `group`); a find
-that names a group asks the second only. A number that is no number of the list is asked once more with the
+that names a group asks the second only. A number that is no number of the list is asked again with the
 reason `not_an_option` and then leaves the coordinate without an entry, which the
 check ends as it ends any answer off its list. The unit is such a list, so is the
 value of a category parameter and the quantity; so is the choice among the plan's
@@ -605,7 +618,7 @@ form of one scenario, the same work cited twice; the same name in another work i
 another entry, and two equal names of two works are two entries (nothing is merged
 by its spelling); words such as "this report" or "we" name this publication. A name
 is asked once per document, work, wording and kind (`Names.asked`). A number that
-is none of the list is asked once more (`name_not_listed`). An entry belongs to the
+is none of the list is asked again (`name_not_listed`). An entry belongs to the
 work its value was read for (`Reader.work_of`): the list shows each entry under its
 work, and the same name in another work is another entry.
 
@@ -637,16 +650,16 @@ goes with the field's sentence, and where no sentence can be had at all a questi
 may be searched, which the run counts (`question_queries`; owner decision
 2026-11-08: a question may be searched where no sentence can be had).
 
-The pieces are shown in this order, `EXTRACT_SEARCH_CHUNKS` = 5 to a request, each
-request showing the value and its own place (as in the coordinate's request) and the
+The pieces are shown in this order, `search_per_request` to a request (the flow's
+number, see The flow file), each request showing the value and its own place (as in the coordinate's request) and the
 pieces under a letter of their own, with their kind, page and title:
 
 1. the pieces right before and after the value's piece, one request (window
    `near`; `Plan.beside`);
-2. the run's budget of pieces (`EXTRACT_SEARCH_PIECES`, default 50): the pieces of
+2. the run's budget of pieces (`search_pieces`): the pieces of
    the passages the vector search finds best for the sentence, the best of each
-   kind first up to its share (`EXTRACT_SEARCH_SHARES`, default `20,15,15`: tables,
-   figures, text, scaled to the budget), then the best of any kind up to the budget
+   kind first up to its share (`search_tables`, `search_figures` and `search_text`:
+   tables, figures, text, scaled to the budget), then the best of any kind up to the budget
    (`addressed.budgeted`), ordered once by the reranker with the same sentence
    (`Reader.shown_order`); window `found`.
 
@@ -654,10 +667,12 @@ The reply is the coordinate's reply, an address under one of the letters and its
 words, or `0`, and may ask to fetch itself (`more`): the piece before or after the
 last shown, a table or figure by its placeholder, the pieces a pattern stands in,
 the pieces closest to a sentence of its own, which the next request shows first
-(`addressed.GETS`, `Reader.fetch`; at most five pieces for a pattern or a sentence).
+(`addressed.GETS`, `Reader.fetch`; at most `search_per_request` pieces for a pattern or a sentence).
 Pieces a reply fetches itself do not count against the budget, and no piece is
-shown twice. The search ends when a find holds (`read`), when an answer does not
-hold after its follow-up (`unbacked`), or when nothing of the budget is left:
+shown twice. The trace notes with each search request which pieces it shows
+(`shows`): `near` for the pieces beside the value, `found` for pieces of the
+budget, `fetched` for pieces the model fetched itself. The search ends when a find
+holds (`read`), when an answer does not hold after its follow-ups (`unbacked`), or when nothing of the budget is left:
 `exhausted` where pieces of the plan stay unshown (the finding is about the run),
 `unstated` where every piece was shown (the finding is about the plan).
 `--top-up-open` sets the budget to every piece (`runner.read_to_end`), so a
@@ -672,16 +687,21 @@ choice: a profile that writes no `check` prompt does without it
 ### Asking again: follow-ups
 
 An answer that did not hold, whether a find, a coordinate, a list entry or a name,
-is asked once more as a request of its own, not as a message in a conversation
-(`Reader._follow`, prompt `extraction/follow`, owner decision 2026-11-08: follow-ups
+is asked again as a request of its own, not as a message in a conversation, as
+often as the flow says (`follow_ups`, once by default; 0 asks none;
+`Reader._follow`, prompt `extraction/follow`, owner decision 2026-11-08: follow-ups
 are requests of their own). The request is the request that went out, with the
 instruction of its own kind, plus the answer that did not hold under `answer` and
 what did not hold under `what`: for each refused entry its address, its words and
 the reason in the profile's words (`wording.say`: `not_an_address`,
 `words_not_in_line`, `quote_not_in_source`, `answer_not_in_quote`,
 `not_an_option`, `name_not_listed`, ...); the words of the follow-up prompt follow
-the payload. What holds after it is taken. What does not ends `unbacked` for a
-coordinate and is left for a find, and no third request follows. A request whose
+the payload. Each further follow-up carries the answer before it and why it did
+not hold. What holds after one is taken. What does not hold after the last ends
+`unbacked` for a coordinate and is left for a find, and no further request
+follows. The number counts the places that ask again: finds, document fields,
+list entries, names, coordinates and searches, the work of a piece and the work
+of a value. A request whose
 reply is no object, an object without its key or cut off is asked again as every
 request of the stage is (`runner.ask_in_grammar`, `_reply_fault`), the cause named,
 and no JSON is repaired; the limits of that are in The adaptive request limit and
@@ -949,16 +969,17 @@ to the model's length. Scores are kept per thread for the document in hand, so a
 search asked again with fewer passages left scores nothing twice. A search, an
 embedding or a reranker request that fails is asked again until it answers or the run
 halts (`runner.persistently`, owner decision 2026-11-09) and is replaced by no other
-order and by no empty result; one the server refuses is asked three times at most and
-then fails its document, which stays unfinished.
+order and by no empty result; one the server refuses is asked `replies` times at most
+(a number of the flow) and then fails its document, which stays unfinished.
 
 The pieces: the order of a plan's pieces for a field has the reranker score every
 piece with each of the field's sentences (`runner.make_chunk_reranker`, a pool that
 holds the whole plan), a piece keeping its best score, and a search for an open
 coordinate or a field a document has once takes the pieces of the passages the first
-function finds best, the run's budget of them by kind (`addressed.budgeted`: 50
-pieces, 20 of tables, 15 of figures, 15 of text, `EXTRACT_SEARCH_PIECES` and
-`EXTRACT_SEARCH_SHARES`), and has the reranker order them once with the search
+function finds best, the run's budget of them by kind (`addressed.budgeted`: the
+pieces of `search_pieces`, of which `search_tables`, `search_figures` and
+`search_text` are the shares of tables, figures and text taken first, all
+numbers of the flow; `runner.search_budget`), and has the reranker order them once with the search
 sentence (owner decisions 2026-11-08 and 2026-11-09: pieces are ordered by the
 reranker with the same sentence; `Reader.shown_order`). A piece goes as its text, a
 figure's as its transcribed lines. A failed reranker request is asked again
@@ -1011,7 +1032,7 @@ Every request loop of this stage hands a failed request to one rule,
 apart. A failure that is the server's is asked again without a limit until the run
 halts (`runner.Failures.attempts`, `runner.halted`: a stop signal or a server that
 answers no more); a reply that cannot be read is asked again at most
-`EXTRACT_MAX_RETRIES` = 3 times and then given up, the coordinate being
+`replies` times (a number of the flow) and then given up, the coordinate being
 `unanswered` (owner decision 2026-11-09). A request that never arrived has no status and is the server's:
 `server_side` is true, and the loop waits on the long curve,
 `retry_wait(attempt, transport=True)`, rather than the short one a reply the
@@ -1022,7 +1043,7 @@ request as unserved if the run halts while the last attempt still got it. Any ot
 the request itself (`runner.refused`, its status read from the exception or
 from its response): a request too long for the model, or one our code built
 wrong ("System message must be at the beginning.", a probe of 2026-11-01).
-It is asked again after the short wait, `EXTRACT_MAX_RETRIES` = 3 times at
+It is asked again after the short wait, `replies` times at
 most, and a request refused to the end leaves its document unfinished like
 an unserved one: the stamp is withheld, a later run reads the document again,
 and the log names the request and the server's reason (owner decision
@@ -2145,7 +2166,9 @@ size of the PDF (absent for a database that records none), of which it compares
 the sha256 alone. `value/<uri>` counts the classes and their spellings and not
 their definitions. `model`, `anchors`, one entry per
 prompt of the run, `question_text/<key>`, `review/*`, `docpipe` (the version)
-and `producers` (every pass that wrote into the harvest, in order) are written
+and `producers` (every pass that wrote into the harvest, in order; a pass that
+asks a model names its model, its prompts and the numbers of the flow it read
+with, `numbers` and `flow_file`, see The flow file) are written
 into the stamp too, so a reader can place a harvest, and are never
 compared. A stamp of an older release also carries `extraction/harvest`; it
 stays valid and stays as it is. A coordinate a top-up read again, and every
@@ -2180,15 +2203,64 @@ stats). Neither directory holds a `*.jsonl` or `*.stamp.json` that a reader of
 the harvest would list. A harvest from before 2026-11-08 also holds `anchors.json`
 and `places/<document id>.json`.
 
+## The flow file
+
+The numbers that bound how a document is read, and the steps they bound, stand in
+one file of the profile, `flow.json` (`extraction.flow`; `docpipe edit` has a Flow
+tab for it, see [the editor](editor.md)). The default profile's file is the whole
+flow, `numbers` and `steps`. A profile that extends it may have a `flow.json` of
+its own that holds `numbers` only, and only the ones it sets differently; it is
+laid over the inherited file number by number (`flow.load`), and a file that
+writes steps is refused. The steps describe what the code does and are not run
+from the file: their order is the code's. The file is read strictly: every
+request the code sends (`addressed.KINDS` and the compute request) stands in the
+`ask` of a step, a step asks nothing the code does not send, every number bounds
+a step, and an unknown key, a key written twice, a value that is no whole number
+or one below the number's least is refused by name.
+
+There are twelve numbers, all whole numbers, each counting something: lines of a
+piece (`piece_lines`), lines of the title page (`title_page_lines`), headings
+shown up to a value's place (`headings`), entries of a list up to which it is
+shown with their meanings (`list_meanings`), pieces of a search (`search_pieces`),
+the shares of a search's pieces that come first from tables, figures and text
+(`search_tables`, `search_figures`, `search_text`), pieces one request of a search
+shows (`search_per_request`), the times a field the document has once reads the
+pieces of a search where its values come from a list (`listed_field_factor`),
+the times a request whose answer did not hold is asked again (`follow_ups`) and
+the replies out of their form a request takes before it is left unanswered
+(`replies`). The values of the default profile stand in its file and nowhere in
+the code.
+
+Four settings win over the files: `EXTRACT_SEARCH_PIECES` (`search_pieces`),
+`EXTRACT_SEARCH_SHARES` (three numbers, tables, figures, text), `EXTRACT_SEARCH_CHUNKS`
+(`search_per_request`) and `EXTRACT_MAX_RETRIES` (`replies`). They have no default
+of their own; where one is unset the profile's file says the number, and
+`docpipe config` shows the flow's value with the origin `flow.json of <profile>`
+(`flow.in_effect`). The four settings cover six numbers; the other six have no
+setting. A profile's file wins over the default's.
+
+A run takes the numbers once at its start (`runner.take_flow`, in `main()` and in
+`make_harvest`) and logs them once per change as `flow: name=value ... [origin];
+...`, each number with where it comes from, so that the log of a job says what it
+read with. Each pass that asks a model writes the numbers it read with into its
+entry of the stamp's `producers` (`runner.producer`): `numbers`, every number in
+effect, a setting that won over the file among them, and `flow_file`, the sha256
+of the flow's files. They are there for a reader and are never compared: a
+changed number makes no harvest stale (`runner.stale` compares the question keys
+only). They are not among the keys of the run (`runner._stamp_current`), so a
+pass over a stored harvest, a remap or a top-up, neither carries them forward
+nor finds them changed, and the entry of the harvest keeps the numbers the
+harvest read with.
+
 ## Configuration
 
 | Name | Kind | Default | Effect | Where read |
 |---|---|---|---|---|
-| `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | `3` / `600` | `MAX_RETRIES`: replies out of their form a request takes before it is left unanswered; a failure that is the server's is asked again until the run halts (`runner.Failures.attempts`). `RETRY_TIMEOUT`: client timeout (seconds) the repeat of a request that timed out gets, every request of the stage alike; a request's own longer time stays, and one that ended on a server error keeps its time | `runner.py`, `runner._client`, `scheduler.Repeats` |
+| `EXTRACT_MAX_RETRIES` / `EXTRACT_RETRY_TIMEOUT` | env var | none (the flow's `replies`) / `600` | `MAX_RETRIES`: replies out of their form a request takes before it is left unanswered; a failure that is the server's is asked again until the run halts (`runner.Failures.attempts`). Where it is set it wins over the flow's `replies` (see The flow file). `RETRY_TIMEOUT`: client timeout (seconds) the repeat of a request that timed out gets, every request of the stage alike; a request's own longer time stays, and one that ended on a server error keeps its time | `runner.py`, `runner._client`, `scheduler.Repeats` |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT` | env var | `http://localhost:8000/v1` / `EMPTY` / `Qwen/Qwen3.5-122B-A10B-FP8` / `180` | The address, the key and the model name every request of the stage goes out with (the model name is written into the stamp), and the client timeout in seconds, which starts when a request is sent and not while it waits; a retry after a timeout gets `EXTRACT_RETRY_TIMEOUT` instead | `runner.py`, `runner._client` |
 | `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429, a 5xx or a timeout | `runner.retry_wait` |
 | `EXTRACT_SPLIT_DEPTH` | env var | `3` | Listed in `docpipe/settings.py`; no request of the extraction halves by it any more (`runner._split_harvest` is gone, and the chat's `llm_client` has a constant of its own) | `docpipe/settings.py` |
-| `EXTRACT_SEARCH_PIECES` / `EXTRACT_SEARCH_SHARES` / `EXTRACT_SEARCH_CHUNKS` | env var | `50` / `20,15,15` / `5` | The budget of every search, read by `runner.search_budget`: how many pieces a search for an open coordinate or a field a document has once shows (a field with a list reads twice as many); how many of them come first from tables, figures and text, scaled to the budget, the rest being the best of any kind; and how many pieces a request shows. A coordinate whose budget ends with pieces unshown is `exhausted`; `runner.read_to_end` sets the budget to every piece for `--top-up-open` | `runner.make_reader`, `addressed.Reader.search`, `addressed.Reader.ask_once` |
+| `EXTRACT_SEARCH_PIECES` / `EXTRACT_SEARCH_SHARES` / `EXTRACT_SEARCH_CHUNKS` | env var | none (the flow's `search_pieces`) / none (its `search_tables`, `search_figures`, `search_text`) / none (its `search_per_request`) | The budget of every search, read by `runner.search_budget`: how many pieces a search for an open coordinate or a field a document has once shows (a field with a list reads `listed_field_factor` times as many); how many of them come first from tables, figures and text, scaled to the budget (the setting lists three whole numbers in that order, such as `20,15,15`), the rest being the best of any kind; and how many pieces a request shows. A setting that is set wins over the flow file (see The flow file). A coordinate whose budget ends with pieces unshown is `exhausted`; `runner.read_to_end` sets the budget to every piece for `--top-up-open` | `runner.make_reader`, `addressed.Reader.search`, `addressed.Reader.ask_once` |
 | `EXTRACT_BATCH_SOURCES` / `EXTRACT_BATCH_CHARS` | env var | `6` / `14000` | Passages and characters of passage text a value request was sized for; they only enter the context budget (`runner.context_budget`) | `runner.py` |
 | `EXTRACT_PRIOR_MAX` | env var | `24` | Earlier values a request was told it has; it only enters the context budget (`runner.context_budget`) now | `runner.py` |
 | `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text a request was sized for; it only enters the context budget now. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.context_budget`, `runner.make_parents` |
@@ -2222,15 +2294,14 @@ and `places/<document id>.json`.
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose spec, prompts and hooks the run reads; the stage refuses to run without one, in a line naming the available profiles, and `__main__.py` binds the flag before `runner` is imported | `runner.main`, `docpipe/profile.py` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
 | `--no-provenance` | CLI flag | off (the file is written) | With `--serialize`: no provenance file beside the graph, as `EXTRACT_PROVENANCE=0` | `runner.main`, `provenance.enabled` |
-| `SLICE` / `FRAME` | profile hook | none / none | `SLICE`: a gate on coordinates; no step of `docpipe/` reads it since the harvest has no slice gate, kwp still declares it. `FRAME`: the frame coordinates (kwp: scenario and year): the plan's years date them, and `--top-up` blocks a changed key that names one (`runner.main`, `topup.actionable`) | `runner.main`, `topup.actionable` |
+| `FRAME` | profile hook | none | The frame coordinates (kwp: scenario and year): the plan's years date them, and `--top-up` blocks a changed key that names one (`runner.main`, `topup.actionable`). No coordinate of a plan closes a row: `SLICE`, `READ_IN_FULL` and `kept_quantities()` were deleted on 2026-11-10, and what closes a row now is a coordinate with an entry a value must have, the spec's `keep` at a coordinate (`fields.kept`, `fields.closed`; the scenarios spec uses it for `work`), which gives the state `out_of_slice` | `runner.main`, `topup.actionable` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
 | `NOT_EXTRACTED` | profile hook | none | A mapping `(shape, property)` to one sentence of reason: the properties of the profile's shapes it leaves out on purpose, so that `docpipe preflight` does not warn about them. Scenarios declares 21 | `preflight.not_extracted`, `preflight.shapes_verdict` |
 | `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
-| `BASE_YEAR` / `TARGET_YEAR` | profile hook | none (the state has no years) | Which frame pairs are the plan's own state and which are its target: a mapping from a frame coordinate to its entry, kwp's `{"scenario": "status_quo"}` and `{"scenario": "target"}`. It only says where the plan's own years are looked for (see What the plan settles) | `runner.year_states_of`, `pipeline.state_years` |
 | `SPAN_MARKS` | profile hook | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
-| `CHUNK_UNITS` | profile hook | `units.CHUNK_UNITS` (8) | Lines of a piece a plan is read in; both profiles say 8, and 12 only where a probe loses values against the runs before (see Pieces and addresses). It moves the key of a kept order | `runner.make_harvest`, `addressed.order_key` |
-| `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
+| `flow.json` | profile file | the default profile's whole flow | The numbers that bound the reading and its steps; a profile that extends another writes `numbers` only, laid over the inherited ones. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
+| `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
 | `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `addressed.Reader.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
 | `DECIMAL_MARK` | profile hook | `,` | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
