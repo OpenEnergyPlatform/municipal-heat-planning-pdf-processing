@@ -50,7 +50,7 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; `extraction.PHRASES` is another table, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, `CHUNK_UNITS`, `PLAN_FIELDS`, `WORKS`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags), the per-document region list, the lines of a piece (8), what a publication settles for all its values, the field that finds other works, the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md` | `SPEC_PATH`, `document_axes`, `document_context`, `PHRASES`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, `CHUNK_UNITS`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags; its `plan_fields` block holds what a publication settles for all its values, its `works` block the field that finds other works, and the key `beside` of `scenario_region` the entries the region list always has), the per-document region list (the regions a publication names), the lines of a piece (8), the sentences the stage writes to the model, the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -111,11 +111,11 @@ group is asked in a list request of its own (`extraction/list`).
 
 The profile has no number coordinates (no unit, `what`, `qualifier` and no
 conversion), so a value is asked three coordinates at most. As in kwp (see
-[extraction](../stages/extraction.md)), `PLAN_FIELDS` names what a publication
-settles for all its values (the settings only, no years), asked once per
+[extraction](../stages/extraction.md)), the spec's `plan_fields` block names what a publication
+settles for all its values (the key `settings` only, no years), asked once per
 publication as a field a document has once, and every request about a value shows
 it under `F`; a value only a figure's image shows is read from the lines the
-figure was written into (caption and numbers), trust level C. `WORKS` names the field that finds the
+figure was written into (caption and numbers), trust level C. The spec's `works` block names the field that finds the
 works a publication presents, compares or cites beside itself (below).
 
 The search that orders a publication's pieces for a parameter ranks with a
@@ -276,9 +276,11 @@ whatever starts with it.
 One family of sentinel exists, plus the last entry of each fixed
 vocabulary, which behaves the same way. A scenario has none: it is read as
 the name the publication prints, so there is no list for it to fall outside.
-`REGION_OUT` offers `out:multiregion` (a named grouping,
+The key `beside` of the parameter `scenario_region` in the spec offers `out:multiregion` (a named grouping,
 such as a trade bloc, that neither the countries nor the groups carry) and
-`out:other` (a spatial statement fitting neither). The world and the
+`out:other` (a spatial statement fitting neither). The run appends them after the regions a
+document names (`runner.fill_dynamic_axes`), so the list exists also where a
+document names none. The world and the
 groups of countries are entries of the list (`region_aggregates.json`),
 since the OEKG's own region list holds only individual countries and a
 scenario is global far more often than national.
@@ -366,10 +368,10 @@ A publication presents, compares, reviews or cites other works, and a value may 
 about one of them. Before any value is read, `extraction/work` asks every piece once
 which shown lines name another work whose results the lines of the piece state
 (`found`) and which line shows that the rest are this publication's own (`own`, an
-address or 0); `WORKS` in `extraction.py` names the field and the details of a
+address or 0); the `works` block of the spec names the field and the details of a
 work. Each name is asked against the list of works with the `names` request; each
 new work is then asked at its own line for its title, its organisation, its year
-and its short name (`WORKS["fields"]`), side by side, one `coord` request each
+and its short name (`works.fields` of the spec), side by side, one `coord` request each
 (owner decisions 2026-11-08, h, and 2026-11-09). Those values are values of that
 work, with `work` "another work" and the work's name under `work_means`; the
 harvest keeps them, the graph does not (`kg.held_back`, since the `work`

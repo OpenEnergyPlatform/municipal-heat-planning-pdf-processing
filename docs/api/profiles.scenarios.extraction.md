@@ -86,10 +86,12 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict
 
 Per-document choice lists, keyed by axis name and by parameter uri.
 
-The out: entries are appended unconditionally, so the list exists even
-when the narrowing finds nothing. That case is not hypothetical — a
-publication that names no country at all used to leave the field with no
-list, and a field with no list is free text again.
+The regions this document names, possibly none. The run appends the
+out: entries the spec lists beside them (`beside` of scenario_region,
+`runner.fill_dynamic_axes`), so the list exists even when the narrowing
+finds nothing. That case is not hypothetical — a publication that names
+no country at all used to leave the field with no list, and a field with
+no list is free text again.
 
 ### shapes_files
 

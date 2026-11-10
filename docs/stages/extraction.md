@@ -270,7 +270,8 @@ What a plan says once for all its values (that it dates its figures by one
 base year, that its "CO2 emissions" include the equivalents, the unit of the
 consumptions in a table) and the plan's own years are asked once per plan,
 before its fields (`addressed.Reader.settled`, owner decision 2026-11-08). The
-profile names them in `extraction.PLAN_FIELDS`, each `{name, means, sentence}`:
+spec names them in its block `plan_fields` (owner decision 2026-11-10; before, the
+profile's Python held them), each `{name, means, sentence}`:
 `settings`, `base_year` and `target_year` (kwp names all three, scenarios the
 settings only). Each is asked as a field a document has once is (see A field a
 document has once): the title page and the pieces a search with the field's
@@ -693,15 +694,15 @@ request they follow (`asked`) and counted under `follow`.
 
 A scenarios publication presents, compares, reviews or cites works beside itself,
 and its values may be about any of them (the KWP profile has no works). The profile
-names the field and the details of a work (`extraction.WORKS`; owner decisions
-2026-11-08, h, and 2026-11-09). Before any value is read, a request `work` (prompt
+names the field and the details of a work (the spec's `works` block; owner decisions
+2026-11-08, h, and 2026-11-09, and 2026-11-10 for the move into the spec). Before any value is read, a request `work` (prompt
 `extraction/work`, optional like `names`; `Reader.work_piece`) asks every piece once
 which shown lines name another work whose results the lines of the piece state
 (`found`: a cell, a line or a stretch and the work's name) and which line shows
 that the rest of the piece is this publication's own (`own`: an address, or `0`).
 Each name is asked against the document's list of works, whose first entry is the
 publication itself (`Reader.works`), and the details of each new work (title,
-organisation, year, short name: `WORKS["fields"]`) are asked side by side, one
+organisation, year, short name: `works.fields`) are asked side by side, one
 `coord` request per detail, the question the profile wrote, the answer an address
 and words. Those values are values of that work: their `work` coordinate is the
 entry "another work" with the work's name under `work_means`. The harvest keeps
@@ -781,7 +782,7 @@ A run harvests each plan piece by piece (`runner.surveyed_flow`: its spec must
 name groups), and then the profile must write the prompts `extraction/transcribe`,
 `find`, `docfield`, `coord`, `list`, `search` and `follow`
 (`runner.SURVEY_PROMPT_IDS`), `extraction/names` where its spec merges names or
-the profile keeps a list of works (`runner.names_asked`), and may write
+its spec keeps a list of works (`runner.names_asked`, which reads the spec only), and may write
 `extraction/check`, `extraction/phrase` and `extraction/work`
 (`runner.survey_prompt_ids` lists the ones a profile has).
 kwp and scenarios do, scenarios with `names`. A profile whose spec names groups
@@ -1920,7 +1921,8 @@ The folder then holds `draft.json`, the review file, `spec.json`, `harvest/` and
 `values.csv`.
 
 `extract --spec FILE` reads FILE instead of the profile's spec, for the harvest
-and for `--review`, `--top-up`, `--top-up-parameters`, `--recheck` and `--remap`. The harvest has its
+and for `--review`, `--top-up`, `--top-up-parameters`, `--recheck` and `--remap`. It asks what that file's `plan_fields` and
+`works` say, no longer what the profile's Python said; a file without them has none. The harvest has its
 own folder, stamps and query cache: OUT has to lie strictly below the
 folder FILE lies in, or the run ends with exit 2 before anything is written, so
 it cannot land beside a profile's harvest, nor overwrite one under `--force`.
@@ -2227,8 +2229,9 @@ and `places/<document id>.json`.
 | `BASE_YEAR` / `TARGET_YEAR` | profile hook | none (the state has no years) | Which frame pairs are the plan's own state and which are its target: a mapping from a frame coordinate to its entry, kwp's `{"scenario": "status_quo"}` and `{"scenario": "target"}`. It only says where the plan's own years are looked for (see What the plan settles) | `runner.year_states_of`, `pipeline.state_years` |
 | `SPAN_MARKS` | profile hook | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
 | `CHUNK_UNITS` | profile hook | `units.CHUNK_UNITS` (8) | Lines of a piece a plan is read in; both profiles say 8, and 12 only where a probe loses values against the runs before (see Pieces and addresses). It moves the key of a kept order | `runner.make_harvest`, `addressed.order_key` |
-| `PLAN_FIELDS` | profile hook | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; see What the plan settles) | `runner.make_reader`, `addressed.Reader.settled` |
-| `WORKS` | profile hook | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, a mapping `{name, means, fields: {uri: question}}` (scenarios; see Works beside the publication) | `runner.make_reader`, `addressed.Reader.works` |
+| `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
+| `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `addressed.Reader.works` |
+| `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
 | `DECIMAL_MARK` | profile hook | `,` | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
 | `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (scenarios closes its regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
 | `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to the sentence it is searched with (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |
@@ -2565,6 +2568,14 @@ for the coordinate that names which parameter a value belongs to
 against these keys rather than against the whole file's hash, so an edit that
 touches no question a document was asked through, such as a graph block or a
 comment, costs nothing on the next run.
+
+Three kinds of text a model is shown stand in the spec beside its parameters
+(owner decision 2026-11-10; they stood in each profile's Python before): what a
+document settles once for all its values (`plan_fields`), the other works a
+document presents and what is asked of each (`works`), and the fixed entries of
+a list the profile closes per document (`beside` of such a parameter). They
+are loaded as strictly as a parameter and are in no fingerprint: a reworded
+one leaves a harvest current, as a reworded prompt does.
 
 Author: Felix Vossel
 

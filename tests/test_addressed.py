@@ -70,7 +70,6 @@ from docpipe.extraction.addressed import Asks, Names, Plan, Reader
 from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
-from profiles.scenarios import extraction as scenarios_extraction
 from profiles.scenarios import kg
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -799,7 +798,7 @@ def read_works(choice, each=None, detail=None):
         if n.get("parameter") == label.uri else {"found": []},
         coord=coord)
     reader = reader_of(model, spec=SCENARIOS,
-                       works=scenarios_extraction.WORKS,
+                       works=SCENARIOS.works,
                        **({"each": each} if each is not None else {}))
     reads = reader(plan_of(*WORK_PLAN), [label])
     names = {c["value"]: c for r in reads if r.batch.parameter is label
@@ -870,7 +869,7 @@ def test_the_details_of_new_works_run_side_by_side_before_any_value_is_read():
     (details,) = [jobs for jobs in batches if jobs
                   and isinstance(jobs[0], tuple) and len(jobs[0]) == 6]
     # Every detail of the three new works in one turn of side by side.
-    assert len(details) == 3 * len(scenarios_extraction.WORKS["fields"])
+    assert len(details) == 3 * len(SCENARIOS.works["fields"])
     first_find = next(i for i, (kind, _p, _n) in enumerate(model.calls)
                       if kind == "find")
     assert all(i < first_find for i, (kind, p, _n) in enumerate(model.calls)
@@ -1097,7 +1096,7 @@ def test_every_request_that_finds_values_shows_a_find_of_its_own_and_none():
     label = SCENARIOS.by_uri["scenario_label"]
     title = SCENARIOS.by_uri["publication_title"]
     model = Model()
-    reader_of(model, spec=SCENARIOS, works=scenarios_extraction.WORKS)(
+    reader_of(model, spec=SCENARIOS, works=SCENARIOS.works)(
         plan_of(*WORK_PLAN), [label, title])
     kinds = ("find", "docfield", "work")
     examples = [(kind, example) for kind, example in model.examples
@@ -1147,7 +1146,7 @@ def test_a_name_that_names_no_scenario_is_no_entry_and_the_graph_takes_none():
         names=names_reply)
     plan = plan_of(text)
     reads = reader_of(model, spec=SCENARIOS,
-                      works=scenarios_extraction.WORKS)(plan, [label])
+                      works=SCENARIOS.works)(plan, [label])
     named = {c["value"]: c for r in reads for c in r.claims}
     # 0 is taken: no entry, the value stays read with an empty note.
     assert named["Source: JRC."]["value_means"] == []
@@ -1183,7 +1182,7 @@ def test_a_name_of_an_entry_takes_its_work_and_one_without_work_stays_apart():
         coord=lambda p, n: {"entry": 0} if "list" in p else {"at": 0},
         names=names_reply)
     reader = reader_of(model, spec=SCENARIOS,
-                       works=scenarios_extraction.WORKS)
+                       works=SCENARIOS.works)
     plan = plan_of(text)
     reader.lists_of(plan)
     iea = plan.names["work"].add("IEA 2020")
@@ -1205,3 +1204,52 @@ def test_a_name_of_an_entry_takes_its_work_and_one_without_work_stays_apart():
     rapid = plan.names["scenario"].entries[-1]
     assert (rapid.name, rapid.work) == ("Rapid", 0)
     assert named["Rapid"]["work_state"] == fields.SAID_UNSTATED
+
+
+# -- what the spec says a plan settles (owner decision 2026-11-10) -------------
+
+KWP_RAW = json.loads((ROOT / "profiles" / "kwp" / "extraction_spec.json")
+                     .read_text(encoding="utf-8"))
+
+
+def requests_of_a_reading(raw: dict, monkeypatch) -> list:
+    """[(kind, what it shows, what is noted of it)] of one plan read by the
+    reader the run builds from a spec (`runner.make_reader`)."""
+    spec = load_spec(raw)
+    model = Model()
+    monkeypatch.setattr(runner, "make_asks", lambda profile: model.asks())
+    reader = runner.make_reader(spec, None, in_order, in_order)
+    plan = plan_of(TITLE, TEXT, TABLE)
+    # As the harvest of a document does (`surveyed.SurveyedHarvest`).
+    reader.settled(plan, addressed.Counts())
+    reader(plan, [spec.by_uri["energy_consumption"]])
+    return model.calls
+
+
+def test_what_a_plan_settles_is_asked_with_the_words_of_the_spec(
+        monkeypatch):
+    calls = requests_of_a_reading(KWP_RAW, monkeypatch)
+    shown = {noted["parameter"]: payload["field"]
+             for kind, payload, noted in calls if kind == "docfield"
+             and noted["parameter"] in KWP_RAW["plan_fields"]}
+    assert shown == {key: {"name": said["name"], "means": said["means"]}
+                     for key, said in KWP_RAW["plan_fields"].items()}
+    # the failure by construction: a spec that settles nothing asks none of
+    # the three
+    bare = {k: v for k, v in KWP_RAW.items() if k != "plan_fields"}
+    assert not [noted for kind, _payload, noted
+                in requests_of_a_reading(bare, monkeypatch)
+                if noted.get("parameter") in KWP_RAW["plan_fields"]]
+
+
+def test_a_reworded_target_year_changes_the_requests_that_show_it_only(
+        monkeypatch):
+    reworded = json.loads(json.dumps(KWP_RAW))
+    reworded["plan_fields"]["target_year"]["means"] += " Auch ein Etappenziel."
+    before = requests_of_a_reading(KWP_RAW, monkeypatch)
+    after = requests_of_a_reading(reworded, monkeypatch)
+    assert len(before) == len(after)
+    moved = [noted_a.get("parameter")
+             for (kind, shown, _noted), (kind_a, shown_a, noted_a)
+             in zip(before, after) if (kind, shown) != (kind_a, shown_a)]
+    assert moved and set(moved) == {"target_year"}

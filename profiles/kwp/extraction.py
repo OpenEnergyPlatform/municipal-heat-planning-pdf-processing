@@ -57,39 +57,9 @@ SLICE = {"quantity": kept_quantities(), "year": None}
 # twelve only measured where a probe loses values).
 CHUNK_UNITS = 8
 
-# What a plan settles for all its values and its own years, each asked once
-# in the form of a document's field, with the title page and the pieces a
-# search finds best for its sentence (owner decision 2026-11-08,
-# `addressed.Reader.settled`): the settings' lines stand beside every
-# value's coordinates, the years are the plan's base and target years.
-PLAN_FIELDS = {
-    "settings": {
-        "name": "Festlegung des Plans für alle seine Werte",
-        "means": ("Eine Festlegung, die der Plan selbst für mehr als einen "
-                  "seiner Werte trifft: das Jahr seiner Bilanz, dass "
-                  "Emissionen in CO2-Äquivalenten angegeben sind, die "
-                  "Einheit aller Zahlen einer Tabelle, das Gebiet, für das "
-                  "seine Zahlen gelten. Keine einzelne Zahl und keine "
-                  "Vorgabe aus Gesetz, Förderrichtlinie oder einer anderen "
-                  "Studie, außer der Plan macht sie zu seiner eigenen."),
-        "sentence": ("Alle Werte dieses Wärmeplans beziehen sich auf das "
-                     "Bilanzjahr und sind in CO2-Äquivalenten angegeben.")},
-    "base_year": {
-        "name": "Basisjahr des Plans",
-        "means": ("Das Jahr, für das der Plan seinen eigenen Stand aufnimmt "
-                  "(Basisjahr, Bilanzjahr, Ist-Zustand). Nimmt er seinen "
-                  "Stand als Mittel mehrerer Jahre auf, sind es diese "
-                  "Jahre."),
-        "sentence": "Das Basisjahr der Wärmeplanung ist das Jahr 2021."},
-    "target_year": {
-        "name": "Zieljahr des Plans",
-        "means": ("Das Jahr, das der Plan selbst Zieljahr nennt oder in dem "
-                  "sein Ziel erreicht ist, kein Zwischenziel und kein "
-                  "Stützjahr; das Jahr eines Gesetzes, einer Förderung oder "
-                  "einer anderen Studie zählt nicht."),
-        "sentence": ("Das Zieljahr der Wärmeplanung ist 2040, dann ist die "
-                     "Wärmeversorgung klimaneutral.")},
-}
+# What a plan settles for all its values and its own years
+# (`plan_fields`) stands in the spec, with the texts a request shows of each
+# (owner decision 2026-11-10).
 
 
 def document_context(conn, document_id: int) -> dict:

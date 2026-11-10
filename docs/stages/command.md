@@ -38,6 +38,7 @@ project file say when it is imported, so the command settles both first.
 | `reanchor` | after a rebuilt database: find each harvested row's passage again |
 | `compile` | draft an extraction spec from shapes (see [the spec compiler](compile.md)) |
 | `column` | the spec of one question of one's own, for a trial harvest over a few documents (see [a column of one's own](extraction.md)) |
+| `edit` | a profile's extraction spec in the browser, on a local page, with what each edit costs the next run (see [editing a spec](editor.md)) |
 | `preflight` | before a corpus run: check a profile's spec, prompts, schema and graph writer (see [the extraction stage](extraction.md)) |
 | `evaluate`, `benchmark` | measure a harvest; `evaluate NEW --diff OLD` compares two harvests without decisions (see [measuring a harvest](evaluation.md)) |
 | `export`, `serve` | hand the harvested values on, with the states and refusals beside them and a search over the corpus passages (see [handing the values on](serve.md)) |

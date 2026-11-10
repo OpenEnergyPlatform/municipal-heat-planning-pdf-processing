@@ -21,7 +21,8 @@
     "                   for the four tags a scenario bundle has to carry",
     "                   (corpus-wide, listed below)",
     "The first is marked `vocabulary_dynamic` and filled by",
-    "profiles/scenarios/extraction.py:document_axes before the harvest starts. In every",
+    "profiles/scenarios/extraction.py:document_axes before the harvest starts; its `beside`",
+    "lists the two entries every document's list has beside its own regions. In every",
     "case the document's own wording stays on the tuple in `value_raw` or",
     "`<axis>_raw`, so a choice is never a substitute for the evidence.",
     "",
@@ -41,19 +42,42 @@
     "its prompts."
   ],
   "parameter_question": "WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.",
+  "plan_fields": {
+    "settings": {
+      "name": "Setting of this publication for all its values",
+      "means": "Something this publication itself settles for more than one of its values: the region all its scenarios cover, the model they are run with, that every emission is given in CO2 equivalents. No single value, nothing attributed to other works.",
+      "sentence": "All scenarios of this study cover the EU27 and are run with the same energy system model; emissions are given in CO2 equivalents."
+    }
+  },
+  "works": {
+    "name": "Other study or publication",
+    "means": "A study, report, article, model comparison or scenario set other than this publication that the publication presents, compares, reviews or cites, by the name, title, short name or reference it prints for it.",
+    "fields": {
+      "publication_title": "Which shown line gives the title of this work? Answer with its address and the words of the title, 0 if no line gives it.",
+      "study_organisation": "Which shown line names the organisation or publisher of this work? Answer with its address and the words of the name, 0 if no line names one.",
+      "publication_date": "Which shown line gives the year this work was published? Answer with its address and the year, 0 if no line gives it.",
+      "study_acronym": "Which shown line gives the short name or acronym of this work? Not every work has one. Answer with its address and the words, 0 if it has none."
+    }
+  },
   "groups": {
     "work": {
-      "coordinates": ["work"],
+      "coordinates": [
+        "work"
+      ],
       "read_in": "reading",
       "where": "The value's own passage, the heading of its section and the text shown around it."
     },
     "year_kind": {
-      "coordinates": ["year_kind"],
+      "coordinates": [
+        "year_kind"
+      ],
       "read_in": "reading",
       "where": "The year's own passage, the heading of its section and the text shown around it."
     },
     "scenario": {
-      "coordinates": ["scenario"],
+      "coordinates": [
+        "scenario"
+      ],
       "read_in": "reading",
       "where": "The scenario a value refers to is named in the value's own sentence, in the heading of its section, in the title, a column head or a row label of its table, or in the caption of its figure."
     }
@@ -2551,6 +2575,19 @@
         ]
       },
       "vocabulary_dynamic": true,
+      "beside": {
+        "out:multiregion": [
+          "several regions",
+          "several countries",
+          "EU27",
+          "OECD",
+          "several countries or a group the list does not carry"
+        ],
+        "out:other": [
+          "other region",
+          "something else that is not a country of the list"
+        ]
+      },
       "kg": {
         "node": "scenariofactsheet",
         "property": {

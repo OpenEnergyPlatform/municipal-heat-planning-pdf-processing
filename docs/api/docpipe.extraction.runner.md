@@ -989,10 +989,10 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
 
 The reading of a document piece by piece (`addressed.Reader`), or
 None where its spec names no groups or the profile writes no prompts
-for it. What the profile asks once of a plan beside its fields
-(`PLAN_FIELDS`) and the field that names other works (`WORKS`) come
-from the profile; how much a search shows from the run
-(`search_budget`).
+for it. What is asked once of a plan beside its fields
+(`Spec.plan_fields`) and the field that names other works
+(`Spec.works`) come from the spec (owner decision 2026-11-10); how much
+a search shows from the run (`search_budget`).
 
 ### make_chunk_reranker
 
@@ -1300,12 +1300,12 @@ is sent rather than at the first plan's reading.
 ### names_asked
 
 ```python
-def names_asked(spec: Spec, profile=None) -> bool
+def names_asked(spec: Spec) -> bool
 ```
 
 Whether a run asks names against a document's lists: its spec
 merges a field or a coordinate into a list of names (a scenario), or
-the profile keeps a list of works (`WORKS`).
+keeps a list of works (`Spec.works`).
 
 ### producer
 

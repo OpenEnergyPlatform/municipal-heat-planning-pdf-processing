@@ -546,6 +546,9 @@ docpipe compile spec --shapes shapes.ttl --out draft.json
   [asking the corpus](stages/inference.md).
 - `compile` drafts an extraction spec from the shapes of a graph; see [the
   spec compiler](stages/compile.md).
+- `edit` shows a profile's extraction spec as a page in the browser and says
+  what an edit costs the next run before it is saved; see [editing a
+  spec](stages/editor.md).
 
 ## Configuration reference
 

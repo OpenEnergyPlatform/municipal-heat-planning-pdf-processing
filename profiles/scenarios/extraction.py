@@ -58,13 +58,16 @@ _WORD = r"(?<!\w){}(?!\w)"
 # or a link from any of them (NOT_IN_GRAPH, one definition for both profiles in
 # docpipe/extraction/graphkit.py) and counts them by name.
 
-# The first label is the answer token: runner._parameter_payload renders a
-# choice list as {labels[0]: labels[1:]} and the prompt says to copy it
-# character for character. So labels[0] is short and quotable, and the
-# explanation is an alternate — value_to_uri() maps every label, so both
-# spellings resolve. The long gloss first was a mistake: an answer nobody can
-# retype without a slip is an answer that arrives as an unmapped wording, and
-# an unmapped wording is exactly what these entries exist to prevent.
+# The entries a region list always has beside the regions a document
+# names stand in the spec (`beside` of scenario_region, owner decision
+# 2026-11-10). The first label of each is the answer token:
+# runner._parameter_payload renders a choice list as {labels[0]: labels[1:]}
+# and the prompt says to copy it character for character. So labels[0] is
+# short and quotable, and the explanation is an alternate — value_to_uri()
+# maps every label, so both spellings resolve. The long gloss first was a
+# mistake: an answer nobody can retype without a slip is an answer that
+# arrives as an unmapped wording, and an unmapped wording is exactly what
+# these entries exist to prevent.
 #
 # A scenario is global far more often than national, and the OEKG's region list
 # is 249 countries with no aggregate — no World, no EU27, no OECD, no R5.
@@ -74,13 +77,6 @@ _WORD = r"(?<!\w){}(?!\w)"
 # none of them has, "other region" for any other region the list lacks; the
 # graph writes either as a study region of its own under the name the
 # document prints (kg.printed_region, owner decision 2026-11-07).
-REGION_OUT = {
-    "out:multiregion": ["several regions", "several countries", "EU27", "OECD",
-                        "several countries or a group the list does not "
-                        "carry"],
-    "out:other": ["other region",
-                  "something else that is not a country of the list"],
-}
 
 def _regions() -> dict:
     return json.loads(REGIONS_PATH.read_text(encoding="utf-8"))
@@ -248,14 +244,14 @@ def document_regions(conn: sqlite3.Connection, document_id: int) -> dict:
 def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
     """Per-document choice lists, keyed by axis name and by parameter uri.
 
-    The out: entries are appended unconditionally, so the list exists even
-    when the narrowing finds nothing. That case is not hypothetical — a
-    publication that names no country at all used to leave the field with no
-    list, and a field with no list is free text again.
+    The regions this document names, possibly none. The run appends the
+    out: entries the spec lists beside them (`beside` of scenario_region,
+    `runner.fill_dynamic_axes`), so the list exists even when the narrowing
+    finds nothing. That case is not hypothetical — a publication that names
+    no country at all used to leave the field with no list, and a field with
+    no list is free text again.
     """
-    regions = dict(document_regions(conn, document_id))
-    regions.update(REGION_OUT)
-    return {"scenario_region": regions}
+    return {"scenario_region": dict(document_regions(conn, document_id))}
 
 # How the documents write the decimal. It decides what the digits leave
 # open: "3,251" is 3251 here, and "1.234" is 1.234.
@@ -265,51 +261,10 @@ DECIMAL_MARK = "."
 # eight; twelve only measured where a probe loses values).
 CHUNK_UNITS = 8
 
-# What a publication settles for all its values, asked once in the form of
-# a document's field (owner decision 2026-11-08, `addressed.Reader.settled`):
-# its lines stand beside every value's coordinates.
-PLAN_FIELDS = {
-    "settings": {
-        "name": "Setting of this publication for all its values",
-        "means": ("Something this publication itself settles for more than "
-                  "one of its values: the region all its scenarios cover, "
-                  "the model they are run with, that every emission is "
-                  "given in CO2 equivalents. No single value, nothing "
-                  "attributed to other works."),
-        "sentence": ("All scenarios of this study cover the EU27 and are run "
-                     "with the same energy system model; emissions are given "
-                     "in CO2 equivalents.")},
-}
-
-# The works a publication presents, compares, reviews or cites beside
-# itself (owner decision 2026-11-08, h): each name of one found in every
-# piece is asked against the publication's list of works, entry 1 the
-# publication itself, and each new work is asked at its line for its title,
-# its organisation, its year and its short name, values of that work, which
-# the graph does not take (`work` keeps this publication only).
-WORKS = {
-    "name": "Other study or publication",
-    "means": ("A study, report, article, model comparison or scenario set "
-              "other than this publication that the publication presents, "
-              "compares, reviews or cites, by the name, title, short name "
-              "or reference it prints for it."),
-    "fields": {
-        "publication_title": ("Which shown line gives the title of this "
-                              "work? Answer with its address and the words "
-                              "of the title, 0 if no line gives it."),
-        "study_organisation": ("Which shown line names the organisation or "
-                               "publisher of this work? Answer with its "
-                               "address and the words of the name, 0 if no "
-                               "line names one."),
-        "publication_date": ("Which shown line gives the year this work was "
-                             "published? Answer with its address and the "
-                             "year, 0 if no line gives it."),
-        "study_acronym": ("Which shown line gives the short name or acronym "
-                          "of this work? Not every work has one. Answer "
-                          "with its address and the words, 0 if it has "
-                          "none."),
-    },
-}
+# What a publication settles for all its values (`plan_fields`) and the
+# works it presents, compares, reviews or cites beside itself (`works`)
+# stand in the spec, with the texts a request shows of them (owner decision
+# 2026-11-10).
 
 # The language tag of the ontology's alternative labels that the vocabulary
 # snapshot keeps for this profile, the words its spec is held against. The

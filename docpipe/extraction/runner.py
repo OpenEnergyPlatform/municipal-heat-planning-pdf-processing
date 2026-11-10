@@ -1069,8 +1069,13 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
                 axes[name] = replace(axis, vocabulary=vocabularies[name])
                 changed = True
         # A category parameter whose VALUE is the choice takes the list named
-        # after the parameter itself.
+        # after the parameter itself, and after it the entries the spec says
+        # such a list always has (`Parameter.beside`): the list then exists
+        # where the document names nothing of its own.
         values = vocabularies.get(parameter.uri)
+        if parameter.vocabulary_dynamic and parameter.beside \
+                and parameter.uri in vocabularies:
+            values = {**(values or {}), **parameter.beside}
         if parameter.vocabulary_dynamic and values:
             parameters.append(replace(parameter, axes=axes, vocabulary=values))
             changed = True
@@ -1883,23 +1888,20 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
                 context: Optional[Callable] = None):
     """The reading of a document piece by piece (`addressed.Reader`), or
     None where its spec names no groups or the profile writes no prompts
-    for it. What the profile asks once of a plan beside its fields
-    (`PLAN_FIELDS`) and the field that names other works (`WORKS`) come
-    from the profile; how much a search shows from the run
-    (`search_budget`)."""
+    for it. What is asked once of a plan beside its fields
+    (`Spec.plan_fields`) and the field that names other works
+    (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
+    a search shows from the run (`search_budget`)."""
     if not spec.groups:
         return None
     asks = make_asks(profile)
     if asks is None:
         return None
-    component = (profile.component if profile is not None
-                 else (lambda stage, name: None))
     pieces, shares, per_request = search_budget()
     return addressed_map.Reader(
         spec, asks, order, search_order=search_order, rerank=rerank,
         probes=probes, known=row_context, span_marks=span_marks_of(),
-        plan_fields=component("extraction", "PLAN_FIELDS") or {},
-        works=component("extraction", "WORKS"),
+        plan_fields=spec.plan_fields, works=spec.works,
         frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
         budget=pieces, shares=shares, per_request=per_request,
         context=context)
@@ -3315,7 +3317,7 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
     if not spec.groups:
         return False
     wanted = list(SURVEY_PROMPT_IDS)
-    if names_asked(spec, profile):
+    if names_asked(spec):
         wanted.append(addressed_map.PROMPT_IDS["names"])
     for prompt_id in wanted:
         try:
@@ -3329,16 +3331,14 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
     return True
 
 
-def names_asked(spec: Spec, profile=None) -> bool:
+def names_asked(spec: Spec) -> bool:
     """Whether a run asks names against a document's lists: its spec
     merges a field or a coordinate into a list of names (a scenario), or
-    the profile keeps a list of works (`WORKS`)."""
+    keeps a list of works (`Spec.works`)."""
     merged = any(getattr(p, "merged", None)
                  or any(getattr(a, "merged", None) for a in p.axes.values())
                  for p in spec.parameters)
-    works = profile.component("extraction", "WORKS") \
-        if profile is not None else None
-    return bool(merged or works)
+    return bool(merged or getattr(spec, "works", None))
 
 
 def producer(kind: str, model: Optional[str] = None) -> dict:

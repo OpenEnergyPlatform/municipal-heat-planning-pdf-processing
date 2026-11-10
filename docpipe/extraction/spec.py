@@ -17,6 +17,14 @@ against these keys rather than against the whole file's hash, so an edit that
 touches no question a document was asked through, such as a graph block or a
 comment, costs nothing on the next run.
 
+Three kinds of text a model is shown stand in the spec beside its parameters
+(owner decision 2026-11-10; they stood in each profile's Python before): what a
+document settles once for all its values (`plan_fields`), the other works a
+document presents and what is asked of each (`works`), and the fixed entries of
+a list the profile closes per document (`beside` of such a parameter). They
+are loaded as strictly as a parameter and are in no fingerprint: a reworded
+one leaves a harvest current, as a reworded prompt does.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -44,6 +52,10 @@ READ_IN = ("reading",)
 DEFINITIONS = ("brief", "full")
 # The coordinate that names a number's entry of units_accepted.
 UNIT = "unit"
+# What a document can settle once for all its values, the keys of
+# `plan_fields`: the settings that hold for every value, and the document's
+# own base and target year (`addressed.Reader.settled`).
+PLAN_FIELDS = ("settings", "base_year", "target_year")
 
 
 def fold_label(raw) -> str:
@@ -225,6 +237,12 @@ class Parameter:
     # uri -> the group an entry of the value's list belongs to, as on an
     # axis.
     groups: dict = field(default_factory=dict)
+    # The entries a list closed per document always has beside the
+    # document's own, uri -> labels like a vocabulary, each an out: entry
+    # (spec: "beside", for a parameter with vocabulary_dynamic): "several
+    # regions" and "other region" beside the regions one publication names,
+    # so the list exists where a document names none. In no fingerprint.
+    beside: Optional[dict] = None
 
     @property
     def is_numeric(self) -> bool:
@@ -335,6 +353,18 @@ class Spec:
     # name -> Group; empty for a spec read the old way only.
     groups: dict = field(default_factory=dict)
     by_uri: dict = field(default_factory=dict)
+    # What a document settles once for all its values, each asked once in
+    # the form of a document's field (spec: "plan_fields", owner decision
+    # 2026-11-08): key of `PLAN_FIELDS` -> {"name", "means", "sentence"}. The
+    # settings' lines stand beside every value's coordinates, the years are
+    # the document's own base and target years. Empty where a spec asks
+    # none. In no fingerprint.
+    plan_fields: dict = field(default_factory=dict)
+    # The works a document presents, compares, reviews or cites beside
+    # itself (spec: "works", owner decision 2026-11-08, h): {"name", "means",
+    # "fields": {parameter uri: the question asked at a new work's line}}.
+    # None where a spec keeps no list of works. In no fingerprint.
+    works: Optional[dict] = None
 
     def __post_init__(self) -> None:
         self.by_uri = {p.uri: p for p in self.parameters}
@@ -496,16 +526,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
         if not merged:
             _fail(f"{path}.beside", "entries beside the names are for an axis "
                                     "of names only (merged)")
-        for uri, labels in beside.items():
-            # The out: convention: nothing that turns an answer into a node
-            # or a name takes one (`graphkit.NOT_IN_GRAPH`).
-            if not str(uri).startswith("out:"):
-                _fail(f"{path}.beside.{uri}", "an entry beside the names is "
-                                              "an out: entry, it names nothing")
-            if not isinstance(labels, list) or not labels or \
-                    not all(isinstance(l, str) and l.strip() for l in labels):
-                _fail(f"{path}.beside.{uri}",
-                      "labels must be a non-empty list of strings")
+        _validate_out_entries(f"{path}.beside", beside)
         definitions = {**definitions, **beside_definitions}
         glosses = {**glosses, **beside_glosses}
     return Axis(name=name, vocabulary=vocabulary, type=axis_type,
@@ -516,6 +537,23 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                 several=several,
                 groups=_entry_groups(f"{path}.vocabulary",
                                      raw.get("vocabulary")))
+
+
+def _validate_out_entries(path: str, entries: dict) -> None:
+    """Entries offered beside a list of names or a document's own list: each
+    an out: entry with its labels.
+
+    The out: convention: nothing that turns an answer into a node or a name
+    takes one (`graphkit.NOT_IN_GRAPH`).
+    """
+    for uri, labels in entries.items():
+        if not str(uri).startswith("out:"):
+            _fail(f"{path}.{uri}", "an entry beside a list is an out: "
+                                   "entry, it names nothing")
+        if not isinstance(labels, list) or not labels or \
+                not all(isinstance(l, str) and l.strip() for l in labels):
+            _fail(f"{path}.{uri}",
+                  "labels must be a non-empty list of strings")
 
 
 def _validate_example(path: str, raw, value_type: str,
@@ -623,6 +661,16 @@ def _validate_parameter(path: str, raw) -> Parameter:
     if brief is not None and (not isinstance(brief, str)
                               or not brief.strip()):
         _fail(f"{path}.brief", "a non-empty string when given")
+    beside, beside_definitions, beside_glosses = _vocabulary(
+        f"{path}.beside", raw.get("beside"))
+    if beside is not None:
+        if not vocabulary_dynamic:
+            _fail(f"{path}.beside", "entries beside a document's own list "
+                                    "are for a list the profile closes per "
+                                    "document (vocabulary_dynamic)")
+        _validate_out_entries(f"{path}.beside", beside)
+        value_definitions = {**value_definitions, **beside_definitions}
+        value_glosses = {**value_glosses, **beside_glosses}
     if value_type in NUMERIC_TYPES:
         if not isinstance(unit_target, str) or not unit_target.strip():
             _fail(f"{path}.unit_target",
@@ -715,7 +763,8 @@ def _validate_parameter(path: str, raw) -> Parameter:
                                                     False)),
                      takes_group=bool(raw.get("takes_group", True)),
                      groups=_entry_groups(f"{path}.vocabulary",
-                                          raw.get("vocabulary")))
+                                          raw.get("vocabulary")),
+                     beside=beside)
 
 
 def load(source: Union[Path, str, dict]) -> Spec:
@@ -752,7 +801,76 @@ def load(source: Union[Path, str, dict]) -> Spec:
                               bool(unit_question))
     return Spec(parameters=parameters,
                 parameter_question=(question or None),
-                unit_question=(unit_question or None), groups=groups)
+                unit_question=(unit_question or None), groups=groups,
+                plan_fields=_validate_plan_fields(data.get("plan_fields")),
+                works=_validate_works(data.get("works"), parameters))
+
+
+def _validate_text(path: str, raw: dict, key: str, required: bool) -> None:
+    value = raw.get(key)
+    if value is None and not required:
+        return
+    if not isinstance(value, str) or not value.strip():
+        _fail(f"{path}.{key}", "required, non-empty string" if required
+              else "a non-empty string when given")
+
+
+def _validate_plan_fields(raw) -> dict:
+    """key -> {"name", "means", "sentence"} of what a document settles once.
+
+    A key no step asks is refused rather than carried: it would be a text
+    somebody wrote for the model that no request ever shows.
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict) or not raw:
+        _fail("spec.plan_fields", "a non-empty object of key -> field when "
+                                  "given")
+    out: dict = {}
+    for key, entry in raw.items():
+        path = f"spec.plan_fields.{key}"
+        if key not in PLAN_FIELDS:
+            _fail(path, f"no step asks it; one of {PLAN_FIELDS}")
+        if not isinstance(entry, dict):
+            _fail(path, "must be an object")
+        extra = sorted(set(entry) - {"name", "means", "sentence"})
+        if extra:
+            _fail(path, f"has no key {extra}")
+        _validate_text(path, entry, "name", True)
+        _validate_text(path, entry, "means", True)
+        _validate_text(path, entry, "sentence", False)
+        out[key] = dict(entry)
+    return out
+
+
+def _validate_works(raw, parameters: list) -> Optional[dict]:
+    """{"name", "means", "fields"} of the works a document presents beside
+    itself, None where the spec keeps no such list.
+
+    A question keyed by a uri the spec does not have would be asked of
+    nothing, so it is refused here.
+    """
+    if raw is None:
+        return None
+    path = "spec.works"
+    if not isinstance(raw, dict):
+        _fail(path, "must be an object")
+    extra = sorted(set(raw) - {"name", "means", "fields"})
+    if extra:
+        _fail(path, f"has no key {extra}")
+    _validate_text(path, raw, "name", True)
+    _validate_text(path, raw, "means", True)
+    fields = raw.get("fields", {})
+    if not isinstance(fields, dict):
+        _fail(f"{path}.fields", "an object of parameter uri -> the question "
+                                "asked at a work's line")
+    known = {parameter.uri for parameter in parameters}
+    for uri, question in fields.items():
+        if uri not in known:
+            _fail(f"{path}.fields.{uri}", "is no parameter of the spec")
+        if not isinstance(question, str) or not question.strip():
+            _fail(f"{path}.fields.{uri}", "a non-empty question")
+    return {**raw, "fields": dict(fields)} if "fields" in raw else dict(raw)
 
 
 def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
@@ -917,6 +1035,8 @@ def value_fingerprint(parameter: "Parameter") -> str:
     """
     if not parameter.vocabulary and not parameter.vocabulary_dynamic:
         return ""
+    # Without `beside`: the fixed entries of a list closed per document were
+    # in no key while the profile's code held them, and stay in none.
     return _digest({
         "dynamic": parameter.vocabulary_dynamic,
         "options": {uri: {"spellings": sorted(map(str, labels or []))}

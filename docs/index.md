@@ -169,6 +169,7 @@ stages/serve
 
 profiles
 stages/compile
+stages/editor
 profiles/kwp
 profiles/scenarios
 ```

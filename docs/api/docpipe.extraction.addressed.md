@@ -21,11 +21,12 @@ The steps of a document (`Reader`):
    its numbers, any other field in the piece of its caption
    (`units.pieces_for`).
 2. What the plan settles for all its values and its own years, where the
-   profile asks them (`PLAN_FIELDS`). Where the profile keeps a list of
-   works, every piece is asked once which of its lines speak of another
-   work and which line shows the rest are this publication's own (`work`,
-   owner decisions 2026-11-09): a value takes the work of the line it
-   stands in only from such a line, else asks its own (`work_coordinate`).
+   spec asks them (`Spec.plan_fields`). Where the spec keeps a list of
+   works (`Spec.works`), every piece is asked once which of its lines
+   speak of another work and which line shows the rest are this
+   publication's own (`work`, owner decisions 2026-11-09): a value takes
+   the work of the line it stands in only from such a line, else asks its
+   own (`work_coordinate`).
 3. The fields a document has once (`Parameter.once_per_document`): the
    title page and the pieces a search finds best for a sentence written
    for the field, the run's budget of them, five a request, every find

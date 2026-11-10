@@ -20,6 +20,14 @@ against these keys rather than against the whole file's hash, so an edit that
 touches no question a document was asked through, such as a graph block or a
 comment, costs nothing on the next run.
 
+Three kinds of text a model is shown stand in the spec beside its parameters
+(owner decision 2026-11-10; they stood in each profile's Python before): what a
+document settles once for all its values (`plan_fields`), the other works a
+document presents and what is asked of each (`works`), and the fixed entries of
+a list the profile closes per document (`beside` of such a parameter). They
+are loaded as strictly as a parameter and are in no fingerprint: a reworded
+one leaves a harvest current, as a reworded prompt does.
+
 Author: Felix Vossel
 
 ## Classes
@@ -105,6 +113,7 @@ Fields:
 - `once_per_document: bool = False`: Asked once per document, with its title page and the pieces a search finds best, never in every piece (owner decision 2026-11-08): a field the document has once, its title, its authors, its organisation.
 - `takes_group: bool = True`: Whether a value whose scenario is the words of a group of scenarios ("all scenarios") takes the members the document names, one row each (owner decision 2026-11-08, i): years, regions, types do, a description does not.
 - `groups: dict = field(default_factory=dict)`: uri -> the group an entry of the value's list belongs to, as on an axis.
+- `beside: Optional[dict] = None`: The entries a list closed per document always has beside the document's own, uri -> labels like a vocabulary, each an out: entry (spec: "beside", for a parameter with vocabulary_dynamic): "several regions" and "other region" beside the regions one publication names, so the list exists where a document names none. In no fingerprint.
 
 #### Parameter.is_numeric
 
@@ -214,6 +223,8 @@ Fields:
 - `unit_question: Optional[str] = None`: The one line that asks which entry of units_accepted a number is in. A coordinate like the parameter, asked before it and with the lists of every numeric parameter, because the entry is what settles the parameter. Only a spec with a numeric parameter has a use for it.
 - `groups: dict = field(default_factory=dict)`: name -> Group; empty for a spec read the old way only.
 - `by_uri: dict = field(default_factory=dict)`
+- `plan_fields: dict = field(default_factory=dict)`: What a document settles once for all its values, each asked once in the form of a document's field (spec: "plan_fields", owner decision 2026-11-08): key of `PLAN_FIELDS` -> {"name", "means", "sentence"}. The settings' lines stand beside every value's coordinates, the years are the document's own base and target years. Empty where a spec asks none. In no fingerprint.
+- `works: Optional[dict] = None`: The works a document presents, compares, reviews or cites beside itself (spec: "works", owner decision 2026-11-08, h): {"name", "means", "fields": {parameter uri: the question asked at a new work's line}}. None where a spec keeps no list of works. In no fingerprint.
 
 #### Spec.groups_read_in
 

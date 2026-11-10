@@ -73,6 +73,7 @@ OWN = {
     "profiles": "the profiles this installation finds, and where",
     "column": "a column of one's own: the spec of one question for a "
               "trial harvest, in a folder of its own",
+    "edit": "a profile's extraction spec in the browser, on a local page",
 }
 USAGE = "docpipe [--profile P] [--config FILE] <command> [arguments]"
 
@@ -446,6 +447,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if command == "column":
         from . import column
         return column.main(rest)
+    if command == "edit":
+        from . import editor
+        return editor.main(rest)
     from . import doctor
     return doctor.main(rest)
 

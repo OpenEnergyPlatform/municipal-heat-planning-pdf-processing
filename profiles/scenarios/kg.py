@@ -409,9 +409,10 @@ AGGREGATE = "aggregate:"
 
 
 # The two entries a region answer takes where the list holds no class for the
-# region the document names (`extraction.REGION_OUT`): a group none of the
-# groups carries, and any other region. Such a region is its own study region
-# node, named as the document prints it (owner decision 2026-11-07).
+# region the document names (`beside` of scenario_region in the spec): a
+# group none of the groups carries, and any other region. Such a region is
+# its own study region node, named as the document prints it (owner decision
+# 2026-11-07).
 UNLISTED_REGION = ("out:multiregion", "out:other")
 
 

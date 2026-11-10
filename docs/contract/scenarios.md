@@ -86,7 +86,8 @@ countries of `profiles/scenarios/region_aggregates.json` to the ones the
 publication's own text names (`document_regions`); the world is always
 offered. A group's key starts with `aggregate:` and the graph writes its
 member countries. The list always carries two
-fixed `out:` entries (`REGION_OUT`). `value_raw` and
+fixed `out:` entries, the `beside` entries of the parameter `scenario_region` in the
+spec. `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved
 entry on every tuple, recording what the list held at harvest time.
 No parameter of this spec is numeric, so a bare year or a dotted date is
