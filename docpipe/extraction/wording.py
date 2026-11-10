@@ -11,7 +11,8 @@ profile wrote its prompts in another language. The two keys of an entry of
 a closed list are the exception: they are keys of the request, English in
 every profile.
 
-A profile contributes them in `profiles/<name>/extraction.py: PHRASES`. A
+A profile writes them in `profiles/<name>/prompts/extraction/phrases.json`
+(`docpipe/phrases.py`; a table in its `extraction.py` until 2026-11-10). A
 profile that extends another one writes only the ones it words differently.
 A phrase is a template for `str.format`: the names in braces are filled by
 the stage, `!r` shows a value the way the model wrote it, and a brace that
@@ -23,7 +24,10 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .. import phrases as phrase_files
 from ..profile import ENV_VAR, Profile, active_profile
+
+MODULE = "extraction"
 
 # Checked as a set when first read: a profile that forgets one hears about
 # it before the first request, not when that sentence is first needed.
@@ -45,6 +49,32 @@ REQUIRED = frozenset({
     "compute_not_taken", "compute_quote", "compute_rejected",
 })
 
+# What a comment said above a sentence while the sentences were tables in
+# the profiles' modules, each above the sentence it stood before: said once
+# here, and shown there by the editor (`docpipe edit`).
+NOTES = {
+    "option_means": (
+        "the closed list as a request shows it: protocol keys, so English "
+        "in every profile"),
+    "kind_whole_number": "why a coordinate's answer was not taken",
+    "answer_not_in_quote": (
+        "A correction names every way of answering that passes in the "
+        "request (owner decision 2026-11-06): the document's own word as "
+        "the wording where the request asks one, the answer as its quote "
+        "prints it where the answer is its own wording; \"not stated\" only "
+        "where the request offers it, else leaving it out."),
+    "frame_options": (
+        "The key of the frame request that holds the entries of a closed "
+        "frame coordinate, one list per coordinate. The correction below "
+        "is handed the key that was sent, so a profile that words this one "
+        "phrase differently has moved all of it."),
+    "frame_missing": "why a pair of the document's frame was not taken",
+    "shape_rule": "a reply that could not be read",
+    "not_an_address": "a round of the values of a passage, one value each",
+    "code_failed": "what the model gets back after a calculation",
+    "image_for": "labels inside a request",
+}
+
 _checked: dict = {}
 
 
@@ -56,15 +86,12 @@ def phrases(profile: Optional[Profile] = None) -> dict:
                           f"${ENV_VAR}")
     if profile.name in _checked:
         return _checked[profile.name]
-    nearest = profile.require("extraction", "PHRASES")
-    got: dict = {}
-    for layer in reversed(profile.layers("extraction", "PHRASES")[1:]):
-        got.update(layer)                   # those of the profiles it extends
-    got.update(nearest)
+    got = phrase_files.table(profile, MODULE)
     missing = sorted(REQUIRED - set(got))
     if missing:
-        raise LookupError(f"extraction.PHRASES of profile {profile.name!r} "
-                          f"is missing {missing}")
+        raise LookupError(
+            f"the extraction sentences of profile {profile.name!r} are "
+            f"missing {missing} ({phrase_files.path_of(profile, MODULE)})")
     _checked[profile.name] = got
     return got
 

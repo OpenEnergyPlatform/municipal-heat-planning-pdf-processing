@@ -17,23 +17,6 @@ entries) is a second view.
 
 ## Functions
 
-### requests_of
-
-```python
-def requests_of(events: list) -> list
-```
-
-One dict per `*_ask` event, in trace order.
-
-### chain_of
-
-```python
-def chain_of(requests: list, index: int) -> list
-```
-
-Indexes of the requests of one value: the find of its parameter and
-passage, the readings and follow-ups, and the list entries asked for its words.
-
 ### render
 
 ```python

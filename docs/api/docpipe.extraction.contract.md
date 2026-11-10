@@ -25,8 +25,8 @@ A fact is a value the code decides and a prompt only repeats, so the prompt
 and the request agree by construction: the least length of a quote
 (`verify.MIN_QUOTE_CHARS`), the word for "not stated" (`fields.UNSTATED`),
 and the words the closed list is shown in and the key of the frame's list from
-the profile's PHRASES. No template carries any of them as a typed number or
-word.
+the profile's sentences (`prompts/extraction/phrases.json`). No template
+carries any of them as a typed number or word.
 
 Author: Felix Vossel
 
@@ -99,7 +99,7 @@ def facts(profile, names: Iterable) -> dict
 ```
 
 {name: value} of the facts a prompt names, for this profile. Only the
-ones asked for are read: a profile whose PHRASES are incomplete is told so
+ones asked for are read: a profile whose sentences are incomplete is told so
 by a prompt that needs them and not by one that does not.
 
 [Back to the index](../README.md)

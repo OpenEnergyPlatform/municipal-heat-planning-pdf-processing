@@ -22,8 +22,8 @@ A fact is a value the code decides and a prompt only repeats, so the prompt
 and the request agree by construction: the least length of a quote
 (`verify.MIN_QUOTE_CHARS`), the word for "not stated" (`fields.UNSTATED`),
 and the words the closed list is shown in and the key of the frame's list from
-the profile's PHRASES. No template carries any of them as a typed number or
-word.
+the profile's sentences (`prompts/extraction/phrases.json`). No template
+carries any of them as a typed number or word.
 
 Author: Felix Vossel
 """
@@ -42,7 +42,8 @@ TEMPLATE_ROOT = Path(__file__).resolve().parent / "contract"
 # The facts a template or a profile's part may name, `{{name}}`.
 FACT_NAMES = ("min_quote_chars", "unstated", "option_means", "option_spellings",
               "unstated_means", "unstated_spelling", "frame_options")
-# The ones that are a sentence of the profile's PHRASES, by the same name.
+# The ones that are a sentence of the profile's sentence file, by the same
+# name.
 _PHRASE_FACTS = frozenset(FACT_NAMES) - {"min_quote_chars", "unstated"}
 
 _NAME = re.compile(r"[a-z][a-z_0-9]*\Z")
@@ -103,7 +104,7 @@ def available() -> list:
 
 def facts(profile, names: Iterable) -> dict:
     """{name: value} of the facts a prompt names, for this profile. Only the
-    ones asked for are read: a profile whose PHRASES are incomplete is told so
+    ones asked for are read: a profile whose sentences are incomplete is told so
     by a prompt that needs them and not by one that does not."""
     from . import fields, verify, wording
     names = list(names)

@@ -297,7 +297,7 @@ list of rectangles, to every segment kind where the geometry is known
 | `input`, `output` (positional) | CLI | none; `output` falls back to the profile's processed directory | PDF file or folder (omitted only with `--rebuild-stage3`), and the output directory |
 | `--force-reextract` / `--rebuild-stage3` | CLI flags | off | ignore both caches and rerun Stages 1 to 3, or rerun only Stage 3 from cached `pages.json` |
 | `--report-columns` | CLI flag | off | read-only report of multi-column pages, changes nothing |
-| `--transcribe-missing-text` | CLI flag | off | turns on the vision-model fallback; needs a running vision server, which is asked before the first page that lacks its text, and the profile's `reading.PHRASES` (checked first); ignored by `--rebuild-stage3` |
+| `--transcribe-missing-text` | CLI flag | off | turns on the vision-model fallback; needs a running vision server, which is asked before the first page that lacks its text, and the profile's reading sentences (`prompts/reading/phrases.json`, checked first); ignored by `--rebuild-stage3` |
 | `--pages START END` | CLI flag, 2 ints | whole document | 0-indexed, end-exclusive page range; single-PDF only |
 | `--glob` | CLI flag | `*.pdf` | pattern `run_folder()` matches PDFs against in folder mode (`pipeline.py:580`) |
 | `--profile` | CLI flag | `$DOCPIPE_PROFILE` | names the active profile |
@@ -359,7 +359,7 @@ A selection of the module constants that tune detection and assembly:
 | No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`page_text.py:41-43`; `profile.py:261-271,392-406,452-475`) |
 | A page's transcription ends in a hole (a reply that stayed unreadable, one cut off twice, a request refused or not answered, a page that could not be rendered, an error of the stage's own), returns an empty markdown string, or more candidates need transcription than `max_pages` | a hole is counted in `pages_failed` and listed in `failed_pages` with its cause, an empty string in `pages_empty`, and the exit code does not change; a run with candidates over `max_pages` is truncated with `pages_missing_text` still reporting the true total (`page_text_without_layer.py:204-212`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:406-412`) |
 | The vision server a page needs is not there, does not serve the model, has too small a window or refuses the page reply schema | the check `_assert_page_server` raises `PreflightError` before the first page that lacks its text; `run_folder` lets it through and `main` exits with status 1 (`pipeline.py:280-283,461-480,654-656`); a run in which no page lacks its text never asks |
-| The profile lacks a sentence of `reading.PHRASES`, with `--transcribe-missing-text` | `LookupError` from `reading.phrases()` before the first document, with a traceback and a non-zero exit (`pipeline.py:631-634`) |
+| The profile lacks a sentence of `prompts/reading/phrases.json`, with `--transcribe-missing-text` | `LookupError` from `reading.phrases()` before the first document, with a traceback and a non-zero exit (`pipeline.py:631-634`) |
 | `find_gutters()` cannot support a confident column split | returns `[]`; the page reads as a single column, or, under `column_layout="double"`, falls back to a hard centre split (`columns.py:158-267`) |
 
 ## Measured behaviour

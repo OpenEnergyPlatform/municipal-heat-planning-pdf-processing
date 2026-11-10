@@ -10,12 +10,14 @@ the sentence that tells the model to answer NOW. The core assembles those
 pieces and does not write them: it cannot know whether the reader is holding a
 German heat plan or an English scenario study.
 
-A profile contributes them in `profiles/<name>/inference.py`. A profile that
-extends another one writes only the pieces it words differently: its PHRASES
-are laid over those of the profile it extends.
+A profile writes them in `profiles/<name>/prompts/inference/phrases.json`
+(`docpipe/phrases.py`; a table in its `inference.py` until 2026-11-10). A
+profile that extends another one writes only the pieces it words
+differently: its file is laid over those of the profile it extends.
 
-The words of the app's pages come the same way and from the same file: the
-profile's `UI` table, which a person reads where a model reads PHRASES. That
+The words of the app's pages come the same way, from the profile's
+`inference.py`: its `UI` table, which a person reads where a model reads the
+sentences. That
 includes the picker's labels, the tag after a document's name and the noun
 for one. Both tables are checked for the entries the core asks for
 (`REQUIRED`, `UI_REQUIRED`).

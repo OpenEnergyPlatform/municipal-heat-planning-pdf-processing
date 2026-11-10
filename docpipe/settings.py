@@ -190,6 +190,17 @@ SETTINGS = (
       "Base folder of all profile data, one subfolder per profile; default: "
       "<repo>/data.",
       stages=("preprocess", "refine", "visuals", "chunk", "extract", "chat")),
+    S("EDIT_TRY_API_KEY", "edit.try_api_key", "str", "EMPTY",
+      "API key of the endpoint `docpipe edit` tries a changed prompt at.",
+      secret=True, stages=("edit",)),
+    S("EDIT_TRY_BASE_URL", "edit.try_base_url", "str", None,
+      "OpenAI-compatible endpoint `docpipe edit` sends a recorded request "
+      "to once more with a changed prompt; without it the text model of "
+      "the run (LLM_BASE_URL) where one is set, else nothing is sent.",
+      stages=("edit",)),
+    S("EDIT_TRY_MODEL", "edit.try_model", "str", None,
+      "Model name at EDIT_TRY_BASE_URL; without it LLM_MODEL.",
+      stages=("edit",)),
     S("EMBEDDING_ALLOW_MIXED_INDEX", "embedding.allow_mixed_index", "flag",
       "0",
       "Append to an index of another embedding model (both recorded); 0 "

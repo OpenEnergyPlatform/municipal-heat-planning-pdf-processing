@@ -273,8 +273,8 @@ prompt, one page image and one reply, 9,260 tokens with the `kwp` profile and
 9,449 with `scenarios`) and take the page reply schema. A server that
 is not there, or refuses the schema, ends the run with exit 1 at that page;
 a run in which every page has its text asks no server and ends 0 as before.
-The profile's `reading.PHRASES` is checked first, and a profile without one of
-its sentences stops the run with a `LookupError`. A page the model gave no
+The profile's reading sentences (`prompts/reading/phrases.json`) are checked first, and a profile without one of
+them stops the run with a `LookupError`. A page the model gave no
 readable reply for keeps no text and is listed with its cause under
 `failed_pages` in `page_transcription_report.json`; that does not change the
 exit code, the run says in one line how many pages of how many documents could
@@ -316,7 +316,7 @@ beside it; the server at `LLM_BASE_URL` is checked first
 (`docpipe/llm_preflight.py`), for the needed context and for taking each reply
 schema of the stage as the `response_format` of a request, and a server that
 refuses one ends the run with exit 1 before the first document. The profile's
-`reading.PHRASES` is checked then too.
+reading sentences (`prompts/reading/phrases.json`) are checked then too.
 
 Every request sends its reply schema as the grammar, and the reply is read as
 exactly one JSON object (`docpipe/reading.py`); nothing is stripped, cut out or
@@ -372,7 +372,7 @@ the longer of the two system prompts, one image and one reply of
 `VLM_MAX_TOKENS` tokens (8,192 by default), 13,992 tokens with the `kwp` profile
 and 14,163 with `scenarios`. A vision server whose maximum context length is
 smaller is refused by the preflight. The preflight also puts the two
-reply schemas to the server, and a profile without a `reading.PHRASES` sentence
+reply schemas to the server, and a profile without a sentence of `prompts/reading/phrases.json`
 stops the run before the first request; neither is asked of a dry run.
 
 An image has no halves, so a reply cut off at its limit is asked once more,
@@ -546,9 +546,11 @@ docpipe compile spec --shapes shapes.ttl --out draft.json
   [asking the corpus](stages/inference.md).
 - `compile` drafts an extraction spec from the shapes of a graph; see [the
   spec compiler](stages/compile.md).
-- `edit` shows a profile's extraction spec as a page in the browser and says
-  what an edit costs the next run before it is saved; see [editing a
-  spec](stages/editor.md).
+- `edit` shows a profile's extraction spec, its prompts and the sentences its
+  stages say outside their prompts as a page in the browser; for the spec it
+  says what an edit costs the next run before it is saved, and for a prompt it
+  shows the recorded requests the edit reaches; see [editing a
+  profile](stages/editor.md).
 
 ## Configuration reference
 

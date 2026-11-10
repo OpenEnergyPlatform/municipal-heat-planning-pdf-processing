@@ -16,7 +16,9 @@ a test holds the two against each other, so neither can drift. The harvest does
 not call this module: it keeps its own reader and its own sentences.
 
 The sentences the model hears are the profile's, in the language of that
-profile's prompts for these stages (`profiles/<name>/reading.py: PHRASES`).
+profile's prompts for these stages
+(`profiles/<name>/prompts/reading/phrases.json`, `docpipe/phrases.py`; a
+table in its `reading.py` until 2026-11-10).
 
 Author: Felix Vossel
 """
@@ -28,7 +30,10 @@ import json
 from dataclasses import dataclass
 from typing import Optional
 
+from . import phrases as phrase_files
 from .profile import ENV_VAR, Profile, active_profile
+
+MODULE = "reading"
 
 # Why a reply is not the object that was asked for. `wrong_shape` is the
 # label of an object that was read well and is no use to the stage (a window
@@ -63,6 +68,15 @@ REQUIRED = frozenset({
     "key_not_text",
 })
 
+# What a comment said above a sentence while the sentences were tables in
+# the profiles' modules: said once here, and shown there by the editor
+# (`docpipe edit`).
+NOTES = {
+    "shape_rule": (
+        "what is said back whatever went wrong: the shape that was asked "
+        "for"),
+}
+
 _checked: dict = {}
 
 # The profile that speaks where none is in force. The stages that write a
@@ -92,15 +106,12 @@ def phrases(profile: Optional[Profile] = None) -> dict:
                           f"${ENV_VAR}")
     if profile.name in _checked:
         return _checked[profile.name]
-    nearest = profile.require("reading", "PHRASES")
-    got: dict = {}
-    for layer in reversed(profile.layers("reading", "PHRASES")[1:]):
-        got.update(layer)                   # those of the profiles it extends
-    got.update(nearest)
+    got = phrase_files.table(profile, MODULE)
     missing = sorted(REQUIRED - set(got))
     if missing:
-        raise LookupError(f"reading.PHRASES of profile {profile.name!r} "
-                          f"is missing {missing}")
+        raise LookupError(
+            f"the reading sentences of profile {profile.name!r} are "
+            f"missing {missing} ({phrase_files.path_of(profile, MODULE)})")
     _checked[profile.name] = got
     return got
 

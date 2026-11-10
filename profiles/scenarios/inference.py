@@ -11,74 +11,9 @@ READOFF_MARKER = "read off"
 READOFF_NOTE = ("(Note: some values were read off from figures – estimates, "
                 "reading errors possible.)")
 
-# How a statement about a number the code printed, or one read off a
-# requested image, is given: told in the message that brings the output or
-# the image, not before (owner decision 2026-11-07: each request is told what
-# it is to do).
-_COMPUTED = (' A statement about a calculated number is {"statement": "...", '
-             '"basis": "computed", "index": <int of the excerpt that holds the '
-             'input values>, "quote": "<verbatim sentence or table row from '
-             'that excerpt with the input values>", "run": <number of the run '
-             'under "Already executed" whose output printed the number>}. '
-             'Never give a calculated number with basis "text".')
-_READ_OFF = (' Give what you read as {"statement": "...", "basis": "image", '
-             '"block": "p17_img1", "reading": "..."}, with the id of the image '
-             'instead of an index.')
 
-
-PHRASES = {
-    "task_heading": "User's task",
-    "history_heading": ("Conversation so far (use it ONLY to resolve references in the "
-                        "current task — pronouns, \"and …\", ellipses; NOT a source of "
-                        "facts, evidence comes exclusively from the excerpts)"),
-    "history_task": "Question",
-    "history_phrase": "Search anchor",
-    "history_answer": "Answer",
-    "pick_outside": "{ids} are not on the list. Choose entries of the list only.",
-    "chat_parameter_question": ("What does the user ask for? Choose the entry "
-                                "of the list the question asks about, by what "
-                                "it means and not by its words. A question "
-                                "about none of them is out:unstated."),
-
-    "code_heading": "Code executed",
-    "exec_stdout": "Execution result (stdout)",
-    "exec_empty": "(no output)",
-    "exec_failed": "Execution failed",
-    "exec_unknown": "unknown error",
-    "exec_recover": "Fix the code OR answer without computing.",
-
-    "compute_heading": "Already executed",
-    "compute_guide": ("Give the final answer in the prescribed JSON format — or, only "
-                      "if truly necessary, another "
-                      '{"action":"python","code":...}.' + _COMPUTED),
-    "compute_guide_final": ("Give the final answer NOW, in the prescribed JSON format "
-                            "(NO more action objects)." + _COMPUTED),
-
-    "image_heading": "Requested figures (see images)",
-    "image_uncaptioned": "no caption",
-    "image_unavailable": "image unavailable",
-    "image_guide": ("Read the value off the image and give the final answer — or, only "
-                    'if truly necessary, another {"action":"image","id":"..."}.'
-                    + _READ_OFF),
-    "image_guide_final": ("Give the final answer NOW, in the prescribed JSON format "
-                          "(NO more action objects)." + _READ_OFF),
-    "image_part": "Image for excerpt index={index}",
-
-    "readoff_heading": "To read off (per the pre-check)",
-
-    # The citation under the answer, which the model also reads as `source`.
-    "citation_quotes": ("“", "”"),
-    "citation_page": "page {page}",
-    "citation_page_unknown": "page unknown",
-    "citation_section": "Section",
-    "citation_table": "Table",
-    "citation_figure": "Figure",
-
-    # What the loop splices into a reading, a failed run and an image part.
-    "readoff_value": "{reading} — value read off: {value} {unit}",
-    "exec_none": "no result",
-    "image_requested": "Requested image [{id}]: {title}",
-}
+# What the answer loop says around the prompts is a file beside them:
+# prompts/inference/phrases.json (docpipe/phrases.py).
 
 
 # The words of the chat app's pages (docpipe/app/app.py) and of the picker's

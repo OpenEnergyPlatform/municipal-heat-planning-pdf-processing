@@ -553,13 +553,13 @@ def _prompts_of(stage: str, profile) -> list:
 def _extraction_phrases(profile) -> list:
     from .extraction import wording
     _has_extraction(profile)
-    return [Check("wording", "extraction.PHRASES", OK,
+    return [Check("wording", "prompts/extraction/phrases.json", OK,
                   f"{len(wording.phrases(profile))} phrase(s), none missing")]
 
 
 def _inference_phrases(profile) -> list:
     from .inference import wording
-    return [Check("wording", "inference.PHRASES", OK,
+    return [Check("wording", "prompts/inference/phrases.json", OK,
                   f"{len(wording.phrases(profile))} phrase(s), none missing")]
 
 
@@ -583,8 +583,8 @@ def _graph_route(profile) -> list:
 # (stage, line, check). The tables are the stages' own, and so is the check
 # that one is complete: it raises and names what is missing.
 WORDING = (
-    ("extract", "extraction.PHRASES", _extraction_phrases),
-    ("chat", "inference.PHRASES", _inference_phrases),
+    ("extract", "prompts/extraction/phrases.json", _extraction_phrases),
+    ("chat", "prompts/inference/phrases.json", _inference_phrases),
     ("chat", "inference.UI", _inference_ui),
     ("chat", "graph route", _graph_route),
 )

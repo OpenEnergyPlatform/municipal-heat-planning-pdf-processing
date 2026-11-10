@@ -15,194 +15,19 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from docpipe.extraction import trace  # noqa: E402
-
-NOTES = ("parameter", "coordinate", "owner", "value")
-CHAINED = ("coord", "search", "check", "follow")
-
-
-def _text(content) -> str:
-    if content is None:
-        return ""
-    if not isinstance(content, list):
-        return str(content)
-    parts = []
-    for p in content:
-        if isinstance(p, dict) and p.get("type") == "text":
-            parts.append(str(p.get("text", "")))
-        else:
-            parts.append("[image]")
-    return "\n".join(parts)
-
-
-def _json(text):
-    try:
-        return json.loads(text)
-    except (TypeError, ValueError):
-        return None
-
-
-def _entries(user) -> dict:
-    """{number: label} of the "N label (means: ...)" lines of a request's list."""
-    out = {}
-    for line in (user or {}).get("list") or ():
-        m = re.match(r"\s*(\d+)\s+(.*?)(?:\s*\(means:.*)?\s*$", str(line), re.S)
-        if m:
-            out[m.group(1)] = m.group(2)
-    return out
-
-
-def _spell(answer, user) -> list:
-    """The entries an answer names, each written out as "N = label"."""
-    if not isinstance(answer, dict) or "entry" not in answer:
-        return []
-    labels = _entries(user)
-    picked = answer["entry"]
-    picked = picked if isinstance(picked, list) else [picked]
-    return [f"{n} = {labels[str(n)]}" if str(n) in labels else str(n)
-            for n in picked]
-
-
-def _words(answer) -> set:
-    """The words an answer reads, from "words" or each of its "found"/"more"."""
-    out = set()
-    if isinstance(answer, dict):
-        for item in [answer] + list(answer.get("found") or ()) + list(
-                answer.get("more") or ()):
-            if isinstance(item, dict) and item.get("words") not in (None, ""):
-                out.add(str(item["words"]))
-    return out
-
-
-def _reasons(user) -> str:
-    what = (user or {}).get("what")
-    if isinstance(what, (dict, str)):
-        what = [what]
-    parts = []
-    for w in what or ():
-        if isinstance(w, dict):
-            parts.append(str(w.get("why") or w.get("reason")
-                             or json.dumps(w, ensure_ascii=False)))
-        else:
-            parts.append(str(w))
-    return ", ".join(parts)
-
-
-def requests_of(events: list) -> list:
-    """One dict per `*_ask` event, in trace order."""
-    pieces = trace.pieces_of(events)
-    out = []
-    for i, e in enumerate(events):
-        t = str(e.get("t", ""))
-        if not t.endswith("_ask"):
-            continue
-        sent = trace.sent(e, pieces) or {}
-        msgs = [[m.get("role"), _text(m.get("content"))]
-                for m in sent.get("messages") or ()]
-        system = next((m[1] for m in msgs if m[0] == "system"), "")
-        rest = [m for m in msgs if m[0] != "system"]
-        user_text = rest[0][1] if rest and rest[0][0] == "user" else ""
-        user = _json(user_text)
-        user = user if isinstance(user, dict) else None
-        output = e.get("output") if isinstance(e.get("output"), dict) else {}
-        content = output.get("content")
-        answer_text = content if isinstance(content, str) and content.strip() else None
-        answer = _json(answer_text) if answer_text else None
-        value = (user or {}).get("value")
-        req = {k: v for k, v in e.items() if k not in ("input", "output", "t", "kind")}
-        if "kind" in e:
-            req["note_kind"] = e["kind"]  # the passage's or list's kind
-        req.update({
-            "kind": t[:-4], "system": system, "messages": rest,
-            "user": user_text, "answer": answer_text,
-            "answer_json": answer if isinstance(answer, (dict, list)) else None,
-            "finish": output.get("finish"), "error": output.get("error"),
-            "spelled": _spell(answer, user),
-            "at": value.get("at") if isinstance(value, dict) else None,
-            "check": "", "_event": i, "_user": user,
-        })
-        out.append(req)
-    _check(out, events)
-    for r in out:
-        r.pop("_event")
-        r.pop("_user")
-    return out
-
-
-def _same_notes(a, b) -> bool:
-    return a.get("doc") == b.get("doc") and all(a.get(k) == b.get(k) for k in NOTES)
-
-
-def _check(reqs: list, events: list) -> None:
-    """What became of each request: taken, asked again, no answer, unreadable."""
-    for pos, r in enumerate(reqs):
-        if r["answer"] is None:
-            r["check"] = "no answer"
-            continue
-        nxt = next((x for x in events[r["_event"] + 1:]
-                    if x.get("t") != trace.PIECE), None)
-        if (nxt and nxt.get("t") == "error" and nxt.get("kind") == "unreadable"
-                and nxt.get("where") == r["kind"]):
-            r["check"] = f"unreadable: {nxt.get('cause')}"
-            continue
-        follow = next((x for x in reqs[pos + 1:] if x["kind"] == "follow"
-                       and x.get("asked") == r["kind"] and _same_notes(x, r)), None)
-        if follow is None:
-            r["check"] = "taken"
-        else:
-            why = _reasons(follow["_user"])
-            r["check"] = "asked again" + (f": {why}" if why else "")
-
-
-def chain_of(requests: list, index: int) -> list:
-    """Indexes of the requests of one value: the find of its parameter and
-    passage, the readings and follow-ups, and the list entries asked for its words."""
-    r = requests[index]
-    kind = r.get("asked") if r["kind"] == "follow" else r["kind"]
-    if kind not in CHAINED:
-        return [index]
-    doc, par, own = r.get("doc"), r.get("parameter"), r.get("owner")
-    members = [i for i, x in enumerate(requests)
-               if x.get("doc") == doc and x.get("parameter") == par
-               and x.get("owner") == own and x.get("value") == r.get("value")
-               and (x["kind"] in ("coord", "search", "check")
-                    or (x["kind"] == "follow" and x.get("asked") in CHAINED))]
-    first = min(members + [index])
-    finds = [i for i, x in enumerate(requests)
-             if x["kind"] == "find" and x.get("doc") == doc
-             and x.get("parameter") == par and x.get("owner") == own and i < first]
-    words = set()
-    for i in members:
-        words |= _words(requests[i]["answer_json"])
-    lists = []
-    for i, x in enumerate(requests):
-        if x["kind"] not in ("list", "names") or x.get("doc") != doc:
-            continue
-        if x.get("parameter") not in (None, par):
-            continue
-        u = _json(x["user"]) or {}
-        if str(u.get("words", u.get("name"))) in words:
-            lists.append(i)
-    return sorted(set(finds[-1:] + members + lists))
+from docpipe.editor.requests import (  # noqa: E402,F401
+    CHAINED, NOTES, _check, _entries, _json, _reasons, _same_notes, _spell,
+    _text, _words, chain_of, keep, requests_of)
 
 
 def _keep(r: dict, a) -> bool:
-    kinds = {k[:-4] if k.endswith("_ask") else k for k in a.kind or ()}
-    if kinds and r["kind"] not in kinds:
-        return False
-    if a.field and r.get("parameter") not in a.field:
-        return False
-    if a.owner and str(r.get("owner")) not in {str(o) for o in a.owner}:
-        return False
-    if a.value and str(r.get("value")) not in {str(v) for v in a.value}:
-        return False
-    blob = "\n".join([r["system"], r["user"], r["answer"] or ""]).casefold()
-    return all(s.casefold() in blob for s in a.contains or ())
+    return keep(r, a.kind or (), a.field or (), a.owner or (), a.value or (),
+                a.contains or ())
 
 
 PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -267,7 +92,7 @@ function list(){const k=$('fk').value,f=$('ff').value,o=$('fo').value.trim(),v=$
 function show(i){const r=R[i];const hit=addrs(r.answer_json);const ch=$('chat');
  let h='<h3>'+esc(label(r))+(r.asked?' (asks again: '+esc(r.asked)+')':'')+'</h3><p style="color:var(--muted)">#'+i+' · doc '+esc(r.doc)+' · '+esc(sub(r))+'</p>';
  h+='<button id="cp">Copy as text</button>';
- if(['coord','search','check','follow'].includes(r.kind))h+='<button id="ch">Chain of this value</button>';
+ if(r.chain.length>1)h+='<button id="ch">Chain of this value</button>';
  if(view)h+='<button id="all">Show all</button>';
  h+='<details class="msg system"><summary class="role">instruction</summary>'+esc(r.system)+'</details>';
  h+='<div class="msg user"><div class="role">request</div>'+userHtml(r,hit)+'</div>';

@@ -73,7 +73,8 @@ OWN = {
     "profiles": "the profiles this installation finds, and where",
     "column": "a column of one's own: the spec of one question for a "
               "trial harvest, in a folder of its own",
-    "edit": "a profile's extraction spec in the browser, on a local page",
+    "edit": "a profile's spec, prompts and sentences in the browser, on a "
+            "local page",
 }
 USAGE = "docpipe [--profile P] [--config FILE] <command> [arguments]"
 

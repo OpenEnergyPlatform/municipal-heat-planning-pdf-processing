@@ -626,9 +626,11 @@ profile default and always have to be spelled out.
   an assistant's tool; see [handing the values on](stages/serve.md).
 - **Drafting a spec.** `docpipe compile` drafts an extraction spec from the
   shapes and the ontology of a graph; see [the spec compiler](stages/compile.md).
-- **Editing a spec.** `docpipe edit` shows a profile's extraction spec in the
+- **Editing a profile.** `docpipe edit` shows a profile's extraction spec in the
   browser and says which questions an edit moves and which stored documents it
-  makes stale; see [editing a spec](stages/editor.md).
+  makes stale; its second tab edits the prompts and the sentences of the
+  stages and shows what an edit does to recorded requests; see [editing a
+  profile](stages/editor.md).
 - **Checking a profile.** `docpipe preflight` holds any profile to what a
   corpus run rests on, without a GPU: its spec, its prompts, the shape it
   publishes and the writer of its graph; see [the check before a

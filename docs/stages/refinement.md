@@ -66,7 +66,7 @@ asks for JSON in no other way, so a server that refuses a schema with a 4xx
 other than 429 would refuse every request of the run, and the run ends with
 exit 1 before the first document. A server that does not answer the probe
 (busy, down, a 5xx, a 429) gives no verdict, and the run goes on. `main`
-also reads the profile's `reading.PHRASES` before the first document
+also reads the profile's reading sentences (`prompts/reading/phrases.json`) before the first document
 (`reading.phrases()`, after `--print-context-budget`, which asks nothing of
 the model): a profile that lacks one of the sentences ends the run there
 with a `LookupError`, not in the middle of the first document.
@@ -158,7 +158,7 @@ attempts in all, with `_backoff` between them (`min(2 * attempt, 10)`
 seconds). The next request is the original one, then an assistant turn with
 a bounded echo of the bad reply (`_echo`, at most 400 leading and 200
 trailing characters; empty when the reply had no text), then a user turn
-that names the cause in the profile's words (`reading.PHRASES`) and repeats
+that names the cause in the profile's words (`prompts/reading/phrases.json`) and repeats
 the shape that was asked for. The cause is one of:
 
 | cause | the reply was |
@@ -514,7 +514,7 @@ over `SECTION_MAX_WORDS` is re-cut mechanically by `_enforce_max`.
 `run()`'s preflight (see Method) refuses to start before the first
 document rather than mid-run: an undersized or wrong server, and a server that
 refuses a reply schema of the stage, end the run with exit 1 there, and a
-profile without a `reading.PHRASES` sentence ends it with a `LookupError`. A document with no
+profile without a sentence of `prompts/reading/phrases.json` ends it with a `LookupError`. A document with no
 `results/sections.json`
 is not a `--batch`-mode candidate (`run_batch` lists the document directories
 that hold `sections.json` through `artifacts.document_dirs`). A killed `--force` run,

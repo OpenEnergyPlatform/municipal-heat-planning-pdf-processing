@@ -307,13 +307,14 @@ function renderHeader() {
     st.branch ? h('span', { class: 'meta' }, 'branch ', h('code', { text: st.branch })) : null,
     st.harvest ? h('span', { class: 'meta', title: st.harvest }, 'harvest: ', st.harvest_documents == null ? '' : st.harvest_documents + ' documents') : null,
     (st.changed && st.changed.length) ? h('span', { class: 'meta changed', title: st.changed.join('\n') }, 'uncommitted: ' + st.changed.join(', ')) : null,
-    h('span', { class: 'tabs' }, (st.tabs || ['spec']).map(t => h('button', { class: t === S.tab ? 'on' : '', text: t.charAt(0).toUpperCase() + t.slice(1), onclick: () => { S.tab = t; } }))),
+    h('span', { class: 'tabs' }, ['spec', 'prompts'].map(t => h('button', { class: t === S.tab ? 'on' : '',
+      text: t.charAt(0).toUpperCase() + t.slice(1) + ((t === 'spec' ? S.dirty : promptsDirty()) ? ' •' : ''), onclick: () => setTab(t) }))),
     h('span', { class: 'spacer' }),
-    S.dirty ? h('span', { class: 'dirty', text: 'Unsaved edits' }) : h('span', { class: 'clean', text: 'No unsaved edits' }),
-    h('button', { text: 'Reload from disk', disabled: S.busy, onclick: () => reload() }),
-    h('button', { text: 'Check', disabled: S.busy, title: 'Ctrl+Enter', onclick: () => doCheck() }),
-    h('button', { class: 'primary', text: 'Save', disabled: S.busy, title: 'Ctrl+S', onclick: () => doSave(false) }));
-  document.title = (S.dirty ? '* ' : '') + 'docpipe edit ' + (st.profile || '');
+    anyDirty() ? h('span', { class: 'dirty', text: 'Unsaved edits' }) : h('span', { class: 'clean', text: 'No unsaved edits' }),
+    S.tab === 'spec' ? h('button', { text: 'Reload from disk', disabled: S.busy, onclick: () => reload() }) : null,
+    S.tab === 'spec' ? h('button', { text: 'Check', disabled: S.busy, title: 'Ctrl+Enter', onclick: () => doCheck() }) : null,
+    S.tab === 'spec' ? h('button', { class: 'primary', text: 'Save', disabled: S.busy, title: 'Ctrl+S', onclick: () => doSave(false) }) : null);
+  document.title = (anyDirty() ? '* ' : '') + 'docpipe edit ' + (st.profile || '');
 }
 
 /* ---------- tree ---------- */
@@ -988,6 +989,886 @@ function summaryBadge(R) {
   return r.ok ? h('span', { class: 'badge ok', text: 'ok' }) : h('span', { class: 'badge dep', text: 'refused' });
 }
 
+/* ---------- prompts tab ---------- */
+
+/* State. Unsaved text is kept per prompt id in P.eds (and per module in P.phs) for as long as the page is open: opening
+   another prompt never loses an edit, and the list marks every prompt whose text differs from what was loaded. */
+const P = {
+  loaded: false, loading: false, list: null, sel: null, filter: '',
+  eds: new Map(), phs: new Map(), trace: null,
+  req: null, tryRes: null, rui: null, pvSeq: 0, rqSeq: 0, pvTimer: null, rqTimer: null, sig: '',
+};
+
+/* like api() for a POST, but an answer that carries "ok" or "saved" is a report even when it holds an error sentence */
+async function apiR(url, body) {
+  let res;
+  try {
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Docpipe-Edit': '1' }, body: JSON.stringify(body == null ? {} : body) });
+  } catch (e) { throw new Error('The server cannot be reached: ' + e.message); }
+  let j;
+  try { j = await res.json(); } catch (e) { throw new Error('The server answered ' + res.status + ' without JSON.'); }
+  if (isObj(j) && ('ok' in j || 'saved' in j)) return j;
+  if (isObj(j) && typeof j.error === 'string') throw new Error(j.error);
+  if (!res.ok) throw new Error('The server answered ' + res.status + '.');
+  return j;
+}
+
+/* the one function that builds the text sent back for a prompt */
+// The run reads a marker only on a line of its own. So the text before a
+// marker ends its line, and a marker ends its line before its text: what is
+// typed at the end of one box must not run into the marker of the next.
+const lineEnded = t => (t === '' || t.endsWith('\n')) ? t : t + '\n';
+function rawOf(E) {
+  if (E.single) return E.cut.front + E.body;
+  const parts = E.cut.parts;
+  let out = E.cut.front + (parts.length ? lineEnded(E.cut.common) : E.cut.common);
+  parts.forEach((p, i) => {
+    out += (p.text === '' ? p.mark : lineEnded(p.mark))
+      + (i < parts.length - 1 ? lineEnded(p.text) : p.text);
+  });
+  return out;
+}
+const edDirty = E => rawOf(E) !== E.detail.raw;
+const phDirty = X => JSON.stringify(X.table) !== X.origJson;
+function isDirty(X) { return X.kind === 'prompt' ? edDirty(X) : phDirty(X); }
+function stampOf(X) { return X.kind === 'prompt' ? rawOf(X) : JSON.stringify(X.table); }
+function promptsDirty() {
+  for (const E of P.eds.values()) if (edDirty(E)) return true;
+  for (const X of P.phs.values()) if (phDirty(X)) return true;
+  return false;
+}
+function anyDirty() { return S.dirty || promptsDirty(); }
+function dirtySig() {
+  const a = [];
+  for (const [id, E] of P.eds) if (edDirty(E)) a.push('p:' + id);
+  for (const [m, X] of P.phs) if (phDirty(X)) a.push('s:' + m);
+  return a.join('|');
+}
+function editsMap() {
+  const out = {};
+  for (const [id, E] of P.eds) if (edDirty(E)) out[id] = rawOf(E);
+  return out;
+}
+function currentX() {
+  if (!P.sel) return null;
+  return P.sel.t === 'prompt' ? P.eds.get(P.sel.id) || null : P.phs.get(P.sel.module) || null;
+}
+const isShown = X => { const c = currentX(); return !!c && c === X; };
+
+/* settings in the front matter: only the value after the key is replaced, every other character stays */
+const settingRe = key => new RegExp('^(' + key + ':)([^\\r\\n]*)', 'm');
+function settingRest(front, key) { const m = settingRe(key).exec(front); return m ? m[2] : null; }
+function withSetting(front, key, lead, v) { return front.replace(settingRe(key), (all, a) => a + lead + v); }
+
+function bodyFromCut(cut) { return cut.common + (cut.parts || []).map(p => p.mark + p.text).join(''); }
+function makeEd(d) {
+  const cut = clone(d.cut);
+  cut.parts = cut.parts || [];
+  const single = !!d.composed || !cut.parts.length;
+  return { kind: 'prompt', id: d.id, detail: d, cut, single, body: bodyFromCut(cut), rep: null, review: null, busy: false, ui: null };
+}
+function makePh(d) {
+  return { kind: 'phrases', module: d.module, detail: d, table: clone(d.table || {}), origJson: JSON.stringify(d.table || {}),
+    rep: null, review: null, busy: false, ui: null, shown: {} };
+}
+
+const mb = b => (b / 1e6).toFixed(1) + ' MB';
+const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+
+/* ---------- load and list ---------- */
+
+async function loadPrompts() {
+  if (P.loading) return;
+  P.loading = true;
+  put($('pl-items'), h('div', { class: 'help pr-pad', text: 'Loading…' }));
+  try {
+    P.list = await api('GET', '/api/prompts');
+    P.loaded = true;
+    const tr = P.list.traces || [];
+    if (!P.trace || !tr.some(t => t.name === P.trace)) P.trace = tr.length ? tr[0].name : null;
+  } catch (e) {
+    put($('pl-items'), h('div', { class: 'box bad', text: e.message }));
+    P.loading = false;
+    return;
+  }
+  P.loading = false;
+  renderList(); renderEditorColumn(); renderRight();
+}
+
+function stageOrder(a, b) { return (a === 'extraction' ? 0 : 1) - (b === 'extraction' ? 0 : 1) || a.localeCompare(b); }
+
+function renderList() {
+  const box = $('pl-items');
+  if (!P.list) return;
+  const top = $('pl-left').scrollTop;
+  const words = P.filter.toLowerCase().split(/\s+/).filter(Boolean);
+  const match = (...t) => { const hay = t.join('\n').toLowerCase(); return words.every(w => hay.includes(w)); };
+  const els = [];
+  const item = (selected, name, sub, badges, onclick) => h('button', { class: 'node' + (selected ? ' sel' : ''), onclick },
+    h('span', { class: 'caret' }), h('span', { class: 'name', text: name, title: name + (sub ? ' · ' + sub : '') }), sub ? h('span', { class: 'sub', text: sub }) : null, badges);
+  const prompts = (P.list.prompts || []).filter(p => match(p.id, p.owner || ''));
+  const stages = [...new Set(prompts.map(p => p.stage))].sort(stageOrder);
+  els.push(h('div', { class: 'tree-h', text: 'Prompts (' + prompts.length + ')' }));
+  if (!prompts.length) els.push(h('div', { class: 'help pr-pad', text: (P.list.prompts || []).length ? 'No prompt matches the filter.' : 'This profile has no prompt files.' }));
+  for (const st of stages) {
+    els.push(h('div', { class: 'tree-h', text: st }));
+    for (const p of prompts.filter(x => x.stage === st)) {
+      const E = P.eds.get(p.id);
+      els.push(item(P.sel && P.sel.t === 'prompt' && P.sel.id === p.id, p.name, p.own ? '' : 'inherited from ' + p.owner,
+        [(p.kinds || []).length ? h('span', { class: 'badge ok', text: 'requests', title: 'Recorded requests can be shown for this prompt' }) : null,
+          E && edDirty(E) ? h('span', { class: 'badge changed', text: 'unsaved' }) : null],
+        () => selectPrompt(p.id)));
+    }
+  }
+  els.push(h('div', { class: 'tree-h', text: 'Sentences' }));
+  for (const m of (P.list.modules || []).filter(m => match(m, 'sentences'))) {
+    const X = P.phs.get(m);
+    els.push(item(P.sel && P.sel.t === 'phrases' && P.sel.module === m, m, '', X && phDirty(X) ? h('span', { class: 'badge changed', text: 'unsaved' }) : null, () => selectModule(m)));
+  }
+  put(box, ...els);
+  $('pl-left').scrollTop = top;
+}
+
+/* called after every edit: the list, the tabs and the header say what is unsaved, only when that changed */
+function touched() {
+  const sig = dirtySig();
+  if (sig === P.sig) return;
+  P.sig = sig;
+  renderList(); renderHeader();
+}
+
+async function selectPrompt(id) {
+  P.sel = { t: 'prompt', id };
+  resetRequests();
+  renderList();
+  const main = $('pl-main');
+  if (!P.eds.has(id)) {
+    put(main, h('div', { class: 'help', text: 'Loading ' + id + '…' }));
+    renderRight();
+    try {
+      const d = await api('GET', '/api/prompt?id=' + encodeURIComponent(id));
+      if (!P.eds.has(id)) P.eds.set(id, makeEd(d));
+    } catch (e) {
+      if (P.sel && P.sel.t === 'prompt' && P.sel.id === id) put(main, h('div', { class: 'box bad', text: e.message }));
+      return;
+    }
+  }
+  if (!(P.sel && P.sel.t === 'prompt' && P.sel.id === id)) return;
+  resetRequests();
+  renderEditorColumn(); renderRight();
+  startRequests();
+}
+async function selectModule(m) {
+  P.sel = { t: 'phrases', module: m };
+  resetRequests();
+  renderList();
+  const main = $('pl-main');
+  if (!P.phs.has(m)) {
+    put(main, h('div', { class: 'help', text: 'Loading the sentences of ' + m + '…' }));
+    renderRight();
+    try {
+      const d = await api('GET', '/api/phrases?module=' + encodeURIComponent(m));
+      if (!P.phs.has(m)) P.phs.set(m, makePh(d));
+    } catch (e) {
+      if (P.sel && P.sel.t === 'phrases' && P.sel.module === m) put(main, h('div', { class: 'box bad', text: e.message }));
+      return;
+    }
+  }
+  if (!(P.sel && P.sel.t === 'phrases' && P.sel.module === m)) return;
+  renderEditorColumn(); renderRight();
+}
+
+function renderEditorColumn() {
+  const main = $('pl-main');
+  const top = main.scrollTop;
+  if (!P.list) { put(main); return; }
+  if (!P.sel) { put(main, h('div', { class: 'help', text: 'Pick a prompt or the sentences of a module on the left.' })); return; }
+  const X = currentX();
+  if (!X) { put(main, h('div', { class: 'help', text: 'Loading…' })); return; }
+  if (X.kind === 'prompt') renderPromptEditor(X); else renderPhrasesEditor(X);
+  main.scrollTop = top;
+}
+
+/* ---------- the editor of a prompt ---------- */
+
+function promptArea(value, onInput, readonly) {
+  const ta = h('textarea', { class: 'prompt', spellcheck: 'false', value, readonly: readonly ? true : null });
+  ta.rows = Math.max(3, Math.min(30, String(value).split('\n').length + 1));
+  if (!readonly) ta.addEventListener('input', () => { onInput(ta.value); });
+  return ta;
+}
+function syncButtons(X) {
+  const u = X.ui;
+  if (!u) return;
+  u.check.disabled = X.busy; u.save.disabled = X.busy; u.discard.disabled = X.busy || !isDirty(X);
+  u.dirty.hidden = !isDirty(X);
+  if (u.stale) u.stale.hidden = !(X.rep && X.rep.stamp !== stampOf(X));
+}
+function edited(X) {
+  syncButtons(X);
+  touched();
+  if (X.kind === 'prompt') schedulePreview();
+}
+
+function renderPromptEditor(E) {
+  const d = E.detail;
+  const ui = E.ui = {};
+  ui.dirty = h('span', { class: 'badge changed', text: 'unsaved changes', hidden: !edDirty(E) });
+  const kids = [
+    h('div', { class: 'page-title' }, d.id, d.own ? h('span', { class: 'badge ok', text: 'own file' }) : h('span', { class: 'badge', text: 'inherited from ' + d.owner }), ui.dirty),
+    h('div', { class: 'page-sub' }, 'File: ', h('code', { text: d.path || '' })),
+  ];
+  if (!d.own) kids.push(h('div', { class: 'warn', text: 'This profile runs with the file of ' + d.owner + '. Saving writes a file of its own: ' + (d.target || '') + '.' }));
+
+  const keys = ['temperature', 'max_tokens'].filter(k => settingRest(E.cut.front, k) !== null);
+  if (keys.length) {
+    kids.push(h('div', { class: 'section', text: 'Settings' }), h('div', { class: 'row2' }, keys.map(k => {
+      const rest = settingRest(E.cut.front, k);
+      const lead = /^[ \t]*/.exec(rest)[0];
+      const inp = h('input', { type: 'text', value: rest.slice(lead.length), spellcheck: 'false' });
+      inp.addEventListener('input', () => { E.cut.front = withSetting(E.cut.front, k, lead, inp.value); edited(E); });
+      return h('label', { class: 'pr-set' }, h('code', { text: k }), inp);
+    })));
+  }
+
+  if (E.single) {
+    kids.push(h('div', { class: 'section', text: d.composed ? 'The file, after its settings' : 'What every request is told' }),
+      promptArea(E.body, v => { E.body = v; edited(E); }));
+    if (d.composed) {
+      kids.push(h('div', { class: 'help', text: 'This file is put together with a template of the core. The text that is sent:' }),
+        promptArea(d.sent == null ? '' : d.sent, null, true),
+        h('div', { class: 'help', text: 'This is the text sent with the file on disk; it does not change while you edit.' }));
+    }
+  } else {
+    kids.push(h('div', { class: 'section', text: 'What every request is told' }), promptArea(E.cut.common, v => { E.cut.common = v; edited(E); }));
+    for (const p of E.cut.parts) {
+      const follow = p.kind === 'follow-up';
+      kids.push(h('div', { class: 'field pr-part' },
+        h('label', {}, follow ? 'The words of a follow-up message that carries: ' : 'Only told to a request whose message carries: ', h('code', { text: (p.keys || []).join(', ') })),
+        h('div', { class: 'help' }, 'Opened by the line ', h('code', { text: String(p.mark).replace(/\n+$/, '') }), ' (not editable)'),
+        promptArea(p.text, v => { p.text = v; edited(E); })));
+    }
+  }
+  if ((d.placeholders || []).length) kids.push(h('div', { class: 'help' }, 'Places the code fills: ', d.placeholders.map(x => h('code', { text: '{{' + x + '}} ' }))));
+
+  ui.check = h('button', { text: 'Check', title: 'Ctrl+Enter', onclick: () => actCheck(E) });
+  ui.save = h('button', { class: 'primary', text: 'Save', title: 'Ctrl+S', onclick: () => actSave(E, false) });
+  ui.discard = h('button', { text: 'Discard changes', onclick: () => actDiscard(E) });
+  ui.report = h('div', { class: 'pr-report' });
+  kids.push(h('div', { class: 'toolbar pr-actions' }, ui.check, ui.save, ui.discard), ui.report);
+  put($('pl-main'), ...kids);
+  syncButtons(E);
+  renderReport(E);
+}
+
+/* ---------- check, save, discard, review (prompts and sentences) ---------- */
+
+const urlOf = X => X.kind === 'prompt' ? '/api/prompt/' : '/api/phrases/';
+const bodyOf = X => X.kind === 'prompt' ? { id: X.id, raw: rawOf(X) } : { module: X.module, table: X.table };
+
+async function actCheck(X) {
+  if (X.busy) return;
+  const stamp = stampOf(X);
+  X.busy = true; syncButtons(X);
+  try { X.rep = { source: 'check', r: await apiR(urlOf(X) + 'check', bodyOf(X)), stamp }; }
+  catch (e) { X.rep = { source: 'check', error: e.message, stamp }; }
+  X.busy = false; syncButtons(X); renderReport(X);
+}
+async function actSave(X, confirm) {
+  if (X.busy) return;
+  const stamp = stampOf(X);
+  const body = Object.assign(bodyOf(X), { base: X.detail.sha256 == null ? null : X.detail.sha256 });
+  if (X.kind === 'phrases') body.confirm = !!confirm;
+  X.busy = true; X.review = null; syncButtons(X);
+  let saved = false;
+  try {
+    const r = await apiR(urlOf(X) + 'save', body);
+    X.rep = { source: 'save', r, stamp };
+    if (r.saved) { saved = true; await afterSaved(X, stamp); }
+  } catch (e) { X.rep = { source: 'save', error: e.message, stamp }; }
+  X.busy = false;
+  if (saved && isShown(X)) renderEditorColumn(); else { syncButtons(X); renderReport(X); }
+  touched();
+  if (saved) runReview(X);
+}
+/* the file on disk is the new base; the text in the editor is kept when it was changed again meanwhile */
+async function afterSaved(X, stamp) {
+  try {
+    if (X.kind === 'prompt') {
+      adoptPrompt(X, await api('GET', '/api/prompt?id=' + encodeURIComponent(X.id)), stamp);
+      const l = await api('GET', '/api/prompts');
+      if (P.list && Array.isArray(l.prompts)) P.list.prompts = l.prompts;
+    } else {
+      adoptPhrases(X, await api('GET', '/api/phrases?module=' + encodeURIComponent(X.module)), stamp);
+    }
+  } catch (e) { showError(e); }
+  renderList();
+}
+/* stamp null: take the text of the file whatever the editor holds */
+function adoptPrompt(E, d, stamp) {
+  const same = stamp === null || stampOf(E) === stamp;
+  E.detail = d;
+  if (same) {
+    E.cut = clone(d.cut); E.cut.parts = E.cut.parts || [];
+    E.single = !!d.composed || !E.cut.parts.length; E.body = bodyFromCut(E.cut);
+  }
+}
+function adoptPhrases(X, d, stamp) {
+  const same = stamp === null || stampOf(X) === stamp;
+  X.detail = d; X.origJson = JSON.stringify(d.table || {});
+  if (same) X.table = clone(d.table || {});
+}
+async function actDiscard(X) {
+  const what = X.kind === 'prompt' ? X.id : 'the sentences of ' + X.module;
+  if (!await askConfirm('Discard changes', 'Discard the changes to ' + what + '?', 'Discard')) return;
+  if (X.kind === 'prompt') { X.cut = clone(X.detail.cut); X.cut.parts = X.cut.parts || []; X.body = bodyFromCut(X.cut); }
+  else X.table = clone(X.detail.table || {});
+  X.rep = null; X.review = null;
+  if (isShown(X)) renderEditorColumn();
+  touched();
+  if (X.kind === 'prompt') schedulePreview();
+}
+async function reloadFromDisk(X) {
+  if (isDirty(X) && !await askConfirm('Reload from disk', 'The file changed on disk. Reloading drops the changes in the editor.', 'Drop my changes and reload')) return;
+  try {
+    if (X.kind === 'prompt') adoptPrompt(X, await api('GET', '/api/prompt?id=' + encodeURIComponent(X.id)), null);
+    else adoptPhrases(X, await api('GET', '/api/phrases?module=' + encodeURIComponent(X.module)), null);
+  } catch (e) { showError(e); return; }
+  X.rep = null; X.review = null;
+  if (isShown(X)) renderEditorColumn();
+  touched();
+  if (X.kind === 'prompt') schedulePreview();
+}
+async function runReview(X) {
+  X.review = { running: true }; renderReport(X);
+  try { X.review = { res: await apiR('/api/review', {}) }; }
+  catch (e) { X.review = { err: e.message }; }
+  renderReport(X);
+}
+
+function diffPre(diff) {
+  const pre = h('pre', { class: 'diff' });
+  for (const line of String(diff || '').split('\n')) pre.append(h('span', { class: diffClass(line), text: line === '' ? ' ' : line }));
+  return pre;
+}
+function renderReport(X) {
+  const ui = X.ui;
+  if (!ui) return;
+  const kids = [];
+  ui.stale = h('div', { class: 'warn', text: 'The text was edited after this result.', hidden: !(X.rep && X.rep.stamp !== stampOf(X)) });
+  if (X.rep) kids.push(ui.stale, ...repNodes(X));
+  if (X.review) kids.push(...reviewNodes(X.review));
+  put(ui.report, ...kids);
+}
+function repNodes(X) {
+  const R = X.rep;
+  if (R.error) return [h('div', { class: 'box bad', text: R.error })];
+  const r = R.r || {};
+  const out = [];
+  if (R.source === 'save') {
+    if (r.saved) out.push(h('div', { class: 'box ok', text: 'Saved ' + (r.path || '') + '.' }));
+    else if (r.reason === 'moved') {
+      return [h('div', { class: 'box bad' }, h('div', { text: 'The file a run loads changed on disk since this page loaded it. Nothing was written.' }),
+        h('button', { text: 'Reload from disk', onclick: () => reloadFromDisk(X) }))];
+    } else if (r.reason === 'same') out.push(h('div', { class: 'box', text: 'Nothing changed. Nothing was written.' }));
+    else if (r.reason === 'confirm') {
+      out.push(h('div', { class: 'box warnbox' }, h('b', { text: 'This save takes own sentences away. Nothing is written yet.' }),
+        h('ul', {}, (r.removed || []).map(c => h('li', {}, h('code', { text: c.key }), ' now: ', textOf(c.before), ' — then the profile runs with: ', textOf(c.after)))),
+        h('button', { class: 'danger', text: 'Remove and save', onclick: () => actSave(X, true) })));
+    } else if (r.reason === 'check') out.push(h('div', { class: 'box bad', text: 'Not saved: the check refuses this text.' }));
+  }
+  out.push(...(X.kind === 'prompt' ? promptReport(r) : phrasesReport(r, R.source === 'save')));
+  return out;
+}
+const textOf = v => Array.isArray(v) ? v.join(' / ') : (v == null ? '' : String(v));
+
+function promptReport(r) {
+  const out = [];
+  if (r.ok) out.push(h('div', { class: 'box ok', text: 'A run would load this text.' }));
+  else out.push(h('div', { class: 'box bad' }, h('b', { text: 'The check refuses this text: ' }), r.error || ''));
+  if (r.creates) out.push(h('div', { class: 'box warnbox', text: 'Saving writes a new file of this profile: ' + r.creates }));
+  if (r.changed === false) out.push(h('div', { class: 'help', text: 'The text is the file on disk.' }));
+  if (r.size) out.push(h('div', { class: 'help', text: 'The text that is sent: ' + r.size.before + ' → ' + r.size.after + ' characters.' }));
+  if (r.meta && isObj(r.meta.before) && isObj(r.meta.after)) {
+    const ks = [...new Set(Object.keys(r.meta.before).concat(Object.keys(r.meta.after)))].filter(k => JSON.stringify(r.meta.before[k]) !== JSON.stringify(r.meta.after[k]));
+    for (const k of ks) out.push(h('div', { class: 'help' }, 'Setting ', h('code', { text: k }), ': ' + textOf(r.meta.before[k]) + ' → ' + textOf(r.meta.after[k])));
+  }
+  if (r.sentences) out.push(h('details', { open: true }, h('summary', { text: 'Changes by sentence' }), diffPre(r.sentences)));
+  const ln = r.lines || {};
+  if (r.diff) out.push(h('details', {}, h('summary', {}, 'Diff of the file ', h('span', { class: 'badge new', text: '+' + (ln.added || 0) + ' lines' }), ' ', h('span', { class: 'badge gone', text: '-' + (ln.removed || 0) + ' lines' })), diffPre(r.diff)));
+  if (r.note) out.push(h('div', { class: 'help', text: r.note }));
+  return out;
+}
+function phrasesReport(r, skipRemoved) {
+  const out = [];
+  if (r.ok) out.push(h('div', { class: 'box ok', text: 'A run would load these sentences.' }));
+  else out.push(h('div', { class: 'box bad' }, h('b', { text: 'The check refuses these sentences: ' }), r.error || '', r.where ? ' (' + r.where + ')' : ''));
+  if (r.creates) out.push(h('div', { class: 'box warnbox', text: 'Saving writes a new file of this profile: ' + r.creates }));
+  if (r.changed === false) out.push(h('div', { class: 'help', text: 'The sentences are those of the file on disk.' }));
+  const ch = r.changes || [];
+  if (ch.length) {
+    out.push(h('details', { open: true }, h('summary', { text: 'Changed sentences (' + ch.length + ')' }), ch.map(c => h('div', { class: 'chg' },
+      h('span', { class: 'badge ' + (c.state === 'added' ? 'new' : c.state === 'removed' ? 'gone' : 'changed'), text: c.state }), ' ', h('code', { text: c.key }),
+      c.state !== 'added' ? h('div', { class: 'pr-pair' }, 'before: ', textOf(c.before)) : null,
+      c.state !== 'removed' ? h('div', { class: 'pr-pair' }, 'after: ', textOf(c.after)) : null))));
+  }
+  const ln = r.lines || {};
+  if (r.diff) out.push(h('details', {}, h('summary', {}, 'Diff of the file ', h('span', { class: 'badge new', text: '+' + (ln.added || 0) + ' lines' }), ' ', h('span', { class: 'badge gone', text: '-' + (ln.removed || 0) + ' lines' })), diffPre(r.diff)));
+  if (!skipRemoved && (r.removed || []).length) out.push(h('div', { class: 'warn', text: 'This text takes own sentences away (' + r.removed.map(c => c.key).join(', ') + '). Saving asks for a confirmation.' }));
+  if (r.note) out.push(h('div', { class: 'help', text: r.note }));
+  return out;
+}
+function reviewNodes(rv) {
+  if (rv.running) return [h('div', { class: 'box', text: 'Running the profile check and the before/after comparison…' })];
+  if (rv.err) return [h('div', { class: 'box bad', text: 'The review could not run: ' + rv.err })];
+  const res = rv.res || {};
+  const out = [h('div', { class: 'box ' + (res.ok ? 'ok' : 'bad') }, h('b', { text: res.ok ? 'The profile check and the before/after comparison passed.' : 'The profile check or the before/after comparison failed.' }))];
+  for (const st of res.steps || []) {
+    out.push(h('details', { open: !st.ok },
+      h('summary', {}, h('span', { class: 'badge ' + (st.ok ? 'ok' : 'dep'), text: st.ok ? 'ok' : 'failed' }), ' ' + (st.name || ''), ' ', h('code', { text: st.command || '' })),
+      st.output ? h('pre', { class: 'out', text: st.output }) : h('div', { class: 'help', text: 'No output.' }),
+      st.summary ? [h('h4', { text: 'Summary' }), h('pre', { class: 'out pr-summary', text: st.summary })] : null));
+  }
+  return out;
+}
+
+/* ---------- the editor of the sentences of a module ---------- */
+
+const inheritedOf = s => s.inherited != null ? s.inherited : s.text;
+
+function diffSegs(a, b) {
+  a = a == null ? '' : String(a); b = b == null ? '' : String(b);
+  const m = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < m && a[i] === b[i]) i++;
+  let j = 0;
+  while (j < m - i && a[a.length - 1 - j] === b[b.length - 1 - j]) j++;
+  return { a: [a.slice(0, i), a.slice(i, a.length - j), a.slice(a.length - j)], b: [b.slice(0, i), b.slice(i, b.length - j), b.slice(b.length - j)] };
+}
+function segNodes(seg, cls) { return [seg[0], seg[1] ? h('span', { class: cls, text: seg[1] }) : null, seg[2]]; }
+
+function traceSelect(onChange) {
+  const tr = (P.list && P.list.traces) || [];
+  if (!tr.length) return h('span', { class: 'help', text: (P.list && P.list.traces_note) || 'There is no recorded request.' });
+  if (tr.length === 1) return h('span', {}, 'Trace ', h('code', { text: tr[0].name }), ' ', h('span', { class: 'help', text: mb(tr[0].bytes || 0) }));
+  const sel = h('select', { style: 'width:auto' }, tr.map(t => h('option', { value: t.name, text: t.name + ' (' + mb(t.bytes || 0) + ')' })));
+  sel.value = P.trace;
+  sel.addEventListener('change', () => onChange(sel.value));
+  return sel;
+}
+function setTrace(name) {
+  P.trace = name;
+  for (const X of P.phs.values()) X.shown = {};
+  if (P.sel && P.sel.t === 'prompt') { resetRequests(); renderRight(); startRequests(); }
+  else if (P.sel && P.sel.t === 'phrases') renderEditorColumn();
+}
+
+function renderPhrasesEditor(X) {
+  const d = X.detail;
+  const ui = X.ui = {};
+  ui.dirty = h('span', { class: 'badge changed', text: 'unsaved changes', hidden: !phDirty(X) });
+  const kids = [
+    h('div', { class: 'page-title' }, 'Sentences of ' + X.module, ui.dirty),
+    h('div', { class: 'page-sub' }, 'File: ', h('code', { text: d.path || '' })),
+  ];
+  if (!d.own_file) kids.push(h('div', { class: 'warn', text: 'This profile has no file of its own for this module yet. Saving a sentence writes one.' }));
+  kids.push(h('div', { class: 'toolbar' }, h('b', { text: 'Recorded requests' }), traceSelect(setTrace)));
+  for (const s of d.sentences || []) kids.push(sentenceRow(X, s));
+  ui.check = h('button', { text: 'Check', title: 'Ctrl+Enter', onclick: () => actCheck(X) });
+  ui.save = h('button', { class: 'primary', text: 'Save', title: 'Ctrl+S', onclick: () => actSave(X, false) });
+  ui.discard = h('button', { text: 'Discard changes', onclick: () => actDiscard(X) });
+  ui.report = h('div', { class: 'pr-report' });
+  kids.push(h('div', { class: 'toolbar pr-actions' }, ui.check, ui.save, ui.discard), ui.report);
+  put($('pl-main'), ...kids);
+  syncButtons(X);
+  renderReport(X);
+}
+
+function sentenceRow(X, s) {
+  const box = h('div', { class: 'field pr-sent' });
+  const key = s.key;
+  const draw = () => {
+    const mine = own(X.table, key);
+    const cur = mine ? X.table[key] : inheritedOf(s);
+    const isList = Array.isArray(cur);
+    const items = isList ? cur : [cur];
+    /* what the trace showed belongs to the wording it was looked up with: it is hidden once the sentence reads differently */
+    let shownEl = null;
+    const fresh = () => { const c = X.shown[key]; return !!c && (c.loading || c.text === firstText()); };
+    const areas = items.map((t, i) => {
+      const ta = h('textarea', { class: 'prompt', spellcheck: 'false', value: t == null ? '' : String(t), readonly: mine ? null : true });
+      ta.rows = Math.max(2, Math.min(12, String(ta.value).split('\n').length + 1));
+      if (mine) ta.addEventListener('input', () => {
+        if (Array.isArray(X.table[key])) X.table[key][i] = ta.value; else X.table[key] = ta.value;
+        if (shownEl) shownEl.hidden = !fresh();
+        edited(X);
+      });
+      return ta;
+    });
+    const fromWhere = s.from || 'default';
+    const acts = [];
+    if (mine && s.inherited != null) acts.push(h('button', { text: 'Take the inherited wording again', onclick: () => { delete X.table[key]; draw(); edited(X); } }));
+    if (!mine) acts.push(h('button', { text: 'Word it for this profile', onclick: () => { X.table[key] = clone(inheritedOf(s)); draw(); edited(X); } }));
+    const cell = X.shown[key];
+    const firstText = () => { const c = own(X.table, key) ? X.table[key] : inheritedOf(s); return Array.isArray(c) ? (c[0] == null ? '' : String(c[0])) : String(c == null ? '' : c); };
+    shownEl = cell ? h('div', { hidden: !fresh() }, shownNodes(cell, draw)) : null;
+    put(box,
+      s.note ? h('div', { class: 'help', text: s.note }) : null,
+      h('label', {}, h('code', { text: key }), ' ', s.required ? h('span', { class: 'badge', text: 'required' }) : null, ' ',
+        mine ? h('span', { class: 'badge ok', text: 'this profile' }) : h('span', { class: 'badge', text: 'from ' + fromWhere })),
+      areas,
+      h('div', { class: 'help' }, s.names == null ? 'Takes no name in braces.' : 'Names the code fills: ' + (s.names.length ? s.names.map(n => '{' + n + '}').join(' ') : 'none')),
+      h('div', { class: 'toolbar' }, acts,
+        P.trace ? h('button', { text: 'Recorded requests with this sentence', disabled: !!(cell && cell.loading), onclick: () => fetchShown(X, s, draw, firstText()) }) : null),
+      shownEl);
+  };
+  draw();
+  return box;
+}
+async function fetchShown(X, s, draw, text) {
+  const cell = { loading: true, trace: P.trace, text };
+  X.shown[s.key] = cell; draw();
+  try { cell.res = await apiR('/api/phrases/shown', { module: X.module, key: s.key, text, trace: P.trace }); }
+  catch (e) { cell.err = e.message; }
+  cell.loading = false;
+  if (X.shown[s.key] === cell) draw();
+}
+function shownNodes(cell, draw) {
+  if (cell.loading) return h('div', { class: 'help', text: 'Looking through the trace… the first time this takes several seconds.' });
+  if (cell.err) return h('div', { class: 'box bad', text: cell.err });
+  const r = cell.res || {};
+  const all = r.shown || [];
+  const limit = cell.all ? all.length : 50;
+  return h('div', {},
+    h('div', { class: 'help', text: 'Found in ' + (r.found == null ? all.length : r.found) + ' of ' + (r.searched == null ? '?' : r.searched) + ' requests.' + (r.why ? ' ' + r.why : '') }),
+    all.slice(0, limit).map(it => {
+      const segs = it.after == null ? null : diffSegs(it.before, it.after);
+      return h('div', { class: 'pr-pair' },
+        h('div', {}, h('span', { class: 'idx', text: '#' + it.index }), ' ', it.kind || '', it.asked ? ' (asks again: ' + it.asked + ')' : '', it.parameter ? ' · ' + it.parameter : ''),
+        h('div', {}, 'before: ', segs ? segNodes(segs.a, 'pr-gone') : textOf(it.before)),
+        segs ? h('div', {}, 'after: ', segNodes(segs.b, 'pr-hit')) : null,
+        it.why ? h('div', { class: 'help', text: it.why }) : null);
+    }),
+    all.length > limit ? h('button', { text: 'Show all ' + all.length, onclick: () => { cell.all = true; draw(); } }) : null);
+}
+
+/* ---------- recorded requests (right column) ---------- */
+
+function kindsOf(id) { const p = ((P.list && P.list.prompts) || []).find(x => x.id === id); return p ? (p.kinds || []) : []; }
+
+function resetRequests() {
+  clearTimeout(P.pvTimer); clearTimeout(P.rqTimer);
+  P.pvSeq++; P.rqSeq++;
+  P.req = null; P.tryRes = null; P.rui = null;
+  if (P.sel && P.sel.t === 'prompt' && P.trace && kindsOf(P.sel.id).length) {
+    P.req = { prompt: P.sel.id, trace: P.trace, kind: '', field: '', carries: '', text: '', offset: 0, listing: null, listErr: null, listLoading: false,
+      opts: null, sel: null, pv: null, pvErr: null, pvLoading: false, pvEdited: false, showSent: false, sysOpen: false };
+  }
+}
+function startRequests() { if (P.req) fetchRequests(); }
+
+function renderRight() {
+  const box = $('pl-right');
+  if (!P.list) { put(box); return; }
+  const note = t => put(box, h('div', { class: 'help', text: t }));
+  if (!P.sel) { note('Pick a prompt to see the recorded requests it has a say in.'); return; }
+  if (P.sel.t === 'phrases') { note('Recorded requests are shown beside a prompt. For a sentence, choose a trace in its editor and press "Recorded requests with this sentence".'); return; }
+  if (!kindsOf(P.sel.id).length) { note('No request of a harvest is recorded with this prompt alone, so there is no preview.'); return; }
+  if (!P.req) { note(P.list.traces_note || 'There is no recorded request to show.'); return; }
+  const R = P.req;
+  const rui = P.rui = { filters: h('div', { class: 'pr-filters' }), count: h('div', { class: 'help' }), list: h('div', { class: 'pr-reqlist' }),
+    pager: h('div', { class: 'toolbar' }), tryBox: h('div'), chat: h('div'), textIn: h('input', { type: 'text', placeholder: 'text anywhere in the request or its answer', spellcheck: 'false', value: R.text }) };
+  rui.textIn.addEventListener('input', () => {
+    R.text = rui.textIn.value; R.offset = 0;
+    clearTimeout(P.rqTimer); P.rqTimer = setTimeout(fetchRequests, 350);
+  });
+  put(box,
+    h('div', { class: 'toolbar' }, h('b', { text: 'Recorded requests' }), traceSelect(setTrace)),
+    rui.filters, rui.count, rui.list, rui.pager,
+    h('div', { class: 'section', text: 'Try' }), rui.tryBox,
+    h('div', { class: 'section', text: 'Request' }), rui.chat);
+  renderFilters(); renderReqList(); renderTry(); renderChat();
+}
+
+function filterSelect(label, options, value, onChange) {
+  const sel = h('select', { title: label }, h('option', { value: '', text: label + ': any' }), options.map(o => h('option', { value: o, text: o })));
+  sel.value = options.includes(value) ? value : '';
+  sel.addEventListener('change', () => onChange(sel.value));
+  return sel;
+}
+function renderFilters() {
+  const R = P.req, rui = P.rui;
+  if (!R || !rui) return;
+  const o = R.opts || { kinds: [], fields: [], carried: [] };
+  const change = k => v => { R[k] = v; R.offset = 0; fetchRequests(); };
+  put(rui.filters, filterSelect('kind', o.kinds, R.kind, change('kind')), filterSelect('field', o.fields, R.field, change('field')),
+    filterSelect('message carries', o.carried, R.carries, change('carries')), rui.textIn);
+}
+
+async function fetchRequests() {
+  const R = P.req;
+  if (!R) return;
+  const my = ++P.rqSeq;
+  R.listLoading = true; R.listErr = null; renderReqList();
+  const q = new URLSearchParams({ trace: R.trace, prompt: R.prompt, kind: R.kind, field: R.field, carries: R.carries, text: R.text, offset: String(R.offset), limit: '100' });
+  try {
+    const a = await api('GET', '/api/requests?' + q.toString());
+    if (my !== P.rqSeq || P.req !== R) return;
+    R.listing = a;
+    const opts = { kinds: a.kinds || [], fields: a.fields || [], carried: a.carried || [] };
+    const changedOpts = JSON.stringify(opts) !== JSON.stringify(R.opts);
+    R.opts = opts;
+    R.listLoading = false;
+    if (changedOpts) renderFilters();
+  } catch (e) {
+    if (my !== P.rqSeq || P.req !== R) return;
+    R.listErr = e.message; R.listLoading = false;
+  }
+  renderReqList(); renderTry();
+}
+
+const reqLabel = r => [r.kind, r.parameter, r.coordinate].filter(Boolean).join(' · ') + (r.asked ? ' (asks again: ' + r.asked + ')' : '');
+function reqSub(r) {
+  const a = [];
+  if (r.owner != null) a.push('passage ' + r.owner);
+  if (r.value != null) a.push('value ' + r.value + (r.at ? ' @' + r.at : ''));
+  if (r.ms != null) a.push(Math.round(r.ms) + ' ms');
+  a.push((r.prompt_tokens == null ? '?' : r.prompt_tokens) + '/' + (r.completion_tokens == null ? '?' : r.completion_tokens) + ' tok');
+  if (r.attempt > 1) a.push('attempt ' + r.attempt);
+  return a.join(' · ');
+}
+function renderReqList() {
+  const R = P.req, rui = P.rui;
+  if (!R || !rui) return;
+  const L = R.listing;
+  if (R.listErr) { put(rui.count, h('div', { class: 'box bad', text: R.listErr })); put(rui.list); put(rui.pager); return; }
+  if (!L) { put(rui.count, h('div', { class: 'help', text: 'Reading the trace. The first time this takes several seconds…' })); put(rui.list); put(rui.pager); return; }
+  const reqs = L.requests || [];
+  put(rui.count, (L.matching == null ? reqs.length : L.matching) + ' of ' + L.total + ' requests' + (R.listLoading ? ' · updating…' : ''));
+  const top = rui.list.scrollTop;
+  put(rui.list, ...reqs.map(r => h('button', { class: 'pr-req' + (R.sel === r.index ? ' sel' : ''), onclick: () => selectRequest(r.index) },
+    h('b', { text: reqLabel(r) }), h('small', { text: reqSub(r) }), h('small', { text: r.check || '' }))));
+  if (!reqs.length) put(rui.list, h('div', { class: 'help pr-pad', text: 'No request matches.' }));
+  rui.list.scrollTop = top;
+  const m = L.matching == null ? reqs.length : L.matching;
+  put(rui.pager,
+    h('button', { text: 'Previous', disabled: R.offset <= 0 || R.listLoading, onclick: () => { R.offset = Math.max(0, R.offset - 100); fetchRequests(); } }),
+    h('span', { class: 'count', text: m ? (R.offset + 1) + '–' + (R.offset + reqs.length) + ' of ' + m : '' }),
+    h('button', { text: 'Next', disabled: R.offset + 100 >= m || R.listLoading, onclick: () => { R.offset += 100; fetchRequests(); } }));
+}
+
+function selectRequest(index) {
+  const R = P.req;
+  if (!R) return;
+  R.sel = index; R.pv = null; R.pvErr = null;
+  clearTimeout(P.pvTimer);
+  renderReqList(); renderChat(); renderTry();
+  doPreview();
+}
+function schedulePreview() {
+  clearTimeout(P.pvTimer);
+  if (!P.req || P.req.sel == null) return;
+  P.pvTimer = setTimeout(doPreview, 400);
+}
+async function doPreview() {
+  const R = P.req;
+  if (!R || R.sel == null) return;
+  const my = ++P.pvSeq;
+  const edits = editsMap();
+  R.pvLoading = true; renderChat();
+  try {
+    const a = await apiR('/api/request/preview', { trace: R.trace, index: R.sel, edits });
+    if (my !== P.pvSeq || P.req !== R) return;
+    R.pv = a; R.pvErr = null; R.pvEdited = Object.keys(edits).length > 0;
+  } catch (e) {
+    if (my !== P.pvSeq || P.req !== R) return;
+    R.pvErr = e.message;
+  }
+  R.pvLoading = false;
+  renderChat();
+}
+
+/* the chat view of scripts/chat_view.py: numbered lines, the lines an answer's addresses name highlighted */
+function addrs(a) {
+  const out = [];
+  const add = x => {
+    if (x === undefined || x === null) return;
+    const m = String(x).match(/^([A-Za-z]*)(\d+)(?:\.\d+)?(?:-([A-Za-z]*)(\d+)(?:\.\d+)?)?$/);
+    if (!m) return;
+    const lo = +m[2], hi = m[4] ? +m[4] : lo;
+    for (let n = lo; n <= Math.min(hi, lo + 500); n++) out.push(m[1] + n);
+  };
+  const walk = o => {
+    if (Array.isArray(o)) o.forEach(walk);
+    else if (o && typeof o === 'object') { if ('at' in o) add(o.at); Object.values(o).forEach(v => { if (typeof v === 'object') walk(v); }); }
+  };
+  walk(a);
+  return new Set(out);
+}
+function lineKey(s) { const m = String(s).match(/^\s*([A-Za-z]*\d+)\b/); return m ? m[1] : null; }
+function valNodes(v, hit, ind) {
+  const pad = '  '.repeat(ind);
+  if (Array.isArray(v)) {
+    if (v.length && v.every(x => typeof x === 'string')) return v.map(s => { const k = lineKey(s); return h('span', { class: 'ln' + (k && hit.has(k) ? ' hit' : '') }, s); });
+    return v.flatMap(x => valNodes(x, hit, ind));
+  }
+  if (v && typeof v === 'object') {
+    return Object.entries(v).flatMap(([k, x]) => {
+      const sub = x && typeof x === 'object';
+      return [h('span', { class: 'ln' }, h('span', { class: 'key', text: pad + k + ':' }), sub ? null : ' ' + x)].concat(sub ? valNodes(x, hit, ind + 1) : []);
+    });
+  }
+  return [h('span', { class: 'ln', text: pad + v })];
+}
+function userNodes(text, hit) {
+  let o = null;
+  try { o = JSON.parse(text); } catch (e) { o = null; }
+  if (o && typeof o === 'object') return valNodes(o, hit, 0);
+  return String(text).split('\n').map(line => { const k = lineKey(line); return h('span', { class: 'ln' + (k && hit.has(k) ? ' hit' : ''), text: line }); });
+}
+function prettyAnswer(a) {
+  if (a && a.answer_json) {
+    let t = JSON.stringify(a.answer_json, null, 2);
+    if (Array.isArray(a.spelled) && a.spelled.length) t += '\n= ' + a.spelled.join('; ');
+    return t;
+  }
+  return a && a.answer != null ? String(a.answer) : '';
+}
+
+function renderChat() {
+  const R = P.req, rui = P.rui;
+  if (!R || !rui) return;
+  const box = rui.chat;
+  if (R.sel == null) { put(box, h('div', { class: 'help', text: 'Pick a request to see it as a chat, with your unsaved changes in it.' })); return; }
+  if (!R.pv) {
+    put(box, R.pvErr ? h('div', { class: 'box bad', text: R.pvErr }) : h('div', { class: 'help', text: 'Loading request #' + R.sel + '…' }));
+    return;
+  }
+  const pv = R.pv, rec = pv.recorded || {}, p = pv.preview || null, notes = pv.notes || {};
+  const hit = addrs(rec.answer_json);
+  const msgs = Array.isArray(rec.messages) ? rec.messages : [];
+  const kids = [];
+  kids.push(h('div', { class: 'page-title' }, reqLabel({ kind: pv.kind, parameter: notes.parameter, coordinate: notes.coordinate, asked: pv.asked })),
+    h('div', { class: 'help', text: '#' + pv.index + (notes.doc != null ? ' · doc ' + notes.doc : '') + ' · ' + reqSub(notes) + (R.pvLoading ? ' · updating…' : '') }));
+  if (R.pvErr) kids.push(h('div', { class: 'box bad', text: R.pvErr }));
+  if (Array.isArray(pv.chain) && pv.chain.length > 1) {
+    kids.push(h('div', { class: 'help' }, 'Requests of the same value: ', pv.chain.flatMap(i => [i === pv.index ? h('b', { text: '#' + i }) : h('button', { class: 'link', text: '#' + i, onclick: () => selectRequest(i) }), ' '])));
+  }
+  const usable = !!p && !p.why && !!p.edit;
+  if (p && p.why) kids.push(h('div', { class: 'warn', text: p.why + ' The request is shown as it was sent.' }));
+  else if (p) {
+    if (p.same_as_recorded) kids.push(h('div', { class: 'help', text: 'The files on disk give this request character for character.' }));
+    else if (p.example === 'lines') kids.push(h('div', { class: 'help', text: 'This request was sent with other words of this prompt; its example reply is taken from the record.' }));
+    if (p.changed === false && R.pvEdited) kids.push(h('div', { class: 'warn', text: 'Your change does not reach this request.' }));
+  }
+  if (usable) {
+    const cb = h('input', { type: 'checkbox' });
+    cb.checked = R.showSent;
+    cb.addEventListener('change', () => { R.showSent = cb.checked; renderChat(); });
+    kids.push(h('label', { class: 'checkrow' }, cb, ' Show the instruction as it was sent'));
+  }
+  let instruction;
+  if (!usable || R.showSent) instruction = h('div', { text: rec.system || '' });
+  else if ((p.lines || []).length) {
+    instruction = h('div', {}, p.lines.map(line => h('span', { class: 'ln' }, (line || []).map(pair => h('span', { class: pair && pair[1] ? 'pr-chg' : null, text: pair ? pair[0] : '' })))));
+  } else instruction = h('div', { text: (p.edit && p.edit.system) || '' });
+  const gone = usable && !R.showSent && (p.gone || []).length ? h('div', { class: 'pr-gonebox' }, h('div', { class: 'role', text: 'removed by your change' }), p.gone.map(s => h('div', { class: 'pr-gone', text: s }))) : null;
+  const sysDetails = h('details', { class: 'pr-msg system', open: R.sysOpen ? true : null }, h('summary', { class: 'role', text: 'instruction' }), instruction, gone);
+  sysDetails.addEventListener('toggle', () => { R.sysOpen = sysDetails.open; });
+  kids.push(sysDetails);
+
+  const first = msgs[0] ? String(msgs[0][1] == null ? '' : msgs[0][1]) : '';
+  const userText = pv.kind === 'follow' && usable && typeof p.edit.user === 'string' ? p.edit.user : first;
+  kids.push(h('div', { class: 'pr-msg user' }, h('div', { class: 'role', text: 'request' }), userNodes(userText, hit)));
+  for (const m of msgs.slice(1)) {
+    kids.push(h('div', { class: 'pr-msg ' + (m[0] === 'assistant' ? 'assistant' : 'user') }, h('div', { class: 'role', text: m[0] + ' (this attempt)' }), String(m[1] == null ? '' : m[1])));
+  }
+  kids.push(h('div', { class: 'pr-msg assistant' }, h('div', { class: 'role', text: 'answer' + (rec.finish ? ' · ' + rec.finish : '') }),
+    rec.answer == null ? (rec.error || 'no answer') : prettyAnswer(rec)));
+  kids.push(h('div', { class: 'pr-msg check' }, h('div', { class: 'role', text: 'result' }), rec.check || ''));
+  put(box, ...kids);
+}
+
+/* ---------- Try: the only place that sends anything to a model, one click each ---------- */
+
+function renderTry() {
+  const R = P.req, rui = P.rui;
+  if (!R || !rui) return;
+  const T = (P.list && P.list.try) || {};
+  const listed = R.listing && R.listing.requests ? R.listing.requests : [];
+  const n = Math.min(T.limit || 3, listed.length);
+  const running = !!(P.tryRes && P.tryRes.running);
+  const off = !T.configured || running;
+  const b1 = h('button', { text: 'Try on this request (sends 1 request)', disabled: off || R.sel == null, onclick: () => doTry([R.sel]) });
+  const b2 = h('button', { text: 'Try on the first ' + n + ' listed (sends ' + plural(n, 'request') + ')', disabled: off || n < 1, onclick: () => doTry(listed.slice(0, n).map(r => r.index)) });
+  const why = T.configured ? (T.model ? 'Model ' + T.model + (T.host ? ' on ' + T.host : '') : '') : 'Not available: ' + (T.why || 'no model is configured.');
+  const kids = [h('div', { class: 'pr-tryrow' }, b1, b2), h('div', { class: T.configured ? 'help' : 'warn', text: why })];
+  const tr = P.tryRes;
+  if (tr && tr.running) kids.push(h('div', { class: 'box', text: 'Sending ' + plural(tr.n, 'request') + ' to ' + (T.host || 'the model') + '…' }));
+  else if (tr && tr.err) kids.push(h('div', { class: 'box bad', text: tr.err }));
+  else if (tr && tr.res) kids.push(...tryNodes(tr.res, listed));
+  put(rui.tryBox, ...kids);
+}
+async function doTry(indexes) {
+  const R = P.req;
+  if (!R || !indexes.length) return;
+  const T = (P.list && P.list.try) || {};
+  if (!T.configured || (P.tryRes && P.tryRes.running)) return;
+  const cell = { running: true, n: indexes.length };
+  P.tryRes = cell; renderTry();
+  try { cell.res = await apiR('/api/request/try', { trace: R.trace, indexes, edits: editsMap() }); }
+  catch (e) { cell.err = e.message; }
+  cell.running = false;
+  if (P.tryRes === cell && P.req === R) renderTry();
+}
+const addrWhy = { not_an_address: 'names no shown line', words_not_in_line: 'its words do not stand in the line it names' };
+function tryNodes(res, listed) {
+  const c = res.counts || {};
+  const out = [h('div', { class: 'help', text: 'Named ' + (c.named == null ? '?' : c.named) + ', sent ' + (c.sent == null ? '?' : c.sent) + ', failed ' + (c.failed == null ? '?' : c.failed) +
+    '; the same answer ' + (c.same == null ? '?' : c.same) + ', a different answer ' + (c.different == null ? '?' : c.different) + ', not in the reply\'s form ' + (c.out_of_form == null ? '?' : c.out_of_form) +
+    '; addresses that hold ' + (c.addresses_hold == null ? '?' : c.addresses_hold) + ', that fail ' + (c.addresses_fail == null ? '?' : c.addresses_fail) + '.' })];
+  for (const r of res.results || []) {
+    const found = listed.find(x => x.index === r.index);
+    const head = h('div', {}, h('b', { text: '#' + r.index }), found ? ' ' + reqLabel(found) : '');
+    if (!r.sent) { out.push(h('div', { class: 'pr-try' }, head, h('div', { class: 'warn', text: 'Not sent: ' + (r.why || 'no reason given.') }))); continue; }
+    const o = r.old || {}, nw = r.new || {};
+    const badges = [];
+    if (r.same === true) badges.push(h('span', { class: 'badge ok', text: 'the same answer' }));
+    else if (r.same === false) badges.push(h('span', { class: 'badge changed', text: 'a different answer' }));
+    if (nw.in_form === true) badges.push(h('span', { class: 'badge ok', text: 'in the reply\'s form' }));
+    else if (nw.in_form === false) badges.push(h('span', { class: 'badge dep', text: 'not in the reply\'s form' + (nw.fault ? ' (' + nw.fault + ')' : '') }));
+    if (r.changed_request === false) badges.push(h('span', { class: 'badge', text: 'the edit did not change what was sent' }));
+    if (r.holds === true) badges.push(h('span', { class: 'badge ok', text: 'every address holds' }));
+    else if (r.holds === false) badges.push(h('span', { class: 'badge dep', text: 'an address fails' }));
+    else badges.push(h('span', { class: 'badge', text: 'names no address' }));
+    const stats = [];
+    if (nw.ms != null) stats.push(Math.round(nw.ms) + ' ms');
+    if (nw.prompt_tokens != null || nw.completion_tokens != null) stats.push((nw.prompt_tokens == null ? '?' : nw.prompt_tokens) + '/' + (nw.completion_tokens == null ? '?' : nw.completion_tokens) + ' tok' + (nw.max_tokens != null ? ' (max ' + nw.max_tokens + ')' : ''));
+    if (nw.finish) stats.push(nw.finish);
+    out.push(h('div', { class: 'pr-try' }, head, h('div', { class: 'pr-badges' }, badges),
+      h('div', { class: 'two' },
+        h('div', {}, h('h4', { text: 'recorded' }), h('pre', { text: prettyAnswer(o) || '(no answer)' }), o.check ? h('div', { class: 'help', text: o.check }) : null),
+        h('div', {}, h('h4', { text: 'new' }), h('pre', { text: nw.error ? nw.error : (prettyAnswer(nw) || '(no answer)') }), nw.error ? h('div', { class: 'help', text: 'The server gave an error.' }) : null)),
+      (r.addresses || []).length ? h('div', {}, h('h4', { text: 'addresses of the new answer' }), r.addresses.map(a => h('div', { class: 'help' },
+        h('code', { text: String(a.at) }), a.words ? ' “' + a.words + '” ' : ' ',
+        a.holds === true ? h('span', { class: 'badge ok', text: 'holds' })
+          : a.holds === false ? h('span', { class: 'badge dep', text: a.why ? (addrWhy[a.why] || a.why) : 'does not hold' })
+          : h('span', { class: 'badge', text: 'says that no shown line holds it' })))) : null,
+      stats.length ? h('div', { class: 'help', text: stats.join(' · ') }) : null));
+  }
+  return out;
+}
+
+/* ---------- tabs ---------- */
+
+function setTab(t) {
+  S.tab = t;
+  $('layout').hidden = t !== 'spec';
+  $('prompts').hidden = t !== 'prompts';
+  renderHeader();
+  if (t === 'prompts' && !P.loaded) loadPrompts();
+}
+
 /* ---------- load ---------- */
 
 async function reload() {
@@ -1004,13 +1885,21 @@ async function loadAll() {
   renderHeader(); renderTree(); renderMain(); renderPanel();
 }
 
-window.addEventListener('beforeunload', ev => { if (S.dirty) { ev.preventDefault(); ev.returnValue = ''; } });
+window.addEventListener('beforeunload', ev => { if (anyDirty()) { ev.preventDefault(); ev.returnValue = ''; } });
 window.addEventListener('keydown', ev => {
   if (!(ev.ctrlKey || ev.metaKey)) return;
+  if (S.tab === 'prompts') {
+    const X = currentX();
+    if (!X) return;
+    if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); actSave(X, false); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); actCheck(X); }
+    return;
+  }
   if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); if (!S.busy) doSave(false); }
   else if (ev.key === 'Enter') { ev.preventDefault(); if (!S.busy) doCheck(); }
 });
 
+$('pl-filter').addEventListener('input', ev => { P.filter = ev.target.value; renderList(); });
 renderHeader(); renderPanel();
 run(loadAll);
 

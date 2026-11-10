@@ -8,8 +8,11 @@ only reads the file, asks the logic and, where the logic says so, writes.
 
 `Files` is the one place the editor touches a file: it may write only inside
 the profile's own folder and read only inside the folders of the profiles in
-effect, the harvest it was given, the page itself and the generated
-documentation. A path is resolved first, so `..` and links cannot lead out.
+effect, the harvest it was given, the page itself, the generated
+documentation and the folder the prompt review writes into
+(`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links
+cannot lead out. A trace is read by the run's own reader after the guard has
+checked its path (`Files.checked`).
 
 The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
 of another site cannot reach the server by a name of its own) and takes a
@@ -29,7 +32,9 @@ import logging
 import os
 import socket
 import subprocess
+import re
 import sys
+import tempfile
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -37,7 +42,10 @@ from pathlib import Path
 from typing import Optional, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
-from . import specs
+from .. import phrases as phrase_files
+from ..extraction import trace as trace_files
+from . import phrases, prompts, specs, trying
+from . import requests as recorded
 
 LOG = logging.getLogger(__name__)
 
@@ -48,6 +56,14 @@ RUN_TIMEOUT = 600         # seconds, each generating command
 LINGER = 2.0              # seconds, reading off a request that was not read
 STAMP_GLOB = "*.stamp.json"
 EDIT_HEADER = "X-Docpipe-Edit"
+REVIEW_FOLDER = "docpipe-prompt-review"     # what render_prompts.py writes to
+PROMPT_ID = re.compile(r"[A-Za-z0-9_-]+/[A-Za-z0-9_-]+")
+PAGE_LIMIT = 500                            # requests in one answer, at most
+# the notes of a recorded request the preview shows
+PREVIEW_NOTES = ("parameter", "coordinate", "owner", "value", "at", "attempt",
+                 "ms", "prompt_tokens", "completion_tokens", "doc")
+# what the model of a try is reached with: never sent to the page
+SECRET_SETTINGS = ("base_url", "api_key")
 # what is served at "/": path -> (file in WEB, content type)
 PAGES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -81,6 +97,11 @@ class Files:
                 f"{'write' if writing else 'read'}")
         return resolved
 
+    def checked(self, path) -> Path:
+        """*path* resolved, for a reader that opens the file itself;
+        PermissionError where `open` would refuse it."""
+        return self._resolve(path, False)
+
     def open(self, path, mode: str = "rb"):
         writing = any(flag in mode for flag in "wax+")
         return open(self._resolve(path, writing), mode)
@@ -93,6 +114,7 @@ class Files:
         """The whole file or the old one: written beside it, then put in its
         place."""
         target = self._resolve(path, True)
+        os.makedirs(target.parent, exist_ok=True)   # inside the write root
         temporary = target.with_name(target.name + ".editing")
         try:
             with self.open(temporary, "wb") as handle:
@@ -156,10 +178,14 @@ class App:
         self.harvest = Path(harvest).resolve() if harvest else None
         folder = Path(profile.package_dir)
         roots = [Path(p.package_dir) for p in profile.lineage()]
-        roots += [WEB, self.root / "docs"]
+        self.review_root = Path(tempfile.gettempdir()) / REVIEW_FOLDER
+        roots += [WEB, self.root / "docs", self.review_root]
         if self.harvest:
             roots.append(self.harvest)
         self.files = Files(folder, roots)
+        self.traces = recorded.Traces(
+            self.harvest, lines=lambda path: trace_files.lines(
+                self.files.checked(path)))
         self.spec_path = profile.component("extraction", "SPEC_PATH")
         self._snapshot: Optional[dict] = None
         self._loaded = False
@@ -238,6 +264,18 @@ class App:
             "/api/spec/remove": ("POST", self._remove),
             "/api/terms": ("GET", self._terms),
             "/api/generate": ("POST", self._generate),
+            "/api/prompts": ("GET", self._prompts),
+            "/api/prompt": ("GET", self._prompt),
+            "/api/prompt/check": ("POST", self._prompt_check),
+            "/api/prompt/save": ("POST", self._prompt_save),
+            "/api/review": ("POST", self._review),
+            "/api/phrases": ("GET", self._phrases),
+            "/api/phrases/check": ("POST", self._phrases_check),
+            "/api/phrases/save": ("POST", self._phrases_save),
+            "/api/phrases/shown": ("POST", self._phrases_shown),
+            "/api/requests": ("GET", self._requests),
+            "/api/request/preview": ("POST", self._request_preview),
+            "/api/request/try": ("POST", self._request_try),
         }
         if path not in routes:
             raise _Refusal(404, f"no such endpoint: {path}")
@@ -248,7 +286,9 @@ class App:
             raise _Refusal(400, "the body must be a JSON object")
         if path.startswith("/api/spec"):
             self._need_spec()
-        return 200, handler(query, body)
+        answer = handler(query, body)
+        # a handler that answers with another status gives (status, object)
+        return answer if isinstance(answer, tuple) else (200, answer)
 
     # -- endpoints --
 
@@ -269,7 +309,7 @@ class App:
             "harvest": self.harvest.as_posix() if self.harvest else None,
             "harvest_documents": (len(self.files.stamps(self.harvest))
                                   if self.harvest else None),
-            "tabs": ["spec"],
+            "tabs": ["spec", "prompts"],
         }
 
     def _spec(self, query, body) -> dict:
@@ -381,6 +421,302 @@ class App:
                          if before.get(path) != digest)
         return {"ok": ok, "changed": changed,
                 "output": "\n".join(text for text in printed if text)}
+
+    # -- helpers of the prompts tab --
+
+    @staticmethod
+    def _text_of(source, key: str) -> str:
+        value = source.get(key) if isinstance(source, dict) else None
+        if not isinstance(value, str):
+            raise _Refusal(400, f"\"{key}\" is needed, as text")
+        return value
+
+    def _prompt_id(self, source) -> str:
+        value = self._text_of(source, "id")
+        if not PROMPT_ID.fullmatch(value):
+            raise _Refusal(404, f"no such prompt: {value!r}")
+        return value
+
+    def _disk(self, prompt_id: str) -> dict:
+        """The file a run loads for the prompt, with its bytes."""
+        try:
+            return prompts.on_disk(self.profile, prompt_id, self.files.read)
+        except FileNotFoundError:
+            raise _Refusal(404, f"profile {self.profile.name!r} has no "
+                                f"prompt {prompt_id!r}") from None
+
+    def _module(self, source) -> str:
+        value = self._text_of(source, "module")
+        if value not in phrase_files.MODULES:
+            raise _Refusal(404, f"no such module: {value!r}; one of "
+                                f"{list(phrase_files.MODULES)}")
+        return value
+
+    def _trace(self, source):
+        name = self._text_of(source, "trace")
+        try:
+            return self.traces.load(name)
+        except KeyError:
+            raise _Refusal(404, f"no such trace: {name!r}") from None
+
+    @staticmethod
+    def _edits(body) -> dict:
+        edits = body.get("edits", {})
+        if not isinstance(edits, dict) or not all(
+                isinstance(text, str) for text in edits.values()):
+            raise _Refusal(400, "\"edits\" is an object: prompt id -> its "
+                                "text")
+        return edits
+
+    @staticmethod
+    def _whole(query: dict, key: str, default: int, least: int) -> int:
+        try:
+            value = int(query.get(key) or default)
+        except (TypeError, ValueError):
+            raise _Refusal(400, f"{key} must be a whole number") from None
+        if value < least:
+            raise _Refusal(400, f"{key} must be at least {least}")
+        return value
+
+    def _report(self, report: dict) -> dict:
+        """A report of the logic for the page: what a save writes is
+        dropped, a path is shown."""
+        out = {key: value for key, value in report.items() if key != "text"}
+        if out.get("creates") is not None:
+            out["creates"] = self.shown(out["creates"])
+        return out
+
+    @staticmethod
+    def _moved(what: str) -> tuple:
+        return 409, {"saved": False, "reason": "moved",
+                     "message": f"{what} changed on disk since the page "
+                                f"loaded it; reload it before saving"}
+
+    # -- the prompts --
+
+    def _prompts(self, query, body) -> dict:
+        found = self.traces.names()
+        note = None
+        if not found:
+            note = ("no harvest folder was given (--harvest)"
+                    if self.harvest is None
+                    else "the harvest folder holds no trace "
+                         "(*.trace.jsonl.gz)")
+        return {
+            "profile": self.profile.name,
+            "lineage": [one.name for one in self.profile.lineage()],
+            "prompts": prompts.listing(self.profile),
+            "modules": list(phrase_files.MODULES),
+            "try": {key: value for key, value in trying.settings().items()
+                    if key not in SECRET_SETTINGS},
+            "traces": found, "traces_note": note}
+
+    def _prompt(self, query, body) -> dict:
+        prompt_id = self._prompt_id(query)
+        self._disk(prompt_id)                   # 404 where nobody has it
+        shown = prompts.detail(self.profile, prompt_id, self.files.read)
+        for key in ("path", "target"):
+            shown[key] = self.shown(shown[key])
+        return shown
+
+    def _prompt_check(self, query, body) -> dict:
+        prompt_id = self._prompt_id(body)
+        raw = self._text_of(body, "raw")
+        return self._report(prompts.judge(self.profile, prompt_id, raw,
+                                          self._disk(prompt_id)))
+
+    def _prompt_save(self, query, body):
+        prompt_id = self._prompt_id(body)
+        raw = self._text_of(body, "raw")
+        disk = self._disk(prompt_id)
+        if body.get("base") != sha256(disk["bytes"]):
+            return self._moved("the prompt")
+        report, data, target = prompts.save(self.profile, prompt_id, raw,
+                                            disk)
+        report = self._report(report)
+        if data is not None:
+            self.files.write(target, data)
+            report["sha256"] = sha256(data)
+            report["path"] = self.shown(target)
+        return report
+
+    def _review(self, query, body) -> dict:
+        name = self.profile.name
+        steps = [("profile check", [sys.executable, "-m", "docpipe",
+                                    "preflight", "--profile", name]),
+                 ("before and after",
+                  [sys.executable, "scripts/render_prompts.py", "--profile",
+                   name, "--before", "HEAD"])]
+        environment = dict(os.environ, PYTHONUTF8="1")
+        out = []
+        for title, command in steps:
+            step = {"name": title, "command": " ".join(command[1:])}
+            try:
+                done = subprocess.run(
+                    command, cwd=self.root, env=environment,
+                    capture_output=True, text=True, encoding="utf-8",
+                    errors="replace", timeout=RUN_TIMEOUT)
+            except (OSError, subprocess.SubprocessError) as exc:
+                step.update(ok=False, stdout="",
+                            output=f"{type(exc).__name__}: {exc}")
+            else:
+                step.update(ok=done.returncode == 0, stdout=done.stdout,
+                            output=done.stdout + done.stderr)
+            out.append(step)
+        out[1]["summary"] = self._summary(out[1].get("stdout", ""))
+        for step in out:
+            step.pop("stdout", None)
+        return {"ok": all(step["ok"] for step in out), "steps": out}
+
+    def _summary(self, printed: str) -> Optional[str]:
+        """The summary.md of the folder render_prompts.py names in its last
+        line, None where it names none or the file cannot be read."""
+        lines = [line for line in printed.splitlines() if line.strip()]
+        if not lines or not lines[-1].startswith("written to "):
+            return None
+        folder = lines[-1][len("written to "):].strip()
+        try:
+            return self.files.read(Path(folder) / "summary.md").decode(
+                "utf-8", errors="replace")
+        except OSError:                 # PermissionError among them
+            return None
+
+    # -- the sentences --
+
+    def _phrases(self, query, body) -> dict:
+        module = self._module(query)
+        shown = phrases.detail(self.profile, module, self.files.read)
+        shown["path"] = self.shown(shown["path"])
+        return shown
+
+    @staticmethod
+    def _table(body) -> dict:
+        table = body.get("table")
+        if not isinstance(table, dict):
+            raise _Refusal(400, "\"table\" is an object: the name of a "
+                                "sentence -> its words")
+        return table
+
+    def _phrases_check(self, query, body) -> dict:
+        module = self._module(body)
+        return self._report(phrases.judge(self.profile, module,
+                                          self._table(body),
+                                          self.files.read))
+
+    def _phrases_save(self, query, body):
+        module = self._module(body)
+        table = self._table(body)
+        own = phrase_files.path_of(self.profile, module)
+        current = sha256(self.files.read(own)) if own.is_file() else None
+        if body.get("base") != current:
+            return self._moved("the sentence file")
+        report, data, target = phrases.save(
+            self.profile, module, table, self.files.read,
+            confirm=bool(body.get("confirm")))
+        report = self._report(report)
+        if data is not None:
+            self.files.write(target, data)
+            report["sha256"] = sha256(data)
+            report["path"] = self.shown(target)
+        return report
+
+    def _phrases_shown(self, query, body) -> dict:
+        module = self._module(body)
+        key = self._text_of(body, "key")
+        new = self._text_of(body, "text")
+        trace = self._trace(body)
+        made = phrases.detail(self.profile, module, self.files.read)
+        row = next((one for one in made["sentences"] if one["key"] == key),
+                   None)
+        if row is None:
+            raise _Refusal(404, f"no sentence {key!r} in {module}")
+        old = row["text"][0] if isinstance(row["text"], list) \
+            else row["text"]
+        return phrases.shown_in(trace.requests, old, new)
+
+    # -- the recorded requests --
+
+    def _requests(self, query, body) -> dict:
+        trace = self._trace(query)
+        offset = self._whole(query, "offset", 0, 0)
+        limit = min(self._whole(query, "limit", 100, 1), PAGE_LIMIT)
+        every = trace.requests
+        scope = list(range(len(every)))
+        wanted = query.get("prompt")
+        if wanted:
+            if wanted not in {one["id"] for one
+                              in prompts.listing(self.profile)}:
+                raise _Refusal(404, f"no such prompt: {wanted!r}")
+            scope = [i for i in scope
+                     if prompts.concerns(wanted, every[i])]
+        kind, field = query.get("kind"), query.get("field")
+        carries, text = query.get("carries"), query.get("text")
+        matching = [i for i in scope
+                    if recorded.keep(every[i],
+                                     kinds=[kind] if kind else (),
+                                     fields=[field] if field else (),
+                                     contains=[text] if text else ())
+                    and (not carries or carries in trace.carried(i))]
+        rows = []
+        for i in matching[offset:offset + limit]:
+            request = every[i]
+            row = {key: request.get(key) for key in (
+                "kind", "asked", "parameter", "coordinate", "owner",
+                "value", "at", "attempt", "ms", "prompt_tokens",
+                "completion_tokens", "check")}
+            rows.append({"index": i, **row})
+        return {
+            "trace": trace_files.name_of(trace.path),
+            "total": len(every), "matching": len(matching),
+            "kinds": sorted({every[i]["kind"] for i in scope}),
+            "fields": sorted({every[i]["parameter"] for i in scope
+                              if every[i].get("parameter") is not None}),
+            "carried": sorted({name for i in scope
+                               for name in trace.carried(i)}),
+            "requests": rows}
+
+    def _request_of(self, body) -> tuple:
+        """(the trace, the number of the request) a body names."""
+        trace = self._trace(body)
+        index = body.get("index")
+        if type(index) is not int:
+            raise _Refusal(400, "\"index\" is a whole number")
+        if not 0 <= index < len(trace.requests):
+            raise _Refusal(404, f"the trace has no request {index}")
+        return trace, index
+
+    def _request_preview(self, query, body) -> dict:
+        trace, index = self._request_of(body)
+        edits = self._edits(body)
+        request = trace.requests[index]
+        return {
+            "index": index, "kind": request["kind"],
+            "asked": request.get("asked"),
+            "notes": {key: request[key] for key in PREVIEW_NOTES
+                      if key in request},
+            "recorded": {
+                "system": request["system"], "messages": request["messages"],
+                "answer": request["answer"],
+                "answer_json": request["answer_json"],
+                "finish": request["finish"], "error": request["error"],
+                "check": request["check"], "spelled": request["spelled"]},
+            "chain": recorded.chain_of(trace.requests, index),
+            "preview": prompts.preview(self.profile, request,
+                                       trace.sent(index) or {}, edits,
+                                       self.files.read)}
+
+    def _request_try(self, query, body) -> dict:
+        trace = self._trace(body)
+        indexes = body.get("indexes")
+        if not isinstance(indexes, list) \
+                or any(type(one) is not int for one in indexes):
+            raise _Refusal(400, "\"indexes\" is a list of whole numbers")
+        edits = self._edits(body)
+        try:
+            return trying.run(self.profile, trace, indexes, edits,
+                              self.files.read)
+        except trying.Refused as exc:
+            raise _Refusal(400, str(exc)) from None
 
 
 # -- HTTP ----------------------------------------------------------------------
@@ -512,13 +848,19 @@ def command(rest: Sequence[str]) -> int:
     from ..profile import ENV_VAR, active_profile
     parser = argparse.ArgumentParser(
         prog="docpipe edit",
-        description="A profile's extraction spec in the browser, on a "
-                    "local page (127.0.0.1 only). Nothing leaves this "
-                    "machine; the only file written is the spec.")
+        description="A profile's extraction spec, its prompts and the "
+                    "sentences beside them in the browser, on a local "
+                    "page (127.0.0.1 only). It writes only inside the "
+                    "profile's folder. Nothing leaves this machine but "
+                    "the requests of a click on Try, which go to the "
+                    "model the installation names for it "
+                    "(EDIT_TRY_BASE_URL).")
     parser.add_argument("--harvest", metavar="DIR",
                         help="a folder with a harvest, its stamps and "
-                             "traces (a local copy): an edit then says "
-                             "which documents it makes stale")
+                             "traces (a local copy): an edit of the spec "
+                             "then says which documents it makes stale, "
+                             "and a prompt is shown with the requests "
+                             "recorded there")
     parser.add_argument("--port", type=int, default=8765,
                         help="default 8765; a free one if it is taken")
     parser.add_argument("--no-browser", action="store_true",

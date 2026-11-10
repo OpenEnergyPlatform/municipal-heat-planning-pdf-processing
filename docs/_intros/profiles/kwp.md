@@ -70,12 +70,14 @@ table gives kwp's own answer.
 | Preprocessing (page transcription) | `prompts/preprocessing/page_transcribe.md` | one prompt id | reads a page with no text layer, verbatim, into Markdown |
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
-| Refinement, visuals, page transcription, the answer app | `reading.py` | `PHRASES` | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
+| Refinement, visuals, page transcription, the answer app | `prompts/reading/phrases.json` | ten sentences | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object, in English like the prompts of the first three (`reading.REQUIRED`), laid over the built-in profile's |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | plan-centric labels and names (a name opens each line of the values index), convoy membership, three filters |
-| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `SPAN_MARKS`, `document_context`, `PHRASES`, `PROMPT_CHECKS` (empty), `CHUNK_UNITS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec (its `plan_fields` block holds what a plan settles for all its values and its own years: its settings, base year and target year, each a name, a meaning and a search sentence), the slice constant (read by no step now), the frame axes, the pairs that are the plan's own state and its target, the marks a value stated for a span of years takes on each of its rows (`out:approximate`), the lines of a piece a plan is read in (8), the German sentences the stage writes to the model (the list of a closed coordinate in a refused pair stands under `"scenarios"`), and the language (`"de"`) of the core's templates its parts files are put together with |
+| Extraction | `extraction.py` | `SPEC_PATH`, `SLICE`, `FRAME`, `BASE_YEAR`, `TARGET_YEAR`, `SPAN_MARKS`, `document_context`, `PROMPT_CHECKS` (empty), `CHUNK_UNITS`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec (its `plan_fields` block holds what a plan settles for all its values and its own years: its settings, base year and target year, each a name, a meaning and a search sentence), the slice constant (read by no step now), the frame axes, the pairs that are the plan's own state and its target, the marks a value stated for a span of years takes on each of its rows (`out:approximate`), the lines of a piece a plan is read in (8), and the language (`"de"`) of the core's templates its parts files are put together with |
+| Extraction | `prompts/extraction/phrases.json` | 55 sentences | the German sentences the stage writes to the model outside its prompts (the list of a closed coordinate in a refused pair stands under `"scenarios"`), laid over the built-in profile's |
 | Extraction | `prompts/extraction/*.md` | 13 prompt ids | phrase and anchors as plain files; review and example as parts files that name a template of the core; `compute`; and the eight prompts of the harvest, `transcribe`, `find`, `docfield`, `coord`, `search`, `list`, `check` and `follow` (see The prompts) |
 | The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
-| The answer app | `inference.py` | `PHRASES`, `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the German chat wording and the graph route's refusal sentences |
+| The answer app | `inference.py` | `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the marker of a value read off a chart and the graph route's refusal sentences |
+| The answer app | `prompts/inference/phrases.json` | 32 sentences | the German chat wording |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
 
 ## The extraction spec
@@ -465,11 +467,11 @@ stands. Trust levels and their closed reason list are on
 ## The chat wording and the graph route
 
 `profiles/kwp/inference.py` supplies the German wording the answer app
-wraps around every turn. `PHRASES`, 32 keys matching
-`docpipe.inference.wording.REQUIRED` exactly, covers the task and history
+wraps around every turn. Its sentences are the file
+`profiles/kwp/prompts/inference/phrases.json`: 32 keys matching
+`docpipe.inference.wording.REQUIRED` exactly, covering the task and history
 headings, the code-execution sandbox's own headings, the image read-off
-headings, and how a citation names its page, section, table or figure
-(`profiles/kwp/inference.py:33` to `80`).
+headings, and how a citation names its page, section, table or figure.
 `READOFF_MARKER` and `READOFF_NOTE` mark a value read off a chart image
 rather than table text. `make_search_phrase` (see
 [inference](../stages/inference.md)) no longer filters the model's anchor
@@ -478,15 +480,15 @@ phrase the model wrote and falls back to the raw task only on an error or
 an empty reply.
 
 What the chat says to the model when a reply was not the one JSON object it asked
-for is not in that table. It is `profiles/kwp/reading.py`, `PHRASES`, the ten
+for is not in that file. It is `profiles/kwp/prompts/reading/phrases.json`, the ten
 sentences of `docpipe.reading.REQUIRED` that refinement, the visuals stage and
 page transcription use as well: what was wrong with the reply (no object, text
 beside it, a syntax error at a character, a missing key) and the shape that was
 asked for. They are English, because the instructions of those stages are
 English in this profile and only what the model reads off a German page is
 German; so the correction the chat appends to a request is English although its
-prompts and its answers are German. The table is laid over the built-in
-profile's entry by entry (`profile.layers("reading", "PHRASES")`).
+prompts and its answers are German. The file is laid over the built-in
+profile's entry by entry (`phrases.table`, `docpipe/phrases.py`).
 
 `ROUTE_NOTES` words the five reasons `docpipe.inference.kg_route` can give
 for not answering from the graph at all: no graph loaded, no plan node for

@@ -362,7 +362,7 @@ seconds times the attempt number, at most ten, and none after the last attempt.
 two costs one. When they are used up the request ends with a `ReplyError`, a
 `RuntimeError` that carries the last cause, the name of the reply asked for and
 the attempts (`llm_client.py:161-178`). The sentences said back are the
-profile's `reading.PHRASES` (see The profile's wording contract), spoken through
+profile's `prompts/reading/phrases.json` (see The profile's wording contract), spoken through
 the profile the chat answers in, and in English in all three shipped profiles,
 `kwp` among them.
 
@@ -398,9 +398,10 @@ not answer; both are `not_served`, so the chat never notes `refused` or `error`.
 ### The profile's wording contract
 
 Every phrase and label the loop wraps around the model comes from the
-active profile through `wording.py`. `phrases()` checks a profile's
-`PHRASES` dict against `REQUIRED`, a frozenset of 32 keys
-(`wording.py:33-46`). `llm_client.py` calls `phrases()` on first use
+active profile through `wording.py`. The sentences are a file of the profile,
+`prompts/inference/phrases.json`, laid over the file of the profile it extends
+(`docpipe/phrases.py`); `phrases()` checks the result against `REQUIRED`, a
+frozenset of 32 keys. `llm_client.py` calls `phrases()` on first use
 (`llm_client.py:108-110`), so this package imports with no active profile.
 A lookup with none does not fail: `wording.chat_profile` is the one place
 that falls back, to the built-in `default` profile, for the phrases, the
@@ -419,20 +420,20 @@ requests are on. The chat loop stays single-turn (a gateway agent rejects a JSON
 assistant turn), so owner decisions 2026-11-07 changed only the texts:
 `compute_hint` and `image_hint` no longer describe the next turn, the formats
 of a computed statement and of an image read-off moved into the
-`compute_guide` and `image_guide` phrases (`_COMPUTED`, `_READ_OFF` in the
-profiles' `inference.py` and the built-in profile's), and `readoff` and
+`compute_guide` and `image_guide` phrases (in the sentence files of the
+built-in profile and of the two profiles), and `readoff` and
 `answer_tail` no longer refer to a later answer. The prompts themselves state
 the shape of the reply: no separate prompt splices an answer format into them, none corrects a reply, and
 none revises an answer. The sentences that tell a model what was wrong with a
-reply that was not the one object are not in `inference.PHRASES` either. They are
-the profile's `reading.PHRASES`, the table of
-`docpipe/reading.py` that refinement, the visuals stage and page transcription
+reply that was not the one object are not in `prompts/inference/phrases.json` either. They are
+the profile's `prompts/reading/phrases.json`, the file
+`docpipe/reading.py` reads and that refinement, the visuals stage and page transcription
 use as well. `reading.REQUIRED` names its ten sentences (`shape_rule`,
 `reasoning_only`, `empty`, `no_object`, `syntax`, `outside_text`,
 `not_an_object`, `key_missing`, `key_not_a_list`, `key_not_text`), and a profile
-lays its table over the one of the profile it extends, entry by entry
-(`reading.phrases`, `profile.layers`). The three stages check the table before
-their first request. The chat does not: it reads the table when a reply was not
+lays its file over the one of the profile it extends, entry by entry
+(`reading.phrases`, `phrases.table`). The three stages check the sentences before
+their first request. The chat does not: it reads the sentences when a reply was not
 the object it asked for, and a profile that lacks a sentence fails there with a
 `LookupError` naming it.
 
@@ -741,16 +742,16 @@ with reason `no_trust` (`kg_route.py:328-333`). A profile that leaves a
 when the route is built (`kg_route.py:82-94`); a Turtle fragment with no
 `@prefix` line is refused outright (`kg_route.py:144-146`).
 
-The wording contract fails the same way: a profile whose `PHRASES` dict
-is missing a required key raises `LookupError` at the first check
-(`wording.py:141-143`). No active profile is not one of its failures:
-`wording._component` (`wording.py:119-120`) asks `chat_profile`, which falls
+The wording contract fails the same way: a profile whose sentences
+are missing a required key raises `LookupError` at the first check
+(`wording.phrases`), naming the keys and the file. No active profile is not one of its failures:
+`wording._component` asks `chat_profile`, which falls
 back to the built-in profile and says so in the log. `llm_client.py` resolves
 its own phrases on first use (`llm_client.py:108-110`), so a profile that lacks a
 phrase surfaces at the first lookup of a turn and not as an import error. The
-profile's `reading.PHRASES` is looked up only when a reply was not the object
+profile's `prompts/reading/phrases.json` is looked up only when a reply was not the object
 asked for: a profile that lacks one of its ten sentences raises `LookupError`
-naming it there (`docpipe/reading.py:87-105`).
+naming it there (`reading.phrases`).
 
 Answers are deliberately not cached: a follow-up is context-dependent,
 and a cache keyed on the question text alone would misfit a later
@@ -1166,12 +1167,14 @@ the sentence that tells the model to answer NOW. The core assembles those
 pieces and does not write them: it cannot know whether the reader is holding a
 German heat plan or an English scenario study.
 
-A profile contributes them in `profiles/<name>/inference.py`. A profile that
-extends another one writes only the pieces it words differently: its PHRASES
-are laid over those of the profile it extends.
+A profile writes them in `profiles/<name>/prompts/inference/phrases.json`
+(`docpipe/phrases.py`; a table in its `inference.py` until 2026-11-10). A
+profile that extends another one writes only the pieces it words
+differently: its file is laid over those of the profile it extends.
 
-The words of the app's pages come the same way and from the same file: the
-profile's `UI` table, which a person reads where a model reads PHRASES. That
+The words of the app's pages come the same way, from the profile's
+`inference.py`: its `UI` table, which a person reads where a model reads the
+sentences. That
 includes the picker's labels, the tag after a document's name and the noun
 for one. Both tables are checked for the entries the core asks for
 (`REQUIRED`, `UI_REQUIRED`).

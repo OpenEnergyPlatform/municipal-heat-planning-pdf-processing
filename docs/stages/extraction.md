@@ -877,7 +877,8 @@ field-by-field flow, `plan`, `anchor`, `frame`, `rows`, `field`, `sweep`, `drop`
 and `places`, are written no more and stay in the schema for older traces, as do
 the `comb`, `years`, `settings`, `naming` events and their requests of the flow
 before 2026-11-08. `scripts/chat_view.py` renders a trace's requests as small chats
-for reading. `stats.py` writes per run the requests per kind, every
+for reading; the code that reads the requests out of a trace, chains them and
+filters them is `docpipe/editor/requests.py`, which the script and `docpipe edit` share. `stats.py` writes per run the requests per kind, every
 `<stage>_ask` kind under its stage and the known stages (`schema.ASK_STAGES`) even
 when they asked nothing, and the order, reading, piece, once-asked and works counts
 (`stats.from_traces`, see Archive and stats). The cost estimate counts the
@@ -1975,8 +1976,8 @@ The sentences the stage writes itself outside its prompts (why an answer was
 not taken, what was wrong with a reply that could not be read, how the closed
 list names a meaning) go back to the model in the next request, so they are
 in the language of the prompts and belong to the profile: its
-`extraction.PHRASES`, where a profile that extends another one writes only
-the ones it words differently (`wording.py`). One of them, `frame_options`,
+`prompts/extraction/phrases.json`, where a profile that extends another one writes only
+the ones it words differently (`wording.py`, `docpipe/phrases.py`). One of them, `frame_options`,
 is not a sentence but the key under which a frame pair's refusal lists
 the entries of a closed coordinate (`runner.frame_pairs`). Two more are keys and no prose either:
 `option_means` and `option_spellings` are the keys under which an entry of a
@@ -2009,7 +2010,7 @@ in, from `extraction.CONTRACT_LANGUAGE` of the profile that holds them
 (`Profile.own`, so it is not inherited). `facts()` gives the values a template
 names and does not type: the least length of a quote (`verify.MIN_QUOTE_CHARS`),
 the word for "not stated" (`fields.UNSTATED`) and, from the profile's
-`extraction.PHRASES`, the two keys of an option, the gloss and the spelling of
+`prompts/extraction/phrases.json`, the two keys of an option, the gloss and the spelling of
 the closed list's entry for "not stated" and the key under which a closed
 coordinate's list goes. Only the facts a prompt names are read, so a profile whose
 phrases are incomplete is told so by the prompt that needs them and by no other.
@@ -2076,7 +2077,9 @@ in this repository, `kwp` and `scenarios`: one line per check for each.
 `scripts/render_prompts.py` is the other look at a profile's prompts before a
 run: it renders them before and after a change and sets the text, the window
 and the passages per request of the two sides next to each other (see
-[Running the pipeline](../running.md)).
+[Running the pipeline](../running.md)). The cut of a text into sentences and the
+diff by sentence it writes are `docpipe/editor/sentences.py`, which the script
+and `docpipe edit` share.
 
 Two lines read more than the keys. `every shape property is asked or left out
 on purpose` holds the shapes of the profile's graph against its spec, the way
@@ -3084,7 +3087,8 @@ profile wrote its prompts in another language. The two keys of an entry of
 a closed list are the exception: they are keys of the request, English in
 every profile.
 
-A profile contributes them in `profiles/<name>/extraction.py: PHRASES`. A
+A profile writes them in `profiles/<name>/prompts/extraction/phrases.json`
+(`docpipe/phrases.py`; a table in its `extraction.py` until 2026-11-10). A
 profile that extends another one writes only the ones it words differently.
 A phrase is a template for `str.format`: the names in braces are filled by
 the stage, `!r` shows a value the way the model wrote it, and a brace that
@@ -3120,8 +3124,8 @@ A fact is a value the code decides and a prompt only repeats, so the prompt
 and the request agree by construction: the least length of a quote
 (`verify.MIN_QUOTE_CHARS`), the word for "not stated" (`fields.UNSTATED`),
 and the words the closed list is shown in and the key of the frame's list from
-the profile's PHRASES. No template carries any of them as a typed number or
-word.
+the profile's sentences (`prompts/extraction/phrases.json`). No template
+carries any of them as a typed number or word.
 
 Author: Felix Vossel
 

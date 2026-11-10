@@ -11,8 +11,11 @@ only reads the file, asks the logic and, where the logic says so, writes.
 
 `Files` is the one place the editor touches a file: it may write only inside
 the profile's own folder and read only inside the folders of the profiles in
-effect, the harvest it was given, the page itself and the generated
-documentation. A path is resolved first, so `..` and links cannot lead out.
+effect, the harvest it was given, the page itself, the generated
+documentation and the folder the prompt review writes into
+(`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links
+cannot lead out. A trace is read by the run's own reader after the guard has
+checked its path (`Files.checked`).
 
 The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
 of another site cannot reach the server by a name of its own) and takes a
@@ -38,6 +41,15 @@ Every byte the editor reads or writes itself goes through `open`.
 ```python
 def __init__(self, write_root: Path, read_roots: Sequence[Path])
 ```
+
+#### Files.checked
+
+```python
+def checked(self, path) -> Path
+```
+
+*path* resolved, for a reader that opens the file itself;
+PermissionError where `open` would refuse it.
 
 #### Files.open
 

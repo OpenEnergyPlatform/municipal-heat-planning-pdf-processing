@@ -68,8 +68,8 @@ reply is counted. `assert_serving` keeps the window the server reported
 budget is what a reply that was cut off is asked once more with (see The vision
 call, its retries and a hole).
 
-Unless `--dry-run` is set, `main` then reads the profile's `reading.PHRASES`
-(`reading.phrases()`; a profile that lacks a sentence ends the run with a
+Unless `--dry-run` is set, `main` then reads the profile's reading sentences
+(`prompts/reading/phrases.json`, `reading.phrases()`; a profile that lacks a sentence ends the run with a
 `LookupError` before the first request, and a dry run or the budget needs none)
 and calls `assert_serving` (`docpipe/llm_preflight.py`; see [core](core.md))
 before `run_single` or `run_batch` runs. A smaller `max_model_len` raises
@@ -217,7 +217,7 @@ reply that could not be read.
 
 A reply that is not that object is asked again, up to `MAX_RETRIES` attempts
 in all: the failed answer is echoed back with the cause named in the profile's
-words (`reading.PHRASES`) and the shape that was asked for. A reply that
+words (`prompts/reading/phrases.json`) and the shape that was asked for. A reply that
 cannot be read comes back within the second, so this retry does not wait. A
 timeout, a 429, a 5xx or any other exception waits `5 * attempt` seconds
 (not after the last attempt) and, for a timeout, also escalates the
@@ -356,7 +356,7 @@ unreachable endpoint, or one not serving the named model, is caught by
 is smaller than `max_request_tokens()` never gets a document: the preflight
 check, skipped only on `--dry-run`, refuses to start the run; so does a server
 that refuses a reply schema of the stage, and a profile without a
-`reading.PHRASES` sentence stops the run with a `LookupError` before the
+sentence of `prompts/reading/phrases.json` stops the run with a `LookupError` before the
 first request.
 
 Inside one item's retries, a 4xx fails at once with no wait; a timeout,

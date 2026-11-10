@@ -45,80 +45,9 @@ READOFF_MARKER = "abgelesen"
 READOFF_NOTE = ("(Hinweis: Werte teilweise aus Abbildungen abgelesen "
                 "– Schätzwerte, Ablesefehler möglich.)")
 
-# How a statement about a number the code printed, or one read off a
-# requested image, is given: told in the message that brings the output or
-# the image, not before (owner decision 2026-11-07: each request is told what
-# it is to do).
-_COMPUTED = (' Eine Aussage über eine berechnete Zahl lautet {"statement": '
-             '"...", "basis": "computed", "index": <int des Auszugs, der die '
-             'Eingangswerte enthält>, "quote": "<wörtlicher Satz oder '
-             'wörtliche Tabellenzeile aus diesem Auszug mit den '
-             'Eingangswerten>", "run": <Nummer des Laufs unter "Bereits '
-             'ausgeführt", dessen Ausgabe die Zahl gedruckt hat>}. Gib eine '
-             'berechnete Zahl nie mit basis "text" an.')
-_READ_OFF = (' Das Abgelesene gibst du als {"statement": "...", "basis": '
-             '"image", "block": "p17_img1", "reading": "..."} an, mit der '
-             'Kennung des Bildes statt eines Index.')
 
-
-PHRASES = {
-    "task_heading": "Auftrag des Nutzers",
-    "history_heading": ("Bisheriger Gesprächsverlauf (nutze ihn NUR, um Bezüge im "
-                        "aktuellen Auftrag aufzulösen — Pronomen, \"und …\", "
-                        "Auslassungen; KEINE Faktenquelle, Belege ausschließlich "
-                        "aus den Auszügen)"),
-    "history_task": "Frage",
-    "history_phrase": "Suchanker",
-    "history_answer": "Antwort",
-    "chat_parameter_question": ("Wonach fragt der Nutzer? Wähle den Eintrag "
-                                "der Liste, nach dem die Frage fragt, nach dem, "
-                                "was sie meint, nicht nach ihren Wörtern: wer "
-                                "einen Plan erstellt hat, ist das beauftragte "
-                                "Planungsbüro; wie viel Wärme gebraucht wird, "
-                                "ist ein Energieverbrauch. Fragt sie nach "
-                                "keinem davon, ist die Antwort out:unstated."),
-    "pick_outside": ("{ids} stehen nicht in der Liste. Wähle nur Einträge der "
-                     "Liste."),
-
-    "code_heading": "Ausgeführter Code",
-    "exec_stdout": "Ausführungsergebnis (stdout)",
-    "exec_empty": "(keine Ausgabe)",
-    "exec_failed": "Ausführung fehlgeschlagen",
-    "exec_unknown": "unbekannter Fehler",
-    "exec_recover": "Korrigiere den Code ODER antworte ohne Berechnung.",
-
-    "compute_heading": "Bereits ausgeführt",
-    "compute_guide": ("Gib die finale Antwort im vorgegebenen JSON-Format — oder, nur "
-                      "falls unbedingt nötig, eine weitere "
-                      '{"action":"python","code":...}.' + _COMPUTED),
-    "compute_guide_final": ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format "
-                            "(KEIN action-Objekt mehr)." + _COMPUTED),
-
-    "image_heading": "Angeforderte Abbildungen (siehe Bilder)",
-    "image_uncaptioned": "ohne Bildunterschrift",
-    "image_unavailable": "Bild nicht verfügbar",
-    "image_guide": ("Lies den Wert aus dem Bild ab und gib die finale Antwort — oder, "
-                    'nur falls wirklich nötig, eine weitere {"action":"image","id":"..."}.'
-                    + _READ_OFF),
-    "image_guide_final": ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format "
-                          "(KEIN action-Objekt mehr)." + _READ_OFF),
-    "image_part": "Bild zum Auszug index={index}",
-
-    "readoff_heading": "Abzulesen (laut Vorprüfung)",
-
-    # The citation under the answer, which the model also reads as `source`.
-    "citation_quotes": ("„", "“"),
-    "citation_page": "Seite {page}",
-    "citation_page_unknown": "Seite unbekannt",
-    "citation_section": "Abschnitt",
-    "citation_table": "Tabelle",
-    "citation_figure": "Abbildung",
-
-    # What the loop splices into a reading, a failed run and an image part.
-    "readoff_value": "{reading} — abgelesener Wert: {value} {unit}",
-    "exec_none": "kein Ergebnis",
-    "image_requested": "Angefordertes Bild [{id}]: {title}",
-}
+# What the answer loop says around the prompts is a file beside them:
+# prompts/inference/phrases.json (docpipe/phrases.py).
 
 
 # The words of the chat app's pages (docpipe/app/app.py) and of the picker's
