@@ -335,6 +335,30 @@ short line with the lines around it).
 
 ## Functions
 
+### letter_title_page
+
+```python
+def letter_title_page() -> str
+```
+
+### letter_headings
+
+```python
+def letter_headings() -> str
+```
+
+### letter_settings
+
+```python
+def letter_settings() -> str
+```
+
+### letters_others
+
+```python
+def letters_others() -> tuple
+```
+
 ### ends_abbreviated
 
 ```python
@@ -475,8 +499,9 @@ def title_page_of(passages: list, count: int) -> list
 ```
 
 [(Line, Source)] of the plan's title page: the first *count* lines
-of its first page, else of its second, each the line of its passage
-(`Passage`), in the plan's order; [] for a plan with no page.
+of its first page, else of the page the rule `title_page_also` names,
+each the line of its passage (`Passage`), in the plan's order; [] for a
+plan with no page.
 
 ### short_quote
 

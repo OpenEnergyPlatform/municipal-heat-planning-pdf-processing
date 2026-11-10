@@ -20,7 +20,7 @@ for, is refused at load and told which languages there are.
 
 A fact is a value the code decides and a prompt only repeats, so the prompt
 and the request agree by construction: the least length of a quote
-(`verify.MIN_QUOTE_CHARS`), the word for "not stated" (`fields.UNSTATED`),
+(`verify.min_quote_chars`, rule `quote_min_chars`), the word for "not stated" (`fields.UNSTATED`),
 and the words the closed list is shown in and the key of the frame's list from
 the profile's sentences (`prompts/extraction/phrases.json`). No template
 carries any of them as a typed number or word.
@@ -115,7 +115,7 @@ def facts(profile, names: Iterable) -> dict:
     out: dict = {}
     for name in names:
         if name == "min_quote_chars":
-            out[name] = verify.MIN_QUOTE_CHARS
+            out[name] = verify.min_quote_chars()
         elif name == "unstated":
             out[name] = fields.UNSTATED
         elif name == "frame_options":

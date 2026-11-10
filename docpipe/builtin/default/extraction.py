@@ -9,9 +9,8 @@ docpipe/extraction/wording.py for what each name is filled with.
 Author: Felix Vossel
 """
 
-# How the documents write the decimal. It decides what the digits leave
-# open: "3,251" is 3251 here, and "1.234" is 1.234.
-DECIMAL_MARK = "."
+# How the documents write the decimal is the rule `decimal_mark` (rules.json
+# beside this file).
 
 # The language tag of the ontology's alternative labels that a vocabulary
 # snapshot keeps for this profile, the words its spec is held against. This

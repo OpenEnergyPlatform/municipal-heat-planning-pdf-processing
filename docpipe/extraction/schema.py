@@ -43,7 +43,7 @@ from . import fields
 from .spec import load as load_spec
 from .trust import (FLAG_REASONS, LEVEL_A, LEVEL_B, LEVEL_C, LEVEL_D, LEVELS,
                     PARAMETER_STATES)
-from .verify import MIN_QUOTE_CHARS, TIER_TEXT, TIER_VISUAL
+from .verify import TIER_TEXT, TIER_VISUAL, min_quote_chars
 
 SCHEMA_NAME = "extraction_schema.json"
 BASE_ID = "https://openenergyplatform.org/schema/mhpkg/extraction"
@@ -260,7 +260,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"does not list onto this class. Kept and counted, "
                            f"not refused: some of those mappings are right."},
         f"{name}_quote": {
-            "type": "string", "minLength": MIN_QUOTE_CHARS,
+            "type": "string", "minLength": min_quote_chars(),
             "description": f"The verbatim passage carrying '{name}'. Present "
                            f"exactly when {name}_state is 'read'."},
         f"{name}_source": {
@@ -309,7 +309,7 @@ def _slot_properties(name: str, slot, doc: str) -> dict:
                            f"`retrieval`, `rest` and `places` are the "
                            f"windows of the reading by passages."},
         f"{name}_link_quote": {
-            "type": "string", "minLength": MIN_QUOTE_CHARS,
+            "type": "string", "minLength": min_quote_chars(),
             "description": f"Only with window `base_year` or `target_year`: "
                            f"the passage where the row names that state "
                            f"('{name}_raw'). '{name}_quote' is then the "
@@ -362,7 +362,7 @@ def _slot_rules(name: str, slot) -> dict:
 def _tuple_schema(spec, parameter) -> dict:
     props: dict = {
         "kind": {"const": "tuple"},
-        "quote": {"type": "string", "minLength": MIN_QUOTE_CHARS,
+        "quote": {"type": "string", "minLength": min_quote_chars(),
                   "description": "The passage of the owner source that "
                                  "contains the value, checked by "
                                  "whitespace-collapsed containment."},

@@ -43,7 +43,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from types import SimpleNamespace
 from typing import Callable, Optional
 
-from docpipe import providers
+from docpipe import providers, rules
 
 from . import trace
 
@@ -376,9 +376,10 @@ class Repeats:
         asked = time.time()
         document = current()[0]
         # Word for word in the same document: a request of no document
-        # (anchors, a run's own questions) is sent every time.
+        # (anchors, a run's own questions) is sent every time, and every
+        # request is where the rule `same_request_once` is off.
         key = (request_key(kwargs) if document is not None and not args
-               else None)
+               and rules.get("same_request_once") else None)
         held, first = (self._once.claim(document, key) if key is not None
                        else (None, False))
         if held is not None and not first:

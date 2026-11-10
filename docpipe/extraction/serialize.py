@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -103,9 +104,13 @@ def read_decisions(held, harvest: dict, source=None) -> dict:
     return decided
 
 
+_SUBJECT = re.compile(r"^<([^>]+)>\s*$", re.M)
+
+
 def run(jsonl_dir: Path, out_path: Path,
         serializer: Callable[[str, list], Optional[str]],
-        provenance=None, gold=None, gold_source=None) -> dict:
+        provenance=None, gold=None, gold_source=None,
+        index: Optional[dict] = None) -> dict:
     """Serialize every document's harvest; returns {name: tuple count}.
 
     A serializer returning None skips its document (nothing to say is a
@@ -120,6 +125,10 @@ def run(jsonl_dir: Path, out_path: Path,
     harvest is collected and not in `collect`, which the review page and
     `evaluate` read their rows from: counting a decision against a harvest
     that already held it would hide the row it was made on.
+
+    *index*, where given, is filled with {document: [the subjects its part
+    of the graph names]}: what leaving a paper out of the graph takes
+    (`apply_graph_file`).
     """
     harvest = collect(jsonl_dir)
     decided = (read_decisions(gold, harvest, gold_source)
@@ -143,6 +152,8 @@ def run(jsonl_dir: Path, out_path: Path,
         if rendered:
             parts.append(rendered)
             counts[name] = len(rows)
+            if index is not None:
+                index[name] = _SUBJECT.findall(rendered)
             if provenance is not None and entry:
                 from .provenance import read_stamp
                 provenance.add(name, entry, read_stamp(jsonl_dir, name),
@@ -179,6 +190,25 @@ def run(jsonl_dir: Path, out_path: Path,
                  "rows the writer left out of the graph",
                  provenance.decisions, given, given - provenance.decisions)
     return counts
+
+
+def apply_graph_file(path: Path, profile, shapes=(), context=(),
+                     index: Optional[dict] = None) -> Optional[dict]:
+    """What the profile's graph file asks of the graph written to *path*
+    (`docpipe.graphfile`): classes left out, nodes named anew, the effects
+    of the constraints. None, and the file untouched, where it asks
+    nothing."""
+    from .. import graphfile
+    made = graphfile.load(profile)
+    if not made.acts():
+        return None
+    report = graphfile.finish(path, made, made.rules.get("base", ""),
+                              list(shapes or ()), context, index)
+    log.info("graph file: %s: classes left out %s, %d node(s) named anew, "
+             "%d left out by a constraint", Path(path).name,
+             report["classes_left_out"] or "none", report["readdressed"],
+             len(report["left_out"]))
+    return report
 
 
 def kind_key(kind: tuple) -> str:

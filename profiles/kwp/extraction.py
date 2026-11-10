@@ -77,21 +77,12 @@ FRAME = ("scenario", "year")
 # their quote and whose number did not, "Basisjahr" among the most common, and
 # a later harvest about 14,500 for the target, "Zieljahr" 12,369 of them.
 
-# What counts as a year here: a zone number printed beside a value (169002)
-# was answered as its year, in the frame and on a row (owner decision
-# 2026-11-01).
-YEAR_RANGE = (1900, 2100)
-
-# What a value stated for a span of years takes on each of its rows, one per
-# year of the span (`reading.span_rows`, owner decision 2026-11-07: "als ca.
-# für jedes distinkte Jahr erfassen"): "im Mittel der Jahre 2019 bis 2021"
-# is the value for 2019, 2020 and 2021, each approximate.
-SPAN_MARKS = {"qualifier": "out:approximate"}
-
-
-# How the documents write the decimal. It decides what the digits leave
-# open: "3,251 GWh" is 3.251 here, and "1.234" is 1234.
-DECIMAL_MARK = ","
+# What counts as a year here (a zone number printed beside a value, 169002,
+# was answered as its year; owner decision 2026-11-01), what a value stated
+# for a span of years takes on each of its rows (owner decision 2026-11-07:
+# "als ca. für jedes distinkte Jahr erfassen") and how the documents write
+# the decimal ("3,251 GWh" is 3.251 here) are rules: rules.json beside this
+# file (`year_range`, `span_marks`, `decimal_mark`).
 
 # The language tag of the ontology's alternative labels that the vocabulary
 # snapshot keeps for this profile, the words its spec is held against.
@@ -114,3 +105,20 @@ PROMPT_CHECKS = ()
 # What the stage says to the model outside its prompts (why an answer was not
 # taken, what was wrong with a reply) is a file beside them:
 # prompts/extraction/phrases.json (docpipe/phrases.py).
+
+
+def shapes_files() -> list:
+    """The MHPKG shapes of the last `vocabulary --refresh`, or none: the
+    files the spec is held against (`docpipe compile diff`, the preflight,
+    the Sources tab of `docpipe edit`)."""
+    from profiles.kwp import vocabulary   # lazy: it reads the spec
+    return [path for path in vocabulary.shapes() if path.is_file()]
+
+
+def spec_for_shapes(raw: dict) -> dict:
+    """The spec as the shapes name its properties: this profile's `kg`
+    blocks name schema slots and classes (`"schema_slot":
+    "refers_to_energy_carrier"`), which the MHPKG schema turns into the
+    predicate and class its shapes carry (`mhpkg.resolve`)."""
+    from profiles.kwp import mhpkg
+    return mhpkg.resolve(raw, mhpkg.load())

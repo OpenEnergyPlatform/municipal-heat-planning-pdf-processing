@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from .. import rules
 from . import wording
 from .spec import UNIT, Parameter, fold_label
 
@@ -223,9 +224,13 @@ def wording_asked(slot: Slot) -> bool:
 # What an example reply writes for an answer (`value_example`): a placeholder
 # for an entry of a list or a wording, and one for a year, never a year of
 # its own the model could copy (owner decision 2026-11-07: "mach das
-# Beispiel mit YYYY").
-SAID = "..."
-YEAR = "YYYY"
+# Beispiel mit YYYY"; rules `example_words`, `example_year`).
+def said() -> str:
+    return rules.get("example_words")
+
+
+def year_word() -> str:
+    return rules.get("example_year")
 
 
 def value_example(slot: Slot):
@@ -235,8 +240,8 @@ def value_example(slot: Slot):
     read (owner decision 2026-11-06), and the prompt's rule line shows how
     an unstated one looks."""
     if not slot.is_closed and slot.kind == NUMBER:
-        return YEAR
-    return SAID
+        return year_word()
+    return said()
 
 
 def _options(vocabulary: dict, definitions: Optional[dict] = None,

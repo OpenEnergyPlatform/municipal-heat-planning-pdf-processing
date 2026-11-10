@@ -44,7 +44,7 @@ from .remap import enter_producer, stamp_path_of
 from .spec import Spec, fold_label
 from .trust import (REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_LEVELS, REVIEW_UNBACKED,
                     document_summary, trust)
-from .verify import MIN_QUOTE_CHARS, quote_in, value_in_quote
+from .verify import min_quote_chars, quote_in, value_in_quote
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ def backed(target, answer, wording: Optional[str], quote: str,
     answer. Written here against the same two functions the harvest uses, so
     the review's idea of evidence and the harvest's cannot drift apart.
     """
-    if not quote or len(quote.strip()) < MIN_QUOTE_CHARS:
+    if not quote or len(quote.strip()) < min_quote_chars():
         # The same floor the harvest has (`merge_field`), and for the same
         # reason: a three-character quote names no place in a document.
         return False

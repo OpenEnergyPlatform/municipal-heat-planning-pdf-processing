@@ -1,0 +1,148 @@
+{
+  "rules": {
+    "not_extracted": [
+      {
+        "shape": "study",
+        "property": "OEO_00000508",
+        "reason": "has contact person: optional in the shapes, and the bundle carries authors, organisations and funders and no contact person"
+      },
+      {
+        "shape": "study",
+        "property": "OEO_00020432",
+        "reason": "covers energy carrier: optional in the shapes, a closed list; the sector and technology tags of the study are asked and its energy carrier tag is not"
+      },
+      {
+        "shape": "scenario",
+        "property": "OEO_00020222",
+        "reason": "has interacting region: optional in the shapes; a scenario's study region is asked and its interacting region is not"
+      },
+      {
+        "shape": "scenario",
+        "property": "OEO_00020436",
+        "reason": "has information output: optional in the shapes, and the serializer writes no dataset node"
+      },
+      {
+        "shape": "scenario",
+        "property": "OEO_00020437",
+        "reason": "has information input: optional in the shapes, and the serializer writes no dataset node"
+      },
+      {
+        "shape": "publication",
+        "property": "OEO_00390078",
+        "reason": "has reference: optional in the shapes; the report carries no link to its reference"
+      },
+      {
+        "shape": "region",
+        "property": "OEO_00390078",
+        "reason": "has reference: optional in the shapes; a region is only referenced by its IRI and never written"
+      },
+      {
+        "shape": "study",
+        "property": "BFO_0000051",
+        "reason": "has part: the serializer writes it from the kg block of the scenario coordinate, the bundle holds its report and its factsheets, and no parameter asks for it"
+      },
+      {
+        "shape": "scenario",
+        "property": "OEO_00020220",
+        "reason": "has study region: the serializer writes its parent, has spatial region, for scenario_region, and the bundle body for the platform writes this one itself"
+      },
+      {
+        "shape": "publication",
+        "property": "OEO_00390095",
+        "reason": "has uuid: the serializer writes it on every node it mints (kg.P_UUID), behind no parameter"
+      },
+      {
+        "shape": "scenario",
+        "property": "OEO_00390095",
+        "reason": "has uuid: the serializer writes it on every node it mints (kg.P_UUID), behind no parameter"
+      },
+      {
+        "shape": "common",
+        "property": "label",
+        "reason": "label of the objects of the author, organisation, funder, tag and scenario type properties: the serializer writes it for the authors, organisations and funders it mints, and a tag or a scenario type is the IRI of a node the OEKG already holds with its label"
+      },
+      {
+        "shape": "region",
+        "property": "label",
+        "reason": "label: a region is only referenced by its IRI, the node exists in the OEKG with its label, and writing ours would give it a second one"
+      },
+      {
+        "shape": "dataset",
+        "property": "label",
+        "reason": "label: the serializer writes no dataset node"
+      },
+      {
+        "shape": "dataset",
+        "property": "has_id",
+        "reason": "has_id: the serializer writes no dataset node"
+      },
+      {
+        "shape": "dataset",
+        "property": "OEO_00390094",
+        "reason": "has iri: the serializer writes no dataset node"
+      },
+      {
+        "shape": "dataset",
+        "property": "OEO_00390095",
+        "reason": "has uuid: the serializer writes no dataset node"
+      },
+      {
+        "shape": "framework",
+        "property": "label",
+        "reason": "label: the serializer writes no factsheet of this kind, so there is nothing to give it"
+      },
+      {
+        "shape": "framework",
+        "property": "OEO_00390094",
+        "reason": "has iri: the serializer writes no factsheet of this kind, so there is nothing to give it"
+      },
+      {
+        "shape": "model",
+        "property": "label",
+        "reason": "label: the serializer writes no factsheet of this kind, so there is nothing to give it"
+      },
+      {
+        "shape": "model",
+        "property": "OEO_00390094",
+        "reason": "has iri: the serializer writes no factsheet of this kind, so there is nothing to give it"
+      }
+    ],
+    "catalogue_address": "https://api.openalex.org/works",
+    "catalogue_family_names": 2,
+    "catalogue_timeout_s": 30,
+    "country_groups": [
+      {
+        "key": "aggregate:EU28",
+        "labels": "EU28|EU-28|EU 28",
+        "union": "aggregate:worldbank:EUU",
+        "joined": "United Kingdom",
+        "source": "worldbank and the United Kingdom"
+      }
+    ],
+    "short_forms": {
+      "EUU": [
+        "EU"
+      ],
+      "OED": [
+        "OECD"
+      ]
+    },
+    "name_abbreviations": {
+      "st.": "saint",
+      "rep.": "republic",
+      "dem.": "democratic",
+      "fed.": "federated",
+      "sts.": "states",
+      "pdr": "people's democratic republic",
+      "sar": ""
+    },
+    "world_labels": [
+      "global",
+      "worldwide",
+      "World",
+      "global — the whole world, not a single country"
+    ],
+    "acronym_most_chars": 4,
+    "model_region_needs_model": true
+  }
+}

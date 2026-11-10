@@ -17,16 +17,24 @@ edit`):
 The default profile writes the whole file: every number the reading takes
 (`NUMBERS`) and its steps. A profile that extends it writes only the numbers
 it sets differently, and its file is laid over the default's number by
-number (`load`); the steps are the default's. A setting of the run wins over
-the file for the numbers that have one (`Number.env`): the environment, then
-the project file, then this file (`in_effect`).
+number (`load`); it may write the steps as well, all of them, and then they
+are its. A setting of the run wins over the file for the numbers that have
+one (`Number.env`): the environment, then the project file, then this file
+(`in_effect`).
 
-The steps say what the code does and are not run from the file: the order is
-the code's until the reading is cut into steps that can be (the plan's stage
-4). So that the file cannot say something else than the code, it is read
-strictly: every request the code sends stands in a step (`kinds`), a step
-asks no request the code does not send, every number bounds a step, and a
-number the code does not take is refused.
+Since 2026-11-10 the run reads its steps from the file (`arrangement`): the
+order of the steps a frame may reorder and which steps are off. Each step is
+a building block of the code (`BLOCKS`); the file says in which order the
+blocks of a document and of a coordinate run and which are left out, and the
+code says where a block may stand at all: the steps that prepare what every
+request shows keep their place, a coordinate is asked at its own place first,
+the coordinates of a value come after its finds, a search sentence before
+the search that goes with it. An arrangement that cannot run is refused with
+the reason (`arrangement_problems`). So that the file cannot say something
+else than the code, it is read strictly: every request the code sends stands
+in a step (`kinds`), a step asks no request the code does not send, every
+number bounds a step, a number the code does not take is refused, and every
+block of the code stands in the steps once.
 
 Nothing here decides whether a harvest is current. A stamp names, in the
 entry of each pass that asked a model, the numbers the pass read with and
@@ -62,6 +70,22 @@ Fields:
 - `help: str`
 - `env: Optional[str] = None`: the setting that wins over the file
 - `part: Optional[int] = None`: its place where the setting lists several
+
+### Block
+
+```python
+@dataclass(frozen=True)
+class Block
+```
+
+What the code can do with one step of the flow.
+
+Fields:
+
+- `frame: str`: "document" or "coordinate"
+- `moves: bool = False`: its place among the frame's moving steps
+- `switch: bool = False`: whether it may be off
+- `why: str = ""`: why it keeps its place or cannot be off
 
 ### Numbers
 
@@ -119,6 +143,28 @@ Fields:
 - `steps: list`
 - `files: tuple`: ((profile name, path)), nearest first
 - `sha256: str`
+- `steps_from: str = ""`: the profile whose file says the steps
+
+### Arrangement
+
+```python
+@dataclass(frozen=True)
+class Arrangement
+```
+
+The order the run reads a document in, as its flow says it.
+
+Fields:
+
+- `document: tuple`: the moving blocks of a document, in order
+- `coordinate: tuple`: the moving blocks of a coordinate, in order
+- `off: frozenset`: the blocks left out
+
+#### Arrangement.on
+
+```python
+def on(self, name: str) -> bool
+```
 
 ## Functions
 
@@ -228,5 +274,33 @@ def default() -> Numbers
 
 The numbers of the default profile's file, no setting applied: what
 a reading takes where it is given none.
+
+### arrangement_problems
+
+```python
+def arrangement_problems(steps: list, against: Optional[list] = None) -> list
+```
+
+Why the run cannot read in the order of *steps*, [] where it can,
+held against the steps of the default profile's file (*against*, read
+from it where not given):
+a block of the code that is missing or stands twice or in another
+frame, a step that keeps its place moved, a block that cannot be off
+switched off, a moving block before one it has to follow.
+
+### arranged
+
+```python
+def arranged(steps: list) -> Arrangement
+```
+
+### arrangement
+
+```python
+def arrangement(profile=None) -> Arrangement
+```
+
+The order a run of *profile* reads in (the default profile's where
+None): its flow's steps.
 
 [Back to the index](../README.md)

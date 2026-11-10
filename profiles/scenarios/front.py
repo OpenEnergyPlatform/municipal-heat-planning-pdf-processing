@@ -17,11 +17,12 @@ from __future__ import annotations
 
 from typing import Optional
 
+from docpipe import graphfile
 from docpipe.extraction.trust import CATALOGUE
 
-# The fields a publication states about itself on its front pages.
-FRONT_FIELDS = ("publication_title", "publication_author",
-                "publication_date", "publication_doi")
+# The fields a publication states about itself on its front pages: the rule
+# `front_first_fields` of graph.json beside this file.
+FRONT_FIELDS = tuple(graphfile.get("front_first_fields", "scenarios"))
 
 
 def page_of(row: dict) -> Optional[int]:

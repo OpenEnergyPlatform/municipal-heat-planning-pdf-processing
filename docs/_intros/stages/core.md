@@ -2,7 +2,8 @@
 
 `docpipe/artifacts.py`, `docpipe/profile.py`, `docpipe/prompts.py`,
 `docpipe/llm_preflight.py`, `docpipe/reading.py`, `docpipe/phrases.py`,
-`docpipe/captions.py`, `docpipe/usage.py` and `docpipe/jsonl.py` are the nine modules this page
+`docpipe/captions.py`, `docpipe/usage.py`, `docpipe/jsonl.py`, `docpipe/rules.py`,
+`docpipe/sources.py` and `docpipe/graphfile.py` are the twelve modules this page
 documents together (the
 `SOURCES` manifest of `scripts/build_docs.py` groups them under this page).
 Each is imported by a different subset of
@@ -27,7 +28,7 @@ sits (`captions.py`), how many tokens a run spent, summed across
 processes that come and go (`usage.py`), and where one line of a JSON
 Lines file ends (`jsonl.py`).
 
-The nine files share a property none of the numbered stages needs: a
+The twelve files share a property none of the numbered stages needs: a
 profile never appears inside them by name. `docpipe/profile.py` states
 the rule in its own docstring, "The core never imports a profile; it
 receives one" (`docpipe/profile.py:6`). Three further checks in the same file hold the reverse:
@@ -639,3 +640,27 @@ from a PDF can carry one of them, which `json.dumps(ensure_ascii=False)` writes
 as it is: read with `splitlines()`, that record would become two broken ones.
 Every reader of a harvest, of the decisions file and of a cassette goes through
 it.
+
+`rules.py` holds every value a run follows (quote minimum length, decimal mark,
+year range, span words, request letters, retry waits, image size, country
+groups, `not_extracted`, compute parts, and the rest) in the profile's
+`rules.json`. The code knows a rule's name, kind, bounds and help; a profile's
+file is laid over the default's rule by rule, and an `EXTRACT_*` setting wins
+over the file. A profile declares its own rules in `rules.py: RULES` and its
+graph writer rules in `GRAPH`. No rule makes a harvest stale; the stamp's
+producer entry names the sha of the rules file. It replaced constants such as
+`verify.MIN_QUOTE_CHARS` (now `verify.min_quote_chars()`) and `reading.SHOWN`
+(now `reading.shown_counts()`).
+
+`sources.py` reads `sources.json`: the ontology, shapes and knowledge graph
+queries a profile is written against (`sources`), the lists drawn from them
+(`lists`) and which coordinate answers from which list (`axis_lists`). The
+profile's `vocabulary.py` reads them through `sources()`, `sets()` and
+`axis_sets()`, which replaced its `SOURCES`, `SETS` and `AXIS_SETS`.
+`refresh(cache, out=None)` can write into another folder and `WRITES` names the
+files a refresh writes. A token is never in the file, only the name of the
+setting that holds it.
+
+`graphfile.py` reads `graph.json`: the classes the graph does not write, the
+address rules, the effect of each constraint and the writer rules (see
+[the graph](graph.md)).

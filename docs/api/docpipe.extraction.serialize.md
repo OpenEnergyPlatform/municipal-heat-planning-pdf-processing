@@ -73,7 +73,8 @@ does not hold is named, up to `NAMED` of them, and applied to nothing.
 ```python
 def run(jsonl_dir: Path, out_path: Path,
         serializer: Callable[[str, list], Optional[str]],
-        provenance=None, gold=None, gold_source=None) -> dict
+        provenance=None, gold=None, gold_source=None,
+        index: Optional[dict] = None) -> dict
 ```
 
 Serialize every document's harvest; returns {name: tuple count}.
@@ -90,6 +91,22 @@ where they were read from, for the log. They are looked up after the
 harvest is collected and not in `collect`, which the review page and
 `evaluate` read their rows from: counting a decision against a harvest
 that already held it would hide the row it was made on.
+
+*index*, where given, is filled with {document: [the subjects its part
+of the graph names]}: what leaving a paper out of the graph takes
+(`apply_graph_file`).
+
+### apply_graph_file
+
+```python
+def apply_graph_file(path: Path, profile, shapes=(), context=(),
+                     index: Optional[dict] = None) -> Optional[dict]
+```
+
+What the profile's graph file asks of the graph written to *path*
+(`docpipe.graphfile`): classes left out, nodes named anew, the effects
+of the constraints. None, and the file untouched, where it asks
+nothing.
 
 ### kind_key
 

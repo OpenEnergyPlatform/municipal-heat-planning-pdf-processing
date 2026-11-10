@@ -37,6 +37,7 @@ counting.
 import json
 import re
 import sqlite3
+from docpipe import rules
 from pathlib import Path
 
 SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
@@ -117,8 +118,10 @@ def _document_text(conn: sqlite3.Connection, document_id: int) -> str:
 
 
 def _acronym(label: str) -> bool:
-    """A label that is only a word when its capitals are: US, UK, USA, U.S."""
-    return len(label) <= 4 and label.upper() == label and label.lower() != label
+    """A label that is only a word when its capitals are: US, UK, USA, U.S.
+    (rule `acronym_most_chars`)."""
+    return (len(label) <= rules.get("acronym_most_chars", "scenarios")
+            and label.upper() == label and label.lower() != label)
 
 
 def _code(label: str) -> bool:
@@ -229,7 +232,9 @@ def document_regions(conn: sqlite3.Connection, document_id: int) -> dict:
     for key, group in groups.items():
         labels = spellings(group["labels"], True)
         if group.get("named_by"):
-            if (key not in out and _named(text, group["named_by"])
+            if (key not in out
+                    and (_named(text, group["named_by"])
+                         or not rules.get("model_region_needs_model", "scenarios"))
                     and _mentioned(text, labels)):
                 out[key] = labels
             continue
@@ -253,9 +258,8 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
     """
     return {"scenario_region": dict(document_regions(conn, document_id))}
 
-# How the documents write the decimal. It decides what the digits leave
-# open: "3,251" is 3251 here, and "1.234" is 1.234.
-DECIMAL_MARK = "."
+# How the documents write the decimal is the rule `decimal_mark` (the
+# default profile's rules.json; "3,251" is 3251 here).
 
 # How many lines a piece holds is a number of the flow (`flow.json`, owner
 # decision 2026-11-08, f: eight; twelve only measured where a probe loses
@@ -286,7 +290,8 @@ PROMPT_CHECKS = ()
 def shapes_files() -> list:
     """The OEKG shapes of the last `vocabulary --refresh`, or none.
 
-    Where the preflight finds the file `NOT_EXTRACTED` is held against: the
+    Where the preflight finds the file the rule `not_extracted` is held
+    against: the
     same one the serializer reads its paths from.
     """
     from profiles.scenarios import vocabulary   # lazy: it reads the spec
@@ -294,74 +299,10 @@ def shapes_files() -> list:
 
 
 # The properties of the OEKG shapes that no parameter reads, each left out on
-# purpose and each with its reason. `docpipe compile diff` lists them and the
-# preflight warns about every one that is neither a parameter nor here. Keyed
-# by (shape, property): the shape as the compiler names it, the property by
-# the end of its IRI. The first group is the owner's decision (2026-10-05):
-# nobody asks for these five, though none of them is required. The rest the
-# serializer writes itself or never touches.
-_NO_DATASET_NODE = "the serializer writes no dataset node"
-_NO_FACTSHEET = ("the serializer writes no factsheet of this kind, so there "
-                 "is nothing to give it")
-_OWN_UUID = ("the serializer writes it on every node it mints (kg.P_UUID), "
-             "behind no parameter")
-NOT_EXTRACTED = {
-    # contact person
-    ("study", "OEO_00000508"):
-        "has contact person: optional in the shapes, and the bundle carries "
-        "authors, organisations and funders and no contact person",
-    # the study's energy carrier tag
-    ("study", "OEO_00020432"):
-        "covers energy carrier: optional in the shapes, a closed list; the "
-        "sector and technology tags of the study are asked and its energy "
-        "carrier tag is not",
-    # interacting region
-    ("scenario", "OEO_00020222"):
-        "has interacting region: optional in the shapes; a scenario's study "
-        "region is asked and its interacting region is not",
-    # input and output datasets of a scenario
-    ("scenario", "OEO_00020436"):
-        "has information output: optional in the shapes, and "
-        + _NO_DATASET_NODE,
-    ("scenario", "OEO_00020437"):
-        "has information input: optional in the shapes, and "
-        + _NO_DATASET_NODE,
-    # the publication's reference link
-    ("publication", "OEO_00390078"):
-        "has reference: optional in the shapes; the report carries no link "
-        "to its reference",
-    ("region", "OEO_00390078"):
-        "has reference: optional in the shapes; a region is only referenced "
-        "by its IRI and never written",
-    # written by the serializer itself
-    ("study", "BFO_0000051"):
-        "has part: the serializer writes it from the kg block of the "
-        "scenario coordinate, the bundle holds its report and its "
-        "factsheets, and no parameter asks for it",
-    ("scenario", "OEO_00020220"):
-        "has study region: the serializer writes its parent, has spatial "
-        "region, for scenario_region, and the bundle body for the platform "
-        "writes this one itself",
-    ("publication", "OEO_00390095"): "has uuid: " + _OWN_UUID,
-    ("scenario", "OEO_00390095"): "has uuid: " + _OWN_UUID,
-    ("common", "label"):
-        "label of the objects of the author, organisation, funder, tag and "
-        "scenario type properties: the serializer writes it for the authors, "
-        "organisations and funders it mints, and a tag or a scenario type is "
-        "the IRI of a node the OEKG already holds with its label",
-    ("region", "label"):
-        "label: a region is only referenced by its IRI, the node exists in "
-        "the OEKG with its label, and writing ours would give it a second one",
-    # shapes of nodes the serializer never writes
-    ("dataset", "label"): "label: " + _NO_DATASET_NODE,
-    ("dataset", "has_id"): "has_id: " + _NO_DATASET_NODE,
-    ("dataset", "OEO_00390094"): "has iri: " + _NO_DATASET_NODE,
-    ("dataset", "OEO_00390095"): "has uuid: " + _NO_DATASET_NODE,
-    ("framework", "label"): "label: " + _NO_FACTSHEET,
-    ("framework", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
-    ("model", "label"): "label: " + _NO_FACTSHEET,
-    ("model", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
-}
+# purpose and each with its reason, are the rule `not_extracted` (rules.json
+# beside this file, owner decision 2026-10-05 for the first five): `docpipe
+# compile diff` lists them and the preflight warns about every one that is
+# neither a parameter nor there.
 
 
 # What the stage says to the model outside its prompts (why an answer was not

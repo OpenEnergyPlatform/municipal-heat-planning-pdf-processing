@@ -308,7 +308,9 @@ function renderHeader() {
     st.harvest ? h('span', { class: 'meta', title: st.harvest }, 'harvest: ', st.harvest_documents == null ? '' : st.harvest_documents + ' documents') : null,
     (st.changed && st.changed.length) ? h('span', { class: 'meta changed', title: st.changed.join('\n') }, 'uncommitted: ' + st.changed.join(', ')) : null,
     h('span', { class: 'tabs' }, (st.tabs || ['spec', 'prompts']).map(t => h('button', { class: t === S.tab ? 'on' : '',
-      text: t.charAt(0).toUpperCase() + t.slice(1) + ((t === 'spec' ? S.dirty : t === 'flow' ? flowDirty() : promptsDirty()) ? ' •' : ''), onclick: () => setTab(t) }))),
+      text: t.charAt(0).toUpperCase() + t.slice(1) + ((t === 'spec' ? S.dirty : t === 'flow' ? flowDirty() : t === 'sources' ? sourcesDirty()
+        : t === 'graph' ? graphDirty() : promptsDirty()) ? ' •' : ''), onclick: () => setTab(t) }))),
+    (S.tab === 'spec' || S.tab === 'prompts') ? h('button', { text: 'Rules', title: 'The rules of this tab', onclick: () => openRules(S.tab) }) : null,
     h('span', { class: 'spacer' }),
     anyDirty() ? h('span', { class: 'dirty', text: 'Unsaved edits' }) : h('span', { class: 'clean', text: 'No unsaved edits' }),
     S.tab === 'spec' ? h('button', { text: 'Reload from disk', disabled: S.busy, onclick: () => reload() }) : null,
@@ -1082,7 +1084,7 @@ function promptsDirty() {
   for (const X of P.phs.values()) if (phDirty(X)) return true;
   return false;
 }
-function anyDirty() { return S.dirty || promptsDirty() || flowDirty(); }
+function anyDirty() { return S.dirty || promptsDirty() || flowDirty() || sourcesDirty() || graphDirty() || rulesDirty(); }
 function dirtySig() {
   const a = [];
   for (const [id, E] of P.eds) if (edDirty(E)) a.push('p:' + id);
@@ -1911,11 +1913,12 @@ function tryNodes(res, listed) {
 const F = {
   loaded: false, loading: false, data: null, num: {}, cur: {}, report: null,
   meas: null, counting: false, trace: null, mSeq: 0, mTimer: null, busy: false, dirty: false, ui: null,
+  order: null, off: new Set(),
 };
-const flowDirty = () => !!F.data && F.data.numbers.some(n => F.cur[n.name] !== n.value);
+const flowDirty = () => !!F.data && (F.data.numbers.some(n => F.cur[n.name] !== n.value) || orderDirty());
 const numVal = t => { const s = String(t).trim(); return /^-?\d+$/.test(s) && Number.isSafeInteger(Number(s)) ? Number(s) : t; };
 function flowNumbers() { const o = {}; for (const n of F.data.numbers) o[n.name] = F.cur[n.name]; return o; }
-const flowSig = () => JSON.stringify(flowNumbers());
+const flowSig = () => JSON.stringify([flowNumbers(), F.order, [...F.off].sort()]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function loadFlow(keep) {
@@ -1927,6 +1930,7 @@ async function loadFlow(keep) {
     const prev = F.cur;
     F.data = d; F.num = {}; F.cur = {};
     for (const n of d.numbers) { F.num[n.name] = n; F.cur[n.name] = keep && own(prev, n.name) ? prev[n.name] : n.value; }
+    if (!keep || !F.order) { F.order = framesOf(d.steps || [], 'document'); F.off = new Set(offOf(d.steps || [])); }
     F.report = null; F.loaded = true;
     if (F.trace && !(d.traces || []).some(t => t.name === F.trace)) F.trace = null;
   } catch (e) {
@@ -1970,8 +1974,10 @@ function renderFlow() {
     traceBox = h('span', {}, 'Measured on: ', sel);
   }
   const bar = h('div', { class: 'fl-bar toolbar' }, h('code', { text: d.file }), h('span', { class: 'help', text: fileLine }),
-    h('span', { class: 'spacer' }), traceBox, ui.why, ui.check, ui.save, ui.discard);
-  const diagram = h('div', { class: 'fl-steps fl-diagram' }, stepList(d.steps || []));
+    h('span', { class: 'spacer' }), traceBox, ui.why, h('button', { text: 'Rules', onclick: () => openRules('flow') }), ui.check, ui.save, ui.discard);
+  const orderLine = h('div', { class: 'help fl-pad', text: 'Drag a step, or use ↑ ↓, to move it among the steps of its frame that move; switch a step off where the code can leave it out. '
+    + 'An order the run cannot read in is refused with its reason when you check or save.' });
+  const diagram = h('div', { class: 'fl-steps fl-diagram' }, stepList(d.steps || [], 'document'));
   const loose = d.numbers.filter(n => !ui.inputs.has(n.name));
   const looseBox = loose.length ? h('div', { class: 'fl-loose' }, h('div', { class: 'section', text: 'Numbers no step shows' }),
     loose.map(n => h('div', { class: 'fl-extra' }, h('code', { text: n.name }), ' ', numInput(n.name), ' ', h('span', { class: 'help', text: n.help || '' }), numExtras(n.name)))) : null;
@@ -1983,19 +1989,19 @@ function renderFlow() {
           h('td', { text: s.secret ? (s.set ? '(set, not shown)' : '(unset)') : (s.value == null ? '(unset)' : String(s.value)) }),
           h('td', { text: s.origin || '' }), h('td', { class: 'mono', text: s.env || '' }), h('td', { text: s.help || '' })))))),
     ui.mnotes);
-  put($('fl-wrap'), bar, ui.report, diagram, looseBox, below);
+  put($('fl-wrap'), bar, ui.report, orderLine, diagram, looseBox, below);
   syncFlowButtons(); paintReport(); paintMeasured();
 }
 
-function stepList(steps) {
+function stepList(steps, frame) {
   const out = [];
-  steps.forEach((st, i) => {
+  inOrder(steps, frame).forEach((st, i) => {
     if (i > 0 || st.when) out.push(h('div', { class: 'fl-conn' + (st.when ? ' when' : '') }, st.when ? h('span', { class: 'fl-when', text: 'when: ' + st.when }) : null));
-    out.push(stepEl(st));
+    out.push(stepEl(st, frame));
   });
   return out;
 }
-function stepEl(st) {
+function stepEl(st, frame) {
   const ui = F.ui;
   const isFrame = Array.isArray(st.steps), isBox = !isFrame && st.ask != null;
   const kids = [];
@@ -2007,7 +2013,11 @@ function stepEl(st) {
       pr && pr.written ? h('button', { class: 'link fl-kind', text: st.ask, title: 'Open the prompt ' + pr.id, onclick: () => openPrompt(pr.id) }) : h('b', { class: 'fl-kind', text: st.ask }), count),
       h('div', { class: 'fl-says', text: st.says }));
   } else kids.push(h('div', { class: 'fl-says', text: st.says }));
-  if (st.off) kids.push(h('div', { class: 'fl-offsays', text: st.off }));
+  const ctl = stepControls(st, frame);
+  if (ctl) kids.unshift(ctl);
+  const isOff = F.off.has(st.id) || (st.off && !st.switched_off);
+  if (F.off.has(st.id)) kids.push(h('div', { class: 'fl-offsays', text: 'switched off: no run takes this step' }));
+  else if (st.off && !st.switched_off) kids.push(h('div', { class: 'fl-offsays', text: st.off }));
   if (Array.isArray(st.bound) && st.bound.length) {
     const names = [...new Set(st.bound.filter(isObj).map(p => p.number))];
     kids.push(h('div', { class: 'fl-bound' }, st.bound.map(p => typeof p === 'string' ? p : numInput(p.number))));
@@ -2025,8 +2035,9 @@ function stepEl(st) {
       ? items.flatMap((it, i) => [i ? ', ' : null, it.to ? h('button', { class: 'link', text: it.label, onclick: () => openSpec(it.to) }) : it.label])
       : sw.none));
   }
-  const card = h('div', { class: 'fl-step ' + (isFrame ? 'fl-frame' : isBox ? 'fl-box' : 'fl-note') + (st.off ? ' off' : ''), 'data-step': st.id }, kids);
-  if (isFrame) card.append(h('div', { class: 'fl-steps' }, stepList(st.steps)));
+  const card = h('div', { class: 'fl-step ' + (isFrame ? 'fl-frame' : isBox ? 'fl-box' : 'fl-note') + (isOff ? ' off' : ''), 'data-step': st.id }, kids);
+  dragWire(card, st, frame);
+  if (isFrame) card.append(h('div', { class: 'fl-steps' }, stepList(st.steps, st.id)));
   if (isBox && st.each) return h('div', {}, h('div', { class: 'fl-each', text: 'each ' + st.each }), card);
   return card;
 }
@@ -2137,9 +2148,9 @@ function reportNodes(R) {
     if (!r.saved) out.push(h('div', { class: 'box bad', text: 'Not saved: ' + (r.message || r.reason || 'the server refused the numbers.') }));
   }
   const errs = r.errors || [];
-  if (errs.length) out.push(h('div', { class: 'box bad' }, h('b', { text: 'The server refuses these numbers: ' }),
+  if (errs.length) out.push(h('div', { class: 'box bad' }, h('b', { text: 'The server refuses: ' }),
     errs.map(e => h('div', {}, e.name ? [h('button', { class: 'link', text: e.name, onclick: () => focusNumber(e.name) }), ': '] : null, e.message))));
-  else if (r.ok) out.push(h('div', { class: 'box ok', text: 'The numbers are accepted.' }));
+  else if (r.ok) out.push(h('div', { class: 'box ok', text: 'Accepted.' }));
   if (!errs.length && Array.isArray(r.changed)) out.push(h('div', { class: 'box' }, h('b', { text: 'Changes (' + r.changed.length + ')' }),
     r.changed.length ? r.changed.map(c => h('div', {}, h('code', { text: c.name }), ': ' + fmtN(c.from) + ' → ' + fmtN(c.to)))
       : h('div', { class: 'help', text: 'No number differs from the files on disk.' })));
@@ -2152,14 +2163,16 @@ async function flowCheck() {
   if (!F.data || F.busy) return;
   const stamp = flowSig();
   F.busy = true; syncFlowButtons();
-  try { F.report = { source: 'check', r: await apiR('/api/flow/check', { numbers: flowNumbers() }), stamp }; }
+  const arr = orderDirty() ? { order: F.order, off: [...F.off] } : {};
+  try { F.report = { source: 'check', r: await apiR('/api/flow/check', Object.assign({ numbers: flowNumbers() }, arr)), stamp }; }
   catch (e) { F.report = { source: 'check', error: e.message, stamp }; }
   F.busy = false; syncFlowButtons(); paintReport();
 }
 async function flowSave() {
   if (!F.data || F.busy || !flowDirty()) return;
   const stamp = flowSig();
-  const body = { numbers: flowNumbers(), base: F.data.base == null ? null : F.data.base };
+  const body = Object.assign({ numbers: flowNumbers(), base: F.data.base == null ? null : F.data.base },
+    orderDirty() ? { order: F.order, off: [...F.off] } : {});
   F.busy = true; syncFlowButtons();
   let saved = null;
   try {
@@ -2176,6 +2189,7 @@ async function flowDiscard() {
   if (!flowDirty() || F.busy) return;
   if (!await askConfirm('Discard changes', 'Discard the edited numbers?', 'Discard')) return;
   for (const n of F.data.numbers) F.cur[n.name] = n.value;
+  F.order = framesOf(F.data.steps || [], 'document'); F.off = new Set(offOf(F.data.steps || []));
   F.report = null;
   renderFlow(); renderHeader();
   runMeasured();
@@ -2185,6 +2199,420 @@ async function reloadFlow() {
   await loadFlow(false);
 }
 
+/* ---------- rules of a tab ---------- */
+
+/* One input per kind of rule; what the input holds is read back by valueOf. A value the server refuses comes back with
+   the rule's name and the reason, nothing is written. */
+function ruleInput(r, cur, onChange) {
+  const v = cur;
+  const kind = r.kind;
+  let el;
+  if (kind === 'switch') {
+    el = h('input', { type: 'checkbox' }); el.checked = !!v;
+    el.addEventListener('change', () => onChange(el.checked));
+  } else if (kind === 'choice') {
+    el = h('select', {}, (r.choices || []).map(c => h('option', { value: c, text: c })));
+    el.value = v == null ? '' : String(v);
+    el.addEventListener('change', () => onChange(el.value));
+  } else if (kind === 'whole' || kind === 'number') {
+    el = h('input', { type: 'number', class: 'fl-num', step: kind === 'whole' ? '1' : 'any', min: r.least, max: r.most, value: v == null ? '' : String(v) });
+    el.addEventListener('input', () => { const s = el.value.trim(); onChange(s === '' ? null : (isNaN(Number(s)) ? s : Number(s))); });
+  } else if (kind === 'text' || kind === 'chars') {
+    el = h('input', { type: 'text', value: v == null ? '' : String(v), spellcheck: 'false' });
+    el.addEventListener('input', () => onChange(el.value));
+  } else if (kind === 'texts') {
+    el = h('textarea', { rows: Math.min(8, Math.max(2, (v || []).length + 1)), spellcheck: 'false' });
+    el.value = Array.isArray(v) ? v.join('\n') : '';
+    el.addEventListener('input', () => onChange(el.value.split('\n').map(s => s.trim()).filter(Boolean)));
+  } else {
+    el = h('textarea', { rows: 6, class: 'mono', spellcheck: 'false' });
+    el.value = JSON.stringify(v, null, 1);
+    el.addEventListener('input', () => { try { onChange(JSON.parse(el.value)); el.classList.remove('bad'); } catch (e) { onChange(el.value); el.classList.add('bad'); } });
+  }
+  return el;
+}
+function ruleRow(r, cur, onChange, extra) {
+  const changed = JSON.stringify(cur) !== JSON.stringify(r.value);
+  return h('div', { class: 'ru-row' + (changed ? ' edited' : ''), 'data-rule': r.name },
+    h('div', { class: 'ru-head' }, h('code', { text: r.name }), ' ',
+      r.own || r.declared_here ? h('span', { class: 'badge ok', text: r.owner || 'set by this profile' }) : h('span', { class: 'badge', text: r.owner || 'inherited' }),
+      r.decided ? h('span', { class: 'badge', text: 'decided ' + r.decided }) : null,
+      r.setting ? h('span', { class: 'badge' + (r.setting_set || (r.in_effect !== undefined && JSON.stringify(r.in_effect) !== JSON.stringify(r.value)) ? ' changed' : ''), text: 'setting ' + r.setting + (r.setting_set || (r.in_effect !== undefined && JSON.stringify(r.in_effect) !== JSON.stringify(r.value)) ? ' is set and wins' : ' wins where set') }) : null,
+      extra || null),
+    h('div', { class: 'help', text: r.help || '' }),
+    h('div', { class: 'ru-input' }, ruleInput(r, cur, onChange),
+      r.has_inherited && JSON.stringify(cur) !== JSON.stringify(r.inherited) ? h('button', { text: 'use inherited', title: JSON.stringify(r.inherited), onclick: () => onChange(clone(r.inherited), true) }) : null),
+    r.where ? h('div', { class: 'help mono', text: 'applied in ' + r.where }) : null);
+}
+function groupedRules(rules, curOf, onChange) {
+  const groups = new Map();
+  for (const r of rules) { if (!groups.has(r.group)) groups.set(r.group, []); groups.get(r.group).push(r); }
+  return [...groups.entries()].map(([g, rs]) => h('details', { class: 'ru-group', open: true }, h('summary', { text: g + ' (' + rs.length + ')' }),
+    rs.map(r => ruleRow(r, curOf(r.name), (v, redraw) => onChange(r.name, v, redraw)))));
+}
+
+const RU = { tab: null, data: null, cur: {}, report: null, busy: false, from: null };
+const rulesDirty = () => !!RU.data && RU.data.rules.some(r => JSON.stringify(RU.cur[r.name]) !== JSON.stringify(r.value));
+async function openRules(tab) {
+  if (rulesDirty() && RU.tab !== tab && !await askConfirm('Rules', 'The rules of ' + RU.tab + ' have unsaved edits. Drop them?', 'Drop')) return;
+  RU.from = tab; RU.tab = tab; RU.report = null;
+  for (const id of ['layout', 'prompts', 'flow', 'sources', 'graph']) $(id).hidden = true;
+  $('rules').hidden = false;
+  put($('rules'), h('div', { class: 'help fl-pad', text: 'Loading…' }));
+  try {
+    RU.data = await api('GET', '/api/rules?tab=' + encodeURIComponent(tab));
+    RU.cur = {};
+    for (const r of RU.data.rules) RU.cur[r.name] = clone(r.value);
+  } catch (e) { put($('rules'), h('div', { class: 'box bad', text: e.message })); return; }
+  renderRules();
+}
+function closeRules() { $('rules').hidden = true; setTab(RU.from || 'spec'); }
+function renderRules() {
+  const d = RU.data;
+  const bar = h('div', { class: 'fl-bar toolbar' }, h('button', { text: '← back to ' + RU.tab, onclick: closeRules }),
+    h('b', { text: 'Rules of the ' + RU.tab + ' tab' }), h('code', { text: d.file }),
+    h('span', { class: 'help', text: d.exists ? '' : 'not written yet: every rule is inherited' }), h('span', { class: 'spacer' }),
+    h('button', { text: 'Check', disabled: RU.busy, onclick: () => rulesSend('check') }),
+    h('button', { class: 'primary', text: 'Save', disabled: RU.busy || !rulesDirty(), onclick: () => rulesSend('save') }),
+    h('button', { text: 'Discard', disabled: !rulesDirty(), onclick: () => { for (const r of d.rules) RU.cur[r.name] = clone(r.value); RU.report = null; renderRules(); } }));
+  const body = d.rules.length ? groupedRules(d.rules, n => RU.cur[n], (n, v, redraw) => { RU.cur[n] = v; RU.report = null; if (redraw) renderRules(); else syncRulesBar(); })
+    : h('div', { class: 'help fl-pad', text: 'No rule of this profile belongs to this tab.' });
+  put($('rules'), bar, h('div', { class: 'help fl-pad', text: d.cost || '' }), h('div', { class: 'pr-report', id: 'ru-report' }, RU.report ? reportNodes(RU.report) : null), h('div', { class: 'ru-list' }, body));
+}
+function syncRulesBar() { renderHeader(); const b = $('rules').querySelector('button.primary'); if (b) b.disabled = RU.busy || !rulesDirty(); }
+async function rulesSend(what) {
+  if (RU.busy) return;
+  const values = {};
+  for (const r of RU.data.rules) if (JSON.stringify(RU.cur[r.name]) !== JSON.stringify(r.value)) values[r.name] = RU.cur[r.name];
+  RU.busy = true;
+  try {
+    const r = await apiR('/api/rules/' + what, what === 'save' ? { values, base: RU.data.base } : { values });
+    if (what === 'save' && r.saved) { showInfo('Saved ' + r.file + ' (' + r.writes + ').'); RU.busy = false; await openRules(RU.tab); return; }
+    RU.report = { source: what, r };
+  } catch (e) { RU.report = { source: what, error: e.message }; }
+  RU.busy = false; renderRules();
+}
+
+/* ---------- sources tab ---------- */
+
+const SR = { loaded: false, data: null, cur: null, report: null, fetch: null, picks: new Map(), busy: false };
+const sourcesData = d => ({ sources: clone(Object.fromEntries(d.sources.map(s => [s.name, Object.assign({ kind: s.kind }, s.source)]))),
+  lists: clone(Object.fromEntries(d.lists.map(l => [l.name, { kind: l.kind, root: l.root }]))), axis_lists: clone(d.axis_lists || {}) });
+const sourcesDirty = () => !!SR.data && JSON.stringify(SR.cur) !== JSON.stringify(sourcesData(SR.data));
+async function loadSources() {
+  put($('sources'), h('div', { class: 'help fl-pad', text: 'Loading…' }));
+  try { SR.data = await api('GET', '/api/sources'); SR.cur = sourcesData(SR.data); SR.loaded = true; }
+  catch (e) { put($('sources'), h('div', { class: 'box bad', text: e.message })); return; }
+  renderSources(); renderHeader();
+}
+function srField(obj, key, kind) {
+  if (key === 'until_released') { const c = h('input', { type: 'checkbox' }); c.checked = !!obj[key]; c.addEventListener('change', () => { if (c.checked) obj[key] = true; else delete obj[key]; srChanged(); }); return c; }
+  if (key === 'files' || key === 'paths' || key === 'query') {
+    const t = h('textarea', { rows: key === 'query' ? 6 : 3, class: 'mono', spellcheck: 'false' });
+    t.value = key === 'query' ? (obj[key] || '') : (obj[key] || []).join('\n');
+    t.addEventListener('input', () => { if (key === 'query') obj[key] = t.value; else obj[key] = t.value.split('\n').map(s => s.trim()).filter(Boolean); srChanged(); });
+    return t;
+  }
+  const i = h('input', { type: 'text', value: obj[key] == null ? '' : String(obj[key]), spellcheck: 'false' });
+  i.addEventListener('input', () => { if (i.value === '') delete obj[key]; else obj[key] = i.value; srChanged(); });
+  return i;
+}
+function srChanged() { SR.report = null; renderHeader(); const b = $('sources').querySelector('.sr-save'); if (b) b.disabled = SR.busy || !sourcesDirty(); }
+function renderSources() {
+  const d = SR.data, cur = SR.cur;
+  const kinds = d.kinds || {};
+  const bar = h('div', { class: 'fl-bar toolbar' }, h('code', { text: d.file }),
+    h('span', { class: 'help', text: d.exists ? '' : (d.inherited_from ? 'inherited from ' + d.inherited_from : 'not written yet') }),
+    h('span', { class: 'help', text: 'lock: ' + d.lock.file + (d.lock.fetched_at ? ', fetched ' + d.lock.fetched_at : ', never fetched') }),
+    h('span', { class: 'spacer' }),
+    h('button', { text: 'Rules', onclick: () => openRules('sources') }),
+    h('button', { text: 'Check', disabled: SR.busy, onclick: () => srSend('check') }),
+    h('button', { class: 'primary sr-save', text: 'Save', disabled: SR.busy || !sourcesDirty(), onclick: () => srSend('save') }),
+    h('button', { text: SR.busy === 'fetch' ? 'Fetching…' : 'Fetch', disabled: !!SR.busy || !d.fetches || sourcesDirty(), title: sourcesDirty() ? 'Save the sources first: a fetch reads the saved file' : 'Pull every source into a folder of the temp directory and show what moved', onclick: srFetch }));
+  const rows = Object.entries(cur.sources).map(([name, src]) => {
+    const shown = d.sources.find(s => s.name === name);
+    const k = kinds[src.kind] || { needs: [], may: [] };
+    return h('div', { class: 'sr-src' },
+      h('div', { class: 'ru-head' }, h('code', { text: name }), ' ',
+        (() => { const s = h('select', {}, Object.keys(kinds).map(x => h('option', { value: x, text: x }))); s.value = src.kind; s.addEventListener('change', () => { cur.sources[name] = { kind: s.value }; srChanged(); renderSources(); }); return s; })(),
+        h('span', { class: 'badge', text: (kinds[src.kind] || {}).stands || '' }),
+        shown && shown.locked ? h('span', { class: 'badge ok', text: 'locked ' + (shown.locked.version || shown.locked.note || '?') }) : h('span', { class: 'badge dep', text: 'not in the lock' }),
+        shown && shown.token ? h('span', { class: 'badge' + (shown.token.set ? ' ok' : ' dep'), text: shown.token.env + (shown.token.set ? ' is set' : ' is not set') }) : null,
+        h('span', { class: 'spacer' }), h('button', { class: 'link', text: 'remove', onclick: () => { delete cur.sources[name]; srChanged(); renderSources(); } })),
+      shown ? h('div', { class: 'help', text: shown.address }) : null,
+      h('table', { class: 'grid' }, h('tbody', {}, [...k.needs, ...k.may].map(key => h('tr', {}, h('td', { class: 'mono', text: key + (k.needs.includes(key) ? ' *' : '') }), h('td', {}, srField(src, key)))))),
+      shown && shown.locked && (shown.locked.changed_since_reviewed || []).length ? h('div', { class: 'warn', text: 'changed since reviewed: ' + shown.locked.changed_since_reviewed.join(', ') }) : null);
+  });
+  const lists = h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, ['list', 'kind', 'root', 'entries now', ''].map(t => h('th', { text: t })))),
+    h('tbody', {}, Object.entries(cur.lists).map(([name, l]) => {
+      const now = d.lists.find(x => x.name === name);
+      const kind = h('select', {}, (d.list_kinds || ['class', 'individual']).map(x => h('option', { value: x, text: x }))); kind.value = l.kind;
+      kind.addEventListener('change', () => { l.kind = kind.value; srChanged(); });
+      const root = h('input', { type: 'text', value: l.root, spellcheck: 'false' }); root.addEventListener('input', () => { l.root = root.value; srChanged(); });
+      return h('tr', {}, h('td', { class: 'mono', text: name }), h('td', {}, kind), h('td', {}, root), h('td', { text: now && now.members != null ? String(now.members) : '' }),
+        h('td', {}, h('button', { class: 'link', text: 'remove', onclick: () => { delete cur.lists[name]; for (const [a, n] of Object.entries(cur.axis_lists)) if (n === name) delete cur.axis_lists[a]; srChanged(); renderSources(); } })));
+    })));
+  const axes = h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, ['coordinate', 'answers from the list', ''].map(t => h('th', { text: t })))),
+    h('tbody', {}, Object.entries(cur.axis_lists).map(([axis, name]) => {
+      const s = h('select', {}, Object.keys(cur.lists).map(x => h('option', { value: x, text: x }))); s.value = name;
+      s.addEventListener('change', () => { cur.axis_lists[axis] = s.value; srChanged(); });
+      return h('tr', {}, h('td', { class: 'mono', text: axis }), h('td', {}, s), h('td', {}, h('button', { class: 'link', text: 'remove', onclick: () => { delete cur.axis_lists[axis]; srChanged(); renderSources(); } })));
+    })));
+  const adders = h('div', { class: 'toolbar' },
+    h('button', { text: 'Add a source', onclick: async () => { const n = await askText('Add a source', 'Name of the source', ''); if (n && !cur.sources[n]) { cur.sources[n] = { kind: 'url' }; srChanged(); renderSources(); } } }),
+    h('button', { text: 'Add a list', onclick: async () => { const n = await askText('Add a list', 'Name of the list', ''); if (n && !cur.lists[n]) { cur.lists[n] = { kind: 'class', root: '' }; srChanged(); renderSources(); } } }),
+    h('button', { text: 'Add a coordinate', onclick: async () => { const n = await askText('A coordinate that answers from a list', 'Name of the coordinate', ''); if (n && Object.keys(cur.lists).length) { cur.axis_lists[n] = Object.keys(cur.lists)[0]; srChanged(); renderSources(); } } }));
+  put($('sources'), bar, h('div', { class: 'help fl-pad', text: d.cost }),
+    h('div', { class: 'pr-report' }, SR.report ? reportNodes(SR.report) : null),
+    h('div', { class: 'sr-cols' },
+      h('div', {}, h('div', { class: 'section', text: 'Sources' }), rows, h('div', { class: 'section', text: 'Lists' }), lists,
+        h('div', { class: 'section', text: 'Which coordinate answers from which list' }), axes, adders),
+      h('div', {}, SR.fetch ? fetchNodes(SR.fetch) : null,
+        h('div', { class: 'section', text: SR.fetch ? 'What the fetched shapes and ontology say otherwise than the spec' : 'What the shapes and the ontology say otherwise than the spec' }),
+        differencesNodes(SR.fetch ? SR.fetch.differences : d.differences))));
+}
+function fetchNodes(f) {
+  const moved = (f.sources || []).filter(s => s.moved);
+  return h('div', { class: 'box' }, h('b', { text: 'Fetched into ' + f.id }),
+    h('div', {}, moved.length ? moved.map(s => h('div', {}, h('code', { text: s.name }), ': ' + (s.before || '(none)') + ' → ' + (s.after || s.note || '(none)')))
+      : h('div', { class: 'help', text: 'No source moved.' })),
+    (f.lists || []).map(l => h('details', {}, h('summary', { text: l.list + ': ' + l.before + ' → ' + l.after + ' entries (' + l.added.length + ' new, ' + l.gone.length + ' gone, ' + l.renamed.length + ' renamed, ' + l.redefined.length + ' defined anew)' }),
+      l.added.map(x => h('div', { class: 'help' }, '+ ', h('code', { text: x.id }), ' ' + (x.label || ''))),
+      l.gone.map(x => h('div', { class: 'help' }, '− ', h('code', { text: x.id }), ' ' + (x.label || ''))),
+      l.renamed.map(x => h('div', { class: 'help' }, h('code', { text: x.id }), ': ' + x.from + ' → ' + x.to)),
+      l.redefined.map(x => h('div', { class: 'help' }, h('code', { text: x.id }), ' (' + (x.label || '') + ') defined anew')))),
+    (f.files || []).filter(x => x.changed).map(x => h('div', { class: 'help' }, h('code', { text: x.file }), x.entries ? ': ' + x.entries.before + ' → ' + x.entries.after + ' entries' : ': changed')),
+    h('div', { class: 'toolbar' }, h('button', { class: 'primary', text: 'Apply', disabled: !!SR.busy, title: 'Write the lists into the profile and the lock into the cache; the spec stays', onclick: srApply }),
+      h('button', { text: 'Drop this fetch', onclick: () => { SR.fetch = null; SR.picks.clear(); renderSources(); } })));
+}
+function diffRow(r, pick) {
+  const kids = [h('span', { class: 'badge', text: r.kind }), r.axis ? h('span', { class: 'badge', text: r.axis }) : null, ' ',
+    h('code', { text: r.path || '' }), ' ', r.detail];
+  if ((r.entries || []).length) {
+    kids.push(h('div', { class: 'sr-entries' }, r.entries.map(e => {
+      const c = h('input', { type: 'checkbox', disabled: !e.takes, title: e.why || '' });
+      c.checked = SR.picks.has(e.id);
+      c.addEventListener('change', () => pick(e.id, c.checked ? 'add' : null));
+      return h('label', { class: 'sr-entry', title: e.definition || e.why || '' }, c, ' ', h('code', { text: shortId(e.iri) }), ' ' + (e.label || '(the pinned ontology does not carry it)'));
+    })));
+  }
+  if (r.kind && r.kind.startsWith('definition_')) {
+    const c = h('input', { type: 'checkbox' });
+    c.checked = SR.picks.has(r.id);
+    c.addEventListener('change', () => pick(r.id, c.checked ? 'replace' : null));
+    kids.push(h('div', { class: 'sr-entries' }, h('label', {}, c, " take the ontology's definition"),
+      h('div', { class: 'help', text: 'spec: ' + (r.spec || '(none)') }), h('div', { class: 'help', text: 'ontology: ' + (r.ontology || '') })));
+  }
+  return h('div', { class: 'sr-row' }, kids);
+}
+function differencesNodes(D) {
+  if (!D) return h('div', { class: 'help', text: 'No spec to compare.' });
+  if (D.skipped) return h('div', { class: 'help', text: 'Not compared: ' + D.skipped });
+  const fields = (S.data && S.data.parameters || []).map(p => p.uri);
+  const pick = (id, action, into) => { if (action) SR.picks.set(id, { id, action, into }); else SR.picks.delete(id); syncTake(); };
+  const out = [];
+  for (const f of D.fields) {
+    out.push(h('details', { class: 'sr-field', open: f.rows.some(r => (r.actions || []).length) },
+      h('summary', {}, h('code', { text: f.field }), ' ' + plural(f.rows.length, 'difference')),
+      f.rows.map(r => diffRow(r, pick))));
+  }
+  if (D.unasked.length) out.push(h('details', { class: 'sr-field', open: true }, h('summary', {}, 'Properties of the shapes no field asks (' + D.unasked.length + ')'),
+    D.unasked.map(r => {
+      const into = h('select', { hidden: true }, fields.map(x => h('option', { value: x, text: x })));
+      const act = h('select', {}, h('option', { value: '', text: '—' }), h('option', { value: 'new_field', text: 'new field (draft)' }), h('option', { value: 'merge', text: 'merge into a field' }));
+      const set = () => { into.hidden = act.value !== 'merge'; pick(r.id, act.value || null, act.value === 'merge' ? into.value : undefined); };
+      act.addEventListener('change', set); into.addEventListener('change', set);
+      return h('div', { class: 'sr-row' }, h('code', { text: r.shape + '.' + r.path }), ' ', h('span', { class: 'help', text: r.detail }), ' ', act, ' ', into);
+    })));
+  out.push(h('div', { class: 'toolbar' }, h('button', { class: 'primary sr-take', text: 'Take into the spec', disabled: !SR.picks.size, onclick: srTake }),
+    h('span', { class: 'help', text: 'The spec is changed in the Spec tab, where it is checked and saved with what it costs.' })));
+  return out;
+}
+function syncTake() { const b = $('sources').querySelector('.sr-take'); if (b) b.disabled = !SR.picks.size; }
+async function srSend(what) {
+  if (SR.busy) return;
+  SR.busy = true;
+  try {
+    const r = await apiR('/api/sources/' + what, what === 'save' ? { data: SR.cur, base: SR.data.base } : { data: SR.cur });
+    if (what === 'save' && r.saved) { showInfo('Saved ' + r.file + ' (' + r.writes + ').'); SR.busy = false; await loadSources(); return; }
+    SR.report = { source: what, r: Object.assign({}, r, { errors: (r.errors || []).map(e => typeof e === 'string' ? { name: null, message: e } : e) }) };
+  } catch (e) { SR.report = { source: what, error: e.message }; }
+  SR.busy = false; renderSources();
+}
+async function srFetch() {
+  if (SR.busy) return;
+  SR.busy = 'fetch'; renderSources();
+  try { SR.fetch = await api('POST', '/api/sources/fetch', {}); SR.picks.clear(); }
+  catch (e) { showError(e); }
+  SR.busy = false; renderSources();
+}
+async function srApply() {
+  if (!SR.fetch || SR.busy) return;
+  if (!await askConfirm('Apply the fetch', 'Write the lists of ' + SR.fetch.id + ' into the profile and its lock into the cache? The spec stays as it is.', 'Apply')) return;
+  SR.busy = true;
+  try { const r = await api('POST', '/api/sources/apply', { fetch: SR.fetch.id }); showInfo('Applied ' + r.applied + ': ' + r.profile_files.length + ' file(s) of the profile, ' + r.cache_files + ' file(s) into the cache, lock ' + r.lock + '.'); SR.fetch = null; }
+  catch (e) { showError(e); }
+  SR.busy = false; await loadSources();
+}
+async function srTake() {
+  if (!SR.picks.size) return;
+  if (S.dirty && !await askConfirm('Take into the spec', 'The Spec tab has unsaved edits; the taken rows are applied to the spec as saved on disk and replace them.', 'Replace my edits')) return;
+  try {
+    const r = await api('POST', '/api/sources/take', { chosen: [...SR.picks.values()], fetch: SR.fetch ? SR.fetch.id : null });
+    S.data = r.data; S.dirty = true; S.result = null;
+    SR.picks.clear();
+    setTab('spec'); renderTree(); renderMain(); renderPanel(); renderHeader();
+    showInfo(plural(r.done.length, 'change') + ' taken into the spec' + (r.refused.length ? ', ' + r.refused.length + ' refused (' + r.refused.map(x => x.why).join('; ') + ')' : '') + '. Check and save them here.');
+  } catch (e) { showError(e); }
+}
+
+/* ---------- graph tab ---------- */
+
+const GR = { loaded: false, data: null, cur: null, report: null, probe: null, busy: false, db: '' };
+const graphData = d => ({ classes: clone(d.set.classes || {}), constraints: clone(d.set.constraints || {}), rules: Object.fromEntries(d.rules.map(r => [r.name, clone(r.value)])) });
+const graphDirty = () => !!GR.data && JSON.stringify(GR.cur) !== JSON.stringify(graphData(GR.data));
+async function loadGraph() {
+  put($('graph'), h('div', { class: 'help fl-pad', text: 'Loading…' }));
+  try { GR.data = await api('GET', '/api/graph'); GR.cur = graphData(GR.data); GR.loaded = true; }
+  catch (e) { put($('graph'), h('div', { class: 'box bad', text: e.message })); return; }
+  renderGraph(); renderHeader();
+}
+function grChanged(redraw) { GR.report = null; renderHeader(); if (redraw) renderGraph(); else { const b = $('graph').querySelector('.gr-save'); if (b) b.disabled = GR.busy || !graphDirty(); } }
+function constraintChip(c) {
+  const sel = h('select', { class: 'gr-effect' }, (GR.data.effects || []).map(x => h('option', { value: x, text: x })));
+  sel.value = GR.cur.constraints[c.key] || 'report';
+  sel.addEventListener('change', () => { if (sel.value === 'report') delete GR.cur.constraints[c.key]; else GR.cur.constraints[c.key] = sel.value; grChanged(); });
+  const P = GR.probe && GR.probe.differs, said = P ? (P.violations || []).find(v => v.key === c.key) : null;
+  const says = Array.isArray(c.says) ? c.says.join(', ') : String(c.says);
+  return h('span', { class: 'gr-con' + (said && said.after ? ' bad' : ''), title: c.key }, c.component + ' ' + says + ' ', sel,
+    said ? h('span', { class: 'help', text: ' violations ' + said.before + ' → ' + said.after }) : null);
+}
+function classCard(c) {
+  const set = GR.cur.classes[c.id] || {};
+  const written = h('input', { type: 'checkbox' }); written.checked = set.written !== false;
+  written.addEventListener('change', () => { const s = GR.cur.classes[c.id] = Object.assign({}, GR.cur.classes[c.id]); if (written.checked) delete s.written; else s.written = false; if (!Object.keys(s).length) delete GR.cur.classes[c.id]; grChanged(true); });
+  const addr = set.address || null;
+  const folder = h('input', { type: 'text', value: addr ? addr.folder : '', placeholder: 'as the writer names it', spellcheck: 'false' });
+  const key = h('input', { type: 'text', value: addr ? addr.key.join(', ') : '', placeholder: 'properties, e.g. OEO_00140178, rdfs:label', spellcheck: 'false' });
+  const setAddr = () => {
+    const s = GR.cur.classes[c.id] = Object.assign({}, GR.cur.classes[c.id]);
+    const keys = key.value.split(',').map(x => x.trim()).filter(Boolean);
+    if (!folder.value.trim() && !keys.length) delete s.address; else s.address = { folder: folder.value.trim(), key: keys };
+    if (!Object.keys(s).length) delete GR.cur.classes[c.id];
+    grChanged();
+  };
+  folder.addEventListener('input', setAddr); key.addEventListener('input', setAddr);
+  const P = GR.probe && GR.probe.differs, n = P && P.classes ? P.classes[c.id] : null;
+  return h('div', { class: 'gr-class' + (written.checked ? '' : ' off') },
+    h('div', { class: 'ru-head' }, h('label', {}, written, ' written'), ' ', h('b', { text: c.label || c.id }), ' ', h('code', { text: c.id }), c.shape ? h('span', { class: 'help', text: ' shape ' + c.shape }) : null,
+      n ? h('span', { class: 'badge', text: n.before + ' → ' + n.after + ' nodes' }) : null),
+    h('div', { class: 'gr-addr' }, 'address: folder ', folder, ' key ', key),
+    h('table', { class: 'grid' }, h('tbody', {}, (c.properties || []).map(p => h('tr', {},
+      h('td', {}, h('code', { text: p.path }), p.label ? h('div', { class: 'help', text: p.label }) : null),
+      h('td', { class: 'gr-fields' }, p.fields.length ? p.fields.map(f => h('button', { class: 'link', text: '← ' + f, title: 'open the field in the Spec tab', onclick: () => openSpec({ t: 'param', uri: f }) })) : h('span', { class: 'help', text: 'no field' })),
+      h('td', {}, (p.constraints || []).map(constraintChip)))))));
+}
+function renderGraph() {
+  const d = GR.data;
+  const db = h('input', { type: 'text', value: GR.db, placeholder: 'corpus database (default: the profile\'s)', spellcheck: 'false', style: 'width:22em' });
+  db.addEventListener('input', () => { GR.db = db.value; });
+  const bar = h('div', { class: 'fl-bar toolbar' }, h('code', { text: d.file }), h('span', { class: 'help', text: d.exists ? '' : 'not written yet' }), h('span', { class: 'spacer' }),
+    db, h('button', { text: GR.busy === 'probe' ? 'Writing…' : 'Write probe', disabled: !!GR.busy, title: 'Write the graph of the page\'s harvest with the saved file and with this one, into the temp directory', onclick: grProbe }),
+    h('button', { text: 'Check', disabled: !!GR.busy, onclick: () => grSend('check') }),
+    h('button', { class: 'primary gr-save', text: 'Save', disabled: !!GR.busy || !graphDirty(), onclick: () => grSend('save') }),
+    h('button', { text: 'Discard', disabled: !graphDirty(), onclick: () => { GR.cur = graphData(d); GR.report = null; renderGraph(); renderHeader(); } }));
+  const rules = groupedRules(d.rules, n => GR.cur.rules[n], (n, v, redraw) => { GR.cur.rules[n] = v; grChanged(redraw); });
+  const P = GR.probe && GR.probe.differs;
+  const probe = P ? h('div', { class: 'box' }, h('b', { text: 'Probe in ' + GR.probe.folder }),
+    h('div', {}, 'triples ' + P.triples.before + ' → ' + P.triples.after + ', named anew: ' + P.readdressed),
+    h('details', {}, h('summary', { text: 'documents that differ (' + P.documents.length + ')' }), P.documents.map(x => h('div', { class: 'help' }, h('code', { text: x.document }), ': nodes ' + (x.before.kept || 0) + ' → ' + (x.after.kept || 0) + ', violations ' + (x.before.violations || 0) + ' → ' + (x.after.violations || 0) + (x.after.left_out && x.after.left_out.length ? ', left out: ' + x.after.left_out.map(l => l.constraint).join('; ') : '')))),
+    h('details', {}, h('summary', { text: 'violations by constraint' }), (P.violations || []).map(v => h('div', { class: 'help' }, h('code', { text: v.key }), ': ' + v.before + ' → ' + v.after)))) : null;
+  put($('graph'), bar, h('div', { class: 'help fl-pad', text: d.cost + ' ' + d.gate }),
+    h('div', { class: 'pr-report' }, GR.report ? reportNodes(GR.report) : null), probe,
+    h('div', { class: 'section', text: 'Rules of the writer' }), rules,
+    h('div', { class: 'section', text: 'Classes of the shapes, the fields that write each property, and what each constraint does' }),
+    d.skipped ? h('div', { class: 'help', text: d.skipped }) : (d.classes || []).map(classCard),
+    (() => {
+      const known = new Set((d.classes || []).map(c => c.id));
+      const extra = GR.probe ? Object.keys(GR.probe.saved.classes || {}).filter(k => !known.has(k)) : [];
+      return [h('div', { class: 'section', text: 'Classes the writer writes that no shape names' }),
+        extra.length ? extra.map(k => classCard({ id: k, shape: null, label: null, properties: [] }))
+          : h('div', { class: 'help', text: GR.probe ? 'none' : 'They are listed once a probe has written the graph.' })];
+    })());
+}
+async function grSend(what) {
+  if (GR.busy) return;
+  GR.busy = true;
+  try {
+    const r = await apiR('/api/graph/' + what, what === 'save' ? { data: GR.cur, base: GR.data.base } : { data: GR.cur });
+    if (what === 'save' && r.saved) { showInfo('Saved ' + r.file + ' (' + r.writes + ').'); GR.busy = false; await loadGraph(); return; }
+    GR.report = { source: what, r: Object.assign({}, r, { errors: (r.errors || []).map(e => typeof e === 'string' ? { name: null, message: e } : e) }) };
+  } catch (e) { GR.report = { source: what, error: e.message }; }
+  GR.busy = false; renderGraph();
+}
+async function grProbe() {
+  if (GR.busy) return;
+  GR.busy = 'probe'; renderGraph();
+  try { GR.probe = await api('POST', '/api/graph/probe', { data: GR.cur, db: GR.db || null }); }
+  catch (e) { showError(e); }
+  GR.busy = false; renderGraph();
+}
+
+/* ---------- the order of the flow's steps ---------- */
+
+function framesOf(steps, frame, out) {
+  out = out || {};
+  out[frame] = steps.map(s => s.id);
+  for (const s of steps) if (Array.isArray(s.steps)) framesOf(s.steps, s.id, out);
+  return out;
+}
+function offOf(steps, out) {
+  out = out || [];
+  for (const s of steps) { if (s.switched_off) out.push(s.id); if (Array.isArray(s.steps)) offOf(s.steps, out); }
+  return out;
+}
+const orderDirty = () => !!F.data && (JSON.stringify(F.order) !== JSON.stringify(framesOf(F.data.steps || [], 'document'))
+  || JSON.stringify([...F.off].sort()) !== JSON.stringify(offOf(F.data.steps || []).sort()));
+function inOrder(steps, frame) {
+  const want = F.order && F.order[frame];
+  if (!want) return steps;
+  const by = new Map(steps.map(s => [s.id, s]));
+  return want.map(id => by.get(id)).filter(Boolean);
+}
+function moveStep(frame, id, to) {
+  const list = F.order[frame], i = list.indexOf(id);
+  if (i < 0 || to < 0 || to >= list.length) return;
+  list.splice(i, 1); list.splice(to, 0, id);
+  F.report = null; renderFlow(); renderHeader();
+}
+function stepControls(st, frame) {
+  if (!st.moves && !st.switch) return st.keeps ? h('div', { class: 'fl-keeps', title: st.keeps, text: 'keeps its place' }) : null;
+  const bits = [];
+  if (st.moves) {
+    const list = F.order[frame] || [], i = list.indexOf(st.id);
+    bits.push(h('button', { class: 'link', text: '↑', title: 'earlier', disabled: i <= 0, onclick: () => moveStep(frame, st.id, i - 1) }),
+      h('button', { class: 'link', text: '↓', title: 'later', disabled: i < 0 || i >= list.length - 1, onclick: () => moveStep(frame, st.id, i + 1) }));
+  }
+  if (st.switch) {
+    const c = h('input', { type: 'checkbox' }); c.checked = !F.off.has(st.id);
+    c.addEventListener('change', () => { if (c.checked) F.off.delete(st.id); else F.off.add(st.id); F.report = null; renderFlow(); renderHeader(); });
+    bits.push(h('label', { class: 'fl-on', title: st.keeps || '' }, c, ' on'));
+  }
+  return h('div', { class: 'fl-ctl' }, bits);
+}
+function dragWire(card, st, frame) {
+  if (!st.moves) return;
+  card.setAttribute('draggable', 'true');
+  card.addEventListener('dragstart', ev => { ev.stopPropagation(); ev.dataTransfer.setData('text/plain', JSON.stringify({ frame, id: st.id })); });
+  card.addEventListener('dragover', ev => { ev.preventDefault(); ev.stopPropagation(); });
+  card.addEventListener('drop', ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    let got; try { got = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch (e) { return; }
+    if (!got || got.frame !== frame || got.id === st.id) return;
+    moveStep(frame, got.id, F.order[frame].indexOf(st.id));
+  });
+}
+
 /* ---------- tabs ---------- */
 
 function setTab(t) {
@@ -2192,8 +2620,13 @@ function setTab(t) {
   $('layout').hidden = t !== 'spec';
   $('prompts').hidden = t !== 'prompts';
   $('flow').hidden = t !== 'flow';
+  $('sources').hidden = t !== 'sources';
+  $('graph').hidden = t !== 'graph';
+  $('rules').hidden = true;
   renderHeader();
   if (t === 'flow' && !F.loaded) loadFlow();
+  if (t === 'sources' && !SR.loaded) loadSources();
+  if (t === 'graph' && !GR.loaded) loadGraph();
   if (t === 'prompts' && !P.loaded) return loadPrompts();
 }
 

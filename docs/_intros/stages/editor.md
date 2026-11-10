@@ -405,10 +405,8 @@ coordinate of each value is asked on its own and searched for where it is open,
 and what the checked rows leave open is computed. The steps and the numbers that
 bound them stand in one file, `flow.json` (`extraction.flow`). The default
 profile's file is the whole flow: `numbers` and `steps`. A profile that extends
-it may have a `flow.json` of its own that holds `numbers` only, and only the ones
-it sets differently; it is laid over the inherited file number by number, and a
-file of a profile that writes steps is refused. The steps describe the flow; the
-order they are run in is still the code's. The loader is strict: every request
+it may have a `flow.json` of its own that holds the numbers it sets differently,
+laid over the inherited file number by number, and may write all steps. The steps are run in the order the file lists them (see Reordering the steps). The loader is strict: every request
 the code sends stands in the `ask` of at least one step, a step asks no request
 the code does not send, every number bounds a step, and an
 unknown key, a key written twice, a value that is no whole number or lies below
@@ -500,12 +498,50 @@ carries before its host (a user, a password) is replaced by `***@`.
 The Spec tab's form of a plan field that is a year has the key `of`: a coordinate
 of a group's pair and an entry of its list.
 
+### Reordering the steps
+
+The coordinate steps (`own_place`, `search_sentence`, `beside`, `search`,
+`about`, `plan_years`) can be dragged, or moved with the arrows, and switched
+off in the Flow tab; the reader and the surveyed harvest run them in that
+order (`extraction/flow.py`: `BLOCKS`, `Arrangement`). A step may carry
+`"off": true`. A profile's own `flow.json` may then write all steps. Judge and
+Save take `order` and `off`; an order the run cannot read in is refused with
+its reason (`arrangement_problems`).
+
+## Rules
+
+Each tab that has rules shows them in a panel: each rule with its help, its
+kind and its bounds, taken from the profile's `rules.json` (the default
+profile's file names all of them, a profile's file only what it sets
+differently). A value is checked against the bounds before it is saved
+(`/api/rules`, `/check`, `/save` in `rulespage.py`). An `EXTRACT_*` setting
+wins over the file and the panel says so. No rule makes a harvest stale.
+
+## Sources
+
+The Sources tab shows `sources.json`: the ontology, the shapes and the graph
+queries the profile is written against, the lists drawn from them and which
+coordinate answers from which list. It checks and saves the file. Fetch pulls
+the sources into a temporary folder; Apply writes the files a refresh writes
+into the profile and the fetched files and the lock into the upstream cache. The
+differences of the fetched shapes against the spec are shown per field, and a
+chosen row can be taken into the Spec tab (`sourcespage.py`).
+
+## Graph
+
+The Graph tab shows the classes of the shapes with the fields that write each
+property and the effect of each constraint, and the writer rules, and edits
+`graph.json` (see [the graph](graph.md)). Write probe writes the graph of the
+page's harvest twice into a temporary folder and compares the two
+(`graphpage.py`, `graphprobe.py`).
+
 ## What the editor does not touch
 
-The editor writes four kinds of file through its own code: the spec, the
-prompt files, the sentence files and the profile's `flow.json`, and the write
-guard (`server.Files`) lets that code write, and remove the flow file, only
-inside the profile's folder. It reads only inside the
+The editor writes these kinds of file through its own code: the spec, the
+prompt files, the sentence files and the profile's `flow.json`, `rules.json`,
+`sources.json` and `graph.json`, and the write guard (`server.Files`) lets that
+code write, and remove the flow file, only inside the profile's folder. A second
+guard may write only the upstream cache, for Apply in the Sources tab. It reads only inside the
 folders of the profiles in effect, the harvest it was given, its own page, the
 generated documentation and the folder the before and after comparison of the
 prompts writes into. A path is resolved first, so `..` and links cannot lead out.
@@ -532,6 +568,6 @@ its summary from there.
 
 ## What it does not contain yet
 
-The order of the steps of the reading and what a step does cannot be edited in
-it: they stay code. The prompts, the sentences the stages say outside them, the
-spec and the numbers of the flow are in the page.
+What a step does cannot be edited in it: that stays code. The prompts, the
+sentences the stages say outside them, the spec, the flow, the rules, the sources
+and the graph file are in the page.

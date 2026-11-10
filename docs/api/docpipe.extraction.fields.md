@@ -124,6 +124,18 @@ them, whose entry the wording backs. A free text answer is its own
 wording; the request does not ask it twice, and the row keeps it as its
 wording (`pipeline.merge_field`, owner decision 2026-11-06).
 
+### said
+
+```python
+def said() -> str
+```
+
+### year_word
+
+```python
+def year_word() -> str
+```
+
 ### value_example
 
 ```python

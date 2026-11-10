@@ -210,7 +210,7 @@ The prompt of a request counted with the served model's own tokenizer.
 
 The text of every message goes through the model's chat template with the
 settings every request carries (`request_extras`) and is counted exactly;
-a crop is counted at IMAGE_TOKENS, the most one can take. The estimate
+a crop is counted at `image_tokens`, the most one can take. The estimate
 this replaces ran short on tables of figures, where the tokenizer gives
 every digit a token of its own: requests went out one token over the
 window and were refused, and a refused request that carried a crop broke
@@ -240,13 +240,30 @@ def __init__(self, reranker)
 
 ## Functions
 
+### retry_timeout
+
+```python
+def retry_timeout() -> float
+```
+
+What a retry may take after a request timed out (rule
+`repeat_timeout_s`). The first attempt keeps LLM_TIMEOUT, which is sized
+for a slow but working generation; a request the server did not answer
+in that time is unlikely to differ on its repeat, and three full
+timeouts held one field thread for 91 minutes.
+
 ### retry_temperature
 
 ```python
 def retry_temperature(base: float, faults: int) -> float
 ```
 
-The sampling temperature after `faults` unreadable replies.
+The sampling temperature after `faults` unreadable replies. A
+malformed reply asked again at temperature 0 comes back the same, byte
+for byte, correction message or not: on corpus_m5 field retries repeated
+their first attempt exactly and all three were lost. Every reply fault
+raises the temperature of the next attempt by a step (rules
+`retry_temperature_step`, `retry_temperature_most`).
 
 ### install_stop_handler
 
@@ -350,6 +367,25 @@ the last one. A request the server refuses (`refused`) is asked
 `MAX_RETRIES` times at most and then raised: its document fails and
 stays unfinished, and a later run reads it again (owner decision
 2026-11-09).
+
+### code_rounds
+
+```python
+def code_rounds() -> int
+```
+
+Sandbox rounds per calculation question (rule `code_rounds`). A
+computed value carries its code and the code's output as evidence;
+without the sandbox the model would have to work the number out itself,
+and that number would have no evidence at all.
+
+### image_max_side
+
+```python
+def image_max_side() -> int
+```
+
+Pixels of a crop's longer side (rule `image_max_side`).
 
 ### read_to_end
 
@@ -793,6 +829,24 @@ the ticket of the thread that asked (`_for`), although a thread of the
 pool below sends it: such a thread belongs to no document, and a request
 of none goes before every document (owner decision 2026-11-07).
 
+### image_tokens
+
+```python
+def image_tokens() -> int
+```
+
+One crop at its longest side on both sides, one visual token per
+28 px square.
+
+### least_answer_tokens
+
+```python
+def least_answer_tokens() -> int
+```
+
+Less room than this for the answer and the request is not sent
+(rule `least_answer_tokens`).
+
 ### set_model_len
 
 ```python
@@ -1060,29 +1114,6 @@ def dates_by_plan(spec: Spec) -> bool
 Does the spec date a value by the plan's own years: has its frame a
 year?
 
-### frame_pairs
-
-```python
-def frame_pairs(reply: Optional[dict], slots: list, sources: list,
-                rejected: Optional[list] = None) -> list
-```
-
-The pairs of a reply that carry their own evidence, in order.
-
-Every coordinate is held to what a field answer is held to: its quote sits
-verbatim in one of the passages that were SHOWN, the quote contains the
-answer, and a scenario is one of the keys the request listed. Nothing else
-is checked. A frame reading is document-level by construction -- it is
-read once, from a caption or a heading, and every row of the document
-inherits it -- so "is this passage near this row" is not a question about
-it, and no reading anywhere in the harvest is asked it.
-
-*rejected* collects one sentence per pair that did not get through, to be
-put back in front of the model. Silently dropping them is
-how a plan ended up with a scenario the ontology has no class for: the
-pair was refused, nobody said so, and the next window was asked the same
-question in the same way.
-
 ### probe_server
 
 ```python
@@ -1097,14 +1128,15 @@ Any reply below 500 counts: a server that refuses the key is still there.
 
 ```python
 def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
-                 every: float = SERVER_PROBE_EVERY,
-                 dead_after: float = SERVER_DEAD_AFTER,
+                 every: Optional[float] = None,
+                 dead_after: Optional[float] = None,
                  clock: Callable = time.monotonic,
                  sleep: Callable = time.sleep) -> threading.Thread
 ```
 
 A daemon thread that calls *on_dead(seconds)* once the server has not
-answered for *dead_after* seconds, then stops watching.
+answered for *dead_after* seconds (rule `server_dead_after_s`), probing
+every *every* (rule `server_probe_every_s`), then stops watching.
 
 ### shared_http
 
@@ -1340,8 +1372,10 @@ reordered.
 
 A pass that asks a model also names the flow it read with (`take_flow`):
 `numbers`, every number in effect, a setting that won over the flow file
-among them, and `flow_file`, the sha256 of the flow's files. For a
-reader: a changed number makes no harvest stale.
+among them, and `flow_file`, the sha256 of the flow's files; and the
+rules (`rules_file`, the sha256 of the rules files, `rules_set`, the
+rules a setting set). For a reader: a changed number or rule makes no
+harvest stale.
 
 ### note_documents
 
@@ -1398,6 +1432,15 @@ the key existed cannot say which PDF it read, and calling that stale would
 report the whole corpus for a sentence it never recorded; a database that
 records no checksum cannot say which PDF this run reads.
 
+### question_keys
+
+```python
+def question_keys() -> tuple
+```
+
+The keys of a stamp that decide whether a document is read again
+(rule `question_keys`, owner decision 2026-09-10).
+
 ### recorded_questions
 
 ```python
@@ -1423,7 +1466,7 @@ def stale(stamp_path: Path, current: dict) -> list
 
 Which keys differ from now; everything when unstamped.
 
-The ontology keys are compared (`QUESTION_KEYS`: one per parameter,
+The ontology keys are compared (`question_keys`: one per parameter,
 value list, axis and slot), the whole-file sha `spec` only for a stamp
 that has none of them, and the sha256 of the PDF the harvest read from
 (`DOCUMENT_KEY`) where the stamp and `current` both carry one. The model,
@@ -1654,8 +1697,8 @@ def span_marks_of() -> dict
 ```
 
 {coordinate: entry} a value stated for a span of years takes on each
-of its rows, as the active profile says it (`SPAN_MARKS`,
-`reading.span_rows`); {} where it says nothing.
+of its rows (rule `span_marks`, `reading.span_rows`); {} where the rules
+say nothing.
 
 ### year_states_of
 

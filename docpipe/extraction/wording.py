@@ -36,9 +36,7 @@ REQUIRED = frozenset({
     "kind_whole_number", "kind_year", "kind_text", "not_an_option",
     "name_not_listed", "wrong_type", "quote_not_in_source",
     "quote_not_in_passage", "quote_too_short", "answer_not_in_quote",
-    "answer_not_in_quote_text", "or_unstated", "frame_missing",
-    "frame_no_quote", "frame_quote_not_in_source", "frame_answer_not_in_quote",
-    "frame_not_an_option", "frame_not_a_year", "frame_options", "shape_rule",
+    "answer_not_in_quote_text", "or_unstated", "frame_options", "shape_rule",
     "cut_off", "shorter", "shorter_frame", "shorter_rows", "shorter_field",
     "shorter_review", "reasoning_only", "empty", "no_object", "syntax",
     "outside_text", "not_an_object", "key_missing", "key_not_a_list",
@@ -68,7 +66,6 @@ NOTES = {
         "frame coordinate, one list per coordinate. The correction below "
         "is handed the key that was sent, so a profile that words this one "
         "phrase differently has moved all of it."),
-    "frame_missing": "why a pair of the document's frame was not taken",
     "shape_rule": "a reply that could not be read",
     "not_an_address": "a round of the values of a passage, one value each",
     "code_failed": "what the model gets back after a calculation",

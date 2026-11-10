@@ -25,7 +25,7 @@ name. A wording the run depends on is the profile's, in the language of its
 prompts, so the profile says which passages its prompts have to hold
 (`extraction.PROMPT_CHECKS`). The shapes of its graph are the profile's as
 well: it says where they are (`extraction.shapes_files`) and which of their
-properties it leaves out on purpose (`extraction.NOT_EXTRACTED`).
+properties it leaves out on purpose (the rule `not_extracted`).
 
 Two lines only say what they find and never fail: the properties of the
 shapes that nobody asks and the definitions of the spec that are not the
@@ -60,14 +60,24 @@ cannot be handed a failing input is decoration, and `audit` can only be
 handed a profile's own files, which are, by the time anyone runs it, the
 ones that pass.
 
+### left_out_of
+
+```python
+def left_out_of(profile) -> object
+```
+
+The properties of the shapes *profile* leaves out on purpose, as its
+rule `not_extracted` says them: {(shape, property): why}, None where its
+line knows no such rule.
+
 ### not_extracted
 
 ```python
 def not_extracted(declared) -> tuple
 ```
 
-A profile's `extraction.NOT_EXTRACTED` as ({(shape, property): why},
-what is wrong with it).
+The properties a profile leaves out on purpose (`left_out_of`) as
+({(shape, property): why}, what is wrong with it).
 
 The shape properties the profile leaves out on purpose, each with a
 sentence of reason. An entry that is anything else is named and not
@@ -78,7 +88,7 @@ that is no mapping at all, which is named once.
 ### shape_properties
 
 ```python
-def shape_properties(files, raw: dict) -> tuple
+def shape_properties(files, raw: dict, profile=None) -> tuple
 ```
 
 (properties no parameter asks, all properties) of the shapes.
@@ -99,7 +109,7 @@ def shapes_verdict(profile, raw: dict) -> tuple
 
 The profile says where its shapes are (`extraction.shapes_files`, the
 files of its last refresh) and which of their properties it leaves out on
-purpose (`extraction.NOT_EXTRACTED`). Where it names no shapes, or the
+purpose (the rule `not_extracted`). Where it names no shapes, or the
 file is not there, or rdflib is not, the line says it is skipped: a
 check that was not run is not a gap found.
 

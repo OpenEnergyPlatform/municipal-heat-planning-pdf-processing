@@ -52,7 +52,7 @@ table gives this profile's own answer.
 | Preprocessing, refinement, visuals | `prompts/preprocessing`, `prompts/refinement`, `prompts/visuals` | 1, 3 and 6 prompt ids of its own | page transcription, English artefact repair, table and figure captioning; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
 | Refinement, visuals, page transcription, the answer app | `prompts/reading/phrases.json` | ten sentences | the ten sentences these stages and the chat say to the model when its reply was not the one JSON object (`reading.REQUIRED`), in English, the language of the prompts of the first three; `prompts/extraction/phrases.json` is another file, the harvest's own |
 | The picker (app) | `catalog.py`, `profile.py` | `CATALOG`, `facets` | publication labels and names (a name opens each line of the values index) and two filters |
-| Extraction | `extraction.py`, `prompts/extraction/*.md`, `prompts/extraction/phrases.json` | `SPEC_PATH`, `document_axes`, `document_context`, `PROMPT_CHECKS`, `NOT_EXTRACTED`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags; its `plan_fields` block holds what a publication settles for all its values, its `works` block the field that finds other works, and the key `beside` of `scenario_region` the entries the region list always has), the per-document region list (the regions a publication names), the 46 sentences the stage writes to the model outside its prompts (the file), the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
+| Extraction | `extraction.py`, `prompts/extraction/*.md`, `prompts/extraction/phrases.json` | `SPEC_PATH`, `document_axes`, `document_context`, `PROMPT_CHECKS`, `shapes_files`, `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE`, 14 prompt ids | the spec (18 parameters, four of them the bundle's tags; its `plan_fields` block holds what a publication settles for all its values, its `works` block the field that finds other works, and the key `beside` of `scenario_region` the entries the region list always has), the per-document region list (the regions a publication names), the 46 sentences the stage writes to the model outside its prompts (the file), the language (`"en"`) of the core's templates its parts files are put together with, and the harvest's own questions |
 | The graph | `kg.py`, `oekg_api.py` | `make_serializer`, `make_study_reader`, `dry_run` | OEKG Turtle, the trust wording, and a dry run of the platform's scenario-bundle API (below) |
 | The answer app | `inference.py`, `prompts/inference/*.md`, `prompts/inference/phrases.json` | `READOFF_MARKER`, `READOFF_NOTE`, 32 sentences, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
@@ -456,7 +456,7 @@ factsheet, not the bundle, whose `StudyShape` names none (`bind`,
 The serializer does not carry the OEKG shapes a second time. When it is
 built, `bind(model)` reads them (`docpipe/extraction/shapemodel.py`), from
 the file the last `vocabulary --refresh` pulled (`oekg_shapes` in
-`vocabulary.SOURCES`, at the head of `production`). Every path the
+the profile's `sources.json`, at the head of `production`). Every path the
 serializer writes on a report, a bundle or a factsheet (`WRITTEN`) has to
 be a property of that class's shape, and the two dates have to be the
 `xsd:dateTime` it writes; a path the shapes dropped or retyped raises
@@ -519,7 +519,7 @@ factsheet's `rdfs:label` is the name the scenario is called by; its
 2026-11-08, none now, owner decision 2026-11-07), and the scenario's own name
 where there is none (`kg.py`, the factsheet block of
 `_make_builder`). Every factsheet
-also carries a fixed `OEO_00020517` annotation (`IAM_SCENARIO`; owner
+also carries a fixed `OEO_00020517` annotation (`graph.json` rule `scenario_types_always`, read as `kg.ALWAYS_TYPES`; owner
 decision 2026-11-06: kept) on top of whatever `scenario_type` classes the
 model read off the text.
 
@@ -662,9 +662,9 @@ was read from, the leading one first.
 Nothing is ever sent. The module builds no call that writes, and `--live`
 is one GET of the public list, followed page by page. The two
 inputs, the platform's OpenAPI description and the shapes file, are the
-`SOURCES` of `oekg_api.py`, pulled through `docpipe/upstream.py` at the
+sources of `oekg_api.py`, pulled through `docpipe/upstream.py` at the
 head of their branch; the shapes source is the profile's own
-(`vocabulary.SOURCES["oekg_shapes"]`), so the dry run and the Turtle are
+(`oekg_shapes` of its `sources.json`), so the dry run and the Turtle are
 held to one file, and the bodies are read with the paths of the shapes they
 are checked against. Each names a `reviewed` commit, for the shapes the
 one the platform pins its validator to, and every run prints whether the
@@ -700,7 +700,7 @@ more), and `graph()` raises on a body carrying one rather than return a
 verdict over half a body.
 Which properties of the shapes the profile leaves out on purpose, the contact
 person, the study's energy carrier tag and the interacting region among them,
-and why, is `extraction.NOT_EXTRACTED`; `docpipe preflight` warns about any
+and why, is the rule `not_extracted` (`rules.json`, declared in `rules.py`); `docpipe preflight` warns about any
 other property that nobody asks.
 The acronym comparison ignores case and outer spaces, which may be
 narrower than the platform's own rule.

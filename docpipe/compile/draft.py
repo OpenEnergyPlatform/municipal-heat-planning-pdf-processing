@@ -489,23 +489,68 @@ def _node_classes(spec_raw: dict) -> dict:
     return out
 
 
+def _predicate_blocks(block, found=None) -> list:
+    """(predicate, the block that names it) for every predicate of a `kg`
+    block, at any depth."""
+    found = [] if found is None else found
+    if isinstance(block, dict):
+        if isinstance(block.get("predicate"), str):
+            found.append((block["predicate"], block))
+        for value in block.values():
+            _predicate_blocks(value, found)
+    return found
+
+
+def _object_list(parameter: dict, block: dict, axis=None) -> dict:
+    """What *block* writes as its object, as a list to hold against the
+    shapes': a value the spec fixes (`from` a key of the parameter that
+    holds one IRI, the unit a value is converted to), else the list of the
+    axis the block belongs to, else the parameter's own list. The entries an
+    axis writes no edge for (`no_edge_for`) are none of its objects."""
+    said = parameter.get(block.get("from")) if block.get("from") else None
+    owner = (parameter.get("axes") or {}).get(axis) if axis else parameter
+    owner = owner if isinstance(owner, dict) else {}
+    edge = owner.get("kg") if axis else None
+    return {"fixed": said if isinstance(said, str) else None,
+            "from": block.get("from"), "axis": axis,
+            "vocabulary": owner.get("vocabulary"),
+            "dynamic": bool(owner.get("vocabulary_dynamic")),
+            "edgeless": set((edge or {}).get("no_edge_for") or ())}
+
+
+def read_as_shapes(spec_raw: dict, profile=None) -> dict:
+    """The spec as *profile*'s shapes name its properties. A profile whose
+    `kg` blocks name the slots of a schema of its own says how they become
+    predicates (`extraction.spec_for_shapes`, KWP through the MHPKG schema);
+    any other spec is held to the shapes as written."""
+    hook = (profile.component("extraction", "spec_for_shapes")
+            if profile is not None else None)
+    return hook(spec_raw) if hook is not None else spec_raw
+
+
 def differences(shapes: list, spec_raw: dict,
                 terms: Optional[Terms] = None,
-                unit_properties=UNIT_PROPERTIES) -> list:
+                unit_properties=UNIT_PROPERTIES,
+                pairs: Optional[list] = None) -> list:
     """What the spec says differently from the shapes, and what one of them
     does not say at all. [{kind, parameter, path, detail}], nothing changed.
 
     A parameter is held against the property shape whose path its `kg` block
     names. Where several shapes carry that path (a label, on every node),
     the one is taken whose target class the block names, or the node of the
-    block is of. Where that settles nothing, the parameter is compared to
-    nothing rather than to a guess, and is listed as ambiguous only if no
-    other predicate of its block found its shape.
+    block is of. A block whose node takes its class from an axis
+    (`class_from`) is held against the shape of every class that axis
+    offers, as `ontology.spec_edges` reads it. Where that settles nothing,
+    the parameter is compared to nothing rather than to a guess, and is
+    listed as ambiguous only if no other predicate of its block found its
+    shape. A predicate no shape carries, or none of the classes its node is
+    written as, is named on its own.
 
     An entry of a list that starts with `out:` is the profile's own word for
     "none of these" and no term, so the shapes are not expected to have it.
     The units a shape lists are no property to ask for where the spec asks
-    for the shape's number.
+    for the shape's number. *pairs*, where given, is filled with (parameter,
+    shape, property) for every property a parameter was held against.
     """
     terms = terms or Terms()
     by_path: dict = {}
@@ -523,17 +568,33 @@ def differences(shapes: list, spec_raw: dict,
     out: list = []
     asked: set = set()
 
-    def note(kind, parameter, path, detail, shape=None):
+    def note(kind, parameter, path, detail, shape=None, entries=None,
+             axis=None):
         row = {"kind": kind, "parameter": parameter, "path": path,
                "detail": detail}
         if shape is not None:
             row["shape"] = shape        # a property of a shape, said by it
+        if entries is not None:
+            row["entries"] = entries    # the IRIs a list row names
+            row["axis"] = axis          # whose list: an axis, or the value
         out.append(row)
 
     for parameter in spec_raw.get("parameters") or ():
         name = parameter.get("uri")
         kg = parameter.get("kg")
-        predicates = _predicates(kg)
+        # Every block that names a predicate, with what it writes as its
+        # object: the parameter's own blocks, and the blocks of its axes
+        # that draw an edge from the same node (`role: edge`), as
+        # `ontology.spec_edges` reads them.
+        writes = [(predicate, block, kg, _object_list(parameter, block))
+                  for predicate, block in _predicate_blocks(kg)]
+        for axis, said in (parameter.get("axes") or {}).items():
+            edge = said.get("kg") if isinstance(said, dict) else None
+            if isinstance(edge, dict) and edge.get("role") == "edge":
+                writes += [(predicate, block, edge,
+                            _object_list(parameter, block, axis))
+                           for predicate, block in _predicate_blocks(edge)]
+        predicates = [predicate for predicate, *_rest in writes]
         if not predicates:
             note("no_graph_block", name, None,
                  "the parameter names no predicate, so it cannot be held "
@@ -542,17 +603,28 @@ def differences(shapes: list, spec_raw: dict,
         classes = set(_classes(kg))
         if isinstance(kg, dict) and kg.get("node") in node_class:
             classes.add(node_class[kg["node"]])
-        matched, unsettled = [], []
-        for predicate in predicates:
+        source = kg.get("class_from") if isinstance(kg, dict) else None
+        if source:
+            offered = ((parameter.get("axes") or {}).get(source) or {}) \
+                .get("vocabulary") or {}
+            classes.update(local(str(key).split(":")[-1]) for key in offered
+                           if not str(key).startswith("out:"))
+        matched, unsettled, absent = [], [], []
+        for predicate, block, bounds, listed in writes:
             candidates = by_path.get(local(predicate), [])
             if len(candidates) > 1:
                 narrowed = [(shape, prop) for shape, prop in candidates
                             if local(shape.target_class or "") in classes]
-                if len(narrowed) != 1:
+                if len(narrowed) == 1 or (narrowed and source):
+                    candidates = narrowed
+                elif classes and not narrowed:
+                    absent.append(predicate)
+                    continue
+                else:
                     unsettled.append((predicate, candidates))
                     continue
-                candidates = narrowed
-            matched += candidates
+            matched += [(shape, prop, bounds, listed)
+                        for shape, prop in candidates]
         if not matched:
             for predicate, candidates in unsettled:
                 note("ambiguous", name, predicate,
@@ -560,13 +632,23 @@ def differences(shapes: list, spec_raw: dict,
                      f"block does not say which node is meant")
                 asked.update((shape.name, prop.path)
                              for shape, prop in candidates)
-            if not unsettled:
-                note("not_in_shapes", name, ", ".join(predicates),
+        # Every predicate the spec writes is one the shapes are asked for:
+        # one no shape of its node carries is named, whatever the others
+        # of the parameter found.
+        for predicate in absent:
+            note("not_in_shapes", name, predicate,
+                 "shapes carry this path, but none of the class(es) this "
+                 "node is written as")
+        for predicate in predicates:
+            if not by_path.get(local(predicate)):
+                note("not_in_shapes", name, predicate,
                      "no property shape has this path")
-        for shape, prop in matched:
+        for shape, prop, bounds, listed in matched:
             asked.add((shape.name, prop.path))
-            said_min = kg.get("min") if isinstance(kg, dict) else None
-            said_max = kg.get("max") if isinstance(kg, dict) else None
+            if pairs is not None:
+                pairs.append((name, shape.name, local(prop.path)))
+            said_min = bounds.get("min") if isinstance(bounds, dict) else None
+            said_max = bounds.get("max") if isinstance(bounds, dict) else None
             if (prop.min_count or prop.max_count is not None) and (
                     (prop.min_count or 0) != (said_min or 0)
                     or prop.max_count != said_max):
@@ -577,11 +659,24 @@ def differences(shapes: list, spec_raw: dict,
                      f"the shapes allow min {prop.min_count or 0}, max "
                      f"{'any' if prop.max_count is None else prop.max_count}"
                      + spec_says)
-            vocabulary = parameter.get("vocabulary")
-            if prop.choices and isinstance(vocabulary, dict):
-                theirs = {local(iri): iri for iri in prop.choices}
+            if not prop.choices:
+                continue
+            theirs = {local(iri): iri for iri in prop.choices}
+            if listed["fixed"] is not None:
+                # One object, the same on every node: the shapes have to
+                # take it, the rest of their list is theirs to offer.
+                if local(listed["fixed"]) not in theirs:
+                    note("list_extra", name, local(prop.path),
+                         f"the spec writes {listed['fixed']} "
+                         f"({listed['from']}), which the shapes' list of "
+                         f"{len(theirs)} does not have",
+                         entries=[listed["fixed"]], axis=listed["axis"])
+                continue
+            vocabulary = listed["vocabulary"]
+            if isinstance(vocabulary, dict) and vocabulary:
                 ours = {local(iri): iri for iri in vocabulary
-                        if not str(iri).startswith("out:")}
+                        if not str(iri).startswith("out:")
+                        and iri not in listed["edgeless"]}
                 missing = sorted(set(theirs) - set(ours))
                 extra = sorted(set(ours) - set(theirs))
                 if missing:
@@ -589,12 +684,16 @@ def differences(shapes: list, spec_raw: dict,
                          f"{len(missing)} entr"
                          f"{'y' if len(missing) == 1 else 'ies'} of the "
                          f"shapes' list not in the spec: "
-                         + ", ".join(missing))
+                         + ", ".join(missing),
+                         entries=[theirs[key] for key in missing],
+                         axis=listed["axis"])
                 if extra:
                     note("list_extra", name, local(prop.path),
                          f"{len(extra)} entr"
                          f"{'y' if len(extra) == 1 else 'ies'} of the spec "
-                         f"not in the shapes' list: " + ", ".join(extra))
+                         f"not in the shapes' list: " + ", ".join(extra),
+                         entries=[ours[key] for key in extra],
+                         axis=listed["axis"])
                 for key in sorted(set(theirs) & set(ours)):
                     entry = vocabulary[ours[key]]
                     label = terms.label(theirs[key])
@@ -605,7 +704,7 @@ def differences(shapes: list, spec_raw: dict,
                     if label and label not in spellings:
                         note("label", name, key,
                              f"the ontology calls it {label!r}, the spec "
-                             f"{said!r}")
+                             f"{said!r}", axis=listed["axis"])
                     meaning = terms.definition(theirs[key])
                     theirs_said = entry.get("definition") \
                         if isinstance(entry, dict) else None
@@ -613,13 +712,15 @@ def differences(shapes: list, spec_raw: dict,
                             " ".join(meaning.split()) != \
                             " ".join(theirs_said.split()):
                         note("definition", name, key,
-                             "the spec's definition is not the ontology's")
-            elif prop.choices and parameter.get("vocabulary_dynamic"):
+                             "the spec's definition is not the ontology's",
+                             axis=listed["axis"])
+            elif listed["dynamic"]:
                 pass        # the list is the profile's, per document
-            elif prop.choices:
+            else:
                 note("list_missing", name, local(prop.path),
                      f"the shapes close this property over "
-                     f"{len(prop.choices)} entries and the spec has no list")
+                     f"{len(prop.choices)} entries and the spec has no list",
+                     entries=list(prop.choices), axis=listed["axis"])
     for shape in shapes:
         listing, numbers = unit_listing(shape, unit_properties)
         # The units a shape lists belong to its number, as the draft hangs

@@ -445,7 +445,7 @@ def answered(value, *used, quote=WHOLE) -> str:
 ANSWER = answered(38892.0)
 NOTHING = json.dumps({"value": None, "used": []})
 # Every request one question may make: its code, then the answers.
-TRIES = runner.MAX_RETRIES + runner.CODE_ROUNDS + 1
+TRIES = runner.MAX_RETRIES + runner.code_rounds() + 1
 
 
 def insisting(said) -> list:
@@ -609,7 +609,7 @@ class Status(Exception):
 def test_a_request_that_timed_out_is_repeated_with_the_time_of_a_repeat(
         monkeypatch):
     slow = openai.APITimeoutError(request=httpx.Request("POST", "http://x"))
-    assert timed(monkeypatch, slow) == [None, runner.RETRY_TIMEOUT]
+    assert timed(monkeypatch, slow) == [None, runner.retry_timeout()]
 
 
 def test_a_request_after_a_server_error_keeps_its_time(monkeypatch):

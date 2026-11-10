@@ -41,6 +41,14 @@ Author: Felix Vossel
 
 ## Functions
 
+### works
+
+```python
+def works() -> str
+```
+
+Where the catalogue answers (rule `catalogue_address`).
+
 ### search
 
 ```python
@@ -97,7 +105,8 @@ def accepted(record: dict, read: list) -> bool
 ```
 
 Whether the record a title found is the document: two of its family
-names among the authors read, or one where either side names one.
+names among the authors read (rule `catalogue_family_names`), or one
+where either side names one.
 
 ### bare_doi
 

@@ -33,6 +33,12 @@ one row of it stays (`same`, owner decision 2026-11-03).
 
 ## Functions
 
+### parts_of
+
+```python
+def parts_of() -> dict
+```
+
 ### qualified
 
 ```python

@@ -168,10 +168,18 @@ def test_a_profile_s_file_is_laid_over_the_default_number_by_number(profile):
     assert flow.inherited(load_profile("default")) is None
 
 
-def test_a_profile_s_file_writes_no_steps(profile):
+def test_a_profile_s_file_writes_all_the_steps_or_none(profile):
+    # Since 2026-11-10 the run reads its steps from the file, and a profile
+    # may set them: all of them, in an order the code can run.
+    steps = default()["steps"]
     flow.path_of(profile).write_text(flow.dump(
-        {"numbers": {}, "steps": default()["steps"]}), encoding="utf-8")
-    with pytest.raises(flow.FlowError, match="sets numbers only"):
+        {"numbers": {}, "steps": steps}), encoding="utf-8")
+    assert flow.load(profile).steps == steps
+    assert flow.load(profile).steps_from == profile.name
+    # the failure by construction: a step left out
+    flow.path_of(profile).write_text(flow.dump(
+        {"numbers": {}, "steps": steps[:-1]}), encoding="utf-8")
+    with pytest.raises(flow.FlowError, match="stands 0 times"):
         flow.load(profile)
 
 

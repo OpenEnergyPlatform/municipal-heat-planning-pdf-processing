@@ -1,0 +1,17 @@
+{
+  "classes": {},
+  "constraints": {},
+  "rules": {
+    "base": "https://openenergyplatform.org/ontology/oekg/",
+    "scenario_types_always": [
+      "OEO_00020517"
+    ],
+    "evidence_as": "comment",
+    "front_first_fields": [
+      "publication_title",
+      "publication_author",
+      "publication_date",
+      "publication_doi"
+    ]
+  }
+}

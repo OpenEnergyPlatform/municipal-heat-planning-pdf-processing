@@ -134,7 +134,7 @@ def addition(stamp_path: Path, current: dict, spec: Spec) -> tuple:
     # Every key that still differs from the stored stamp is something other
     # than the addition: a reworded or removed parameter shows up here.
     before = {k: v for k, v in current.items()
-              if not k.startswith(runner.QUESTION_KEYS)}
+              if not k.startswith(runner.question_keys())}
     before.update(fingerprints(without(spec, new)))
     unexplained = [k for k in runner.stale(stamp_path, before)
                    if k not in owned]

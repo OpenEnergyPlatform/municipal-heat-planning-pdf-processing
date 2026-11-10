@@ -27,14 +27,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from ..profile import active_profile
+from .. import rules
 from . import archive
 from .wording import say
 from .spec import Spec, fold_label
 from .fields import (CHOICE, DERIVED, NUMBER, READ, SAID_UNSTATED, TEXT,
                      UNANSWERED, UNBACKED, UNSTATED, beside_names,
                      wording_asked)
-from .verify import (MIN_QUOTE_CHARS, Refusal, canonical_number, flat,
+from .verify import (Refusal, canonical_number, flat, min_quote_chars,
                      numbers_in, quote_in, verify_tuple)
 from .trust import document_summary
 
@@ -434,7 +434,6 @@ _WORD_EDGE = re.compile(r"[^0-9A-Za-zÀ-ɏ]+")
 # longest spelling any kwp axis lists is 44 characters ("Gewerbe, Handel,
 # Dienstleistungen" and "Reduktion gegenueber einem Vergleichsjahr"), so 80
 # leaves room for a compound the spec did not foresee and refuses a footnote.
-MAX_WORDING_CHARS = 80
 
 
 def _tokens(text: str) -> list:
@@ -480,7 +479,7 @@ def wording_names_option(slot, given, wording) -> bool:
     """
     if slot.kind != CHOICE or not slot.options or not wording:
         return True
-    if len(wording) > MAX_WORDING_CHARS:
+    if len(wording) > rules.get("wording_most_chars"):
         return False
     chosen = next((o for o in slot.options if fold_label(o.label)
                    == fold_label(given)), None)
@@ -498,9 +497,9 @@ def wording_names_option(slot, given, wording) -> bool:
 def year_in_range(year) -> bool:
     """Is this number one the profile takes for a year? Zones and districts
     carry numbers of their own, and one printed beside a value was answered
-    as its year (169002). Without a `YEAR_RANGE` every number is."""
-    profile = active_profile()
-    span = profile.component("extraction", "YEAR_RANGE") if profile else None
+    as its year (169002). Without a range (rule `year_range`) every number
+    is."""
+    span = rules.get("year_range")
     return span is None or span[0] <= year <= span[1]
 
 
@@ -627,7 +626,8 @@ def named_year(slot, given, wording: Optional[str], quote: str,
     2026-10-06): the number has to be one of the years shown. A number that
     dates both states is cited from the first, the plan's own.
     """
-    if slot.kind != NUMBER or not named or not wording:
+    if slot.kind != NUMBER or not named or not wording \
+            or not rules.get("year_by_plan_word"):
         return None
     if flat(wording).casefold() not in flat(quote).casefold():
         return None
@@ -671,9 +671,9 @@ def _print_read(row, slot, printed: str, answer: dict, sources: list,
     row.claim[f"{slot.name}_state"] = UNBACKED
     if found is None:
         return {**base, "why": "quote_not_in_source", "reason": say(not_shown)}
-    if len(quote.strip()) < MIN_QUOTE_CHARS:
+    if len(quote.strip()) < min_quote_chars():
         return {**base, "why": "quote_too_short",
-                "reason": say("quote_too_short", minimum=MIN_QUOTE_CHARS)}
+                "reason": say("quote_too_short", minimum=min_quote_chars())}
     if flat(printed).casefold() not in flat(quote).casefold():
         return {**base, "why": "answer_not_in_quote",
                 "reason": say("answer_not_in_quote", answer=printed)
@@ -868,12 +868,12 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                            "quote": quote, "reason": say(not_shown)})
             unquoted += 1
             continue
-        if len(quote.strip()) < MIN_QUOTE_CHARS:
+        if len(quote.strip()) < min_quote_chars():
             row.claim[f"{slot.name}_state"] = UNBACKED
             failed.append({"row": row.label, "why": "quote_too_short",
                            "given": given, "raw": answer.get("value_raw"),
                            "quote": quote, "reason": say(
-                               "quote_too_short", minimum=MIN_QUOTE_CHARS)})
+                               "quote_too_short", minimum=min_quote_chars())})
             unbacked += 1
             continue
         wording = answer.get("value_raw")

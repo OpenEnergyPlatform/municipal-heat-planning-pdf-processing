@@ -36,9 +36,12 @@ import sys
 import unicodedata
 from collections import Counter
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from docpipe import sources as docpipe_sources
+from docpipe import rules
 from docpipe import ontology, upstream                        # noqa: E402
 from docpipe.profile import load_profile                      # noqa: E402
 
@@ -52,130 +55,66 @@ AGGREGATES_PATH = HERE / "region_aggregates.json"
 PROFILE = HERE.name
 REGION_BASE = "https://openenergyplatform.org/ontology/oekg/region/"
 
-# Every node under region/, with whatever labels the OEKG gives it. OPTIONAL,
-# because a region the graph uses without a label is still a region, and
-# `merge_regions` says so instead of the query dropping it.
-REGIONS_QUERY = f"""PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-SELECT DISTINCT ?region ?label WHERE {{
-  ?region ?p ?o .
-  FILTER(STRSTARTS(STR(?region), "{REGION_BASE}"))
-  OPTIONAL {{ ?region rdfs:label ?label }}
-}}"""
+# The sources this profile pulls stand in sources.json beside this file
+# (`docpipe.sources`), where `docpipe edit` shows and fetches them: the OEO,
+# the regions of the OEKG with whatever labels it gives them (every node
+# under region/; OPTIONAL, because a region the graph uses without a label is
+# still a region and `merge_regions` says so), what the OEKG already says
+# about the nodes a written graph points at (the class and label of each
+# region and OEO term it holds, `context`), the shapes the serializer reads
+# its paths from and the written graph is validated against (the head of
+# the branch; `reviewed` is the commit the platform pins its validator to),
+# the groups of countries (IAM regions, M49, the World Bank's groups) and the
+# countries of ISO 3166-1 in the OMG's LCC (OEKG team, 2026-11-04).
+def sources() -> dict:
+    return docpipe_sources.of(PROFILE).sources
 
-# What the OEKG already says about the nodes a written graph points at: the
-# class and the label of each region and each OEO term it holds. The graph
-# describes the ones it names itself (kg.node_names); one it leaves bare is
-# validated as the OEKG holds it (`context`).
-CONTEXT_QUERY = f"""PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-SELECT ?s ?p ?o WHERE {{
-  VALUES ?p {{ rdf:type rdfs:label }}
-  ?s ?p ?o .
-  FILTER(STRSTARTS(STR(?s), "{REGION_BASE}")
-         || STRSTARTS(STR(?s), "https://openenergyplatform.org/ontology/oeo/"))
-}}"""
-
-SOURCES = {
-    "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
-            "asset": "oeo-closure.owl"},
-    "regions": {"kind": "sparql",
-                "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
-                "token_env": "OEP_API_TOKEN", "query": REGIONS_QUERY},
-    "oekg_context": {"kind": "sparql",
-                     "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
-                     "token_env": "OEP_API_TOKEN", "query": CONTEXT_QUERY},
-    # The shapes the serializer reads its paths, cardinalities and classes
-    # from (kg.make_serializer) and the written graph is validated against.
-    # The head of the branch, which is what the next pin will be. `reviewed`
-    # is the commit the platform pins its validator to today
-    # (oeplatform/settings.py OEKG_SHAPES_PINNED_COMMIT): while the two are
-    # the same file, the verdict here is the validator's. Every run prints
-    # whether they still are.
-    "oekg_shapes": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
-                    "ref": "production",
-                    "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
-                    "files": ["oekg/shapes/oekg_shapes.ttl"]},
-    # The groups of countries a scenario covers, with their members: the
-    # regions the IAM community defines (R5, R9, R10), the regions of
-    # each model with the codes its mapping gives them ("LAM", "OAS"), and the
-    # UN's statistical regions (M49), which carry the names a paper writes
-    # ("Sub-Saharan Africa", "Western Europe"). The OEKG has countries only,
-    # so a group is written as its members (`aggregates`).
-    "iiasa_regions": {"kind": "repo_tree",
-                      "repo": "IAMconsortium/common-definitions",
-                      "ref": "main",
-                      "paths": ["definitions/region/", "mappings/"],
-                      "suffix": ".yaml"},
-    "m49": {"kind": "url",
-            "url": "https://unstats.un.org/SDGAPI/v1/sdg/GeoArea/Tree",
-            "file": "tree.json"},
-    # The World Bank's groups of economies with their members: the European
-    # Union, the OECD members and its world regions ("Middle East & North
-    # Africa"), which neither source above lists by country.
-    "worldbank": {"kind": "url",
-                  "url": ("https://datacatalogfiles.worldbank.org/"
-                          "ddh-published/0037712/DR0090755/CLASS.xlsx"),
-                  "file": "CLASS.xlsx"},
-    # The countries of ISO 3166-1 in the OMG's LCC: a region of the OEKG is
-    # named after its LCC individual, and its node carries LCC's English
-    # short name as its label (OEKG team, 2026-11-04).
-    "lcc": {"kind": "url",
-            "url": ("https://www.omg.org/spec/LCC/Countries/"
-                    "ISO3166-1-CountryCodes.rdf"),
-            "file": "ISO3166-1-CountryCodes.rdf"},
-}
 
 LCC_SHORT_NAME = ("https://www.omg.org/spec/LCC/Countries/"
                   "CountryRepresentation/hasEnglishShortName")
 
-# The one group no source lists by country (owner, 2026-11-04): the European
+# The groups no source lists by country (owner, 2026-11-04: the European
 # Union of 2013 to 2020, the Union of the World Bank's list and the United
-# Kingdom. Its labels are the ways its name is written.
-EU28 = {"key": "aggregate:EU28", "labels": ["EU28", "EU-28", "EU 28"],
-        "union": "aggregate:worldbank:EUU", "joined": ["United Kingdom"]}
-
-# The short forms a paper writes for two groups the World Bank lists under a
-# longer name (owner, 2026-11-04).
-SHORT_FORMS = {"EUU": ["EU"], "OED": ["OECD"]}
-
-# How the sources abbreviate a country's name ("St. Lucia", "Congo, Dem.
-# Rep.", "Lao PDR", "Hong Kong SAR, China"), written out before a member is
-# looked up. SAR is a status, not part of the name.
-ABBREVIATIONS = {"st.": "saint", "rep.": "republic", "dem.": "democratic",
-                 "fed.": "federated", "sts.": "states",
-                 "pdr": "people's democratic republic", "sar": ""}
+# Kingdom), the short forms a paper writes for two groups the World Bank lists
+# under a longer name, and how the sources abbreviate a country's name ("St.
+# Lucia", "Congo, Dem. Rep.") are rules of the profile: rules.json beside this
+# file (`country_groups`, `short_forms`, `name_abbreviations`). SAR is a
+# status, not part of the name.
 
 # The group a worldwide scenario covers: every region the OEKG holds. Its
 # spellings are the answer the list always offered for it.
 WORLD = "aggregate:World"
-WORLD_LABELS = ["global", "worldwide", "World",
-                u"global — the whole world, not a single country"]
+# Its spellings are the rule `world_labels`.
 # The M49 code of the world, which WORLD already is.
 M49_WORLD = "1"
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 
-# The one static list this profile offers. `scenario_label` and
-# `scenario_region` are per document, so they draw from no corpus-wide root.
-SETS = {
-    "scenario": ("class", OEO + "OEO_00000364"),
-}
-
-# `scenario_type` answers from the scenario tree and nothing else.
-AXIS_SETS: dict = {}
+# The one static list this profile offers (`scenario_label` and
+# `scenario_region` are per document, so they draw from no corpus-wide
+# root), and which coordinate answers from it: sources.json beside this
+# file.
+def sets() -> dict:
+    return docpipe_sources.of(PROFILE).sets()
 
 
-def build(closure: Path) -> dict:
+def axis_sets() -> dict:
+    return docpipe_sources.of(PROFILE).axis_lists
+
+
+def build(closure: Path, regions_path: Path = REGIONS_PATH) -> dict:
+    """The snapshot: the lists of the closure and the regions of
+    *regions_path* (the profile's own file where not given)."""
     spec_raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
     snapshot = ontology.build(
-        closure, SETS, spec_raw, base=OEO,
+        closure, sets(), spec_raw, base=OEO,
         language=load_profile(PROFILE).require("extraction",
                                                "ALT_LABEL_LANGUAGE"))
     # The regions are not in any ontology release: they are individuals the
     # OEKG mints, read off the live graph. So they are pinned by their own
     # count and digest rather than by a version IRI, and the check below can
     # still say "the spec offers a region the snapshot does not know".
-    regions = json.loads(REGIONS_PATH.read_text(encoding="utf-8"))
+    regions = json.loads(Path(regions_path).read_text(encoding="utf-8"))
     snapshot["regions"] = sorted(regions)
     snapshot["pin"]["regions_file"] = REGIONS_PATH.name
     snapshot["pin"]["regions_count"] = len(regions)
@@ -389,7 +328,8 @@ def aggregates(families: list, tree: list, regions: dict, codes=None,
         return "".join(c for c in spelt if not unicodedata.combining(c))
 
     def words(name) -> frozenset:
-        spelt = " ".join(ABBREVIATIONS.get(w, w) for w in plain(name).split())
+        written_out = rules.get("name_abbreviations", "scenarios")
+        spelt = " ".join(written_out.get(w, w) for w in plain(name).split())
         return frozenset(w for w in re.split(r"[^\w]+", spelt)
                          if w and w not in ("the", "of"))
 
@@ -424,9 +364,10 @@ def aggregates(families: list, tree: list, regions: dict, codes=None,
                 out.append(iri)
         return out
 
-    out = {WORLD: {"labels": list(WORLD_LABELS), "members": sorted(regions),
+    world_labels = list(rules.get("world_labels", "scenarios"))
+    out = {WORLD: {"labels": world_labels, "members": sorted(regions),
                    "source": "every region of the OEKG"}}
-    for label in WORLD_LABELS:
+    for label in world_labels:
         taken[(None, fold_label(label))] = WORLD
 
     def add(key, labels, members, source, family=None, model=None) -> None:
@@ -504,35 +445,44 @@ def aggregates(families: list, tree: list, regions: dict, codes=None,
     for node in tree or ():
         walk(node)
     for code, name, members in banks or ():
-        add(f"aggregate:worldbank:{code}", [name] + SHORT_FORMS.get(code, []),
+        add(f"aggregate:worldbank:{code}",
+            [name] + list(rules.get("short_forms", "scenarios").get(code, [])),
             placed(members), "worldbank")
-    union = out.get(EU28["union"])
-    if union is None:
-        missing[f"group {EU28['labels'][0]}"] += 1
-    else:
-        add(EU28["key"], EU28["labels"],
-            list(dict.fromkeys(union["members"] + placed(EU28["joined"]))),
-            "worldbank and the United Kingdom")
+    for group in rules.get("country_groups", "scenarios"):
+        labels = [one for one in group["labels"].split("|") if one]
+        joined = [one for one in group["joined"].split("|") if one]
+        union = out.get(group["union"])
+        if union is None:
+            missing[f"group {labels[0] if labels else group['key']}"] += 1
+        else:
+            add(group["key"], labels,
+                list(dict.fromkeys(union["members"] + placed(joined))),
+                group["source"])
     return out, missing
 
 
-def refresh(cache: Path = upstream.CACHE) -> dict:
-    """Pull SOURCES, write regions.json, region_names.json and vocabulary.json,
-    write the lock.
+def refresh(cache: Path = upstream.CACHE, out: Optional[Path] = None) \
+        -> dict:
+    """Pull the sources, write regions.json, region_names.json,
+    region_aggregates.json and vocabulary.json, write the lock.
 
     The lock is what `shapes` reads: the serializer and the validation of
-    the written graph take the shapes this refresh pulled.
+    the written graph take the shapes this refresh pulled. *out* is the
+    folder the profile's files are written to, its own where not given
+    (`docpipe edit` fetches into a folder of its own first).
     """
-    records = upstream.fetch(SOURCES, cache)
+    out = Path(out) if out is not None else HERE
+    records = upstream.fetch(sources(), cache)
     rows = json.loads(upstream.files(records["regions"])[0]
                       .read_text(encoding="utf-8"))
     aliases = json.loads(ALIASES_PATH.read_text(encoding="utf-8"))
     regions = merge_regions(rows, aliases)
-    with io.open(REGIONS_PATH, "w", encoding="utf-8", newline="\n") as handle:
+    with io.open(out / REGIONS_PATH.name, "w", encoding="utf-8",
+                 newline="\n") as handle:
         handle.write(json.dumps(regions, ensure_ascii=False, indent=1,
                                 sort_keys=True) + "\n")
     names, unnamed = region_names(upstream.files(records["lcc"])[0], regions)
-    with io.open(REGION_NAMES_PATH, "w", encoding="utf-8",
+    with io.open(out / REGION_NAMES_PATH.name, "w", encoding="utf-8",
                  newline="\n") as handle:
         handle.write(json.dumps(names, ensure_ascii=False, indent=1,
                                 sort_keys=True) + "\n")
@@ -543,20 +493,26 @@ def refresh(cache: Path = upstream.CACHE) -> dict:
                       .read_text(encoding="utf-8"))
     banks = worldbank(upstream.files(records["worldbank"])[0])
     groups, missing = aggregates(families, tree, regions, codes, banks)
-    with io.open(AGGREGATES_PATH, "w", encoding="utf-8",
+    with io.open(out / AGGREGATES_PATH.name, "w", encoding="utf-8",
                  newline="\n") as handle:
         handle.write(json.dumps(groups, ensure_ascii=False, indent=1,
                                 sort_keys=True) + "\n")
     records["iiasa_regions"]["aggregates"] = len(groups)
     records["iiasa_regions"]["not_placed"] = dict(missing)
-    snapshot = build(upstream.files(records["oeo"], ".owl")[0])
+    snapshot = build(upstream.files(records["oeo"], ".owl")[0],
+                     out / REGIONS_PATH.name)
     snapshot["pin"]["sources"] = {name: record["version"]
                                   for name, record in records.items()}
-    with io.open(VOCABULARY_PATH, "w", encoding="utf-8",
+    with io.open(out / VOCABULARY_PATH.name, "w", encoding="utf-8",
                  newline="\n") as handle:
         handle.write(ontology.serialize(snapshot))
     upstream.write_lock(PROFILE, records, cache)
     return records
+
+
+# The files a refresh writes into the profile's folder.
+WRITES = ("regions.json", "region_names.json", "region_aggregates.json",
+          "vocabulary.json")
 
 
 def shapes(cache: Path = upstream.CACHE) -> list:
@@ -615,7 +571,7 @@ def check(spec_raw: dict, snapshot: dict) -> list:
     return (ontology.term_problems(spec_raw, snapshot)
             + ontology.kind_problems(spec_raw, snapshot)
             + ontology.edge_problems(edges(spec_raw), snapshot)
-            + ontology.set_problems(spec_raw, snapshot, AXIS_SETS)
+            + ontology.set_problems(spec_raw, snapshot, axis_sets())
             + region_problems(snapshot))
 
 
@@ -630,7 +586,7 @@ def main(argv=None) -> int:
     parser.add_argument("--write", action="store_true",
                         help="rebuild vocabulary.json from that file")
     parser.add_argument("--refresh", action="store_true",
-                        help="pull SOURCES at their latest version, rebuild "
+                        help="pull the sources of sources.json at their latest version, rebuild "
                              "regions.json and vocabulary.json, then check")
     parser.add_argument("--check", action="store_true",
                         help="hold the spec against the checked-in snapshot")

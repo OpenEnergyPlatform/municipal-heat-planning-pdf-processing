@@ -19,6 +19,7 @@ import sys
 from dataclasses import dataclass, field, replace
 from typing import Callable, Optional
 
+from .. import rules
 from . import fields, lookup
 from .pipeline import (READ, Batch, Row, Source, answer_in_quote,
                        window_around)
@@ -30,8 +31,10 @@ CUT = "cut_off"
 NO_ANSWER = "no_answer"
 
 # The hits of one ranked list a request shows, per kind (owner decision
-# 2026-11-04: the best 15 sections, 20 tables and 20 figures).
-SHOWN = {"section": 15, "table": 20, "figure": 20}
+# 2026-11-04: the best 15 sections, 20 tables and 20 figures; rule
+# `compute_shown`).
+def shown_counts() -> dict:
+    return dict(rules.get("compute_shown"))
 
 
 # What a reply may ask for under "more" (owner decisions 2026-11-04 and
@@ -55,8 +58,9 @@ SEARCHED_WITH = ("query", "similar", "pattern")
 
 
 def shown_hits(ranked: list) -> list:
-    """The best of each kind of a ranked search, in its order (`SHOWN`)."""
-    left = dict(SHOWN)
+    """The best of each kind of a ranked search, in its order
+    (`shown_counts`)."""
+    left = shown_counts()
     out = []
     for source in ranked:
         if left.get(source.owner_kind, 0) > 0:
@@ -290,7 +294,7 @@ class Gathered:
                     self._miss(ask, UNKNOWN)
                     continue
                 # The best of each kind, as a search shows them
-                # (owner decision 2026-11-05: `SHOWN`), the passages the
+                # (owner decision 2026-11-05: `shown_counts`), the passages the
                 # request shows left out.
                 ranked = shown_hits(self.rank([text], set(self.seen)))
                 if not self.list_hits(
@@ -338,7 +342,7 @@ def span_rows(row: Row, slot, until: Optional[int], marks: dict,
     erfassen"): *row*, read with the span's first year, and a copy of it
     (*clone(row)*) for each year after, the last read as the first is, those
     between derived from the span, which the quote prints and names neither
-    of. Each takes *marks* ({coordinate: entry}, the profile's `SPAN_MARKS`)
+    of. Each takes *marks* ({coordinate: entry}, the rule `span_marks`)
     where it read nothing, derived from the span. Only where the year read
     holds and the last year stands in its quote as well, as any year must;
     [the copies]."""

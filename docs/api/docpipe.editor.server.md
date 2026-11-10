@@ -16,8 +16,11 @@ file away, only inside the profile's own folder and read only inside the
 folders of the profiles in
 effect, the harvest it was given, the page itself, the generated
 documentation and the folder the prompt review writes into
-(`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links
-cannot lead out. A trace is read by the run's own reader after the guard has
+(`<temp>/docpipe-prompt-review`). One more guard writes the upstream cache
+and nothing else: "Apply" of a fetch puts the fetched files and the lock
+there (`sourcespage.apply`); a fetch itself writes only into a folder of its
+own in the temp directory (`<temp>/docpipe-sources-fetch`). A path is
+resolved first, so `..` and links cannot lead out. A trace is read by the run's own reader after the guard has
 checked its path (`Files.checked`).
 
 The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
@@ -120,7 +123,8 @@ The endpoints of CONTRACT section 3, without a socket.
 
 ```python
 def __init__(self, profile, harvest: Optional[Path] = None,
-             root: Optional[Path] = None)
+             root: Optional[Path] = None, cache: Optional[Path] = None,
+             fetch_root: Optional[Path] = None)
 ```
 
 #### App.shown

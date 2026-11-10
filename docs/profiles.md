@@ -205,6 +205,19 @@ profile that was not named. A profile without `extends` stands alone, and a
 part it lacks is an absence, as before. A line of profiles that leads back to
 itself is refused.
 
+## The files a profile holds beside its code
+
+Each profile folder holds files that say what its code would otherwise hold as
+constants. `docpipe edit` shows and sets each of them.
+
+| File | What it holds | Laid over the default's |
+|---|---|---|
+| `rules.json` | every value a run follows (`docpipe/rules.py`): quote minimum length, decimal mark, year range, span words, request letters, retry waits, image size, country groups, `not_extracted`, compute parts; an `EXTRACT_*` setting wins over it | rule by rule |
+| `sources.json` | the ontology, shapes and graph queries the profile is written against, the lists drawn from them and which coordinate answers from which list (`docpipe/sources.py`); read by the profile's `vocabulary.py` through `sources()`, `sets()` and `axis_sets()` | not inherited |
+| `graph.json` | the classes not written, address rules, the effect of each constraint and the writer rules (`docpipe/graphfile.py`, applied by `serialize.apply_graph_file`) | not inherited |
+| `flow.json` | the numbers and steps of the reading, and the order of the coordinate steps | number by number |
+| `rules.py` | `RULES`, the rules the profile's own code follows, and `GRAPH`, the rules of its graph writer; the code knows name, kind, bounds and help, never the value | not inherited |
+
 ## The profile interface, stage by stage
 
 The table lists every `(module, attribute)` pair `docpipe/` or its
@@ -231,7 +244,7 @@ shipped profile provides.
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | none: an empty tuple since 2026-11-08, when the field and rows prompts it checked went | none |
 | Reading the values out | `extraction.CONTRACT_LANGUAGE` | required of a profile that holds a parts file: the language of the core's template the file is put together with, read from the profile that owns the file (`Profile.own`, `docpipe/extraction/contract.py:85-88`) and not inherited | `"de"` | `"en"` for scenarios and the built-in profile |
 | Reading the values out | `extraction.ALT_LABEL_LANGUAGE` | required by the profile's own `vocabulary` module (`profile.require`), not by the core: the language tag of the alternative labels a vocabulary snapshot keeps (`ontology.index` and `ontology.build` take it as `language`, with no default) | `"de"` | `"en"` for scenarios and the built-in profile |
-| Reading the values out | `extraction.NOT_EXTRACTED` | optional (`component`), read by `docpipe preflight`: a mapping `(shape, property)` to one sentence, the properties of the profile's shapes it leaves out on purpose | not provided | 21 entries, each with its reason |
+| Reading the values out | rule `not_extracted` | optional, in the profile's `rules.json` (declared by its `rules.py`), read by `docpipe preflight`: a table `(shape, property)` to one sentence, the properties of the profile's shapes it leaves out on purpose | not set | 21 entries, each with its reason |
 | Reading the values out | `extraction.shapes_files` | optional (`component`), read by `docpipe preflight`: a callable returning the SHACL files the graph is held against | not provided; the shapes line says "skipped" | the shapes file of the last refresh of the OEKG sources |
 | Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5433-5436`) | `extraction_spec.json` | `extraction_spec.json` |
 | Reading the values out | `extraction.FRAME` | optional (`component`, `runner.main`): the frame coordinates, the ones the plan's base and target years date a value by | `("scenario", "year")`; each value is asked them for itself | not provided |
@@ -243,10 +256,9 @@ shipped profile provides.
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 Two entries say more than the table. `prompts/extraction/phrases.json` names
-the key of a list as well as its sentences. A frame pair's refusal
-(`frame_not_an_option`) names the list of a closed coordinate through
-`say("frame_options", slot=<coordinate name>)`, and `frame_options` is one of the
-phrases a profile has to have. `kwp` and `scenarios` say `"scenarios"`, one list
+the key of a list as well as its sentences. A request names the list of a
+closed coordinate through `say("frame_options", slot=<coordinate name>)`, and
+`frame_options` is one of the phrases a profile has to have. `kwp` and `scenarios` say `"scenarios"`, one list
 for every closed coordinate, and the built-in profile says `"{slot}_options"`,
 one list per coordinate.
 
@@ -256,7 +268,7 @@ passage, has to be there)`: a passage the profile's prompts have to hold
 text a request sends, which for a parts file is the composed one. None of the
 shipped profiles declares one since 2026-11-08.
 The shapes of a profile's graph are its own as well: `extraction.shapes_files`
-says where they are and `extraction.NOT_EXTRACTED` which of their properties it
+says where they are and the rule `not_extracted` which of their properties it
 leaves out on purpose, and `docpipe preflight` warns about the rest (see [the
 extraction stage](stages/extraction.md)).
 
@@ -341,7 +353,7 @@ template asks of a profile it says in its own front matter: its `required` and
 A part is put in as it is written, apart from the blank lines around it, so a
 part that continues a sentence starts with a space. A part may name a fact and a rule, and no other double brace or
 comment mark. A fact is a value the code decides and a prompt only repeats: the
-least length of a quote (`verify.MIN_QUOTE_CHARS`), the word for "not stated"
+least length of a quote (the rule `quote_min_chars`, `verify.min_quote_chars()`), the word for "not stated"
 (`fields.UNSTATED`), and the keys and words the closed list is shown in and the
 key a closed coordinate's list goes under, which are sentences of the profile's
 `prompts/extraction/phrases.json`. No template types one of them, so the prompt and the

@@ -13,8 +13,11 @@ file away, only inside the profile's own folder and read only inside the
 folders of the profiles in
 effect, the harvest it was given, the page itself, the generated
 documentation and the folder the prompt review writes into
-(`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links
-cannot lead out. A trace is read by the run's own reader after the guard has
+(`<temp>/docpipe-prompt-review`). One more guard writes the upstream cache
+and nothing else: "Apply" of a fetch puts the fetched files and the lock
+there (`sourcespage.apply`); a fetch itself writes only into a folder of its
+own in the temp directory (`<temp>/docpipe-sources-fetch`). A path is
+resolved first, so `..` and links cannot lead out. A trace is read by the run's own reader after the guard has
 checked its path (`Files.checked`).
 
 The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
@@ -45,11 +48,16 @@ from pathlib import Path
 from typing import Optional, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
+from .. import graphfile
 from .. import phrases as phrase_files
+from .. import rules as rule_files
+from .. import sources as source_files
+from .. import upstream
 from ..extraction import flow as flow_files
 from ..extraction import trace as trace_files
 from . import flow as flow_view
-from . import measured, phrases, prompts, specs, trying
+from . import (graphpage, measured, phrases, prompts, rulespage,
+               sourcespage, specs, trying)
 from . import requests as recorded
 
 LOG = logging.getLogger(__name__)
@@ -183,10 +191,16 @@ class App:
     """The endpoints of CONTRACT section 3, without a socket."""
 
     def __init__(self, profile, harvest: Optional[Path] = None,
-                 root: Optional[Path] = None):
+                 root: Optional[Path] = None, cache: Optional[Path] = None,
+                 fetch_root: Optional[Path] = None):
         if root is None:
             from ..profile import ROOT
             root = ROOT
+        # where "Apply" writes a fetch, and where "Fetch" pulls into
+        self.cache = Path(cache or upstream.CACHE).resolve()
+        self.fetch_root = Path(fetch_root
+                               or sourcespage.fetch_root()).resolve()
+        self.cache_files = Files(self.cache, [self.fetch_root])
         self.profile = profile
         self.root = Path(root).resolve()
         self.harvest = Path(harvest).resolve() if harvest else None
@@ -296,6 +310,19 @@ class App:
             "/api/flow/check": ("POST", self._flow_check),
             "/api/flow/save": ("POST", self._flow_save),
             "/api/flow/measured": ("POST", self._flow_measured),
+            "/api/rules": ("GET", self._rules),
+            "/api/rules/check": ("POST", self._rules_check),
+            "/api/rules/save": ("POST", self._rules_save),
+            "/api/sources": ("GET", self._sources),
+            "/api/sources/check": ("POST", self._sources_check),
+            "/api/sources/save": ("POST", self._sources_save),
+            "/api/sources/fetch": ("POST", self._sources_fetch),
+            "/api/sources/apply": ("POST", self._sources_apply),
+            "/api/sources/take": ("POST", self._sources_take),
+            "/api/graph": ("GET", self._graph),
+            "/api/graph/check": ("POST", self._graph_check),
+            "/api/graph/save": ("POST", self._graph_save),
+            "/api/graph/probe": ("POST", self._graph_probe),
         }
         if path not in routes:
             raise _Refusal(404, f"no such endpoint: {path}")
@@ -329,7 +356,7 @@ class App:
             "harvest": self.harvest.as_posix() if self.harvest else None,
             "harvest_documents": (len(self.files.stamps(self.harvest))
                                   if self.harvest else None),
-            "tabs": ["spec", "prompts", "flow"],
+            "tabs": ["spec", "prompts", "flow", "sources", "graph"],
         }
 
     def _spec(self, query, body) -> dict:
@@ -684,7 +711,8 @@ class App:
     def _flow_check(self, query, body) -> dict:
         own, raw = self._flow_file()
         report = flow_view.judge(self.profile, raw, body.get("numbers"),
-                                 self.shown(own))
+                                 self.shown(own), body.get("order"),
+                                 body.get("off"))
         report.pop("text", None)        # the page gets the diff
         return report
 
@@ -692,7 +720,7 @@ class App:
         own, raw = self._flow_file()
         report, written, remove = flow_view.save(
             self.profile, raw, body.get("numbers"), body.get("base"),
-            self.shown(own))
+            self.shown(own), body.get("order"), body.get("off"))
         if written is not None:
             self.files.write(own, written)
         elif remove:
@@ -733,6 +761,184 @@ class App:
                 "requests": found["requests"],
                 "says": measured.says(found, numbers),
                 "steps": found["steps"], "notes": measured.notes(found)}
+
+    # -- the rules --
+
+    def _rules_file(self) -> tuple:
+        """(the profile's own rules file, its bytes or None where it has
+        none), every file of the rules' line checked by the guard before
+        the run's loader reads it."""
+        for _name, path in rule_files.line(self.profile):
+            self.files.checked(path)
+        own = rule_files.path_of(self.profile)
+        return own, (self.files.read(own) if own.is_file() else None)
+
+    def _rules(self, query, body) -> dict:
+        tab = query.get("tab") or "spec"
+        if tab not in rule_files.TABS:
+            raise _Refusal(400, f"tab must be one of "
+                                f"{', '.join(rule_files.TABS)}, not {tab!r}")
+        own, raw = self._rules_file()
+        return rulespage.view(self.profile, tab, raw, self.shown)
+
+    def _rules_check(self, query, body) -> dict:
+        own, raw = self._rules_file()
+        report = rulespage.judge(self.profile, raw, body.get("values"),
+                                 self.shown(own))
+        report.pop("text", None)
+        return report
+
+    def _rules_save(self, query, body) -> dict:
+        own, raw = self._rules_file()
+        report, written, remove = rulespage.save(
+            self.profile, raw, body.get("values"), body.get("base"),
+            self.shown(own))
+        if written is not None:
+            self.files.write(own, written)
+        elif remove:
+            self.files.remove(own)
+        if written is not None or remove:
+            rule_files.reset()
+        return report
+
+    # -- the sources --
+
+    def _sources_file(self) -> tuple:
+        own = source_files.path_of(self.profile)
+        return own, (self.files.read(own) if own.is_file() else None)
+
+    def _spec_raw(self) -> Optional[dict]:
+        if self.spec_path is None or not Path(self.spec_path).is_file():
+            return None
+        return specs.parse(self.files.read(self.spec_path))
+
+    def _sources(self, query, body) -> dict:
+        own, raw = self._sources_file()
+        return sourcespage.view(self.profile, raw, self.shown, self.cache,
+                                self.snapshot(), self._spec_raw())
+
+    def _sources_check(self, query, body) -> dict:
+        own, raw = self._sources_file()
+        report = sourcespage.judge(self.profile, raw, body.get("data"),
+                                   self.shown(own))
+        report.pop("text", None)
+        return report
+
+    def _sources_save(self, query, body) -> dict:
+        own, raw = self._sources_file()
+        report, written = sourcespage.save(self.profile, raw,
+                                           body.get("data"),
+                                           body.get("base"), self.shown(own))
+        if written is not None:
+            self.files.write(own, written)
+        return report
+
+    def _sources_fetch(self, query, body) -> dict:
+        try:
+            return sourcespage.fetch(self.profile, self.fetch_root,
+                                     self.cache, self._spec_raw())
+        except (upstream.UpstreamError, OSError) as exc:
+            raise _Refusal(502, f"the fetch failed and wrote nothing outside "
+                                f"{self.shown(self.fetch_root)}: {exc}")
+        except ValueError as exc:
+            raise _Refusal(400, str(exc))
+
+    def _fetch_of(self, body) -> Optional[Path]:
+        wanted = body.get("fetch")
+        if wanted is None:
+            return None
+        try:
+            return sourcespage.fetched(self.fetch_root, wanted)
+        except ValueError as exc:
+            raise _Refusal(404, str(exc))
+
+    def _sources_apply(self, query, body) -> dict:
+        where = self._fetch_of(body)
+        if where is None:
+            raise _Refusal(400, "the body needs \"fetch\": the id a fetch "
+                                "answered with")
+        done = sourcespage.apply(self.profile, where, self.files.write,
+                                 self.cache_files.write, self.cache)
+        forget = self.profile.component("vocabulary", "forget")
+        if forget is not None:
+            forget()
+        self._loaded = False
+        done["lock"] = self.shown(done["lock"])
+        done["profile_files"] = [self.shown(one)
+                                 for one in done["profile_files"]]
+        return done
+
+    def _sources_take(self, query, body) -> dict:
+        spec_raw = self._spec_raw()
+        if spec_raw is None:
+            raise _Refusal(404, f"profile {self.profile.name!r} has no "
+                                f"extraction spec")
+        where = self._fetch_of(body)
+        if where is None:
+            snapshot = self.snapshot()
+            files = sourcespage.shape_files(self.profile, self.cache)
+        else:
+            snapshot = sourcespage._snapshot_of(
+                where / "profile" / "vocabulary.json")
+            files = sourcespage.shape_files(self.profile, where / "cache")
+        chosen = body.get("chosen")
+        if not isinstance(chosen, list):
+            raise _Refusal(400, "the body needs \"chosen\": a list of "
+                                "{id, action, into}")
+        return sourcespage.take(spec_raw, chosen, snapshot, self.profile,
+                                files)
+
+    # -- the graph --
+
+    def _graph_file(self) -> tuple:
+        for _name, path in graphfile.line(self.profile):
+            self.files.checked(path)
+        own = graphfile.path_of(self.profile)
+        return own, (self.files.read(own) if own.is_file() else None)
+
+    def _graph(self, query, body) -> dict:
+        own, raw = self._graph_file()
+        return graphpage.view(
+            self.profile, raw, self.shown, self._spec_raw(),
+            sourcespage.shape_files(self.profile, self.cache),
+            self.snapshot())
+
+    def _graph_check(self, query, body) -> dict:
+        own, raw = self._graph_file()
+        report = graphpage.judge(self.profile, raw, body.get("data"),
+                                 self.shown(own))
+        report.pop("text", None)
+        return report
+
+    def _graph_save(self, query, body) -> dict:
+        own, raw = self._graph_file()
+        report, written, remove = graphpage.save(
+            self.profile, raw, body.get("data"), body.get("base"),
+            self.shown(own))
+        if written is not None:
+            self.files.write(own, written)
+        elif remove:
+            self.files.remove(own)
+        if written is not None or remove:
+            graphfile.reset()
+        return report
+
+    def _graph_probe(self, query, body) -> dict:
+        if self.harvest is None:
+            raise _Refusal(400, "the page was started without a harvest "
+                                "(docpipe edit --harvest DIR): there is "
+                                "nothing to write a graph of")
+        db = body.get("db") or getattr(self.profile, "db_path", None)
+        if not db or not Path(db).is_file():
+            raise _Refusal(400, f"no corpus database at {db}: give \"db\"")
+        try:
+            return graphpage.probe(self.profile, body.get("data"),
+                                   self.harvest, Path(db),
+                                   stamp=time.strftime("%Y%m%d-%H%M%S"))
+        except graphfile.GraphError as exc:
+            raise _Refusal(400, str(exc))
+        except (RuntimeError, subprocess.SubprocessError) as exc:
+            raise _Refusal(502, str(exc))
 
     # -- the recorded requests --
 

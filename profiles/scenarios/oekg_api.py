@@ -79,9 +79,9 @@ SOURCES = {
                 "reviewed": "3432710bac7b6d91dc314bc240dbaeb99cd3d44c",
                 "files": ["docs/oeplatform-code/web-api/openapi.yaml"]},
     # The same source the profile's refresh pulls for its serializer, named
-    # once (vocabulary.SOURCES), so the dry run and the Turtle are held to
+    # once (sources.json, `vocabulary.sources`), so the dry run and the Turtle are held to
     # one shapes file.
-    "oekg_shapes": vocabulary.SOURCES["oekg_shapes"],
+    "oekg_shapes": vocabulary.sources()["oekg_shapes"],
 }
 # The lock of these two sources. Its own, so a harvest run's
 # `vocabulary --refresh` does not come to depend on the API description.
@@ -98,9 +98,10 @@ TAG_KEYS = {"study_descriptor": "descriptors",
             "study_technology": "technologies"}
 
 # Written on every factsheet of the Turtle, because the ontology side asks for
-# it. The platform's list of scenario types does not hold it yet, and a create
-# is refused for one entry off that list.
-NOT_YET_LISTED = (kg.OEO_BASE + kg.IAM_SCENARIO,)
+# it (the graph rule `scenario_types_always`). The platform's list of
+# scenario types does not hold it yet, and a create is refused for one entry
+# off that list.
+NOT_YET_LISTED = tuple(kg.OEO_BASE + always for always in kg.ALWAYS_TYPES)
 
 # What `study_regions` becomes over there: the path the closed scenario
 # shape names, as the Turtle writes it (kg.P_STUDY_REGION), onto nodes of the

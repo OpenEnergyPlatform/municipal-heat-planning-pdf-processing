@@ -189,14 +189,17 @@ def _check(args) -> int:
 def _diff(args) -> int:
     found, _prefixes, terms = _sources(args)
     path = args.spec
+    profile = resolve_profile(args)
     if path is None:
-        profile = resolve_profile(args)
         path = profile.component("extraction", "SPEC_PATH") if profile \
             else None
         if path is None:
             raise SystemExit("no spec: give --spec, or a --profile that "
                              "has one")
-    rows = drafting.differences(found, _read(path), terms)
+    # A profile that names its properties through a schema of its own is
+    # held to the shapes with them (`read_as_shapes`).
+    rows = drafting.differences(
+        found, drafting.read_as_shapes(_read(path), profile), terms)
     kinds: dict = {}
     for row in rows:
         kinds.setdefault(row["kind"], []).append(row)

@@ -43,6 +43,7 @@ import re
 from dataclasses import dataclass, field, replace
 from typing import Optional
 
+from .. import rules
 from .pipeline import Source
 from .verify import flat
 
@@ -51,34 +52,49 @@ from .verify import flat
 # `title_page_lines`; owner decision 2026-11-08, f: 8 lines, and 12 measured
 # only where a probe loses values against the runs before).
 
-# The letters of the blocks a request shows beside its own passage.
-TITLE_PAGE = "T"
-HEADINGS = "H"
-SETTINGS = "F"
-RESERVED = (TITLE_PAGE, HEADINGS, SETTINGS)
-OTHERS = tuple(letter for letter in "ABCDEGIJKLMNOPQRSUVWXYZ"
-               if letter not in RESERVED)
+# The letters of the blocks a request shows beside its own passage, and the
+# letters of other passages, in order (rules `letter_title_page`,
+# `letter_headings`, `letter_settings`, `letters_others`).
+def letter_title_page() -> str:
+    return rules.get("letter_title_page")
+
+
+def letter_headings() -> str:
+    return rules.get("letter_headings")
+
+
+def letter_settings() -> str:
+    return rules.get("letter_settings")
+
+
+def letters_others() -> tuple:
+    reserved = (letter_title_page(), letter_headings(), letter_settings())
+    return tuple(letter for letter in rules.get("letters_others")
+                 if letter not in reserved)
+
+
 # The role of a line that is one number a figure shows.
 NUMBER_LINE = "number"
 
-# Abbreviations whose point ends no sentence, both languages, written as
-# the plan prints them; matched at the end of the text before a break.
-ABBREVIATIONS = (
-    "z. B.", "z.B.", "u. a.", "u.a.", "d. h.", "d.h.", "i. d. R.", "o. ä.",
-    "ca.", "Abb.", "Tab.", "Nr.", "Nrn.", "bzw.", "vgl.", "S.", "Kap.",
-    "Abs.", "Anh.", "Bd.", "Hrsg.", "ggf.", "evtl.", "inkl.", "zzgl.",
-    "exkl.", "bspw.", "usw.", "etc.", "Mio.", "Mrd.", "Tsd.", "rd.", "max.",
-    "min.", "Dr.", "Prof.", "Dipl.", "Ing.", "St.", "Str.", "jährl.", "gem.",
-    "lt.", "e.g.", "i.e.", "e. g.", "i. e.", "Fig.", "Figs.", "et al.",
-    "approx.", "cf.", "vs.", "No.", "Nos.", "Eq.", "Sec.", "Ch.", "pp.",
-    "p.", "Vol.", "Ref.", "resp.", "incl.", "Jan.", "Feb.", "Mar.", "Apr.",
-    "Aug.", "Sep.", "Sept.", "Oct.", "Okt.", "Nov.", "Dec.", "Dez.")
-_ABBREVIATION_ENDS = tuple(sorted({flat(a) for a in ABBREVIATIONS},
-                                  key=len, reverse=True))
-# A mark that ends a sentence with what closes it, a space, and what may
-# begin the next one.
-_SENTENCE_END = re.compile(r"(?<=[.!?])([\"'”“»)\]]*)\s+(?=[\"'„“«(\[•▪●◦\-–]?"
-                           r"[A-ZÄÖÜ0-9])")
+
+def _abbreviation_ends() -> tuple:
+    """The abbreviations whose point ends no sentence (rule
+    `abbreviations`, both languages, written as the plan prints them),
+    longest first, matched at the end of the text before a break."""
+    return rules.derived("units.abbreviations", lambda: tuple(sorted(
+        {flat(a) for a in rules.get("abbreviations")}, key=len,
+        reverse=True)))
+
+
+def _sentence_end():
+    """A mark that ends a sentence (rule `sentence_marks`) with what closes
+    it, a space, and what may begin the next one."""
+    return rules.derived("units.sentence_end", lambda: re.compile(
+        r"(?<=[" + re.escape(rules.get("sentence_marks")) + r"])"
+        r"([\"'”“»)\]]*)\s+(?=[\"'„“«(\[•▪●◦\-–]?"
+        r"[A-ZÄÖÜ0-9])"))
+
+
 # A list item a transcription runs into the text before it.
 _BULLET = re.compile(r"\s+(?=[•▪●◦]\s)")
 # An ordinal or a numbered heading before a point: "3." "12." ends nothing.
@@ -100,7 +116,7 @@ def ends_abbreviated(text: str, after: str = "") -> bool:
     if _ORDINAL.search(tail):
         return True
     word = flat(after).split(" ", 1)[0] if after else ""
-    for abbreviation in _ABBREVIATION_ENDS:
+    for abbreviation in _abbreviation_ends():
         whole = tail
         if word and " " in abbreviation \
                 and abbreviation.rsplit(" ", 1)[1] == word:
@@ -122,7 +138,7 @@ def sentences_of(text: str) -> list:
             continue
         for item in _BULLET.split(line.strip()):
             start = 0
-            for match in _SENTENCE_END.finditer(item):
+            for match in _sentence_end().finditer(item):
                 if ends_abbreviated(item[start:match.start()],
                                     item[match.end():match.end() + 12]):
                     continue
@@ -217,7 +233,7 @@ class Passage:
             if 0 < cell <= len(line.cells) and line.cells[cell - 1] \
                     and line.cells[cell - 1] not in words:
                 words.append(line.cells[cell - 1])
-        return " / ".join(words) or None
+        return rules.get("head_joiner").join(words) or None
 
 
 def table_lines(text: str) -> Optional[tuple]:
@@ -488,11 +504,11 @@ class Shown:
         """The letter of another passage's block: its own where it has one,
         else the next free one."""
         for letter, block in self.blocks.items():
-            if letter in OTHERS and block.entries \
+            if letter in letters_others() and block.entries \
                     and (block.entries[0][2].owner_kind,
                          block.entries[0][2].owner_id) == tuple(owner):
                 return letter
-        return next(letter for letter in OTHERS
+        return next(letter for letter in letters_others()
                     if letter not in self.blocks)
 
     def rendered(self, letter: str) -> list:
@@ -583,9 +599,10 @@ def passage_lines(passage: Passage, numbers) -> list:
 
 def title_page_of(passages: list, count: int) -> list:
     """[(Line, Source)] of the plan's title page: the first *count* lines
-    of its first page, else of its second, each the line of its passage
-    (`Passage`), in the plan's order; [] for a plan with no page."""
-    for page in (1, 2):
+    of its first page, else of the page the rule `title_page_also` names,
+    each the line of its passage (`Passage`), in the plan's order; [] for a
+    plan with no page."""
+    for page in dict.fromkeys((1, rules.get("title_page_also"))):
         lines: list = []
         for passage in passages:
             if passage.page != page or passage.kind == "figure":

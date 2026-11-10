@@ -80,9 +80,15 @@
           "says": "At the value's own place: its line with the head of its table or the sentences beside it, the headings up to it, the title page and what the document settles. The answer is an address and words, or 0."
         },
         {
+          "id": "search_sentence",
+          "ask": "phrase",
+          "when": "the answer is 0",
+          "says": "A sentence of how the document would print the answer, written once per field, coordinate and wording of the value; the search goes with it. Off, or where it writes none, the search goes with the field's own sentence."
+        },
+        {
           "id": "beside",
           "ask": "search",
-          "when": "the answer is 0",
+          "when": "then",
           "shows": [
             "own_passage",
             "own_value"
@@ -90,15 +96,9 @@
           "says": "The pieces right before and after the value's. What only the value's own place can say is not searched."
         },
         {
-          "id": "search_sentence",
-          "ask": "phrase",
-          "when": "the answer is 0 again",
-          "says": "A sentence of how the document would print the answer, written once per field, coordinate and wording of the value."
-        },
-        {
           "id": "search",
           "ask": "search",
-          "when": "then",
+          "when": "the pieces beside said nothing",
           "says": "The pieces the search finds best for that sentence, ordered once by the reranker. The model may fetch pieces itself, which do not count; no piece is shown twice.",
           "bound": "{search_pieces} pieces: the shares of tables, figures and text first ({search_tables}, {search_figures} and {search_text}, scaled to the pieces), then the best of the rest; {search_per_request} a request"
         },

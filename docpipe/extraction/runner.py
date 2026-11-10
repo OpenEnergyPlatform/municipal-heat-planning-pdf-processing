@@ -60,6 +60,7 @@ from typing import Callable, Optional
 
 from docpipe import prompts
 from docpipe import providers
+from docpipe import rules
 from docpipe.providers.governor import status_of
 from docpipe import usage as token_usage
 from docpipe.llm_preflight import assert_serving, request_extras
@@ -102,17 +103,15 @@ NUMBERS = flow_map.in_effect()
 # and how often a request the server refuses is asked: the flow's `replies`,
 # which the setting EXTRACT_MAX_RETRIES wins over.
 MAX_RETRIES = NUMBERS.replies
-# What a retry may take after a request timed out. The first attempt keeps
-# LLM_TIMEOUT, which is sized for a slow but working generation; a request the
-# server did not answer in that time is unlikely to differ on its repeat, and
-# three full timeouts held one field thread for 91 minutes.
-RETRY_TIMEOUT = int(os.environ.get("EXTRACT_RETRY_TIMEOUT", "600"))
-# A malformed reply asked again at temperature 0 comes back the same, byte for
-# byte, correction message or not: on corpus_m5 field retries
-# repeated their first attempt exactly and all three were lost. Every reply
-# fault raises the temperature of the next attempt by this step.
-RETRY_TEMPERATURE_STEP = float(os.environ.get("EXTRACT_RETRY_TEMPERATURE_STEP",
-                                              "0.1"))
+
+
+def retry_timeout() -> float:
+    """What a retry may take after a request timed out (rule
+    `repeat_timeout_s`). The first attempt keeps LLM_TIMEOUT, which is sized
+    for a slow but working generation; a request the server did not answer
+    in that time is unlikely to differ on its repeat, and three full
+    timeouts held one field thread for 91 minutes."""
+    return rules.get("repeat_timeout_s")
 
 # Set by SIGTERM (a time-limit trap or a manual kill). The run stops
 # taking new work, writes the documents whose every batch came back, and
@@ -121,8 +120,14 @@ STOP = threading.Event()
 
 
 def retry_temperature(base: float, faults: int) -> float:
-    """The sampling temperature after `faults` unreadable replies."""
-    return min(1.0, base + RETRY_TEMPERATURE_STEP * faults)
+    """The sampling temperature after `faults` unreadable replies. A
+    malformed reply asked again at temperature 0 comes back the same, byte
+    for byte, correction message or not: on corpus_m5 field retries repeated
+    their first attempt exactly and all three were lost. Every reply fault
+    raises the temperature of the next attempt by a step (rules
+    `retry_temperature_step`, `retry_temperature_most`)."""
+    return min(rules.get("retry_temperature_most"),
+               base + rules.get("retry_temperature_step") * faults)
 
 
 STOPPED_EXIT = 143
@@ -140,10 +145,6 @@ def install_stop_handler() -> None:
     if threading.current_thread() is not threading.main_thread():
         return
     signal.signal(signal.SIGTERM, lambda *_: STOP.set())
-RETRY_WAIT = float(os.environ.get("EXTRACT_RETRY_WAIT", "2"))
-RETRY_WAIT_MAX = float(os.environ.get("EXTRACT_RETRY_WAIT_MAX", "6"))
-TRANSPORT_WAIT = float(os.environ.get("EXTRACT_TRANSPORT_WAIT", "15"))
-TRANSPORT_WAIT_MAX = float(os.environ.get("EXTRACT_TRANSPORT_WAIT_MAX", "120"))
 
 
 def unheld_requests() -> int:
@@ -176,9 +177,10 @@ def retry_wait(attempt: int, transport: bool = False) -> float:
     if providers.replaying():
         return 0.0          # nothing comes back that is waited for
     if transport:
-        return min(TRANSPORT_WAIT * (2 ** max(0, attempt - 1)),
-                   TRANSPORT_WAIT_MAX)
-    return min(RETRY_WAIT * attempt, RETRY_WAIT_MAX)
+        return min(rules.get("transport_wait_s") * (2 ** max(0, attempt - 1)),
+                   rules.get("transport_wait_most_s"))
+    return min(rules.get("retry_wait_s") * attempt,
+               rules.get("retry_wait_most_s"))
 
 
 def unserved(exc: BaseException) -> bool:
@@ -386,10 +388,16 @@ class Failures:
 # handful of requests leaves four GPUs idle between tokens. The first pilot
 # ran eight at a time and did 0.14 requests a second.
 LLM_PARALLEL = int(os.environ.get("EXTRACT_LLM_PARALLEL", "128"))
-# Sandbox rounds per harvest. A computed value carries its code and the code's
-# output as evidence; without the sandbox the model would have to work the
-# number out itself, and that number would have no evidence at all.
-CODE_ROUNDS = int(os.environ.get("EXTRACT_CODE_ROUNDS", "2"))
+
+
+def code_rounds() -> int:
+    """Sandbox rounds per calculation question (rule `code_rounds`). A
+    computed value carries its code and the code's output as evidence;
+    without the sandbox the model would have to work the number out itself,
+    and that number would have no evidence at all."""
+    return rules.get("code_rounds")
+
+
 # How many code runs the sandbox takes at a time, for the whole run. A code
 # run waiting for its turn stands on the sandbox's own timeout otherwise.
 SANDBOX_SLOTS = threading.BoundedSemaphore(
@@ -418,7 +426,13 @@ MAX_SOURCE_CHARS = int(os.environ.get("EXTRACT_MAX_SOURCE_CHARS", "16000"))
 # transcription IS a reading of that picture, and a model that can see both
 # can notice when they disagree.
 ATTACH_IMAGES = os.environ.get("EXTRACT_ATTACH_IMAGES", "1") != "0"
-IMAGE_MAX_SIDE = int(os.environ.get("EXTRACT_IMAGE_MAX_SIDE", "1280"))
+
+
+def image_max_side() -> int:
+    """Pixels of a crop's longer side (rule `image_max_side`)."""
+    return rules.get("image_max_side")
+
+
 # A section can run over a page break; how many of its pages to try before
 # giving up on placing the quote.
 LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
@@ -493,6 +507,7 @@ def take_flow(profile=None):
     global NUMBERS, MAX_RETRIES, _flow_logged
     NUMBERS = flow_map.in_effect(profile)
     MAX_RETRIES = NUMBERS.replies
+    taken = rules.use(profile)
     said = (tuple(NUMBERS.as_dict().items()),
             tuple(sorted(NUMBERS.origin.items())))
     if said != _flow_logged:
@@ -504,6 +519,15 @@ def take_flow(profile=None):
         log.info("flow: %s", "; ".join(
             f"{' '.join(numbers)} [{origin}]"
             for origin, numbers in by_origin.items()))
+        # The rules a profile sets itself, and those a setting sets: what
+        # the default profile's file says is not repeated.
+        own = {name: value for name, value in taken.values.items()
+               if not taken.owners.get(name, "").endswith(
+                   f"of {rules.DEFAULT_NAME}")}
+        log.info("rules: %s (sha256 %s)", "; ".join(
+            f"{name}={json.dumps(value, ensure_ascii=False)[:60]} "
+            f"[{taken.owners.get(name)}]" for name, value in own.items())
+            or "those of the default profile", taken.sha256[:12])
     return NUMBERS
 
 
@@ -619,7 +643,7 @@ def _source_of(hit: dict, via: Optional[str] = None) -> Source:
     # or a year printed only in a caption was visible and not quotable.
     heading = (hit.get("title") or hit.get("section_title") or "").strip()
     text = body
-    if heading and heading not in body[:200]:
+    if heading and heading not in body[:rules.get("heading_in_front_chars")]:
         text = f"{heading}\n{body}"
     return Source(owner_kind=hit["owner_kind"], owner_id=hit["owner_id"],
                   text=text, provenance=provenance,
@@ -1406,7 +1430,8 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
         system = thread_map.cut(prompt).system(body.keys()).text
         failures = Failures(document_id)
         conversation: list = [{"role": "user", "content": payload}]
-        limit = int(prompt.meta.get("max_tokens", 300))
+        limit = int(prompt.meta.get("max_tokens",
+                                    rules.get("max_tokens_phrase")))
         for attempt in failures.attempts():
             started = time.time()
             try:
@@ -1414,7 +1439,8 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                     response = client.chat.completions.create(
                         model=LLM_MODEL,
                         temperature=retry_temperature(
-                            float(prompt.meta.get("temperature", 0)),
+                            float(prompt.meta.get(
+                                "temperature", rules.get("temperature"))),
                             failures.faults),
                         max_tokens=limit,
                         messages=[{"role": "system", "content": system},
@@ -1470,12 +1496,22 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
 MAX_MODEL_LEN = int(os.environ.get("EXTRACT_MAX_MODEL_LEN", "32768"))
 # Prompt characters per token, set low so a prompt is never estimated short.
 PROMPT_CHARS_PER_TOKEN = 2.62
-# One crop at IMAGE_MAX_SIDE on both sides, one visual token per 28 px square.
-IMAGE_TOKENS = (IMAGE_MAX_SIDE // 28 + 1) ** 2 + 2
+
+
+def image_tokens() -> int:
+    """One crop at its longest side on both sides, one visual token per
+    28 px square."""
+    return (image_max_side() // 28 + 1) ** 2 + 2
+
+
 # Room kept free between the estimate and the window.
 ANSWER_MARGIN = 256
-# Less room than this for the answer and the request is not sent.
-MIN_ANSWER_TOKENS = 512
+
+
+def least_answer_tokens() -> int:
+    """Less room than this for the answer and the request is not sent
+    (rule `least_answer_tokens`)."""
+    return rules.get("least_answer_tokens")
 
 
 def set_model_len(tokens: Optional[int]) -> None:
@@ -1537,7 +1573,7 @@ class PromptCounter:
 
     The text of every message goes through the model's chat template with the
     settings every request carries (`request_extras`) and is counted exactly;
-    a crop is counted at IMAGE_TOKENS, the most one can take. The estimate
+    a crop is counted at `image_tokens`, the most one can take. The estimate
     this replaces ran short on tables of figures, where the tokenizer gives
     every digit a token of its own: requests went out one token over the
     window and were refused, and a refused request that carried a crop broke
@@ -1572,7 +1608,7 @@ class PromptCounter:
                 messages, tokenize=False, add_generation_prompt=True,
                 **kwargs)
             ids = self._tokenizer.encode(text, add_special_tokens=False)
-        return len(ids) + images * IMAGE_TOKENS
+        return len(ids) + images * image_tokens()
 
 
 # Set by `start_counting` for the run; None counts by estimate.
@@ -1626,7 +1662,7 @@ def prompt_tokens(system: str, conversation: list) -> int:
                 images += 1
             else:
                 chars += len(part.get("text") or "")
-    return (int(chars / PROMPT_CHARS_PER_TOKEN) + images * IMAGE_TOKENS
+    return (int(chars / PROMPT_CHARS_PER_TOKEN) + images * image_tokens()
             + 16 * (len(conversation) + 1))
 
 
@@ -1713,13 +1749,14 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     the harvest is.
     """
     client = _repeating(client)
-    temperature = float(prompt.meta.get("temperature", 0))
-    max_tokens = int(prompt.meta.get("max_tokens", 4096))
+    temperature = float(prompt.meta.get("temperature",
+                                        rules.get("temperature")))
+    max_tokens = int(prompt.meta.get("max_tokens", rules.get("max_tokens")))
     text = system_text(prompt, example)
     failures = Failures(document_id)
     for attempt in failures.attempts():
         limit = answer_room(text, conversation, max_tokens)
-        if limit < MIN_ANSWER_TOKENS:
+        if limit < least_answer_tokens():
             return "cut_off"
         started = time.time()
         try:
@@ -1896,9 +1933,9 @@ def make_transcribe(profile, image_root: Optional[Path]) -> tuple:
             client, prompt, [{"role": "user", "content": content}],
             addressed_map.lines_format(), document_id, "transcribe",
             ASK_KEYS["transcribe"],
-            example={"caption": [payload["figure"]["title"] or fields.SAID,
-                                 fields.SAID],
-                     "numbers": [fields.SAID]},
+            example={"caption": [payload["figure"]["title"] or fields.said(),
+                                 fields.said()],
+                     "numbers": [fields.said()]},
             kind="figure", owner=source.owner_id)
     return ask, fingerprint
 
@@ -1937,7 +1974,8 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
         plan_fields=spec.plan_fields, works=spec.works,
         frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
         budget=pieces, shares=shares, per_request=per_request,
-        context=context, numbers=NUMBERS)
+        context=context, numbers=NUMBERS,
+        arrangement=flow_map.arrangement(profile))
 
 
 class Persistent:
@@ -2005,7 +2043,8 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
                                      seek, rerank, context_of),
         lambda document_id: every(document_id, set()),
         spec_for=spec_for, transcripts=transcripts, orders=orders,
-        numbers=numbers, each=run_each, trace=trace.event)
+        numbers=numbers, each=run_each, trace=trace.event,
+        arrangement=flow_map.arrangement(profile))
 
 
 def frame_slots_of(spec: Spec) -> list:
@@ -2022,105 +2061,6 @@ def dates_by_plan(spec: Spec) -> bool:
     return any(slot.kind == fields.NUMBER for slot in frame_slots_of(spec))
 
 
-def frame_pairs(reply: Optional[dict], slots: list, sources: list,
-                rejected: Optional[list] = None) -> list:
-    """The pairs of a reply that carry their own evidence, in order.
-
-    Every coordinate is held to what a field answer is held to: its quote sits
-    verbatim in one of the passages that were SHOWN, the quote contains the
-    answer, and a scenario is one of the keys the request listed. Nothing else
-    is checked. A frame reading is document-level by construction -- it is
-    read once, from a caption or a heading, and every row of the document
-    inherits it -- so "is this passage near this row" is not a question about
-    it, and no reading anywhere in the harvest is asked it.
-
-    *rejected* collects one sentence per pair that did not get through, to be
-    put back in front of the model. Silently dropping them is
-    how a plan ended up with a scenario the ontology has no class for: the
-    pair was refused, nobody said so, and the next window was asked the same
-    question in the same way.
-    """
-    from .pipeline import answer_in_quote, option_named, year_in_range
-    from .verify import quote_in
-
-    where = {f"Q{i + 1}": s for i, s in enumerate(sources)}
-    out: list = []
-    seen: set = set()
-
-    def refuse(reason: str) -> None:
-        # Bounded: the corrections ride in the next prompt, and a reply whose
-        # every pair failed would otherwise pay for itself twice.
-        if rejected is not None and len(rejected) < 6:
-            rejected.append({"reason": reason})
-
-    for entry in (reply or {}).get("pairs") or ():
-        if not isinstance(entry, dict):
-            continue
-        pair: dict = {}
-        for slot in slots:
-            given = entry.get(slot.name)
-            if isinstance(given, str):
-                given = given.strip()
-            if given is None or given == "":
-                refuse(say("frame_missing", slot=slot.name))
-                break
-            quote = entry.get(f"{slot.name}_quote")
-            if not isinstance(quote, str) or not quote.strip():
-                refuse(say("frame_no_quote", slot=slot.name,
-                                   given=given))
-                break
-            named = entry.get(f"{slot.name}_source")
-            found = where.get(str(named))
-            if found is None or not quote_in(found.text or "", quote):
-                found = next((s for s in sources
-                              if quote_in(s.text or "", quote)), None)
-            if found is None:
-                refuse(say("frame_quote_not_in_source",
-                                   slot=slot.name, given=given,
-                                   quote=quote.strip()[:80]))
-                break
-            wording = entry.get(f"{slot.name}_raw")
-            wording = wording.strip() if isinstance(wording, str) else None
-            if not answer_in_quote(slot, given, wording, quote):
-                refuse(say("frame_answer_not_in_quote",
-                                   slot=slot.name, given=given,
-                                   quote=quote.strip()[:80]))
-                break
-            if slot.kind == fields.CHOICE and slot.options \
-                    and option_named(slot, given) is None:
-                # An answer that is not on the closed list. It used to be
-                # taken as long as its wording stood in the quote, and the
-                # class lookup behind it then came back empty -- 8,944 of
-                # one corpus run's tuples carried an unmapped label for
-                # exactly this reason. Asked again instead, and told which
-                # list.
-                refuse(say("frame_not_an_option", given=given,
-                           slot=slot.name,
-                           options=say("frame_options", slot=slot.name)))
-                break
-            if slot.kind == fields.NUMBER:
-                try:
-                    given = int(str(given).strip())
-                except (TypeError, ValueError):
-                    refuse(say("frame_not_a_year",
-                                       slot=slot.name, given=given))
-                    break
-                if not year_in_range(given):
-                    refuse(say("frame_not_a_year",
-                                       slot=slot.name, given=given))
-                    break
-            pair[slot.name] = given
-            pair[f"{slot.name}_raw"] = wording
-            pair[f"{slot.name}_quote"] = quote.strip()
-            pair[f"{slot.name}_source"] = [found.owner_kind, found.owner_id]
-        else:
-            key = tuple(pair.get(slot.name) for slot in slots)
-            if key not in seen:
-                seen.add(key)
-                out.append(pair)
-    return out
-
-
 # ---------------------------------------------------------------------------
 # Harvest: one source + one parameter -> the model's claimed tuples
 # ---------------------------------------------------------------------------
@@ -2130,8 +2070,6 @@ def frame_pairs(reply: Optional[dict], slots: list, sources: list,
 # as unreachable only once every one of its requests has given up: when vLLM
 # died on the first corpus run with the adaptive limit, the runner took 78
 # minutes to notice.
-SERVER_DEAD_AFTER = float(os.environ.get("EXTRACT_SERVER_DEAD_AFTER", "180"))
-SERVER_PROBE_EVERY = 15.0
 
 
 def probe_server(base_url: str = None, timeout: float = 10.0) -> bool:
@@ -2155,12 +2093,16 @@ def probe_server(base_url: str = None, timeout: float = 10.0) -> bool:
 
 
 def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
-                 every: float = SERVER_PROBE_EVERY,
-                 dead_after: float = SERVER_DEAD_AFTER,
+                 every: Optional[float] = None,
+                 dead_after: Optional[float] = None,
                  clock: Callable = time.monotonic,
                  sleep: Callable = time.sleep) -> threading.Thread:
     """A daemon thread that calls *on_dead(seconds)* once the server has not
-    answered for *dead_after* seconds, then stops watching."""
+    answered for *dead_after* seconds (rule `server_dead_after_s`), probing
+    every *every* (rule `server_probe_every_s`), then stops watching."""
+    every = rules.get("server_probe_every_s") if every is None else every
+    dead_after = rules.get("server_dead_after_s") if dead_after is None \
+        else dead_after
 
     def watch() -> None:
         silent_since = None
@@ -2234,9 +2176,9 @@ def _client():
 
 def _repeating(client):
     """*client*, whose repeat of a request that timed out gets
-    `RETRY_TIMEOUT` (`scheduler.Repeats`): every request of the stage, made
+    `retry_timeout` (`scheduler.Repeats`): every request of the stage, made
     here or handed in."""
-    return scheduler.repeating(client, RETRY_TIMEOUT, LLM_TIMEOUT)
+    return scheduler.repeating(client, retry_timeout(), LLM_TIMEOUT)
 
 
 def _for(document_id):
@@ -2470,8 +2412,8 @@ def _image_data_url(path: str) -> Optional[str]:
     try:
         from PIL import Image
         img = Image.open(path)
-        if max(img.size) > IMAGE_MAX_SIDE:
-            img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))
+        if max(img.size) > image_max_side():
+            img.thumbnail((image_max_side(), image_max_side()))
         buf = io.BytesIO()
         img.save(buf, format="PNG")
     except Exception as exc:
@@ -2694,8 +2636,10 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     """
     prompt = prompts.load(REVIEW_PROMPT_ID)
     client = _client()
-    temperature = float(prompt.meta.get("temperature", 0.0))
-    max_tokens = int(prompt.meta.get("max_tokens", 1024))
+    temperature = float(prompt.meta.get("temperature",
+                                        rules.get("temperature")))
+    max_tokens = int(prompt.meta.get("max_tokens",
+                                     rules.get("max_tokens_review")))
 
     def ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
         payload = json.dumps(_review_payload(row, shown, parameter, slots),
@@ -2722,7 +2666,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
         conversation: list = [{"role": "user", "content": content}]
         for attempt in failures.attempts():
             limit = answer_room(prompt.text, conversation, max_tokens)
-            if limit < MIN_ANSWER_TOKENS:
+            if limit < least_answer_tokens():
                 log.warning("   review: the prompt leaves %d answer token(s) "
                             "in a window of %d -- not sent", limit,
                             MAX_MODEL_LEN)
@@ -2818,7 +2762,9 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     from docpipe.inference import code_exec
 
     open_questions = profile.component("compute", "questions")
-    if open_questions is None or CODE_ROUNDS < 1 or not code_exec.is_enabled():
+    if open_questions is None or code_rounds() < 1 \
+            or not code_exec.is_enabled() \
+            or not flow_map.arrangement(profile).on("compute"):
         return None
     same = profile.component("compute", "same")
     try:
@@ -2829,8 +2775,10 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     # the step quietly.
     parts = thread_map.cut(prompt, follows=computing.FOLLOWS)
     client = _client()
-    temperature = float(prompt.meta.get("temperature", 0))
-    max_tokens = int(prompt.meta.get("max_tokens", 2048))
+    temperature = float(prompt.meta.get("temperature",
+                                        rules.get("temperature")))
+    max_tokens = int(prompt.meta.get("max_tokens",
+                                     rules.get("max_tokens_compute")))
     pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
                               thread_name_prefix="compute")
 
@@ -2890,12 +2838,12 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         # fetching or of taking is no failure.
         failed = 0
         attempt = 0
-        while attempt < MAX_RETRIES + CODE_ROUNDS + 1:
+        while attempt < MAX_RETRIES + code_rounds() + 1:
             attempt += 1
             if stop is not None and stop.is_set():
                 return ended("stopped")
             limit = answer_room(system, conversation, max_tokens)
-            if limit < MIN_ANSWER_TOKENS:
+            if limit < least_answer_tokens():
                 return ended("too_long")
             shape = replies.compute(
                 computing.labels(question),
@@ -2936,12 +2884,13 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                    started=started)
             said = reply.message.content
             code = _parse_action(said)
-            if code and len(runs) < CODE_ROUNDS:
+            if code and len(runs) < code_rounds():
                 with SANDBOX_SLOTS:
                     out = code_exec.run_code(code, context=computing.context(
                         question, shown, gathered.sources))
                 runs.append({"code": code,
-                             "stdout": (out.get("stdout") or "")[:2000],
+                             "stdout": (out.get("stdout") or "")[
+                                 :rules.get("code_output_chars")],
                              "ok": bool(out.get("ok")),
                              "error": out.get("error")})
                 trace.event("code", document_id, attempt=attempt, **runs[-1])
@@ -3393,16 +3342,26 @@ def producer(kind: str, model: Optional[str] = None) -> dict:
 
     A pass that asks a model also names the flow it read with (`take_flow`):
     `numbers`, every number in effect, a setting that won over the flow file
-    among them, and `flow_file`, the sha256 of the flow's files. For a
-    reader: a changed number makes no harvest stale.
+    among them, and `flow_file`, the sha256 of the flow's files; and the
+    rules (`rules_file`, the sha256 of the rules files, `rules_set`, the
+    rules a setting set). For a reader: a changed number or rule makes no
+    harvest stale.
     """
     from docpipe import __version__
     entry = {"pass": kind, "docpipe": __version__,
              "utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if model is not None:
+        taken = rules.current()
         entry.update(model=model, provider=providers.provider("llm"),
                      prompts=prompts.versions(survey_prompt_ids()), flow=FLOW,
-                     numbers=NUMBERS.as_dict(), flow_file=NUMBERS.sha256)
+                     numbers=NUMBERS.as_dict(), flow_file=NUMBERS.sha256,
+                     rules_file=taken.sha256,
+                     **({"rules_set": {
+                         name: taken.values[name] for name, owner
+                         in taken.owners.items()
+                         if not owner.startswith(rules.FILE)}}
+                        if any(not owner.startswith(rules.FILE)
+                               for owner in taken.owners.values()) else {}))
     return entry
 
 
@@ -3505,7 +3464,13 @@ COARSE = ("spec",)
 # answer space: the ontology keys, and the only ones `stale` compares. Their
 # presence is what licenses ignoring `spec`: with nothing finer in the stamp
 # there is nothing else to go on.
-QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
+
+
+def question_keys() -> tuple:
+    """The keys of a stamp that decide whether a document is read again
+    (rule `question_keys`, owner decision 2026-09-10)."""
+    return tuple(rules.get("question_keys"))
+
 
 # Where a top-up writes its trace: beside the harvest's `trace/`, never into
 # it. trace._handle starts its file anew, so the harvest's own would be lost,
@@ -3541,7 +3506,7 @@ def recorded_questions(questions: Optional[dict]) -> dict:
 def stale(stamp_path: Path, current: dict) -> list:
     """Which keys differ from now; everything when unstamped.
 
-    The ontology keys are compared (`QUESTION_KEYS`: one per parameter,
+    The ontology keys are compared (`question_keys`: one per parameter,
     value list, axis and slot), the whole-file sha `spec` only for a stamp
     that has none of them, and the sha256 of the PDF the harvest read from
     (`DOCUMENT_KEY`) where the stamp and `current` both carry one. The model,
@@ -3572,10 +3537,11 @@ def stale(stamp_path: Path, current: dict) -> list:
         stored = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return unstamped
-    detailed = any(k.startswith(QUESTION_KEYS) for k in current)
+    keys = question_keys()
+    detailed = any(k.startswith(keys) for k in current)
 
     def compared(key: str) -> bool:
-        return key.startswith(QUESTION_KEYS) or (not detailed and key in COARSE)
+        return key.startswith(keys) or (not detailed and key in COARSE)
 
     changed = {k for k in current
                if compared(k) and stored.get(k) != current[k]}
@@ -3672,7 +3638,6 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
 # A document this many of whose sources died on an unreachable server was not
 # harvested, whatever its file says. Half is the line: below it a plan really
 # can be mostly holes, above it the server was gone.
-UNREACHABLE_LIMIT = 0.5
 
 
 def not_happened(report, *, answered: Optional[int] = None,
@@ -3695,7 +3660,7 @@ def not_happened(report, *, answered: Optional[int] = None,
     unreachable = sum(1 for r in failed
                       if r.get("claim", {}).get("_why") == "unreachable")
     sources = max(report.owners_harvested, len(failed))
-    if sources and unreachable > sources * UNREACHABLE_LIMIT:
+    if sources and unreachable > sources * rules.get("unreachable_share"):
         return "unreachable", unreachable, sources
     if sources and answered == 0:
         return "no_reply", sources, sources
@@ -3986,7 +3951,8 @@ def request_budget(spec, profile=None) -> int:
 
 
 def _documents(conn: sqlite3.Connection) -> list:
-    """Every current document, the largest first.
+    """Every current document, the largest first (rule `largest_first`;
+    otherwise by name).
 
     Admission is bounded (EXTRACT_BATCH_DOCS in flight) and a document lasts
     as long as its slowest sweep's chain of windows, which is sequential by
@@ -4000,7 +3966,8 @@ def _documents(conn: sqlite3.Connection) -> list:
                 "SELECT d.id, d.filename FROM Documents d "
                 "LEFT JOIN Sections s ON s.document = d.id "
                 "WHERE d.is_current = 1 GROUP BY d.id, d.filename "
-                "ORDER BY COUNT(s.id) DESC, d.filename")]
+                + ("ORDER BY COUNT(s.id) DESC, d.filename"
+                   if rules.get("largest_first") else "ORDER BY d.filename"))]
 
 
 def select_documents(documents: list, wanted: Optional[list]) -> tuple:
@@ -4020,11 +3987,9 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple:
 
 def span_marks_of() -> dict:
     """{coordinate: entry} a value stated for a span of years takes on each
-    of its rows, as the active profile says it (`SPAN_MARKS`,
-    `reading.span_rows`); {} where it says nothing."""
-    from docpipe.profile import active_profile
-    return dict(active_profile().component("extraction", "SPAN_MARKS")
-                or {})
+    of its rows (rule `span_marks`, `reading.span_rows`); {} where the rules
+    say nothing."""
+    return dict(rules.get("span_marks") or {})
 
 
 def year_states_of(spec: Spec) -> dict:
@@ -4322,12 +4287,14 @@ def main(argv: Optional[list] = None) -> int:
         if args.provenance and provenance.enabled() \
                 and described.get("base"):
             writer = provenance.Writer(described["base"], described)
-        from .serialize import (profile_context, run as serialize_run,
-                                validate)
+        from .serialize import (apply_graph_file, profile_context,
+                                run as serialize_run, validate)
         held, gold_path = _decisions_file(args.out)
+        indexes = [{}]
         try:
             counts = serialize_run(args.out, args.serialize, serializer,
-                                   writer, gold=held, gold_source=gold_path)
+                                   writer, gold=held, gold_source=gold_path,
+                                   index=indexes[0])
         except ValueError as exc:
             log.error("serialize: %s", exc)
             return 1
@@ -4341,7 +4308,9 @@ def main(argv: Optional[list] = None) -> int:
         if strict is not None:
             beside = Path(args.serialize).with_suffix(".strict.ttl")
             try:
-                taken = serialize_run(args.out, beside, strict(args.db))
+                indexes.append({})
+                taken = serialize_run(args.out, beside, strict(args.db),
+                                      index=indexes[-1])
                 log.info("serialize: %d document(s) as the data schema takes "
                          "them -> %s", len(taken), beside)
                 written.append(beside)
@@ -4351,12 +4320,20 @@ def main(argv: Optional[list] = None) -> int:
         # names none has nothing to validate against; one that names them
         # but was never refreshed is told so rather than passed over.
         shapes = profile.component("vocabulary", "shapes")
+        paths = shapes() if shapes is not None else []
+        context = profile_context(profile) if paths else ()
+        # What the profile's graph file asks of the written graphs: classes
+        # left out, nodes named anew, constraints that leave a value or a
+        # paper out (`docpipe.graphfile`); nothing where it asks nothing.
+        for graph_path, index in zip(written, indexes):
+            try:
+                apply_graph_file(graph_path, profile, paths, context, index)
+            except Exception:
+                log.exception("graph file: not applied to %s", graph_path)
         if shapes is not None:
-            paths = shapes()
             if paths:
                 # The graph is written by now, and the report must not take
                 # the serialize result with it when the validator fails.
-                context = profile_context(profile)
                 for graph_path in written:
                     try:
                         validate(graph_path, paths, context=context)

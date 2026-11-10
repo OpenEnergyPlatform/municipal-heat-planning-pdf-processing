@@ -375,7 +375,7 @@ A value that holds becomes a claim (`Reader.claim`): the number or the words,
 `value_raw`, its quote, its address `at` (the passage, the line, the cell,
 the last line of a stretch) and, where it stands in a table cell, `head`. Its
 quote is the line itself, the lines before it as well where one line is shorter
-than `verify.MIN_QUOTE_CHARS`, so that a quote names a place
+than the rule `quote_min_chars` (`verify.min_quote_chars()`), so that a quote names a place
 (`units.short_quote`); a table row's quote is the row. A free-text value is its
 own wording (`verify.wording_of`) and is not asked twice. A value of a list
 field is the entry its find named, or `""` where it named none; a find that named a
@@ -486,7 +486,7 @@ entry of the years the plan's settings gave (`Reader.last_year`; its reply is
 
 **A year.** The model looks for a year first, and the plan's years are shown only to the
 last question of a year and to the list request below (owner decision 2026-11-07); a year is read where its number stands in its
-quote. A year is a number in the profile's `YEAR_RANGE` (see Numbers, years and
+quote. A year is a number in the rule `year_range` (see Numbers, years and
 per-document lists). A year whose words print none, the plan's word for a state
 alone, is asked among the plan's years (`Reader.plan_year`, a list request, the
 step `plan_years`). A year the plan states for a span ("im Mittel der Jahre 2019
@@ -495,7 +495,7 @@ bis 2021") is answered with its first year, and `until`, its last
 decision 2026-11-07: "als ca. für jedes distinkte Jahr erfassen"): the first and
 the last year are READ, each with the quote that prints it, the years between are
 DERIVED from the span, and every row takes the marks the profile names where it
-read nothing of its own (`SPAN_MARKS`, kwp `{"qualifier": "out:approximate"}`,
+read nothing of its own (the rule `span_marks`, kwp `{"qualifier": "out:approximate"}`,
 "ca."; `reading.span_rows`).
 
 **A value read as no value of its field.** An axis with a list may name the entry
@@ -906,8 +906,8 @@ once, by its `frame` event, owner decision 2026-11-05).
 
 ### Numbers, years and per-document lists
 
-A year is a number in the profile's `YEAR_RANGE` (kwp: 1900 to 2100): a
-coordinate answer outside it is a `wrong_type` drop. A profile without the constant takes every whole number.
+A year is a number in the rule `year_range` (kwp: 1900 to 2100): a
+coordinate answer outside it is a `wrong_type` drop. A profile whose rules leave it unset takes every whole number.
 
 A printed sign is part of a number: `-1.155` backs -1155, and -1155 is not
 backed by a quote that prints `1.155`. A dash after a letter, a digit or a
@@ -1191,7 +1191,7 @@ entry fails once.
 `pipeline.merge_field` folds each field's answers onto the open rows,
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
-answer, with a floor of `MIN_QUOTE_CHARS` so that a quote names a place.
+answer, with a floor of the rule `quote_min_chars` so that a quote names a place.
 Those are the check for a quote (`pipeline.py`). Without its own `value_raw`
 wording, a closed-list answer's quote is checked against every spelling the
 spec lists for the chosen option, not only its label: the real classes
@@ -1316,7 +1316,7 @@ A zero is neither a part, a share nor a total: it adds nothing, and rows of it
 fill plans' tables.
 
 A sum over passages must not count one statement twice (`one_statement`): the
-same part with the same number, within the graph's `ROUNDING_TOLERANCE`, in two
+same part with the same number, within the graph file's rule `rounding_tolerance`, in two
 passages or under one quote, in any unit, since `value_target` is compared. The
 most precisely printed of them stays. Two rows of one passage under two quotes
 are two rows. A set whose largest number is the sum of the others has printed
@@ -1396,7 +1396,7 @@ Two questions of one document that come to the same number with the same
 coordinates are one statement, and the second row goes (profile `same`, owner
 decision 2026-11-03). kwp compares every axis but `subject`, whose wording tells
 only different numbers apart, as in the graph, and the number in its target unit
-within `ROUNDING_TOLERANCE`. One plan printed 27 % twice in one table row, and
+within the rule `rounding_tolerance`. One plan printed 27 % twice in one table row, and
 both shares came to 116.1 GWh.
 
 The trace has a `code` event per run and a `compute` event per question with how
@@ -1997,8 +1997,8 @@ list names a meaning) go back to the model in the next request, so they are
 in the language of the prompts and belong to the profile: its
 `prompts/extraction/phrases.json`, where a profile that extends another one writes only
 the ones it words differently (`wording.py`, `docpipe/phrases.py`). One of them, `frame_options`,
-is not a sentence but the key under which a frame pair's refusal lists
-the entries of a closed coordinate (`runner.frame_pairs`). Two more are keys and no prose either:
+is not a sentence but the key under which a request lists
+the entries of a closed coordinate (`contract.py`). Two more are keys and no prose either:
 `option_means` and `option_spellings` are the keys under which an entry of a
 closed list goes to the model, `means` and `spellings` in every shipped profile
 (the built-in one, kwp and scenarios; kwp and scenarios used to say them in
@@ -2027,7 +2027,7 @@ shown passage, that the answer stands in the quote. `languages()` and
 as a template, and `language_of()` gives the language a profile's parts files are
 in, from `extraction.CONTRACT_LANGUAGE` of the profile that holds them
 (`Profile.own`, so it is not inherited). `facts()` gives the values a template
-names and does not type: the least length of a quote (`verify.MIN_QUOTE_CHARS`),
+names and does not type: the least length of a quote (the rule `quote_min_chars`),
 the word for "not stated" (`fields.UNSTATED`) and, from the profile's
 `prompts/extraction/phrases.json`, the two keys of an option, the gloss and the spelling of
 the closed list's entry for "not stated" and the key under which a closed
@@ -2104,7 +2104,7 @@ Two lines read more than the keys. `every shape property is asked or left out
 on purpose` holds the shapes of the profile's graph against its spec, the way
 `docpipe compile diff` does: the properties no parameter asks, and no `kg`
 block or link names, are warned about unless the profile has recorded them in
-`extraction.NOT_EXTRACTED`, a mapping from `(shape, property)` to a sentence of
+the rule `not_extracted`, a table from `(shape, property)` to a sentence of
 reason (scenarios declares 21; kwp none). Where the shapes are is the profile's
 own too, `extraction.shapes_files`, a callable that returns the files of its
 last refresh (scenarios finds them there; kwp names none, so its line says
@@ -2210,9 +2210,13 @@ one file of the profile, `flow.json` (`extraction.flow`; `docpipe edit` has a Fl
 tab for it, see [the editor](editor.md)). The default profile's file is the whole
 flow, `numbers` and `steps`. A profile that extends it may have a `flow.json` of
 its own that holds `numbers` only, and only the ones it sets differently; it is
-laid over the inherited file number by number (`flow.load`), and a file that
-writes steps is refused. The steps describe what the code does and are not run
-from the file: their order is the code's. The file is read strictly: every
+laid over the inherited file number by number (`flow.load`); a profile's file
+may also write all steps. The coordinate steps (`own_place`, `search_sentence`,
+`beside`, `search`, `about`, `plan_years`) are run in the order the file lists
+them (`flow.arrangement`, read by `addressed.Reader` and
+`surveyed.SurveyedHarvest`), and a step with `"off": true` is skipped; an order
+the run cannot read in is refused with its reason (`flow.arrangement_problems`).
+The file is read strictly: every
 request the code sends (`addressed.KINDS` and the compute request) stands in the
 `ask` of a step, a step asks nothing the code does not send, every number bounds
 a step, and an unknown key, a key written twice, a value that is no whole number
@@ -2296,15 +2300,15 @@ harvest read with.
 | `--no-provenance` | CLI flag | off (the file is written) | With `--serialize`: no provenance file beside the graph, as `EXTRACT_PROVENANCE=0` | `runner.main`, `provenance.enabled` |
 | `FRAME` | profile hook | none | The frame coordinates (kwp: scenario and year): the plan's years date them, and `--top-up` blocks a changed key that names one (`runner.main`, `topup.actionable`). No coordinate of a plan closes a row: `SLICE`, `READ_IN_FULL` and `kept_quantities()` were deleted on 2026-11-10, and what closes a row now is a coordinate with an entry a value must have, the spec's `keep` at a coordinate (`fields.kept`, `fields.closed`; the scenarios spec uses it for `work`), which gives the state `out_of_slice` | `runner.main`, `topup.actionable` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
-| `NOT_EXTRACTED` | profile hook | none | A mapping `(shape, property)` to one sentence of reason: the properties of the profile's shapes it leaves out on purpose, so that `docpipe preflight` does not warn about them. Scenarios declares 21 | `preflight.not_extracted`, `preflight.shapes_verdict` |
+| `not_extracted` | profile rule | none | A table `(shape, property)` to one sentence of reason: the properties of the profile's shapes it leaves out on purpose, so that `docpipe preflight` does not warn about them. Scenarios declares 21 | `preflight.not_extracted`, `preflight.shapes_verdict` |
 | `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
-| `SPAN_MARKS` | profile hook | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
+| `span_marks` | rule | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
 | `flow.json` | profile file | the default profile's whole flow | The numbers that bound the reading and its steps; a profile that extends another writes `numbers` only, laid over the inherited ones. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
 | `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
 | `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `addressed.Reader.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
-| `DECIMAL_MARK` | profile hook | `,` | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
+| `decimal_mark` | rule | `.` (kwp sets `,`) | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
 | `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (scenarios closes its regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
 | `document_context` | profile hook | none | A callable `(connection, document_id)` that returns `{"name": ...}`, what the document itself contributes to the sentence it is searched with (the municipality); the caption of the first passage found is added to it | `runner.document_anchor` |
 

@@ -48,30 +48,46 @@ has none; *data* its spec as written, None where it has none;
 *shown(path)* a path as the user sees it; *computes* whether the
 profile computes.
 
+### arranged_steps
+
+```python
+def arranged_steps(steps: list, order=None, off=None) -> tuple
+```
+
+(the steps with the order and the switches of the page, errors).
+*order* is {frame: [the ids of its steps in their new order]} (the
+document's steps under "document"), *off* the ids of the steps
+switched off; a step not named keeps its place and its switch.
+
 ### judge
 
 ```python
-def judge(profile, own_raw: Optional[bytes], numbers, name: str) -> dict
+def judge(profile, own_raw: Optional[bytes], numbers, name: str,
+          order=None, off=None) -> dict
 ```
 
 What a save of *numbers* ({name: value}, those not named as the
-files say them) would do: {"ok", "errors": [{"name", "message"}],
+files say them) and of the order of the steps (*order*, *off*:
+`arranged_steps`) would do: {"ok", "errors": [{"name", "message"}],
 "changed": [{"name", "from", "to"}], "file", "writes" ("created",
 "changed", "removed", "unchanged"), "diff", "says", "text"}. *text* is
 the profile's file as it would stand, in the line ends it has (plain
 ones where it is new), None where it would be removed. *name* is the
-file as the user sees it.
+file as the user sees it. An order the run cannot read in is refused
+with its reason (`flow.arrangement_problems`); a profile that orders
+its steps otherwise than it inherits writes them all.
 
 ### save
 
 ```python
 def save(profile, own_raw: Optional[bytes], numbers, base: Optional[str],
-         name: str) -> tuple
+         name: str, order=None, off=None) -> tuple
 ```
 
 (what the page is told, the bytes to write or None, whether the
 file is to be removed). Bytes come back only for numbers the flow
-takes, and only where the file is as the page loaded it (*base*, the
-sha256 of its bytes, None where it had none).
+takes and an order the run can read in, and only where the file is as
+the page loaded it (*base*, the sha256 of its bytes, None where it had
+none).
 
 [Back to the index](../README.md)

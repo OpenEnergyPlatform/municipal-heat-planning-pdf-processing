@@ -77,7 +77,7 @@ def test_a_request_that_timed_out_is_repeated_with_the_time_of_a_repeat(
     client, times = stage_client(monkeypatch, slow(), answered())
     ask(client)
     assert ask(client) is not None
-    assert times == [None, runner.RETRY_TIMEOUT]
+    assert times == [None, runner.retry_timeout()]
 
 
 def test_a_server_error_is_repeated_with_the_time_it_had(monkeypatch):
@@ -101,18 +101,18 @@ def test_the_time_of_a_repeat_holds_until_the_request_is_answered(
                                  answered())
     for _ in range(4):
         ask(client)
-    assert times == [None, runner.RETRY_TIMEOUT, runner.RETRY_TIMEOUT, None]
+    assert times == [None, runner.retry_timeout(), runner.retry_timeout(), None]
 
 
 def test_a_longer_time_of_its_own_stays_on_a_repeat(monkeypatch):
-    longer = runner.RETRY_TIMEOUT * 3
+    longer = runner.retry_timeout() * 3
     client, times = stage_client(monkeypatch, slow(), answered(), slow(),
                                  answered())
     ask(client, "a", timeout=longer)
     ask(client, "a", timeout=longer)
     ask(client, "b", timeout=1)
     ask(client, "b", timeout=1)
-    assert times == [longer, longer, 1, runner.RETRY_TIMEOUT]
+    assert times == [longer, longer, 1, runner.retry_timeout()]
 
 
 def test_a_repeat_is_the_next_request_of_the_same_thread(monkeypatch):
@@ -124,7 +124,7 @@ def test_a_repeat_is_the_next_request_of_the_same_thread(monkeypatch):
     ask(client)
     # The other thread asked the same and was no repeat; this thread's repeat
     # still is one, whatever the other thread asked in between.
-    assert times == [None, None, runner.RETRY_TIMEOUT]
+    assert times == [None, None, runner.retry_timeout()]
 
 
 def test_a_client_is_made_repeating_once():
@@ -161,7 +161,7 @@ def test_a_request_handed_a_client_repeats_by_the_rule_in_every_thread():
                                  prompt=Prompt("phrase", "x", {}, "",
                                                Path("phrase.md")))
     assert set(out) == {"a", "b", "c"}
-    assert list(times.values()) == [[None, runner.RETRY_TIMEOUT]] * 3
+    assert list(times.values()) == [[None, runner.retry_timeout()]] * 3
 
 
 def _receiver(call: ast.Call):

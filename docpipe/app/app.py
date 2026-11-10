@@ -1215,7 +1215,8 @@ def _typed(text: str, like):
         sign, digits = 1, text
         if digits[:1] in ("-", "\u2212", "+"):
             sign, digits = (1 if digits[0] == "+" else -1), digits[1:].strip()
-        mark = WORDS_PROFILE.component("extraction", "DECIMAL_MARK") or ","
+        from docpipe import rules
+        mark = rules.load(WORDS_PROFILE)["decimal_mark"]
         canonical = canonical_number(digits, mark)
         if canonical is None:
             return text

@@ -31,11 +31,32 @@ Author: Felix Vossel
 
 ## Functions
 
+### sources
+
+```python
+def sources() -> dict
+```
+
+### sets
+
+```python
+def sets() -> dict
+```
+
+### axis_sets
+
+```python
+def axis_sets() -> dict
+```
+
 ### build
 
 ```python
-def build(closure: Path) -> dict
+def build(closure: Path, regions_path: Path = REGIONS_PATH) -> dict
 ```
+
+The snapshot: the lists of the closure and the regions of
+*regions_path* (the profile's own file where not given).
 
 ### load
 
@@ -151,14 +172,17 @@ the World Bank's European Union and the United Kingdom.
 ### refresh
 
 ```python
-def refresh(cache: Path = upstream.CACHE) -> dict
+def refresh(cache: Path = upstream.CACHE, out: Optional[Path] = None) \
+        -> dict
 ```
 
-Pull SOURCES, write regions.json, region_names.json and vocabulary.json,
-write the lock.
+Pull the sources, write regions.json, region_names.json,
+region_aggregates.json and vocabulary.json, write the lock.
 
 The lock is what `shapes` reads: the serializer and the validation of
-the written graph take the shapes this refresh pulled.
+the written graph take the shapes this refresh pulled. *out* is the
+folder the profile's files are written to, its own where not given
+(`docpipe edit` fetches into a folder of its own first).
 
 ### shapes
 

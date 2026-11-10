@@ -32,7 +32,7 @@ from types import SimpleNamespace
 from typing import Callable, Optional
 
 from ..extraction import spec as spec_module
-from ..extraction.verify import MIN_QUOTE_CHARS, quote_in, value_in_quote
+from ..extraction.verify import min_quote_chars, quote_in, value_in_quote
 
 log = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ def checked(drafted, passage: str, parameter: dict) -> tuple:
         quote = raw.get("quote")
         if not isinstance(quote, str) or not quote_in(passage, quote):
             dropped.append((raw, NOT_IN_PASSAGE))
-        elif len(quote.strip()) < MIN_QUOTE_CHARS:
+        elif len(quote.strip()) < min_quote_chars():
             dropped.append((raw, TOO_SHORT))
         elif not value_in_quote(raw, stand_in, quote):
             dropped.append((raw, NOT_IN_QUOTE))

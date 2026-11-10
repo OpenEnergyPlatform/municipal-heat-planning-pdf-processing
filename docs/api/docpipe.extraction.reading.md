@@ -140,13 +140,20 @@ Fields:
 
 ## Functions
 
+### shown_counts
+
+```python
+def shown_counts() -> dict
+```
+
 ### shown_hits
 
 ```python
 def shown_hits(ranked: list) -> list
 ```
 
-The best of each kind of a ranked search, in its order (`SHOWN`).
+The best of each kind of a ranked search, in its order
+(`shown_counts`).
 
 ### slots_of
 
@@ -238,7 +245,7 @@ it (owner decision 2026-11-07: "als ca. für jedes distinkte Jahr
 erfassen"): *row*, read with the span's first year, and a copy of it
 (*clone(row)*) for each year after, the last read as the first is, those
 between derived from the span, which the quote prints and names neither
-of. Each takes *marks* ({coordinate: entry}, the profile's `SPAN_MARKS`)
+of. Each takes *marks* ({coordinate: entry}, the rule `span_marks`)
 where it read nothing, derived from the span. Only where the year read
 holds and the last year stands in its quote as well, as any year must;
 [the copies].

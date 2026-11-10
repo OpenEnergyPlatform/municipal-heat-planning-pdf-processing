@@ -2,7 +2,7 @@
 upstream.py: Pulls the files a profile is written against, at the version
 upstream currently calls its own.
 
-A profile names its sources in `profiles/<name>/vocabulary.py: SOURCES`. This
+A profile names its sources in `profiles/<name>/sources.json` (`docpipe.sources`). This
 module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.

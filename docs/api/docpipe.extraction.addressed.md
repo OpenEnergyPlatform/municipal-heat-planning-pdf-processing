@@ -375,7 +375,8 @@ def __init__(self, spec, asks: Asks, order: Callable, *,
              budget: Optional[int] = None,
              shares: Optional[dict] = None,
              per_request: Optional[int] = None,
-             context: Optional[Callable] = None, numbers=None)
+             context: Optional[Callable] = None, numbers=None,
+             arrangement=None)
 ```
 
 #### Reader.lists_of
@@ -388,6 +389,16 @@ The lists of names a document builds while it is read: its
 scenarios (a field or coordinate the spec merges) and its works
 (where the profile keeps them), the publication itself the first
 work.
+
+#### Reader.finds_of
+
+```python
+def finds_of(self, plan: Plan, located: list, pieces_of: Callable,
+             order_of: Optional[dict], counts: Counts) -> list
+```
+
+[Read] of the fields *located* in their pieces (`find`), one per
+field and passage, the pieces of each field in its order.
 
 #### Reader.coordinates_of
 
@@ -678,7 +689,9 @@ one of the plan's (`pipeline.named_year`).
 
 ```python
 def search(self, plan: Plan, read: Read, row: Row, slot, payload: dict,
-           counts: Counts, clone: Callable, noted: dict) -> list
+           counts: Counts, clone: Callable, noted: dict,
+           steps: tuple = ("search_sentence", "beside", "search")) \
+        -> list
 ```
 
 A coordinate its value's own place does not state (owner
@@ -690,7 +703,43 @@ time, the pieces a request fetches itself first in the next, until
 a find holds, one does not hold after its follow-up (`unbacked`),
 or nothing is left to show: `unstated` where every piece of the
 plan was shown, `exhausted` where the budget left some unshown.
+*steps* are the steps of the search in the flow's order, those that
+are off left out where they stand (`arrangement`).
 [the rows made].
+
+#### Reader.search_sentence
+
+```python
+def search_sentence(self, plan: Plan, read: Read, row: Row, slot,
+                    counts: Counts) -> str
+```
+
+The sentence a search goes with (`sentence`); a question where
+the rule `question_as_sentence` takes none is the field's own
+sentence instead, and a question taken is counted.
+
+#### Reader.field_sentence
+
+```python
+def field_sentence(self, plan: Plan, read: Read, slot) -> str
+```
+
+The field's own search sentence, else its question or name: what
+a search goes with where no sentence was written for it.
+
+#### Reader.rounds
+
+```python
+def rounds(self, plan: Plan, read: Read, row: Row, slot, payload: dict,
+           counts: Counts, clone: Callable, noted: dict, seen: set,
+           numbers: bool, more_of: Callable, first: list,
+           window: tuple, shows: str) -> tuple
+```
+
+(rows made, done) of one step of a search: *first*, then the
+pieces *more_of()* leaves unseen, `per_request` at a time, each
+request's own fetches in the next, until a find holds or does not
+hold after its follow-up (done) or nothing is left.
 
 #### Reader.sentence
 
@@ -920,6 +969,23 @@ def __init__(self, order: Callable, probes: Callable,
 
 ## Functions
 
+### years_in
+
+```python
+def years_in(text: str) -> list
+```
+
+The years *text* names, as their four digits, in order.
+
+### span
+
+```python
+def span()
+```
+
+What makes a span of years between two of them (rules `span_words`,
+`span_dashes`).
+
 ### told
 
 ```python
@@ -977,6 +1043,15 @@ def is_question(sentence: str) -> bool
 
 Is a search sentence a question rather than a sentence of the
 plan?
+
+### fetches
+
+```python
+def fetches() -> list
+```
+
+What a reply may fetch itself (rule `fetches`), in the order of
+`GETS`.
 
 ### more_schema
 

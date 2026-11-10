@@ -14,16 +14,24 @@ edit`):
 The default profile writes the whole file: every number the reading takes
 (`NUMBERS`) and its steps. A profile that extends it writes only the numbers
 it sets differently, and its file is laid over the default's number by
-number (`load`); the steps are the default's. A setting of the run wins over
-the file for the numbers that have one (`Number.env`): the environment, then
-the project file, then this file (`in_effect`).
+number (`load`); it may write the steps as well, all of them, and then they
+are its. A setting of the run wins over the file for the numbers that have
+one (`Number.env`): the environment, then the project file, then this file
+(`in_effect`).
 
-The steps say what the code does and are not run from the file: the order is
-the code's until the reading is cut into steps that can be (the plan's stage
-4). So that the file cannot say something else than the code, it is read
-strictly: every request the code sends stands in a step (`kinds`), a step
-asks no request the code does not send, every number bounds a step, and a
-number the code does not take is refused.
+Since 2026-11-10 the run reads its steps from the file (`arrangement`): the
+order of the steps a frame may reorder and which steps are off. Each step is
+a building block of the code (`BLOCKS`); the file says in which order the
+blocks of a document and of a coordinate run and which are left out, and the
+code says where a block may stand at all: the steps that prepare what every
+request shows keep their place, a coordinate is asked at its own place first,
+the coordinates of a value come after its finds, a search sentence before
+the search that goes with it. An arrangement that cannot run is refused with
+the reason (`arrangement_problems`). So that the file cannot say something
+else than the code, it is read strictly: every request the code sends stands
+in a step (`kinds`), a step asks no request the code does not send, every
+number bounds a step, a number the code does not take is refused, and every
+block of the code stands in the steps once.
 
 Nothing here decides whether a harvest is current. A stamp names, in the
 entry of each pass that asked a model, the numbers the pass read with and
@@ -113,7 +121,64 @@ BY_NAME = {number.name: number for number in NUMBERS}
 
 # What a step may say of itself.
 STEP_KEYS = ("id", "ask", "each", "when", "says", "bound", "shows", "needs",
-             "steps")
+             "steps", "off")
+
+
+@dataclass(frozen=True)
+class Block:
+    """What the code can do with one step of the flow."""
+    frame: str                  # "document" or "coordinate"
+    moves: bool = False         # its place among the frame's moving steps
+    switch: bool = False        # whether it may be off
+    why: str = ""               # why it keeps its place or cannot be off
+
+
+# The building blocks of the reading, by the id of their step. A moving
+# block runs where the file puts it among the moving blocks of its frame; a
+# block that does not move keeps its place, and one that is not a switch is
+# always on.
+BLOCKS = {
+    "figures": Block("document", why="every request shows the lines a "
+                     "figure is written off into, so they come first"),
+    "pieces": Block("document", why="every request shows pieces, so the "
+                    "document is cut into them before anything is asked"),
+    "sentences": Block("document", switch=True,
+                       why="a field's sentence orders the pieces its finds "
+                       "are asked in, so it comes before them"),
+    "settled": Block("document", switch=True,
+                     why="what the document settles is shown with every "
+                     "request after it, so it is asked before them"),
+    "works": Block("document", moves=True, switch=True),
+    "document_fields": Block("document", moves=True, switch=True),
+    "finds": Block("document", moves=True,
+                   why="without its finds no value is read"),
+    "coordinates": Block("document", moves=True,
+                         why="a value without its coordinates is no row"),
+    "own_place": Block("coordinate", why="a coordinate is asked at its "
+                       "value's own place first"),
+    "search_sentence": Block("coordinate", moves=True, switch=True),
+    "beside": Block("coordinate", moves=True, switch=True),
+    "search": Block("coordinate", moves=True, switch=True),
+    "about": Block("coordinate", switch=True,
+                   why="it asks of a find from another place whether it "
+                   "speaks about the value, wherever the find came from"),
+    "plan_years": Block("coordinate", moves=True, switch=True),
+    "entry": Block("document", why="a list's answer is one of its entries "
+                   "(owner decision 2026-09-11)"),
+    "name": Block("document", why="a name the spec merges is an entry of "
+                  "the document's list"),
+    "follow_up": Block("document", why="how often is its number "
+                       "(follow_ups), 0 asks none"),
+    "replies": Block("document", why="how often is its number (replies)"),
+    "compute": Block("document", switch=True,
+                     why="it computes from the rows the reading wrote, so "
+                     "it comes after them"),
+}
+# What has to come before what, among the blocks that move.
+BEFORE = (("finds", "coordinates", "a value's coordinates are asked after "
+           "its finds"),
+          ("search_sentence", "search", "the search goes with the sentence, "
+           "so it is written before"))
 # The switches of a spec and a profile a step can show (`shows`) or need to
 # be asked at all (`needs`); what each is in a profile is `docpipe edit`'s to
 # say (`editor.flow`).
@@ -169,6 +234,7 @@ class Flow:
     steps: list
     files: tuple                    # ((profile name, path)), nearest first
     sha256: str
+    steps_from: str = ""            # the profile whose file says the steps
 
 
 # -- the file ------------------------------------------------------------------
@@ -239,6 +305,8 @@ def _steps(where, raw, seen: dict, asked: set, bounded: set) -> list:
             if key in step and not (isinstance(step[key], str)
                                     and step[key].strip()):
                 raise FlowError(f"{at}: {key} must be a text, not empty")
+        if "off" in step and not isinstance(step["off"], bool):
+            raise FlowError(f"{at}: off must be true or false")
         if "says" not in step:
             raise FlowError(f"{at} must say what it does (says)")
         if "ask" in step:
@@ -303,12 +371,15 @@ def parse(raw: str, where, whole: bool) -> dict:
                         f"number -> its value")
     read = {name: checked(where, name, value)
             for name, value in numbers.items()}
-    if not whole:
-        if "steps" in data:
-            raise FlowError(
-                f"{where}: the steps are those of the file the flow starts "
-                f"from; this file sets numbers only")
+    if not whole and "steps" not in data:
         return {"numbers": read}
+    if not whole:
+        asked_: set = set()
+        steps = _steps(where, data.get("steps"), {}, asked_, set())
+        said = arrangement_problems(steps, None)
+        if said:
+            raise FlowError(f"{where}: {said[0]}")
+        return {"numbers": read, "steps": steps}
     missing = [number.name for number in NUMBERS if number.name not in read]
     if missing:
         raise FlowError(f"{where}: names no {', '.join(missing)}; the file "
@@ -324,6 +395,9 @@ def parse(raw: str, where, whole: bool) -> dict:
              if number.name not in bounded]
     if loose:
         raise FlowError(f"{where}: {', '.join(loose)} bounds no step")
+    said = arrangement_problems(steps, steps)
+    if said:
+        raise FlowError(f"{where}: {said[0]}")
     return {"numbers": read, "steps": steps}
 
 
@@ -360,15 +434,18 @@ def _merged(written: list) -> Flow:
     whole = parse(start.read_text(encoding="utf-8"), start, True)
     numbers = dict(whole["numbers"])
     owners = {name: first for name in numbers}
+    steps, steps_from = whole["steps"], first
     for name, path in reversed(nearer):
         own = parse(path.read_text(encoding="utf-8"), path, False)
         for number, value in own["numbers"].items():
             numbers[number], owners[number] = value, name
+        if "steps" in own:
+            steps, steps_from = own["steps"], name
     numbers = {number.name: numbers[number.name] for number in NUMBERS}
     sha = hashlib.sha256(json.dumps(
-        {"numbers": numbers, "steps": whole["steps"]}, ensure_ascii=False,
+        {"numbers": numbers, "steps": steps}, ensure_ascii=False,
         sort_keys=True).encode("utf-8")).hexdigest()
-    flow = Flow(numbers, owners, whole["steps"], tuple(written), sha)
+    flow = Flow(numbers, owners, steps, tuple(written), sha, steps_from)
     while len(_loaded) >= LOADED_KEPT:
         _loaded.pop(next(iter(_loaded)))
     _loaded[key] = flow
@@ -450,3 +527,121 @@ def default() -> Numbers:
     """The numbers of the default profile's file, no setting applied: what
     a reading takes where it is given none."""
     return in_effect(None, environ={})
+
+
+# -- the order the run reads in ---------------------------------------------------
+
+def _walk(steps: list, frame: str = "document") -> list:
+    """[(frame, step)] of *steps* and the steps of their frames, in order."""
+    out = []
+    for step in steps:
+        out.append((frame, step))
+        if "steps" in step:
+            out += _walk(step["steps"], "coordinate")
+    return out
+
+
+def _default_steps() -> list:
+    return parse(DEFAULT.read_text(encoding="utf-8"), DEFAULT, True)["steps"]
+
+
+def arrangement_problems(steps: list, against: Optional[list] = None) -> list:
+    """Why the run cannot read in the order of *steps*, [] where it can,
+    held against the steps of the default profile's file (*against*, read
+    from it where not given):
+    a block of the code that is missing or stands twice or in another
+    frame, a step that keeps its place moved, a block that cannot be off
+    switched off, a moving block before one it has to follow."""
+    out = []
+    walked = _walk(steps)
+    ids = [step.get("id") for _, step in walked]
+    for name in ids:
+        if name not in BLOCKS:
+            out.append(f"{name} is no step the code has"
+                       f"{_nearest(name, BLOCKS)}")
+    for name in BLOCKS:
+        if ids.count(name) != 1:
+            out.append(f"the step {name} stands {ids.count(name)} times; "
+                       f"every step of the code stands once")
+    if out:
+        return out
+    for frame, step in walked:
+        block = BLOCKS[step["id"]]
+        if block.frame != frame:
+            out.append(f"{step['id']} stands in the frame of each "
+                       f"{'value' if frame == 'coordinate' else 'document'}"
+                       f", and the code has it only in the other")
+        if step.get("off") and not block.switch:
+            out.append(f"{step['id']} cannot be off: {block.why}")
+    for frame in ("document", "coordinate"):
+        fixed_here = [step["id"] for f, step in walked
+                      if f == frame and not BLOCKS[step["id"]].moves]
+        fixed_default = [step["id"] for f, step in _walk(
+            against if against is not None else _default_steps())
+                         if f == frame and not BLOCKS[step["id"]].moves]
+        if fixed_here != fixed_default:
+            moved = next(name for name, want in zip(fixed_here,
+                                                    fixed_default)
+                         if name != want)
+            out.append(f"{moved} keeps its place: {BLOCKS[moved].why}")
+    order = [step["id"] for _, step in walked]
+    for first, then, why in BEFORE:
+        on = {step["id"] for _, step in walked if not step.get("off")}
+        if first in on and then in on \
+                and order.index(first) > order.index(then):
+            out.append(f"{then} stands before {first}: {why}")
+    top = [step["id"] for step in steps]
+    ready = [name for name in top
+             if name in BLOCKS and BLOCKS[name].frame == "document"
+             and not BLOCKS[name].moves and BLOCKS[name].why
+             and name in ("figures", "pieces", "sentences", "settled")]
+    for name in top:
+        if name in BLOCKS and BLOCKS[name].moves and ready                 and top.index(name) < top.index(ready[-1]):
+            out.append(f"{name} stands before {ready[-1]}: "
+                       f"{BLOCKS[ready[-1]].why}")
+    if "compute" in top and top.index("compute") < max(
+            top.index(name) for name in ("finds", "coordinates")):
+        out.append(f"compute stands before the reading: "
+                   f"{BLOCKS['compute'].why}")
+    moving = [name for name in arranged(steps).coordinate
+              if name in ("search_sentence", "beside", "search",
+                          "plan_years")]
+    if "plan_years" in moving:
+        at = moving.index("plan_years")
+        if 0 < at < len(moving) - 1:
+            out.append("plan_years stands between the steps of the search: "
+                       "the plan's years are asked before the search or "
+                       "after it")
+    first_coordinate = [step["id"] for f, step in walked
+                        if f == "coordinate"][:1]
+    if first_coordinate != ["own_place"]:
+        out.append(f"own_place keeps its place: {BLOCKS['own_place'].why}")
+    return out
+
+
+@dataclass(frozen=True)
+class Arrangement:
+    """The order the run reads a document in, as its flow says it."""
+    document: tuple             # the moving blocks of a document, in order
+    coordinate: tuple           # the moving blocks of a coordinate, in order
+    off: frozenset              # the blocks left out
+
+    def on(self, name: str) -> bool:
+        return name not in self.off
+
+
+def arranged(steps: list) -> Arrangement:
+    walked = _walk(steps)
+    off = frozenset(step["id"] for _, step in walked if step.get("off"))
+    return Arrangement(
+        tuple(step["id"] for frame, step in walked
+              if frame == "document" and BLOCKS[step["id"]].moves),
+        tuple(step["id"] for frame, step in walked
+              if frame == "coordinate" and BLOCKS[step["id"]].moves),
+        off)
+
+
+def arrangement(profile=None) -> Arrangement:
+    """The order a run of *profile* reads in (the default profile's where
+    None): its flow's steps."""
+    return arranged(load(profile).steps)

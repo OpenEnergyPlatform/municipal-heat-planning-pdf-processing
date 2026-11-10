@@ -77,8 +77,7 @@ def decimal_mark() -> str
 ```
 
 How the documents of the ambient profile write the decimal: "," or
-".". The profile says it (`extraction.py: DECIMAL_MARK`); one that does
-not is read with the comma, as every corpus was before this was asked.
+"." (rule `decimal_mark`).
 
 It decides only what the digits leave open. '1.036.767,8' reads the same
 under both. '3,251' is 3.251 where the comma is the decimal mark and
@@ -213,6 +212,12 @@ def number_outside_quote(claim: dict) -> bool
 
 A number the quote it stands under does not print. What
 `value_in_quote` refuses, asked before the parameter of a row is known.
+
+### min_quote_chars
+
+```python
+def min_quote_chars() -> int
+```
 
 ### not_in_quote
 

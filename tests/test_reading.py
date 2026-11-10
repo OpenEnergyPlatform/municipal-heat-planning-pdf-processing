@@ -118,7 +118,7 @@ def test_similar_lists_the_passages_nearest_to_its_sentence_best_of_each_kind():
     assert PROBE not in json.dumps(gathered.context(), ensure_ascii=False)
     assert gathered.hits[0]["similar"] == PROBE
     assert [hit["title"] for hit in listed["hits"]] \
-        == [f"S{i}" for i in range(reading.SHOWN["section"])]
+        == [f"S{i}" for i in range(reading.shown_counts()["section"])]
     # The same sentence again asks nothing and brings nothing new.
     assert not gathered.fetch(ask, ORDER, PLAN, None)
     assert len(calls) == 1

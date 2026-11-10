@@ -1,0 +1,9 @@
+{
+  "classes": {},
+  "constraints": {},
+  "rules": {
+    "base": "https://openenergyplatform.org/id/mhpkg/",
+    "rounding_tolerance": 0.02,
+    "contested_in_full": true
+  }
+}

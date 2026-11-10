@@ -50,6 +50,26 @@ def _serializer(profile, db: Path):
         Path(spec_path).read_text(encoding="utf-8")))
 
 
+def _stopping(out: Path, profile, paths: list) -> list:
+    """The violations of the graph at *out* whose constraint the profile's
+    graph file stops a job for."""
+    from docpipe import graphfile
+    from .serialize import profile_context
+    made = graphfile.load(profile)
+    stop = {key for key, effect in made.constraints.items()
+            if effect == "stop"}
+    if not stop:
+        return []
+    found = graphfile.violations(Path(out).read_text(encoding="utf-8"),
+                                 paths, profile_context(profile))
+    hit: dict = {}
+    for key, _node in found:
+        if key in stop:
+            hit[key] = hit.get(key, 0) + 1
+    return [f"the graph file stops a job for {key}: {count} node(s)"
+            for key, count in sorted(hit.items())]
+
+
 def new_kinds(report: dict, against: dict) -> list:
     """The kinds of violation in *report* that *against* does not have."""
     return sorted(set(report.get("kinds") or {})
@@ -61,14 +81,16 @@ def check(harvest: Path, db: Path, out: Path,
     """Why the graph of *harvest* cannot be written as the run would write
     it; empty when it can."""
     from docpipe.profile import load_profile
-    from .serialize import profile_context, run as serialize_run, validate
+    from .serialize import (apply_graph_file, profile_context,
+                            run as serialize_run, validate)
     profile = profile or load_profile()
+    index: dict = {}
     try:
         serializer = _serializer(profile, db)
     except Exception as exc:          # what building it raises is the reason
         return [f"the serializer does not build: {exc}"]
     try:
-        counts = serialize_run(harvest, out, serializer)
+        counts = serialize_run(harvest, out, serializer, index=index)
     except Exception as exc:
         return [f"the graph is not written: {exc}"]
     if not counts:
@@ -84,9 +106,19 @@ def check(harvest: Path, db: Path, out: Path,
         return [f"no shapes from a refresh to hold the graph against "
                 f"(python -m profiles.{profile.name}.vocabulary --refresh)"]
     try:
+        apply_graph_file(out, profile, paths,
+                                profile_context(profile), index)
+    except Exception as exc:
+        return [f"the graph file is not applied: {exc}"]
+    try:
         validate(out, paths, context=profile_context(profile))
     except Exception as exc:
         return [f"the validator does not run: {exc}"]
+    # A constraint the profile's graph file stops a job for (`stop`):
+    # held here, before the model starts.
+    stopping = _stopping(out, profile, paths)
+    if stopping:
+        return stopping
     written = json.loads(out.with_name(out.name + ".shacl.json")
                          .read_text(encoding="utf-8"))
     if against is None or not Path(against).is_file():

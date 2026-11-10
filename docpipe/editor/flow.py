@@ -180,9 +180,16 @@ def _step(step: dict, data: Optional[dict], owners: dict,
             off = (SWITCHES[needs][1] if data is not None
                    or needs == "compute"
                    else "this profile has no extraction spec")
+    if step.get("off"):
+        off = "switched off in the flow file: no run takes this step"
+    block = flow_map.BLOCKS.get(step["id"])
     return {"id": step["id"], "ask": kind, "each": step.get("each"),
             "when": step.get("when"), "says": step["says"],
             "bound": _bound(step.get("bound")), "prompt": prompt, "off": off,
+            "switched_off": bool(step.get("off")),
+            "moves": bool(block and block.moves),
+            "switch": bool(block and block.switch),
+            "keeps": block.why if block else "",
             "switches": [_switch(name, data)
                          for name in step.get("shows") or ()],
             "steps": [_step(inner, data, owners, computes)
@@ -283,18 +290,69 @@ def _text(raw: Optional[bytes]) -> Optional[str]:
     return None if raw is None else raw.decode("utf-8").replace(CR + LF, LF)
 
 
-def judge(profile, own_raw: Optional[bytes], numbers, name: str) -> dict:
+def arranged_steps(steps: list, order=None, off=None) -> tuple:
+    """(the steps with the order and the switches of the page, errors).
+    *order* is {frame: [the ids of its steps in their new order]} (the
+    document's steps under "document"), *off* the ids of the steps
+    switched off; a step not named keeps its place and its switch."""
+    import copy
+    out = copy.deepcopy(steps)
+    errors = []
+    if order is not None and not isinstance(order, dict):
+        return out, ["order must be an object: a frame -> the ids of its "
+                     "steps"]
+    if off is not None and not (isinstance(off, list)
+                                and all(isinstance(one, str) for one in off)):
+        return out, ["off must be a list of step ids"]
+
+    def walk(level: list, frame: str) -> list:
+        wanted = (order or {}).get(frame)
+        if wanted is not None:
+            ids = [step.get("id") for step in level]
+            if sorted(map(str, wanted)) != sorted(map(str, ids)):
+                errors.append(f"the order of {frame} names "
+                              f"{', '.join(map(str, wanted))}, its steps are "
+                              f"{', '.join(map(str, ids))}")
+            else:
+                by_id = {step.get("id"): step for step in level}
+                level = [by_id[one] for one in wanted]
+        for step in level:
+            if off is not None:
+                if step.get("id") in off:
+                    step["off"] = True
+                else:
+                    step.pop("off", None)
+            if isinstance(step.get("steps"), list):
+                step["steps"] = walk(step["steps"], step.get("id"))
+        return level
+
+    return walk(out, "document"), errors
+
+
+def judge(profile, own_raw: Optional[bytes], numbers, name: str,
+          order=None, off=None) -> dict:
     """What a save of *numbers* ({name: value}, those not named as the
-    files say them) would do: {"ok", "errors": [{"name", "message"}],
+    files say them) and of the order of the steps (*order*, *off*:
+    `arranged_steps`) would do: {"ok", "errors": [{"name", "message"}],
     "changed": [{"name", "from", "to"}], "file", "writes" ("created",
     "changed", "removed", "unchanged"), "diff", "says", "text"}. *text* is
     the profile's file as it would stand, in the line ends it has (plain
     ones where it is new), None where it would be removed. *name* is the
-    file as the user sees it."""
+    file as the user sees it. An order the run cannot read in is refused
+    with its reason (`flow.arrangement_problems`); a profile that orders
+    its steps otherwise than it inherits writes them all."""
     flow = flow_map.load(profile)
     below = flow_map.inherited(profile)
     errors = []
     values = dict(flow.numbers)
+    steps = flow.steps
+    if order is not None or off is not None:
+        steps, wrong = arranged_steps(flow.steps, order, off)
+        errors += [{"name": None, "message": one} for one in wrong]
+        if not wrong:
+            errors += [{"name": None, "message": one} for one in
+                       flow_map.arrangement_problems(
+                           steps, flow_map._default_steps())]
     if not isinstance(numbers, dict):
         errors.append({"name": None,
                        "message": "numbers must be an object, the name of a "
@@ -315,16 +373,20 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str) -> dict:
     # A file keeps its line ends; one that is new is written with plain ones.
     newline = CR + LF if (CR + LF).encode() in (own_raw or b"") else LF
     if below is None:
-        # The profile's own file is the whole flow: its steps stay.
+        # The profile's own file is the whole flow: its steps stay, in the
+        # order the page gives them.
         whole = json.loads(old) if old is not None else {}
-        new = flow_map.dump({**whole, "numbers": {
+        new = flow_map.dump({**whole, "steps": steps, "numbers": {
             number.name: values[number.name]
             for number in flow_map.NUMBERS}})
     else:
         own = {number.name: values[number.name]
                for number in flow_map.NUMBERS
                if values[number.name] != below.numbers[number.name]}
-        new = flow_map.dump({"numbers": own}) if own else None
+        data = {"numbers": own} if own else {}
+        if steps != below.steps:
+            data["steps"] = steps
+        new = flow_map.dump(data) if data else None
     if errors:
         new = old
     writes = ("unchanged" if new == old else "created" if old is None
@@ -344,23 +406,32 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str) -> dict:
                 f"({in_effect.origin[number.name]}: "
                 f"{os.environ[number.env]}) and wins over the file for a "
                 f"run started here.")
+    moved = [] if steps == flow.steps else [
+        {"name": "steps", "from": ", ".join(
+            step.get("id") + (" (off)" if step.get("off") else "")
+            for _frame, step in flow_map._walk(flow.steps)),
+         "to": ", ".join(step.get("id") + (" (off)" if step.get("off")
+                                           else "")
+                         for _frame, step in flow_map._walk(steps))}]
     return {"ok": not errors, "errors": errors,
-            "changed": [{"name": number.name,
-                         "from": flow.numbers[number.name],
-                         "to": values[number.name]}
-                        for number in flow_map.NUMBERS
-                        if values[number.name] != flow.numbers[number.name]],
+            "changed": moved + [{"name": number.name,
+                                 "from": flow.numbers[number.name],
+                                 "to": values[number.name]}
+                                for number in flow_map.NUMBERS
+                                if values[number.name]
+                                != flow.numbers[number.name]],
             "file": name, "writes": writes, "diff": diff, "says": says,
             "text": None if new is None else new.replace(LF, newline)}
 
 
 def save(profile, own_raw: Optional[bytes], numbers, base: Optional[str],
-         name: str) -> tuple:
+         name: str, order=None, off=None) -> tuple:
     """(what the page is told, the bytes to write or None, whether the
     file is to be removed). Bytes come back only for numbers the flow
-    takes, and only where the file is as the page loaded it (*base*, the
-    sha256 of its bytes, None where it had none)."""
-    report = judge(profile, own_raw, numbers, name)
+    takes and an order the run can read in, and only where the file is as
+    the page loaded it (*base*, the sha256 of its bytes, None where it had
+    none)."""
+    report = judge(profile, own_raw, numbers, name, order, off)
     text = report.pop("text")
     if not report["ok"]:
         return {"saved": False, "reason": "invalid",

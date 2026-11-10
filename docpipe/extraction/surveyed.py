@@ -186,7 +186,8 @@ class SurveyedHarvest:
                  transcripts: Optional[Callable] = None,
                  orders: Optional[Callable] = None,
                  numbers=None,
-                 each: Optional[Callable] = None, trace=None):
+                 each: Optional[Callable] = None, trace=None,
+                 arrangement=None):
         self.spec = spec
         self.make_reader = make_reader
         self.passages_of = passages_of
@@ -196,6 +197,9 @@ class SurveyedHarvest:
         self.orders = orders
         self.numbers = numbers or flow_map.default()
         self.chunk_units = int(self.numbers.piece_lines)
+        # Which steps of the flow are off: what the document settles, the
+        # sentences its fields' pieces are ordered with.
+        self.arrangement = arrangement or flow_map.arrangement(None)
         self.each = each
         self.trace = trace
         self._made: dict = {}
@@ -231,7 +235,8 @@ class SurveyedHarvest:
             counts.ask("transcribe", asked)
         reader = self.reader_of(spec)
         reader.lists_of(plan)
-        reader.settled(plan, counts)
+        if self.arrangement.on("settled"):
+            reader.settled(plan, counts)
         with self._lock:
             self._plans[document_id] = (plan, counts)
             while len(self._plans) > PLANS_KEPT:
@@ -284,7 +289,8 @@ class SurveyedHarvest:
                              key=lambda c: plan.position[c.key])
         order_of = (self.orders(plan, located, self.chunk_units, scope,
                                 read_in)
-                    if self.orders is not None and located else {})
+                    if self.orders is not None and located
+                    and self.arrangement.on("sentences") else {})
         reads = self.reader_of(spec)(plan, parameters, chunks, counts,
                                      order_of)
         if self.halted():

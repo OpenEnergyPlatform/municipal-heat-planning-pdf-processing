@@ -465,7 +465,7 @@ def described(names, *documents):
 
 
 def test_a_node_the_graph_points_at_is_described_once_by_its_own_source():
-    iam = OEO + kg.IAM_SCENARIO
+    iam = OEO + kg.ALWAYS_TYPES[0]
     names = {REGION + "Germany": "Germany",
              iam: "integrated assessment modeling scenario"}
     graph, texts = described(names, ("a", [REGION + "Germany"]),

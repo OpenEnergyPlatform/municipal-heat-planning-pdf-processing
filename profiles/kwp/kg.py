@@ -22,6 +22,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Optional
 
+from docpipe import graphfile
 from docpipe.extraction import graphkit
 from docpipe.extraction.fields import DERIVED
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_escape
@@ -33,7 +34,11 @@ from profiles.kwp import mhpkg
 
 log = logging.getLogger(__name__)
 
-BASE = "https://openenergyplatform.org/id/mhpkg/"
+# Where the nodes are named, how far apart two readings of one number may
+# lie and whether a still contested number stays in the full graph are rules
+# of graph.json beside this file (`docpipe.graphfile`, the Graph tab of
+# `docpipe edit`).
+BASE = graphfile.get("base", "kwp")
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 NS_MHPKG = graphkit.base_namespace(BASE)
 
@@ -602,8 +607,11 @@ def _value_iri(heatplan: str, row: dict, label: str = "") -> str:
 
 # How far apart two readings of one number may lie and still be one rounded
 # statement of it: "rund 1,6 Mio. MWh" beside a table's 1.626.000. corpus_m5
-# dropped both sides of 642 such identities.
-ROUNDING_TOLERANCE = 0.02
+# dropped both sides of 642 such identities. The rule `rounding_tolerance`.
+ROUNDING_TOLERANCE = graphfile.get("rounding_tolerance", "kwp")
+# Whether a number still contested after wording, rounding and trust stays in
+# the full graph as a node of its own (owner decision 2026-11-02).
+CONTESTED_IN_FULL = graphfile.get("contested_in_full", "kwp")
 _RANK = {level: rank for rank, level in enumerate(LEVELS)}
 
 
@@ -1027,7 +1035,8 @@ def make_serializer(db_path: Path, strict: bool = False):
         for iri, rows_of in claims.items():
             got, lost, named = settle(iri, rows_of, part_iri[rows_of[0]["scenario"]],
                                       transcribed=bool(transcribed),
-                                      keep_open=not strict)
+                                      keep_open=(not strict
+                                                 and CONTESTED_IN_FULL))
             values.update(got)
             marks.update(named)
             for reason, n in lost.items():

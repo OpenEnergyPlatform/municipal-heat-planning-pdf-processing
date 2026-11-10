@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Callable, Optional
 
-from ..profile import ENV_VAR, active_profile
+from .. import rules
 from .fields import DERIVED, READ, UNBACKED
 from .spec import Parameter, fold_label
 
@@ -75,38 +75,41 @@ _DATED_YEAR = re.compile(r"(?<![\d.,])(?:\d{1,2}\.){1,2}((?:19|20)\d{2})(?!\d|[.
 _SPACE_GROUPED = re.compile(r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?")
 
 
-# The signs of a negative number, as a PDF prints them and a model retypes them.
-_MINUS = ("-", "–", "−")
-# A number with its sign in front. After a letter, a digit or a separator the
-# dash joins two things ("KWP-2030", "2020-2030") and is no sign.
-_SIGNED = re.compile(
-    rf"(?<![\w.,])[{''.join(_MINUS)}]\s?"
-    rf"({_SPACE_GROUPED.pattern}|{_NUMBER.pattern})")
+def _minus() -> str:
+    """The signs of a negative number, as a PDF prints them and a model
+    retypes them (rule `minus_signs`)."""
+    return rules.get("minus_signs")
+
+
+def _signed():
+    """A number with its sign in front. After a letter, a digit or a
+    separator the dash joins two things ("KWP-2030", "2020-2030") and is no
+    sign."""
+    return rules.derived("verify.signed", lambda: re.compile(
+        rf"(?<![\w.,])[{re.escape(_minus())}]\s?"
+        rf"({_SPACE_GROUPED.pattern}|{_NUMBER.pattern})"))
+
+
+def _dated_years(text: str) -> list:
+    """The years at the end of the dotted dates of *text*, where the rule
+    `dotted_date_year` takes them."""
+    if not rules.get("dotted_date_year"):
+        return []
+    return [m.group(1) for m in _DATED_YEAR.finditer(text or "")]
 
 
 MARKS = (",", ".")
-_marks: dict = {}
 
 
 def decimal_mark() -> str:
     """How the documents of the ambient profile write the decimal: "," or
-    ".". The profile says it (`extraction.py: DECIMAL_MARK`); one that does
-    not is read with the comma, as every corpus was before this was asked.
+    "." (rule `decimal_mark`).
 
     It decides only what the digits leave open. '1.036.767,8' reads the same
     under both. '3,251' is 3.251 where the comma is the decimal mark and
     3251 where the point is, and no rule about digits can tell which.
     """
-    name = os.environ.get(ENV_VAR)
-    if name not in _marks:
-        profile = active_profile()
-        mark = profile.component("extraction", "DECIMAL_MARK") \
-            if profile is not None else None
-        if mark is not None and mark not in MARKS:
-            raise ValueError(f"extraction.DECIMAL_MARK of profile {name!r} "
-                             f"is {mark!r}; it is one of {MARKS}")
-        _marks[name] = mark or ","
-    return _marks[name]
+    return rules.get("decimal_mark")
 
 
 def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
@@ -130,7 +133,7 @@ def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
     if not isinstance(raw, str):
         return None
     s = raw.strip().replace(" ", "").replace(" ", "").replace(" ", "")
-    if s[:1] in _MINUS:
+    if s[:1] and s[:1] in _minus():
         magnitude = canonical_number(s[1:], decimal)
         return ("-" + magnitude
                 if magnitude and not magnitude.startswith("-") else None)
@@ -174,12 +177,12 @@ def numbers_in(text: str, decimal: Optional[str] = None) -> set:
     # The year of a dotted date. "Stand 09.12.2025" is one token to _NUMBER
     # and reads as the grouped number 09122025, so the 2025 it plainly prints
     # was not in the quote: 12 years on the corpus_m5 canary were dropped so.
-    found.update(m.group(1) for m in _DATED_YEAR.finditer(text or ""))
+    found.update(_dated_years(text))
     # A printed sign is part of the number: "-1.155" holds -1155, and a table
     # of savings lost all its values while the sign stayed outside this set.
     # The magnitude stays in too: the dash of "2020 - 2030" may be no sign.
     found.update("-" + canonical_number(m.group(1), decimal)
-                 for m in _SIGNED.finditer(text or ""))
+                 for m in _signed().finditer(text or ""))
     return found
 
 
@@ -196,15 +199,12 @@ _BR = re.compile(r"<br\s*/?>", re.I)
 # Quotation marks and dashes a PDF prints and a model retypes. The model is
 # shown the transcription and writes its quote from it, but the two go through
 # different encoders, and a passage that says „Bestand" against a quote that
-# says "Bestand" is the same sentence twice under two code points.
-_SAME = str.maketrans({
-    "„": '"', "“": '"', "”": '"', "‟": '"',  # „ “ ” ‟
-    "«": '"', "»": '"',                                # « »
-    "‘": "'", "’": "'", "‚": "'", "‛": "'",  # ‘ ’ ‚ ‛
-    "–": "-", "—": "-", "−": "-",                 # – — −
-    " ": " ", " ": " ", " ": " ",                 # the thin spaces
-    "­": "",                                                # the soft hyphen
-})
+# says "Bestand" is the same sentence twice under two code points. Which
+# characters are one is the rule `same_characters`.
+def _same() -> dict:
+    return rules.derived("verify.same", lambda: str.maketrans(
+        {key: value for key, value in rules.get("same_characters").items()
+         if len(key) == 1}))
 
 
 def flat(text: str) -> str:
@@ -216,7 +216,7 @@ def flat(text: str) -> str:
     two different sentences. This is not a check, it is the form both sides
     are brought into before the one check that exists runs.
     """
-    same = unicodedata.normalize("NFKC", text or "").translate(_SAME)
+    same = unicodedata.normalize("NFKC", text or "").translate(_same())
     return _WS.sub(" ", _BR.sub(" ", same.replace("**", ""))).strip()
 
 
@@ -230,20 +230,21 @@ def quote_in(source: str, quote: str) -> bool:
 # What joins a name or a number to more of itself: "SSP5-3.4-OS",
 # "non-OECD", "11.109", "1.109,5". A stretch with a letter or a digit right
 # beside it, or one of these and then a letter or a digit, is part of a
-# longer name or number, not the thing itself.
-_JOINERS = "-._/,"
+# longer name or number, not the thing itself (rule `word_joiners`).
 
 
 def _alone(text: str, start: int, end: int) -> bool:
     """Does text[start:end] stand for itself, not as part of a longer name or
     number? Only an end that is a letter or a digit can run on."""
+    joiners = rules.get("word_joiners")
+
     def runs_on(at: int, step: int) -> bool:
         if not 0 <= at < len(text):
             return False
         if text[at].isalnum():
             return True
         beyond = at + step
-        return (text[at] in _JOINERS and 0 <= beyond < len(text)
+        return (text[at] in joiners and 0 <= beyond < len(text)
                 and text[beyond].isalnum())
     first, last = text[start:start + 1], text[end - 1:end]
     return not ((first.isalnum() and runs_on(start - 1, -1))
@@ -271,14 +272,13 @@ def _times_number(quote: str, value) -> int:
         return 0
     text = flat(quote or "")
     if wanted.startswith("-"):
-        return sum(1 for m in _SIGNED.finditer(text)
+        return sum(1 for m in _signed().finditer(text)
                    if canonical_number(m.group(1)) == wanted[1:])
     count = sum(1 for m in _NUMBER.finditer(text)
                 if canonical_number(m.group(0)) == wanted)
     count += sum(1 for m in _SPACE_GROUPED.finditer(text)
                  if canonical_number(m.group(0)) == wanted)
-    count += sum(1 for m in _DATED_YEAR.finditer(text)
-                 if m.group(1) == wanted)
+    count += sum(1 for year in _dated_years(text) if year == wanted)
     return count
 
 
@@ -345,7 +345,8 @@ def _check_value(raw: dict, parameter: Parameter, flags: list, *,
         if wording and wording != unit:
             out["unit_raw"] = wording
         out["unit"] = unit
-        out["value_target"] = round(float(value) * float(factor), 6)
+        out["value_target"] = round(float(value) * float(factor),
+                                    rules.get("unit_factor_places"))
         return out, None
 
     wording = raw.get("value_raw")
@@ -473,8 +474,10 @@ def number_outside_quote(claim: dict) -> bool:
 # nothing about where it read THIS one. The value quote has been held to it
 # since the first corpus run; the coordinate quotes were not, although
 # field.md rule 3 promises the same, and three of Kassel's year readings were
-# the bare year.
-MIN_QUOTE_CHARS = 8
+# the bare year. How many characters is the rule `quote_min_chars`.
+def min_quote_chars() -> int:
+    return rules.get("quote_min_chars")
+
 
 # Why the fold refuses a value's quote, said once for `verify_tuple` and for
 # `value_refused`, which asks the same while the model can still answer.
@@ -607,7 +610,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         # figure is its evidence, and the flag says it is an estimate.
         flags.append(READ_OFF)
     else:
-        if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
+        if not isinstance(quote, str) or len(quote) < min_quote_chars():
             return Refusal(raw, QUOTE_TOO_SHORT)
         if not quote_in(source_text, quote):
             return Refusal(raw, QUOTE_NOT_FOUND)
@@ -699,7 +702,7 @@ def value_refused(raw: dict, parameter: Parameter, source_text: str,
     if read_off(raw, owner_kind):
         return None
     quote = raw.get("quote")
-    if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
+    if not isinstance(quote, str) or len(quote) < min_quote_chars():
         return QUOTE_TOO_SHORT
     if not quote_in(source_text or "", quote):
         return QUOTE_NOT_FOUND

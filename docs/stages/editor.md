@@ -407,10 +407,8 @@ coordinate of each value is asked on its own and searched for where it is open,
 and what the checked rows leave open is computed. The steps and the numbers that
 bound them stand in one file, `flow.json` (`extraction.flow`). The default
 profile's file is the whole flow: `numbers` and `steps`. A profile that extends
-it may have a `flow.json` of its own that holds `numbers` only, and only the ones
-it sets differently; it is laid over the inherited file number by number, and a
-file of a profile that writes steps is refused. The steps describe the flow; the
-order they are run in is still the code's. The loader is strict: every request
+it may have a `flow.json` of its own that holds the numbers it sets differently,
+laid over the inherited file number by number, and may write all steps. The steps are run in the order the file lists them (see Reordering the steps). The loader is strict: every request
 the code sends stands in the `ask` of at least one step, a step asks no request
 the code does not send, every number bounds a step, and an
 unknown key, a key written twice, a value that is no whole number or lies below
@@ -502,12 +500,50 @@ carries before its host (a user, a password) is replaced by `***@`.
 The Spec tab's form of a plan field that is a year has the key `of`: a coordinate
 of a group's pair and an entry of its list.
 
+### Reordering the steps
+
+The coordinate steps (`own_place`, `search_sentence`, `beside`, `search`,
+`about`, `plan_years`) can be dragged, or moved with the arrows, and switched
+off in the Flow tab; the reader and the surveyed harvest run them in that
+order (`extraction/flow.py`: `BLOCKS`, `Arrangement`). A step may carry
+`"off": true`. A profile's own `flow.json` may then write all steps. Judge and
+Save take `order` and `off`; an order the run cannot read in is refused with
+its reason (`arrangement_problems`).
+
+## Rules
+
+Each tab that has rules shows them in a panel: each rule with its help, its
+kind and its bounds, taken from the profile's `rules.json` (the default
+profile's file names all of them, a profile's file only what it sets
+differently). A value is checked against the bounds before it is saved
+(`/api/rules`, `/check`, `/save` in `rulespage.py`). An `EXTRACT_*` setting
+wins over the file and the panel says so. No rule makes a harvest stale.
+
+## Sources
+
+The Sources tab shows `sources.json`: the ontology, the shapes and the graph
+queries the profile is written against, the lists drawn from them and which
+coordinate answers from which list. It checks and saves the file. Fetch pulls
+the sources into a temporary folder; Apply writes the files a refresh writes
+into the profile and the fetched files and the lock into the upstream cache. The
+differences of the fetched shapes against the spec are shown per field, and a
+chosen row can be taken into the Spec tab (`sourcespage.py`).
+
+## Graph
+
+The Graph tab shows the classes of the shapes with the fields that write each
+property and the effect of each constraint, and the writer rules, and edits
+`graph.json` (see [the graph](graph.md)). Write probe writes the graph of the
+page's harvest twice into a temporary folder and compares the two
+(`graphpage.py`, `graphprobe.py`).
+
 ## What the editor does not touch
 
-The editor writes four kinds of file through its own code: the spec, the
-prompt files, the sentence files and the profile's `flow.json`, and the write
-guard (`server.Files`) lets that code write, and remove the flow file, only
-inside the profile's folder. It reads only inside the
+The editor writes these kinds of file through its own code: the spec, the
+prompt files, the sentence files and the profile's `flow.json`, `rules.json`,
+`sources.json` and `graph.json`, and the write guard (`server.Files`) lets that
+code write, and remove the flow file, only inside the profile's folder. A second
+guard may write only the upstream cache, for Apply in the Sources tab. It reads only inside the
 folders of the profiles in effect, the harvest it was given, its own page, the
 generated documentation and the folder the before and after comparison of the
 prompts writes into. A path is resolved first, so `..` and links cannot lead out.
@@ -534,9 +570,9 @@ its summary from there.
 
 ## What it does not contain yet
 
-The order of the steps of the reading and what a step does cannot be edited in
-it: they stay code. The prompts, the sentences the stages say outside them, the
-spec and the numbers of the flow are in the page.
+What a step does cannot be edited in it: that stays code. The prompts, the
+sentences the stages say outside them, the spec, the flow, the rules, the sources
+and the graph file are in the page.
 
 ## Module reference
 
@@ -713,8 +749,11 @@ file away, only inside the profile's own folder and read only inside the
 folders of the profiles in
 effect, the harvest it was given, the page itself, the generated
 documentation and the folder the prompt review writes into
-(`<temp>/docpipe-prompt-review`). A path is resolved first, so `..` and links
-cannot lead out. A trace is read by the run's own reader after the guard has
+(`<temp>/docpipe-prompt-review`). One more guard writes the upstream cache
+and nothing else: "Apply" of a fetch puts the fetched files and the lock
+there (`sourcespage.apply`); a fetch itself writes only into a folder of its
+own in the temp directory (`<temp>/docpipe-sources-fetch`). A path is
+resolved first, so `..` and links cannot lead out. A trace is read by the run's own reader after the guard has
 checked its path (`Files.checked`).
 
 The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
@@ -723,6 +762,119 @@ POST only with the header the page sends (a form on another site cannot send
 it). A request it answers without having read it to the end, a refusal, is
 read off before the connection closes, so that the answer arrives. The
 standard library is all this needs.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/editor/rulespage.py</code></summary>
+
+rulespage.py: The rules of a profile as `docpipe edit` shows and sets them,
+each in the tab it belongs to.
+
+The rules themselves are the run's (`docpipe.rules`): their files, their
+strict loader, what each is and where the code applies it. A tab shows the
+rules of its kind (spec, prompts, flow, sources, graph) in their groups, each
+with its value, the value it has where the profile says nothing (the
+inherited one), who says it, the dates of the owner's decisions, and the
+setting that wins over it where one is set. Saving writes the profile's own
+rules.json with the rules it sets differently from what it inherits, and
+every rule it declares itself (that file is where those start from); a file
+with no rule left is removed. Nothing a rule says makes a harvest stale.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/editor/sourcespage.py</code></summary>
+
+sourcespage.py: Where a profile's ontology, shapes and graph come from, as
+`docpipe edit` shows, fetches and applies them, and what they say differently
+from the spec.
+
+The sources themselves are the run's (`docpipe.sources`, `docpipe.upstream`):
+the profile's sources.json, the fetch of each kind, the lock that names what
+the last refresh took. This module turns them into what the page shows and
+decides what each button does (owner, 2026-11-10: "einfach die URLs angeben
+für Ontologie und KG und dann eben die auch die Felder auswählen und
+zusammenlegen"):
+
+- `view`: every source with its address, the kind of version it stands at
+  (a release, the head of a branch, a live query) and the version the lock
+  holds; a token only as set or not set, never its value; the lists and
+  which coordinate answers from which.
+- `judge` and `save`: an edited sources.json, read strictly by the run's own
+  parser before it is written.
+- `fetch`: the profile's own refresh into a folder of the temp directory,
+  never into the profile or the cache: which source moved, what that does
+  to each list (entries added, gone, renamed, redefined) and to the other
+  files the refresh writes.
+- `apply`: a fetch made the profile's: the files the refresh writes into the
+  profile's folder, the fetched files into the cache and the lock beside
+  them, its paths moved from the temp folder to the cache. The spec never.
+- `differences`: per field, what the shapes and the ontology say otherwise
+  than the spec (`draft.differences`, held to the shapes as the profile names
+  its properties; `ontology.definition_differences`), each row the page can
+  act on with an id.
+- `take`: the chosen rows applied to the spec, for the Spec tab to check and
+  save with what it costs: a new entry of a list with the ontology's name
+  and definition, a definition replaced by the ontology's, a property no
+  field asks as a new field (a draft: it needs an example before the strict
+  check takes it), or merged into an existing field as one more property it
+  writes (`also`).
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/editor/graphpage.py</code></summary>
+
+graphpage.py: How a profile's harvest becomes its graph, as `docpipe edit`
+shows and sets it (owner, 2026-11-10: "sodass man steuern kann, wie die
+Ernte in den Graphen aufgenommen wird und welche constraints erfüllt sein
+müssen").
+
+The file and what it does are the run's (`docpipe.graphfile`); the shapes
+are the ones the profile's last refresh pulled. This module turns them into
+what the page draws and decides what a save writes:
+
+- `view`: every class of the shapes with its properties, each with the
+  fields that write it, its constraints (required, at most so many, a closed
+  list, a class, a datatype) and the effect the graph file gives each; per
+  class whether it is written and its address rule; the rules the writer
+  declares, each with its value, what it inherits and the setting that wins
+  over it.
+- `judge` and `save`: an edited graph file, read by the run's own parser.
+  A profile that extends another writes only what differs from what it
+  inherits, and the rules its writer reads.
+- `probe`: the graph of the harvest the page was given, written twice into
+  the temp directory, with the saved file and with the edited one, and what
+  differs: per document the nodes kept and left out, per constraint its
+  violations, the nodes named anew. No model is asked and nothing is saved.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/editor/graphprobe.py</code></summary>
+
+graphprobe.py: The graph of a local harvest as a profile's graph file has
+it written, into a folder of the temp directory, for the Graph tab of
+`docpipe edit` ("Write probe"). A process of its own, because a writer reads
+its rules when it is imported:
+
+    python -m docpipe.editor.graphprobe PROFILE HARVEST DB OUT
+
+with `DOCPIPE_GRAPH_FILE` naming the graph file to write with (the page's,
+unsaved) or unset for the profile's own. Writes OUT/graph.ttl and
+OUT/probe.json: per document the nodes it has in the graph and what left it
+with which constraint, the nodes of each class, the violations of each
+constraint and how many nodes were named anew. Nothing is written but into
+OUT; no model is asked.
 
 Author: Felix Vossel
 

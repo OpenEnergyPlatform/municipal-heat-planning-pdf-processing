@@ -71,6 +71,9 @@ class Setting:
     # (`extraction.flow`): unset, the file says them, so there is no default
     # here.
     flow: tuple = ()
+    # The rule of the profile's rules file this setting wins over
+    # (`docpipe.rules`): unset, the file says it, so there is no default here.
+    rule: Optional[str] = None
 
 
 def S(env: str, key: str, kind: str, default: Optional[str], help: str,
@@ -270,9 +273,10 @@ SETTINGS = (
       "Passages sharing one value request; lowered at start if the context "
       "window is small.",
       stages=("extract",)),
-    S("EXTRACT_CODE_ROUNDS", "extract.code_rounds", "int", "2",
-      "Sandbox calculation rounds one value request may use.",
-      stages=("extract",)),
+    S("EXTRACT_CODE_ROUNDS", "extract.code_rounds", "int", None,
+      "Sandbox calculation rounds one value request may use. "
+      "Unset: the profile's rules file says it (code_rounds).",
+      stages=("extract",), rule="code_rounds"),
     S("EXTRACT_CONTENT_CACHE_OWNERS", "extract.content_cache_owners", "int",
       "300000",
       "Passages (sections, tables, figures) whose text one run keeps, shared "
@@ -282,9 +286,10 @@ SETTINGS = (
       "Field-sweep threads under the row requests; a ceiling for the "
       "adaptive request limit.",
       stages=("extract",)),
-    S("EXTRACT_IMAGE_MAX_SIDE", "extract.image_max_side", "int", "1280",
-      "Longest side in pixels of a crop attached to an extraction request.",
-      stages=("extract",)),
+    S("EXTRACT_IMAGE_MAX_SIDE", "extract.image_max_side", "int", None,
+      "Longest side in pixels of a crop attached to an extraction request. "
+      "Unset: the profile's rules file says it (image_max_side).",
+      stages=("extract",), rule="image_max_side"),
     S("EXTRACT_LIMIT_ADAPTIVE", "extract.limit_adaptive", "flag", "1",
       "Steer the open requests by the server's queue; 0 turns the adaptive "
       "limit off.",
@@ -357,19 +362,23 @@ SETTINGS = (
       "(<graph>.prov.ttl); 0 writes the graph only.",
       stages=("extract",)),
     S("EXTRACT_RETRY_TEMPERATURE_STEP", "extract.retry_temperature_step",
-      "float", "0.1",
+      "float", None,
       "Temperature added per unreadable reply on the next attempt, capped "
-      "at 1.0.",
-      stages=("extract",)),
-    S("EXTRACT_RETRY_TIMEOUT", "extract.retry_timeout", "int", "600",
-      "Seconds a retry may wait for a reply after a request timed out.",
-      stages=("extract",)),
-    S("EXTRACT_RETRY_WAIT", "extract.retry_wait", "float", "2",
-      "Seconds per attempt to wait after a bad reply, up to retry_wait_max.",
-      stages=("extract",)),
-    S("EXTRACT_RETRY_WAIT_MAX", "extract.retry_wait_max", "float", "6",
-      "Longest wait in seconds after a bad reply.",
-      stages=("extract",)),
+      "by the rule retry_temperature_most. "
+      "Unset: the profile's rules file says it (retry_temperature_step).",
+      stages=("extract",), rule="retry_temperature_step"),
+    S("EXTRACT_RETRY_TIMEOUT", "extract.retry_timeout", "int", None,
+      "Seconds a retry may wait for a reply after a request timed out. "
+      "Unset: the profile's rules file says it (repeat_timeout_s).",
+      stages=("extract",), rule="repeat_timeout_s"),
+    S("EXTRACT_RETRY_WAIT", "extract.retry_wait", "float", None,
+      "Seconds per attempt to wait after a bad reply, up to retry_wait_max. "
+      "Unset: the profile's rules file says it (retry_wait_s).",
+      stages=("extract",), rule="retry_wait_s"),
+    S("EXTRACT_RETRY_WAIT_MAX", "extract.retry_wait_max", "float", None,
+      "Longest wait in seconds after a bad reply. "
+      "Unset: the profile's rules file says it (retry_wait_most_s).",
+      stages=("extract",), rule="retry_wait_most_s"),
     S("EXTRACT_SEARCH_CHUNKS", "extract.search_chunks", "int", None,
       "Pieces one request of a search shows. Unset: the profile's flow "
       "file says it (search_per_request).",
@@ -386,9 +395,11 @@ SETTINGS = (
       "search_figures, search_text).",
       stages=("extract",),
       flow=("search_tables", "search_figures", "search_text")),
-    S("EXTRACT_SERVER_DEAD_AFTER", "extract.server_dead_after", "float", "180",
-      "Seconds without any reply from the server before the run ends.",
-      stages=("extract",)),
+    S("EXTRACT_SERVER_DEAD_AFTER", "extract.server_dead_after", "float",
+      None,
+      "Seconds without any reply from the server before the run ends. "
+      "Unset: the profile's rules file says it (server_dead_after_s).",
+      stages=("extract",), rule="server_dead_after_s"),
     S("EXTRACT_SHOW_UNPARSABLE", "extract.show_unparsable", "int", "20",
       "How many unreadable model replies are shown in the log.",
       stages=("extract",)),
@@ -399,14 +410,15 @@ SETTINGS = (
       "Write a per-document event trace beside the harvest; 0 turns tracing "
       "off.",
       stages=("extract",)),
-    S("EXTRACT_TRANSPORT_WAIT", "extract.transport_wait", "float", "15",
+    S("EXTRACT_TRANSPORT_WAIT", "extract.transport_wait", "float", None,
       "Seconds before retrying a request that never reached the server; "
-      "doubles each time.",
-      stages=("extract",)),
+      "doubles each time. Unset: the profile's rules file says it (transport_wait_s).",
+      stages=("extract",), rule="transport_wait_s"),
     S("EXTRACT_TRANSPORT_WAIT_MAX", "extract.transport_wait_max",
-      "float", "120",
-      "Longest wait in seconds between retries to an unreachable server.",
-      stages=("extract",)),
+      "float", None,
+      "Longest wait in seconds between retries to an unreachable server. "
+      "Unset: the profile's rules file says it (transport_wait_most_s).",
+      stages=("extract",), rule="transport_wait_most_s"),
     S("GEMINI_API_KEY", "gemini.api_key", "str", None,
       "Key of the Gemini API, for a role that has no key of its own.",
       secret=True,
@@ -885,11 +897,21 @@ def origin(env: str) -> str:
 
 def from_flow(setting: Setting) -> Optional[tuple]:
     """(value as the environment would spell it, where it comes from) of a
-    setting that is not set and wins over numbers of the flow: what the
-    flow file of the ambient profile says, the default profile's where
-    there is none. None for any other setting, and where the flow cannot be
-    read."""
-    if not setting.flow or setting.env in os.environ:
+    setting that is not set and wins over numbers of the flow or a rule:
+    what the flow file or the rules file of the ambient profile says, the
+    default profile's where there is none. None for any other setting, and
+    where the file cannot be read."""
+    if setting.env in os.environ:
+        return None
+    if setting.rule:
+        try:
+            from . import rules
+            from .profile import active_profile
+            said = rules.load(active_profile(), environ={})
+        except Exception:
+            return None
+        return str(said[setting.rule]), said.owners[setting.rule]
+    if not setting.flow:
         return None
     try:
         from .extraction import flow

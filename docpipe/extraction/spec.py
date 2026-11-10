@@ -37,13 +37,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Union
 
+from .. import rules
+
 # What a parameter's value IS. Numbers were the first case, not the only one:
 # an ontology asks for categories (a class from a vocabulary) and for plain
 # statements of fact just as often, and those are evidenced exactly like a
 # number — by the passage they stand in.
 NUMERIC_TYPES = ("float", "int")
 VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
-SCENARIOS = ("status_quo", "trend", "target", "unknown")
 # The step that reads a group of coordinates: the reading of each value
 # (owner decision 2026-11-07); the survey that read a group per passage is
 # gone (owner decisions 2026-11-08).
@@ -571,8 +572,10 @@ def _validate_example(path: str, raw, value_type: str,
                     "tuples it must yield (it becomes the prompt's few-shot "
                     "and the runner's golden test)")
     source = raw.get("source")
-    if not isinstance(source, str) or len(source.split()) < 5:
-        _fail(f"{path}.source", "must be a real snippet, not a placeholder")
+    least = rules.get("example_least_words")
+    if not isinstance(source, str) or len(source.split()) < least:
+        _fail(f"{path}.source", f"must be a real snippet, not a placeholder "
+                                f"(under {least} words)")
     tuples = raw.get("tuples")
     if not isinstance(tuples, list) or not tuples:
         _fail(f"{path}.tuples", "must be a non-empty list")
@@ -640,11 +643,12 @@ def _validate_parameter(path: str, raw) -> Parameter:
     for key in ("uri", "label", "description"):
         if not isinstance(raw.get(key), str) or not raw[key].strip():
             _fail(f"{path}.{key}", "required, non-empty string")
-    if len(raw["description"].split()) < 8:
+    least = rules.get("description_least_words")
+    if len(raw["description"].split()) < least:
         # The description IS the prompt's definition of the parameter. A stub
         # here means the model extracts on vibes.
-        _fail(f"{path}.description", "too short to define the parameter for "
-                                     "the model (under 8 words)")
+        _fail(f"{path}.description", f"too short to define the parameter "
+                                     f"for the model (under {least} words)")
     value_type = raw.get("value_type", "float")
     if value_type not in VALUE_TYPES:
         _fail(f"{path}.value_type", f"must be one of {VALUE_TYPES}")
@@ -769,7 +773,8 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      axes=axes, example=example, kg=raw.get("kg"),
                      once_per_document=bool(raw.get("once_per_document",
                                                     False)),
-                     takes_group=bool(raw.get("takes_group", True)),
+                     takes_group=bool(raw.get(
+                         "takes_group", rules.get("default_takes_group"))),
                      groups=_entry_groups(f"{path}.vocabulary",
                                           raw.get("vocabulary")),
                      beside=beside)

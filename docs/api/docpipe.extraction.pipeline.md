@@ -359,7 +359,8 @@ def year_in_range(year) -> bool
 
 Is this number one the profile takes for a year? Zones and districts
 carry numbers of their own, and one printed beside a value was answered
-as its year (169002). Without a `YEAR_RANGE` every number is.
+as its year (169002). Without a range (rule `year_range`) every number
+is.
 
 ### state_years
 

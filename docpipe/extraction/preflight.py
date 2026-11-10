@@ -22,7 +22,7 @@ name. A wording the run depends on is the profile's, in the language of its
 prompts, so the profile says which passages its prompts have to hold
 (`extraction.PROMPT_CHECKS`). The shapes of its graph are the profile's as
 well: it says where they are (`extraction.shapes_files`) and which of their
-properties it leaves out on purpose (`extraction.NOT_EXTRACTED`).
+properties it leaves out on purpose (the rule `not_extracted`).
 
 Two lines only say what they find and never fail: the properties of the
 shapes that nobody asks and the definitions of the spec that are not the
@@ -82,9 +82,20 @@ def silent_parameters(raw: dict) -> list:
     return [p["uri"] for p in raw.get("parameters", ()) if not p.get("kg")]
 
 
+def left_out_of(profile) -> object:
+    """The properties of the shapes *profile* leaves out on purpose, as its
+    rule `not_extracted` says them: {(shape, property): why}, None where its
+    line knows no such rule."""
+    from docpipe import rules
+    rows = rules.load(profile).get("not_extracted")
+    if rows is None:
+        return None
+    return {(row["shape"], row["property"]): row["reason"] for row in rows}
+
+
 def not_extracted(declared) -> tuple:
-    """A profile's `extraction.NOT_EXTRACTED` as ({(shape, property): why},
-    what is wrong with it).
+    """The properties a profile leaves out on purpose (`left_out_of`) as
+    ({(shape, property): why}, what is wrong with it).
 
     The shape properties the profile leaves out on purpose, each with a
     sentence of reason. An entry that is anything else is named and not
@@ -108,7 +119,7 @@ def not_extracted(declared) -> tuple:
     return good, bad
 
 
-def shape_properties(files, raw: dict) -> tuple:
+def shape_properties(files, raw: dict, profile=None) -> tuple:
     """(properties no parameter asks, all properties) of the shapes.
 
     Both as sorted (shape, property) pairs, the property by the end of its
@@ -122,7 +133,8 @@ def shape_properties(files, raw: dict) -> tuple:
     every = sorted({(shape.name, draft.local(prop.path))
                     for shape in found for prop in shape.properties})
     unasked = sorted({(row["shape"], row["path"])
-                      for row in draft.differences(found, raw)
+                      for row in draft.differences(
+                          found, draft.read_as_shapes(raw, profile))
                       if row["kind"] == "not_asked"})
     return unasked, every
 
@@ -132,12 +144,11 @@ def shapes_verdict(profile, raw: dict) -> tuple:
 
     The profile says where its shapes are (`extraction.shapes_files`, the
     files of its last refresh) and which of their properties it leaves out on
-    purpose (`extraction.NOT_EXTRACTED`). Where it names no shapes, or the
+    purpose (the rule `not_extracted`). Where it names no shapes, or the
     file is not there, or rdflib is not, the line says it is skipped: a
     check that was not run is not a gap found.
     """
-    left_out, unreadable = not_extracted(
-        profile.component("extraction", "NOT_EXTRACTED"))
+    left_out, unreadable = not_extracted(left_out_of(profile))
     hook = profile.component("extraction", "shapes_files")
     if hook is None:
         return True, "skipped: the profile names no shapes file"
@@ -153,7 +164,7 @@ def shapes_verdict(profile, raw: dict) -> tuple:
     except ImportError:
         return True, "skipped: rdflib is not installed"
     try:
-        unasked, every = shape_properties(files, raw)
+        unasked, every = shape_properties(files, raw, profile)
     except Exception as exc:              # a file that does not parse
         return False, (f"the shapes could not be read: "
                        f"{type(exc).__name__}: {exc}")
@@ -164,7 +175,7 @@ def shapes_verdict(profile, raw: dict) -> tuple:
         f"and the profile does not record"
         + (": " + ", ".join(shown[:8]) + (", ..." if len(shown) > 8 else "")
            if shown else "")
-        + (f"; unreadable NOT_EXTRACTED entries: "
+        + (f"; unreadable not_extracted entries: "
            f"{', '.join(unreadable[:3])}" if unreadable else ""))
 
 
@@ -471,7 +482,8 @@ def audit(name: str) -> list:
             # What the last `vocabulary --refresh` pulled. A source whose
             # files moved since the commit the profile was reviewed against
             # is named with the files, because the profile mirrors it by hand.
-            if profile.component("vocabulary", "SOURCES"):
+            from docpipe import sources as docpipe_sources
+            if docpipe_sources.load(profile).sources:
                 from docpipe import upstream as _upstream
                 lock = _upstream.load_lock(name)
                 check("sources refreshed", lock is not None,
@@ -503,7 +515,7 @@ def audit(name: str) -> list:
 
     # What the shapes of the graph hold that nobody asks for. A property a
     # parameter does not read is either left out on purpose, and the profile
-    # says so with a reason (`extraction.NOT_EXTRACTED`), or nobody decided.
+    # says so with a reason (the rule `not_extracted`), or nobody decided.
     # The second is a warning: it stops no run, it makes the gap readable
     # where it was only a hand command (`docpipe compile diff`).
     ok, detail = shapes_verdict(profile, raw)

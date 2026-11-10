@@ -40,6 +40,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
+from docpipe import graphfile
 from docpipe.extraction import fields, graphkit
 from docpipe.extraction.compute import owner_of
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
@@ -61,7 +62,8 @@ log = logging.getLogger(__name__)
 # class. Still to confirm with Mirjam is the *local part* — the OEKG's own
 # UUIDs are random, ours are UUIDv5 over the identifying name so that two runs
 # over one document mint one IRI and a re-run does not duplicate the graph.
-BASE = os.environ.get("OEKG_ID_BASE", "https://openenergyplatform.org/ontology/oekg/")
+# The rule `base` of graph.json beside this file; the setting wins over it.
+BASE = os.environ.get("OEKG_ID_BASE") or graphfile.get("base", "scenarios")
 NS_OEKG = graphkit.base_namespace(BASE)
 
 # Class -> path segment, as the live OEKG has them. A study report sits under
@@ -257,8 +259,8 @@ def edges() -> list:
 
 # Mirjam: "all IAM scenarios get the annotation for now". In the OEO since
 # release 2.14.0, in the shape's sh:in list with the OEKG's shape update
-# (oekg#68).
-IAM_SCENARIO = "OEO_00020517"
+# (oekg#68). The rule `scenario_types_always` of graph.json: OEO_00020517.
+ALWAYS_TYPES = tuple(graphfile.get("scenario_types_always", "scenarios"))
 
 # Scenario-scope fields: everything carrying a `scenario` axis, which names
 # in the document's own words which scenario the value belongs to. Read from
@@ -567,7 +569,11 @@ def _crosscheck(conn, name: str, chosen: dict) -> None:
 # on a study report or a factsheet invalidates the very node it documents.
 # OEKG_EVIDENCE=1 emits the provenance nodes instead — same content, queryable,
 # and knowingly ahead of the shapes.
-EVIDENCE = os.environ.get("OEKG_EVIDENCE", "0") != "0"
+# The rule `evidence_as` of graph.json ("comment" or "node"); the setting
+# wins over it.
+EVIDENCE = (os.environ["OEKG_EVIDENCE"] != "0"
+            if "OEKG_EVIDENCE" in os.environ
+            else graphfile.get("evidence_as", "scenarios") == "node")
 
 # The words of the trust line; the marks and their order are the core's
 # (docpipe.extraction.trust.MARKS). English, because this corpus is English
@@ -1043,7 +1049,7 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
 
             # The types the model chose from the shapes' own list, each with
             # the passage it read them in. On top of that Mirjam asks every IAM
-            # scenario to carry OEO_00020517 (IAM_SCENARIO).
+            # scenario to carry OEO_00020517 (ALWAYS_TYPES).
             types: dict = {}
             for row in rows_for("scenario_type", scenario=norm):
                 if in_graph(row.get("value_uri")):
@@ -1051,7 +1057,8 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
             for type_iri, sources in types.items():
                 block += evidence_for(iri, P_SCENARIO_TYPE, sources)
                 block.append(f"    {P_SCENARIO_TYPE} <{type_iri}> ;")
-            block.append(f"    {P_SCENARIO_TYPE} oeo:{IAM_SCENARIO} ;")
+            for always in ALWAYS_TYPES:
+                block.append(f"    {P_SCENARIO_TYPE} oeo:{always} ;")
 
             described = rows_for("scenario_abstract", scenario=norm)
             best = None
@@ -1100,7 +1107,8 @@ def _make_builder(db_path: Path, model=None, groups: Optional[dict] = None,
             scenarios.append({
                 "label": ident, "acronym": acronym,
                 "abstract": best,
-                "types": list(types) + [OEO_BASE + IAM_SCENARIO],
+                "types": list(types) + [OEO_BASE + always
+                                        for always in ALWAYS_TYPES],
                 "regions": list(regions),
                 "region_names": {region: names[region] for region in regions
                                  if names.get(region)},

@@ -49,15 +49,21 @@ import urllib.request
 from collections import Counter
 from typing import Callable, Optional
 
+from docpipe import rules
 from docpipe.extraction.trust import CATALOGUE
 from docpipe.store.schema import readonly_uri
 from profiles.scenarios.front import (front_pages, in_order, looked_up,
                                       read_in_front)
 
-WORKS = "https://api.openalex.org/works"
+
+
+def works() -> str:
+    """Where the catalogue answers (rule `catalogue_address`)."""
+    return rules.get("catalogue_address", "scenarios")
+
+
 # A generic client name: the catalogue asks nothing more of a client.
 USER_AGENT = "docpipe"
-TIMEOUT = 30
 FIELDS = "id,doi,display_name,publication_date,publication_year,authorships"
 
 TITLE = "publication_title"
@@ -79,7 +85,8 @@ OFFLINE = threading.Event()
 
 def _get(url: str) -> dict:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+    with urllib.request.urlopen(
+            request, timeout=rules.get("catalogue_timeout_s", "scenarios")) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -87,7 +94,7 @@ def search(title: str) -> Optional[dict]:
     """The first record OpenAlex finds for *title*, or None."""
     query = urllib.parse.urlencode({"search": title, "per_page": 1,
                                     "select": FIELDS})
-    results = _get(f"{WORKS}?{query}").get("results") or []
+    results = _get(f"{works()}?{query}").get("results") or []
     return results[0] if results else None
 
 
@@ -95,7 +102,8 @@ def by_doi(doi: str) -> Optional[dict]:
     """The record OpenAlex holds under *doi*, or None where it holds none."""
     query = urllib.parse.urlencode({"select": FIELDS})
     try:
-        return _get(f"{WORKS}/doi:{urllib.parse.quote(doi, safe='/')}?{query}")
+        return _get(f"{works()}/doi:{urllib.parse.quote(doi, safe='/')}"
+                    f"?{query}")
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
             return None
@@ -138,10 +146,12 @@ def matched(record: dict, read: list) -> list:
 
 def accepted(record: dict, read: list) -> bool:
     """Whether the record a title found is the document: two of its family
-    names among the authors read, or one where either side names one."""
+    names among the authors read (rule `catalogue_family_names`), or one
+    where either side names one."""
     families = {family(name) for name in authors_of(record)} - {""}
     named = [name for name in read if words(name)]
-    needed = min(2, len(families), len(named))
+    needed = min(rules.get("catalogue_family_names", "scenarios"), len(families),
+                 len(named))
     return needed >= 1 and len(matched(record, read)) >= needed
 
 

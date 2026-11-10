@@ -33,19 +33,22 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Optional
 
+from docpipe import rules
 from docpipe.extraction import fields
 from docpipe.extraction.compute import (Number, Question, inherited, keys_of,
                                         owner_of)
 from docpipe.extraction.pipeline import answer_in_quote
 from docpipe.extraction.verify import Refusal, verify_tuple
-from profiles.kwp.kg import ROUNDING_TOLERANCE, _precision
+from docpipe import graphfile
+from profiles.kwp.kg import _precision
 
 SHARE = "share"
 AREA = "spatial_scope"
 SUBJECT = "subject"
-# The axes a number can be split over, each with the entry that says it is not.
-PARTS = {"carrier": "out:total", "sector": "out:total",
-         "technology": "out:total", AREA: "municipality"}
+# The axes a number can be split over, each with the entry that says it is
+# not (rule `compute_parts`).
+def parts_of() -> dict:
+    return rules.get("compute_parts", "kwp")
 SPLIT = ("carrier", "sector", "technology")
 # How precisely a number holds, the word the plan prints with it ("ca.", "bis
 # zu"), and the entry a worked-out number takes from parts that differ in it.
@@ -83,7 +86,7 @@ def entry(row: dict, axis: str) -> Optional[str]:
     if row.get(f"{axis}_state") not in (fields.READ, fields.DERIVED):
         return None
     value = row.get(axis)
-    if axis == AREA and value != PARTS[AREA]:
+    if axis == AREA and value != parts_of()[AREA]:
         return row.get(f"{AREA}_raw") or value
     return value
 
@@ -91,7 +94,7 @@ def entry(row: dict, axis: str) -> Optional[str]:
 def whole_on(row: dict, axis: str) -> Optional[str]:
     """As `entry`, and a row that says nothing on an axis is not split on it:
     the technology of most numbers is simply not asked for."""
-    return entry(row, axis) or PARTS[axis]
+    return entry(row, axis) or parts_of()[axis]
 
 
 def framed(row: dict) -> bool:
@@ -118,7 +121,8 @@ def additive(row: dict, spec) -> bool:
 def same_number(a: dict, b: dict) -> bool:
     low, high = sorted((a["value_target"], b["value_target"]))
     return low == high or (bool(high)
-                           and (high - low) / abs(high) <= ROUNDING_TOLERANCE)
+                           and (high - low) / abs(high)
+                           <= graphfile.get("rounding_tolerance", "kwp"))
 
 
 def one_statement(a: dict, b: dict, part) -> bool:
@@ -144,7 +148,7 @@ def holds_its_sum(parts: list) -> bool:
     if len(values) < 3:
         return False
     return (abs(values[-1] - sum(values[:-1]))
-            <= ROUNDING_TOLERANCE * values[-1])
+            <= graphfile.get("rounding_tolerance", "kwp") * values[-1])
 
 
 def known(row: dict, spec) -> dict:
@@ -307,7 +311,7 @@ def open_shares(rows: list, spec) -> list:
         if any(split_of(row) == own for row in near):
             continue            # its absolute number stands in the plan
         bases = [row for row in near
-                 if all(said in (part, PARTS[axis]) for axis, said, part
+                 if all(said in (part, parts_of()[axis]) for axis, said, part
                         in zip(SPLIT, split_of(row), own))]
         # Asked with no total offered, too: the request may find its whole
         # in the plan and take it (owner decision 2026-11-05).
@@ -321,7 +325,7 @@ def sum_question(parts: list, axis: str, spec) -> Question:
 
     def row(used: list) -> dict:
         return qualified({**inherited(first, axis, SUBJECT),
-                          axis: PARTS[axis], f"{axis}_state": fields.DERIVED,
+                          axis: parts_of()[axis], f"{axis}_state": fields.DERIVED,
                           f"{SUBJECT}_state": fields.SAID_UNSTATED},
                          used or parts)
 
@@ -341,20 +345,21 @@ def sum_question(parts: list, axis: str, spec) -> Question:
 
 def open_sums(rows: list, spec) -> list:
     questions = []
-    for axis in PARTS:
+    for axis in parts_of():
         groups: dict = defaultdict(list)
         for row in rows:
             if additive(row, spec) and entry(row, axis) is not None:
                 groups[(row.get("parameter"), row.get("quantity"),
                         row.get("aggregation"), row.get("year"),
                         row.get("scenario"),
-                        *(whole_on(row, other) for other in PARTS
+                        *(whole_on(row, other) for other in parts_of()
                           if other != axis))].append(row)
         for members in groups.values():
-            if any(entry(row, axis) == PARTS[axis] for row in members):
+            if any(entry(row, axis) == parts_of()[axis] for row in members):
                 continue        # its sum stands in the plan
             parts = distinct(members, lambda row: entry(row, axis))
-            if (len({entry(part, axis) for part in parts}) > 1
+            if (len({entry(part, axis) for part in parts})
+                    >= rules.get("compute_least_parts", "kwp")
                     and not holds_its_sum(parts)):
                 questions.append(sum_question(parts, axis, spec))
     return questions

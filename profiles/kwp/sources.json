@@ -1,0 +1,66 @@
+{
+  "sources": {
+    "oeo": {
+      "kind": "release_asset",
+      "repo": "OpenEnergyPlatform/ontology",
+      "asset": "oeo-closure.owl"
+    },
+    "mhpo": {
+      "kind": "repo_files",
+      "repo": "OpenEnergyPlatform/municipal-heat-planning-ontology",
+      "ref": "develop",
+      "files": [
+        "mhpo.owl"
+      ]
+    },
+    "mhpkg": {
+      "kind": "repo_files",
+      "repo": "OpenEnergyPlatform/oekg",
+      "ref": "production",
+      "reviewed": "c18860c373eefc0ff38fb7f01a6ff0a230ef1e0d",
+      "files": [
+        "mhpkg/schema/generated/mhpkg_target_scenario.shacl.ttl",
+        "mhpkg/schema/mhpkg_iri_policy.shacl.ttl",
+        "mhpkg/schema/mhpkg_context.shacl.ttl",
+        "mhpkg/schema/mhpkg_target_scenario.yaml",
+        "mhpkg/schema/mint_slice.py"
+      ]
+    }
+  },
+  "lists": {
+    "energy_carrier": {
+      "kind": "class",
+      "root": "https://openenergyplatform.org/ontology/oeo/OEO_00020039"
+    },
+    "sector": {
+      "kind": "class",
+      "root": "https://openenergyplatform.org/ontology/oeo/OEO_00000367"
+    },
+    "quantity_value": {
+      "kind": "class",
+      "root": "https://openenergyplatform.org/ontology/oeo/OEO_00000350"
+    },
+    "energy_unit": {
+      "kind": "class",
+      "root": "http://purl.obolibrary.org/obo/UO_0000111"
+    },
+    "mass_unit": {
+      "kind": "class",
+      "root": "http://purl.obolibrary.org/obo/UO_0000002"
+    },
+    "aggregation_type": {
+      "kind": "individual",
+      "root": "https://openenergyplatform.org/ontology/oeo/OEO_00140068"
+    },
+    "heat_generation_technology": {
+      "kind": "class",
+      "root": "https://openenergyplatform.org/ontology/oeo/OEO_00020308"
+    }
+  },
+  "axis_lists": {
+    "sector": "sector",
+    "aggregation": "aggregation_type",
+    "quantity": "quantity_value",
+    "technology": "heat_generation_technology"
+  }
+}
