@@ -77,6 +77,7 @@ GRAPH = (
          "its triple, or provenance nodes linked to it (ahead of the shapes, "
          "which are closed). A setting wins over the file.",
          choices=("comment", "node"), env="OEKG_EVIDENCE",
+         env_flag=("comment", "node"),
          where="profiles/scenarios/kg.py (evidence_for)"),
     rule("front_first_fields", "graph", "One value, several readings",
          "texts",

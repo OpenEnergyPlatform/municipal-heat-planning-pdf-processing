@@ -457,7 +457,7 @@ not refresh it for a file replaced under the same name, so this fires when the
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
-(`scripts/change_audit.py:10`).
+(`scripts/change_audit.py`).
 
 The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a

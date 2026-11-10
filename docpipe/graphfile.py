@@ -56,7 +56,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from .rules import Rule, problem as rule_problem
+from .rules import Rule, _setting as rule_setting, \
+    problem as rule_problem
 
 FILE = "graph.json"
 DEFAULT = Path(__file__).resolve().parent / "builtin" / "default" / FILE
@@ -251,18 +252,39 @@ def load(profile=None, environ=None, skip_own: bool = False) -> Graph:
             raise GraphError(f"no graph file of {getattr(profile, 'name', '')}"
                              f"'s line names the rule {name}, which its "
                              f"writer reads")
+    # A setting wins over the files (`Rule.env`), as for the rules of
+    # `docpipe.rules`; what it inherits has none.
+    if not skip_own:
+        for name, one in known.items():
+            raw = environ.get(one.env) if one.env else None
+            if raw is None:
+                continue
+            data["rules"][name] = rule_setting(one, raw)
+            if environ is os.environ:
+                from . import settings
+                owners[f"rules/{name}"] = settings.origin(one.env)
+            else:
+                owners[f"rules/{name}"] = "environment"
     return Graph(data["classes"], data["constraints"], data["rules"], owners,
                  tuple(files), digest.hexdigest())
 
 
 _cache: dict = {}
+_envs: dict = {}
 
 
 def get(name: str, owner: str):
     """The value of the graph rule *name* of the profile called *owner*,
-    as its files and `DOCPIPE_GRAPH_FILE` say it now."""
+    as its files, `DOCPIPE_GRAPH_FILE` and the settings of its rules say it
+    now."""
     from .profile import load_profile
-    key = (owner, os.environ.get(ENV))
+    envs = _envs.get(owner)
+    if envs is None:
+        envs = _envs[owner] = tuple(sorted({
+            one.env for one in declared(load_profile(owner)).values()
+            if one.env}))
+    key = (owner, os.environ.get(ENV),
+           tuple(os.environ.get(env) for env in envs))
     if key not in _cache:
         _cache[key] = load(load_profile(owner))
     rules = _cache[key].rules
@@ -273,6 +295,7 @@ def get(name: str, owner: str):
 
 def reset() -> None:
     _cache.clear()
+    _envs.clear()
 
 
 # -- what the file does to a written graph -------------------------------------
@@ -450,15 +473,23 @@ def of_class(text: str, classes: set) -> set:
 
 def violations(text: str, shapes: list, context=()) -> list:
     """[(constraint key, focus node)] of the graph held to *shapes*."""
-    from pyshacl import validate
-    from rdflib import RDF, Graph as RdfGraph, Namespace
-
-    from . import ontology
-    sh = Namespace("http://www.w3.org/ns/shacl#")
+    from rdflib import Graph as RdfGraph
     shapes_graph = RdfGraph()
     for path in shapes:
         shapes_graph.parse(str(path), format="turtle")
-    data = _parsed(text)
+    return violations_of(_parsed(text), shapes_graph, context)
+
+
+def violations_of(data, shapes_graph, context=()) -> list:
+    """[(constraint key, focus node)] of the rdflib graph *data* held to the
+    rdflib graph *shapes_graph*, with what the target graph holds about the
+    nodes it points at (*context*). The key is the constraint, the path and
+    the focus node's class: what a constraint of the file names."""
+    from pyshacl import validate
+    from rdflib import RDF, Namespace
+
+    from . import ontology
+    sh = Namespace("http://www.w3.org/ns/shacl#")
     ontology.with_context(data, context)
     _conforms, results, _text = validate(data, shacl_graph=shapes_graph,
                                          advanced=True)
@@ -476,17 +507,21 @@ def violations(text: str, shapes: list, context=()) -> list:
 
 
 def finish(path: Path, made: Graph, base: str, shapes: list = (),
-           context=(), index: Optional[dict] = None) -> dict:
+           context=(), index: Optional[dict] = None, follow=()) -> dict:
     """What the graph file asks of the graph written to *path*, done: the
     classes not written leave it, the classes with an address rule are named
     anew, and the effects of the constraints are applied after the graph is
     held to *shapes*. *index* is {document: [its subjects]}, which a
-    paper's leaving out needs. The file is rewritten only where something
-    changed. Returns what was done, counted."""
+    paper's leaving out needs. The files *follow* names speak of the graph's
+    nodes (its provenance) and follow it: a node named anew is named anew
+    there, a node left out takes every triple that names it along. A file is
+    rewritten only where something changed. Returns what was done,
+    counted."""
     path = Path(path)
     text = path.read_text(encoding="utf-8")
     report = {"classes_left_out": {}, "readdressed": 0, "left_out": [],
               "stop": []}
+    done: list = []                 # what the followers repeat, in order
     off = {klass for klass in made.classes if not made.written(klass)}
     changed = False
     if off:
@@ -495,10 +530,12 @@ def finish(path: Path, made: Graph, base: str, shapes: list = (),
             report["classes_left_out"] = {klass: len(of_class(text, {klass}))
                                           for klass in sorted(off)}
             text = remove(text, nodes)
+            done.append(("remove", nodes))
             changed = True
     moved = addresses(text, made, base)
     if moved:
         text = readdress(text, moved)
+        done.append(("move", moved))
         report["readdressed"] = len(moved)
         changed = True
         if index:
@@ -531,9 +568,205 @@ def finish(path: Path, made: Graph, base: str, shapes: list = (),
             values |= set((index or {}).get(document) or ())
         if values:
             text = remove(text, values)
+            done.append(("remove", values))
             changed = True
     if changed:
-        partial = path.with_name(path.name + ".part")
-        partial.write_text(text, encoding="utf-8")
-        partial.replace(path)
+        _write(path, text)
+    for other in follow or ():
+        other = Path(other)
+        if done and other.is_file():
+            _write(other, _repeat(other.read_text(encoding="utf-8"), done))
     return report
+
+
+def _write(path: Path, text: str) -> None:
+    partial = path.with_name(path.name + ".part")
+    partial.write_text(text, encoding="utf-8")
+    partial.replace(path)
+
+
+def _repeat(text: str, done: list) -> str:
+    """*text* with what was done to the graph done to it too: the nodes
+    named anew named anew, the nodes left out with every triple that names
+    them."""
+    for what, nodes in done:
+        if what == "move":
+            text = readdress(text, nodes)
+        else:
+            named = {node for node in nodes if f"<{node}>" in text}
+            text = remove(text, named) if named else text
+    return text
+
+
+# -- `also`: a value written under further predicates ------------------------
+
+def _listed(said) -> list:
+    if isinstance(said, dict):
+        return [said]
+    if isinstance(said, list):
+        return [one for one in said if isinstance(one, dict)]
+    return []
+
+
+def also_pairs(spec_raw: dict) -> list:
+    """[(classes, predicate block, [further predicate blocks])] of a spec
+    read as its shapes name its properties (`draft.read_as_shapes`): every
+    block that writes a predicate and names further ones (`also`), with the
+    classes of the node it writes on (`draft.field_classes`). A parameter's
+    `kg` block may name them beside its `property`, for that property."""
+    from .compile import draft
+    node_class = draft._node_classes(spec_raw)
+    out = []
+    for parameter in spec_raw.get("parameters") or ():
+        if not isinstance(parameter, dict):
+            continue
+        classes = draft.field_classes(parameter, node_class)
+        kg = parameter.get("kg")
+        if isinstance(kg, dict) and kg.get("also") \
+                and isinstance(kg.get("property"), dict):
+            out.append((classes, kg["property"], _listed(kg["also"])))
+        for _where, block in draft.predicate_places(parameter):
+            if block.get("also"):
+                out.append((classes, block, _listed(block["also"])))
+    return [one for one in out if one[2]]
+
+
+def _iri_of(block: dict, prefixes: dict) -> Optional[str]:
+    predicate = block.get("predicate")
+    if not isinstance(predicate, str):
+        return None
+    if predicate.startswith("http"):
+        return predicate
+    prefix = block.get("prefix")
+    return prefixes[prefix] + predicate if prefix in prefixes else None
+
+
+def _short(iri: str, prefixes: dict) -> Optional[str]:
+    """The prefixed name of *iri* under one of *prefixes*, None where none
+    binds it with a plain local name."""
+    for name, namespace in prefixes.items():
+        rest = iri[len(namespace):]
+        if iri.startswith(namespace) and re.fullmatch(r"[A-Za-z_][\w-]*",
+                                                      rest):
+            return f"{name}:{rest}"
+    return None
+
+
+def shape_prefixes(shapes) -> dict:
+    """{prefix: namespace} the shapes files declare."""
+    out: dict = {}
+    for path in shapes or ():
+        try:
+            out.update(dict(_PREFIX.findall(
+                Path(path).read_text(encoding="utf-8"))))
+        except OSError:
+            continue
+    return out
+
+
+def add_also(text: str, pairs: list, prefixes: Optional[dict] = None) -> tuple:
+    """(*text* with what `also` asks, the triples added): for every triple
+    whose predicate a block writes with `also`, on a node of one of the
+    block's classes, the same node and object under each further predicate,
+    where the node holds no value under it yet (a writer that writes it
+    itself, a scenario's acronym, keeps its own). Edited as text where every
+    block can be read, the writers' comments staying, else written anew by
+    rdflib; held against the graph it asks for either way. *prefixes*
+    {name: namespace} expand a further predicate the graph's header does not
+    bind (the shapes' own, where a merged property came from)."""
+    from rdflib import RDF, URIRef
+    from rdflib.compare import isomorphic
+    if not pairs:
+        return text, 0
+    own = dict(_PREFIX.findall(text))
+    known = {**(prefixes or {}), **own}
+    graph = _parsed(text)
+    held = set(graph.subject_predicates())
+    wanted: dict = {}
+    added: set = set()
+    for classes, main, further in pairs:
+        predicate = _iri_of(main, known)
+        if predicate is None:
+            continue
+        for subject, obj in graph.subject_objects(URIRef(predicate)):
+            if classes and not {local(one) for one in graph.objects(
+                    subject, RDF.type)} & set(classes):
+                continue
+            for block in further:
+                iri = _iri_of(block, known)
+                if iri is None or iri == predicate \
+                        or (subject, URIRef(iri)) in held:
+                    continue
+                added.add((subject, URIRef(iri), obj))
+                wanted.setdefault(str(subject), {}).setdefault(
+                    predicate, set()).add(iri)
+    if not added:
+        return text, 0
+    whole = _parsed(text)
+    for triple in added:
+        whole.add(triple)
+    try:
+        edited = _with_also(text, wanted, dict(own), known)
+        if isomorphic(_parsed(edited), whole):
+            return edited, len(added)
+    except ValueError:
+        pass
+    return whole.serialize(format="turtle"), len(added)
+
+
+def _with_also(text: str, wanted: dict, own: dict, known: dict) -> str:
+    """*text* with an entry for each further predicate after the entry of the
+    predicate it repeats, in the blocks of the nodes *wanted* names ({node:
+    {predicate: {further}}}); a prefix the header lacks is declared."""
+    header: list = []
+
+    def name_of(iri: str) -> str:
+        short = _short(iri, own)
+        if short:
+            return short
+        short = _short(iri, {k: v for k, v in known.items() if k not in own})
+        if short:
+            prefix = short.split(":", 1)[0]
+            own[prefix] = known[prefix]
+            header.append(f"@prefix {prefix}: <{known[prefix]}> .")
+            return short
+        return f"<{iri}>"
+
+    out = []
+    for block in _blocks(text):
+        found = _SUBJECT.match(block.split("\n", 1)[0])
+        todo = wanted.get(found.group(1)) if found else None
+        if not todo:
+            out.append(block)
+            continue
+        parsed = _entries(block)
+        if parsed is None or _render(*parsed) != block.rstrip("\n"):
+            raise ValueError("a block the edit cannot read")
+        subject, entries = parsed
+        grown = []
+        for comments, predicate, objects, end in entries:
+            grown.append([comments, predicate, objects, end])
+            bare = predicate[1:-1] if predicate.startswith("<") else \
+                _expand(predicate, own)
+            for further in sorted(todo.get(bare, ())):
+                grown.append([[], name_of(further), list(objects), end])
+        out.append(_render(subject, grown)
+                   + block[len(block.rstrip("\n")):])
+    edited = "\n\n".join(out)
+    if header:
+        lines = edited.split("\n")
+        at = max((number for number, line_ in enumerate(lines)
+                  if _PREFIX.match(line_)), default=-1)
+        edited = "\n".join(lines[:at + 1] + header + lines[at + 1:])
+    return edited
+
+
+def also(path: Path, pairs: list, prefixes: Optional[dict] = None) -> int:
+    """`add_also` on the graph written to *path*; the file is rewritten only
+    where a triple is added. Returns how many were."""
+    path = Path(path)
+    edited, count = add_also(path.read_text(encoding="utf-8"), pairs,
+                             prefixes)
+    if count:
+        _write(path, edited)
+    return count

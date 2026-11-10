@@ -115,8 +115,28 @@ default profile's `graph.json` sets nothing; a profile writes only what it sets.
 `serialize.apply_graph_file` runs after the graph is written, by `--serialize`
 and by the gate. The gate shuts for a constraint whose effect is `stop`. With
 nothing set the graph is byte-identical to one written without the file.
-`DOCPIPE_GRAPH_FILE` lays a file over every profile's. The Graph tab of
+`DOCPIPE_GRAPH_FILE` lays a file over every profile's. A setting of a graph
+rule (`OEKG_ID_BASE` for `base`, `OEKG_EVIDENCE` for `evidence_as`) wins over
+the files, applied by `graphfile.load` as for the rules of `docpipe.rules`
+(`Rule.env`); the Graph tab shows it as in effect. The Graph tab of
 `docpipe edit` edits the file (see [the editor](editor.md)).
+
+The file's effects reach the other outputs beside the graph. The provenance
+file follows it (`graphfile.finish`, its `follow` argument, which
+`apply_graph_file` fills with `<graph>.prov.ttl`): a node named anew is named
+anew there, a node left out takes every triple that names it. The OEKG dry run
+of `scenarios` follows it too (see [the scenarios profile](../profiles/scenarios.md)).
+
+`also` is not a key of this file but of a block of a spec's `kg` that names a
+predicate: it names further predicates (one block or a list). After the writer,
+one step for every profile (`serialize.also_of_spec`, called in
+`apply_graph_file`, with `graphfile.also_pairs` and `add_also`) writes the
+value under each further predicate on the nodes of the field's classes, where
+a node holds no value under it yet, so a writer's own triple, the scenarios'
+acronym, stays. A further predicate whose prefix the graph's header does not
+bind is declared from the shapes' prefixes. The `also` beside `property` in a
+parameter's `kg` block keeps its meaning. The Sources tab sets it (see
+[the editor](editor.md)).
 
 ### The provenance file
 
@@ -311,8 +331,7 @@ name keeping every reading of it in its evidence. A row
 whose scenario coordinate never resolves reaches no triple, comment or
 number; it is counted `unplaceable`, keyed by state, since without it
 the gap read as zero. Evidence for a triple is a flattened comment, or,
-with `OEKG_EVIDENCE`
-on, a linked `oekgprov:ExtractionEvidence` node; either way the
+with the graph rule `evidence_as` set to `node` (or `OEKG_EVIDENCE` on), a linked `oekgprov:ExtractionEvidence` node; either way the
 rendered trust line follows it. That reading lives in `_make_builder`, which
 `make_serializer` and `make_study_reader` share; the second hands the same
 document as plain data to `profiles/scenarios/oekg_api.py`, a dry run of the
@@ -430,7 +449,7 @@ full field list is at [contract/kwp.md](../contract/kwp.md) and
 The node kinds each file carries, one per document, are described
 above under Method: for `kwp`, plan, part, value, year, organisation,
 sub area and municipality; for `scenarios`, report, bundle, factsheet,
-author, organisation and funder, plus, only with `OEKG_EVIDENCE` on,
+author, organisation and funder, plus, only where `evidence_as` is `node`,
 one evidence node per cited passage. Both carry a single `@prefix`
 header, emitted once per run.
 
@@ -466,8 +485,8 @@ marks a trust line is built from are at
 | `--no-provenance`, `EXTRACT_PROVENANCE` | CLI flag, env var | provenance written (`1`) | With `--serialize`: leave out the provenance file beside the graph | `runner.py` |
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | Selects which `kg.py` and spec the run uses | `docpipe/profile.py` |
 | `DOCPIPE_PROFILE` | environment variable | unset | Default for `--profile` | `docpipe/profile.py` |
-| `OEKG_ID_BASE` | env var, `scenarios` only | `https://openenergyplatform.org/ontology/oekg/` | Overrides the IRI prefix every node and namespace uses | `profiles/scenarios/kg.py` |
-| `OEKG_EVIDENCE` | env var, `scenarios` only, truthy unless `"0"` | off | Links each passage as an `oekgprov:` node, not a comment; provisional under `sh:closed` OEKG shapes | `profiles/scenarios/kg.py` |
+| `OEKG_ID_BASE` | env var, `scenarios` only | unset: the graph rule `base` of the profile's `graph.json` | Overrides the IRI prefix every node and namespace uses; wins over the file (`graphfile.load`) | `docpipe/graphfile.py`, `profiles/scenarios/kg.py` |
+| `OEKG_EVIDENCE` | env var, `scenarios` only, a flag (1 = node, 0 = comment) | unset: the graph rule `evidence_as` of `graph.json` (`comment`) | Links each passage as an `oekgprov:` node, not a comment; provisional under `sh:closed` OEKG shapes; wins over the file (`graphfile.load`) | `docpipe/graphfile.py`, `profiles/scenarios/kg.py` |
 | `--refresh` | CLI flag | off | Pulls the sources of `sources.json` at their current version, rebuilds the snapshot and the lock, then runs `--check` | both `vocabulary.py` |
 | `--closure PATH` | flag, `vocabulary.py --write` | required with `--write` | OEO closure file `rdflib` parses by hand; not vendored here | both `vocabulary.py` |
 | `--mhpo PATH` | flag, `kwp` `--write` only | none | Extra MHPO ontology file parsed into the same graph | `profiles/kwp/vocabulary.py` |

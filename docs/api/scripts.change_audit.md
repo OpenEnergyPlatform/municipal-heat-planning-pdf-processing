@@ -16,6 +16,9 @@ other end. That is mechanical, so it is done here rather than remembered:
 
   siblings   a name this change touches that other places also use
   consumers  a literal this change writes that other files read
+  docs       a generated page of docs/ that its sources now render
+             otherwise (`scripts/build_docs.py --check`), which no test
+             checks
 
 What it cannot check is the shape that needs judgement — a guarantee written
 in a docstring and half implemented. "The quote sits in the source AND carries
@@ -58,6 +61,16 @@ Literals this change writes that other files read.
 The check that would have caught the resume defect: recheck.py deleted
 *.stamp.json, and already_done reads that name to decide whether a
 document needs work.
+
+### docs_drift
+
+```python
+def docs_drift() -> list
+```
+
+The generated pages of docs/ a fresh build renders otherwise than
+they stand (`scripts/build_docs.py --check`, two seconds). [] where
+they agree; the check's own words where it could not run.
 
 ### report
 

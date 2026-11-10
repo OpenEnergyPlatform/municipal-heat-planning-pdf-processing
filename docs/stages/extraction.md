@@ -154,7 +154,7 @@ code's to look up.
 
 A section is cut first at its line ends and then at its sentence ends, a
 heading a line of its own (`units.sentences_of`). An abbreviation ("z. B.",
-"S. 12", "et al.", `units.ABBREVIATIONS`) and an ordinal ("3. Oktober") end no
+"S. 12", "et al.", the rule `abbreviations`) and an ordinal ("3. Oktober") end no
 sentence, and a number such as "1.155 MWh" never breaks, since a sentence ends
 only where a mark is followed by a space. A table is its title lines, its head
 lines and its body rows, numbered in that order from 1 (the rule under the
@@ -493,7 +493,7 @@ per-document lists). A year whose words print none, the plan's word for a state
 alone, is asked among the plan's years (`Reader.plan_year`, a list request, the
 step `plan_years`). A year the plan states for a span ("im Mittel der Jahre 2019
 bis 2021") is answered with its first year, and `until`, its last
-(`addressed.SPAN`). The run makes one row per distinct year of the span (owner
+(the words and dashes of a span are the rules `span_words` and `span_dashes`, built into `addressed`). The run makes one row per distinct year of the span (owner
 decision 2026-11-07: "als ca. für jedes distinkte Jahr erfassen"): the first and
 the last year are READ, each with the quote that prints it, the years between are
 DERIVED from the span, and every row takes the marks the profile names where it
@@ -750,7 +750,8 @@ the numbers of every entry the words mean; each member gets a row holding the
 words under the entry beside the names for several scenarios (`out:several`) with
 its own name under `<coordinate>_means`; where the spec lists no such entry the
 row holds the words. Words that name an entry beside the names alone
-(`out:status_quo`) give no member. A field takes groups unless its spec entry says `"takes_group": false`
+(`out:status_quo`) give no member. A field takes groups unless its spec entry says `"takes_group": false`;
+the rule `default_takes_group` is the default of an entry that says neither
 (`Parameter.takes_group`; the scenarios profile: `scenario_abstract`, a description
 of a scenario, which a group's words do not stand for): its words are then asked
 for one name only.
@@ -2109,8 +2110,9 @@ block or link names, are warned about unless the profile has recorded them in
 the rule `not_extracted`, a table from `(shape, property)` to a sentence of
 reason (scenarios declares 21; kwp none). Where the shapes are is the profile's
 own too, `extraction.shapes_files`, a callable that returns the files of its
-last refresh (scenarios finds them there; kwp names none, so its line says
-"skipped"). The line only warns. It is skipped, and says so, without a shapes
+last refresh (both profiles name them: the shapes of the last refresh, kwp's the MHPKG
+shapes). The line only warns. It is skipped, and says so, for a profile
+without that hook or without a refresh, without a shapes
 file or without `rdflib`; a hook that raises, a file that does not parse, an
 entry that is no pair with a reason and a record that is no mapping at all
 (which covers nothing and is named once) are warnings of their own. An entry
@@ -2211,9 +2213,9 @@ The numbers that bound how a document is read, and the steps they bound, stand i
 one file of the profile, `flow.json` (`extraction.flow`; `docpipe edit` has a Flow
 tab for it, see [the editor](editor.md)). The default profile's file is the whole
 flow, `numbers` and `steps`. A profile that extends it may have a `flow.json` of
-its own that holds `numbers` only, and only the ones it sets differently; it is
-laid over the inherited file number by number (`flow.load`); a profile's file
-may also write all steps. The coordinate steps (`own_place`, `search_sentence`,
+its own that holds the `numbers` it sets differently, laid over the inherited
+file number by number (`flow.load`), and the `steps` where it orders or
+switches them otherwise. The coordinate steps (`own_place`, `search_sentence`,
 `beside`, `search`, `about`, `plan_years`) are run in the order the file lists
 them (`flow.arrangement`, read by `addressed.Reader` and
 `surveyed.SurveyedHarvest`), and a step with `"off": true` is skipped; an order
@@ -2303,10 +2305,10 @@ harvest read with.
 | `FRAME` | profile hook | none | The frame coordinates (kwp: scenario and year): the plan's years date them, and `--top-up` blocks a changed key that names one (`runner.main`, `topup.actionable`). No coordinate of a plan closes a row: `SLICE`, `READ_IN_FULL` and `kept_quantities()` were deleted on 2026-11-10, and what closes a row now is a coordinate with an entry a value must have, the spec's `keep` at a coordinate (`fields.kept`, `fields.closed`; the scenarios spec uses it for `work`), which gives the state `out_of_slice` | `runner.main`, `topup.actionable` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
 | `not_extracted` | profile rule | none | A table `(shape, property)` to one sentence of reason: the properties of the profile's shapes it leaves out on purpose, so that `docpipe preflight` does not warn about them. Scenarios declares 21 | `preflight.not_extracted`, `preflight.shapes_verdict` |
-| `shapes_files` | profile hook | none (the check is skipped) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Scenarios finds its own there; kwp names none | `preflight.shapes_verdict` |
+| `shapes_files` | profile hook | none (the check is skipped for a profile without the hook or a refresh) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Each profile names the SHACL files of its last refresh (kwp the MHPKG shapes) | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 | `span_marks` | rule | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
-| `flow.json` | profile file | the default profile's whole flow | The numbers that bound the reading and its steps; a profile that extends another writes `numbers` only, laid over the inherited ones. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
+| `flow.json` | profile file | the default profile's whole flow | The numbers that bound the reading and its steps; a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and `steps` where it orders or switches them otherwise. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
 | `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
 | `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `addressed.Reader.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
@@ -2363,7 +2365,7 @@ At the document level, `finish_document` writes the JSONL file every time
 and withholds the stamp entirely, forcing a full redo on the next run, in
 three cases, which `not_happened` tells apart and the pass that appends a
 parameter asks as well: more than half a document's planned sources came back
-from a server it could not reach (`UNREACHABLE_LIMIT`, `0.5`), not one batch
+from a server it could not reach (the rule `unreachable_share`, `0.5`), not one batch
 answered at all, or any one of its requests ended on a 429 or a 5xx, or timed out. The last
 count adds the `unserved` sentinels to the document's entry in `UNSERVED`,
 which the callers pass as `lost`; one is enough, because such a request was

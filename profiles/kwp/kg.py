@@ -607,11 +607,11 @@ def _value_iri(heatplan: str, row: dict, label: str = "") -> str:
 
 # How far apart two readings of one number may lie and still be one rounded
 # statement of it: "rund 1,6 Mio. MWh" beside a table's 1.626.000. corpus_m5
-# dropped both sides of 642 such identities. The rule `rounding_tolerance`.
-ROUNDING_TOLERANCE = graphfile.get("rounding_tolerance", "kwp")
-# Whether a number still contested after wording, rounding and trust stays in
-# the full graph as a node of its own (owner decision 2026-11-02).
-CONTESTED_IN_FULL = graphfile.get("contested_in_full", "kwp")
+# dropped both sides of 642 such identities. The rule `rounding_tolerance`,
+# read where it is used, as `compute.same_number` reads it. And the rule
+# `contested_in_full`: whether a number still contested after wording,
+# rounding and trust stays in the full graph as a node of its own (owner
+# decision 2026-11-02).
 _RANK = {level: rank for rank, level in enumerate(LEVELS)}
 
 
@@ -707,7 +707,8 @@ def settle(iri: str, rows: list, part: str, *,
         return kept, skipped, marks
     distinct = [group[0] for group in claims.values()]
     low, high = min(claims), max(claims)
-    if high and (high - low) / abs(high) <= ROUNDING_TOLERANCE:
+    if high and (high - low) / abs(high) \
+            <= graphfile.get("rounding_tolerance", "kwp"):
         best = max(_precision(r) for r in distinct)
         top = [r for r in distinct if _precision(r) == best]
         if len(top) == 1:
@@ -1036,7 +1037,9 @@ def make_serializer(db_path: Path, strict: bool = False):
             got, lost, named = settle(iri, rows_of, part_iri[rows_of[0]["scenario"]],
                                       transcribed=bool(transcribed),
                                       keep_open=(not strict
-                                                 and CONTESTED_IN_FULL))
+                                                 and graphfile.get(
+                                                     "contested_in_full",
+                                                     "kwp")))
             values.update(got)
             marks.update(named)
             for reason, n in lost.items():

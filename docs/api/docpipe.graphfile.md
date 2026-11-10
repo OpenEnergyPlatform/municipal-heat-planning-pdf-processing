@@ -159,7 +159,8 @@ def get(name: str, owner: str)
 ```
 
 The value of the graph rule *name* of the profile called *owner*,
-as its files and `DOCPIPE_GRAPH_FILE` say it now.
+as its files, `DOCPIPE_GRAPH_FILE` and the settings of its rules say it
+now.
 
 ### reset
 
@@ -212,18 +213,77 @@ def violations(text: str, shapes: list, context=()) -> list
 
 [(constraint key, focus node)] of the graph held to *shapes*.
 
+### violations_of
+
+```python
+def violations_of(data, shapes_graph, context=()) -> list
+```
+
+[(constraint key, focus node)] of the rdflib graph *data* held to the
+rdflib graph *shapes_graph*, with what the target graph holds about the
+nodes it points at (*context*). The key is the constraint, the path and
+the focus node's class: what a constraint of the file names.
+
 ### finish
 
 ```python
 def finish(path: Path, made: Graph, base: str, shapes: list = (),
-           context=(), index: Optional[dict] = None) -> dict
+           context=(), index: Optional[dict] = None, follow=()) -> dict
 ```
 
 What the graph file asks of the graph written to *path*, done: the
 classes not written leave it, the classes with an address rule are named
 anew, and the effects of the constraints are applied after the graph is
 held to *shapes*. *index* is {document: [its subjects]}, which a
-paper's leaving out needs. The file is rewritten only where something
-changed. Returns what was done, counted.
+paper's leaving out needs. The files *follow* names speak of the graph's
+nodes (its provenance) and follow it: a node named anew is named anew
+there, a node left out takes every triple that names it along. A file is
+rewritten only where something changed. Returns what was done,
+counted.
+
+### also_pairs
+
+```python
+def also_pairs(spec_raw: dict) -> list
+```
+
+[(classes, predicate block, [further predicate blocks])] of a spec
+read as its shapes name its properties (`draft.read_as_shapes`): every
+block that writes a predicate and names further ones (`also`), with the
+classes of the node it writes on (`draft.field_classes`). A parameter's
+`kg` block may name them beside its `property`, for that property.
+
+### shape_prefixes
+
+```python
+def shape_prefixes(shapes) -> dict
+```
+
+{prefix: namespace} the shapes files declare.
+
+### add_also
+
+```python
+def add_also(text: str, pairs: list, prefixes: Optional[dict] = None) -> tuple
+```
+
+(*text* with what `also` asks, the triples added): for every triple
+whose predicate a block writes with `also`, on a node of one of the
+block's classes, the same node and object under each further predicate,
+where the node holds no value under it yet (a writer that writes it
+itself, a scenario's acronym, keeps its own). Edited as text where every
+block can be read, the writers' comments staying, else written anew by
+rdflib; held against the graph it asks for either way. *prefixes*
+{name: namespace} expand a further predicate the graph's header does not
+bind (the shapes' own, where a merged property came from).
+
+### also
+
+```python
+def also(path: Path, pairs: list, prefixes: Optional[dict] = None) -> int
+```
+
+`add_also` on the graph written to *path*; the file is rewritten only
+where a triple is added. Returns how many were.
 
 [Back to the index](../README.md)

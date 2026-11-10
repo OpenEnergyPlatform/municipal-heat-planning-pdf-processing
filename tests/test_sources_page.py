@@ -17,6 +17,11 @@ The promises, each with a case that breaks it by construction:
 4. The comparison reads KWP as its shapes name its properties: no field of
    KWP is "without a graph block" once its schema slots are resolved.
 5. The page never shows a token's value, only whether it is set.
+6. "Write a field under it as well" puts the property beside the predicate
+   the choice names (`also`), every predicate of every field being offered,
+   AND the written graph then holds that predicate's value under it; a
+   field of several predicates named alone, and a property merged twice,
+   are refused.
 
 Author: Felix Vossel
 """
@@ -237,3 +242,44 @@ def test_a_token_is_shown_as_set_never_as_its_value(tmp_path, profile,
     status, report = app.call("POST", "/api/sources/check", {},
                               {"data": data})
     assert not report["ok"] and "token" in report["errors"][0]
+
+
+
+def test_a_merge_writes_the_property_beside_the_predicate_it_names():
+    pytest.importorskip("rdflib")
+    from docpipe import graphfile
+    from docpipe.compile.shapes import Property
+    data = {"parameters": [{"uri": "energy", "kg": {
+        "node": "value", "class": "ex:Value",
+        "number": {"prefix": "ex", "predicate": "number",
+                   "label": "has number"},
+        "unit": {"prefix": "ex", "predicate": "unit", "label": "has unit"}},
+        "axes": {"carrier": {"kg": {"role": "edge", "prefix": "ex",
+                                    "predicate": "carrier"}}}}]}
+    parameters = {one["uri"]: one for one in data["parameters"]}
+    prop = Property(path="https://example.org/o/amount", name="amount")
+    prefixes = {"ex": "https://example.org/o/"}
+    assert {one["into"] for one in sourcespage.merge_targets(data)} == {
+        "energy|kg.number", "energy|kg.unit", "energy|axes.carrier.kg"}
+    done, said = sourcespage._merge(data, parameters, "energy|kg.number",
+                                    prop, prefixes)
+    assert done, said
+    kg = data["parameters"][0]["kg"]
+    assert kg["number"]["also"] == {"prefix": "ex", "predicate": "amount",
+                                    "label": "amount"}
+    assert "also" not in kg["unit"]
+    text = """@prefix ex: <https://example.org/o/> .
+
+<https://example.org/id/value/1>
+    a ex:Value ;
+    ex:number 5 ;
+    ex:unit ex:MWh .
+"""
+    out, added = graphfile.add_also(text, graphfile.also_pairs(data))
+    assert added == 1 and "ex:amount 5" in out
+    # the failure by construction: named alone, a field of three predicates
+    # is refused, and so is a property merged a second time
+    assert not sourcespage._merge(data, parameters, "energy", prop,
+                                  prefixes)[0]
+    assert not sourcespage._merge(data, parameters, "energy|kg.number", prop,
+                                  prefixes)[0]

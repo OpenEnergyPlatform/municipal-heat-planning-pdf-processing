@@ -520,14 +520,14 @@ SETTINGS = (
       "Token for the OEKG SPARQL endpoint; the scenarios vocabulary refresh "
       "stops without it.",
       secret=True, stages=("extract",)),
-    S("OEKG_EVIDENCE", "oekg.evidence", "flag", "0",
+    S("OEKG_EVIDENCE", "oekg.evidence", "flag", None,
       "scenarios profile: write each passage as a provenance node instead "
-      "of a comment.",
+      "of a comment. Unset: the profile's graph file says it (evidence_as).",
       stages=("extract",)),
-    S("OEKG_ID_BASE", "oekg.id_base",
-      "str", "https://openenergyplatform.org/ontology/oekg/",
+    S("OEKG_ID_BASE", "oekg.id_base", "str", None,
       "scenarios profile: IRI prefix of every graph node; changing it "
-      "changes all identifiers.",
+      "changes all identifiers. Unset: the profile's graph file says it "
+      "(base).",
       stages=("extract",)),
     S("PAGE_RENDER_WORKERS", "preprocess.page_render_workers", "int", "4",
       "Pages rendered at once when pages without a text layer are "

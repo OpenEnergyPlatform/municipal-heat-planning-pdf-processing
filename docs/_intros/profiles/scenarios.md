@@ -160,7 +160,7 @@ dataclass); `Parameter.vocabulary_dynamic` marks a parameter's own value
 the same way, and `_validate_parameter` refuses a spec that gives a
 category parameter both a fixed vocabulary and `vocabulary_dynamic` at
 once, or gives `vocabulary_dynamic` to a parameter that is not a category
-at all (`spec.py`, lines 431 to 455). Either way, the vocabulary key
+at all (`spec.py`, `_validate_parameter`). Either way, the vocabulary key
 stays out of `extraction_spec.json` and a profile hook fills it in before
 the harvest runs; where no hook fills it, the coordinate degrades to a
 plain wording, the glossary's definition of a dynamic list.
@@ -221,14 +221,14 @@ of a wording against the option it names takes it.
 
 `_document_text` concatenates every row of `Sections.content`,
 `Tables.markdown`, `Tables.caption`, `Images.description` and
-`Images.caption` for the document (`extraction.py`, lines 98 to 121), so a
+`Images.caption` for the document (`_document_text`, `extraction.py`), so a
 country named only in a figure's caption is still quotable. Matching runs
 on word boundaries and is casefolded, except for an all-caps label of
 four letters or fewer, matched case-sensitively instead: a bare "US" or
 "UK" casefolded onto ordinary English prose (the pronoun "us", the
 country name "Ukraine") would otherwise be offered as a valid country on
 every document of this English-language corpus (`_acronym`, `_mentioned`,
-`extraction.py`, lines 124 to 146). The same widening accepts one failure
+`extraction.py`). The same widening accepts one failure
 mode in place of the other: a paper that spells a country only as an
 adjective ("Chilean") no longer offers that country as a choice, and the
 model falls back to an `out:` sentinel, a visible, counted outcome rather
@@ -269,7 +269,7 @@ deliberate non-class answer, not a reading the graph can hold. The
 prefix is one definition, `NOT_IN_GRAPH = "out:"` in
 `docpipe/extraction/graphkit.py`, which both profiles' `kg.py` and the
 provenance writer import, so the serializer has nothing to keep in step with
-another copy; `kg.in_graph()` in `profiles/scenarios/kg.py` (line 257) is the
+another copy; `kg.in_graph()` in `profiles/scenarios/kg.py` is the
 one guard every later mint, link and type decision runs through, and it refuses
 whatever starts with it.
 
@@ -307,14 +307,13 @@ and the harvest counts it. The harvest renders a choice list as a short
 answer token followed by its longer explanation, and the prompt asks for
 the token copied character for character, so every sentinel's first
 label is short and retypable, its longer gloss placed as an alternate
-spelling rather than first (`extraction.py`, lines 58 to 64).
+spelling rather than first (`extraction.py`).
 
 Once chosen, a sentinel is refused a place in the graph outright.
 `in_graph()` and `graph_value()` ensure an `out:` value never becomes a
 class, an IRI or a link; only the document's own wording, carried
 separately as `value_raw`, stands in for it, since the sentinel's own
-label describes why nothing fit, not what the document states (`kg.py`,
-lines 257 to 272). Every chosen sentinel, together with every
+label describes why nothing fit, not what the document states (`kg.py`). Every chosen sentinel, together with every
 `scenario_region`, `scenario_type` or bundle tag row
 that resolved no `value_uri`, is counted once into an `out_of_graph`
 tally, logged per document and never written as a triple (`kg.py`).
@@ -403,18 +402,17 @@ codes the model's mapping gives them, from IAMconsortium/common-definitions;
 the UN's M49 regions from the SDG API; the World Bank's groups of economies,
 the European Union and the OECD among them, from its classification
 `CLASS.xlsx`, the two also named "EU" and "OECD" as a paper writes them
-(`SHORT_FORMS`); and EU28, the World Bank's Union and the United Kingdom, the
+(the rule `short_forms` of `rules.json`); and EU28, the World Bank's Union and the United Kingdom, the
 one group no source lists, owner decisions 2026-11-04) and the English short
 name each region has in the OMG's LCC (`lcc`, its ISO 3166-1 file), rewrites
 `vocabulary.json`, `regions.json`, `region_aggregates.json` and
 `region_names.json`, and runs the same check `--check` alone runs against
 the checked-in snapshot; `region_aliases.json` keeps the hand-written
 spellings a document uses that the OEKG's own labels do not, merged in
-ahead of the live ones by `merge_regions` (`vocabulary.py`, lines 1 to
-26; [../stages/graph.md](../stages/graph.md)). `aggregates` places each
+ahead of the live ones by `merge_regions` (`vocabulary.py`; [../stages/graph.md](../stages/graph.md)). `aggregates` places each
 member of a group on an OEKG region by one of its labels, or by a label
 with the same words in another order. Accents do not count and the sources'
-abbreviations are written out ("St. Lucia", "Lao PDR", `ABBREVIATIONS`); a
+abbreviations are written out ("St. Lucia", "Lao PDR", the rule `name_abbreviations` of `rules.json`); a
 name with a comma whose whole words find no label is placed by the words
 before the comma where exactly one region's labels hold them all ("Egypt,
 Arab Rep.", "Hong Kong SAR, China"), while "Congo, Dem. Rep." is placed by
@@ -425,19 +423,18 @@ only among the models of one name ("REMIND" and "REMIND-MAgPIE" are one),
 since a paper is offered them only where it names the model; every version
 of a model defines its regions again, and the newest one is kept.
 
-Every IRI is minted under `BASE`, which defaults to
-`https://openenergyplatform.org/ontology/oekg/` and can be overridden by
-the `OEKG_ID_BASE` environment variable (`kg.py`, line 55).
+Every IRI is minted under `BASE`, the graph rule `base` of
+`profiles/scenarios/graph.json` (`https://openenergyplatform.org/ontology/oekg/`);
+the setting `OEKG_ID_BASE` wins over the file, applied in `graphfile.load`
+(`Rule.env`, `docpipe/rules.py`).
 `mint(collection, name)` derives the local part as a UUIDv5 over a
 normalised identifying name, never a random UUIDv4, so two serialize
-runs over one document mint byte-identical IRIs (`kg.py`, lines 233 to
-239). Where each class of
+runs over one document mint byte-identical IRIs (`mint`). Where each class of
 node lives was read directly off the running OEKG graph over its SPARQL
-endpoint, 13,700 triples at the time it was checked (`kg.py`, lines 49
-to 52): a study report sits under `publication/`, a scenario factsheet
+endpoint, 13,700 triples at the time it was checked (the comment above `COLLECTIONS`): a study report sits under `publication/`, a scenario factsheet
 under `scenario/`, a study region under `region/`, and a scenario
 bundle, an author, an organisation and a funder directly under the base
-with no path segment at all (`COLLECTIONS`, `kg.py`, lines 61 to 69).
+with no path segment at all (`COLLECTIONS`).
 
 One document mints exactly one study report and one scenario bundle. The
 report's IRI comes from the resolved title; the bundle's comes from
@@ -495,10 +492,10 @@ document that gave one, and a later document's other reading goes unwritten
 The bundle also carries its tags, one triple for each entry the model
 picked from the four lists above. `BUNDLE_TAGS` is every category
 parameter whose `kg` block names the bundle, read from the spec as
-`SCENARIO_FIELDS` is (`kg.py`, lines 211 to 218), and every passage that
+`SCENARIO_FIELDS` is (`kg.py`), and every passage that
 named an entry stands above its triple. An `out:` entry or a wording the
 list did not hold writes no triple and is counted in `out_of_graph`, as
-for a scenario type (`kg.py`, lines 948 to 960). The
+for a scenario type (`_make_builder`). The
 picked IRIs travel on in the study dict as `bundle["tags"]`.
 
 One factsheet is minted per scenario. For every row of a scenario-scope
@@ -541,7 +538,7 @@ the shapes by `bind`) are settled by `_pick_one()`, which favours the reading th
 most sources agree on: first dropping any candidate that is a strict
 substring of another (a running header would otherwise outvote a title
 on its own title page), then ranking by vote count, whether the reading
-was located on its PDF page, and length (`kg.py`, lines 393 to 421).
+was located on its PDF page, and length (`_pick_one`).
 For the title, the authors, the date and the DOI a reading on page 1 or on
 the first page the title was read on, the title page behind a cover, goes
 first however often other readings agree; where no front page gives one,
@@ -561,7 +558,7 @@ DOI against `DocumentMeta`, filled in by the crawl, not this profile's
 own extraction; a disagreement is logged and the crawled value is never
 substituted into the graph, since a published value must carry its own
 evidence, and the crawl's copy is only the cross-check
-(`kg.py`'s module docstring; `_crosscheck`, lines 452 to 468).
+(`kg.py`'s module docstring; `_crosscheck`).
 
 What the paper's front pages do not print of its DOI and year, often an
 authors' manuscript, and its authors where they name none, the run looks up
@@ -596,16 +593,19 @@ organisation, and the OEKG shape asks only for that class).
 
 Every triple this serializer writes about a value carries, immediately
 above it, the passage it was read from. By default that passage is a
-flattened Turtle comment (`_evidence_comment`, `kg.py`, lines 514 to 537)
+flattened Turtle comment (`_evidence_comment`)
 rather than a linked node, since the OEKG's node shapes are currently
 declared `sh:closed`, and an unanticipated triple on a report or a
-factsheet would invalidate the node it documents. Setting `OEKG_EVIDENCE`
-to anything other than `"0"` switches to a linked
+factsheet would invalidate the node it documents. The graph rule
+`evidence_as` of `profiles/scenarios/graph.json` says which (`"comment"`,
+the value there, or `"node"`); the setting `OEKG_EVIDENCE` (a flag: 1 =
+node, 0 = comment) wins over the file, applied in `graphfile.load`.
+`"node"` switches to a linked
 `oekgprov:ExtractionEvidence` node per passage instead, described in the
-module's own docstring as provisional and ahead of the shapes, so it
-stays off by default (`kg.py`, line 459 and the module docstring). Either
+module's own docstring as provisional and ahead of the shapes, so the file
+keeps it off (`EVIDENCE` in `kg.py`, and the module docstring). Either
 branch is followed by one rendered trust line, worded in English
-throughout `TRUST_PROSE` (`kg.py`, lines 464 to 471). The line carries
+throughout `TRUST_PROSE` (`kg.py`). The line carries
 `corroborated` where a second passage prints the same value; one passage
 read twice counts once, whatever its quotes (owner decision 2026-11-05). The full
 trust-level and reason vocabulary is published at
@@ -651,6 +651,17 @@ shapes dropped would be harvested and then refused, and one they gained
 could never be chosen.
 `acronym_problems` compares acronyms, without case, across the harvest
 and, with `--live`, with the platform's public bundle list.
+
+The dry run follows the profile's graph file (`graph_file_on`, the
+argument `made` of `dry_run`) as the written graph does, on the bundle as
+the platform would hold it. A class the file does not write leaves the body
+with its items. A constraint whose effect is "leave out the value" takes
+the item at fault, the bundle where the fault is the bundle's; "leave out
+the paper" takes the bundle; "stop" is reported and leaves the body whole.
+Addresses are the platform's to mint, so the file's address rules ask
+nothing here. An entry the file leaves out has no body and carries what the
+file did (`graph_file`), and the report says how many bundles the file
+leaves out.
 
 The report counts bundles, not documents and not nodes: the scenarios of
 one bundle that lack the same thing are one finding about that bundle. `--write` writes one
@@ -734,8 +745,9 @@ none and stays refused.
 The third is the missing IAM annotation. The Turtle types every factsheet
 an IAM scenario (`OEO_00020517`, above). The platform's list of scenario
 types does not hold that class yet and refuses a create for it, so the
-body leaves it out (`NOT_YET_LISTED`); a factsheet with no other type then
-has none and is refused for that instead.
+body leaves it out (`NOT_YET_LISTED`); so is every type of the graph rule
+`scenario_types_always`, the IAM scenario being the only one today. A
+factsheet with no other type then has none and is refused for that instead.
 
 The study region is no longer one of them: the Turtle and the body both
 write `has study region` (`OEO_00020220`), the path the closed scenario
@@ -748,13 +760,13 @@ A spec that mismatches the two dynamic mechanisms above refuses to load
 before any document is touched: a category parameter naming both a fixed
 vocabulary and `vocabulary_dynamic`, or a non-category parameter naming
 `vocabulary_dynamic` at all, raises `SpecError` naming the offending
-field (`docpipe/extraction/spec.py`, lines 431 to 455). A `kg` block
+field (`_validate_parameter`, `docpipe/extraction/spec.py`). A `kg` block
 whose class is not an identifier shape, or whose predicate is not a
 single token, is refused the same way, at spec load time
-(`_validate_kg_ids`, `spec.py`, lines 702 to 741); this rule is shared
+(`_validate_kg_ids`, `spec.py`); this rule is shared
 with the kwp profile. This profile's own `kg.py` calls that same loader
 again, on its own copy of the spec, at import time (`load_spec(_SPEC)`,
-`kg.py`, line 477), so a spec broken this way fails to import the whole
+`kg.py`), so a spec broken this way fails to import the whole
 serializer before a single document is processed, not partway through a
 run. `kg.py`'s own lookup helpers, `_property`, `_name`, `_class` and
 `_kg`, raise `KeyError` for a key the spec does not carry rather than
@@ -762,7 +774,7 @@ default silently.
 
 A document whose `publication_title` never resolved is refused whole:
 the serializer returns `None` and logs at `INFO` level, before a bundle,
-a factsheet or an author node is built (`kg.py`, lines 632 to 634). Any
+a factsheet or an author node is built (`_make_builder`). Any
 other field the shapes demand on the report or the bundle, a date, an
 author, an acronym or one of the tags, is not refused this way, only
 named in the per-document summary line as a missing required field
@@ -792,5 +804,5 @@ its later journal version sharing one title, for example, is only
 logged, naming both documents and the shared IRI; both documents'
 single-valued triples land on that one shared subject rather than the
 second document being dropped whole, the way kwp refuses a duplicate
-identity (`kg.py`, lines 660 to 666; the contrast is documented at
+identity (`_make_builder`; the contrast is documented at
 [../stages/graph.md](../stages/graph.md)).

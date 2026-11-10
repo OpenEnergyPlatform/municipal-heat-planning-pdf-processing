@@ -170,4 +170,15 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
 "refused": [{"id", "why"}]}. *chosen* is [{"id", "action", "into"?}];
 `into` names the field a property is merged into.
 
+### merge_targets
+
+```python
+def merge_targets(spec_raw: Optional[dict]) -> list
+```
+
+[{"into", "label"}]: every predicate of every field a property of the
+shapes can be merged into (`draft.predicate_places`): the value itself,
+its unit, an edge of one of its axes. *into* is "field|key.key...", the
+place `_merge` writes `also` to.
+
 [Back to the index](../README.md)

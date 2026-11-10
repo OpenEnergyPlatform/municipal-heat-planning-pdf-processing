@@ -86,12 +86,12 @@ one row. The stamp is `<document>.stamp.json`: whole-run keys (`spec`,
 version), `document` (the sha256 and size of the PDF it was read from)
 and `producers` (who wrote into it)) beside the `parameter/`, `value/`,
 `axis/*/*`, `slot/parameter` and `question_text/` families, written one
-per question instead (`docpipe/extraction/schema.py:603` to `765`).
+per question instead (`docpipe/extraction/schema.py`).
 The owner decided on 2026-09-10 that a stamp rests on the KG/ontology
 parameters alone: `stale` compares the `parameter/`, `value/`,
-`axis/` and `slot/` families (`QUESTION_KEYS`,
-`docpipe/extraction/runner.py:4372`), and the whole-file sha `spec`
-only for a stamp that carries none of them (`COARSE`, `:4366`).
+`axis/` and `slot/` families (the rule `question_keys`, read by
+`question_keys` in `docpipe/extraction/runner.py`), and the whole-file sha `spec`
+only for a stamp that carries none of them (`COARSE`, same module).
 `model`, `anchors`, every `extraction/*` prompt, `page_text_transcribed`,
 `review/*`, `question_text/*`, `docpipe` and `producers` are written into
 the stamp so a reader can place a harvest, and are never compared.
@@ -106,12 +106,11 @@ stage](../stages/extraction.md) for when that can happen). The
 their definitions, because the rows request shows the model no more.
 A moved `parameter/`, `value/`, `axis/` or `slot/` key, or a moved PDF,
 makes a
-document eligible for `--force-stale`'s full re-harvest (`stale`,
-`docpipe/extraction/runner.py:4404` to `4449`, `already_done`, `:4494`
-to `4533`); redoing only the changed question is
-`top_up_file`'s job (`docpipe/extraction/topup.py:420` to `538`), and
+document eligible for `--force-stale`'s full re-harvest (`stale` and `already_done` in
+`docpipe/extraction/runner.py`); redoing only the changed question is
+`top_up_file`'s job (`docpipe/extraction/topup.py`), and
 reading a parameter the spec has gained, without reading the document again,
-`append_document`'s (`docpipe/extraction/topup_parameter.py:336` to `462`),
+`append_document`'s (`docpipe/extraction/topup_parameter.py`),
 which `already_done` names in a second warning for such a document. The
 trace is `<document>.trace.jsonl.gz`: its event kinds are told apart by
 `t` (`schema.trace_schema`). An event that reports a model request carries

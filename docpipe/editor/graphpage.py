@@ -299,6 +299,8 @@ def compare(before: dict, after: dict) -> dict:
                         for klass in sorted(set(before["classes"])
                                             | set(after["classes"]))},
             "readdressed": after["done"].get("readdressed", 0),
+            # what the spec's `also` wrote under further predicates
+            "also": after["done"].get("also", 0),
             "triples": {"before": before["triples"],
                         "after": after["triples"]}}
 

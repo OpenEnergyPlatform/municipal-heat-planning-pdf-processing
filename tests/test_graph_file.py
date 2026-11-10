@@ -17,6 +17,19 @@ The promises, each with a case that breaks it by construction:
 5. "stop" shuts the gate for a violation of its constraint.
 6. A rule the file sets reaches the writer: the rounding a number's
    readings are one statement within is the file's.
+7. A value a block of the spec writes with `also` stands under each further
+   predicate on every node of the block's classes, AND a node that holds a
+   value under it keeps its own, AND a node of another class gets none, AND
+   the writer's comments stay; a predicate the header does not bind is
+   declared from the shapes' prefixes.
+8. The provenance follows the graph: a node named anew is named anew there,
+   AND a node left out takes every triple that names it out of it.
+9. A setting of a graph rule wins over the file, as for every rule: the
+   base its text, the evidence its flag; without them the file holds.
+10. The OEKG body leaves out what the graph file leaves out: a class not
+    written takes its items along, AND a value left out takes the item at
+    fault, AND a bundle at fault is not sent, AND "stop" is said and leaves
+    the body whole; a file that asks nothing leaves the body as it is.
 """
 import json
 
@@ -200,3 +213,173 @@ def test_a_rule_the_file_sets_reaches_the_writer(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv(graphfile.ENV)
         graphfile.reset()
+
+
+# -- `also`: a value written under further predicates ------------------------
+
+ALSO_TEXT = TEXT + f"""
+<{EX}org/y>
+    a ex:Org ;
+    rdfs:label "Y-Werke" ;
+    ex:name "Y" .
+"""
+
+
+def spec_with(also) -> dict:
+    return {"parameters": [{"uri": "organisation", "kg": {
+        "node": "organisation", "class": "ex:Org",
+        "property": {"prefix": "rdfs", "predicate": "label", "also": also}}}]}
+
+
+def test_also_writes_the_value_under_each_further_predicate():
+    pytest.importorskip("rdflib")
+    from rdflib import Literal, URIRef
+    pairs = graphfile.also_pairs(spec_with({"prefix": "ex",
+                                            "predicate": "name"}))
+    text, added = graphfile.add_also(ALSO_TEXT, pairs)
+    graph = graph_of(text)
+    name = URIRef("https://example.org/o/name")
+    assert added == 1
+    assert set(graph.objects(URIRef(f"{EX}org/x"), name)) \
+        == {Literal("Stadtwerke")}
+    # a node that holds a value under it keeps its own
+    assert set(graph.objects(URIRef(f"{EX}org/y"), name)) == {Literal("Y")}
+    # a node of another class gets none: the plan has a label too
+    assert not set(graph.objects(URIRef(f"{EX}plan/1"), name))
+    assert '# "1.200 MWh", p. 3' in text
+    # a further predicate the header does not bind is declared from the
+    # shapes' prefixes
+    dc = {"prefix": "dc", "predicate": "title"}
+    text, added = graphfile.add_also(
+        ALSO_TEXT, graphfile.also_pairs(spec_with(dc)),
+        {"dc": "http://purl.org/dc/terms/"})
+    assert added == 2 and "@prefix dc: <http://purl.org/dc/terms/> ." in text
+    assert set(graph_of(text).objects(
+        URIRef(f"{EX}org/x"), URIRef("http://purl.org/dc/terms/title"))) \
+        == {Literal("Stadtwerke")}
+    # the failure by construction: a spec without `also` adds nothing
+    assert graphfile.also_pairs(spec_with(None)) == []
+    assert graphfile.add_also(ALSO_TEXT, [], None) == (ALSO_TEXT, 0)
+
+
+def test_also_reads_a_block_inside_the_field_and_the_edges_of_its_axes():
+    spec = {"parameters": [{
+        "uri": "energy", "kg": {
+            "node": "value", "class": "ex:Value",
+            "number": {"prefix": "ex", "predicate": "number",
+                       "also": [{"prefix": "ex", "predicate": "amount"}]}},
+        "axes": {"carrier": {"kg": {
+            "role": "edge", "prefix": "ex", "predicate": "unit",
+            "also": {"prefix": "ex", "predicate": "carrier"}}}}}]}
+    pairs = graphfile.also_pairs(spec)
+    assert sorted(main["predicate"] for _c, main, _f in pairs) \
+        == ["number", "unit"]
+    text, added = graphfile.add_also(TEXT, pairs)
+    # value/a has a number and a unit, value/b a unit only
+    assert added == 3
+
+
+# -- the provenance follows the graph ---------------------------------------
+
+PROV = f"""@prefix prov: <http://www.w3.org/ns/prov#> .
+
+<{EX}statement/1>
+    prov:wasDerivedFrom <{EX}value/a> .
+
+<{EX}statement/2>
+    prov:wasDerivedFrom <{EX}org/x> .
+"""
+
+
+def test_the_provenance_follows_the_graph(written, tmp_path):
+    pytest.importorskip("rdflib")
+    prov = tmp_path / "graph.prov.ttl"
+    prov.write_text(PROV, encoding="utf-8")
+    kept = tmp_path / "other.prov.ttl"
+    kept.write_text(PROV, encoding="utf-8")
+    graphfile.finish(written, made(classes={
+        "Org": {"written": False},
+        "Value": {"address": {"folder": "number",
+                              "key": ["ex:unit", "ex:number"]}}}), EX,
+        follow=[prov])
+    text = prov.read_text(encoding="utf-8")
+    assert f"{EX}org/x" not in text and f"{EX}statement/2" not in text
+    assert f"<{EX}value/a>" not in text and f"<{EX}number/" in text
+    # the same new name in the graph and in its provenance
+    graph_names = {str(s) for s in graph_of(written.read_text(
+        encoding="utf-8")).subjects() if "/number/" in str(s)}
+    prov_names = {str(o) for o in graph_of(text).objects()}
+    assert prov_names <= graph_names
+    # the failure by construction: a file not followed keeps the old names
+    assert kept.read_text(encoding="utf-8") == PROV
+
+
+# -- a setting of a graph rule wins over the file ------------------------------
+
+def test_a_setting_of_a_graph_rule_wins_over_the_file(monkeypatch):
+    profile = load_profile("scenarios")
+    plain = graphfile.load(profile, environ={})
+    said = graphfile.load(profile, environ={
+        "OEKG_ID_BASE": "https://example.org/kg/", "OEKG_EVIDENCE": "1"})
+    assert said.rules["base"] == "https://example.org/kg/"
+    assert said.rules["evidence_as"] == "node"
+    assert said.owners["rules/base"] == "environment"
+    assert graphfile.load(profile, environ={"OEKG_EVIDENCE": "0"}) \
+        .rules["evidence_as"] == "comment"
+    # the failure by construction: without the settings the file holds
+    assert plain.rules["base"] != "https://example.org/kg/"
+    assert plain.rules["evidence_as"] == "comment"
+    # and what the writers read follows the setting as it is now
+    graphfile.reset()
+    monkeypatch.setenv("OEKG_ID_BASE", "https://example.org/kg/")
+    try:
+        assert graphfile.get("base", "scenarios") == "https://example.org/kg/"
+    finally:
+        monkeypatch.delenv("OEKG_ID_BASE")
+        graphfile.reset()
+    assert graphfile.get("base", "scenarios") == plain.rules["base"]
+
+
+# -- the OEKG body leaves out what the graph file leaves out ------------------
+
+def test_the_oekg_body_leaves_out_what_the_graph_file_leaves_out():
+    pytest.importorskip("pyshacl")
+    from rdflib import Graph as RdfGraph
+    from profiles.scenarios import kg, oekg_api
+    shapes = RdfGraph().parse(data=f"""
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix oeo: <{kg.OEO_BASE}> .
+@prefix dc: <http://purl.org/dc/terms/> .
+oeo:ScenarioShape a sh:NodeShape ;
+    sh:targetClass oeo:{kg.CLS_SCENARIO} ;
+    sh:property [ sh:path dc:abstract ; sh:minCount 1 ] .
+oeo:BundleShape a sh:NodeShape ;
+    sh:targetClass oeo:{kg.CLS_BUNDLE} ;
+    sh:property [ sh:path dc:abstract ; sh:minCount 1 ] .
+""", format="turtle")
+    payload = {"label": "Study", "acronym": "ST", "abstract": "What it is.",
+               "study_reports": [{"label": "Paper", "authors": [
+                   {"label": "A. Author"}, {"label": "B. Author"}]}],
+               "scenarios": [{"label": "One", "acronym": "S1",
+                              "abstract": "The first."},
+                             {"label": "Two", "acronym": "S2"}]}
+    at_fault = f"MinCount abstract {kg.CLS_SCENARIO}"
+    body, done = oekg_api.graph_file_on(payload, made(classes={
+        kg.CLS_AUTHOR: {"written": False}}), shapes, {})
+    assert "authors" not in body["study_reports"][0]
+    assert done["classes_left_out"] == {kg.CLS_AUTHOR: 2}
+    body, done = oekg_api.graph_file_on(payload, made(constraints={
+        at_fault: "leave_out_value"}), shapes, {})
+    assert [one["acronym"] for one in body["scenarios"]] == ["S1"]
+    assert body["study_reports"] == payload["study_reports"]
+    without = {key: value for key, value in payload.items()
+               if key != "abstract"}
+    body, done = oekg_api.graph_file_on(without, made(constraints={
+        f"MinCount abstract {kg.CLS_BUNDLE}": "leave_out_value"}), shapes, {})
+    assert body is None
+    body, done = oekg_api.graph_file_on(payload, made(constraints={
+        at_fault: "stop"}), shapes, {})
+    assert body == payload and done["stop"] == [{"constraint": at_fault}]
+    # the failure by construction: a file that asks nothing leaves it whole
+    body, done = oekg_api.graph_file_on(payload, made(), shapes, {})
+    assert body == payload and not any(done.values())

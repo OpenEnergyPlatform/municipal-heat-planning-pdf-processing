@@ -31,7 +31,7 @@ import re
 from pathlib import Path
 from typing import Optional
 
-from .. import ontology
+from .. import ontology, rules
 from ..extraction import spec as spec_module
 from ..extraction.spec import SpecError
 
@@ -845,7 +845,8 @@ _FORM = {
                     "default": "float"}),
                   ("once_per_document", "bool", "once_per_document",
                    {"default": False}),
-                  ("takes_group", "bool", "takes_group", {"default": True}),
+                  ("takes_group", "bool", "takes_group",
+                   {"default_rule": "default_takes_group"}),
                   ("merged", "line", "merged", {}),
                   ("vocabulary_dynamic", "bool", "vocabulary_dynamic",
                    {"default": False}),
@@ -897,6 +898,10 @@ def form() -> dict:
         out[kind] = []
         for key, widget, attribute, extras in fields:
             said = _OWN_HELP.get((kind, key)) or comments.get(attribute, "")
+            extras = dict(extras)
+            if "default_rule" in extras:
+                # The default a run takes is a rule's, as the rules say it.
+                extras["default"] = rules.get(extras.pop("default_rule"))
             out[kind].append({"key": key, "widget": widget, "help": said,
                               **extras})
     for kind, attribute in (("plan_field", "plan_fields"),

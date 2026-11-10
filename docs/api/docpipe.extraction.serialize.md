@@ -108,6 +108,16 @@ What the profile's graph file asks of the graph written to *path*
 of the constraints. None, and the file untouched, where it asks
 nothing.
 
+### also_of_spec
+
+```python
+def also_of_spec(path: Path, profile, shapes=()) -> int
+```
+
+The triples the profile's spec asks for with `also` (a value written
+under further predicates, `graphfile.add_also`), added to the graph at
+*path*. Returns how many were added.
+
 ### kind_key
 
 ```python

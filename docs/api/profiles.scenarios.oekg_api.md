@@ -172,7 +172,7 @@ refused; one they gained could never be chosen.
 ### graph
 
 ```python
-def graph(payload: dict, known: dict)
+def graph(payload: dict, known: dict, origin: Optional[dict] = None)
 ```
 
 The bundle as the platform would hold it after creating this body.
@@ -180,6 +180,28 @@ The bundle as the platform would hold it after creating this body.
 The model the module docstring names. Local IRIs stand in for the ones
 the server mints; nothing here is written anywhere. A key the model does
 not cover raises: a verdict over half a body would read as a verdict.
+*origin*, where given, is filled with {node: [the places of the body it
+was made from]}, a place a tuple of keys and positions:
+("scenarios", 2), ("study_reports", 0, "authors", 1), ("bundle",).
+
+### graph_file_on
+
+```python
+def graph_file_on(payload: dict, made, shapes, known: dict,
+                  context=()) -> tuple
+```
+
+(the body as the profile's graph file leaves it, None where it leaves
+the bundle out; what it did): the graph file asks of the bundle as the
+platform would hold it (`graph`) what it asks of the written graph
+(`docpipe.graphfile.finish`). A class it does not write takes the items
+of the body that are its nodes along; a constraint whose effect is to
+leave the value out takes the item at fault, the bundle where the fault
+is the bundle's; one that leaves the paper out takes the bundle, as the
+paper's leaving out takes every node of its document, the bundle's
+among them; one that stops is said, and nothing is left out for it.
+Addresses are the platform's to mint, so the address rules ask nothing
+here.
 
 ### shape_problems
 
@@ -216,7 +238,7 @@ narrower; two bundles that differ in case alone are one study either way.
 
 ```python
 def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
-            known: dict, taken: Optional[dict] = None) -> tuple
+            known: dict, taken: Optional[dict] = None, made=None) -> tuple
 ```
 
 (entries, documents without a study) for a harvest directory.
@@ -225,6 +247,10 @@ An entry is one request as it would be sent, and every reason the
 platform would refuse it: {documents, formed, method, path, body,
 problems}. `documents` are the harvest files the bundle was read from,
 the leading one first; `formed` names what was made here and not read.
+*made* is the profile's graph file (`docpipe.graphfile`): what it leaves
+out of the graph it leaves out of the body (`graph_file_on`), an entry
+it leaves out whole has no body, and one it stops says so; the entry
+carries what it did (`graph_file`).
 
 ### report
 

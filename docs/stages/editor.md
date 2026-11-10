@@ -7,14 +7,17 @@ closed lists the answers are chosen from, the texts a model is shown about a
 document and the examples. It is a long file, and one line of it can make a
 stored harvest stale. A profile also holds its prompts, the files a model is
 told its task in, and the sentences its stages say to the model outside them.
-`docpipe edit` shows these as a page in the browser with three tabs. The Spec tab
+`docpipe edit` shows these as a page in the browser with five tabs and a Rules pane. The Spec tab
 shows the spec, one form per question, and says what an edit costs the next run
 before it is written. The Prompts tab edits the prompt files and the sentence
 files of the profile; with a harvest folder it also shows what an edit does to
 the requests recorded there, and it can send a few of them once more. The Flow
 tab draws the steps a document is read in and edits the numbers that bound them,
-which stand in the profile's `flow.json`. The order of the steps and what a step
-does is code and is not in the page.
+which stand in the profile's `flow.json`; the order of the coordinate steps a
+frame may reorder and whether a step is on are set there too. What a step does
+is code and is not in the page. The Sources tab edits `sources.json`, the Graph
+tab `graph.json`, and the Rules pane, which the Rules button of a tab opens,
+the rules of that tab.
 
 ```
 docpipe edit --profile kwp
@@ -39,7 +42,7 @@ its end before the connection closes, so the refusal arrives instead of a
 reset connection. The page is one HTML file with plain JavaScript and one
 style sheet, with no build step, and loads nothing from outside.
 
-The header has three tabs, **Spec**, **Prompts** and **Flow**, marks a tab that
+The header has five tabs, **Spec**, **Prompts**, **Flow**, **Sources** and **Graph**, a **Rules** button on the tabs that have rules, marks a tab that
 holds edits not yet saved and says whether there are any. The rest of this section is the
 Spec tab. On the left is a tree, on the right the form of the selected node:
 
@@ -527,7 +530,12 @@ coordinate answers from which list. It checks and saves the file. Fetch pulls
 the sources into a temporary folder; Apply writes the files a refresh writes
 into the profile and the fetched files and the lock into the upstream cache. The
 differences of the fetched shapes against the spec are shown per field, and a
-chosen row can be taken into the Spec tab (`sourcespage.py`).
+chosen row can be taken into the Spec tab (`sourcespage.py`). "Write a field
+under it as well" takes a property of the shapes into a field as a further
+predicate (`also`): the field's predicates, the value itself, its unit and an
+edge of one of its axes, are listed by `merge_targets`, and `_merge` writes
+`also` into the block chosen. The graph then holds what that block writes
+under the further predicate as well (see [the graph](graph.md)).
 
 ## Graph
 

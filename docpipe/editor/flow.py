@@ -34,7 +34,7 @@ import re
 from typing import Callable, Optional
 from urllib.parse import urlsplit, urlunsplit
 
-from .. import settings
+from .. import rules, settings
 from ..extraction import flow as flow_map
 from ..extraction.spec import YEAR_FIELDS
 from . import prompts as prompt_files
@@ -129,7 +129,8 @@ SWITCHES = {
         "fields that keep the words of a group as they stand",
         "every field takes the members of a group",
         lambda data: [_field(p) for p in _fields(data)
-                      if p.get("takes_group") is False]),
+                      if not p.get("takes_group",
+                                   rules.get("default_takes_group"))]),
     "compute": ("the profile computes", "this profile computes nothing",
                 lambda data: []),
 }

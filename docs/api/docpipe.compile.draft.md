@@ -115,6 +115,30 @@ The lines this function can name itself, and after them whatever
 `spec.load` still refuses: that is the judge, and a draft is done when
 it has nothing left to say.
 
+### field_classes
+
+```python
+def field_classes(parameter: dict, node_class: Optional[dict] = None) -> set
+```
+
+The local names of the classes a parameter's node is written as: the
+classes its `kg` block names, its node's (*node_class*, as
+`_node_classes` reads them), and every entry the axis it takes its class
+from offers (`class_from`), an `out:` entry none.
+
+### predicate_places
+
+```python
+def predicate_places(parameter: dict) -> list
+```
+
+[(where, block)] of every block of *parameter* that names a predicate
+it writes: those of its own `kg` block and of its axes that draw an edge
+from its node (`role: edge`). *where* is the tuple of keys from the
+parameter to the block, the place a merge writes `also` to. A block
+names its predicate with `predicate`, or with `schema_slot` where the
+profile's schema says it (KWP); the blocks an `also` names are none.
+
 ### read_as_shapes
 
 ```python

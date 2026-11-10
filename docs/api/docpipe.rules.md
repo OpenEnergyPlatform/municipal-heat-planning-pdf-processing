@@ -67,6 +67,7 @@ Fields:
 - `of: str = "text"`: a map's values: text, texts or whole
 - `empty: bool = False`: an empty text, list or map; no range
 - `env: Optional[str] = None`: the setting that wins over the file
+- `env_flag: tuple = ()`: (the value where that setting is off,
 - `decided: str = ""`: the owner's decisions that set it
 - `where: str = ""`: where the code applies it
 

@@ -170,7 +170,7 @@ flag
 flow (flow file)
 : The steps a document is read in and the whole numbers that bound them, in the
   file `flow.json` of a profile: the default profile's file is the whole flow, and
-  a profile that extends it may set numbers only. A setting of the run wins over
+  a profile that extends it may set numbers, and steps where it writes them. A setting of the run wins over
   the file; a changed flow makes no harvest stale. Read by
   `docpipe.extraction.flow`, edited in the Flow tab of `docpipe edit`; see
   [extraction](stages/extraction.md) and [the editor](stages/editor.md).

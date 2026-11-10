@@ -28,7 +28,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.doctor](docpipe.doctor.md): Can this installation run? (3 classes, 13 functions)
 - [docpipe.dotenv](docpipe.dotenv.md): Populate os.environ from a `.env` file before anything reads it. (2 functions)
 - [docpipe.estimate](docpipe.estimate.md): What a run will cost, before it runs. (3 classes, 8 functions)
-- [docpipe.graphfile](docpipe.graphfile.md): How a harvest becomes the graph, read from a file of the profile (owner, 2026-11-10: "sodass man steuern kann, wie die Ernte in den Graphen aufgenommen wird und welche constraints erfüllt sein müssen"). (2 classes, 15 functions)
+- [docpipe.graphfile](docpipe.graphfile.md): How a harvest becomes the graph, read from a file of the profile (owner, 2026-11-10: "sodass man steuern kann, wie die Ernte in den Graphen aufgenommen wird und welche constraints erfüllt sein müssen"). (2 classes, 20 functions)
 - [docpipe.jsonl](docpipe.jsonl.md): The lines of a JSON Lines file. (2 functions)
 - [docpipe.llm_preflight](docpipe.llm_preflight.md): Asks the server what it can do, before the first document. (1 class, 12 functions)
 - [docpipe.migrate_artifact_names](docpipe.migrate_artifact_names.md): Rename the per-document artefacts of an already processed tree to the names in ``docpipe.artifacts``. (3 functions)
@@ -82,7 +82,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.compile](docpipe.compile.md): An extraction spec drafted from the shapes and the ontology of a graph.
 - [docpipe.compile.\_\_main\_\_](docpipe.compile.__main__.md): `python -m docpipe.compile`.
 - [docpipe.compile.cli](docpipe.compile.cli.md): `docpipe compile`, from the shapes of a graph to an extraction spec. (3 functions)
-- [docpipe.compile.draft](docpipe.compile.draft.md): An extraction spec drafted from shapes and an ontology, and what an existing spec says differently. (1 class, 8 functions)
+- [docpipe.compile.draft](docpipe.compile.draft.md): An extraction spec drafted from shapes and an ontology, and what an existing spec says differently. (1 class, 10 functions)
 - [docpipe.compile.examples](docpipe.compile.examples.md): Proposes, from the corpus, the example a parameter still lacks. (10 functions)
 - [docpipe.compile.shapes](docpipe.compile.shapes.md): What SHACL shapes say about a graph, read into plain records. (2 classes, 2 functions)
 - [docpipe.compile.terms](docpipe.compile.terms.md): What an ontology calls a term and says it means. (1 class, 1 function)
@@ -100,7 +100,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.editor.rulespage](docpipe.editor.rulespage.md): The rules of a profile as `docpipe edit` shows and sets them, each in the tab it belongs to. (4 functions)
 - [docpipe.editor.sentences](docpipe.editor.sentences.md): A text cut into sentences and the diff of two such texts. (3 functions)
 - [docpipe.editor.server](docpipe.editor.server.md): The local server of `docpipe edit` and the one file guard. (2 classes, 3 functions)
-- [docpipe.editor.sourcespage](docpipe.editor.sourcespage.md): Where a profile's ontology, shapes and graph come from, as `docpipe edit` shows, fetches and applies them, and what they say differently from the spec. (14 functions)
+- [docpipe.editor.sourcespage](docpipe.editor.sourcespage.md): Where a profile's ontology, shapes and graph come from, as `docpipe edit` shows, fetches and applies them, and what they say differently from the spec. (15 functions)
 - [docpipe.editor.specs](docpipe.editor.specs.md): What the editor does with a profile's extraction spec. (1 class, 18 functions)
 - [docpipe.editor.trying](docpipe.editor.trying.md): A recorded request sent once more with a changed prompt, and what the new answer is worth. (1 class, 6 functions)
 
@@ -142,7 +142,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.scheduler](docpipe.extraction.scheduler.md): One queue for every model request of a run, served oldest document first. (7 classes, 5 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.scratch](docpipe.extraction.scratch.md): Where a column of one's own lives, and why its harvest stays there. (1 function)
-- [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (8 functions)
+- [docpipe.extraction.serialize](docpipe.extraction.serialize.md): Turns a document harvest into the profile's target graph. (9 functions)
 - [docpipe.extraction.shapemodel](docpipe.extraction.shapemodel.md): The graph a writer produces, as the shapes it is held to say. (3 classes, 1 function)
 - [docpipe.extraction.spec](docpipe.extraction.spec.md): The contract between a profile's ontology knowledge and the core. (5 classes, 9 functions)
 - [docpipe.extraction.stats](docpipe.extraction.stats.md): Where a harvest is hard, written beside it after every run. (6 functions)
@@ -298,7 +298,7 @@ is for and what it hands to what; this is the reference.
 - [profiles.scenarios.front](profiles.scenarios.front.md): What a publication says of itself, and which reading of it goes first (owner decisions 2026-11-05). (5 functions)
 - [profiles.scenarios.inference](profiles.scenarios.inference.md): What the answer loop says around the scenarios prompts.
 - [profiles.scenarios.kg](profiles.scenarios.kg.md): Harvested publication metadata to OEKG Turtle. (16 functions)
-- [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 14 functions)
+- [profiles.scenarios.oekg_api](profiles.scenarios.oekg_api.md): What the OEKG scenario-bundle API would be asked, and what it would answer. (1 class, 15 functions)
 - [profiles.scenarios.preprocessing](profiles.scenarios.preprocessing.md): What text extraction has to know about English.
 - [profiles.scenarios.profile](profiles.scenarios.profile.md): Scenario literature: publications on climate and energy scenarios.
 - [profiles.scenarios.rules](profiles.scenarios.rules.md): The rules this profile's own code follows beyond the core's (`docpipe/rules.py`).
@@ -309,7 +309,7 @@ is for and what it hands to what; this is the reference.
 ## scripts
 
 - [scripts.build_docs](scripts.build_docs.md): Generate the documentation pages from the sources they describe. (1 class, 30 functions)
-- [scripts.change_audit](scripts.change_audit.md): What this change touches that is not in the files it changes. (4 functions)
+- [scripts.change_audit](scripts.change_audit.md): What this change touches that is not in the files it changes. (5 functions)
 - [scripts.chat_search_recall](scripts.chat_search_recall.md): How often the chat's search puts the passage and the page a harvested value was read from among its hits. (3 classes, 6 functions)
 - [scripts.chat_view](scripts.chat_view.md): Show every model request of an extraction trace as a small chat, in one HTML page. (2 functions)
 - [scripts.curation_list](scripts.curation_list.md): The values a person should look at, and where to look. (4 functions)

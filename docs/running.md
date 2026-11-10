@@ -567,15 +567,14 @@ their values and where each value comes from.
 | Visuals | `VLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | served model name requested | `docpipe/visuals/config.py:43` |
 | Chunking | `EMBEDDING_BACKEND` | `local` | `local`, `api`, or an import path | `docpipe/embedding/config.py:19` |
 | Chunking | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF model id for every embedding | `docpipe/embedding/config.py:21` |
-| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:94` |
-| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:96` |
+| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py` (`LLM_BASE_URL`) |
+| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py` (`LLM_MODEL`) |
 | Extraction | `EXTRACT_MAX_RETRIES` | none (unset: the `replies` of the profile's `flow.json`) | replies out of their form a request takes before it is left unanswered; where set it wins over the flow file | `docpipe/extraction/runner.py`, `docpipe/extraction/flow.py` |
-| Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:103` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one rows request; lowered at the start where the rows prompt's `max_tokens` cannot hold the reply for that many | `docpipe/extraction/runner.py:253` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5620` |
-| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:412` |
-| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1307` |
-| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1336` |
+| Extraction | `EXTRACT_RETRY_TIMEOUT` | none (unset: the rule `repeat_timeout_s`, `600`) | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout; wins over the rule | `docpipe/extraction/runner.py` (`retry_timeout`) |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one rows request; lowered at the start where the rows prompt's `max_tokens` cannot hold the reply for that many | `docpipe/extraction/runner.py` (`BATCH_SOURCES`) |
+| Extraction | `EXTRACT_BATCH_DOCS` | `256` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py` (`main`) |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py` (`MAX_MODEL_LEN`, `set_model_len`) |
+| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py` (`start_limit`) |
 | Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:50` |
 | Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:51` |
 | Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:52` |
@@ -585,8 +584,8 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:57` |
 | Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:58` |
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
-| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1955` |
-| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:282` |
+| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | none (unset: the rule `server_dead_after_s`, `180`) | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes; wins over the rule | `docpipe/extraction/runner.py` |
+| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py` (`make_locate`) |
 | Extraction | `EXTRACT_CONTENT_CACHE_OWNERS` | `300000` | passages (sections, tables, figures) whose text one run keeps in the store every thread shares, so each is read once; past it the oldest goes, `0` keeps all | `docpipe/extraction/runner.make_shared_content` |
 | App, serve | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` (the chat; `serve` has none) | SQLite corpus database, opened read-only; `docpipe serve` opens it for its passage search | `docpipe/app/config.py` |
 | App | `INFERENCE_PDF_ROOT` | profile `pdf_dir`, else `data/pdf` | folder of the source PDFs, which the cited page is drawn from | `docpipe/app/config.py` |
@@ -729,8 +728,10 @@ python scripts/change_audit.py
 ```
 
 reports what a change touches beyond the lines it edits: a consumer, a
-sibling, an added function no test names; it takes an optional commit
-range, else compares the working tree against `HEAD`.
+sibling, an added function no test names, and a generated page of `docs/`
+that a fresh `scripts/build_docs.py --check` renders otherwise (DOCS; no test
+checks the generated pages); it takes an optional commit range, else compares
+the working tree against `HEAD`.
 
 ```bash
 python scripts/preflight_profiles.py

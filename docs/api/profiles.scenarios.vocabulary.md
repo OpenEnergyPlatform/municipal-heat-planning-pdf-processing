@@ -153,7 +153,8 @@ region, found by one of its
 labels, or by a label with the same words in another order and
 punctuation ("Republic of Moldova", "Moldova (the Republic of)"), so a
 country both lists spell alike needs no table. Accents do not count and
-the sources' abbreviations are written out (ABBREVIATIONS). A name with a
+the sources' abbreviations are written out (the rule
+`name_abbreviations`). A name with a
 comma whose whole words find no label is found by the words before the
 comma ("Egypt, Arab Rep.", "Taiwan, China") where exactly one region's
 labels hold them all: "Congo, Dem. Rep." is found by its whole words, and

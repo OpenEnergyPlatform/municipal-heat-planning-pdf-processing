@@ -53,6 +53,8 @@ REGION_NAMES_PATH = HERE / "region_names.json"
 ALIASES_PATH = HERE / "region_aliases.json"
 AGGREGATES_PATH = HERE / "region_aggregates.json"
 PROFILE = HERE.name
+# The OEKG's own regions, read from the OEKG: their addresses are its, not
+# the ones this profile names its nodes under (the graph rule `base`).
 REGION_BASE = "https://openenergyplatform.org/ontology/oekg/region/"
 
 # The sources this profile pulls stand in sources.json beside this file
@@ -305,7 +307,8 @@ def aggregates(families: list, tree: list, regions: dict, codes=None,
     labels, or by a label with the same words in another order and
     punctuation ("Republic of Moldova", "Moldova (the Republic of)"), so a
     country both lists spell alike needs no table. Accents do not count and
-    the sources' abbreviations are written out (ABBREVIATIONS). A name with a
+    the sources' abbreviations are written out (the rule
+    `name_abbreviations`). A name with a
     comma whose whole words find no label is found by the words before the
     comma ("Egypt, Arab Rep.", "Taiwan, China") where exactly one region's
     labels hold them all: "Congo, Dem. Rep." is found by its whole words, and

@@ -14,6 +14,9 @@ other end. That is mechanical, so it is done here rather than remembered:
 
   siblings   a name this change touches that other places also use
   consumers  a literal this change writes that other files read
+  docs       a generated page of docs/ that its sources now render
+             otherwise (`scripts/build_docs.py --check`), which no test
+             checks
 
 What it cannot check is the shape that needs judgement — a guarantee written
 in a docstring and half implemented. "The quote sits in the source AND carries
@@ -130,6 +133,25 @@ def consumers(written: set, added: list) -> dict:
     return out
 
 
+def docs_drift() -> list:
+    """The generated pages of docs/ a fresh build renders otherwise than
+    they stand (`scripts/build_docs.py --check`, two seconds). [] where
+    they agree; the check's own words where it could not run."""
+    run = subprocess.run([sys.executable, str(ROOT / "scripts" /
+                                               "build_docs.py"), "--check"],
+                         cwd=ROOT, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
+    if run.returncode == 0:
+        return []
+    lines = run.stdout.splitlines()
+    pages = [line[len("--- "):].split("\t")[0].strip() for line in lines
+             if line.startswith("--- docs/")]
+    pages += [line.split(":", 1)[0] for line in lines
+              if line.endswith("its module is gone")
+              or line.endswith("no manifest entry renders this page any more")]
+    return pages or [(run.stderr or run.stdout).strip()[-300:]]
+
+
 def report(spec: str | None = None) -> int:
     files, added = changed(spec)
     if not files:
@@ -159,6 +181,17 @@ def report(spec: str | None = None) -> int:
                 print(f"      ... {len(rows) - 6} more")
             findings += 1
         print()
+    drift = docs_drift()
+    if drift:
+        print("DOCS — a generated page its sources now render otherwise. "
+              "Re-run `python scripts/build_docs.py --out docs` and commit "
+              "the pages with the change.")
+        for page in drift[:20]:
+            print(f"  {page}")
+        if len(drift) > 20:
+            print(f"  ... {len(drift) - 20} more")
+        print()
+        findings += 1
     if not findings:
         print("nothing outside the changed files looks touched")
     return 0

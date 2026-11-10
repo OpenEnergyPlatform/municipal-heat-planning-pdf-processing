@@ -120,13 +120,12 @@ definitions, so a stamp of this corpus written before that reads stale
 in those keys once: `--remap`, which needs no model, settles them, and
 `--force-stale` first would read the documents again for nothing. A
 document with a wording that no list holds stays stale after the remap,
-and is what `--force-stale` is left for (`stale`,
-`docpipe/extraction/runner.py:4404` to `4449`; `already_done`, `:4494`
-to `4533`). `top_up_file` redoes
+and is what `--force-stale` is left for (`stale` and `already_done` in
+`docpipe/extraction/runner.py`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:420` to `538`), and `append_document` reads a
+(`docpipe/extraction/topup.py`), and `append_document` reads a
 parameter the spec has gained without reading the document again
-(`docpipe/extraction/topup_parameter.py:336` to `462`); `already_done` names
+(`docpipe/extraction/topup_parameter.py`); `already_done` names
 it in a second warning for such a document. The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
 (`scripts/harvest_compare.py`), never by a resume.

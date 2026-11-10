@@ -479,7 +479,8 @@ def differences(profile, spec_raw: Optional[dict], snapshot: Optional[dict],
               for name in order if name in by_field]
     fields += [{"field": name, "rows": rows_}
                for name, rows_ in by_field.items() if name not in order]
-    return {"fields": fields, "unasked": unasked, "skipped": skipped}
+    return {"fields": fields, "unasked": unasked, "skipped": skipped,
+            "targets": merge_targets(spec_raw)}
 
 
 def _list_of(parameter: dict, axis: Optional[str]) -> Optional[dict]:
@@ -593,24 +594,65 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
     return {"data": data, "done": done, "refused": refused}
 
 
-def _merge(data, parameters, into, prop, prefixes) -> tuple:
+def merge_targets(spec_raw: Optional[dict]) -> list:
+    """[{"into", "label"}]: every predicate of every field a property of the
+    shapes can be merged into (`draft.predicate_places`): the value itself,
+    its unit, an edge of one of its axes. *into* is "field|key.key...", the
+    place `_merge` writes `also` to."""
     from docpipe.compile import draft
-    parameter = parameters.get(into)
-    if parameter is None or not isinstance(parameter.get("kg"), dict):
-        return False, f"{into!r} is no field with a graph block to merge into"
+    out = []
+    for parameter in (spec_raw or {}).get("parameters") or ():
+        if not isinstance(parameter, dict) or not parameter.get("uri"):
+            continue
+        for where, block in draft.predicate_places(parameter):
+            what = (block.get("label") or block.get("schema_slot")
+                    or block.get("predicate"))
+            axis = f" · {where[1]}" if where[0] == "axes" else ""
+            out.append({"into": parameter["uri"] + "|" + ".".join(where),
+                        "label": f"{parameter['uri']}{axis}: {what}"})
+    return out
+
+
+def _same(one: dict, other: dict) -> bool:
+    return (one.get("prefix"), one.get("predicate")) \
+        == (other.get("prefix"), other.get("predicate"))
+
+
+def _merge(data, parameters, into, prop, prefixes) -> tuple:
+    """Write *prop* as a further predicate (`also`) of the block *into*
+    names ("field|key.key...", `merge_targets`): the graph then holds the
+    value that block writes under *prop* as well (`graphfile.add_also`). A
+    field with a single predicate may be named alone."""
+    from docpipe.compile import draft
+    field, _, where = str(into or "").partition("|")
+    parameter = parameters.get(field)
+    if parameter is None:
+        return False, f"{field!r} is no field"
+    places = draft.predicate_places(parameter)
+    if where:
+        block = next((one for at, one in places if ".".join(at) == where),
+                     None)
+        if block is None:
+            return False, f"{into!r} names no predicate {field} writes"
+    elif len(places) == 1:
+        block = places[0][1]
+    else:
+        return False, (f"{field} writes {len(places)} predicates; name the "
+                       f"one the property is merged into")
     names = draft.Names(prefixes)
     label = prop.name or draft.local(prop.path)
-    block = draft._predicate(prop, label, names)
-    kg = parameter["kg"]
-    also = kg.get("also")
-    if also is None:
-        kg["also"] = block
-    elif isinstance(also, dict):
-        kg["also"] = [also, block]
-    else:
-        kg["also"] = list(also) + [block]
-    return True, (f"{into} writes its value under {block['prefix']}:"
-                  f"{block['predicate']} as well")
+    merged = draft._predicate(prop, label, names)
+    present = [block.get("also")] if isinstance(block.get("also"), dict) \
+        else list(block.get("also") or ())
+    if _same(block, merged) or any(_same(one, merged) for one in present
+                                   if isinstance(one, dict)):
+        return False, (f"{field} writes {merged['prefix']}:"
+                       f"{merged['predicate']} already")
+    block["also"] = merged if not present else present + [merged]
+    what = block.get("label") or block.get("schema_slot") \
+        or block.get("predicate")
+    return True, (f"{field} writes what it writes as {what} under "
+                  f"{merged['prefix']}:{merged['predicate']} as well")
 
 
 def _new_field(data, parameters, shape, prop, prefixes, snapshot) -> tuple:

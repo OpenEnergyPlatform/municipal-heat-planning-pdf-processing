@@ -62,8 +62,9 @@ log = logging.getLogger(__name__)
 # class. Still to confirm with Mirjam is the *local part* — the OEKG's own
 # UUIDs are random, ours are UUIDv5 over the identifying name so that two runs
 # over one document mint one IRI and a re-run does not duplicate the graph.
-# The rule `base` of graph.json beside this file; the setting wins over it.
-BASE = os.environ.get("OEKG_ID_BASE") or graphfile.get("base", "scenarios")
+# The rule `base` of graph.json beside this file; its setting
+# (OEKG_ID_BASE) wins over it, in `graphfile.load`.
+BASE = graphfile.get("base", "scenarios")
 NS_OEKG = graphkit.base_namespace(BASE)
 
 # Class -> path segment, as the live OEKG has them. A study report sits under
@@ -569,11 +570,9 @@ def _crosscheck(conn, name: str, chosen: dict) -> None:
 # on a study report or a factsheet invalidates the very node it documents.
 # OEKG_EVIDENCE=1 emits the provenance nodes instead — same content, queryable,
 # and knowingly ahead of the shapes.
-# The rule `evidence_as` of graph.json ("comment" or "node"); the setting
-# wins over it.
-EVIDENCE = (os.environ["OEKG_EVIDENCE"] != "0"
-            if "OEKG_EVIDENCE" in os.environ
-            else graphfile.get("evidence_as", "scenarios") == "node")
+# The rule `evidence_as` of graph.json ("comment" or "node"); its setting
+# (OEKG_EVIDENCE, a flag) wins over it, in `graphfile.load`.
+EVIDENCE = graphfile.get("evidence_as", "scenarios") == "node"
 
 # The words of the trust line; the marks and their order are the core's
 # (docpipe.extraction.trust.MARKS). English, because this corpus is English

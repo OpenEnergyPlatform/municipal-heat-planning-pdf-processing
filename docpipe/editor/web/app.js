@@ -2408,7 +2408,7 @@ function diffRow(r, pick) {
 function differencesNodes(D) {
   if (!D) return h('div', { class: 'help', text: 'No spec to compare.' });
   if (D.skipped) return h('div', { class: 'help', text: 'Not compared: ' + D.skipped });
-  const fields = (S.data && S.data.parameters || []).map(p => p.uri);
+  const targets = D.targets || [];
   const pick = (id, action, into) => { if (action) SR.picks.set(id, { id, action, into }); else SR.picks.delete(id); syncTake(); };
   const out = [];
   for (const f of D.fields) {
@@ -2418,8 +2418,8 @@ function differencesNodes(D) {
   }
   if (D.unasked.length) out.push(h('details', { class: 'sr-field', open: true }, h('summary', {}, 'Properties of the shapes no field asks (' + D.unasked.length + ')'),
     D.unasked.map(r => {
-      const into = h('select', { hidden: true }, fields.map(x => h('option', { value: x, text: x })));
-      const act = h('select', {}, h('option', { value: '', text: '—' }), h('option', { value: 'new_field', text: 'new field (draft)' }), h('option', { value: 'merge', text: 'merge into a field' }));
+      const into = h('select', { hidden: true, title: 'The value written under this property as well: a field, its unit or an axis of it' }, targets.map(x => h('option', { value: x.into, text: x.label })));
+      const act = h('select', {}, h('option', { value: '', text: '—' }), h('option', { value: 'new_field', text: 'new field (draft)' }), h('option', { value: 'merge', text: 'write a field under it as well' }));
       const set = () => { into.hidden = act.value !== 'merge'; pick(r.id, act.value || null, act.value === 'merge' ? into.value : undefined); };
       act.addEventListener('change', set); into.addEventListener('change', set);
       return h('div', { class: 'sr-row' }, h('code', { text: r.shape + '.' + r.path }), ' ', h('span', { class: 'help', text: r.detail }), ' ', act, ' ', into);
@@ -2524,7 +2524,8 @@ function renderGraph() {
   const rules = groupedRules(d.rules, n => GR.cur.rules[n], (n, v, redraw) => { GR.cur.rules[n] = v; grChanged(redraw); });
   const P = GR.probe && GR.probe.differs;
   const probe = P ? h('div', { class: 'box' }, h('b', { text: 'Probe in ' + GR.probe.folder }),
-    h('div', {}, 'triples ' + P.triples.before + ' → ' + P.triples.after + ', named anew: ' + P.readdressed),
+    h('div', {}, 'triples ' + P.triples.before + ' → ' + P.triples.after + ', named anew: ' + P.readdressed
+      + (P.also ? ', written under a further predicate of the spec: ' + P.also : '')),
     h('details', {}, h('summary', { text: 'documents that differ (' + P.documents.length + ')' }), P.documents.map(x => h('div', { class: 'help' }, h('code', { text: x.document }), ': nodes ' + (x.before.kept || 0) + ' → ' + (x.after.kept || 0) + ', violations ' + (x.before.violations || 0) + ' → ' + (x.after.violations || 0) + (x.after.left_out && x.after.left_out.length ? ', left out: ' + x.after.left_out.map(l => l.constraint).join('; ') : '')))),
     h('details', {}, h('summary', { text: 'violations by constraint' }), (P.violations || []).map(v => h('div', { class: 'help' }, h('code', { text: v.key }), ': ' + v.before + ' → ' + v.after)))) : null;
   put($('graph'), bar, h('div', { class: 'help fl-pad', text: d.cost + ' ' + d.gate }),

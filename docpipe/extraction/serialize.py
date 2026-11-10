@@ -199,16 +199,44 @@ def apply_graph_file(path: Path, profile, shapes=(), context=(),
     of the constraints. None, and the file untouched, where it asks
     nothing."""
     from .. import graphfile
+    from .provenance import path_for
     made = graphfile.load(profile)
+    added = also_of_spec(path, profile, shapes)
     if not made.acts():
-        return None
+        return None if not added else {"classes_left_out": {},
+                                       "readdressed": 0, "left_out": [],
+                                       "stop": [], "also": added}
+    beside = path_for(path)
     report = graphfile.finish(path, made, made.rules.get("base", ""),
-                              list(shapes or ()), context, index)
+                              list(shapes or ()), context, index,
+                              follow=[beside] if beside.is_file() else [])
+    report["also"] = added
     log.info("graph file: %s: classes left out %s, %d node(s) named anew, "
              "%d left out by a constraint", Path(path).name,
              report["classes_left_out"] or "none", report["readdressed"],
              len(report["left_out"]))
     return report
+
+
+def also_of_spec(path: Path, profile, shapes=()) -> int:
+    """The triples the profile's spec asks for with `also` (a value written
+    under further predicates, `graphfile.add_also`), added to the graph at
+    *path*. Returns how many were added."""
+    from .. import graphfile
+    from ..compile import draft
+    declared = profile.component("extraction", "SPEC_PATH") \
+        if profile is not None else None
+    if not declared or not Path(declared).is_file():
+        return 0
+    raw = json.loads(Path(declared).read_text(encoding="utf-8"))
+    pairs = graphfile.also_pairs(draft.read_as_shapes(raw, profile))
+    if not pairs:
+        return 0
+    added = graphfile.also(path, pairs, graphfile.shape_prefixes(shapes))
+    if added:
+        log.info("graph: %s: %d triple(s) written under a further predicate "
+                 "of the spec (also)", Path(path).name, added)
+    return added
 
 
 def kind_key(kind: tuple) -> str:

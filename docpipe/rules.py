@@ -73,6 +73,9 @@ class Rule:
     of: str = "text"                # a map's values: text, texts or whole
     empty: bool = False             # an empty text, list or map; no range
     env: Optional[str] = None       # the setting that wins over the file
+    env_flag: tuple = ()            # (the value where that setting is off,
+                                    # where it is on): a setting that is a
+                                    # flag and stands for one of two values
     decided: str = ""               # the owner's decisions that set it
     where: str = ""                 # where the code applies it
 
@@ -452,12 +455,24 @@ def checked(where, name: str, value, known: Optional[dict] = None):
     return value
 
 
+# How a setting that is a flag says "off"; any other spelling is "on".
+OFF = ("0", "false", "no", "off", "")
+
+
 def _setting(one: Rule, raw: str):
-    """The value of a rule as its setting spells it."""
-    try:
-        value = int(raw.strip()) if one.kind == "whole" else float(raw)
-    except ValueError:
-        raise RuleError(f"{one.env} must be a number, not {raw!r}") from None
+    """The value of a rule as its setting spells it: a number, a text, one of
+    its choices, or, for a setting that is a flag (`env_flag`), the value
+    the flag stands for."""
+    if one.env_flag:
+        value = one.env_flag[raw.strip().lower() not in OFF]
+    elif one.kind in ("text", "choice"):
+        value = raw.strip()
+    else:
+        try:
+            value = int(raw.strip()) if one.kind == "whole" else float(raw)
+        except ValueError:
+            raise RuleError(f"{one.env} must be a number, not {raw!r}") \
+                from None
     said = problem(one.name, value, {one.name: one})
     if said is not None:
         raise RuleError(f"{one.env}: {said}")

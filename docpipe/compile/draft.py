@@ -489,6 +489,51 @@ def _node_classes(spec_raw: dict) -> dict:
     return out
 
 
+def field_classes(parameter: dict, node_class: Optional[dict] = None) -> set:
+    """The local names of the classes a parameter's node is written as: the
+    classes its `kg` block names, its node's (*node_class*, as
+    `_node_classes` reads them), and every entry the axis it takes its class
+    from offers (`class_from`), an `out:` entry none."""
+    kg = parameter.get("kg")
+    classes = set(_classes(kg))
+    if isinstance(kg, dict) and kg.get("node") in (node_class or {}):
+        classes.add(node_class[kg["node"]])
+    source = kg.get("class_from") if isinstance(kg, dict) else None
+    if source:
+        offered = ((parameter.get("axes") or {}).get(source) or {}) \
+            .get("vocabulary") or {}
+        classes.update(local(str(key).split(":")[-1]) for key in offered
+                       if not str(key).startswith("out:"))
+    return classes
+
+
+def predicate_places(parameter: dict) -> list:
+    """[(where, block)] of every block of *parameter* that names a predicate
+    it writes: those of its own `kg` block and of its axes that draw an edge
+    from its node (`role: edge`). *where* is the tuple of keys from the
+    parameter to the block, the place a merge writes `also` to. A block
+    names its predicate with `predicate`, or with `schema_slot` where the
+    profile's schema says it (KWP); the blocks an `also` names are none."""
+    out: list = []
+
+    def walk(block, where: tuple) -> None:
+        if not isinstance(block, dict):
+            return
+        if isinstance(block.get("predicate"), str) \
+                or isinstance(block.get("schema_slot"), str):
+            out.append((where, block))
+        for key, value in block.items():
+            if key != "also":
+                walk(value, where + (key,))
+
+    walk(parameter.get("kg"), ("kg",))
+    for axis, said in (parameter.get("axes") or {}).items():
+        edge = said.get("kg") if isinstance(said, dict) else None
+        if isinstance(edge, dict) and edge.get("role") == "edge":
+            walk(edge, ("axes", axis, "kg"))
+    return out
+
+
 def _predicate_blocks(block, found=None) -> list:
     """(predicate, the block that names it) for every predicate of a `kg`
     block, at any depth."""
@@ -600,15 +645,8 @@ def differences(shapes: list, spec_raw: dict,
                  "the parameter names no predicate, so it cannot be held "
                  "against the shapes")
             continue
-        classes = set(_classes(kg))
-        if isinstance(kg, dict) and kg.get("node") in node_class:
-            classes.add(node_class[kg["node"]])
+        classes = field_classes(parameter, node_class)
         source = kg.get("class_from") if isinstance(kg, dict) else None
-        if source:
-            offered = ((parameter.get("axes") or {}).get(source) or {}) \
-                .get("vocabulary") or {}
-            classes.update(local(str(key).split(":")[-1]) for key in offered
-                           if not str(key).startswith("out:"))
         matched, unsettled, absent = [], [], []
         for predicate, block, bounds, listed in writes:
             candidates = by_path.get(local(predicate), [])
