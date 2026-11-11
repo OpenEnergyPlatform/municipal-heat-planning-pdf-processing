@@ -32,6 +32,17 @@ Raised when a batch never reached the model, so pages have no layout.
 
 ## Functions
 
+### render_ahead
+
+```python
+def render_ahead(procs: int) -> int
+```
+
+The *depth* of `rendering.batches` for *procs* workers: at least
+LAYOUT_PREFETCH_BATCHES, and enough that while one batch is read, the
+batches after it hold a page for every worker, so 50 workers render 50
+pages at once.
+
 ### detect_layout_all_pages
 
 ```python

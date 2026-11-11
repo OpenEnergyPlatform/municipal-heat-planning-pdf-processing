@@ -3,8 +3,16 @@ pages in worker processes, AND a page a worker renders is the same image,
 pixel for pixel, as the one Stage 2 renders in its own process, at both
 resolutions, AND the batches come back in the order of their pages, AND a page
 a worker cannot render comes back as its error, AND while a batch is read
-no more than *depth* + 1 after it are rendering."""
+no more than *depth* + 1 after it are rendering.
+
+Promise (owner 2026-11-11, "Decodier die auf der GPU oder mit mehreren Cores
+... Es müsste auch möglich sein, 50 Seiten parallel zu rendern"): unset,
+DOCPIPE_LAYOUT_RENDER_PROCS is every CPU the process may run on less two,
+AND set, it is the number given, AND while a batch is read, the batches
+rendering after it hold a page for every worker."""
 import hashlib
+import math
+import os
 
 import fitz
 import pytest
@@ -105,3 +113,52 @@ def test_stage_2_sees_the_same_pages_with_workers_as_without(tmp_path,
         crop = render_page_to_pil(page, layout.PAGE_RENDER_DPI)
         expected[i + 1] = (det.width, det.height, digest(crop))
     assert seen == expected
+
+
+@pytest.mark.parametrize("cpus, env, workers", [
+    (52, None, 50), (16, None, 14), (2, None, 0), (1, None, 0),
+    (52, "0", 0), (52, "7", 7),
+])
+def test_the_workers_are_the_cpus_to_run_on_less_two(monkeypatch, cpus, env,
+                                                    workers):
+    from docpipe.preprocessing import config
+    if env is None:
+        monkeypatch.delenv("DOCPIPE_LAYOUT_RENDER_PROCS", raising=False)
+    else:
+        monkeypatch.setenv("DOCPIPE_LAYOUT_RENDER_PROCS", env)
+    # the failure by construction: the node's 128 CPUs are not the job's
+    monkeypatch.setattr(os, "cpu_count", lambda: 128)
+    monkeypatch.setattr(os, "sched_getaffinity", lambda pid: set(range(cpus)),
+                        raising=False)
+    assert config._render_procs() == workers
+
+
+def test_every_worker_has_a_page_while_a_batch_is_read(tmp_path, monkeypatch):
+    pytest.importorskip("cv2")               # Stage 2 runs where the model does
+    pytest.importorskip("torch")
+    from docpipe.preprocessing import layout
+    for procs in range(1, 201):
+        depth = layout.render_ahead(procs)
+        assert depth >= layout.LAYOUT_PREFETCH_BATCHES
+        assert (depth + 1) * layout.LAYOUT_BATCH_SIZE >= procs
+    assert math.ceil(50 / layout.LAYOUT_BATCH_SIZE) <= layout.render_ahead(50)
+
+    asked = []
+
+    class Stop(Exception):
+        pass
+
+    def batches(path, numbers, dpis, size, depth):
+        asked.append((size, depth))
+        raise Stop
+
+    monkeypatch.setattr(layout.rendering, "batches", batches)
+    monkeypatch.setattr(layout, "LAYOUT_RENDER_PROCS", 50)
+    pages, fitz_pages, doc, _ = extract_all_pages(plan(tmp_path, pages=3))
+    try:
+        with pytest.raises(Stop):
+            layout.detect_layout_all_pages(pages, fitz_pages, tmp_path / "out",
+                                           (None, None, "cpu"))
+    finally:
+        doc.close()
+    assert asked == [(50, layout.render_ahead(50))]

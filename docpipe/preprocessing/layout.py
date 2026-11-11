@@ -94,6 +94,14 @@ class LayoutDetectionFailed(RuntimeError):
     """Raised when a batch never reached the model, so pages have no layout."""
 
 
+def render_ahead(procs: int) -> int:
+    """The *depth* of `rendering.batches` for *procs* workers: at least
+    LAYOUT_PREFETCH_BATCHES, and enough that while one batch is read, the
+    batches after it hold a page for every worker, so 50 workers render 50
+    pages at once."""
+    return max(LAYOUT_PREFETCH_BATCHES, math.ceil(procs / LAYOUT_BATCH_SIZE))
+
+
 def _process_batch(rendered: list, dets_per_page: list, same_dpi: bool,
                    images_dir: Path, footnotes: layout_blocks.FootnoteTally,
                    page_by_number: dict, writer) -> list:
@@ -151,7 +159,7 @@ def detect_layout_all_pages(
     log.info(
         f"Stage 2: PP-DocLayoutV3 – {len(pages)} pages | batch {LAYOUT_BATCH_SIZE} | "
         f"detect DPI {LAYOUT_DETECT_DPI} | crop DPI {PAGE_RENDER_DPI} | "
-        f"NMS {NMS_OVERLAP_THRESHOLD}"
+        f"NMS {NMS_OVERLAP_THRESHOLD} | render processes {LAYOUT_RENDER_PROCS}"
     )
 
     page_by_number: dict[int, PageData] = {pg.page_number: pg for pg in pages}
@@ -197,7 +205,7 @@ def detect_layout_all_pages(
                  for b in range(n_batches)]
         got = rendering.batches(
             path, [[fp.number for fp in fitz_pages[s:e]] for s, e in spans],
-            dpis, LAYOUT_RENDER_PROCS, LAYOUT_PREFETCH_BATCHES)
+            dpis, LAYOUT_RENDER_PROCS, render_ahead(LAYOUT_RENDER_PROCS))
         for b_idx, ((s, e), results) in enumerate(zip(spans, got)):
             rendered = []
             for pg, fp, res in zip(pages[s:e], fitz_pages[s:e], results):

@@ -62,6 +62,7 @@ def plan(tmp_path, pages=14):
 
 def run(tmp_path, monkeypatch, processor, process):
     monkeypatch.setattr(layout_blocks, "process_page", process)
+    monkeypatch.setattr(layout, "LAYOUT_RENDER_PROCS", 0)   # renders in this process
     pages, fitz_pages, doc, _ = extract_all_pages(plan(tmp_path))
     try:
         return layout.detect_layout_all_pages(
@@ -122,6 +123,7 @@ def test_a_batch_whose_inputs_could_not_be_built_fails(tmp_path, monkeypatch):
 
     monkeypatch.setattr(layout_blocks, "process_page",
                         lambda pg, *a: (pg, []))
+    monkeypatch.setattr(layout, "LAYOUT_RENDER_PROCS", 0)   # renders in this process
     pages, fitz_pages, doc, _ = extract_all_pages(plan(tmp_path))
     try:
         with pytest.raises(layout.LayoutDetectionFailed):

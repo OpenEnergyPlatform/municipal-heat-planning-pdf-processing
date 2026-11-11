@@ -144,7 +144,7 @@ Documents sharing a `group_key` are versions of the same work; the profile decid
 
 ### 2. Layout detection (`docpipe.preprocessing`, stage 2)
 
-Each PDF page is rendered to a high-resolution PNG and analysed by [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors), which classifies structural elements — tables, figures, titles, text blocks, headers/footers, page numbers, captions — each with a bounding box and a confidence score. Pages can be rendered in worker processes (`DOCPIPE_LAYOUT_RENDER_PROCS`) while the main process runs the model.
+Each PDF page is rendered to a high-resolution PNG and analysed by [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors), which classifies structural elements — tables, figures, titles, text blocks, headers/footers, page numbers, captions — each with a bounding box and a confidence score. Pages are rendered in worker processes while the main process runs the model, by default one for every CPU the process may run on less two; `DOCPIPE_LAYOUT_RENDER_PROCS` sets the number, and 0 renders in the main process.
 
 ### 3. Text extraction & structure (`docpipe.preprocessing`, stage 3)
 

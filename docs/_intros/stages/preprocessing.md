@@ -82,15 +82,21 @@ page whose extraction raises is skipped and counted in `n_failed`
 ### Stage 2: detecting layout
 
 `detect_layout_all_pages()` (`layout.py`) renders the open `fitz` pages at
-`LAYOUT_DETECT_DPI` (150) in `LAYOUT_BATCH_SIZE` batches. A prefetch thread
-renders a batch ahead of the one running (`rendering.render_page_to_pil`,
-behind `FITZ_LOCK`) and builds the model's inputs for it
-(`layout_model.model_inputs`, resize and normalize, 0.018 s a page), while
-the previous batch runs through the model. With `DOCPIPE_LAYOUT_RENDER_PROCS`
-above 0, worker processes (`rendering.py`) render every page at both
-resolutions instead, each opening the PDF itself: in one process MuPDF renders
-behind one lock, and rendering was 0.119 of the 0.150 s a KWP page took
-through Stage 1-3 (3,254 pages measured), so the GPU waited on one core.
+`LAYOUT_DETECT_DPI` (150) in `LAYOUT_BATCH_SIZE` batches. Worker processes
+(`rendering.py`) render every page at both resolutions, each opening the PDF
+itself. There are as many as the CPUs the process may run on, less two for the
+main and prefetch threads, or the number in `DOCPIPE_LAYOUT_RENDER_PROCS`. In one
+process MuPDF renders behind one lock, and rendering was 0.119 of the 0.150 s
+a KWP page took through Stage 1-3 (3,254 pages measured), so the GPU waited on
+one core. `render_ahead()` sets how many batches `rendering.batches` renders
+ahead, enough that while one batch is read the batches after it hold a page
+for every worker (5 batches for 50 workers). Pages come out of a worker
+pixel-identical to an in-process render. With `DOCPIPE_LAYOUT_RENDER_PROCS` at
+0, a prefetch thread renders a batch ahead of the one running
+(`rendering.render_page_to_pil`, behind `FITZ_LOCK`). In both cases the
+prefetch thread builds the model's inputs for the batch
+(`layout_model.model_inputs`, resize and normalize, 0.018 s a page), while the
+previous batch runs through the model.
 
 `layout_model.infer_batch()` is a PP-DocLayoutV3 forward pass, a global
 confidence floor, per-class thresholds, per-class non-maximum suppression,
@@ -112,7 +118,7 @@ so at most two batches of crops are held. Once every batch has run,
 `headings.promote_headings_by_font()` upgrades heading-styled text to
 `paragraph_title`, and `layout_captions.resolve_captions()` attaches the
 nearest caption to each table or image
-(`docpipe/preprocessing/layout.py:271-273`).
+(`docpipe/preprocessing/layout.py:279-281`).
 
 A text block of the PDF's text layer that lies 90 percent or more inside a box
 of a suppressed class (header, footer, page number, footnote and their image
@@ -304,7 +310,7 @@ list of rectangles, to every segment kind where the geometry is known
 | `--log-level` | CLI flag | `INFO` | logging verbosity: `DEBUG`/`INFO`/`WARNING`/`ERROR` (`pipeline.py:583-584`) |
 | `DOCPIPE_LAYOUT_AUTOCAST` | env var | `off` | `bf16`, `fp16`, or `off`: reduced-precision Stage 2 pass on CUDA |
 | `DOCPIPE_LAYOUT_PREFETCH` | env var | `1` | Stage 2 batches rendered, with the model's inputs built, ahead of the running forward pass, as `LAYOUT_PREFETCH_BATCHES` (`config.py:58`) |
-| `DOCPIPE_LAYOUT_RENDER_PROCS` | env var | `0` | Worker processes that render Stage 2's pages at both resolutions in place of the prefetch thread (`rendering.py`), as `LAYOUT_RENDER_PROCS` (`config.py:67`); 0 keeps the thread. The model's inputs are built in the prefetch thread either way |
+| `DOCPIPE_LAYOUT_RENDER_PROCS` | env var | CPUs the process may run on, less 2 | Worker processes that render Stage 2's pages at both resolutions in place of the prefetch thread (`rendering.py`), as `LAYOUT_RENDER_PROCS` (`config.py:82`); 0 keeps the thread. The model's inputs are built in the prefetch thread either way |
 | `PAGE_TRANSCRIBE_WORKERS` / `PAGE_RENDER_WORKERS` | env vars | `64` / `4` | concurrent transcription calls and page renders in the fallback, bounded separately |
 
 `Profile.column_layout` (`docpipe/profile.py:172`) is optional: it defaults
@@ -337,7 +343,7 @@ A selection of the module constants that tune detection and assembly:
 
 | Name | Default | Effect |
 |---|---|---|
-| `LAYOUT_DETECT_DPI` / `PAGE_RENDER_DPI` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`layout.py:104-118,150`) |
+| `LAYOUT_DETECT_DPI` / `PAGE_RENDER_DPI` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`layout.py:112-126,158`) |
 | `LAYOUT_BATCH_SIZE` | 12 | pages per Stage 2 forward pass |
 | `PP_GLOBAL_MIN_CONF` / `PP_CLASS_THRESHOLDS` | 0.4 / per class, 0.40 to 0.85 | confidence floors before and after per-class filtering |
 | `NMS_OVERLAP_THRESHOLD` | 0.5 | IoU above which two overlapping same-class (or cross-class table/image) boxes collapse to the higher-confidence one |
@@ -352,9 +358,9 @@ A selection of the module constants that tune detection and assembly:
 | Condition | Behaviour |
 |---|---|
 | A Stage 1 page raises during extraction, or `n_failed > 0` after Stage 1/2 | the page is skipped and counted; `pages.json` is not written, so the next run retries extraction from scratch (`page_text.py:224-234`; `pipeline.py:128-136`) |
-| A Stage 2 batch's forward pass raises | recorded in `failed_batches`, its pages get no layout; once every batch has run, `detect_layout_all_pages` raises `LayoutDetectionFailed` naming the batch numbers and affected page count (`layout.py:250-255,293-300`) |
+| A Stage 2 batch's forward pass raises | recorded in `failed_batches`, its pages get no layout; once every batch has run, `detect_layout_all_pages` raises `LayoutDetectionFailed` naming the batch numbers and affected page count (`layout.py:258-263,301-308`) |
 | `LayoutDetectionFailed` reaches `run_folder`'s per-document handler | the document is marked `status="error"` in `_index.json` and the run continues; called directly, the exception propagates unhandled (`pipeline.py:267-292,632-656`) |
-| A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`layout.py:119-120,184-185`, `crops.py:75-89`) |
+| A page fails to render for Stage 2, its post-detection processing raises, or a crop fails to encode or write | logged and skipped; the page keeps its Stage-1-only data, and a written `Block` can still reference a failed crop (`layout.py:127-128,192-193`, `crops.py:75-89`) |
 | `pages.json` or `sections.json` is unreadable, or a Stage 3 cache was built while `n_failed` was set, or the input path is neither a `.pdf` file nor a directory | treated as absent and rebuilt, deleted before the cache-hit check runs, or `run()` raises `ValueError` and `main()` exits with status 1 (`pipeline.py:60-62,170-189,536,654-656`) |
 | No profile is active but a profile-gated function is called, or a profile is named after the stage was imported under another one | a `LookupError` propagates uncaught, or `resolve_profile` raises `SystemExit` (`page_text.py:41-43`; `profile.py:261-271,392-406,452-475`) |
 | A page's transcription ends in a hole (a reply that stayed unreadable, one cut off twice, a request refused or not answered, a page that could not be rendered, an error of the stage's own), returns an empty markdown string, or more candidates need transcription than `max_pages` | a hole is counted in `pages_failed` and listed in `failed_pages` with its cause, an empty string in `pages_empty`, and the exit code does not change; a run with candidates over `max_pages` is truncated with `pages_missing_text` still reporting the true total (`page_text_without_layer.py:204-212`); unreachable through the CLI or `run()`, since `_fill_missing_page_text()` never passes `max_pages` (`pipeline.py:406-412`) |
@@ -379,13 +385,13 @@ A selection of the module constants that tune detection and assembly:
 - Real text columns measure an aligned-left-edge fraction of at least 0.90,
   labels scattered around a chart at most 0.43, the gap
   `COLUMN_ALIGN_TOL_PT`/`COLUMN_MIN_ALIGNED_FRAC` are set to separate
-  (`docpipe/preprocessing/config.py:139-143`). A bulleted list on one
+  (`docpipe/preprocessing/config.py:154-158`). A bulleted list on one
   two-column page produced 0.71 against the 0.75 single-edge threshold;
   allowing alignment on one or two edges instead of one keeps it from
   reading across the gutter (`docpipe/preprocessing/columns.py:132-150`).
 - 423 sections across 99 documents in a corpus snapshot carry Unicode
   Private Use Area glyphs from a symbol font; `STRIP_PRIVATE_USE` drops
-  them (`docpipe/preprocessing/config.py:195-202`).
+  them (`docpipe/preprocessing/config.py:210-217`).
 - Captions run to a median of 8 words on the kwp corpus, 24 at the 99th
   percentile, so `CAPTION_MAX_WORDS` is 45 there
   (`profiles/kwp/preprocessing.py:35-39`); scenarios panel descriptions and

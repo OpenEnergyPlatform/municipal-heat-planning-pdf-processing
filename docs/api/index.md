@@ -208,7 +208,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.preprocessing.config](docpipe.preprocessing.config.md): Central configuration of the pipeline. (7 functions)
 - [docpipe.preprocessing.crops](docpipe.preprocessing.crops.md): Cuts a table or image out of its page and writes it as PNG. (1 class, 3 functions)
 - [docpipe.preprocessing.headings](docpipe.preprocessing.headings.md): Font-based heading promotion, a pass over the whole document after Stage 2's batches. (1 function)
-- [docpipe.preprocessing.layout](docpipe.preprocessing.layout.md): Stage 2. (1 class, 1 function)
+- [docpipe.preprocessing.layout](docpipe.preprocessing.layout.md): Stage 2. (1 class, 2 functions)
 - [docpipe.preprocessing.layout_blocks](docpipe.preprocessing.layout_blocks.md): Turns the detections of one page into blocks. (1 class, 2 functions)
 - [docpipe.preprocessing.layout_captions](docpipe.preprocessing.layout_captions.md): Caption resolution, a pass over the whole document after Stage 2's batches. (1 function)
 - [docpipe.preprocessing.layout_model](docpipe.preprocessing.layout_model.md): The PP-DocLayoutV3 model of Stage 2 and the boxes it detects. (1 class, 5 functions)
