@@ -20,3 +20,6 @@ Wo keine Zeile einen druckt, in dieser Form:
 
 <!-- with: headings -->
 "headings" sind die Überschriften des Plans bis zu diesem Stück, die eigene zuletzt. Sie sagen, wovon das Stück handelt.
+
+<!-- with: passages -->
+"passages" steht statt "passage", wo ein Stück Zeilen mehrerer Passagen hält: jede Passage unter ihrem Buchstaben, mit Art, Seite und Titel. Die Adresse einer Zeile trägt den Buchstaben ihrer Passage, etwa A3 oder B12.2.

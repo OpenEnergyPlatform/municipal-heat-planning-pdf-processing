@@ -38,6 +38,68 @@ log = logging.getLogger(__name__)
 # lie and whether a still contested number stays in the full graph are rules
 # of graph.json beside this file (`docpipe.graphfile`, the Graph tab of
 # `docpipe edit`).
+
+# The keys of a `kg` block this writer (and the checks that read the blocks:
+# docpipe/ontology.py, docpipe/compile/draft.py, profiles/kwp/mhpkg.py) read,
+# each with the kind of form `docpipe edit` shows it as
+# (docpipe/editor/web/forms.js) and what it does. A key not named here stays
+# in the spec file as it is.
+KG_KEYS = {
+    "field": [
+        {"key": "node", "kind": "text",
+         "help": "The kind of node this field writes (value, organisation)."},
+        {"key": "class", "kind": "class",
+         "help": "The class of the node this field mints, where it is one."},
+        {"key": "class_from", "kind": "text",
+         "help": "The coordinate whose entries are the classes a value "
+                 "node can carry."},
+        {"key": "schema_class", "kind": "text",
+         "help": "The class as the MHPKG schema names it."},
+        {"key": "number", "kind": "slot",
+         "help": "The predicate that carries the value's number."},
+        {"key": "unit", "kind": "slot",
+         "help": "The predicate that carries the value's unit."},
+        {"key": "edge_from_plan", "kind": "link",
+         "help": "The predicate that hangs the node off the plan."},
+        {"key": "label", "kind": "text",
+         "help": "How the node's label is made."},
+    ],
+    "axis": [
+        {"key": "role", "kind": "text",
+         "choices": ["type", "edge", "parent", "comment"],
+         "help": "What the answer of this coordinate does in the graph."},
+        {"key": "schema_slot", "kind": "text",
+         "help": "The slot of the MHPKG schema that carries the predicate."},
+        {"key": "predicate", "kind": "text",
+         "help": "The predicate an edge is written under, where the schema "
+                 "gives none."},
+        {"key": "prefix", "kind": "text",
+         "help": "The prefix of that predicate."},
+        {"key": "linked_by", "kind": "link",
+         "help": "The predicate that hangs every container of this "
+                 "coordinate off the plan."},
+        {"key": "map", "kind": "classmap",
+         "help": "For a parent: each answer with the class it puts on its "
+                 "container and the edge up from it."},
+        {"key": "datatype", "kind": "datatype",
+         "help": "The datatype of a literal the coordinate writes."},
+        {"key": "label", "kind": "text",
+         "help": "The predicate's label."},
+        {"key": "note", "kind": "note",
+         "help": "A note for people; the writer does not read it."},
+        {"key": "outside_root", "kind": "labels",
+         "help": "Carrier classes the ontology does not place under energy "
+                 "carrier: class -> its name."},
+        {"key": "total_class", "kind": "class",
+         "help": "The class written for out:total, a figure reported "
+                 "without this breakdown."},
+        {"key": "no_edge_for", "kind": "texts",
+         "help": "Entries that write no edge."},
+        {"key": "object_class", "kind": "class",
+         "help": "The class of the node an edge points at."},
+    ],
+}
+
 BASE = graphfile.get("base", "kwp")
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 NS_MHPKG = graphkit.base_namespace(BASE)

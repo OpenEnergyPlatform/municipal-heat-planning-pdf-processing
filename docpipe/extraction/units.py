@@ -39,6 +39,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field, replace
 from typing import Optional
@@ -329,13 +330,16 @@ def passage_of(source: Source, transcript=None) -> Passage:
 
 class Chunk:
     """A piece of a passage: its own lines (*numbers*), shown with the
-    lines every piece of the passage shows. Two pieces are the same piece
-    where their passage and place are the same (`key`)."""
+    lines every piece of the passage shows (*carried*, the passage's fixed
+    lines where not given). Two pieces are the same piece where their
+    passage and place are the same (`key`)."""
 
-    def __init__(self, passage: Passage, index: int, numbers: tuple):
+    def __init__(self, passage: Passage, index: int, numbers: tuple,
+                 carried: Optional[tuple] = None):
         self.passage = passage
         self.index = index
         self.numbers = tuple(numbers)
+        self.carried = None if carried is None else tuple(carried)
 
     def __repr__(self) -> str:
         return f"Chunk({self.key}, {self.numbers})"
@@ -358,7 +362,9 @@ class Chunk:
     @property
     def shown(self) -> tuple:
         """Every line number the piece shows, in order."""
-        return tuple(sorted(set(self.passage.fixed) | set(self.numbers)))
+        carried = self.passage.fixed if self.carried is None \
+            else self.carried
+        return tuple(sorted(set(carried) | set(self.numbers)))
 
     def lines(self) -> list:
         return [self.passage.line(n) for n in self.shown]
@@ -393,6 +399,163 @@ def chunks_of(passage: Passage, size: int) -> list:
     pieces = [Chunk(passage, first + i, tuple(own[start:start + size]))
               for i, start in enumerate(range(0, len(own), size))]
     return ([Chunk(passage, 0, ())] if first else []) + pieces
+
+
+@dataclass(frozen=True)
+class Cut:
+    """How a flow's split box cuts a document (`blocks.LIBRARY["split"]`):
+    a piece holds at most *lines* lines; a new piece begins where a passage
+    begins, unless a piece may hold several (*across*), and where the
+    condition *new_piece* holds for the next line (`conditions`, the line's
+    properties of `line_facts`). A table's title and head go with each of
+    its pieces (*table_head*), a figure's caption with each of its pieces
+    (*caption*); a figure's numbers are pieces of their own, its caption
+    one (*figure_numbers*). *headings* is how many headings a request shows
+    up to a place."""
+    lines: int = 8
+    new_piece: Optional[dict] = None
+    across: bool = False
+    table_head: bool = True
+    caption: bool = True
+    figure_numbers: bool = True
+    headings: int = 10
+
+    def plain(self) -> bool:
+        """Is this the cut of every flow before 2026-11-11: pieces of at
+        most *lines* lines of one passage, heads and captions carried?"""
+        return (self.new_piece is None and not self.across
+                and self.table_head and self.caption
+                and self.figure_numbers)
+
+    def key(self):
+        """What an order of the pieces is kept under (`addressed.order_key`):
+        the lines of a piece for the plain cut, as before, else every
+        setting."""
+        if self.plain():
+            return self.lines
+        return json.dumps({"lines": self.lines, "new_piece": self.new_piece,
+                           "across": self.across,
+                           "table_head": self.table_head,
+                           "caption": self.caption,
+                           "figure_numbers": self.figure_numbers},
+                          sort_keys=True, ensure_ascii=False)
+
+
+def line_facts(passage: Passage, line: Line, first: bool,
+               page_before: Optional[int], in_piece: int):
+    """What a condition of the split box knows of the next line
+    (`conditions.SUBJECTS["line"]`)."""
+    from .conditions import Facts
+    heading = line.role == "title" or (first and passage.kind == "section"
+                                       and bool(passage.title))
+    values = {"heading": heading, "passage_begins": first,
+              "table_begins": first and passage.kind == "table",
+              "figure_begins": first and passage.kind == "figure",
+              "new_page": first and passage.page is not None
+              and page_before is not None and passage.page != page_before,
+              "role": "heading" if heading and line.role == "text"
+              else line.role,
+              "lines_in_piece": in_piece}
+
+    def get(subject: str, prop: str):
+        if subject != "line":
+            raise LookupError(f"{subject} is not known while cutting")
+        return values[prop]
+    return Facts(get)
+
+
+def cut_pieces(passages: list, cut: Cut) -> tuple:
+    """([Chunk] in reading order, [group]) of *passages* cut as *cut*
+    says. A group is a tuple of the chunks of one piece that holds lines of
+    several passages, each chunk the lines of one of them; a piece of one
+    passage is a chunk alone. The plain cut is `chunks_of`, passage by
+    passage."""
+    if cut.plain():
+        return [c for p in passages for c in chunks_of(p, cut.lines)], []
+    from .conditions import holds
+    size = max(1, int(cut.lines))
+    chunks: list = []
+    groups: list = []
+    index: dict = {}
+    current: list = []          # [(passage, [line numbers])]
+
+    def carried_of(passage: Passage) -> tuple:
+        if passage.kind == "table" and not cut.table_head:
+            return ()
+        if passage.kind == "figure" and not cut.caption:
+            return ()
+        return passage.fixed
+
+    def close() -> None:
+        made = []
+        for passage, numbers in current:
+            if not numbers:
+                continue
+            at = index.get(passage.owner, 0)
+            index[passage.owner] = at + 1
+            made.append(Chunk(passage, at, tuple(numbers),
+                              carried_of(passage)))
+        current.clear()
+        chunks.extend(made)
+        if len(made) > 1:
+            groups.append(tuple(made))
+
+    in_piece = 0
+    page_before = None
+    for passage in passages:
+        carried = carried_of(passage)
+        own = [line for line in passage.lines
+               if line.number not in carried]
+        alone = passage.has_numbers and cut.figure_numbers
+        if alone:
+            # A figure's caption a piece of its own, its numbers pieces of
+            # their own, each shown with the caption.
+            close()
+            in_piece = 0
+            at = index.get(passage.owner, 0)
+            if passage.fixed:
+                chunks.append(Chunk(passage, at, () if carried
+                                    else tuple(passage.fixed), carried))
+                at += 1
+            numbers = [line.number for line in own
+                       if line.number not in passage.fixed]
+            for start in range(0, len(numbers), size):
+                chunks.append(Chunk(passage, at, tuple(
+                    numbers[start:start + size]), carried))
+                at += 1
+            index[passage.owner] = at
+            page_before = passage.page
+            continue
+        if not own:
+            if carried:
+                close()
+                at = index.get(passage.owner, 0)
+                chunks.append(Chunk(passage, at, (), carried))
+                index[passage.owner] = at + 1
+                in_piece = 0
+            page_before = passage.page
+            continue
+        for i, line in enumerate(own):
+            first = i == 0
+            new = in_piece >= size
+            if first and not cut.across:
+                new = True
+            if not new and cut.new_piece is not None and in_piece:
+                new = holds(cut.new_piece, line_facts(
+                    passage, line, first, page_before, in_piece))
+            if new and in_piece:
+                close()
+                in_piece = 0
+            if not current or current[-1][0] is not passage:
+                current.append((passage, []))
+            current[-1][1].append(line.number)
+            in_piece += 1
+        page_before = passage.page
+        if not cut.across:
+            close()
+            in_piece = 0
+    close()
+    return chunks, groups
 
 
 def pieces_for(chunks: list, numbers: bool) -> list:

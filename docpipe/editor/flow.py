@@ -1,22 +1,27 @@
 """
-flow.py: A profile's flow for the editor: its steps as a diagram shows them,
-its numbers with where each comes from, the check of edited numbers and what
-a save writes.
+flow.py: A profile's flow for the editor: its drawing of boxes and frames,
+the library they come from, its numbers with where each comes from, the
+check of an edited drawing and what a save writes.
 
 The flow itself is the run's (`extraction.flow`): its file, its strict
-reading, the numbers a run takes and the settings that win over them. This
-module only turns it into what the page draws and decides what a save does
-to the profile's own file:
+reading, the drawing the run does (`extraction.engine`), the numbers a run
+takes and the settings that win over them. This module only turns it into
+what the page draws and decides what a save does to the profile's own file:
 
-- `view`: every number with its value, whether the profile sets it itself,
-  what it inherits and what a run started here would read with; every step
-  with its bound cut into texts and numbers, the prompt of the request it
-  asks, why this profile never takes it (`off`), and the switches of the
-  spec that belong to it, each entry a link into the spec.
-- `judge`: whether edited numbers are numbers of the flow, what changes and
-  what the profile's file would then be. A profile that extends another
-  writes only the numbers that differ from what it inherits, so a number
-  set back leaves the file, and a file that would hold none is removed.
+- `view`: the drawing as the file says it, the library of boxes and frames
+  (`extraction.blocks`), what a condition can be about
+  (`extraction.conditions`), every number with its value, whether the
+  profile sets it itself, what it inherits and what a run started here
+  would read with; for each kind of box why this profile never takes it
+  (its prompt unwritten, its switch of the spec off), the prompt of each
+  request and the entries of the spec each switch stands for, each a link
+  into the spec; and what the run could not do with the drawing.
+- `judge`: whether edited numbers are numbers of the flow and an edited
+  drawing one the run can do (`flow.problems`, `flow.prompt_problems`),
+  what changes and what the profile's file would then be. A profile that
+  extends another writes only the numbers that differ from what it
+  inherits and the drawing where it differs, so a number set back leaves
+  the file, and a file that would hold nothing is removed.
 - `save`: `judge`, and the bytes to write where it holds.
 
 No file is read here but through the run's loader; the server checks every
@@ -35,6 +40,7 @@ from typing import Callable, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 from .. import rules, settings
+from ..extraction import blocks, conditions
 from ..extraction import flow as flow_map
 from ..extraction.spec import YEAR_FIELDS
 from . import prompts as prompt_files
@@ -134,68 +140,48 @@ SWITCHES = {
     "compute": ("the profile computes", "this profile computes nothing",
                 lambda data: []),
 }
-if set(SWITCHES) != set(flow_map.SWITCHES):
-    raise AssertionError("editor.flow.SWITCHES and extraction.flow.SWITCHES "
-                         "name different switches")
-
-
 def _switch(name: str, data: Optional[dict]) -> dict:
     label, none, items = SWITCHES[name]
     return {"name": name, "label": label, "none": none,
             "items": items(data) if data is not None else []}
 
 
-def _bound(text: Optional[str]) -> Optional[list]:
-    """A bound cut into its texts and its numbers, in order."""
-    if not text:
-        return None
-    out: list = []
-    for i, part in enumerate(flow_map.PLACE.split(text)):
-        if i % 2:
-            out.append({"number": part})
-        elif part:
-            out.append(part)
+def _prompts(profile) -> dict:
+    """{request kind: {"id", "written", "owner"}} of every request a box
+    asks."""
+    owners = {row["id"]: row["owner"]
+              for row in prompt_files.listing(profile)}
+    out = {}
+    for box in blocks.LIBRARY.values():
+        if box.asks and box.asks not in out:
+            prompt_id = f"{STAGE}/{box.asks}"
+            owner = owners.get(prompt_id)
+            out[box.asks] = {"id": prompt_id, "written": owner is not None,
+                             "owner": owner}
     return out
 
 
-def _step(step: dict, data: Optional[dict], owners: dict,
-          computes: bool) -> dict:
-    kind = step.get("ask")
-    prompt = None
-    off = None
-    if kind is not None:
-        prompt_id = f"{STAGE}/{kind}"
-        owner = owners.get(prompt_id)
-        prompt = {"id": prompt_id, "written": owner is not None,
-                  "owner": owner}
-        if owner is None:
-            off = (f"no profile of the line writes the prompt {prompt_id}, "
-                   f"so no run asks it")
-    needs = step.get("needs")
-    if needs is not None and off is None:
-        if needs == "compute":
-            held = computes
-        else:
-            held = data is not None and bool(SWITCHES[needs][2](data))
-        if not held:
-            off = (SWITCHES[needs][1] if data is not None
-                   or needs == "compute"
-                   else "this profile has no extraction spec")
-    if step.get("off"):
-        off = "switched off in the flow file: no run takes this step"
-    block = flow_map.BLOCKS.get(step["id"])
-    return {"id": step["id"], "ask": kind, "each": step.get("each"),
-            "when": step.get("when"), "says": step["says"],
-            "bound": _bound(step.get("bound")), "prompt": prompt, "off": off,
-            "switched_off": bool(step.get("off")),
-            "moves": bool(block and block.moves),
-            "switch": bool(block and block.switch),
-            "keeps": block.why if block else "",
-            "switches": [_switch(name, data)
-                         for name in step.get("shows") or ()],
-            "steps": [_step(inner, data, owners, computes)
-                      for inner in step["steps"]]
-            if step.get("steps") else None}
+def _never(prompts: dict, data: Optional[dict], computes: bool) -> dict:
+    """{kind of box: why this profile never takes it}: no profile of its
+    line writes its prompt, or its switch of the spec is off."""
+    out = {}
+    for box in blocks.LIBRARY.values():
+        why = None
+        if box.asks and not prompts[box.asks]["written"]:
+            why = (f"no profile of the line writes the prompt "
+                   f"{prompts[box.asks]['id']}, so no run asks it")
+        if why is None and box.spec is not None:
+            if box.spec == "compute":
+                held = computes
+            else:
+                held = data is not None and bool(SWITCHES[box.spec][2](data))
+            if not held:
+                why = (SWITCHES[box.spec][1] if data is not None
+                       or box.spec == "compute"
+                       else "this profile has no extraction spec")
+        if why:
+            out[box.type] = why
+    return out
 
 
 def _notes(data: Optional[dict]) -> list:
@@ -262,8 +248,6 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
     flow = flow_map.load(profile)
     below = flow_map.inherited(profile)
     in_effect = flow_map.in_effect(profile)
-    owners = {row["id"]: row["owner"]
-              for row in prompt_files.listing(profile)}
     numbers = []
     for number in flow_map.NUMBERS:
         name = number.name
@@ -275,13 +259,21 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
             "owner": flow.owners[name], "setting": number.env,
             "in_effect": getattr(in_effect, name),
             "origin": in_effect.origin[name]})
+    prompts = _prompts(profile)
     return {"file": shown(flow_map.path_of(profile)),
             "exists": own_raw is not None,
             "base": sha256(own_raw) if own_raw is not None else None,
             "whole": below is None, "starts_from": flow.files[-1][0],
-            "numbers": numbers,
-            "steps": [_step(step, data, owners, computes)
-                      for step in flow.steps],
+            "drawn_by": flow.tree_from,
+            "inherited_tree": below.tree if below is not None else None,
+            "numbers": numbers, "tree": flow.tree,
+            "library": blocks.catalogue(),
+            "conditions": conditions.catalogue(),
+            "prompts": prompts,
+            "never": _never(prompts, data, computes),
+            "switches": {name: _switch(name, data) for name in SWITCHES},
+            "problems": flow_map.problems(flow.tree)
+            + flow_map.prompt_problems(flow.tree, profile),
             "notes": _notes(data), "settings": _settings()}
 
 
@@ -291,69 +283,58 @@ def _text(raw: Optional[bytes]) -> Optional[str]:
     return None if raw is None else raw.decode("utf-8").replace(CR + LF, LF)
 
 
-def arranged_steps(steps: list, order=None, off=None) -> tuple:
-    """(the steps with the order and the switches of the page, errors).
-    *order* is {frame: [the ids of its steps in their new order]} (the
-    document's steps under "document"), *off* the ids of the steps
-    switched off; a step not named keeps its place and its switch."""
-    import copy
-    out = copy.deepcopy(steps)
-    errors = []
-    if order is not None and not isinstance(order, dict):
-        return out, ["order must be an object: a frame -> the ids of its "
-                     "steps"]
-    if off is not None and not (isinstance(off, list)
-                                and all(isinstance(one, str) for one in off)):
-        return out, ["off must be a list of step ids"]
+def _boxes(tree: list) -> dict:
+    return {node.get("id"): node for node, _ in flow_map.walk(tree)}
 
-    def walk(level: list, frame: str) -> list:
-        wanted = (order or {}).get(frame)
-        if wanted is not None:
-            ids = [step.get("id") for step in level]
-            if sorted(map(str, wanted)) != sorted(map(str, ids)):
-                errors.append(f"the order of {frame} names "
-                              f"{', '.join(map(str, wanted))}, its steps are "
-                              f"{', '.join(map(str, ids))}")
-            else:
-                by_id = {step.get("id"): step for step in level}
-                level = [by_id[one] for one in wanted]
-        for step in level:
-            if off is not None:
-                if step.get("id") in off:
-                    step["off"] = True
-                else:
-                    step.pop("off", None)
-            if isinstance(step.get("steps"), list):
-                step["steps"] = walk(step["steps"], step.get("id"))
-        return level
 
-    return walk(out, "document"), errors
+def tree_changes(old: list, new: list) -> list:
+    """What an edit did to a drawing, one line each: boxes and frames added,
+    removed, changed or moved."""
+    before, after = _boxes(old), _boxes(new)
+    out = [f"added {ident}" for ident in after if ident not in before]
+    out += [f"removed {ident}" for ident in before if ident not in after]
+    for ident, node in after.items():
+        was = before.get(ident)
+        if was is None:
+            continue
+        same = {k: v for k, v in node.items()
+                if k not in ("steps", "if", "else")}
+        were = {k: v for k, v in was.items()
+                if k not in ("steps", "if", "else")}
+        if same != were:
+            out.append(f"changed {ident}")
+    order_old = [i for i in before if i in after]
+    order_new = [i for i in after if i in before]
+    if order_old != order_new:
+        out.append("moved: " + ", ".join(
+            i for i, j in zip(order_new, order_old) if i != j))
+    return out
 
 
 def judge(profile, own_raw: Optional[bytes], numbers, name: str,
-          order=None, off=None) -> dict:
+          tree=None) -> dict:
     """What a save of *numbers* ({name: value}, those not named as the
-    files say them) and of the order of the steps (*order*, *off*:
-    `arranged_steps`) would do: {"ok", "errors": [{"name", "message"}],
-    "changed": [{"name", "from", "to"}], "file", "writes" ("created",
-    "changed", "removed", "unchanged"), "diff", "says", "text"}. *text* is
-    the profile's file as it would stand, in the line ends it has (plain
-    ones where it is new), None where it would be removed. *name* is the
-    file as the user sees it. An order the run cannot read in is refused
-    with its reason (`flow.arrangement_problems`); a profile that orders
-    its steps otherwise than it inherits writes them all."""
+    files say them) and of the drawing *tree* (None: as the files say it)
+    would do: {"ok", "errors": [{"name" or "id", "message"}], "changed":
+    [{"name", "from", "to"}], "file", "writes" ("created", "changed",
+    "removed", "unchanged"), "diff", "says", "text"}. *text* is the
+    profile's file as it would stand, in the line ends it has (plain ones
+    where it is new), None where it would be removed. *name* is the file
+    as the user sees it. A drawing the run cannot do is refused with every
+    reason, each at its box (`flow.problems`, `flow.prompt_problems`)."""
     flow = flow_map.load(profile)
     below = flow_map.inherited(profile)
     errors = []
     values = dict(flow.numbers)
-    steps = flow.steps
-    if order is not None or off is not None:
-        steps, wrong = arranged_steps(flow.steps, order, off)
-        errors += [{"name": None, "message": one} for one in wrong]
-        if not wrong:
-            errors += [{"name": None, "message": one} for one in
-                       flow_map.arrangement_problems(
-                           steps, flow_map._default_steps())]
+    drawing = flow.tree if tree is None else tree
+    if tree is not None:
+        said = flow_map.problems(drawing) if isinstance(drawing, list) \
+            else [{"id": None, "message": "the flow is a list of boxes and "
+                   "frames"}]
+        if not said:
+            said = flow_map.prompt_problems(drawing, profile)
+        errors += [{"name": None, "id": one["id"],
+                    "message": one["message"]} for one in said]
     if not isinstance(numbers, dict):
         errors.append({"name": None,
                        "message": "numbers must be an object, the name of a "
@@ -374,19 +355,17 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
     # A file keeps its line ends; one that is new is written with plain ones.
     newline = CR + LF if (CR + LF).encode() in (own_raw or b"") else LF
     if below is None:
-        # The profile's own file is the whole flow: its steps stay, in the
-        # order the page gives them.
-        whole = json.loads(old) if old is not None else {}
-        new = flow_map.dump({**whole, "steps": steps, "numbers": {
+        # The profile's own file is the whole flow.
+        new = flow_map.dump({"numbers": {
             number.name: values[number.name]
-            for number in flow_map.NUMBERS}})
+            for number in flow_map.NUMBERS}, "flow": drawing})
     else:
         own = {number.name: values[number.name]
                for number in flow_map.NUMBERS
                if values[number.name] != below.numbers[number.name]}
         data = {"numbers": own} if own else {}
-        if steps != below.steps:
-            data["steps"] = steps
+        if drawing != below.tree:
+            data["flow"] = drawing
         new = flow_map.dump(data) if data else None
     if errors:
         new = old
@@ -405,34 +384,29 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
             says.append(
                 f"{number.env} is set here "
                 f"({in_effect.origin[number.name]}: "
-                f"{os.environ[number.env]}) and wins over the file for a "
-                f"run started here.")
-    moved = [] if steps == flow.steps else [
-        {"name": "steps", "from": ", ".join(
-            step.get("id") + (" (off)" if step.get("off") else "")
-            for _frame, step in flow_map._walk(flow.steps)),
-         "to": ", ".join(step.get("id") + (" (off)" if step.get("off")
-                                           else "")
-                         for _frame, step in flow_map._walk(steps))}]
+                f"{os.environ[number.env]}) and wins over the named number "
+                f"for a run started here, never over a box's own value.")
+    edited = [] if errors or drawing == flow.tree else tree_changes(
+        flow.tree, drawing)
     return {"ok": not errors, "errors": errors,
-            "changed": moved + [{"name": number.name,
-                                 "from": flow.numbers[number.name],
-                                 "to": values[number.name]}
-                                for number in flow_map.NUMBERS
-                                if values[number.name]
-                                != flow.numbers[number.name]],
+            "changed": [{"name": "flow", "from": "", "to": line}
+                        for line in edited]
+            + [{"name": number.name, "from": flow.numbers[number.name],
+                "to": values[number.name]}
+               for number in flow_map.NUMBERS
+               if values[number.name] != flow.numbers[number.name]],
             "file": name, "writes": writes, "diff": diff, "says": says,
             "text": None if new is None else new.replace(LF, newline)}
 
 
 def save(profile, own_raw: Optional[bytes], numbers, base: Optional[str],
-         name: str, order=None, off=None) -> tuple:
+         name: str, tree=None) -> tuple:
     """(what the page is told, the bytes to write or None, whether the
     file is to be removed). Bytes come back only for numbers the flow
     takes and an order the run can read in, and only where the file is as
     the page loaded it (*base*, the sha256 of its bytes, None where it had
     none)."""
-    report = judge(profile, own_raw, numbers, name, order, off)
+    report = judge(profile, own_raw, numbers, name, tree)
     text = report.pop("text")
     if not report["ok"]:
         return {"saved": False, "reason": "invalid",

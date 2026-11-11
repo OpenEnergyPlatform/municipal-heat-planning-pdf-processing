@@ -168,11 +168,14 @@ flag
   handful of these into trust reasons; see [trust](contract/trust.md).
 
 flow (flow file)
-: The steps a document is read in and the whole numbers that bound them, in the
-  file `flow.json` of a profile: the default profile's file is the whole flow, and
-  a profile that extends it may set numbers, and steps where it writes them. A setting of the run wins over
-  the file; a changed flow makes no harvest stale. Read by
-  `docpipe.extraction.flow`, edited in the Flow tab of `docpipe edit`; see
+: The drawing a document is read by and the whole numbers that bound it, in the
+  file `flow.json` of a profile: boxes from a library (`docpipe.extraction.blocks`)
+  in frames that repeat them for each item, in rounds or under a condition,
+  run exactly as drawn by `docpipe.extraction.engine`. The default profile's
+  file is the whole flow; a profile that extends it may set numbers, and a
+  drawing of its own is the whole drawing. A setting of the run wins over
+  the file; a changed flow makes no harvest stale. Read and checked by
+  `docpipe.extraction.flow`, drawn and tried in the Flow tab of `docpipe edit`; see
   [extraction](stages/extraction.md) and [the editor](stages/editor.md).
 
 fold (folding)

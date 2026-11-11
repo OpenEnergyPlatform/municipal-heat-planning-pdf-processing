@@ -1138,17 +1138,23 @@ def trace_schema() -> dict:
         # carry besides the piece of the passage, how many pieces a request
         # showed, the coordinate asked, the step of a list asked in two, the
         # kind of names and how many a list showed, and the request a
-        # follow-up follows.
+        # follow-up follows. Every request names the box of the flow that
+        # asked it (`box`, since 2026-11-11), a request of a search what
+        # its pieces are (`shows`: beside the value, of the supply, fetched
+        # by the model).
         **{f"{stage}_ask": {"attempt": {"type": "integer"},
                             "parameter": {"type": ["string", "null"]},
                             "owner": {}, "kind": {},
                             "value": {"type": "string"},
+                            "box": {"type": "string"},
                             **({"chunk": {"type": "integer"},
                                 "chunks": {"type": "integer"},
                                 "coordinate": {"type": "string"},
                                 "step": {"enum": ["group", "plan_years"]},
                                 "names": {"type": "integer"},
-                                "asked": {"type": "string"}}
+                                "asked": {"type": "string"},
+                                "shows": {"enum": ["near", "found",
+                                                   "fetched"]}}
                                if stage in PIECE_ASKS
                                else {"coordinate": {"type": "string"}}
                                if stage == "phrase" else {}),
@@ -1250,7 +1256,7 @@ def trace_schema() -> dict:
              "rejected", "given", "raw", "quote", "via_base", "via_target",
              "via_table", "scope", "withdrawn",
              "batches", "input", "output", "asked_at", "sent_at",
-             "answered_at", "once"}
+             "answered_at", "once", "box", "shows"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",

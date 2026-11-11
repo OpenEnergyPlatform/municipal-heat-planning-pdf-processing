@@ -235,10 +235,21 @@ The terms of the snapshot whose identifier, label and alternative
 labels together contain every word of *query*, for choosing a new
 entry: {"terms", "total"}.
 
+### kg_keys
+
+```python
+def kg_keys(profile=None) -> dict
+```
+
+{"field": [...], "axis": [...], "why": None or the reason none are
+known}: the keys of a `kg` block the profile's graph writer reads, each
+{"key", "kind", "help"} (`KG_KEYS` of its kg.py). A key not listed is
+one the writer does not name; the page keeps it and shows it greyed.
+
 ### form
 
 ```python
-def form() -> dict
+def form(profile=None) -> dict
 ```
 
 The form of each kind of node, {kind: [{"key", "widget", "help",

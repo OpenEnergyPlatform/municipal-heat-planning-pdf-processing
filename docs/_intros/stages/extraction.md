@@ -414,11 +414,11 @@ of the rows it used (`profiles/kwp/compute.qualified`).
 
 A field the spec marks `once_per_document` (a publication's title, its authors,
 its organisation; kwp: the planning organisation) is asked once per document,
-never per piece (`Reader.docfield`, prompt `extraction/docfield`, owner decisions
+never per piece (the box `docfield`: `Engine.box_docfield`, `Reader.ask_window`, prompt `extraction/docfield`, owner decisions
 2026-11-08 and 2026-11-09): the first request shows the field in full (its whole
 description) and the title page (`T`); the pieces are those the search finds best
 for the field's sentence, the run's budget of them (`search_pieces`, by kind as in
-the search below: `Reader.shown_order`, `Reader.ask_once`), `search_per_request`
+the search below: the box `order`, `Reader.shown_order`), `search_per_request`
 to a request, and every find that holds is kept. A field with a list reads
 `listed_field_factor` times the budget and shows its list, whose entry a find
 names (see Finding a field's values in a piece). The reply is a list of finds, as
@@ -435,7 +435,7 @@ in one probe the title in 17 documents, the abstract in 132 of 164.
 
 ### Asking a coordinate of a value
 
-Every found value is then asked its coordinates (`Reader.coordinates`, prompt
+Every found value is then asked its coordinates (the frame of each coordinate and its box `coord`: `Engine.box_coord`, `Reader.ask_own_place`, prompt
 `extraction/coord`, owner decisions 2026-11-05, 2026-11-07 and 2026-11-08): each
 on its own, one request for each, in the order of the spec's groups and of
 each group's coordinates, side by side with every other value. A request has no
@@ -506,7 +506,7 @@ year, "scenario year" (OEO_00020097) or "other year", and the work of each of it
 thirteen publication and study fields, "this publication" or "another work". Their
 groups come first, so each is its value's first coordinate. A value read with
 another entry (`fields.kept` False) is asked nothing after it, its other
-coordinates `out_of_slice` (`Reader.coordinates`); a value whose entry stays open
+coordinates `out_of_slice` (the way `closed` of the default drawing, a state box set to `out_of_slice`); a value whose entry stays open
 asks the coordinates after it. The graph takes a value only where every such entry
 is read as the one to keep (`fields.in_parameter`, `kg.held_back`); the others stay
 in the harvest and are counted among what is not in the graph by choice. Nothing
@@ -637,7 +637,7 @@ number of entries shown).
 ### Searching for what a value's place does not say
 
 A coordinate the value's own place left open (a `0` answer), and not one only the
-place can say, is searched for in the rest of the plan (`Reader.search`, prompt
+place can say, is searched for in the rest of the plan (the boxes `order` and `search` in a round: `Engine.box_search`, `Reader.search_round`, prompt
 `extraction/search`, owner decisions 2026-11-04 to 2026-11-08). Every search runs
 with a sentence in the form of the plan, never with a question (HyDE). The `coord`
 answer writes none: a request of its own, `phrase` (prompt `extraction/phrase`,
@@ -859,7 +859,7 @@ one's as `survey/<document>.<scope>.json`, the scopes being `found`,
 `parameters` and `rest`. A kept order is taken again only for the same pieces
 and fields (`addressed.Orders`).
 
-The passes over a stored harvest run the same steps. `--start-at` reads the
+The passes over a stored harvest run the same drawing. `--start-at` reads the
 passages earlier harvests found something in (scope `found`) and, for a
 parameter none of them was asked, the whole plan beside them; the
 stamp says the document was read in part, as before. `--top-up` and the first
@@ -2207,22 +2207,39 @@ and `places/<document id>.json`.
 
 ## The flow file
 
-The numbers that bound how a document is read, and the steps they bound, stand in
-one file of the profile, `flow.json` (`extraction.flow`; `docpipe edit` has a Flow
-tab for it, see [the editor](editor.md)). The default profile's file is the whole
-flow, `numbers` and `steps`. A profile that extends it may have a `flow.json` of
-its own that holds the `numbers` it sets differently, laid over the inherited
-file number by number (`flow.load`), and the `steps` where it orders or
-switches them otherwise. The coordinate steps (`own_place`, `search_sentence`,
-`beside`, `search`, `about`, `plan_years`) are run in the order the file lists
-them (`flow.arrangement`, read by `addressed.Reader` and
-`surveyed.SurveyedHarvest`), and a step with `"off": true` is skipped; an order
-the run cannot read in is refused with its reason (`flow.arrangement_problems`).
-The file is read strictly: every
-request the code sends (`addressed.KINDS` and the compute request) stands in the
-`ask` of a step, a step asks nothing the code does not send, every number bounds
-a step, and an unknown key, a key written twice, a value that is no whole number
-or one below the number's least is refused by name.
+How a document is read is a drawing, and the numbers that bound it stand beside
+it, in one file of the profile, `flow.json` (`extraction.flow`; `docpipe edit`
+has a Flow tab for it, see [the editor](editor.md)): `{"numbers": {...},
+"flow": [...]}`. The drawing is a tree of boxes (`extraction.blocks`, the library
+of kinds: the document, the cutting into pieces, an ordering of pieces, a
+question, a check, a state, the writing and so on) and frames: "each" (for each
+thing the document settles, field, piece, value or coordinate, optionally side by
+side and only where a condition holds), "round" (at most N times or until the
+supply is used up, with a stop condition) and "if" (ways under conditions, the
+last without one). The run does exactly this drawing (`extraction.engine`); there
+is no second order in the code. A box has settings (`set`), may have values of
+its own for the numbers it takes (`own`: in that box the own value wins over the
+named number), a condition (`when`) and may be switched off (`off`) where its kind
+allows it; a box that is off is not there for any check of the drawing.
+Conditions are rows, each saying what it is about, which of its properties, a
+comparison and a value, joined by all or any (`extraction.conditions`). A
+condition about the answer reads the answer of its own item; where no box of that
+item asked, nothing came back. An own check is a box that refuses an answer where
+its condition holds; the answer is asked again with its sentence, and its
+refusals are counted as `check:<name>`.
+
+The default profile's file is the whole flow, `numbers` and `flow`. A profile that
+extends it may have a `flow.json` of its own that holds the `numbers` it sets
+differently, laid over the inherited file number by number (`flow.load`), and a
+`flow` where it draws otherwise, which is then the whole drawing. The file is read
+strictly: an unknown key, a key written twice, a number that is no whole number or
+below its least, and a drawing the run could not do (`flow.problems`: a box
+where it cannot stand, a round that may not end, a frame of coordinates without
+a state, a condition about something not there yet at its place, the order the
+run needs: the document, the figures, the pieces and the lists first, the writing
+last) are refused by name, each at its box. A box that is on and asks a request
+whose prompt the profile does not write is refused as well
+(`flow.prompt_problems`).
 
 There are twelve numbers, all whole numbers, each counting something: lines of a
 piece (`piece_lines`), lines of the title page (`title_page_lines`), headings
@@ -2266,7 +2283,7 @@ harvest read with.
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` / `LLM_TIMEOUT` | env var | `http://localhost:8000/v1` / `EMPTY` / `Qwen/Qwen3.5-122B-A10B-FP8` / `180` | The address, the key and the model name every request of the stage goes out with (the model name is written into the stamp), and the client timeout in seconds, which starts when a request is sent and not while it waits; a retry after a timeout gets `EXTRACT_RETRY_TIMEOUT` instead | `runner.py`, `runner._client` |
 | `EXTRACT_RETRY_WAIT` / `_MAX` / `EXTRACT_TRANSPORT_WAIT` / `_MAX` | env var | `2` / `6` / `15` / `120` | Seconds before the next attempt. The short curve, `RETRY_WAIT` times the attempt up to `RETRY_WAIT_MAX`, follows the model's own mistake. The long curve, `TRANSPORT_WAIT` doubling per attempt up to `TRANSPORT_WAIT_MAX`, follows a request that never arrived or ended on a 429, a 5xx or a timeout | `runner.retry_wait` |
 | `EXTRACT_SPLIT_DEPTH` | env var | `3` | Listed in `docpipe/settings.py`; no request of the extraction halves by it any more (`runner._split_harvest` is gone, and the chat's `llm_client` has a constant of its own) | `docpipe/settings.py` |
-| `EXTRACT_SEARCH_PIECES` / `EXTRACT_SEARCH_SHARES` / `EXTRACT_SEARCH_CHUNKS` | env var | none (the flow's `search_pieces`) / none (its `search_tables`, `search_figures`, `search_text`) / none (its `search_per_request`) | The budget of every search, read by `runner.search_budget`: how many pieces a search for an open coordinate or a field a document has once shows (a field with a list reads `listed_field_factor` times as many); how many of them come first from tables, figures and text, scaled to the budget (the setting lists three whole numbers in that order, such as `20,15,15`), the rest being the best of any kind; and how many pieces a request shows. A setting that is set wins over the flow file (see The flow file). A coordinate whose budget ends with pieces unshown is `exhausted`; `runner.read_to_end` sets the budget to every piece for `--top-up-open` | `runner.make_reader`, `addressed.Reader.search`, `addressed.Reader.ask_once` |
+| `EXTRACT_SEARCH_PIECES` / `EXTRACT_SEARCH_SHARES` / `EXTRACT_SEARCH_CHUNKS` | env var | none (the flow's `search_pieces`) / none (its `search_tables`, `search_figures`, `search_text`) / none (its `search_per_request`) | The budget of every search, read by `runner.search_budget`: how many pieces a search for an open coordinate or a field a document has once shows (a field with a list reads `listed_field_factor` times as many); how many of them come first from tables, figures and text, scaled to the budget (the setting lists three whole numbers in that order, such as `20,15,15`), the rest being the best of any kind; and how many pieces a request shows. A setting that is set wins over the flow file (see The flow file). A coordinate whose budget ends with pieces unshown is `exhausted`; `runner.read_to_end` sets the budget to every piece for `--top-up-open` | `runner.make_reader`, `engine.Engine.box_order`, `addressed.Reader.shown_order` |
 | `EXTRACT_BATCH_SOURCES` / `EXTRACT_BATCH_CHARS` | env var | `6` / `14000` | Passages and characters of passage text a value request was sized for; they only enter the context budget (`runner.context_budget`) | `runner.py` |
 | `EXTRACT_PRIOR_MAX` | env var | `24` | Earlier values a request was told it has; it only enters the context budget (`runner.context_budget`) now | `runner.py` |
 | `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text a request was sized for; it only enters the context budget now. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.context_budget`, `runner.make_parents` |
@@ -2306,7 +2323,7 @@ harvest read with.
 | `shapes_files` | profile hook | none (the check is skipped for a profile without the hook or a refresh) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Each profile names the SHACL files of its last refresh (kwp the MHPKG shapes) | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 | `span_marks` | rule | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
-| `flow.json` | profile file | the default profile's whole flow | The numbers that bound the reading and its steps; a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and `steps` where it orders or switches them otherwise. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
+| `flow.json` | profile file | the default profile's whole flow | The drawing of the reading and the numbers that bound it; a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and the `flow` (the drawing) where it draws otherwise. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
 | `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
 | `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `addressed.Reader.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |

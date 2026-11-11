@@ -744,6 +744,15 @@ The value itself has no set here. The plan searches with the one short
 sentence `document_anchor` writes for the document it plans, and a set
 written once for the whole corpus was never searched with.
 
+### phrase_told
+
+```python
+def phrase_told(prompt) -> str
+```
+
+The system prompt a field's sentence request is told, every part of
+*prompt* it may carry (`PHRASE_KEYS`).
+
 ### phrase_payload
 
 ```python
@@ -777,7 +786,7 @@ def make_seek_probes(context_of: Optional[Callable] = None,
 probes(parameter, document_id) -> the sentences a plan's passages
 are ranked with for a parameter, which sets the order it reads them in,
 and the search after an open coordinate goes with where its answer
-wrote none (`addressed.Orders`, `addressed.Reader.search`).
+wrote none (`addressed.Orders`, `engine.Engine.box_order`).
 
 Every parameter gets a sentence written for this document by the model,
 from the parameter's label, description and list names and from what

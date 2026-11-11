@@ -35,8 +35,10 @@ Author: Felix Vossel
 def step_of(request: dict) -> Optional[str]
 ```
 
-The step of the flow a recorded request was asked in, by the id the
-default profile's flow file gives it; None for a request of no step.
+The box of the default drawing a recorded request that names no box
+of its own (`box`, written since 2026-11-11) was asked in, by its kind;
+None for a request of no box. A follow-up is its question's, which
+`facts` gives by the kind it follows.
 
 ### names_place
 
@@ -79,7 +81,8 @@ def facts(requests: list) -> dict
 What the requests of one trace say, counted once whatever the
 numbers asked about:
 
-- "requests": how many, and "steps": how many per step (`step_of`);
+- "requests": how many, and "steps": how many per box of the flow
+  (the box a request names, else `step_of`);
 - "searches": one entry per search of a value's coordinate, in order:
   {"requests", "after" (pieces of its budget shown when it ended),
   "found" (its last request's answer names a place), "noted" (its
@@ -106,11 +109,10 @@ The facts of several traces as one.
 def says(found: dict, numbers: dict) -> dict
 ```
 
-{step: [sentences]} of what the traces say about the numbers of the
-flow at the values *numbers* gives them, each sentence at the step (its
-id in the flow file) whose requests it counts. A number that is no
-whole number there says nothing, and a step the traces say nothing
-about has no entry.
+{number: [sentences]} of what the traces say about the numbers of the
+flow at the values *numbers* gives them, each sentence at the named
+number it measures. A number that is no whole number there says
+nothing, and a number the traces say nothing about has no entry.
 
 ### notes
 

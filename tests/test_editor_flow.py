@@ -1,11 +1,12 @@
 """
 test_editor_flow.py: what the flow tab of `docpipe edit` promises about the
-diagram, the numbers it saves, the settings it shows and what it measures.
+drawing, the numbers it saves, the settings it shows and what it measures.
 
 Each test states one promise and holds a case that breaks it by
-construction: a number the flow does not take, a file that moved, a secret
-among the settings, pieces of a search that count toward no budget. That the
-run reads the file the page writes is in test_flow.py.
+construction: a number the flow does not take, a box the run cannot do, a
+file that moved, a secret among the settings, pieces of a search that count
+toward no budget. That the run reads the file the page writes is in
+test_flow.py and test_flow_engine.py.
 
 Author: Felix Vossel
 """
@@ -22,7 +23,7 @@ import pytest
 
 from docpipe.editor import flow as flow_view
 from docpipe.editor import measured, requests, server
-from docpipe.extraction import flow, trace
+from docpipe.extraction import blocks, flow, trace
 from docpipe.profile import load_profile
 
 REPO = Path(__file__).resolve().parent.parent
@@ -40,11 +41,14 @@ def no_setting_wins(monkeypatch):
 
 @pytest.fixture
 def profile(tmp_path):
-    """scenarios with a folder of its own, still extending default."""
+    """scenarios with a folder of its own, its spec and prompts, still
+    extending default."""
     home = tmp_path / "scenarios"
     home.mkdir()
     shutil.copy(REPO / "profiles" / "scenarios" / "extraction_spec.json",
                 home)
+    shutil.copytree(REPO / "profiles" / "scenarios" / "prompts",
+                    home / "prompts")
     return dataclasses.replace(load_profile("scenarios"), home=home)
 
 
@@ -67,21 +71,15 @@ def view(profile, data=None, computes=False) -> dict:
                           lambda path: Path(path).name, computes)
 
 
-def walk(steps):
-    for step in steps:
-        yield step
-        yield from walk(step.get("steps") or ())
-
-
-def step_of(shown: dict, name: str) -> dict:
-    return next(step for step in walk(shown["steps"]) if step["id"] == name)
+def node_of(tree: list, ident: str) -> dict:
+    return next(node for node, _ in flow.walk(tree) if node["id"] == ident)
 
 
 def number_of(shown: dict, name: str) -> dict:
     return next(n for n in shown["numbers"] if n["name"] == name)
 
 
-# -- the diagram -------------------------------------------------------------------
+# -- the drawing ---------------------------------------------------------------------
 
 def test_a_number_says_what_the_files_say_and_where_it_comes_from(
         profile, monkeypatch):
@@ -104,79 +102,70 @@ def test_a_number_says_what_the_files_say_and_where_it_comes_from(
         35, 7, "environment")
 
 
-def test_a_bound_is_its_texts_and_its_numbers_in_order(profile):
-    step = step_of(view(profile), "document_fields")
-    names = [part["number"] for part in step["bound"]
-             if isinstance(part, dict)]
-    assert names == ["search_pieces", "listed_field_factor",
-                     "search_per_request"]
-    assert isinstance(step["bound"][-1], str)
-    # every number of every bound is one the page was sent
+def test_every_number_a_box_takes_is_a_named_number_the_page_is_sent(
+        profile):
     shown = view(profile)
     sent = {number["name"] for number in shown["numbers"]}
-    assert {part["number"] for step in walk(shown["steps"])
-            for part in step["bound"] or () if isinstance(part, dict)} == sent
-    # the failure by construction: a step without a bound has none
-    assert step_of(shown, "finds")["bound"] is None
+    taken = {setting["number"] for box in shown["library"]["boxes"]
+             for setting in box["settings"]
+             if setting["kind"] == "number"}
+    assert taken and taken <= sent
+    # the drawing on disk is the one the run does, and the page is sent it
+    assert shown["tree"] == flow.tree_of(profile) and shown["problems"] == []
+    # the failure by construction: a box that takes no number shows none
+    beside = next(box for box in shown["library"]["boxes"]
+                  if box["type"] == "beside")
+    assert [s for s in beside["settings"] if s["kind"] == "number"] == []
 
 
-def test_a_step_no_run_of_the_profile_takes_says_why():
+def test_a_box_no_run_of_the_profile_takes_says_why():
     kwp, scenarios = load_profile("kwp"), load_profile("scenarios")
     plans = view(kwp, computes=True)
     papers = view(scenarios)
     # kwp writes no prompt for the works and names requests, scenarios none
     # for the calculation
-    assert "extraction/work" in step_of(plans, "works")["off"]
-    assert "extraction/names" in step_of(plans, "name")["off"]
-    assert "extraction/compute" in step_of(papers, "compute")["off"]
-    assert step_of(papers, "works")["off"] is None
-    assert step_of(plans, "compute")["off"] is None
-    assert step_of(papers, "works")["prompt"] == {
+    assert "extraction/work" in plans["never"]["works"]
+    assert "extraction/names" in plans["never"]["names"]
+    assert "extraction/compute" in papers["never"]["compute"]
+    assert "works" not in papers["never"]
+    assert "compute" not in plans["never"]
+    assert papers["prompts"]["work"] == {
         "id": "extraction/work", "written": True, "owner": "scenarios"}
     # the failures by construction: the prompt is written and the spec or
-    # the profile does not ask for the step
-    assert step_of(view(kwp, computes=False), "compute")["off"] \
+    # the profile does not ask for the box
+    assert view(kwp, computes=False)["never"]["compute"] \
         == "this profile computes nothing"
     bare = copy.deepcopy(SPEC["scenarios"])
-    del bare["works"], bare["plan_fields"]
-    for parameter in bare["parameters"]:
-        parameter.pop("once_per_document", None)
-    shown = view(scenarios, bare)
-    assert step_of(shown, "works")["off"] \
+    del bare["works"]
+    assert view(scenarios, bare)["never"]["works"] \
         == "the spec keeps no list of other works"
-    assert step_of(shown, "settled")["off"] \
-        == "the spec asks nothing once of a document"
-    assert step_of(shown, "document_fields")["off"] \
-        == "the spec marks no field as once per document"
 
 
 def test_a_switch_lists_what_the_spec_says_and_leads_into_it():
     shown = view(load_profile("scenarios"))
-    (once,) = step_of(shown, "document_fields")["switches"]
+    once = shown["switches"]["once_per_document"]
     marked = [p["uri"] for p in SPEC["scenarios"]["parameters"]
               if p.get("once_per_document")]
     assert [item["label"] for item in once["items"]] == marked and marked
     assert once["items"][0]["to"] == {"t": "param", "uri": marked[0]}
-    (taken,) = step_of(shown, "name")["switches"]
+    taken = shown["switches"]["takes_group"]
     assert [item["label"] for item in taken["items"]] == ["scenario_abstract"]
-    plans = view(load_profile("kwp"))
-    never = {switch["name"]: [item["label"] for item in switch["items"]]
-             for switch in step_of(plans, "beside")["switches"]}
-    assert never == {"own_passage": ["unit (number)", "what (number)",
-                                     "subject (number)", "aggregation "
-                                     "(context)", "role (context)"],
-                     "own_value": ["qualifier (number)"]}
+    switches = view(load_profile("kwp"))["switches"]
+    assert [item["label"] for item in switches["own_passage"]["items"]] == [
+        "unit (number)", "what (number)", "subject (number)",
+        "aggregation (context)", "role (context)"]
+    assert [item["label"] for item in switches["own_value"]["items"]] == [
+        "qualifier (number)"]
     # the failure by construction: a spec that marks nothing lists nothing
     # and says so
     bare = copy.deepcopy(SPEC["kwp"])
     for group in bare["groups"].values():
         group.pop("own_passage", None)
-    (first, _) = step_of(view(load_profile("kwp"), bare),
-                         "beside")["switches"]
+    first = view(load_profile("kwp"), bare)["switches"]["own_passage"]
     assert first["items"] == [] and first["none"]
 
 
-def test_the_rule_for_a_pass_over_a_stored_harvest_stands_below_the_diagram():
+def test_the_rule_for_a_pass_over_a_stored_harvest_stands_below_the_drawing():
     notes = view(load_profile("kwp"))["notes"]
     assert [note["to"] for note in notes] == [
         {"t": "plan", "key": "base_year"}, {"t": "plan", "key": "target_year"}]
@@ -205,6 +194,56 @@ def test_a_save_writes_only_what_differs_from_the_inherited(profile):
     same = flow_view.judge(profile, None, numbers_of(profile), "flow.json")
     assert (same["writes"], same["text"], same["diff"], same["changed"]) == (
         "unchanged", None, [], [])
+
+
+def test_a_drawing_is_written_only_where_it_differs_from_the_inherited(
+        profile):
+    tree = copy.deepcopy(flow.tree_of(profile))
+    node_of(tree, "search_round")["round"] = {"most": 3}
+    report = flow_view.judge(profile, None, numbers_of(profile), "flow.json",
+                             tree)
+    assert report["ok"] and report["writes"] == "created"
+    assert json.loads(report["text"]) == {"flow": tree}
+    assert report["changed"] == [{"name": "flow", "from": "",
+                                  "to": "changed search_round"}]
+    # the failure by construction: the inherited drawing writes nothing
+    same = flow_view.judge(profile, None, numbers_of(profile), "flow.json",
+                           copy.deepcopy(flow.tree_of(profile)))
+    assert (same["writes"], same["text"], same["changed"]) == (
+        "unchanged", None, [])
+
+
+def test_a_drawing_the_run_cannot_do_is_refused_at_its_box(profile):
+    tree = copy.deepcopy(flow.tree_of(profile))
+    # a search outside any coordinate, and a box no library knows
+    tree.insert(1, {"id": "lost_search", "box": "search"})
+    tree.insert(1, {"id": "made_up", "box": "no_such_box"})
+    report = flow_view.judge(profile, None, numbers_of(profile), "flow.json",
+                             tree)
+    assert not report["ok"] and report["writes"] == "unchanged"
+    assert {"lost_search", "made_up"} <= {e["id"] for e in report["errors"]}
+    told, written, remove = flow_view.save(profile, None, numbers_of(profile),
+                                           None, "flow.json", tree)
+    assert (told["saved"], told["reason"], written, remove) == (
+        False, "invalid", None, False)
+    # the failure by construction: without the two the drawing is saved
+    del tree[1:3]
+    assert flow_view.judge(profile, None, numbers_of(profile), "flow.json",
+                           tree)["ok"]
+
+
+def test_what_an_edit_did_to_the_drawing_is_said_one_line_each():
+    old = [{"id": "a", "box": "find"}, {"id": "b", "box": "write"},
+           {"id": "c", "each": "value", "steps": [{"id": "d",
+                                                  "box": "settle"}]}]
+    new = [{"id": "b", "box": "write"}, {"id": "a", "box": "find",
+                                         "off": True},
+           {"id": "c", "each": "value", "steps": [{"id": "e",
+                                                  "box": "state"}]}]
+    assert flow_view.tree_changes(old, new) == [
+        "added e", "removed d", "changed a", "moved: b, a"]
+    # the failure by construction: the same drawing says nothing
+    assert flow_view.tree_changes(old, copy.deepcopy(old)) == []
 
 
 def test_a_number_set_back_leaves_the_file_and_an_empty_file_goes(profile):
@@ -284,7 +323,7 @@ def test_the_line_ends_of_the_file_stay(profile):
     assert "\r" not in report["text"]
 
 
-def test_the_whole_file_keeps_its_steps_and_changes_one_line(tmp_path):
+def test_the_whole_file_keeps_its_drawing_and_changes_one_line(tmp_path):
     home = tmp_path / "default"
     home.mkdir()
     shutil.copy(flow.DEFAULT, home)
@@ -299,7 +338,7 @@ def test_the_whole_file_keeps_its_steps_and_changes_one_line(tmp_path):
                if line[:1] in "+-"]
     assert changed == [f'-    "replies": {replies}',
                        f'+    "replies": {replies + 1}']
-    assert json.loads(report["text"])["steps"] == json.loads(raw)["steps"]
+    assert json.loads(report["text"])["flow"] == json.loads(raw)["flow"]
     # every number is its own there: none is inherited
     shown = flow_view.view(whole, raw, None, str)
     assert shown["whole"] and all(n["own"] and n["inherited"] is None
@@ -327,21 +366,29 @@ def test_the_page_is_given_the_flow_and_a_check_writes_nothing(tmp_path,
     assert status == 200 and not shown["exists"] and shown["base"] is None
     assert "flow" in app.call("GET", "/api/state", {}, None)[1]["tabs"]
     numbers = {n["name"]: n["value"] for n in shown["numbers"]}
+    tree = copy.deepcopy(shown["tree"])
+    node_of(tree, "search_round")["round"] = {"most": 3}
     status, report = post(app, "/api/flow/check",
-                          {"numbers": {**numbers, "search_pieces": 35}})
+                          {"numbers": {**numbers, "search_pieces": 35},
+                           "tree": tree})
     assert status == 200 and report["writes"] == "created"
+    assert {"name": "flow", "from": "", "to": "changed search_round"} \
+        in report["changed"]
     assert "text" not in report and not own_file(profile).exists()
     # the failure by construction: a save does write, into the profile's
     # own folder, and a save back to the inherited takes the file away
     status, told = post(app, "/api/flow/save", {
-        "numbers": {**numbers, "search_pieces": 35}, "base": None})
+        "numbers": {**numbers, "search_pieces": 35}, "base": None,
+        "tree": tree})
     assert told["saved"] and json.loads(own_file(profile).read_text(
-        encoding="utf-8")) == {"numbers": {"search_pieces": 35}}
+        encoding="utf-8")) == {"numbers": {"search_pieces": 35},
+                               "flow": tree}
     assert told["base"] == server.sha256(own_file(profile).read_bytes())
     assert flow.DEFAULT.read_bytes() == (
         REPO / "docpipe" / "builtin" / "default" / "flow.json").read_bytes()
-    status, told = post(app, "/api/flow/save", {"numbers": numbers,
-                                                "base": told["base"]})
+    status, told = post(app, "/api/flow/save", {
+        "numbers": numbers, "base": told["base"],
+        "tree": shown["tree"]})
     assert told["writes"] == "removed" and not own_file(profile).exists()
 
 
@@ -376,10 +423,16 @@ def test_no_key_and_no_token_is_shown_or_written(tmp_path, profile,
     # the failure by construction: what is no secret is shown as it is set
     assert by_env["LLM_MODEL"]["value"] == "a-model-anyone-may-see"
     assert by_env["LLM_MODEL"]["origin"] == "environment"
-    # and nothing but a number of the flow is written: a setting is refused
+    # and nothing but a number of the flow is written: a setting is refused,
+    # in the numbers as in a box of the drawing
     numbers = {n["name"]: n["value"] for n in shown["numbers"]}
     status, told = post(app, "/api/flow/save", {
         "numbers": {**numbers, "LLM_API_KEY": secret}, "base": None})
+    assert not told["saved"] and not own_file(profile).exists()
+    tree = copy.deepcopy(shown["tree"])
+    node_of(tree, "search")["own"] = {"LLM_API_KEY": secret}
+    status, told = post(app, "/api/flow/save", {
+        "numbers": numbers, "base": None, "tree": tree})
     assert not told["saved"] and not own_file(profile).exists()
 
 
@@ -419,22 +472,24 @@ def test_a_budget_is_measured_by_the_places_that_came_after_it():
     found = measured.facts(searches())
     assert [(s["after"], s["found"]) for s in found["searches"]] == [
         (4, True), (36, True), (51, True), (5, False)]
-    (said, per_request) = measured.says(found, {"search_pieces": 35,
-                                                "search_per_request": 5})[
-        "search"]
+    said = measured.says(found, {"search_pieces": 35,
+                                 "search_per_request": 5})
+    (budget,), (per_request,) = said["search_pieces"], \
+        said["search_per_request"]
     assert "Of 4 searches for an open coordinate, 3 ended with an answer " \
-           "that names a place and 1 without one." in said
-    assert "after 4 to 51 shown pieces of the budget" in said
-    assert said.endswith("2 came after more than 35.")
+           "that names a place and 1 without one." in budget
+    assert "after 4 to 51 shown pieces of the budget" in budget
+    assert budget.endswith("2 came after more than 35.")
     assert per_request.startswith("The 4 searches sent 24 requests")
     assert measured.notes(found) == []
     # the failure by construction: a trace that does not say which pieces
     # count has every piece counted, and says so
     found = measured.facts(searches(noted=False))
     assert [s["after"] for s in found["searches"]] == [6, 39, 51, 7]
-    (said, _) = measured.says(found, {"search_pieces": 35,
-                                      "search_per_request": 5})["search"]
-    assert "after 6 to 51 shown pieces," in said
+    (budget,) = measured.says(found, {"search_pieces": 35,
+                                      "search_per_request": 5})[
+        "search_pieces"]
+    assert "after 6 to 51 shown pieces," in budget
     assert len(measured.notes(found)) == 1
 
 
@@ -455,20 +510,40 @@ def test_replies_are_measured_by_the_attempt_they_were_read_at():
     assert measured.says(found, {"replies": ""}) == {}
 
 
-def test_every_step_a_request_is_counted_under_is_a_step_of_the_flow():
-    steps = {step["id"]: step for step in walk(flow.load().steps)}
-    assert set(measured.STEPS) <= set(steps)
+def test_what_the_traces_say_stands_at_the_number_it_measures():
+    said = measured.says(measured.facts(searches()), {
+        number.name: getattr(flow.default(), number.name)
+        for number in flow.NUMBERS})
+    assert said and set(said) <= {number.name for number in flow.NUMBERS}
+    # the failure by construction: no numbers, nothing said
+    assert measured.says(measured.facts(searches()), {}) == {}
+
+
+def test_a_request_is_counted_at_the_box_that_asked_it():
+    boxes = {node["id"]: node for node, _ in flow.walk(
+        flow.load(load_profile("default")).tree) if "box" in node}
+    assert set(measured.STEPS) <= set(boxes)
     kinds = {measured.step_of({"kind": kind, **notes})
              for kind in flow.kinds()
              for notes in ({}, {"coordinate": "year"}, {"shows": "near"},
                            {"step": "plan_years"},
                            {"parameter": "settings"})}
-    assert kinds == set(measured.STEPS)
-    # a request is counted at a step that asks its kind
+    assert kinds - {None} == set(measured.STEPS)
+    # an old request without a box is counted at a box that asks its kind
     for kind in flow.kinds():
-        assert steps[measured.step_of({"kind": kind})]["ask"] == kind
-    # the failure by construction: a request of no step is counted nowhere
+        step = measured.step_of({"kind": kind})
+        if step is not None:
+            assert blocks.LIBRARY[boxes[step]["box"]].asks == kind
+    # a request that names its box is counted there, a follow-up at its
+    # question's box
+    found = measured.facts([
+        {"kind": "search", "box": "document_search", "doc": 1},
+        {"kind": "search", "doc": 1},
+        {"kind": "follow", "asked": "search", "doc": 1}])
+    assert found["steps"] == {"document_search": 1, "search": 2}
+    # the failure by construction: a request of no box is counted nowhere
     assert measured.step_of({"kind": "review"}) is None
+    assert measured.step_of({"kind": "follow"}) is None
 
 
 def reply(content: str):
@@ -534,7 +609,8 @@ def test_a_trace_is_counted_without_putting_its_requests_back_together(
     assert light["follow"] == {"search": 1}
     assert light["searches"] == [{"requests": 2, "noted": True, "after": 5,
                                   "found": True}]
-    assert light["steps"]["beside"] == 1 and light["steps"]["search"] == 1
+    # the follow-up is counted at the search it follows
+    assert light["steps"]["beside"] == 1 and light["steps"]["search"] == 2
 
 
 def test_the_page_is_told_what_was_measured_and_why_not(tmp_path, profile,
@@ -545,8 +621,9 @@ def test_the_page_is_told_what_was_measured_and_why_not(tmp_path, profile,
                                                     "trace": None})
     assert (status, told["harvest"], told["why"], told["traces"],
             told["requests"]) == (200, True, None, 1, 8)
-    assert told["says"]["search"][0].endswith("1 came after more than 4.")
-    assert set(told["says"]) <= set(told["steps"]) | {"replies"}
+    assert told["says"]["search_pieces"][0].endswith(
+        "1 came after more than 4.")
+    assert set(told["says"]) <= {number.name for number in flow.NUMBERS}
     assert told["steps"]["finds"] == 2
     # asked for by name it is the same trace; one that is not there is not
     assert post(app, "/api/flow/measured", {

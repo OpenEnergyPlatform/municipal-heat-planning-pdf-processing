@@ -140,13 +140,15 @@ class Chunk
 ```
 
 A piece of a passage: its own lines (*numbers*), shown with the
-lines every piece of the passage shows. Two pieces are the same piece
-where their passage and place are the same (`key`).
+lines every piece of the passage shows (*carried*, the passage's fixed
+lines where not given). Two pieces are the same piece where their
+passage and place are the same (`key`).
 
 #### Chunk.\_\_init\_\_
 
 ```python
-def __init__(self, passage: Passage, index: int, numbers: tuple)
+def __init__(self, passage: Passage, index: int, numbers: tuple,
+             carried: Optional[tuple] = None)
 ```
 
 #### Chunk.owner
@@ -206,6 +208,52 @@ def of_caption(self) -> bool
 
 Is this the piece of a figure's caption alone, beside the pieces
 of its numbers?
+
+### Cut
+
+```python
+@dataclass(frozen=True)
+class Cut
+```
+
+How a flow's split box cuts a document (`blocks.LIBRARY["split"]`):
+a piece holds at most *lines* lines; a new piece begins where a passage
+begins, unless a piece may hold several (*across*), and where the
+condition *new_piece* holds for the next line (`conditions`, the line's
+properties of `line_facts`). A table's title and head go with each of
+its pieces (*table_head*), a figure's caption with each of its pieces
+(*caption*); a figure's numbers are pieces of their own, its caption
+one (*figure_numbers*). *headings* is how many headings a request shows
+up to a place.
+
+Fields:
+
+- `lines: int = 8`
+- `new_piece: Optional[dict] = None`
+- `across: bool = False`
+- `table_head: bool = True`
+- `caption: bool = True`
+- `figure_numbers: bool = True`
+- `headings: int = 10`
+
+#### Cut.plain
+
+```python
+def plain(self) -> bool
+```
+
+Is this the cut of every flow before 2026-11-11: pieces of at
+most *lines* lines of one passage, heads and captions carried?
+
+#### Cut.key
+
+```python
+def key(self)
+```
+
+What an order of the pieces is kept under (`addressed.order_key`):
+the lines of a piece for the plain cut, as before, else every
+setting.
 
 ### Address
 
@@ -437,6 +485,28 @@ The pieces of *passage*: its lines but the fixed ones, *size* at a
 time, in order; a passage of fixed lines only is one piece. A figure
 with numbers is first the piece of its caption, then the pieces of its
 numbers, each shown with the caption.
+
+### line_facts
+
+```python
+def line_facts(passage: Passage, line: Line, first: bool,
+               page_before: Optional[int], in_piece: int)
+```
+
+What a condition of the split box knows of the next line
+(`conditions.SUBJECTS["line"]`).
+
+### cut_pieces
+
+```python
+def cut_pieces(passages: list, cut: Cut) -> tuple
+```
+
+([Chunk] in reading order, [group]) of *passages* cut as *cut*
+says. A group is a tuple of the chunks of one piece that holds lines of
+several passages, each chunk the lines of one of them; a piece of one
+passage is a chunk alone. The plain cut is `chunks_of`, passage by
+passage.
 
 ### pieces_for
 

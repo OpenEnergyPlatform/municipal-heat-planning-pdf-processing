@@ -12094,6 +12094,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12143,6 +12146,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12179,6 +12189,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12228,6 +12241,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12264,6 +12284,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12313,6 +12336,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12349,6 +12379,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12398,6 +12431,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12434,6 +12474,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12483,6 +12526,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12519,6 +12569,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12568,6 +12621,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12604,6 +12664,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12653,6 +12716,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12689,6 +12759,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12738,6 +12811,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12774,6 +12854,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12823,6 +12906,13 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
      },
      "step": {
       "enum": [
@@ -12859,6 +12949,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12909,6 +13002,13 @@
      "sent_at": {
       "type": "number"
      },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
+     },
      "step": {
       "enum": [
        "group",
@@ -12940,6 +13040,9 @@
      },
      "attempt": {
       "type": "integer"
+     },
+     "box": {
+      "type": "string"
      },
      "completion_tokens": {
       "type": [
@@ -13008,6 +13111,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -13072,6 +13178,9 @@
      "attempt": {
       "type": "integer"
      },
+     "box": {
+      "type": "string"
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -13135,6 +13244,9 @@
      },
      "attempt": {
       "type": "integer"
+     },
+     "box": {
+      "type": "string"
      },
      "completion_tokens": {
       "type": [

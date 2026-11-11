@@ -853,15 +853,15 @@ _FORM = {
                   ("unit_target", "line", "unit_target", {}),
                   ("integrated", "bool", "integrated", {"default": True}),
                   ("units_accepted", "units", "units_accepted", {}),
-                  ("example", "json", "example", {}),
-                  ("kg", "json", "kg", {})],
+                  ("example", "example", "example", {}),
+                  ("kg", "kg", "kg", {"of": "field"})],
     "axis": [("question", "text", "question", {}),
              ("required", "bool", "required", {"default": False}),
              ("several", "bool", "several", {"default": False}),
              ("merged", "line", "merged", {}),
              ("keep", "line", "keep", {}),
-             ("derive", "json", "derive", {}),
-             ("kg", "json", "kg", {})],
+             ("derive", "derive", "derive", {}),
+             ("kg", "kg", "kg", {"of": "axis"})],
     "entry": [("label", "line", None, {}),
               ("spellings", "strings", None, {}),
               ("definition", "text", "definitions", {}),
@@ -887,7 +887,28 @@ _SOURCE = {"spec": spec_module.Spec, "group": spec_module.Group,
            "plan_field": spec_module.Spec, "works": spec_module.Spec}
 
 
-def form() -> dict:
+def kg_keys(profile=None) -> dict:
+    """{"field": [...], "axis": [...], "why": None or the reason none are
+    known}: the keys of a `kg` block the profile's graph writer reads, each
+    {"key", "kind", "help"} (`KG_KEYS` of its kg.py). A key not listed is
+    one the writer does not name; the page keeps it and shows it greyed."""
+    from ..profile import active_profile
+    profile = profile or active_profile()
+    if profile is None:
+        return {"field": [], "axis": [], "why": "no profile is active"}
+    try:
+        declared = profile.component("kg", "KG_KEYS")
+    except Exception as exc:         # a writer that does not import
+        return {"field": [], "axis": [], "why": f"the writer of "
+                f"{profile.name} cannot be loaded: {exc}"}
+    if not isinstance(declared, dict):
+        return {"field": [], "axis": [],
+                "why": f"the writer of {profile.name} names no keys"}
+    return {"field": list(declared.get("field", [])),
+            "axis": list(declared.get("axis", [])), "why": None}
+
+
+def form(profile=None) -> dict:
     """The form of each kind of node, {kind: [{"key", "widget", "help",
     ...}]}: the keys `spec.py` reads, each with the comment the code writes
     at its field. A key that is not here is one the form does not know; the
@@ -907,4 +928,5 @@ def form() -> dict:
     for kind, attribute in (("plan_field", "plan_fields"),
                             ("works", "works")):
         out[kind][0]["about"] = _comments(spec_module.Spec).get(attribute, "")
+    out["kg_keys"] = kg_keys(profile)
     return out

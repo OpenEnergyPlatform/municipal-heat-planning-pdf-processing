@@ -16,3 +16,6 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 
 <!-- with: headings -->
 "headings" sind die Überschriften des Plans bis zur Stelle des Werts, die eigene zuletzt. Nimm die Wörter des Plans auch aus ihnen.
+
+<!-- with: before -->
+"before" sind die Sätze, mit denen für diesen Wert schon gesucht wurde, ohne dass die Antwort gefunden wurde. Schreib einen anderen Satz: mit anderen Wörtern des Plans und so, wie die Antwort an einer anderen Stelle des Plans stehen könnte, etwa in einer Tabelle statt im Text.

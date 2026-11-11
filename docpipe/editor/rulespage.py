@@ -40,6 +40,14 @@ COST = {
              "written from the stored harvest; no model is asked.",
 }
 
+# The form the page gives each kind of rule (app.js `ruleInput`); no kind is
+# typed as JSON. `rows` is a table with + and -, `pair` a two-column table,
+# `bounds` two number fields.
+FORMS = {"whole": "number", "number": "number", "switch": "checkbox",
+         "choice": "select", "text": "line", "chars": "line",
+         "texts": "lines", "map": "pairs", "table": "rows",
+         "range": "bounds"}
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -81,7 +89,7 @@ def view(profile, tab: str, own_raw: Optional[bytes], shown) -> dict:
     return {"tab": tab, "file": shown(rule_files.path_of(profile)),
             "exists": own_raw is not None,
             "base": sha256(own_raw) if own_raw is not None else None,
-            "whole": below is None, "rules": out,
+            "whole": below is None, "rules": out, "forms": FORMS,
             "cost": COST.get(tab, ""), "known": len(known)}
 
 

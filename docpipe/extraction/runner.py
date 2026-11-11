@@ -41,6 +41,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import argparse
+import contextvars
 import functools
 import hashlib
 import json
@@ -1305,6 +1306,16 @@ def anchor_targets(spec: Spec) -> list:
             if t[0] not in (PARAMETER_ANCHOR, UNIT_ANCHOR) or t[3]]
 
 
+# What a field's sentence request may carry (`phrase_payload`).
+PHRASE_KEYS = ("label", "description", "names", "document", "frame")
+
+
+def phrase_told(prompt) -> str:
+    """The system prompt a field's sentence request is told, every part of
+    *prompt* it may carry (`PHRASE_KEYS`)."""
+    return thread_map.cut(prompt).system(PHRASE_KEYS).text
+
+
 def phrase_payload(parameter, context: Optional[dict] = None,
                    frame: Optional[dict] = None) -> dict:
     """What a phrase request is written from: the parameter's label and
@@ -1352,7 +1363,7 @@ def make_seek_probes(context_of: Optional[Callable] = None,
     """probes(parameter, document_id) -> the sentences a plan's passages
     are ranked with for a parameter, which sets the order it reads them in,
     and the search after an open coordinate goes with where its answer
-    wrote none (`addressed.Orders`, `addressed.Reader.search`).
+    wrote none (`addressed.Orders`, `engine.Engine.box_order`).
 
     Every parameter gets a sentence written for this document by the model,
     from the parameter's label, description and list names and from what
@@ -1484,8 +1495,13 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     # group of 64 plans took half an hour with the GPUs waiting.
     from concurrent.futures import ThreadPoolExecutor
     out: dict = {}
+    # Each in the context of the caller: the box of the flow asking goes
+    # with it into the trace (`addressed.ASKING`).
+    asked = [(contextvars.copy_context(), parameter)
+             for parameter in spec.parameters]
     with ThreadPoolExecutor(max_workers=max(len(spec.parameters), 1)) as pool:
-        for uri, phrase in pool.map(one, spec.parameters):
+        for uri, phrase in pool.map(lambda job: job[0].run(one, job[1]),
+                                    asked):
             if phrase:
                 out[uri] = phrase
     return out
@@ -1774,11 +1790,13 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
             reply = response.choices[0]
             usage = getattr(response, "usage", None)
             _observe_usage(usage)
+            box = addressed_map.asking_box()
             trace.event(f"{where}_ask", document_id, attempt=attempt,
                         ms=int((time.time() - started) * 1000),
                         prompt_tokens=getattr(usage, "prompt_tokens", None),
                         completion_tokens=getattr(usage, "completion_tokens",
-                                                  None), **noted)
+                                                  None),
+                        **({"box": box} if box else {}), **noted)
             answer = _loads_object(reply.message.content)
             missing = _lacking(answer, shape)
             if isinstance(answer, dict) and missing is None:
@@ -1818,7 +1836,10 @@ def run_each(jobs: list, run: Callable) -> list:
     jobs = list(jobs)
     if AHEAD is None or len(jobs) < 2:
         return [run(job) for job in jobs]
-    futures = [AHEAD.submit(run, job) for job in jobs]
+    # Each job runs in the context of its caller: the box of the flow
+    # asking (`addressed.ASKING`) goes with it into the trace.
+    futures = [AHEAD.submit(contextvars.copy_context().run, run, job)
+               for job in jobs]
     try:
         return [future.result() for future in futures]
     except BaseException:
@@ -1975,7 +1996,7 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
         frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
         budget=pieces, shares=shares, per_request=per_request,
         context=context, numbers=NUMBERS,
-        arrangement=flow_map.arrangement(profile))
+        flow=flow_map.tree_of(profile))
 
 
 class Persistent:
@@ -2028,9 +2049,12 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
         transcribe, Path(out) / "transcripts", fingerprint,
         lambda source: addressed_map.image_key(image_path_of(source,
                                                              image_root)))
-    # What writes the sentences the orders are made with: an order kept
-    # from sentences written otherwise is made again.
-    written = f"document:{prompts.load(PHRASE_PROMPT_ID, profile).sha256}"
+    # What writes the sentences the orders are made with: the part of the
+    # phrase prompt a field's sentence is told (`phrase_told`). An order
+    # kept from sentences written otherwise is made again; a part told only
+    # to the sentence of one coordinate's search changes no order.
+    written = "document:" + hashlib.sha256(phrase_told(prompts.load(
+        PHRASE_PROMPT_ID, profile)).encode("utf-8")).hexdigest()
     orders = addressed_map.Orders(order, seek, Path(out) / "survey",
                                   trace=trace.event, written=written)
     numbers = take_flow(profile)
@@ -2043,8 +2067,7 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
                                      seek, rerank, context_of),
         lambda document_id: every(document_id, set()),
         spec_for=spec_for, transcripts=transcripts, orders=orders,
-        numbers=numbers, each=run_each, trace=trace.event,
-        arrangement=flow_map.arrangement(profile))
+        numbers=numbers, each=run_each, trace=trace.event)
 
 
 def frame_slots_of(spec: Spec) -> list:
@@ -2487,11 +2510,12 @@ def _asked(stage: str, document_id, response, *, attempt: int,
     (`stats.from_traces`), so no kind of request goes uncounted (owner
     decision 2026-11-05)."""
     usage = getattr(response, "usage", None)
+    box = addressed_map.asking_box()
     trace.event(f"{stage}_ask", document_id, attempt=attempt,
                 ms=int((time.time() - started) * 1000),
                 prompt_tokens=getattr(usage, "prompt_tokens", None),
                 completion_tokens=getattr(usage, "completion_tokens", None),
-                **noted)
+                **({"box": box} if box else {}), **noted)
 
 
 def log_usage(budget: Optional[int] = None) -> None:
@@ -2764,7 +2788,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     open_questions = profile.component("compute", "questions")
     if open_questions is None or code_rounds() < 1 \
             or not code_exec.is_enabled() \
-            or not flow_map.arrangement(profile).on("compute"):
+            or not flow_map.compute_on(flow_map.tree_of(profile)):
         return None
     same = profile.component("compute", "same")
     try:
@@ -3005,9 +3029,16 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             return tried.refusals[0]["reason"] if tried.refusals else None
 
         started = time.time()
-        asked = [(question, pool.submit(ask, question, items,
-                                        report.document_id, stop, check))
-                 for question in questions]
+        # Each question in the context of the compute box of the flow, so
+        # that its requests name it in the trace (`addressed.ASKING`).
+        computing_box = next((node.get("id") for node in flow_map.tree_of(
+            profile) if isinstance(node, dict)
+            and node.get("box") == "compute"), None)
+        with addressed_map.asking(addressed_map.Asking(computing_box)):
+            asked = [(question, pool.submit(
+                contextvars.copy_context().run, ask, question, items,
+                report.document_id, stop, check))
+                for question in questions]
         made: list = []
         for question, future in asked:
             outcome, claim, runs, noted = future.result()

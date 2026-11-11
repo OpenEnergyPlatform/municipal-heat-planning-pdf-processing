@@ -186,8 +186,7 @@ class SurveyedHarvest:
                  transcripts: Optional[Callable] = None,
                  orders: Optional[Callable] = None,
                  numbers=None,
-                 each: Optional[Callable] = None, trace=None,
-                 arrangement=None):
+                 each: Optional[Callable] = None, trace=None):
         self.spec = spec
         self.make_reader = make_reader
         self.passages_of = passages_of
@@ -197,9 +196,6 @@ class SurveyedHarvest:
         self.orders = orders
         self.numbers = numbers or flow_map.default()
         self.chunk_units = int(self.numbers.piece_lines)
-        # Which steps of the flow are off: what the document settles, the
-        # sentences its fields' pieces are ordered with.
-        self.arrangement = arrangement or flow_map.arrangement(None)
         self.each = each
         self.trace = trace
         self._made: dict = {}
@@ -225,18 +221,11 @@ class SurveyedHarvest:
                 return self._plans[document_id]
         spec = self.spec_for(document_id)
         sources = continued(self.passages_of(document_id))
-        figures = [s for s in sources if s.owner_kind == "figure"]
-        lines, asked = {}, 0
-        if self.transcripts is not None and figures:
-            lines, asked = self.transcripts(document_id, figures, self.each)
-        plan = Plan(document_id, sources, lines, numbers=self.numbers)
-        counts = Counts()
-        if asked:
-            counts.ask("transcribe", asked)
-        reader = self.reader_of(spec)
-        reader.lists_of(plan)
-        if self.arrangement.on("settled"):
-            reader.settled(plan, counts)
+        # The document as the drawing of the flow prepares it: its figures
+        # transcribed, its pieces cut, its lists, what it settles
+        # (`engine.Engine.plan`).
+        plan, counts = self.reader_of(spec).engine.plan(
+            document_id, sources, self.transcripts, self.each, self.numbers)
         with self._lock:
             self._plans[document_id] = (plan, counts)
             while len(self._plans) > PLANS_KEPT:
@@ -287,12 +276,15 @@ class SurveyedHarvest:
         else:
             read_in = sorted({c for got in chunks.values() for c in got},
                              key=lambda c: plan.position[c.key])
-        order_of = (self.orders(plan, located, self.chunk_units, scope,
-                                read_in)
-                    if self.orders is not None and located
-                    and self.arrangement.on("sentences") else {})
-        reads = self.reader_of(spec)(plan, parameters, chunks, counts,
-                                     order_of)
+        # The order of each field's pieces where the drawing orders them
+        # (its box `sentences`), kept under the harvest.
+        order_fields = None
+        if self.orders is not None:
+            def order_fields(fields_: list) -> dict:
+                return self.orders(plan, fields_, plan.cut.key(), scope,
+                                   read_in)
+        reads = self.reader_of(spec).engine.read(
+            plan, parameters, chunks, counts, None, order_fields)
         if self.halted():
             return None
         derive_left(reads)

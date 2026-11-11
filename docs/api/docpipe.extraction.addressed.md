@@ -61,6 +61,28 @@ Author: Felix Vossel
 
 ## Classes
 
+### Asking
+
+```python
+@dataclass
+class Asking
+```
+
+What a box of the flow asks with (`engine.Engine`): its id, which
+every request it sends carries in the trace (`box`); the id of the box
+that asks whether a find of another passage speaks about the value
+(`about`), None where none follows the question; *refused(Found)* ->
+(reason, sentence) of the first own check that refuses a find, None
+where every check lets it be; how often an answer that did not hold is
+asked again, None for the flow's number.
+
+Fields:
+
+- `box: Optional[str] = None`
+- `about: Optional[str] = None`
+- `refused: Optional[Callable] = None`
+- `follow_ups: Optional[int] = None`
+
 ### Found
 
 ```python
@@ -212,7 +234,8 @@ entries its wordings were read as, and its lists of names.
 
 ```python
 def __init__(self, document_id: int, sources: list, transcripts: dict,
-             chunk_units: Optional[int] = None, *, numbers=None)
+             chunk_units: Optional[int] = None, *, numbers=None,
+             cut: Optional[Cut] = None)
 ```
 
 #### Plan.pieces
@@ -376,8 +399,26 @@ def __init__(self, spec, asks: Asks, order: Callable, *,
              shares: Optional[dict] = None,
              per_request: Optional[int] = None,
              context: Optional[Callable] = None, numbers=None,
-             arrangement=None)
+             flow: Optional[list] = None)
 ```
+
+#### Reader.engine
+
+```python
+@property
+def engine(self)
+```
+
+The engine that does what the drawing says with this reading.
+
+#### Reader.follow_ups
+
+```python
+def follow_ups(self) -> int
+```
+
+How often an answer that did not hold is asked again: the box
+asking's own number, else the flow's.
 
 #### Reader.lists_of
 
@@ -389,26 +430,6 @@ The lists of names a document builds while it is read: its
 scenarios (a field or coordinate the spec merges) and its works
 (where the profile keeps them), the publication itself the first
 work.
-
-#### Reader.finds_of
-
-```python
-def finds_of(self, plan: Plan, located: list, pieces_of: Callable,
-             order_of: Optional[dict], counts: Counts) -> list
-```
-
-[Read] of the fields *located* in their pieces (`find`), one per
-field and passage, the pieces of each field in its order.
-
-#### Reader.coordinates_of
-
-```python
-def coordinates_of(self, plan: Plan, reads: list,
-                   counts: Counts) -> None
-```
-
-Every value of *reads* asked its coordinates, side by side;
-each Read's claims become the rows they came to.
 
 #### Reader.find
 
@@ -465,7 +486,8 @@ it.
 
 ```python
 def shown_order(self, plan: Plan, sentences: list, pieces: list,
-                budget: Optional[int] = None) -> list
+                budget: Optional[int] = None,
+                shares: Optional[dict] = None) -> list
 ```
 
 The pieces a search for *sentences* shows, in the order it shows
@@ -474,36 +496,21 @@ the vector search finds best, the *budget* best by kind
 (`budgeted`), ordered once by the reranker with the same
 sentences.
 
-#### Reader.ask_once
+#### Reader.ask_window
 
 ```python
-def ask_once(self, plan: Plan, field_: dict, sentences: list,
-             counts: Counts, uri: str, *, numbers: bool = False,
-             budget: Optional[int] = None, listed=None,
-             until_held: bool = False) -> tuple
+def ask_window(self, plan: Plan, field_: dict, batch: list,
+               counts: Counts, uri: str, *, numbers: bool = False,
+               listed=None, title_page: bool = False) -> tuple
 ```
 
-([Found], lost) of a field asked once of the document
-(`docfield`): the title page, then the pieces a search finds best
-for *sentences* (`shown_order`, *budget* of them), `per_request` a
-request, every find that holds kept; with *until_held* those of the
-first request that finds one, the rest of the plan after the budget
-(what the plan settles, `settled`). *listed* is the field's list
+([Found] that hold, lost) of one request of a field asked over
+pieces of the document (`docfield`, owner decision 2026-11-08):
+the title page where *title_page*, the pieces *batch* each under a
+letter of its own; what does not hold is asked again with its
+reason (as often as the flow says). *listed* is the field's list
 (`listing`), whose entry a find names. *lost* is CUT or NO_ANSWER
-where a request came to nothing and nothing was found, else
-None.
-
-#### Reader.docfield
-
-```python
-def docfield(self, plan: Plan, parameter, counts: Counts) -> list
-```
-
-[Read] of a field the document has once (owner decision
-2026-11-08: asked once per document, never per piece), one per
-passage a value of it was read in, each value asked its
-coordinates; a field nothing came of is a Read without values,
-unread with its reason where a request came to nothing.
+where the request came to nothing, else None.
 
 #### Reader.settled
 
@@ -511,11 +518,8 @@ unread with its reason where a request came to nothing.
 def settled(self, plan: Plan, counts: Counts) -> None
 ```
 
-What the plan settles for all its values and its own years, each
-asked once in the form of a document's field (owner decision
-2026-11-08): the settings' lines are shown under `F` with every
-value's coordinates, the years are the plan's base and target years
-(`pipeline.named_years`).
+What the plan settles for all its values and its own years, as
+the drawing of the flow asks them (`engine.Engine.prepare`).
 
 #### Reader.entry
 
@@ -549,20 +553,6 @@ None where no answer came. Each name is asked once per document and
 work. A new entry keeps *work_read*, how the value it is read for
 read its work.
 
-#### Reader.coordinates
-
-```python
-def coordinates(self, plan: Plan, read: Read, row: Row,
-                counts: Counts) -> list
-```
-
-[*row* and the rows made beside it], each coordinate of the
-spec asked on its own in the order of the groups (owner decision
-2026-11-07); a coordinate that reads the value as no value of its
-field (`fields.kept`) closes those after it (`out_of_slice`). A
-value that is a name of the document's list is that entry
-(`named_value`).
-
 #### Reader.coordinate
 
 ```python
@@ -570,13 +560,36 @@ def coordinate(self, plan: Plan, read: Read, row: Row, group, slot,
                counts: Counts, clone: Callable) -> list
 ```
 
-One coordinate of one value (`coord`), [the rows made beside
-it]: its own place first; a 0 then, unless only its own passage can
-say it, the pieces beside it and a search with the sentence of how
-the plan would print it (`phrase`); a year still open the plan's
-years. The work of a value is the work of the line it stands in,
-else asked as an entry of the document's list of works, and never
-searched (`work_coordinate`, owner decisions 2026-11-09).
+One coordinate of one value as the drawing's frame of
+coordinates asks it (`engine.Engine.coordinate`): [the rows made
+beside it].
+
+#### Reader.coord_payload
+
+```python
+def coord_payload(self, plan: Plan, read: Read, row: Row,
+                  slot) -> tuple
+```
+
+(Shown, payload, noted) of what every request about one
+coordinate of a value shows: the value's place (`show_value`), the
+field, the question and what the value has read (`known`); the
+payload None where the value has no place.
+
+#### Reader.ask_own_place
+
+```python
+def ask_own_place(self, plan: Plan, read: Read, row: Row, slot,
+                  counts: Counts, clone: Callable) -> tuple
+```
+
+(answered, rows made, payload, noted) of a coordinate asked at its
+value's own place (`coord`): its line with the head of its table or
+the sentences beside it, the headings up to it, the title page and
+the plan's settings; the answer an address and words, or 0. What
+does not hold is asked again with its reason, then stays
+`unbacked`. Not answered where the value has no place or no answer
+came.
 
 #### Reader.several
 
@@ -685,38 +698,18 @@ that names the plan's word for its state, and the year of the list
 it means; read where the words stand in that line and the year is
 one of the plan's (`pipeline.named_year`).
 
-#### Reader.search
-
-```python
-def search(self, plan: Plan, read: Read, row: Row, slot, payload: dict,
-           counts: Counts, clone: Callable, noted: dict,
-           steps: tuple = ("search_sentence", "beside", "search")) \
-        -> list
-```
-
-A coordinate its value's own place does not state (owner
-decisions 2026-11-08 and 2026-11-09): the pieces right before and
-after the value's, then the pieces a search finds best for a
-sentence of how the plan would print the answer (`sentence`), the
-run's budget of them by kind (`shown_order`), `per_request` at a
-time, the pieces a request fetches itself first in the next, until
-a find holds, one does not hold after its follow-up (`unbacked`),
-or nothing is left to show: `unstated` where every piece of the
-plan was shown, `exhausted` where the budget left some unshown.
-*steps* are the steps of the search in the flow's order, those that
-are off left out where they stand (`arrangement`).
-[the rows made].
-
 #### Reader.search_sentence
 
 ```python
 def search_sentence(self, plan: Plan, read: Read, row: Row, slot,
-                    counts: Counts) -> str
+                    counts: Counts, before: Optional[list] = None) -> str
 ```
 
 The sentence a search goes with (`sentence`); a question where
 the rule `question_as_sentence` takes none is the field's own
-sentence instead, and a question taken is counted.
+sentence instead, and a question taken is counted. *before* are the
+sentences of the rounds before, shown where a new one is asked
+(`phrase` with `before`).
 
 #### Reader.field_sentence
 
@@ -727,25 +720,11 @@ def field_sentence(self, plan: Plan, read: Read, slot) -> str
 The field's own search sentence, else its question or name: what
 a search goes with where no sentence was written for it.
 
-#### Reader.rounds
-
-```python
-def rounds(self, plan: Plan, read: Read, row: Row, slot, payload: dict,
-           counts: Counts, clone: Callable, noted: dict, seen: set,
-           numbers: bool, more_of: Callable, first: list,
-           window: tuple, shows: str) -> tuple
-```
-
-(rows made, done) of one step of a search: *first*, then the
-pieces *more_of()* leaves unseen, `per_request` at a time, each
-request's own fetches in the next, until a find holds or does not
-hold after its follow-up (done) or nothing is left.
-
 #### Reader.sentence
 
 ```python
 def sentence(self, plan: Plan, read: Read, row: Row, slot,
-             counts: Counts) -> str
+             counts: Counts, before: Optional[list] = None) -> str
 ```
 
 The sentence a search for one coordinate goes with: as the plan
@@ -968,6 +947,21 @@ def __init__(self, order: Callable, probes: Callable,
 ```
 
 ## Functions
+
+### asking
+
+```python
+@contextlib.contextmanager
+def asking(what: Asking)
+```
+
+### asking_box
+
+```python
+def asking_box() -> Optional[str]
+```
+
+The id of the box asking now, None outside a box.
 
 ### years_in
 
@@ -1254,6 +1248,26 @@ def show_value(plan: Plan, claim: dict, headings: bool = True) -> tuple
 shows: its line with its table's title and head, or the sentences
 before and after it; the headings up to it, the title page and the
 plan's settings; the value as its words and its address.
+
+### about_box
+
+```python
+def about_box() -> Optional[str]
+```
+
+The id of the box that asks of a find from another passage whether
+it speaks about the value, None where the question asking now has
+none after it.
+
+### own_check
+
+```python
+def own_check(got: Found) -> Optional[tuple]
+```
+
+(reason, sentence) of the own check of the box asking now that
+refuses *got*, None where none does (owner decision 2026-11-10: an own
+check only refuses; its reason is check:\<name>).
 
 ### settings_of
 

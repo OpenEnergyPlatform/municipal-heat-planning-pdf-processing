@@ -31,6 +31,8 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import dataclasses
+
 import argparse
 import hashlib
 import json
@@ -56,6 +58,7 @@ from .. import upstream
 from ..extraction import flow as flow_files
 from ..extraction import trace as trace_files
 from . import flow as flow_view
+from . import flowtry
 from . import (graphpage, measured, phrases, prompts, rulespage,
                sourcespage, specs, trying)
 from . import requests as recorded
@@ -80,7 +83,10 @@ SECRET_SETTINGS = ("base_url", "api_key")
 # what is served at "/": path -> (file in WEB, content type)
 PAGES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-         "/style.css": ("style.css", "text/css; charset=utf-8")}
+         "/flow.js": ("flow.js", "text/javascript; charset=utf-8"),
+         "/forms.js": ("forms.js", "text/javascript; charset=utf-8"),
+         "/style.css": ("style.css", "text/css; charset=utf-8"),
+         "/flow.css": ("flow.css", "text/css; charset=utf-8")}
 
 
 # -- the one file guard --------------------------------------------------------
@@ -310,6 +316,8 @@ class App:
             "/api/flow/check": ("POST", self._flow_check),
             "/api/flow/save": ("POST", self._flow_save),
             "/api/flow/measured": ("POST", self._flow_measured),
+            "/api/flow/try": ("POST", self._flow_try),
+            "/api/flow/documents": ("GET", self._flow_documents),
             "/api/rules": ("GET", self._rules),
             "/api/rules/check": ("POST", self._rules_check),
             "/api/rules/save": ("POST", self._rules_save),
@@ -711,8 +719,7 @@ class App:
     def _flow_check(self, query, body) -> dict:
         own, raw = self._flow_file()
         report = flow_view.judge(self.profile, raw, body.get("numbers"),
-                                 self.shown(own), body.get("order"),
-                                 body.get("off"))
+                                 self.shown(own), body.get("tree"))
         report.pop("text", None)        # the page gets the diff
         return report
 
@@ -720,12 +727,58 @@ class App:
         own, raw = self._flow_file()
         report, written, remove = flow_view.save(
             self.profile, raw, body.get("numbers"), body.get("base"),
-            self.shown(own), body.get("order"), body.get("off"))
+            self.shown(own), body.get("tree"))
         if written is not None:
             self.files.write(own, written)
         elif remove:
             self.files.remove(own)
         return report
+
+    def _corpus_db(self, body: Optional[dict] = None) -> Optional[Path]:
+        db = (body or {}).get("db") or getattr(self.profile, "db_path", None)
+        return Path(db) if db and Path(db).is_file() else None
+
+    def _flow_documents(self, query, body) -> dict:
+        """The documents of the corpus database a try can read, None where
+        the page knows no database."""
+        db = self._corpus_db()
+        return {"db": str(db) if db else None,
+                "documents": flowtry.documents(db) if db else []}
+
+    def _flow_try(self, query, body) -> dict:
+        """The drawing on the page tried on one document with made-up
+        answers, nothing sent (`flowtry.run`)."""
+        tree = body.get("tree")
+        if tree is None:
+            tree = flow_files.load(self.profile).tree
+        numbers = flow_files.in_effect(self.profile)
+        edited = body.get("numbers")
+        if isinstance(edited, dict):
+            good = {k: v for k, v in edited.items()
+                    if flow_files.problem(k, v) is None}
+            numbers = dataclasses.replace(numbers, **good)
+        if not self.spec_path:
+            raise _Refusal(400, "this profile has no extraction spec")
+        from ..extraction import runner as runner_map
+        spec = runner_map.load_spec(specs.parse(
+            self.files.read(self.spec_path)))
+        document = body.get("document")
+        if document is None:
+            sources = flowtry.example_sources(spec)
+        else:
+            db = self._corpus_db(body)
+            if db is None:
+                raise _Refusal(400, "no corpus database: try the example "
+                                    "plan, or give \"db\"")
+            pages = body.get("pages")
+            sources = flowtry.sources_of(
+                db, int(document), tuple(pages) if isinstance(
+                    pages, list) and len(pages) == 2 else None)
+        try:
+            return flowtry.run(self.profile, spec, tree, numbers, sources,
+                               body.get("mode") or "nothing")
+        except flowtry.Refused as exc:
+            raise _Refusal(400, str(exc))
 
     def _facts(self, name: str) -> dict:
         """What the requests of the trace *name* say (`measured.facts`),

@@ -83,8 +83,7 @@ def __init__(self, spec, make_reader: Callable, passages_of: Callable,
              transcripts: Optional[Callable] = None,
              orders: Optional[Callable] = None,
              numbers=None,
-             each: Optional[Callable] = None, trace=None,
-             arrangement=None)
+             each: Optional[Callable] = None, trace=None)
 ```
 
 #### SurveyedHarvest.reader_of

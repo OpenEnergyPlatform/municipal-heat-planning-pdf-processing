@@ -35,13 +35,15 @@ from ..extraction.spec import PLAN_FIELDS
 
 # The notes that say which value's search a request belongs to.
 SEARCH = ("doc", "parameter", "coordinate", "owner", "value")
-# What a request of a search shows (`addressed.Reader.search`).
+# What a request of a search shows, its trace's `shows` (`engine.SearchSupply`).
 FOUND, NEAR = "found", "near"
 
 
 def step_of(request: dict) -> Optional[str]:
-    """The step of the flow a recorded request was asked in, by the id the
-    default profile's flow file gives it; None for a request of no step."""
+    """The box of the default drawing a recorded request that names no box
+    of its own (`box`, written since 2026-11-11) was asked in, by its kind;
+    None for a request of no box. A follow-up is its question's, which
+    `facts` gives by the kind it follows."""
     kind = request.get("kind")
     if kind == "phrase":
         return "search_sentence" if request.get("coordinate") else "sentences"
@@ -52,16 +54,17 @@ def step_of(request: dict) -> Optional[str]:
         return "beside" if request.get("shows") == NEAR else "search"
     if kind == "list":
         return "plan_years" if request.get("step") == "plan_years" \
-            else "entry"
+            else "quantity"
     return {"transcribe": "figures", "work": "works", "find": "finds",
             "coord": "own_place", "check": "about", "names": "name",
-            "follow": "follow_up", "compute": "compute"}.get(kind)
+            "compute": "compute"}.get(kind)
 
 
-# Every id `step_of` can give, for the test that holds them to the flow file.
+# Every id `step_of` can give, for the test that holds them to the default
+# drawing.
 STEPS = ("figures", "sentences", "settled", "works", "document_fields",
          "finds", "own_place", "beside", "search_sentence", "search", "about",
-         "plan_years", "entry", "name", "follow_up", "compute")
+         "plan_years", "quantity", "name", "compute")
 
 
 def names_place(answer) -> bool:
@@ -185,7 +188,8 @@ def facts(requests: list) -> dict:
     """What the requests of one trace say, counted once whatever the
     numbers asked about:
 
-    - "requests": how many, and "steps": how many per step (`step_of`);
+    - "requests": how many, and "steps": how many per box of the flow
+      (the box a request names, else `step_of`);
     - "searches": one entry per search of a value's coordinate, in order:
       {"requests", "after" (pieces of its budget shown when it ended),
       "found" (its last request's answer names a place), "noted" (its
@@ -207,7 +211,13 @@ def facts(requests: list) -> dict:
     follow: collections.Counter = collections.Counter()
     lists: list = []
     for request in requests:
-        step = step_of(request)
+        # Since 2026-11-11 a request names the box of the flow that asked it
+        # (`box`); an older one is counted at the box of the default
+        # drawing its kind stands for, a follow-up at its question's.
+        step = request.get("box") or step_of(
+            {**request, "kind": request.get("asked")}
+            if request.get("kind") == "follow" and request.get("asked")
+            else request)
         if step is not None:
             steps[step] += 1
         kind = request.get("kind")
@@ -278,11 +288,10 @@ def _listed(counts: dict) -> str:
 
 
 def says(found: dict, numbers: dict) -> dict:
-    """{step: [sentences]} of what the traces say about the numbers of the
-    flow at the values *numbers* gives them, each sentence at the step (its
-    id in the flow file) whose requests it counts. A number that is no
-    whole number there says nothing, and a step the traces say nothing
-    about has no entry."""
+    """{number: [sentences]} of what the traces say about the numbers of the
+    flow at the values *numbers* gives them, each sentence at the named
+    number it measures. A number that is no whole number there says
+    nothing, and a number the traces say nothing about has no entry."""
     def whole(name: str) -> Optional[int]:
         value = numbers.get(name)
         return value if isinstance(value, int) \
@@ -308,16 +317,16 @@ def says(found: dict, numbers: dict) -> dict:
                 f"within {int(statistics.median(ended)):,}; "
                 f"{after(ended, budget):,} came after more than "
                 f"{budget:,}.")
-        out["search"].append(sentence)
+        out["search_pieces"].append(sentence)
     plain, listed = found["docfields"]["plain"], found["docfields"]["listed"]
     if budget is not None and plain:
-        out["document_fields"].append(
+        out["search_pieces"].append(
             f"For fields the document has once, "
             f"{_count(len(plain), 'request')} found something; "
             f"{after(plain, budget):,} of them after more than {budget:,} "
             f"shown pieces.")
     if budget is not None and factor is not None and listed:
-        out["document_fields"].append(
+        out["listed_field_factor"].append(
             f"For fields the document has once that have a list, "
             f"{_count(len(listed), 'request')} found something; "
             f"{after(listed, budget * factor):,} of them after more than "
@@ -325,13 +334,13 @@ def says(found: dict, numbers: dict) -> dict:
             f"{factor:,}).")
     if whole("search_per_request") is not None and searches:
         sent = sum(search["requests"] for search in searches)
-        out["search"].append(
+        out["search_per_request"].append(
             f"The {_count(len(searches), 'search', 'searches')} sent "
             f"{_count(sent, 'request')}, {sent / len(searches):.1f} each on "
             f"average.")
     if whole("follow_ups") is not None and found["requests"]:
         asked = sum(found["follow"].values())
-        out["follow_up"].append(
+        out["follow_ups"].append(
             f"{_count(asked, 'answer')} did not hold and "
             f"{'was' if asked == 1 else 'were'} asked again"
             + (f": {_listed(found['follow'])}." if asked else "."))
@@ -355,7 +364,7 @@ def says(found: dict, numbers: dict) -> dict:
     meanings = whole("list_meanings")
     if meanings is not None and found["lists"]:
         lists = found["lists"]
-        out["entry"].append(
+        out["list_meanings"].append(
             f"{_count(len(lists), 'request')} asked for the entry of a "
             f"list; {after(lists, meanings):,} of the lists shown had more "
             f"than {meanings:,} entries, which are shown by their names "

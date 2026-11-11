@@ -308,7 +308,7 @@ function renderHeader() {
     st.harvest ? h('span', { class: 'meta', title: st.harvest }, 'harvest: ', st.harvest_documents == null ? '' : st.harvest_documents + ' documents') : null,
     (st.changed && st.changed.length) ? h('span', { class: 'meta changed', title: st.changed.join('\n') }, 'uncommitted: ' + st.changed.join(', ')) : null,
     h('span', { class: 'tabs' }, (st.tabs || ['spec', 'prompts']).map(t => h('button', { class: t === S.tab ? 'on' : '',
-      text: t.charAt(0).toUpperCase() + t.slice(1) + ((t === 'spec' ? S.dirty : t === 'flow' ? flowDirty() : t === 'sources' ? sourcesDirty()
+      text: t.charAt(0).toUpperCase() + t.slice(1) + ((t === 'spec' ? S.dirty : t === 'flow' ? FlowTab.dirty() : t === 'sources' ? sourcesDirty()
         : t === 'graph' ? graphDirty() : promptsDirty()) ? ' •' : ''), onclick: () => setTab(t) }))),
     (S.tab === 'spec' || S.tab === 'prompts') ? h('button', { text: 'Rules', title: 'The rules of this tab', onclick: () => openRules(S.tab) }) : null,
     h('span', { class: 'spacer' }),
@@ -447,19 +447,188 @@ function stringsEditor(obj, key, opts) {
   draw();
   return box;
 }
-function widgetJson(f, obj, wrap) {
-  let committed = own(obj, f.key) ? JSON.stringify(obj[f.key], null, 2) : '';
-  const el = h('textarea', { class: 'json', rows: 8, value: committed, spellcheck: 'false' });
-  const err = h('div', { class: 'err', hidden: true });
-  const setErr = m => { err.textContent = m || ''; err.hidden = !m; wrap.classList.toggle('bad', !!m); };
-  el.addEventListener('blur', () => {
-    const t = el.value;
-    if (t === committed) { setErr(''); return; }
-    if (t.trim() === '') { delete obj[f.key]; committed = t; setErr(''); markDirty(); return; }
-    try { obj[f.key] = JSON.parse(t); committed = t; setErr(''); markDirty(); }
-    catch (e) { setErr('JSON error: ' + e.message + ' (the text is kept, nothing is written)'); }
-  });
-  return [el, err];
+/* ---------- forms in place of typed JSON (the conversion is forms.js) ---------- */
+
+const DF = window.DPForms;
+const XSD_TYPES = ['xsd:string', 'xsd:integer', 'xsd:float', 'xsd:decimal', 'xsd:boolean', 'xsd:date', 'xsd:dateTime', 'xsd:gYear'];
+const SHAPES = { loaded: false, lists: { classes: [], predicates: [], prefixes: ['oeo', 'obo', 'mhpo', 'rdfs', 'dc', 'schema'], datatypes: XSD_TYPES } };
+/* a list of names an input offers: the classes and predicates of the shapes where the Graph tab has them; the input stays free text */
+function listFor(name) {
+  let dl = document.getElementById('dl-' + name);
+  if (!dl) { dl = h('datalist', { id: 'dl-' + name }); document.body.append(dl); }
+  put(dl, (SHAPES.lists[name] || []).map(x => h('option', { value: x })));
+  return 'dl-' + name;
+}
+async function loadShapes() {
+  if (SHAPES.loaded) return;
+  SHAPES.loaded = true;
+  try {
+    const d = GR.data || await api('GET', '/api/graph');
+    const classes = new Set(), preds = new Set();
+    for (const c of d.classes || []) { classes.add(c.id); for (const p of c.properties || []) preds.add(String(p.path).replace(/^[^:]*:/, '')); }
+    SHAPES.lists.classes = [...classes]; SHAPES.lists.predicates = [...preds];
+    for (const n of ['classes', 'predicates']) { const dl = document.getElementById('dl-' + n); if (dl) put(dl, SHAPES.lists[n].map(x => h('option', { value: x }))); }
+  } catch (e) { /* no shapes: the inputs stay plain text */ }
+}
+
+/* One form; ctx.edit(path, text) and the structure calls write through to the value and draw it again. */
+function formNode(spec, st, ctx, path) {
+  if (st.odd) return h('div', { class: 'fm-grey', title: 'This value is not in the shape of the form; it is kept as it is.' }, 'kept as it is: ', h('code', { text: typeof st.raw === 'string' ? st.raw : JSON.stringify(st.raw) }));
+  switch (spec.k) {
+    case 'text': {
+      let el;
+      if (spec.choices) {
+        const opts = spec.choices.slice(); if (st.v != null && st.v !== '' && !opts.includes(st.v)) opts.push(st.v);
+        el = h('select', {}, h('option', { value: '', text: '(not set)' }), opts.map(o => h('option', { value: o, text: String(o) })));
+        el.value = st.v == null ? '' : st.v;
+        el.addEventListener('change', () => ctx.edit(path, el.value));
+      } else if (spec.area) {
+        el = h('textarea', { rows: 3, value: DF.textOf(st), spellcheck: 'false' });
+        el.addEventListener('input', () => ctx.edit(path, el.value));
+      } else {
+        el = h('input', { type: 'text', value: DF.textOf(st), spellcheck: 'false', list: spec.list ? listFor(spec.list) : null });
+        el.addEventListener('input', () => ctx.edit(path, el.value));
+      }
+      return el;
+    }
+    case 'number': {
+      const el = h('input', { type: 'number', step: 'any', value: DF.textOf(st) });
+      el.addEventListener('input', () => ctx.edit(path, el.value));
+      return el;
+    }
+    case 'bounds': {
+      const lo = h('input', { type: 'number', step: '1', value: st.lo == null ? '' : String(st.lo), placeholder: 'no bound' });
+      const hi = h('input', { type: 'number', step: '1', value: st.hi == null ? '' : String(st.hi), placeholder: 'no bound' });
+      lo.addEventListener('input', () => ctx.edit(path.concat(['lo']), lo.value));
+      hi.addEventListener('input', () => ctx.edit(path.concat(['hi']), hi.value));
+      return h('div', { class: 'fm-bounds' }, h('label', {}, 'from ', lo), h('label', {}, 'to ', hi));
+    }
+    case 'record': {
+      const known = new Set(spec.fields.map(x => x.key));
+      const grey = st.order.filter(k => !known.has(k));
+      return h('div', { class: 'fm-rec' },
+        spec.fields.map(fld => h('div', { class: 'fm-fld' }, h('label', { title: fld.help || '' }, h('code', { text: fld.key })), fld.help ? h('div', { class: 'help', text: fld.help }) : null,
+          formNode(fld.kind, st.cells[fld.key], ctx, path.concat([fld.key])))),
+        grey.map(k => h('div', { class: 'fm-grey' }, h('code', { text: k }), ' kept untouched: the writer does not name this key.')));
+    }
+    case 'rows': {
+      const item = spec.item;
+      const flat = item.k === 'record' && item.fields.every(x => x.kind.k === 'text' || x.kind.k === 'number');
+      const btns = i => [
+        h('button', { text: '↑', disabled: i === 0, onclick: () => ctx.move(path, i, -1) }),
+        h('button', { text: '↓', disabled: i === st.rows.length - 1, onclick: () => ctx.move(path, i, 1) }),
+        h('button', { class: 'danger', text: '−', title: 'Remove', onclick: () => ctx.remove(path, i) })];
+      const add = h('button', { text: '+ Add', onclick: () => ctx.add(path) });
+      if (flat) {
+        const known = new Set(item.fields.map(x => x.key));
+        const kept = r => r.odd ? [] : r.order.filter(k => !known.has(k));
+        return h('div', {}, st.rows.length ? h('table', { class: 'grid fm-table' },
+          h('tr', {}, item.fields.map(x => h('th', { text: x.key, title: x.help || '' })), h('th')),
+          st.rows.map((r, i) => r.odd ? h('tr', {}, h('td', { colspan: item.fields.length + 1 }, formNode(item, r, ctx, path.concat([i]))))
+            : h('tr', {}, item.fields.map(x => h('td', {}, formNode(x.kind, r.cells[x.key], ctx, path.concat([i, x.key])))),
+              h('td', { class: 'fm-btns' }, btns(i), kept(r).length ? h('span', { class: 'fm-grey', title: 'kept untouched: ' + kept(r).join(', ') }, ' +' + kept(r).length + ' kept') : null)))) : null, add);
+      }
+      return h('div', {}, st.rows.map((r, i) => h('div', { class: 'fm-row' }, h('div', { class: 'fm-rowbody' }, formNode(item, r, ctx, path.concat([i]))), h('div', { class: 'fm-btns' }, btns(i)))), add);
+    }
+    case 'map': {
+      const rows = st.pairs.map((p, i) => {
+        const key = h('input', { type: 'text', value: p.key, spellcheck: 'false', placeholder: 'name' });
+        key.addEventListener('input', () => ctx.edit(path.concat([i, 'key']), key.value));
+        return h('tr', {}, h('td', { class: 'fm-key' }, key), h('td', {}, formNode(spec.value, p.state, ctx, path.concat([i, 'value']))),
+          h('td', { class: 'fm-btns' }, h('button', { class: 'danger', text: '−', title: 'Remove', onclick: () => ctx.removePair(path, i) })));
+      });
+      return h('div', {}, st.pairs.length ? h('table', { class: 'grid fm-table' }, rows) : null, h('button', { text: '+ Add', onclick: () => ctx.addPair(path) }));
+    }
+  }
+  return h('div', { class: 'warn', text: 'no form for ' + spec.k });
+}
+
+/* A value as a form: a state kept beside the object, every edit written through to obj[key] (a key with no value left is removed).
+   `draw(box, root, api)` draws the form; the default draws the whole of it. */
+function formField(obj, key, spec, onChange, draw) {
+  const root = DF.stateOf(spec, obj[key]);
+  const box = h('div', { class: 'fm' });
+  const commit = () => {
+    const v = DF.valueOf(root);
+    if (v === undefined) delete obj[key]; else obj[key] = v;
+    markDirty(); if (onChange) onChange();
+  };
+  const redraw = () => draw ? draw(box, root, api) : put(box, formNode(spec, root, api, []));
+  const api = {
+    edit: (path, text) => { DF.edit(root, path, text); commit(); },
+    add: path => { DF.addRow(root, path); commit(); redraw(); },
+    remove: (path, i) => { DF.removeRow(root, path, i); commit(); redraw(); },
+    move: (path, i, d) => { DF.moveRow(root, path, i, d); commit(); redraw(); },
+    addPair: path => { DF.addPair(root, path); commit(); redraw(); },
+    removePair: (path, i) => { DF.removePair(root, path, i); commit(); redraw(); },
+  };
+  redraw();
+  return { box, root, api, redraw };
+}
+function parameterOf(obj) {
+  return (S.data.parameters || []).find(p => p === obj || (isObj(p.axes) && Object.values(p.axes).includes(obj)));
+}
+
+/* kg: the keys the profile's graph writer reads, as a form; any other key stays and is shown greyed */
+function widgetKg(f, obj) {
+  const kk = S.form.kg_keys || {};
+  const keys = kk[f.of] || [];
+  loadShapes();
+  const ff = formField(obj, f.key, DF.recordOf(keys));
+  const note = keys.length ? null : h('div', { class: 'warn', text: (kk.why || 'The writer names no keys') + '; every key stays as it is.' });
+  return [note, ff.box].filter(Boolean);
+}
+
+/* derive: "derived from [coordinate]", "value [an entry of this coordinate's list]" */
+function widgetDerive(f, obj) {
+  const p = parameterOf(obj);
+  const coords = ['unit'].concat(p && isObj(p.axes) ? Object.keys(p.axes) : []);
+  const voc = isObj(obj.vocabulary) ? obj.vocabulary : {};
+  const spec = { k: 'record', fields: [{ key: 'from', kind: DF.TEXT }, { key: 'value', kind: DF.TEXT }] };
+  const draw = (box, st, api) => {
+    if (st.odd) { put(box, formNode(spec, st, api, [])); return; }
+    const sel = (key, opts, none) => {
+      const cur = st.cells[key].v;
+      const all = opts.slice(); if (cur && !all.some(o => o.value === cur)) all.push({ value: cur, text: cur });
+      const el = h('select', {}, h('option', { value: '', text: none }), all.map(o => h('option', { value: o.value, text: o.text })));
+      el.value = cur == null ? '' : cur;
+      el.addEventListener('change', () => api.edit([key], el.value));
+      return el;
+    };
+    put(box, h('div', { class: 'row2' }, h('label', {}, 'derived from ', sel('from', coords.map(c => ({ value: c, text: c })), '(not derived)')),
+      h('label', {}, 'value ', sel('value', Object.keys(voc).map(k => ({ value: k, text: entryParts(voc[k]).name ? entryParts(voc[k]).name + ' (' + k + ')' : k })), '(choose)'))),
+      st.order.filter(k => k !== 'from' && k !== 'value').map(k => h('div', { class: 'fm-grey' }, h('code', { text: k }), ' kept untouched')));
+  };
+  return formField(obj, f.key, spec, null, draw).box;
+}
+
+/* example: the source as text, the defaults as one row, the rows as a table with a column for value, quote and each coordinate */
+function widgetExample(f, obj) {
+  const p = parameterOf(obj) || obj;
+  const coords = isObj(p.axes) ? Object.keys(p.axes) : [];
+  const numeric = ['float', 'int'].includes(p.value_type || 'float');
+  const holder = h('div');
+  const extra = [];
+  const build = () => {
+    const ex = own(obj, f.key) ? obj[f.key] : undefined;
+    const shown = DF.exampleColumns(coords, ex);
+    const cols = shown.concat(extra.filter(c => !shown.includes(c)));
+    const spec = DF.exampleSpec(cols, DF.defaultKeysOf(coords, ex), numeric);
+    const draw = (box, st, api) => {
+      if (st.odd) { put(box, formNode(spec, st, api, [])); return; }
+      const part = (key, label, help) => h('div', { class: 'fm-fld' }, h('label', {}, h('code', { text: label })), h('div', { class: 'help', text: help }),
+        formNode(spec.fields.find(x => x.key === key).kind, st.cells[key], api, [key]));
+      const offers = DF.exampleOffers(coords).filter(c => !cols.includes(c));
+      put(box, part('source', 'source', 'The passage as the document prints it, plain text.'),
+        part('defaults', 'defaults', 'What every row says unless the row says otherwise.'),
+        part('tuples', 'rows', 'One row per value the passage states: its value, its quote and the coordinates.'),
+        offers.length ? h('select', { onchange: ev => { if (ev.target.value) { extra.push(ev.target.value); build(); } } }, h('option', { value: '', text: '+ column' }), offers.map(c => h('option', { value: c, text: c }))) : null,
+        st.order.filter(k => !['source', 'defaults', 'tuples'].includes(k)).map(k => h('div', { class: 'fm-grey' }, h('code', { text: k }), ' kept untouched')));
+    };
+    put(holder, formField(obj, f.key, spec, null, draw).box);
+  };
+  build();
+  return holder;
 }
 
 function widgetStrings(f, obj, ctx) { return stringsEditor(obj, f.key, { datalist: ctx.datalist }); }
@@ -540,47 +709,45 @@ function widgetQuestions(f, obj) {
   return box;
 }
 
-/* entry_of: {"<coordinate>": "<entry key>"} as two selects; any other shape is edited as JSON */
+/* entry_of: {"<coordinate>": "<entry key>"} as two selects, always; further pairs of the file are kept as they are */
 function vocabOf(c) {
   const p = (S.data.parameters || []).find(x => isObj(x.axes) && own(x.axes, c));
   const ax = p && p.axes[c];
   return isObj(ax) && isObj(ax.vocabulary) ? ax.vocabulary : null;
 }
-function widgetEntryOf(f, obj, wrap) {
-  const cur = obj[f.key];
-  if (own(obj, f.key)) {
-    const ks = isObj(cur) ? Object.keys(cur) : [];
-    if (ks.length !== 1 || typeof cur[ks[0]] !== 'string') return widgetJson(f, obj, wrap);
-  }
+function widgetEntryOf(f, obj) {
   const coords = [];
   for (const g of Object.values(isObj(S.data.groups) ? S.data.groups : {})) {
     for (const c of (isObj(g) && Array.isArray(g.pair) ? g.pair : [])) if (!coords.includes(c) && vocabOf(c)) coords.push(c);
   }
-  let coord = own(obj, f.key) ? Object.keys(cur)[0] : '';
-  if (coord && !coords.includes(coord)) coords.push(coord);
-  const cSel = h('select', {}, h('option', { value: '', text: '(none)' }), coords.map(c => h('option', { value: c, text: c })));
-  const eSel = h('select');
-  cSel.value = coord;
-  const drawEntries = () => {
+  const spec = { k: 'map', value: DF.TEXT };
+  const draw = (box, st, api) => {
+    const pair = st.odd ? null : st.pairs[0];
+    const coord = pair ? pair.key : '';
+    const cOpts = coords.slice(); if (coord && !cOpts.includes(coord)) cOpts.push(coord);
+    const cSel = h('select', {}, h('option', { value: '', text: '(none)' }), cOpts.map(c => h('option', { value: c, text: c })));
+    cSel.value = coord;
     const voc = coord ? vocabOf(coord) || {} : {};
-    const keys = Object.keys(voc);
-    const now = coord && own(obj, f.key) ? obj[f.key][coord] : '';
+    const keys = Object.keys(voc), now = pair && !pair.state.odd ? pair.state.v || '' : '';
     if (now && !keys.includes(now)) keys.push(now);
-    put(eSel, h('option', { value: '', text: coord ? '(choose)' : '' }), keys.map(k => {
+    const eSel = h('select', { disabled: !coord }, h('option', { value: '', text: coord ? '(choose)' : '' }), keys.map(k => {
       const nm = own(voc, k) ? entryParts(voc[k]).name : '';
       return h('option', { value: k, text: nm ? nm + ' (' + k + ')' : k });
     }));
-    eSel.value = now || ''; eSel.disabled = !coord;
+    eSel.value = now;
+    cSel.addEventListener('change', () => {
+      if (st.odd) return;
+      if (!cSel.value) { if (pair) { api.removePair([], 0); return; } }
+      else if (!pair) { api.addPair([]); api.edit([0, 'key'], cSel.value); api.edit([0, 'value'], Object.keys(vocabOf(cSel.value) || {})[0] || ''); }
+      else { api.edit([0, 'key'], cSel.value); api.edit([0, 'value'], Object.keys(vocabOf(cSel.value) || {})[0] || ''); }
+      redrawEntry();
+    });
+    eSel.addEventListener('change', () => { if (pair) api.edit([0, 'value'], eSel.value); });
+    put(box, h('div', { class: 'row2' }, cSel, eSel), st.odd ? null : st.pairs.slice(1).map(p => h('div', { class: 'fm-grey' }, h('code', { text: p.key }), ' kept untouched')));
   };
-  cSel.addEventListener('change', () => {
-    coord = cSel.value;
-    if (!coord) delete obj[f.key];
-    else obj[f.key] = { [coord]: Object.keys(vocabOf(coord) || {})[0] || '' };
-    drawEntries(); markDirty();
-  });
-  eSel.addEventListener('change', () => { if (coord) { obj[f.key] = { [coord]: eSel.value }; markDirty(); } });
-  drawEntries();
-  return h('div', { class: 'row2' }, cSel, eSel);
+  let ff = formField(obj, f.key, spec, null, draw);
+  const redrawEntry = () => ff.redraw();
+  return ff.box;
 }
 
 function renderWidget(f, obj, orig, ctx) {
@@ -594,10 +761,12 @@ function renderWidget(f, obj, orig, ctx) {
     case 'choice': ctl = widgetChoice(f, obj); break;
     case 'number': ctl = widgetNumber(f, obj); break;
     case 'strings': ctl = widgetStrings(f, obj, ctx); break;
-    case 'json': ctl = widgetJson(f, obj, wrap); break;
+    case 'kg': ctl = widgetKg(f, obj); break;
+    case 'derive': ctl = widgetDerive(f, obj); break;
+    case 'example': ctl = widgetExample(f, obj); break;
     case 'units': ctl = widgetUnits(f, obj, orig); break;
     case 'questions': ctl = widgetQuestions(f, obj); break;
-    case 'entry_of': ctl = widgetEntryOf(f, obj, wrap); break;
+    case 'entry_of': ctl = widgetEntryOf(f, obj); break;
     case 'entries': ctl = entriesTable(ctx.refFor ? ctx.refFor(f.key) : null); break;
     default: ctl = h('div', { class: 'warn', text: 'Unknown widget "' + f.widget + '" for this key; it is kept as it is.' });
   }
@@ -1084,7 +1253,7 @@ function promptsDirty() {
   for (const X of P.phs.values()) if (phDirty(X)) return true;
   return false;
 }
-function anyDirty() { return S.dirty || promptsDirty() || flowDirty() || sourcesDirty() || graphDirty() || rulesDirty(); }
+function anyDirty() { return S.dirty || promptsDirty() || FlowTab.dirty() || sourcesDirty() || graphDirty() || rulesDirty(); }
 function dirtySig() {
   const a = [];
   for (const [id, E] of P.eds) if (edDirty(E)) a.push('p:' + id);
@@ -1906,43 +2075,9 @@ function tryNodes(res, listed) {
   return out;
 }
 
-/* ---------- flow tab ---------- */
+/* ---------- shared by the tabs ---------- */
 
-/* State. F.cur holds each number as the page has it: a whole number, or the text typed where that is none (the server
-   refuses it and names the number). All inputs of one number share F.cur[name]; F.ui holds the nodes of the last drawing. */
-const F = {
-  loaded: false, loading: false, data: null, num: {}, cur: {}, report: null,
-  meas: null, counting: false, trace: null, mSeq: 0, mTimer: null, busy: false, dirty: false, ui: null,
-  order: null, off: new Set(),
-};
-const flowDirty = () => !!F.data && (F.data.numbers.some(n => F.cur[n.name] !== n.value) || orderDirty());
-const numVal = t => { const s = String(t).trim(); return /^-?\d+$/.test(s) && Number.isSafeInteger(Number(s)) ? Number(s) : t; };
-function flowNumbers() { const o = {}; for (const n of F.data.numbers) o[n.name] = F.cur[n.name]; return o; }
-const flowSig = () => JSON.stringify([flowNumbers(), F.order, [...F.off].sort()]);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-async function loadFlow(keep) {
-  if (F.loading) return;
-  F.loading = true;
-  if (!F.loaded) put($('fl-wrap'), h('div', { class: 'help fl-pad', text: 'Loading…' }));
-  try {
-    const d = await api('GET', '/api/flow');
-    const prev = F.cur;
-    F.data = d; F.num = {}; F.cur = {};
-    for (const n of d.numbers) { F.num[n.name] = n; F.cur[n.name] = keep && own(prev, n.name) ? prev[n.name] : n.value; }
-    if (!keep || !F.order) { F.order = framesOf(d.steps || [], 'document'); F.off = new Set(offOf(d.steps || [])); }
-    F.report = null; F.loaded = true;
-    if (F.trace && !(d.traces || []).some(t => t.name === F.trace)) F.trace = null;
-  } catch (e) {
-    F.loading = false;
-    if (F.loaded) showError(e); else put($('fl-wrap'), h('div', { class: 'box bad', text: e.message }));
-    return;
-  }
-  F.loading = false;
-  renderFlow(); renderHeader();
-  runMeasured();
-}
-
 function openSpec(to) { setTab('spec'); if (to) select(to); }
 async function openPrompt(id) {
   const p = setTab('prompts');
@@ -1951,205 +2086,21 @@ async function openPrompt(id) {
   if (P.loaded) selectPrompt(id);
 }
 
-function renderFlow() {
-  const d = F.data;
-  const ui = F.ui = { inputs: new Map(), seen: new Set(), meas: [], counts: [] };
-  F.dirty = flowDirty();
-  const ownN = d.numbers.filter(n => n.own).length;
-  const fileLine = !d.exists ? 'not written yet: every number is inherited from ' + d.starts_from
-    : d.whole ? 'the whole flow of this profile' : 'sets ' + plural(ownN, 'number') + ' of its own';
-  ui.check = h('button', { text: 'Check', title: 'Ctrl+Enter', onclick: flowCheck });
-  ui.save = h('button', { class: 'primary', text: 'Save', title: 'Ctrl+S', onclick: flowSave });
-  ui.discard = h('button', { text: 'Discard', onclick: flowDiscard });
-  ui.stale = h('div', { class: 'warn', text: 'A number was edited after this result.', hidden: true });
-  ui.report = h('div', { class: 'pr-report' });
-  ui.why = h('span', { class: 'help' });
-  ui.mnotes = h('div');
-  const tr = d.traces || [];
-  let traceBox = null;
-  if (d.harvest && tr.length > 1) {
-    const sel = h('select', { style: 'width:auto' }, h('option', { value: '', text: 'all traces' }), tr.map(t => h('option', { value: t.name, text: t.name + ' (' + mb(t.bytes || 0) + ')' })));
-    sel.value = F.trace || '';
-    sel.addEventListener('change', () => { F.trace = sel.value || null; runMeasured(); });
-    traceBox = h('span', {}, 'Measured on: ', sel);
-  }
-  const bar = h('div', { class: 'fl-bar toolbar' }, h('code', { text: d.file }), h('span', { class: 'help', text: fileLine }),
-    h('span', { class: 'spacer' }), traceBox, ui.why, h('button', { text: 'Rules', onclick: () => openRules('flow') }), ui.check, ui.save, ui.discard);
-  const orderLine = h('div', { class: 'help fl-pad', text: 'Drag a step, or use ↑ ↓, to move it among the steps of its frame that move; switch a step off where the code can leave it out. '
-    + 'An order the run cannot read in is refused with its reason when you check or save.' });
-  const diagram = h('div', { class: 'fl-steps fl-diagram' }, stepList(d.steps || [], 'document'));
-  const loose = d.numbers.filter(n => !ui.inputs.has(n.name));
-  const looseBox = loose.length ? h('div', { class: 'fl-loose' }, h('div', { class: 'section', text: 'Numbers no step shows' }),
-    loose.map(n => h('div', { class: 'fl-extra' }, h('code', { text: n.name }), ' ', numInput(n.name), ' ', h('span', { class: 'help', text: n.help || '' }), numExtras(n.name)))) : null;
-  const below = h('div', { class: 'fl-below' },
-    (d.notes || []).map(n => h('p', { class: 'fl-notep' }, n.says, n.to ? [' ', h('button', { class: 'link', text: 'open in Spec', onclick: () => openSpec(n.to) })] : null)),
-    h('details', { class: 'fl-settings' }, h('summary', { text: 'Other settings of a run (shown, not edited here)' }),
-      h('table', { class: 'grid' }, h('thead', {}, h('tr', {}, ['key', 'value', 'origin', 'environment', 'help'].map(t => h('th', { text: t })))),
-        h('tbody', {}, (d.settings || []).map(s => h('tr', {}, h('td', { class: 'mono', text: s.key }),
-          h('td', { text: s.secret ? (s.set ? '(set, not shown)' : '(unset)') : (s.value == null ? '(unset)' : String(s.value)) }),
-          h('td', { text: s.origin || '' }), h('td', { class: 'mono', text: s.env || '' }), h('td', { text: s.help || '' })))))),
-    ui.mnotes);
-  put($('fl-wrap'), bar, ui.report, orderLine, diagram, looseBox, below);
-  syncFlowButtons(); paintReport(); paintMeasured();
-}
-
-function stepList(steps, frame) {
-  const out = [];
-  inOrder(steps, frame).forEach((st, i) => {
-    if (i > 0 || st.when) out.push(h('div', { class: 'fl-conn' + (st.when ? ' when' : '') }, st.when ? h('span', { class: 'fl-when', text: 'when: ' + st.when }) : null));
-    out.push(stepEl(st, frame));
-  });
-  return out;
-}
-function stepEl(st, frame) {
-  const ui = F.ui;
-  const isFrame = Array.isArray(st.steps), isBox = !isFrame && st.ask != null;
-  const kids = [];
-  if (isFrame) kids.push(h('div', { class: 'fl-says' }, st.each ? h('b', { text: 'each ' + st.each + ' ' }) : null, st.says));
-  else if (isBox) {
-    const pr = st.prompt, count = h('span', { class: 'fl-count' });
-    ui.counts.push({ el: count, id: st.id });
-    kids.push(h('div', { class: 'fl-head' },
-      pr && pr.written ? h('button', { class: 'link fl-kind', text: st.ask, title: 'Open the prompt ' + pr.id, onclick: () => openPrompt(pr.id) }) : h('b', { class: 'fl-kind', text: st.ask }), count),
-      h('div', { class: 'fl-says', text: st.says }));
-  } else kids.push(h('div', { class: 'fl-says', text: st.says }));
-  const ctl = stepControls(st, frame);
-  if (ctl) kids.unshift(ctl);
-  const isOff = F.off.has(st.id) || (st.off && !st.switched_off);
-  if (F.off.has(st.id)) kids.push(h('div', { class: 'fl-offsays', text: 'switched off: no run takes this step' }));
-  else if (st.off && !st.switched_off) kids.push(h('div', { class: 'fl-offsays', text: st.off }));
-  if (Array.isArray(st.bound) && st.bound.length) {
-    const names = [...new Set(st.bound.filter(isObj).map(p => p.number))];
-    kids.push(h('div', { class: 'fl-bound' }, st.bound.map(p => typeof p === 'string' ? p : numInput(p.number))));
-    const extras = names.map(numExtras).filter(Boolean);
-    if (extras.length) kids.push(h('div', { class: 'fl-extras' }, extras));
-  }
-  if (!isFrame) {
-    const box = h('div', { class: 'fl-meas' });
-    ui.meas.push({ el: box, id: st.id });
-    kids.push(box);
-  }
-  for (const sw of st.switches || []) {
-    const items = sw.items || [];
-    kids.push(h('div', { class: 'fl-switch' }, sw.label + ': ', items.length
-      ? items.flatMap((it, i) => [i ? ', ' : null, it.to ? h('button', { class: 'link', text: it.label, onclick: () => openSpec(it.to) }) : it.label])
-      : sw.none));
-  }
-  const card = h('div', { class: 'fl-step ' + (isFrame ? 'fl-frame' : isBox ? 'fl-box' : 'fl-note') + (isOff ? ' off' : ''), 'data-step': st.id }, kids);
-  dragWire(card, st, frame);
-  if (isFrame) card.append(h('div', { class: 'fl-steps' }, stepList(st.steps, st.id)));
-  if (isBox && st.each) return h('div', {}, h('div', { class: 'fl-each', text: 'each ' + st.each }), card);
-  return card;
-}
-
-function numInput(name) {
-  const n = F.num[name];
-  if (!n) return h('code', { text: String(name) });
-  const el = h('input', { type: 'number', class: 'fl-num', min: n.least, step: '1', title: n.help || '', value: String(F.cur[name]), 'data-number': name });
-  el.classList.toggle('edited', F.cur[name] !== n.value);
-  el.addEventListener('input', () => setNumber(name, numVal(el.value), el));
-  if (!F.ui.inputs.has(name)) F.ui.inputs.set(name, []);
-  F.ui.inputs.get(name).push(el);
-  return el;
-}
-/* what is said once per number, at its first place: set by this profile, a setting that wins */
-function numExtras(name) {
-  const n = F.num[name], ui = F.ui;
-  if (!n || ui.seen.has(name)) return null;
-  ui.seen.add(name);
-  const bits = [];
-  if (n.own) {
-    bits.push(h('span', { class: 'badge ok', text: 'set by this profile' }));
-    if (!F.data.whole && n.inherited != null) bits.push(' ', h('button', { text: 'use inherited (' + n.inherited + ')', onclick: () => setNumber(name, n.inherited, null) }));
-  }
-  if (n.setting && (n.in_effect !== n.value || !String(n.origin || '').startsWith('flow.json'))) {
-    bits.push(' ', h('span', { class: 'badge changed', text: n.setting + ' = ' + n.in_effect + ' wins here (' + n.origin + ')' }));
-  }
-  return bits.length ? h('div', { class: 'fl-extra' }, h('code', { text: name }), ' ', bits) : null;
-}
-/* one number changed: the other inputs of it and the markers are updated in place, nothing is redrawn */
-function setNumber(name, v, from) {
-  F.cur[name] = v;
-  const edited = v !== F.num[name].value;
-  for (const el of F.ui.inputs.get(name) || []) {
-    if (el !== from) el.value = from ? from.value : String(v);
-    el.classList.toggle('edited', edited);
-  }
-  syncFlowButtons();
-  F.ui.stale.hidden = !(F.report && F.report.stamp !== flowSig());
-  const d = flowDirty();
-  if (d !== F.dirty) { F.dirty = d; renderHeader(); }
-  scheduleMeasured();
-}
-function syncFlowButtons() {
-  const u = F.ui;
-  if (!u) return;
-  u.check.disabled = F.busy; u.save.disabled = F.busy || !flowDirty(); u.discard.disabled = F.busy || !flowDirty();
-}
-
-/* measured: sentences written by the server for the numbers as they stand; an answer for older numbers is dropped */
-function paintMeasured() {
-  const ui = F.ui, M = F.meas;
-  if (!ui) return;
-  for (const b of ui.meas) {
-    const said = M && isObj(M.says) && Array.isArray(M.says[b.id]) ? M.says[b.id] : [];
-    put(b.el, F.counting && (b.el.childNodes.length || said.length) ? h('div', { class: 'help', text: 'counting ...' })
-      : said.map(s => h('div', { class: 'help fl-sent', text: s })));
-  }
-  for (const c of ui.counts) {
-    const v = M && isObj(M.steps) && own(M.steps, c.id) ? M.steps[c.id] : null;
-    c.el.textContent = v == null ? '' : v.toLocaleString('en-US') + (v === 1 ? ' request' : ' requests') + ' in the last run';
-  }
-  put(ui.why, M && M.why ? M.why : null);
-  put(ui.mnotes, (M && M.notes || []).map(t => h('p', { class: 'help', text: t })));
-}
-function scheduleMeasured() {
-  clearTimeout(F.mTimer);
-  if (F.meas && !F.meas.harvest) return;
-  F.mSeq++; F.counting = true; paintMeasured();
-  F.mTimer = setTimeout(runMeasured, 400);
-}
-async function runMeasured() {
-  clearTimeout(F.mTimer);
-  if (!F.data) return;
-  const my = ++F.mSeq;
-  F.counting = true; paintMeasured();
-  try {
-    const r = await apiR('/api/flow/measured', { numbers: flowNumbers(), trace: F.trace });
-    if (my !== F.mSeq) return;
-    F.meas = r;
-  } catch (e) {
-    if (my !== F.mSeq) return;
-    F.meas = null; showError(e);
-  }
-  F.counting = false; paintMeasured();
-}
-
-/* check, save, discard */
-function focusNumber(name) {
-  const el = ((F.ui && F.ui.inputs.get(name)) || [])[0];
-  if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
-}
 const fmtN = v => v == null ? '(none)' : String(v);
 const writesText = (w, file) => ({ created: 'Saving creates ', changed: 'Saving changes ', removed: 'Saving removes ', unchanged: 'Saving writes nothing to ' }[w] || ('Saving: ' + w + ' '))
   + (file || 'the file') + (w === 'removed' ? ' (nothing would differ from the inherited numbers any more).' : '.');
-function paintReport() {
-  const ui = F.ui, R = F.report;
-  if (!ui) return;
-  ui.stale.hidden = !(R && R.stamp !== flowSig());
-  put(ui.report, R ? [ui.stale, ...reportNodes(R)] : null);
-}
+
 function reportNodes(R) {
   if (R.error) return [h('div', { class: 'box bad', text: R.error })];
   const r = R.r || {}, out = [];
   if (R.source === 'save') {
     if (r.reason === 'moved') return [h('div', { class: 'box bad' }, h('div', { text: r.message || 'The file changed on disk since the page loaded it. Nothing was written.' }),
-      h('button', { text: 'Reload from disk', onclick: () => reloadFlow() }))];
+      h('button', { text: 'Reload from disk', onclick: () => (R.reload ? R.reload() : window.FlowTab && FlowTab.reload()) }))];
     if (!r.saved) out.push(h('div', { class: 'box bad', text: 'Not saved: ' + (r.message || r.reason || 'the server refused the numbers.') }));
   }
   const errs = r.errors || [];
   if (errs.length) out.push(h('div', { class: 'box bad' }, h('b', { text: 'The server refuses: ' }),
-    errs.map(e => h('div', {}, e.name ? [h('button', { class: 'link', text: e.name, onclick: () => focusNumber(e.name) }), ': '] : null, e.message))));
+    errs.map(e => h('div', {}, e.name ? [h('button', { class: 'link', text: e.name, onclick: () => (window.FlowTab && FlowTab.focus(e.name)) }), ': '] : null, e.message))));
   else if (r.ok) out.push(h('div', { class: 'box ok', text: 'Accepted.' }));
   if (!errs.length && Array.isArray(r.changed)) out.push(h('div', { class: 'box' }, h('b', { text: 'Changes (' + r.changed.length + ')' }),
     r.changed.length ? r.changed.map(c => h('div', {}, h('code', { text: c.name }), ': ' + fmtN(c.from) + ' → ' + fmtN(c.to)))
@@ -2159,45 +2110,7 @@ function reportNodes(R) {
   for (const s of r.says || []) out.push(h('div', { class: 'help', text: s }));
   return out;
 }
-async function flowCheck() {
-  if (!F.data || F.busy) return;
-  const stamp = flowSig();
-  F.busy = true; syncFlowButtons();
-  const arr = orderDirty() ? { order: F.order, off: [...F.off] } : {};
-  try { F.report = { source: 'check', r: await apiR('/api/flow/check', Object.assign({ numbers: flowNumbers() }, arr)), stamp }; }
-  catch (e) { F.report = { source: 'check', error: e.message, stamp }; }
-  F.busy = false; syncFlowButtons(); paintReport();
-}
-async function flowSave() {
-  if (!F.data || F.busy || !flowDirty()) return;
-  const stamp = flowSig();
-  const body = Object.assign({ numbers: flowNumbers(), base: F.data.base == null ? null : F.data.base },
-    orderDirty() ? { order: F.order, off: [...F.off] } : {});
-  F.busy = true; syncFlowButtons();
-  let saved = null;
-  try {
-    const r = await apiR('/api/flow/save', body);
-    if (r.saved) saved = r; else F.report = { source: 'save', r, stamp };
-  } catch (e) { F.report = { source: 'save', error: e.message, stamp }; }
-  F.busy = false;
-  if (saved) {
-    showInfo('Saved ' + (saved.file || 'the flow file') + ' (' + (saved.writes || 'written') + ').');
-    await loadFlow(flowSig() !== stamp);   // numbers edited while the save ran are kept
-  } else { syncFlowButtons(); paintReport(); }
-}
-async function flowDiscard() {
-  if (!flowDirty() || F.busy) return;
-  if (!await askConfirm('Discard changes', 'Discard the edited numbers?', 'Discard')) return;
-  for (const n of F.data.numbers) F.cur[n.name] = n.value;
-  F.order = framesOf(F.data.steps || [], 'document'); F.off = new Set(offOf(F.data.steps || []));
-  F.report = null;
-  renderFlow(); renderHeader();
-  runMeasured();
-}
-async function reloadFlow() {
-  if (flowDirty() && !await askConfirm('Reload from disk', 'The flow file changed on disk. Reloading drops the edited numbers.', 'Drop my edits and reload')) return;
-  await loadFlow(false);
-}
+
 
 /* ---------- rules of a tab ---------- */
 
@@ -2225,11 +2138,26 @@ function ruleInput(r, cur, onChange) {
     el.value = Array.isArray(v) ? v.join('\n') : '';
     el.addEventListener('input', () => onChange(el.value.split('\n').map(s => s.trim()).filter(Boolean)));
   } else {
-    el = h('textarea', { rows: 6, class: 'mono', spellcheck: 'false' });
-    el.value = JSON.stringify(v, null, 1);
-    el.addEventListener('input', () => { try { onChange(JSON.parse(el.value)); el.classList.remove('bad'); } catch (e) { onChange(el.value); el.classList.add('bad'); } });
+    el = ruleForm(r, v, onChange);
   }
   return el;
+}
+/* map, table and range: a table with + and -, a table with its columns, two number fields; nothing is typed as JSON */
+function ruleForm(r, cur, onChange) {
+  const spec = DF.ruleSpec(r), root = DF.stateOf(spec, cur), box = h('div', { class: 'fm' });
+  const empty = r.kind === 'map' ? {} : r.kind === 'table' ? [] : null;
+  const emit = () => { const v = DF.valueOf(root); onChange(v === undefined ? empty : v); };
+  const draw = () => put(box, formNode(spec, root, api, []));
+  const api = {
+    edit: (p, t) => { DF.edit(root, p, t); emit(); },
+    add: p => { DF.addRow(root, p); emit(); draw(); },
+    remove: (p, i) => { DF.removeRow(root, p, i); emit(); draw(); },
+    move: (p, i, d) => { DF.moveRow(root, p, i, d); emit(); draw(); },
+    addPair: p => { DF.addPair(root, p); emit(); draw(); },
+    removePair: (p, i) => { DF.removePair(root, p, i); emit(); draw(); },
+  };
+  draw();
+  return box;
 }
 function ruleRow(r, cur, onChange, extra) {
   const changed = JSON.stringify(cur) !== JSON.stringify(r.value);
@@ -2493,20 +2421,36 @@ function classCard(c) {
   written.addEventListener('change', () => { const s = GR.cur.classes[c.id] = Object.assign({}, GR.cur.classes[c.id]); if (written.checked) delete s.written; else s.written = false; if (!Object.keys(s).length) delete GR.cur.classes[c.id]; grChanged(true); });
   const addr = set.address || null;
   const folder = h('input', { type: 'text', value: addr ? addr.folder : '', placeholder: 'as the writer names it', spellcheck: 'false' });
-  const key = h('input', { type: 'text', value: addr ? addr.key.join(', ') : '', placeholder: 'properties, e.g. OEO_00140178, rdfs:label', spellcheck: 'false' });
+  const keys = addr && Array.isArray(addr.key) ? addr.key.slice() : [];
+  const offered = (c.properties || []).map(p => ({ value: p.path, text: p.path + (p.label ? ' (' + p.label + ')' : '') }));
   const setAddr = () => {
     const s = GR.cur.classes[c.id] = Object.assign({}, GR.cur.classes[c.id]);
-    const keys = key.value.split(',').map(x => x.trim()).filter(Boolean);
-    if (!folder.value.trim() && !keys.length) delete s.address; else s.address = { folder: folder.value.trim(), key: keys };
+    const was = s.address && isObj(s.address) ? s.address : {};
+    if (!folder.value.trim() && !keys.length) delete s.address;
+    else s.address = Object.assign({}, was, { folder: folder.value.trim(), key: keys.slice() });   // a base the file says stays
     if (!Object.keys(s).length) delete GR.cur.classes[c.id];
     grChanged();
   };
-  folder.addEventListener('input', setAddr); key.addEventListener('input', setAddr);
+  const keyBox = h('span', { class: 'gr-keys' });
+  const drawKeys = () => {
+    const choice = (cur, onPick, none) => {
+      const opts = offered.slice(); if (cur && !opts.some(o => o.value === cur)) opts.push({ value: cur, text: cur });
+      const el = h('select', {}, h('option', { value: '', text: none }), opts.map(o => h('option', { value: o.value, text: o.text })));
+      el.value = cur || ''; el.addEventListener('change', () => onPick(el.value)); return el;
+    };
+    put(keyBox, keys.map((k, i) => h('span', { class: 'gr-key' }, choice(k, v => { if (v) keys[i] = v; else keys.splice(i, 1); setAddr(); drawKeys(); }, '(remove)'),
+      h('button', { text: '↑', disabled: i === 0, onclick: () => { [keys[i - 1], keys[i]] = [keys[i], keys[i - 1]]; setAddr(); drawKeys(); } }),
+      h('button', { text: '↓', disabled: i === keys.length - 1, onclick: () => { [keys[i + 1], keys[i]] = [keys[i], keys[i + 1]]; setAddr(); drawKeys(); } }),
+      h('button', { class: 'danger', text: '×', title: 'Remove', onclick: () => { keys.splice(i, 1); setAddr(); drawKeys(); } }))),
+      offered.length || keys.length ? choice('', v => { if (v) { keys.push(v); setAddr(); drawKeys(); } }, '+ property') : h('span', { class: 'help', text: 'no properties in the shapes' }));
+  };
+  drawKeys();
+  folder.addEventListener('input', setAddr);
   const P = GR.probe && GR.probe.differs, n = P && P.classes ? P.classes[c.id] : null;
   return h('div', { class: 'gr-class' + (written.checked ? '' : ' off') },
     h('div', { class: 'ru-head' }, h('label', {}, written, ' written'), ' ', h('b', { text: c.label || c.id }), ' ', h('code', { text: c.id }), c.shape ? h('span', { class: 'help', text: ' shape ' + c.shape }) : null,
       n ? h('span', { class: 'badge', text: n.before + ' → ' + n.after + ' nodes' }) : null),
-    h('div', { class: 'gr-addr' }, 'address: folder ', folder, ' key ', key),
+    h('div', { class: 'gr-addr' }, 'address: folder ', folder, ' made of the values of ', keyBox),
     h('table', { class: 'grid' }, h('tbody', {}, (c.properties || []).map(p => h('tr', {},
       h('td', {}, h('code', { text: p.path }), p.label ? h('div', { class: 'help', text: p.label }) : null),
       h('td', { class: 'gr-fields' }, p.fields.length ? p.fields.map(f => h('button', { class: 'link', text: '← ' + f, title: 'open the field in the Spec tab', onclick: () => openSpec({ t: 'param', uri: f }) })) : h('span', { class: 'help', text: 'no field' })),
@@ -2559,61 +2503,6 @@ async function grProbe() {
   GR.busy = false; renderGraph();
 }
 
-/* ---------- the order of the flow's steps ---------- */
-
-function framesOf(steps, frame, out) {
-  out = out || {};
-  out[frame] = steps.map(s => s.id);
-  for (const s of steps) if (Array.isArray(s.steps)) framesOf(s.steps, s.id, out);
-  return out;
-}
-function offOf(steps, out) {
-  out = out || [];
-  for (const s of steps) { if (s.switched_off) out.push(s.id); if (Array.isArray(s.steps)) offOf(s.steps, out); }
-  return out;
-}
-const orderDirty = () => !!F.data && (JSON.stringify(F.order) !== JSON.stringify(framesOf(F.data.steps || [], 'document'))
-  || JSON.stringify([...F.off].sort()) !== JSON.stringify(offOf(F.data.steps || []).sort()));
-function inOrder(steps, frame) {
-  const want = F.order && F.order[frame];
-  if (!want) return steps;
-  const by = new Map(steps.map(s => [s.id, s]));
-  return want.map(id => by.get(id)).filter(Boolean);
-}
-function moveStep(frame, id, to) {
-  const list = F.order[frame], i = list.indexOf(id);
-  if (i < 0 || to < 0 || to >= list.length) return;
-  list.splice(i, 1); list.splice(to, 0, id);
-  F.report = null; renderFlow(); renderHeader();
-}
-function stepControls(st, frame) {
-  if (!st.moves && !st.switch) return st.keeps ? h('div', { class: 'fl-keeps', title: st.keeps, text: 'keeps its place' }) : null;
-  const bits = [];
-  if (st.moves) {
-    const list = F.order[frame] || [], i = list.indexOf(st.id);
-    bits.push(h('button', { class: 'link', text: '↑', title: 'earlier', disabled: i <= 0, onclick: () => moveStep(frame, st.id, i - 1) }),
-      h('button', { class: 'link', text: '↓', title: 'later', disabled: i < 0 || i >= list.length - 1, onclick: () => moveStep(frame, st.id, i + 1) }));
-  }
-  if (st.switch) {
-    const c = h('input', { type: 'checkbox' }); c.checked = !F.off.has(st.id);
-    c.addEventListener('change', () => { if (c.checked) F.off.delete(st.id); else F.off.add(st.id); F.report = null; renderFlow(); renderHeader(); });
-    bits.push(h('label', { class: 'fl-on', title: st.keeps || '' }, c, ' on'));
-  }
-  return h('div', { class: 'fl-ctl' }, bits);
-}
-function dragWire(card, st, frame) {
-  if (!st.moves) return;
-  card.setAttribute('draggable', 'true');
-  card.addEventListener('dragstart', ev => { ev.stopPropagation(); ev.dataTransfer.setData('text/plain', JSON.stringify({ frame, id: st.id })); });
-  card.addEventListener('dragover', ev => { ev.preventDefault(); ev.stopPropagation(); });
-  card.addEventListener('drop', ev => {
-    ev.preventDefault(); ev.stopPropagation();
-    let got; try { got = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch (e) { return; }
-    if (!got || got.frame !== frame || got.id === st.id) return;
-    moveStep(frame, got.id, F.order[frame].indexOf(st.id));
-  });
-}
-
 /* ---------- tabs ---------- */
 
 function setTab(t) {
@@ -2625,7 +2514,7 @@ function setTab(t) {
   $('graph').hidden = t !== 'graph';
   $('rules').hidden = true;
   renderHeader();
-  if (t === 'flow' && !F.loaded) loadFlow();
+  if (t === 'flow' && !FlowTab.loaded()) FlowTab.load();
   if (t === 'sources' && !SR.loaded) loadSources();
   if (t === 'graph' && !GR.loaded) loadGraph();
   if (t === 'prompts' && !P.loaded) return loadPrompts();
@@ -2636,7 +2525,7 @@ function setTab(t) {
 async function reload() {
   if (S.dirty && !await askConfirm('Reload from disk', 'There are unsaved edits. Reloading discards them.', 'Discard and reload')) return;
   await run(loadAll);
-  if (F.loaded && !flowDirty()) loadFlow();
+  if (FlowTab.loaded() && !FlowTab.dirty()) FlowTab.load();
 }
 async function loadAll() {
   clearBar();
@@ -2652,8 +2541,8 @@ window.addEventListener('beforeunload', ev => { if (anyDirty()) { ev.preventDefa
 window.addEventListener('keydown', ev => {
   if (!(ev.ctrlKey || ev.metaKey)) return;
   if (S.tab === 'flow') {
-    if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); flowSave(); }
-    else if (ev.key === 'Enter') { ev.preventDefault(); flowCheck(); }
+    if (ev.key === 's' || ev.key === 'S') { ev.preventDefault(); FlowTab.save(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); FlowTab.check(); }
     return;
   }
   if (S.tab === 'prompts') {
@@ -2667,6 +2556,9 @@ window.addEventListener('keydown', ev => {
   else if (ev.key === 'Enter') { ev.preventDefault(); if (!S.busy) doCheck(); }
 });
 
+// What the Flow tab (flow.js) takes from the page.
+window.DP = { h, $, put, api, apiR, showError, showInfo, askConfirm, renderHeader, setTab, openSpec, openPrompt,
+  openRules, diffPre, plural, mb, own, isObj, clone, reportNodes, sleep };
 $('pl-filter').addEventListener('input', ev => { P.filter = ev.target.value; renderList(); });
 renderHeader(); renderPanel();
 run(loadAll);

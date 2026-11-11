@@ -64,6 +64,45 @@ log = logging.getLogger(__name__)
 # over one document mint one IRI and a re-run does not duplicate the graph.
 # The rule `base` of graph.json beside this file; its setting
 # (OEKG_ID_BASE) wins over it, in `graphfile.load`.
+
+# The keys of a `kg` block this writer (and the checks that read the blocks:
+# docpipe/ontology.py, docpipe/compile/draft.py) read, each with the kind of
+# form `docpipe edit` shows it as (docpipe/editor/web/forms.js) and what it
+# does. A key not named here stays in the spec file as it is.
+KG_KEYS = {
+    "field": [
+        {"key": "node", "kind": "text",
+         "help": "The node this field writes onto (studyreport, author, "
+                 "scenariofactsheet ...)."},
+        {"key": "class", "kind": "class",
+         "help": "The OEO class of the node this field mints."},
+        {"key": "property", "kind": "predicate",
+         "help": "The predicate the value becomes on its node, with the "
+                 "datatype of a literal."},
+        {"key": "edge_from", "kind": "link",
+         "help": "The predicate that hangs the node of this field off "
+                 "another node."},
+        {"key": "also", "kind": "predicate",
+         "help": "A further predicate the value is written under as well "
+                 "(one: the writer reads one record)."},
+        {"key": "note", "kind": "note",
+         "help": "A note for people; the writer does not read it."},
+    ],
+    "axis": [
+        {"key": "role", "kind": "text",
+         "choices": ["type", "edge", "parent", "comment"],
+         "help": "What the answer of this coordinate does in the graph."},
+        {"key": "node", "kind": "text",
+         "help": "The node an answer of this coordinate is minted as."},
+        {"key": "class", "kind": "class",
+         "help": "The class of that node."},
+        {"key": "linked_by", "kind": "link",
+         "help": "The predicate that hangs the minted node off its parent."},
+        {"key": "note", "kind": "note",
+         "help": "A note for people; the writer does not read it."},
+    ],
+}
+
 BASE = graphfile.get("base", "scenarios")
 NS_OEKG = graphkit.base_namespace(BASE)
 

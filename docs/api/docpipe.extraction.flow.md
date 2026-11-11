@@ -2,45 +2,52 @@
 
 `docpipe/extraction/flow.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-flow.py: The steps a document is read in and the numbers that bound them,
-read from a file of the profile.
-
-How a document is read stood in four places: the order in the code of the
-reading (`addressed.Reader`), some of its numbers in the settings, others as
-constants in three modules, its switches in the spec. Since 2026-11-10 the
-numbers stand in one file and the steps beside them, so that both can be
-seen and the numbers set where the spec and the prompts are (`docpipe
-edit`):
+flow.py: How a document is read, as a drawing of boxes and frames, and the
+numbers that bound it, read from a file of the profile.
 
     <profile folder>/flow.json
 
-The default profile writes the whole file: every number the reading takes
-(`NUMBERS`) and its steps. A profile that extends it writes only the numbers
-it sets differently, and its file is laid over the default's number by
-number (`load`); it may write the steps as well, all of them, and then they
-are its. A setting of the run wins over the file for the numbers that have
-one (`Number.env`): the environment, then the project file, then this file
-(`in_effect`).
+Since 2026-11-11 (owner decisions 2026-11-10 evening, "Freie Ablaufgrafik")
+the file is the drawing itself, a tree: boxes in their order, frames with
+their boxes, an "if" with its ways side by side. The run does exactly what
+it says (`engine.Engine`); there is no second order in the code. Each box is
+a kind of the library (`blocks.LIBRARY`): what it takes and gives, its
+settings, where it has to stand. What a box does with an answer stays code.
 
-Since 2026-11-10 the run reads its steps from the file (`arrangement`): the
-order of the steps a frame may reorder and which steps are off. Each step is
-a building block of the code (`BLOCKS`); the file says in which order the
-blocks of a document and of a coordinate run and which are left out, and the
-code says where a block may stand at all: the steps that prepare what every
-request shows keep their place, a coordinate is asked at its own place first,
-the coordinates of a value come after its finds, a search sentence before
-the search that goes with it. An arrangement that cannot run is refused with
-the reason (`arrangement_problems`). So that the file cannot say something
-else than the code, it is read strictly: every request the code sends stands
-in a step (`kinds`), a step asks no request the code does not send, every
-number bounds a step, a number the code does not take is refused, and every
-block of the code stands in the steps once.
+    {"numbers": {"piece_lines": 8, ...},
+     "flow": [{"id": "document", "box": "document"},
+              ...,
+              {"id": "values", "each": "value", "order": "names_first",
+               "together": true, "steps": [...]},
+              {"id": "write", "box": "write"}]}
+
+A box: {"id", "box": kind, "set": {setting: value}, "own": {setting: whole
+number}, "when": condition, "off": true}. "own" gives a number setting a
+value of its own ("only here") instead of the named number. A frame:
+{"id", "each": what, "which", "when", "together", "order", "steps"},
+{"id", "round": {"most": n} or {"supply": true}, "stop": condition,
+"steps"}, {"id", "if": [{"when": condition, "steps"}], "else": steps}.
+Conditions are `conditions.py`'s.
+
+The default profile writes the whole file: every number (`NUMBERS`) and the
+drawing. A profile that extends it writes the numbers it sets differently,
+laid over the default's number by number (`load`), and may write a drawing
+of its own, which is then the whole drawing. A setting of the run wins over
+the file for the numbers that have one (`Number.env`), never over a box's
+own value.
+
+Before a drawing is kept, `problems` says everything the run could not do
+with it (owner decisions 2026-11-10, section 11 of the plan): a box where it
+cannot stand (a question of a coordinate outside "each coordinate", a find
+outside "each piece"), a round that may not end, a frame of coordinates
+without a state, a condition that cannot be evaluated where it stands, the
+order the run needs (the document first, its pieces before anything shows
+them, writing before computing). A file with a problem is refused with it.
 
 Nothing here decides whether a harvest is current. A stamp names, in the
 entry of each pass that asked a model, the numbers the pass read with and
 the sha256 of the flow's files (`runner.producer`, `Numbers.sha256`), for a
-reader, as it names every prompt (owner decision 2026-09-10: a stamp rests on
-the questions alone).
+reader, as it names every prompt (owner decision 2026-09-10).
 
 Author: Felix Vossel
 
@@ -71,22 +78,6 @@ Fields:
 - `env: Optional[str] = None`: the setting that wins over the file
 - `part: Optional[int] = None`: its place where the setting lists several
 
-### Block
-
-```python
-@dataclass(frozen=True)
-class Block
-```
-
-What the code can do with one step of the flow.
-
-Fields:
-
-- `frame: str`: "document" or "coordinate"
-- `moves: bool = False`: its place among the frame's moving steps
-- `switch: bool = False`: whether it may be off
-- `why: str = ""`: why it keeps its place or cannot be off
-
 ### Numbers
 
 ```python
@@ -111,7 +102,9 @@ Fields:
 - `follow_ups: int`
 - `replies: int`
 - `origin: dict = field(default_factory=dict, compare=False, repr=False)`: name -> where its value comes from: "flow.json of \<profile>", or what set the setting that won over the file (`settings.origin`).
-- `sha256: str = field(default="", compare=False, repr=False)`: Of the flow's file as laid over each other, steps and numbers; the settings that won are not in it.
+- `sha256: str = field(default="", compare=False, repr=False)`: Of the flow's file as laid over each other, drawing and numbers; the settings that won are not in it.
+- `set_by_run: frozenset = field(default=frozenset(), compare=False,
+                                  repr=False)`: The names of the numbers a setting of the run set.
 
 #### Numbers.shares
 
@@ -140,50 +133,59 @@ Fields:
 
 - `numbers: dict`: name -> value, in the order of NUMBERS
 - `owners: dict`: name -> the profile whose file says it
-- `steps: list`
+- `tree: list`: the drawing
 - `files: tuple`: ((profile name, path)), nearest first
 - `sha256: str`
-- `steps_from: str = ""`: the profile whose file says the steps
-
-### Arrangement
-
-```python
-@dataclass(frozen=True)
-class Arrangement
-```
-
-The order the run reads a document in, as its flow says it.
-
-Fields:
-
-- `document: tuple`: the moving blocks of a document, in order
-- `coordinate: tuple`: the moving blocks of a coordinate, in order
-- `off: frozenset`: the blocks left out
-
-#### Arrangement.on
-
-```python
-def on(self, name: str) -> bool
-```
+- `tree_from: str = ""`: the profile whose file draws it
 
 ## Functions
 
-### path_of
+### kind_of
 
 ```python
-def path_of(profile) -> Path
+def kind_of(node: dict) -> str
 ```
 
-Where *profile* writes its flow.
+"box", "each", "round" or "if".
 
-### kinds
+### children
 
 ```python
-def kinds() -> tuple
+def children(node: dict) -> list
 ```
 
-The requests the code sends while it reads a document: those of the
-reading (`addressed.KINDS`) and the calculation after it.
+[(label, steps)] of a frame: its steps, or each way of an "if".
+
+### walk
+
+```python
+def walk(tree: list, frames: tuple = ())
+```
+
+(node, its frames outermost first) of every node of *tree*, in
+order.
+
+### boxes
+
+```python
+def boxes(tree: list) -> list
+```
+
+### asked
+
+```python
+def asked(tree: list) -> set
+```
+
+The requests the boxes of *tree* ask, of the boxes that are on.
+
+### compute_on
+
+```python
+def compute_on(tree: list) -> bool
+```
+
+Is the calculation after the reading on in *tree*?
 
 ### problem
 
@@ -204,16 +206,53 @@ def checked(where, name: str, value) -> int
 *value* as the number *name* of the flow, FlowError where it is
 none (`problem`). *where* names the file in what is said about it.
 
+### problems
+
+```python
+def problems(tree) -> list
+```
+
+Everything the run could not do with the drawing *tree*: [{"id": the
+box or frame or None, "message"}], [] where it can run.
+
+### prompt_problems
+
+```python
+def prompt_problems(tree: list, profile) -> list
+```
+
+The boxes of *tree* that are on and ask a request whose prompt
+*profile* writes not, nor the profiles it extends: [{"id", "message"}].
+A request a profile may leave unwritten (`addressed.OPTIONAL`) is no
+problem: its box is never taken by that profile.
+
+### path_of
+
+```python
+def path_of(profile) -> Path
+```
+
+Where *profile* writes its flow.
+
+### kinds
+
+```python
+def kinds() -> tuple
+```
+
+The requests the code can send while it reads a document: those of
+the reading (`addressed.KINDS`) and the calculation after it.
+
 ### parse
 
 ```python
 def parse(raw: str, where, whole: bool) -> dict
 ```
 
-{"numbers": {name: value}, "steps": [...]} of the text *raw*, read
-strictly. A *whole* file names every number and the steps; any other is
-laid over one and names numbers only. *where* names the file in what is
-said about it.
+{"numbers": {name: value}, "flow": [...]} of the text *raw*, read
+strictly. A *whole* file names every number and the drawing; any other
+is laid over one and names numbers, and may draw a whole drawing of
+its own. *where* names the file in what is said about it.
 
 ### dump
 
@@ -255,6 +294,15 @@ what a number is where the profile does not set it. None where no
 profile it extends writes a flow, so that its own file is the whole
 one.
 
+### tree_of
+
+```python
+def tree_of(profile=None) -> list
+```
+
+The drawing a run of *profile* reads by (the default profile's where
+None).
+
 ### in_effect
 
 ```python
@@ -274,33 +322,5 @@ def default() -> Numbers
 
 The numbers of the default profile's file, no setting applied: what
 a reading takes where it is given none.
-
-### arrangement_problems
-
-```python
-def arrangement_problems(steps: list, against: Optional[list] = None) -> list
-```
-
-Why the run cannot read in the order of *steps*, [] where it can,
-held against the steps of the default profile's file (*against*, read
-from it where not given):
-a block of the code that is missing or stands twice or in another
-frame, a step that keeps its place moved, a block that cannot be off
-switched off, a moving block before one it has to follow.
-
-### arranged
-
-```python
-def arranged(steps: list) -> Arrangement
-```
-
-### arrangement
-
-```python
-def arrangement(profile=None) -> Arrangement
-```
-
-The order a run of *profile* reads in (the default profile's where
-None): its flow's steps.
 
 [Back to the index](../README.md)

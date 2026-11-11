@@ -16,3 +16,6 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 
 <!-- with: headings -->
 "headings" are the publication's headings up to the value's place, its own last. Take the publication's words from them too.
+
+<!-- with: before -->
+"before" are the sentences this value was already searched with, without the answer being found. Write a different sentence: with other words of the publication, and as the answer could stand at another place of it, such as in a table instead of the text.

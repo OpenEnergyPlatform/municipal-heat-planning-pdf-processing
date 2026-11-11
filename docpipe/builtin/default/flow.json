@@ -13,145 +13,810 @@
     "follow_ups": 1,
     "replies": 3
   },
-  "steps": [
+  "flow": [
+    {
+      "id": "document",
+      "box": "document"
+    },
     {
       "id": "figures",
-      "ask": "transcribe",
-      "each": "figure",
-      "says": "A figure is written off once into lines: its caption (title, axes, legend) and its numbers. No other request is sent its image."
+      "box": "transcribe"
     },
     {
       "id": "pieces",
-      "says": "The document is cut into numbered lines and into pieces; the code does it, no request.",
-      "bound": "a piece is at most {piece_lines} lines, a table's head shown with each of its pieces; the title page is the first {title_page_lines} lines of the first page; a request shows the last {headings} headings up to its place"
+      "box": "split"
     },
     {
-      "id": "sentences",
-      "ask": "phrase",
-      "each": "field",
-      "says": "The sentence the pieces are ordered and searched with for a field, written as this document would print a value of it."
+      "id": "lists",
+      "box": "lists"
     },
     {
-      "id": "settled",
-      "ask": "docfield",
-      "each": "thing the document settles once",
-      "needs": "plan_fields",
-      "shows": [
-        "plan_fields"
-      ],
-      "says": "What the document settles for all its values, and its own base and target years: the title page, then the best pieces of the search and after them the rest of the document, until a request finds it.",
-      "bound": "{search_per_request} pieces a request"
-    },
-    {
-      "id": "works",
-      "ask": "work",
-      "each": "piece",
-      "needs": "works",
-      "shows": [
-        "works"
-      ],
-      "says": "Which lines of a piece speak of another work, and which line shows that the rest are this publication's own."
-    },
-    {
-      "id": "document_fields",
-      "ask": "docfield",
-      "each": "field the document has once",
-      "needs": "once_per_document",
-      "shows": [
-        "once_per_document"
-      ],
-      "says": "A field the document has once is asked over the title page and the best pieces of the search; every find is kept.",
-      "bound": "{search_pieces} pieces, {listed_field_factor} times as many for a field with a list; {search_per_request} a request"
-    },
-    {
-      "id": "finds",
-      "ask": "find",
-      "each": "other field, in each piece, the best pieces first",
-      "says": "The values of a field in one piece: an address and its words, and the entry where the field has a list. An answer that does not fit its room is asked again in halves of the piece."
-    },
-    {
-      "id": "coordinates",
-      "each": "coordinate of each value",
-      "says": "Each coordinate of each value is asked on its own, in the order of the spec's groups.",
+      "id": "plan",
+      "each": "settled",
+      "order": "spec",
       "steps": [
         {
-          "id": "own_place",
-          "ask": "coord",
-          "says": "At the value's own place: its line with the head of its table or the sentences beside it, the headings up to it, the title page and what the document settles. The answer is an address and words, or 0."
+          "id": "settled_order",
+          "box": "order",
+          "set": {
+            "rest_after": true
+          }
         },
         {
-          "id": "search_sentence",
-          "ask": "phrase",
-          "when": "the answer is 0",
-          "says": "A sentence of how the document would print the answer, written once per field, coordinate and wording of the value; the search goes with it. Off, or where it writes none, the search goes with the field's own sentence."
+          "id": "settled_round",
+          "round": {
+            "supply": true
+          },
+          "stop": {
+            "all": [
+              {
+                "of": "answer",
+                "is": "finds",
+                "op": "more",
+                "value": 0
+              }
+            ]
+          },
+          "steps": [
+            {
+              "id": "settled",
+              "box": "docfield"
+            }
+          ]
         },
         {
-          "id": "beside",
-          "ask": "search",
-          "when": "then",
-          "shows": [
-            "own_passage",
-            "own_value"
-          ],
-          "says": "The pieces right before and after the value's. What only the value's own place can say is not searched."
-        },
-        {
-          "id": "search",
-          "ask": "search",
-          "when": "the pieces beside said nothing",
-          "says": "The pieces the search finds best for that sentence, ordered once by the reranker. The model may fetch pieces itself, which do not count; no piece is shown twice.",
-          "bound": "{search_pieces} pieces: the shares of tables, figures and text first ({search_tables}, {search_figures} and {search_text}, scaled to the pieces), then the best of the rest; {search_per_request} a request"
-        },
-        {
-          "id": "about",
-          "ask": "check",
-          "when": "a find stands in another passage",
-          "says": "Does the place the find stands in speak about this value?"
-        },
-        {
-          "id": "plan_years",
-          "ask": "list",
-          "when": "a year is still open",
-          "says": "A year nothing found is asked last with the document's base and target years."
+          "id": "remember",
+          "box": "settle"
         }
       ]
     },
     {
-      "id": "entry",
-      "ask": "list",
-      "each": "wording",
-      "says": "The entry of a list that a wording means, asked once per wording; the answer is a number of the list.",
-      "bound": "a list of up to {list_meanings} entries shows what each means; a longer one shows names only, and one whose entries name groups is asked group first"
+      "id": "sentences",
+      "box": "sentences"
     },
     {
-      "id": "name",
-      "ask": "names",
-      "each": "name",
-      "needs": "names",
-      "shows": [
-        "takes_group"
-      ],
-      "says": "The entry of the document's list of scenarios or works that a name means, a new entry where it is not on the list yet. Words for several of them become one row per member where the field takes groups."
+      "id": "works",
+      "box": "works",
+      "when": {
+        "all": [
+          {
+            "of": "run",
+            "is": "whole"
+          }
+        ]
+      }
     },
     {
-      "id": "follow_up",
-      "ask": "follow",
-      "when": "an answer does not hold",
-      "says": "The request is asked again as a request of its own, with the answer that did not hold and why.",
-      "bound": "{follow_ups} time(s)"
+      "id": "once",
+      "each": "field",
+      "which": "once",
+      "order": "spec",
+      "steps": [
+        {
+          "id": "document_order",
+          "box": "order",
+          "set": {
+            "list_factor": true
+          }
+        },
+        {
+          "id": "document_round",
+          "round": {
+            "supply": true
+          },
+          "steps": [
+            {
+              "id": "document_fields",
+              "box": "docfield"
+            }
+          ]
+        },
+        {
+          "id": "document_values",
+          "each": "value",
+          "order": "document",
+          "together": true,
+          "steps": [
+            {
+              "id": "document_coordinates",
+              "each": "coordinate",
+              "order": "groups",
+              "steps": [
+                {
+                  "id": "document_coordinate_way",
+                  "if": [
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "closed_before"
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "document_closed",
+                          "box": "state",
+                          "set": {
+                            "mode": "out_of_slice"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "state",
+                            "op": "one_of",
+                            "value": [
+                              "read"
+                            ]
+                          }
+                        ]
+                      },
+                      "steps": []
+                    },
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "kind",
+                            "op": "one_of",
+                            "value": [
+                              "quantity"
+                            ]
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "document_quantity",
+                          "box": "quantity"
+                        }
+                      ]
+                    },
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "kind",
+                            "op": "one_of",
+                            "value": [
+                              "work"
+                            ]
+                          },
+                          {
+                            "of": "document",
+                            "is": "works"
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "document_work",
+                          "box": "work_coordinate"
+                        }
+                      ]
+                    }
+                  ],
+                  "else": [
+                    {
+                      "id": "document_own_place",
+                      "box": "coord"
+                    },
+                    {
+                      "id": "document_after_own_place",
+                      "if": [
+                        {
+                          "when": {
+                            "any": [
+                              {
+                                "of": "answer",
+                                "is": "answered",
+                                "not": true
+                              },
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "read"
+                                ]
+                              }
+                            ]
+                          },
+                          "steps": []
+                        }
+                      ],
+                      "else": [
+                        {
+                          "id": "document_search_way",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "unbacked"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "steps": []
+                            },
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "own_only"
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "document_own_only",
+                                  "box": "state",
+                                  "set": {
+                                    "mode": "unstated"
+                                  }
+                                }
+                              ]
+                            }
+                          ],
+                          "else": [
+                            {
+                              "id": "document_search_sentence",
+                              "box": "phrase"
+                            },
+                            {
+                              "id": "document_near",
+                              "box": "beside"
+                            },
+                            {
+                              "id": "document_beside_round",
+                              "round": {
+                                "supply": true
+                              },
+                              "stop": {
+                                "any": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "read"
+                                    ]
+                                  },
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "unbacked"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "document_beside",
+                                  "box": "search"
+                                },
+                                {
+                                  "id": "document_beside_about",
+                                  "box": "about"
+                                }
+                              ]
+                            },
+                            {
+                              "id": "document_search_on",
+                              "if": [
+                                {
+                                  "when": {
+                                    "all": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read",
+                                          "unbacked"
+                                        ],
+                                        "not": true
+                                      }
+                                    ]
+                                  },
+                                  "steps": [
+                                    {
+                                      "id": "document_search_order",
+                                      "box": "order"
+                                    },
+                                    {
+                                      "id": "document_search_round",
+                                      "round": {
+                                        "supply": true
+                                      },
+                                      "stop": {
+                                        "any": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "read"
+                                            ]
+                                          },
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "unbacked"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "steps": [
+                                        {
+                                          "id": "document_search",
+                                          "box": "search"
+                                        },
+                                        {
+                                          "id": "document_about",
+                                          "box": "about"
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "document_searched",
+                                      "box": "state",
+                                      "when": {
+                                        "all": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "read",
+                                              "unbacked"
+                                            ],
+                                            "not": true
+                                          }
+                                        ]
+                                      },
+                                      "set": {
+                                        "mode": "by_supply"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "document_year_way",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "year"
+                                  },
+                                  {
+                                    "of": "coordinate",
+                                    "is": "plan_years"
+                                  },
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "read"
+                                    ],
+                                    "not": true
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "document_plan_years",
+                                  "box": "last_year"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "document_name",
+              "box": "names"
+            }
+          ]
+        }
+      ]
     },
     {
-      "id": "replies",
-      "when": "a reply is out of its form",
-      "says": "A reply that is no JSON object of the request's form is asked again with the cause, and so is a request the server refuses. A failure of the server is asked again until the run halts.",
-      "bound": "{replies} such replies at most, then the request stays unanswered"
+      "id": "in_pieces",
+      "each": "field",
+      "which": "pieces",
+      "order": "spec",
+      "together": true,
+      "steps": [
+        {
+          "id": "field_pieces",
+          "each": "piece",
+          "order": "best_first",
+          "together": true,
+          "steps": [
+            {
+              "id": "finds",
+              "box": "find"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "values",
+      "each": "value",
+      "order": "names_first",
+      "together": true,
+      "steps": [
+        {
+          "id": "coordinates",
+          "each": "coordinate",
+          "order": "groups",
+          "steps": [
+            {
+              "id": "coordinate_way",
+              "if": [
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "coordinate",
+                        "is": "closed_before"
+                      }
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "id": "closed",
+                      "box": "state",
+                      "set": {
+                        "mode": "out_of_slice"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "coordinate",
+                        "is": "state",
+                        "op": "one_of",
+                        "value": [
+                          "read"
+                        ]
+                      }
+                    ]
+                  },
+                  "steps": []
+                },
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "coordinate",
+                        "is": "kind",
+                        "op": "one_of",
+                        "value": [
+                          "quantity"
+                        ]
+                      }
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "id": "quantity",
+                      "box": "quantity"
+                    }
+                  ]
+                },
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "coordinate",
+                        "is": "kind",
+                        "op": "one_of",
+                        "value": [
+                          "work"
+                        ]
+                      },
+                      {
+                        "of": "document",
+                        "is": "works"
+                      }
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "id": "work",
+                      "box": "work_coordinate"
+                    }
+                  ]
+                }
+              ],
+              "else": [
+                {
+                  "id": "own_place",
+                  "box": "coord"
+                },
+                {
+                  "id": "after_own_place",
+                  "if": [
+                    {
+                      "when": {
+                        "any": [
+                          {
+                            "of": "answer",
+                            "is": "answered",
+                            "not": true
+                          },
+                          {
+                            "of": "coordinate",
+                            "is": "state",
+                            "op": "one_of",
+                            "value": [
+                              "read"
+                            ]
+                          }
+                        ]
+                      },
+                      "steps": []
+                    }
+                  ],
+                  "else": [
+                    {
+                      "id": "search_way",
+                      "if": [
+                        {
+                          "when": {
+                            "all": [
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "unbacked"
+                                ]
+                              }
+                            ]
+                          },
+                          "steps": []
+                        },
+                        {
+                          "when": {
+                            "all": [
+                              {
+                                "of": "coordinate",
+                                "is": "own_only"
+                              }
+                            ]
+                          },
+                          "steps": [
+                            {
+                              "id": "own_only",
+                              "box": "state",
+                              "set": {
+                                "mode": "unstated"
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "else": [
+                        {
+                          "id": "search_sentence",
+                          "box": "phrase"
+                        },
+                        {
+                          "id": "near",
+                          "box": "beside"
+                        },
+                        {
+                          "id": "beside_round",
+                          "round": {
+                            "supply": true
+                          },
+                          "stop": {
+                            "any": [
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "read"
+                                ]
+                              },
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "unbacked"
+                                ]
+                              }
+                            ]
+                          },
+                          "steps": [
+                            {
+                              "id": "beside",
+                              "box": "search"
+                            },
+                            {
+                              "id": "beside_about",
+                              "box": "about"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "search_on",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "read",
+                                      "unbacked"
+                                    ],
+                                    "not": true
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "search_order",
+                                  "box": "order"
+                                },
+                                {
+                                  "id": "search_round",
+                                  "round": {
+                                    "supply": true
+                                  },
+                                  "stop": {
+                                    "any": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read"
+                                        ]
+                                      },
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "unbacked"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "steps": [
+                                    {
+                                      "id": "search",
+                                      "box": "search"
+                                    },
+                                    {
+                                      "id": "about",
+                                      "box": "about"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "searched",
+                                  "box": "state",
+                                  "when": {
+                                    "all": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read",
+                                          "unbacked"
+                                        ],
+                                        "not": true
+                                      }
+                                    ]
+                                  },
+                                  "set": {
+                                    "mode": "by_supply"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "id": "year_way",
+                      "if": [
+                        {
+                          "when": {
+                            "all": [
+                              {
+                                "of": "coordinate",
+                                "is": "year"
+                              },
+                              {
+                                "of": "coordinate",
+                                "is": "plan_years"
+                              },
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "read"
+                                ],
+                                "not": true
+                              }
+                            ]
+                          },
+                          "steps": [
+                            {
+                              "id": "plan_years",
+                              "box": "last_year"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "name",
+          "box": "names"
+        }
+      ]
+    },
+    {
+      "id": "write",
+      "box": "write"
     },
     {
       "id": "compute",
-      "ask": "compute",
-      "each": "question the folded rows leave open",
-      "needs": "compute",
-      "says": "What the checked rows of a document leave open is computed: a share without its absolute number, parts without their sum. The model writes the code and the sandbox runs it."
+      "box": "compute"
     }
   ]
 }

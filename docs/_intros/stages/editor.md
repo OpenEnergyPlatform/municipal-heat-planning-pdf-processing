@@ -10,10 +10,10 @@ shows the spec, one form per question, and says what an edit costs the next run
 before it is written. The Prompts tab edits the prompt files and the sentence
 files of the profile; with a harvest folder it also shows what an edit does to
 the requests recorded there, and it can send a few of them once more. The Flow
-tab draws the steps a document is read in and edits the numbers that bound them,
-which stand in the profile's `flow.json`; the order of the coordinate steps a
-frame may reorder and whether a step is on are set there too. What a step does
-is code and is not in the page. The Sources tab edits `sources.json`, the Graph
+tab draws how a document is read, as boxes and frames, edits that drawing and
+the numbers that bound it, which stand in the profile's `flow.json`, and tries
+the drawing on a document with made-up answers. What a box does is code and is
+not in the page. The Sources tab edits `sources.json`, the Graph
 tab `graph.json`, and the Rules pane, which the Rules button of a tab opens,
 the rules of that tab.
 
@@ -113,6 +113,34 @@ Where a key moved, the page names the pass that settles it:
 
 The sentence on the page is the authority for a key; the table is the rule
 behind it (`specs.changes`).
+
+## Forms, not JSON
+
+No value of the Spec, Rules, Graph or Flow tab is typed as JSON; JSON stands only in
+the files the page writes. The Flow tab draws its file (`web/flow.js`, see Flow);
+for the other three the conversion between a value and its form is
+`web/forms.js`, which runs in the page and in node. A form given a value and
+no edit gives the identical value back, key order included, so the file is
+written back byte for byte; an edit through one field changes only the key
+that field shows; a key the form does not know is kept where it stood and shown
+greyed. A value that does not fit its form is kept as it is. `tests/
+test_editor_forms.py` holds all three for both profiles' real files.
+
+- The `kg` block of a field and of a coordinate is a form of the keys the
+  profile's graph writer reads. The writer declares them in its own `kg.py`
+  (`KG_KEYS`: per key its kind, a one-line help and, for a choice, the
+  choices); a profile without a writer shows every key greyed. A predicate is
+  a record of prefix, predicate, label and datatype, `also` and `map` are rows
+  with + and -, a class or predicate is a text field that offers the classes
+  and predicates of the shapes where the Graph tab has them.
+- `derive` is "derived from" a select of the field's coordinates and "value" a
+  select of the entries of the coordinate's own list.
+- `example` is the source as plain text, the defaults as one row of fields and
+  the rows as a table with the columns value, quote and the coordinates (and
+  their wordings) some row uses; a select adds a column.
+- `of` of a plan field is always two selects, the coordinate and its entry.
+- The address of a class in the Graph tab is a folder and a list of the
+  class's properties from the shapes, with up and down to change the order.
 
 ## Copies and removals
 
@@ -402,27 +430,113 @@ again.
 
 ## Flow
 
-A document is read in steps: it is cut into numbered lines and pieces, the
-figures are written off, fields are asked per piece and per document, each
-coordinate of each value is asked on its own and searched for where it is open,
-and what the checked rows leave open is computed. The steps and the numbers that
-bound them stand in one file, `flow.json` (`extraction.flow`). The default
-profile's file is the whole flow: `numbers` and `steps`. A profile that extends
-it may have a `flow.json` of its own that holds the numbers it sets differently,
-laid over the inherited file number by number, and may write all steps. The steps are run in the order the file lists them (see Reordering the steps). The loader is strict: every request
-the code sends stands in the `ask` of at least one step, a step asks no request
-the code does not send, every number bounds a step, and an
-unknown key, a key written twice, a value that is no whole number or lies below
-the number's least is refused by name.
+A document is read by a drawing: boxes in the order they stand, frames that
+repeat boxes for each thing of the document, rounds, and ways chosen by a
+condition. The run does exactly this drawing (`extraction.engine`); there is no
+second order in the code. The drawing and the numbers that bound it stand in
+one file, `flow.json` (`extraction.flow`):
 
-The Flow tab draws the steps top to bottom, one box per request, with what the
-step does, for what it is asked, when, and a frame around the steps asked per
-coordinate. The bound of a step is a sentence with its numbers as inputs. A step
-links to its prompt in the Prompts tab, and shows the switches of the spec that
-belong to it (the fields the document has once, the coordinates only the value's
-own passage says and so on), each entry a link into the Spec tab. A step that no
-run of the profile takes is drawn as off, with the reason: no profile of the
-line writes its prompt, or the spec has nothing for it.
+```
+{"numbers": {"piece_lines": 8, ...},
+ "flow": [{"id": "document", "box": "document"}, ..., {"id": "write", "box": "write"}]}
+```
+
+The default profile's file is the whole flow: every number and the drawing. A
+profile that extends it writes only the numbers that differ, laid over the
+inherited ones number by number, and the drawing only where it differs; a
+drawing of its own is then the whole drawing. The loader is strict: an unknown
+key, a key written twice, a number that is no whole number or lies below its
+least, and a drawing the run could not do (below) are refused by name.
+
+### The library
+
+A box is one kind of the library (`extraction.blocks`). Each kind has a label,
+a group (start, prepare, order, ask, check, remember, state, end), what it takes
+and gives (the arrow before and after it: document, pieces, supply, answers,
+values and so on), its settings with their defaults, the frames it has to stand
+in, and a sentence on what it does. The library is on the left of the tab and
+can be searched: a box is dragged onto an arrow or, with a click, put after the
+chosen box. A box can also be moved with the arrows of its card, duplicated and
+deleted.
+
+Some boxes are fixed: the document, the transcription of the figures, the
+cutting into pieces, the lists of the document and the writing cannot be
+removed or switched off, and the card says why. The others can be switched off
+(`"off": true`); a box that is off is not there for any check of the drawing.
+A box that asks a model shows the fixed checks that hold its answers (the quote
+is a line the request showed, the answer stands in its quote, a quote names a
+place, an answer to a list is one of its entries) and cannot lose them.
+What a box does with an answer stays code; a kind of box that is new comes as
+code and appears in the library.
+
+A box keeps its settings under `set`. A setting that takes a number of the flow
+takes the named number, unless the box has an own value for it, "only here"
+(`own`): the own value wins in that box only, and a setting of the run wins over
+the named number, never over an own value. A box that asks has a prompt, and the
+card shows the switches of the spec that belong to it, each entry a link into
+the Spec tab. A box that no run of the profile takes is drawn as such, with the
+reason: the profile writes no prompt for it, or the spec has nothing for it.
+
+### Frames
+
+- **each** repeats its boxes for each thing the document settles, each field
+  (all, the fields the document has once, or the fields read in pieces), each
+  piece of a field, each value or each coordinate of a value, in an order the
+  frame names, and only for the items a condition holds for, where it has one.
+  "Side by side" asks the items together instead of one after the other.
+- **round** runs its boxes again, at most N times or until the supply is used up,
+  and stops where its stop condition holds after a turn. A round until the supply
+  is used up also ends after a turn that showed nothing of the supply. The box
+  that writes the search sentence may write a new one from round 2 on, shown the
+  sentences before.
+- **if** takes the first way whose condition holds, else its else way; the ways
+  join again below it.
+
+A frame of coordinates has a state box in it: every coordinate ends in a state.
+
+### Conditions
+
+A box, an each frame, a way of an if and the stop of a round have a condition,
+written in the page as rows, never as JSON. A row says what it is about, which
+of its properties, a comparison and a value, and may be negated ("not"); the rows
+are joined by "all" or by "any" (`extraction.conditions`). A property is a yes
+or no, a number, a text or one of a list. What a row can be about is what is
+there at the box's place: the document, the run, the field, the value, the
+coordinate (its state, its kind, whether only its value's own place says it and
+so on), the pieces (shown, left), the round and, after a box that asks, the
+answer and its quote. A condition about the answer reads the answer of its own
+item; where no box of that item asked, because it is off or its condition passed
+it by, nothing came back. A row about something there is not yet at its place is
+a problem of the drawing.
+
+An own check is a box that refuses an answer where its condition holds; the
+answer is asked again with its sentence, as often as the question's follow-ups,
+then stays unbacked. It never takes what the fixed checks refuse. Its refusals
+are counted as `check:<name>`.
+
+### What the run refuses
+
+Before a drawing is kept, `flow.problems` says everything the run could not do
+with it, each at its box or frame: a box where it cannot stand (a question of a
+coordinate outside each coordinate, a find outside each piece of each field), a
+round that may not end, a search without a supply before it, a frame of
+coordinates without a state, a condition that cannot be evaluated where it
+stands, an id used twice, and the order the run needs (the document, the figures,
+the pieces and the lists first, in this order; the writing at the end, only the
+calculation after it). `flow.prompt_problems` adds a box that is on and asks a
+request whose prompt neither the profile nor a profile it extends writes.
+
+### The tab
+
+The library is on the left, the drawing in the middle, and on the right the
+settings of the chosen box: its settings, its own values, its condition ("only
+when"), whether it is on, and the first request a Try made at it. A frame has
+its own form (what it repeats, its order, side by side, the times of a round
+and its stop, the ways of an if). With nothing chosen the right side shows the
+numbers of the flow. The drawing runs top to bottom, each arrow carrying what the
+box before it gives, a frame around its boxes, which can be folded. A problem is
+shown at its box, and a card shows the number of requests its box asked in the
+recorded traces and in the last Try.
 
 The flow has twelve numbers, each a whole number, and each says what it counts:
 
@@ -431,40 +545,70 @@ The flow has twelve numbers, each a whole number, and each says what it counts:
 | `piece_lines` | lines of a piece a document is read in; a table's head is shown with each of its pieces |
 | `title_page_lines` | lines of the document's first page that a request shows as its title page |
 | `headings` | headings a request shows up to a value's place, its own last |
-| `list_meanings` | entries up to which a list is shown with what each entry means; a longer list shows its names only |
+| `list_meanings` | entries up to which a list is shown with what each entry means; a longer list shows its names only, and one whose entries name groups is asked group first |
 | `search_pieces` | pieces a search shows for an open coordinate or a field the document has once |
 | `search_tables`, `search_figures`, `search_text` | the share of a search's pieces that are the best pieces of tables, of figures and of text, taken first; the three are scaled to the pieces of the search, and the rest are the best of any kind |
 | `search_per_request` | pieces one request of a search shows |
 | `listed_field_factor` | times the pieces of a search that a field the document has once reads where its values come from a list |
 | `follow_ups` | times a request whose answer did not hold is asked again, each time with the answer and why it did not hold; 0 asks none |
-| `replies` | replies out of their form a request takes before it is left unanswered |
+| `replies` | replies out of their form a request takes before it is left unanswered; a request the server refuses is asked as often |
 
 For each number the tab says whether the profile sets it itself or inherits it
 and from which profile, and what a run started here would read with and why:
 six numbers have a setting, four settings in all (`EXTRACT_SEARCH_PIECES`,
 `EXTRACT_SEARCH_SHARES` for the three shares, `EXTRACT_SEARCH_CHUNKS`,
 `EXTRACT_MAX_RETRIES`), and where a setting is set it wins over both files,
-which the tab says. Editing a number
-marks the tab as unsaved.
+which the tab says. Editing a number or the drawing marks the tab as unsaved.
 
-**Check** writes nothing. It refuses a number the flow does not take with the
-loader's words, lists what changed, says what a save would do to the file
-(created, changed, removed or unchanged), shows the diff, and says that a changed
-flow makes no harvest stale: a stamp names, for each pass that read the
-document, the numbers it read with, and compares none of them.
+**Check** writes nothing. It refuses a number the flow does not take and a
+drawing the run could not do, each with its words and at its box, lists what
+changed (numbers, and boxes and frames added, removed, changed or moved), says
+what a save would do to the file (created, changed, removed or unchanged), shows
+the diff, and says that a changed flow makes no harvest stale: a stamp names, for
+each pass that read the document, the numbers it read with, and compares none of
+them.
 
-**Save** writes only where every number holds and the file is as the page loaded
-it; otherwise the page says the file changed on disk and offers to reload. One
-refused number means that nothing of the edit is written. A profile that extends
-another gets only the numbers that differ from what it inherits: a number set
-back to the inherited value leaves the file, and a file that would hold no number
-is removed (`Files.remove`, inside the profile's own folder only). The default
-profile's own file is the whole flow, so a save there changes its number lines
-and keeps its steps. The file keeps its line endings; a new file is written with
-plain ones.
+**Save** writes only where the numbers and the drawing hold and the file is as
+the page loaded it; otherwise the page says the file changed on disk and offers
+to reload. One refusal means that nothing of the edit is written. A profile that
+extends another gets only the numbers that differ from what it inherits and the
+drawing where it differs from the inherited one: a number set back to the
+inherited value leaves the file, and a file that would hold neither is removed
+(`Files.remove`, inside the profile's own folder only). The default profile's
+own file is the whole flow, so a save there writes every number and the drawing.
+The file keeps its line endings; a new file is written with plain ones.
 
-With `--harvest` the tab says, beside the numbers, what the traces of that
-harvest measured, recounted as a number is typed (`measured.says`):
+### Try
+
+The Flow tab's **Try** reads one document by the drawing on the page, with the
+numbers as edited, and sends nothing (`flowtry.py`). Every request is built in
+full as it would go out and kept. The document is one of the corpus database,
+optionally some pages of it, or, without one, a plan made up from the examples of
+the profile's spec. The answers are made up, each in its request's own form, in
+one of two modes:
+
+- "nothing": a find, and the question of a field the document has once, names
+  the first number its piece prints where the field is a number (nothing where
+  the piece prints none), else the piece's first word, so that there are values;
+  every other answer is the empty answer of its request's own form (0, an empty
+  list, an empty text, no). Each coordinate goes through its whole search, which
+  shows how far rounds and searches go at most;
+- "first_line": every answer names the first line the request showed, which shows
+  the shortest way.
+
+No embedder and no reranker are asked, so a search shows its pieces in the
+document's order, which a run never does; the page says so. Per box the Try
+gives the number of requests and the first one in full, and it lists the states
+the coordinates of the values ended in, the number of values and the pieces the
+document was cut into.
+
+### What a trace measured
+
+With `--harvest` the tab says, beside the number it measures, what the traces of
+that harvest measured, recounted as a number is typed (`measured.says`). A request
+of a trace names the box that asked it, which is how the cards count requests;
+a trace written before names none, and its requests are counted at the box of the
+default drawing that asks their kind.
 
 - how many searches for an open coordinate ended with an answer that names a
   place and how many without one, after how many shown pieces of the budget
@@ -490,7 +634,7 @@ not put the requests back together, and the counts of a trace are kept per state
 of its file. Without `--harvest`, or with a folder that holds no trace, the tab
 says that and counts nothing.
 
-Below the diagram the tab lists the year rules of the spec as notes (the key
+Below the drawing the tab lists the year rules of the spec as notes (the key
 `of` of a plan field that is a year; see [the extraction stage](extraction.md)),
 each a link to the plan field in the Spec tab, and the other settings of an
 extraction run, read only, each with its value and where it comes from as
@@ -501,16 +645,6 @@ carries before its host (a user, a password) is replaced by `***@`.
 The Spec tab's form of a plan field that is a year has the key `of`: a coordinate
 of a group's pair and an entry of its list.
 
-### Reordering the steps
-
-The coordinate steps (`own_place`, `search_sentence`, `beside`, `search`,
-`about`, `plan_years`) can be dragged, or moved with the arrows, and switched
-off in the Flow tab; the reader and the surveyed harvest run them in that
-order (`extraction/flow.py`: `BLOCKS`, `Arrangement`). A step may carry
-`"off": true`. A profile's own `flow.json` may then write all steps. Judge and
-Save take `order` and `off`; an order the run cannot read in is refused with
-its reason (`arrangement_problems`).
-
 ## Rules
 
 Each tab that has rules shows them in a panel: each rule with its help, its
@@ -519,6 +653,10 @@ profile's file names all of them, a profile's file only what it sets
 differently). A value is checked against the bounds before it is saved
 (`/api/rules`, `/check`, `/save` in `rulespage.py`). An `EXTRACT_*` setting
 wins over the file and the panel says so. No rule makes a harvest stale.
+A rule of kind map is a table of names and values with + and -, one of kind
+table a table with its columns and a row to add, one of kind range two number
+fields, from and to, an empty one meaning no bound; no value is typed as JSON
+(`forms.js`, `rulespage.FORMS`).
 
 ## Sources
 
@@ -558,9 +696,9 @@ path (`Files.checked`). It commits nothing, pushes nothing and starts no job. It
 runs `git` for the branch and for the files of the profile folder that differ
 from the last commit, to show both in the header, and changes nothing with it.
 
-It sends over a network in exactly one case: a Try, to the endpoint the
-installation names, one request for each request named in the click and at most
-three (see Try). The page itself is served on `127.0.0.1` and talks to nothing
+It sends over a network in exactly one case: a Try of the Prompts tab, to the
+endpoint the installation names, one request for each request named in the click
+and at most three (see Try). The Try of the Flow tab sends nothing. The page itself is served on `127.0.0.1` and talks to nothing
 else, and no other action of the editor sends a request to a model or to any
 other host.
 
@@ -576,6 +714,6 @@ its summary from there.
 
 ## What it does not contain yet
 
-What a step does cannot be edited in it: that stays code. The prompts, the
+What a box does cannot be edited in it: that stays code. The prompts, the
 sentences the stages say outside them, the spec, the flow, the rules, the sources
 and the graph file are in the page.

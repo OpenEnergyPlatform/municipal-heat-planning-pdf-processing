@@ -20,3 +20,6 @@ Where no line prints one, in this form:
 
 <!-- with: headings -->
 "headings" are the publication's headings up to this piece, its own last. They say what the piece is about.
+
+<!-- with: passages -->
+"passages" stands instead of "passage" where a piece holds lines of several passages: each passage under its letter, with its kind, page and title. The address of a line carries the letter of its passage, such as A3 or B12.2.

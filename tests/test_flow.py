@@ -13,12 +13,14 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import copy
 import dataclasses
 import json
 
 import pytest
 
-from docpipe.extraction import addressed, flow, remap, runner
+from docpipe.extraction import (addressed, blocks, conditions, flow, remap,
+                                runner)
 from docpipe.extraction.pipeline import Source
 from docpipe.profile import load_profile
 
@@ -50,10 +52,8 @@ def default() -> dict:
     return json.loads(flow.DEFAULT.read_text(encoding="utf-8"))
 
 
-def walk(steps):
-    for step in steps:
-        yield step
-        yield from walk(step.get("steps") or ())
+def tree() -> list:
+    return copy.deepcopy(default()["flow"])
 
 
 def refused(data, whole: bool = True) -> str:
@@ -64,89 +64,196 @@ def refused(data, whole: bool = True) -> str:
     return str(caught.value)
 
 
-def without_step(data: dict, wanted: str) -> dict:
-    def kept(steps):
-        return [{**step, **({"steps": kept(step["steps"])}
-                            if "steps" in step else {})}
-                for step in steps if step["id"] != wanted]
-    return {**data, "steps": kept(data["steps"])}
+def node(drawing: list, ident: str) -> dict:
+    return next(n for n, _ in flow.walk(drawing) if n.get("id") == ident)
 
 
-# -- the steps cannot say something else than the code ---------------------------
-
-def test_every_request_the_code_sends_stands_in_a_step_and_no_other():
-    asked = {step["ask"] for step in walk(flow.load().steps)
-             if "ask" in step}
-    assert asked == set(flow.kinds())
-    assert set(addressed.KINDS) <= asked
-    # the failure by construction: the step that asks `check` taken out
-    assert "check" in refused(without_step(default(), "about"))
-    # and a step that asks what the code does not send
-    data = default()
-    data["steps"][0]["ask"] = "guess"
-    assert "'guess'" in refused(data)
+def said(drawing: list) -> list:
+    return [p["message"] for p in flow.problems(drawing)]
 
 
-def test_a_request_the_code_gains_fails_the_flow_until_a_step_asks_it(
-        monkeypatch):
-    text = flow.DEFAULT.read_text(encoding="utf-8")
-    flow.parse(text, "flow.json", True)
-    monkeypatch.setattr(addressed, "KINDS", addressed.KINDS + ("recount",))
-    assert "recount" in refused(text)
+# -- the drawing says what the code can do --------------------------------------
+
+def test_every_request_the_code_sends_is_asked_by_a_box_of_the_default():
+    # A follow-up is a request of the question it follows, no box of its
+    # own; every other kind the code sends has its box.
+    assert flow.asked(flow.load().tree) == set(flow.kinds()) - {"follow"}
+    # the failure by construction: a box switched off asks nothing
+    drawing = tree()
+    node(drawing, "compute")["off"] = True
+    assert "compute" not in flow.asked(drawing)
 
 
-def test_the_file_names_exactly_the_numbers_the_run_takes():
-    names = [number.name for number in flow.NUMBERS]
-    assert list(default()["numbers"]) == names
-    assert list(flow.default().as_dict()) == names
-    # the failures by construction: a number the code does not take, one
-    # that is missing, one that is no whole number, one below its least
-    data = default()
-    data["numbers"]["search_depth"] = 3
-    assert "'search_depth' is no number of the flow" in refused(data)
-    data = default()
-    del data["numbers"]["replies"]
-    assert "names no replies" in refused(data)
-    for value, said in ((2.5, "whole number"), (True, "whole number"),
-                        ("3", "whole number"), (0, "at least 1")):
-        data = default()
-        data["numbers"]["replies"] = value
-        assert said in refused(data)
+def test_every_number_is_a_setting_of_a_box_of_the_library():
+    taken = {s.number for box in blocks.LIBRARY.values()
+             for s in box.settings if s.number}
+    assert taken == {number.name for number in flow.NUMBERS}
 
 
-def test_every_number_bounds_a_step():
-    bounded = {place for step in walk(flow.load().steps)
-               for place in flow.PLACE.findall(step.get("bound", ""))}
-    assert bounded == {number.name for number in flow.NUMBERS}
-    # the failure by construction: the one step bounded by it says no more
-    data = default()
-    step = next(s for s in walk(data["steps"]) if s["id"] == "entry")
-    del step["bound"]
-    assert "list_meanings bounds no step" in refused(data)
-    data = default()
-    data["steps"][1]["bound"] = "at most {lines} lines"
-    assert "{lines}" in refused(data)
+# -- 8. what the run cannot do is refused before it is saved ---------------------
+
+def test_the_default_drawing_can_run():
+    assert flow.problems(flow.load().tree) == []
 
 
-@pytest.mark.parametrize("change, said", [
-    (lambda data: data.update(order=["figures"]), "has no key 'order'"),
-    (lambda data: data["steps"][0].pop("says"), "must say what it does"),
-    (lambda data: data["steps"][0].update(loops=3), "has no key 'loops'"),
-    (lambda data: data["steps"].append(dict(data["steps"][0])),
-     "stands twice"),
-    (lambda data: data["steps"][0].update(needs="mood"), "no switch"),
-    (lambda data: data.update(steps=[]), "not empty"),
+def test_a_find_where_values_go_is_refused():
+    drawing = tree()
+    values = node(drawing, "values")
+    values["steps"].insert(0, {"id": "lost_find", "box": "find"})
+    assert any("each piece" in m for m in said(drawing))
+
+
+def test_a_question_of_a_coordinate_outside_each_value_is_refused():
+    drawing = tree()
+    drawing.insert(drawing.index(node(drawing, "values")),
+                   {"id": "stray", "box": "coord"})
+    assert any("each coordinate" in m for m in said(drawing))
+
+
+def test_a_frame_of_coordinates_without_a_state_is_refused():
+    drawing = tree()
+    frame = node(drawing, "coordinates")
+    frame["steps"] = [{"id": "only", "box": "coord"}]
+    assert any("needs a state box" in m for m in said(drawing))
+
+
+def test_a_round_that_may_not_end_is_refused():
+    drawing = tree()
+    node(drawing, "search_round")["round"] = {"most": 0}
+    assert any("1 or more" in m for m in said(drawing))
+    node(drawing, "search_round")["round"] = {}
+    assert any("may not end" in m or "is {" in m for m in said(drawing))
+    # a round of most N needs no supply
+    node(drawing, "search_round")["round"] = {"most": 2}
+    assert said(drawing) == []
+
+
+def test_a_question_whose_prompt_the_profile_does_not_write_is_refused(
+        tmp_path):
+    drawing = tree()
+    profile = load_profile("kwp")
+    # kwp writes no names and no work prompt: those boxes are never taken,
+    # which is no problem; a prompt it must write is
+    assert flow.prompt_problems(drawing, profile) == []
+    prompts_dir = tmp_path / "prompts" / "extraction"
+    prompts_dir.mkdir(parents=True)
+    bare = dataclasses.replace(load_profile("default"), home=tmp_path)
+    got = flow.prompt_problems(drawing, bare)
+    assert got and all("writes no prompt" in p["message"] for p in got)
+
+
+@pytest.mark.parametrize("change, part", [
+    (lambda d: d.append({"id": "x", "box": "nothing"}), "there is no box"),
+    (lambda d: d.append(dict(d[0])), "stands twice"),
+    (lambda d: d.insert(0, d.pop(2)), "starts with document"),
+    (lambda d: d.append({"id": "late", "box": "compute"}),
+     "compute stands once at most"),
+    (lambda d: node(d, "own_place").update(loops=3), "has no key 'loops'"),
+    (lambda d: node(d, "own_place").update(set={"mode": "x"}),
+     "no setting 'mode'"),
+    (lambda d: node(d, "own_place").update(own={"follow_ups": -1}),
+     "at least 0"),
+    (lambda d: node(d, "figures").update(off=True), "cannot be off"),
+    (lambda d: node(d, "coordinate_way")["else"].insert(0, {
+        "id": "early_check", "box": "check",
+        "set": {"name": "n", "refuse": {"all": [
+            {"of": "value", "is": "length", "op": "less", "value": 5}]},
+            "sentence": "s"}}), "right after a question"),
 ])
-def test_a_file_the_run_cannot_read_is_refused_by_what_is_wrong(change,
-                                                                said):
+def test_a_drawing_the_run_cannot_do_is_refused_by_what_is_wrong(change,
+                                                                  part):
+    drawing = tree()
+    change(drawing)
+    assert any(part in m for m in said(drawing)), said(drawing)
+
+
+def test_a_file_without_a_drawing_or_with_steps_is_refused():
     data = default()
-    change(data)
-    assert said in refused(data)
+    data.pop("flow")
+    assert "draws the flow" in refused(data)
+    data = default()
+    data["steps"] = data.pop("flow")
+    assert "now a drawing" in refused(data)
 
 
 def test_a_key_written_twice_is_refused():
     assert "'numbers' stands twice" in refused(
         '{"numbers": {}, "numbers": {}}', whole=False)
+
+
+# -- 4. conditions --------------------------------------------------------------
+
+def facts(values: dict):
+    def get(subject, prop):
+        if (subject, prop) not in values:
+            raise LookupError(subject)
+        return values[(subject, prop)]
+    return conditions.Facts(get)
+
+
+def test_each_kind_of_property_evaluates_as_it_says():
+    short = {"all": [{"of": "quote", "is": "length", "op": "less",
+                      "value": 20}]}
+    assert conditions.holds(short, facts({("quote", "length"): 15}))
+    assert not conditions.holds(short, facts({("quote", "length"): 25}))
+    word = {"all": [{"of": "value", "is": "words", "op": "contains",
+                     "value": "gas"}]}
+    assert conditions.holds(word, facts({("value", "words"): "Erdgas"}))
+    assert not conditions.holds(word, facts({("value", "words"): "Öl"}))
+    empty = {"all": [{"of": "value", "is": "words", "op": "empty"}]}
+    assert conditions.holds(empty, facts({("value", "words"): " "}))
+    state = {"all": [{"of": "coordinate", "is": "state", "op": "one_of",
+                      "value": ["open"]}]}
+    for one, held in (("exhausted", True), ("unbacked", True),
+                      ("unanswered", True), ("read", False),
+                      ("", False)):
+        assert conditions.holds(state, facts(
+            {("coordinate", "state"): one})) is held
+    none = {"all": [{"of": "coordinate", "is": "state", "op": "one_of",
+                     "value": ["none"]}]}
+    assert conditions.holds(none, facts({("coordinate", "state"): ""}))
+    yes = {"any": [{"of": "answer", "is": "zero", "not": True},
+                   {"of": "round", "is": "number", "op": "at_least",
+                    "value": 2}]}
+    assert conditions.holds(yes, facts({("answer", "zero"): False,
+                                          ("round", "number"): 1}))
+    assert not conditions.holds(yes, facts({("answer", "zero"): True,
+                                              ("round", "number"): 1}))
+
+
+@pytest.mark.parametrize("row, part", [
+    ({"of": "quote", "is": "length", "op": "less"}, "value is missing"),
+    ({"of": "quote", "is": "length", "op": "less", "value": "zwanzig"},
+     "is a number"),
+    ({"of": "quote", "is": "length", "op": "contains", "value": 3},
+     "takes is"),
+    ({"of": "coordinate", "is": "state", "op": "one_of", "value": ["fine"]},
+     "not 'fine'"),
+    ({"of": "weather", "is": "rain"}, "nothing a condition can be about"),
+])
+def test_a_condition_that_cannot_be_evaluated_is_refused_with_its_reason(
+        row, part):
+    got = conditions.problems({"all": [row]})
+    assert got and part in got[0]
+
+
+def test_a_quote_before_the_first_question_is_refused():
+    drawing = tree()
+    frame = node(drawing, "coordinates")
+    frame["when"] = {"all": [{"of": "quote", "is": "length", "op": "less",
+                              "value": 20}]}
+    assert any("no question before it" in m for m in said(drawing))
+    # after a question it is known
+    frame.pop("when")
+    node(drawing, "after_own_place")["if"][0]["when"] = {"all": [
+        {"of": "quote", "is": "length", "op": "less", "value": 20}]}
+    assert said(drawing) == []
+
+
+def test_a_condition_says_itself_as_a_sentence():
+    assert conditions.sentence({"all": [{
+        "of": "quote", "is": "length", "op": "less", "value": 20}]}) \
+        == "when the quote's length in characters is less than 20"
 
 
 # -- a profile sets numbers, and only numbers -----------------------------------
@@ -160,7 +267,7 @@ def test_a_profile_s_file_is_laid_over_the_default_number_by_number(profile):
     assert after.numbers == {**before.numbers, "search_pieces": 35}
     assert after.owners["search_pieces"] == "scenarios"
     assert after.owners["replies"] == "default"
-    assert after.steps == before.steps
+    assert after.tree == before.tree
     assert after.sha256 != before.sha256
     assert flow.inherited(profile).numbers == before.numbers
     # the failure by construction: the default profile's own file inherits
@@ -168,18 +275,18 @@ def test_a_profile_s_file_is_laid_over_the_default_number_by_number(profile):
     assert flow.inherited(load_profile("default")) is None
 
 
-def test_a_profile_s_file_writes_all_the_steps_or_none(profile):
-    # Since 2026-11-10 the run reads its steps from the file, and a profile
-    # may set them: all of them, in an order the code can run.
-    steps = default()["steps"]
+def test_a_profile_s_own_drawing_is_its_whole_drawing(profile):
+    drawing = tree()
+    node(drawing, "search_round")["round"] = {"most": 2}
     flow.path_of(profile).write_text(flow.dump(
-        {"numbers": {}, "steps": steps}), encoding="utf-8")
-    assert flow.load(profile).steps == steps
-    assert flow.load(profile).steps_from == profile.name
-    # the failure by construction: a step left out
+        {"numbers": {}, "flow": drawing}), encoding="utf-8")
+    assert flow.load(profile).tree == drawing
+    assert flow.load(profile).tree_from == profile.name
+    # the failure by construction: a drawing the run cannot do
+    node(drawing, "search_round")["round"] = {}
     flow.path_of(profile).write_text(flow.dump(
-        {"numbers": {}, "steps": steps[:-1]}), encoding="utf-8")
-    with pytest.raises(flow.FlowError, match="stands 0 times"):
+        {"numbers": {}, "flow": drawing}), encoding="utf-8")
+    with pytest.raises(flow.FlowError, match="search_round"):
         flow.load(profile)
 
 
