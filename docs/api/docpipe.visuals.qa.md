@@ -7,7 +7,8 @@ qa.py: Quality checks for vision model table extraction.
 Pure helper functions that judge a vision model's Markdown
 transcription of a table. Coverage compares it against the PyMuPDF
 source text and catches truncation; duplication counts repeated rows
-and catches repetition loops.
+and catches repetition loops. A source text that cannot be read as the
+table (see `unreadable`) is no measure, so coverage is then unknown.
 
 Author: Felix Vossel
 
@@ -20,6 +21,33 @@ def salient_tokens(text: str) -> set[str]
 ```
 
 Lowercased numbers and words (>= 2 letters) found in *text*.
+
+### words
+
+```python
+def words(text: str) -> set[str]
+```
+
+Lowercased words (>= 3 letters) found in *text*.
+
+### unreadable
+
+```python
+def unreadable(source_text: str, markdown: str, known_words: set[str], *,
+               max_shared: float, min_known: float) -> bool
+```
+
+Whether the source text cannot be read as the table: less than
+*max_shared* of the transcription's salient tokens stand in it, AND less
+than *min_known* of its words occur in the rest of the document
+(*known_words*).
+
+Both, because each alone misjudges. A table of names a short paper uses
+nowhere else has few known words, but a sound transcription shares its
+tokens, so a truncated one still fails. A transcription that shares
+nothing with a source of known words is the transcription's fault. A
+scanned book whose OCR layer reads its sideways tables upside down
+("Ayjiqixayy" for "flexibility") has both.
 
 ### coverage
 
@@ -62,12 +90,18 @@ def assess(
     min_coverage: float = 0.5,
     max_duplication: float = 0.4,
     min_source_tokens: int = 8,
+    known_words: Optional[set[str]] = None,
+    max_shared: float = 0.25,
+    min_known: float = 0.5,
 ) -> tuple[bool, dict]
 ```
 
 Judge a table Markdown transcription. Returns (passed, metrics).
 
 Fails when there are no data rows, duplication exceeds *max_duplication*,
-or coverage (when assessable) is below *min_coverage*.
+or coverage (when assessable) is below *min_coverage*. A coverage below it
+is not assessable where the source text is `unreadable` against
+*known_words*, the words of the rest of the document; without them it is
+taken as readable.
 
 [Back to the index](../README.md)

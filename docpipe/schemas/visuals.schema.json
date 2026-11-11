@@ -57,7 +57,7 @@
           "type": ["number", "null"],
           "minimum": 0,
           "maximum": 1,
-          "description": "Share of the distinct numbers and words of two letters or more in the PDF text of the frame that the transcription also holds. Null where the frame has too few of them (no text layer): unknown, not 1."
+          "description": "Share of the distinct numbers and words of two letters or more in the PDF text of the frame that the transcription also holds. Null where the frame has too few of them (no text layer) or where its text cannot be read as the table (source_unreadable): unknown, not 1."
         },
         "coverage_assessed": {
           "type": "boolean",
@@ -72,6 +72,10 @@
         "has_rows": {
           "type": "boolean",
           "description": "The transcription holds at least one data row."
+        },
+        "source_unreadable": {
+          "type": "boolean",
+          "description": "True where the coverage fell short against a PDF text that cannot be read as the table: less than a quarter of the transcription's numbers and words stand in it and less than half of its words occur in the rest of the document, as with an OCR layer that reads a sideways table upside down. Coverage is then null. Missing in files of older runs."
         }
       },
       "required": ["coverage", "coverage_assessed", "duplication", "has_rows"],

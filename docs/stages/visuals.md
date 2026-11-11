@@ -130,7 +130,15 @@ which fails a table with no data rows, duplicate rows over
 tokens, numbers and words of two or more letters, also found in the Markdown
 (`qa.coverage`); it is `None`, reported as unknown rather than a pass, when
 the source has fewer than `TABLE_QA_MIN_SOURCE_TOKENS` salient tokens (an
-image-only table with no PyMuPDF text layer). A gate failure triggers exactly one retry, with a correction hint, higher
+image-only table with no PyMuPDF text layer). It is also `None` where the PDF text in
+the table's frame cannot be read as the table (`qa.unreadable`): coverage
+fell below `TABLE_QA_MIN_COVERAGE`, less than `TABLE_QA_MAX_SHARED_UNREADABLE`
+of the transcription's salient tokens stand in that text, and less than
+`TABLE_QA_MIN_KNOWN_WORDS` of its words (three letters or more) occur in the
+document's section titles and texts (`_document_words`). The case is a scanned
+book whose OCR layer reads a sideways table upside down ("Ayjiqixayy" for
+"flexibility"). The table then passes or fails on rows and duplication alone,
+and `qa.source_unreadable` is true. A gate failure triggers exactly one retry, with a correction hint, higher
 temperature and penalty; a pass beats a fail, otherwise the
 higher-coverage attempt is kept, and an unassessable coverage never
 displaces the first attempt. Only a table still failing the retry has its consecutive duplicate
@@ -141,7 +149,7 @@ model returned one.
 
 The result of the check is kept. For every table the model transcribed,
 `process_table` leaves `qa` on it: `{passed, coverage, coverage_assessed,
-duplication, has_rows}`, the metrics of the attempt that was kept, measured on
+duplication, has_rows, source_unreadable}`, the metrics of the attempt that was kept, measured on
 what the model wrote (a failing table has its repeated neighbouring rows
 collapsed afterwards, which the metrics do not see), and whether it passed.
 `qa_warning` stays and says the same on a failure. A table the model gave no
@@ -149,6 +157,14 @@ object for (it has a `vlm_why`) has no `qa`, and none means not checked, never
 passed; so has a table of a `visuals.json` written before this, whose failures carry
 `qa_warning` and no `qa`. The merge hands it on and chunking stores it in
 `Tables.qa` (see [chunking](chunking.md)).
+
+The table prompts ask for exactly one header row in which every column
+carries its full heading. A heading over several columns is written in front of
+each column heading below it ("Energy supply (EJ) 2030"), and a title inside
+the table frame goes into the caption; merged cells below the header follow
+the prompt's own rule. In a header spread over several rows the model writes
+empty filler cells before it has written the row below, and loses that row's
+end until the reply is cut off.
 
 ### A table that continues the table before it
 
@@ -294,7 +310,7 @@ present only in `sections.json` and stripped before every write. It gains
 `caption`, optionally `qa_warning`, `after` and `continues` (only on a table that may continue the
 table before it), a
 `{"coverage": float or null, "coverage_assessed": bool, "duplication":
-float, "has_rows": bool}` dict present only when the kept attempt did not
+float, "has_rows": bool, "source_unreadable": bool}` dict present only when the kept attempt did not
 pass the QA gate, and `qa`, the same metrics plus `"passed": bool`, present for
 every table the model transcribed. An item without content has instead
 `vlm_why`, one of the twelve causes of `reading.HOLE_CAUSES` (`cut_off`,
@@ -333,6 +349,7 @@ partial, tested shape rather than objects the code builds.
 | `VLM_MAX_TOKENS` | constant | `8192` | reply token budget; a reply cut off at it is asked once more with more room, and the context budget counts one reply of this size | `config.py` |
 | `RETRY_PENALTIES` | constant | `[None, 1.1, 1.3]` | penalty after the indexed attempt failed (a timeout, or a reply cut off) | `config.py` |
 | `TABLE_QA_MIN_COVERAGE`/`MAX_DUPLICATION`/`MIN_SOURCE_TOKENS` | constant | `0.5`/`0.4`/`8` | QA gate pass thresholds | `config.py`, `qa.py` |
+| `TABLE_QA_MAX_SHARED_UNREADABLE`/`MIN_KNOWN_WORDS` | constant | `0.25`/`0.5` | a coverage below the minimum is not assessed where both hold: under the first share of the transcription's salient tokens stand in the PDF text, and under the second share of its words occur in the document's text | `config.py`, `qa.py` |
 | `TABLE_QA_RETRY_TEMPERATURE`/`RETRY_PENALTY` | constant | `0.4`/`1.3` | sampling for the QA-failure retry | `config.py` |
 | `TOKENS_PER_WORD` | constant | `3.0` | word-to-token factor in the context budget estimate | `config.py` |
 | `SHOWN_CHARS` | constant | `800` | characters of each text a request shows beside its prompts, counted at two a token in the context budget | `config.py` |
@@ -372,7 +389,8 @@ code. The run says so once, in the units each number counts, where it ends:
 `Stage 5: 4 table(s) and 1 figure(s) in 2 document(s) have no content; item(s)
 by cause: cut_off 3, syntax 2; the next run asks only for those`. The stats
 block of each document counts them too, on the line `Items without content`,
-with the causes. A worker's exception is caught in `_enrich`
+with the causes. The `Tables:` line also counts, as `qa_unreadable_sources`,
+the tables whose PDF text could not be read as the table. A worker's exception is caught in `_enrich`
 and the item is kept unenriched, as a hole named `error`, rather than aborting
 the document;
 the same holds one level up for a directory's exception under `--batch`. A
@@ -478,7 +496,8 @@ qa.py: Quality checks for vision model table extraction.
 Pure helper functions that judge a vision model's Markdown
 transcription of a table. Coverage compares it against the PyMuPDF
 source text and catches truncation; duplication counts repeated rows
-and catches repetition loops.
+and catches repetition loops. A source text that cannot be read as the
+table (see `unreadable`) is no measure, so coverage is then unknown.
 
 Author: Felix Vossel
 

@@ -114,6 +114,15 @@ RETRY_PENALTIES = [None, 1.1, 1.3]
 TABLE_QA_MIN_COVERAGE      = 0.5
 TABLE_QA_MAX_DUPLICATION   = 0.4
 TABLE_QA_MIN_SOURCE_TOKENS = 8
+# A source text below the coverage is no measure where both hold (qa.unreadable):
+# under this share of the transcription stands in it, and under this share of
+# its words occurs in the rest of the document. Measured on the scenarios
+# rebuild of 2026-11-11: of 1,609 assessable tables 31 fell below the coverage.
+# 27 were sideways tables of a scanned book with an upside-down OCR layer
+# (shared <= 0.11, known <= 0.41), one a frame whose layer is a heading with
+# two links (0.04, 0.44); the 3 with a readable layer had >= 0.57 and >= 0.86.
+TABLE_QA_MAX_SHARED_UNREADABLE = 0.25
+TABLE_QA_MIN_KNOWN_WORDS       = 0.5
 # Used for the single retry on QA failure.
 TABLE_QA_RETRY_TEMPERATURE = 0.4
 TABLE_QA_RETRY_PENALTY     = 1.3

@@ -39,7 +39,7 @@ from .config import (
     dump_json_atomic,
     max_request_tokens,
 )
-from . import continuation, replies
+from . import continuation, qa, replies
 from .models import ProcessingStats
 from .vision import create_client, check_model_available
 from .process import process_table, process_figure
@@ -94,6 +94,24 @@ def _load_source_texts(output_dir: Path) -> dict[str, str]:
             if t.get("source_text"):
                 out[t["id"]] = t["source_text"]
     return out
+
+
+def _document_words(sections: list) -> set[str]:
+    """The words of a document's section titles and texts: what the table
+    check reads the PDF text under a table against (`qa.unreadable`)."""
+    def text(value) -> str:
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            return " ".join(text(v) for v in value)
+        if isinstance(value, dict):
+            return " ".join(text(v) for v in value.values())
+        return ""
+    found: set[str] = set()
+    for section in sections:
+        found |= qa.words(text(section.get("title")))
+        found |= qa.words(text(section.get("content")))
+    return found
 
 
 # What an older run wrote for a table or figure it never got an object for:
@@ -287,6 +305,7 @@ def run_single(
     )
     lock = threading.Lock()
     source_texts = _load_source_texts(output_dir)
+    known_words = _document_words(enriched["sections"])
 
     def _one(kind: str, item: dict, section: dict,
              before: Optional[dict] = None) -> dict:
@@ -296,6 +315,7 @@ def run_single(
                     item, section, output_dir, client, stats,
                     model=model, lock=lock,
                     source_text=source_texts.get(item["id"], ""),
+                    known_words=known_words,
                     before=before,
                 )
             return process_figure(

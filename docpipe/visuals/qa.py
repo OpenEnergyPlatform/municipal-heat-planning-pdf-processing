@@ -4,7 +4,8 @@ qa.py: Quality checks for vision model table extraction.
 Pure helper functions that judge a vision model's Markdown
 transcription of a table. Coverage compares it against the PyMuPDF
 source text and catches truncation; duplication counts repeated rows
-and catches repetition loops.
+and catches repetition loops. A source text that cannot be read as the
+table (see `unreadable`) is no measure, so coverage is then unknown.
 
 Author: Felix Vossel
 """
@@ -25,6 +26,40 @@ _SEPARATOR_CHARS = set("|-: ")
 def salient_tokens(text: str) -> set[str]:
     """Lowercased numbers and words (>= 2 letters) found in *text*."""
     return {m.group(0).lower() for m in _TOKEN_RE.finditer(text or "")}
+
+
+# Words, for judging whether a source text can be read at all: letters only and
+# at least three, so numbers and stray letter pairs decide nothing.
+_WORD_RE = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
+
+
+def words(text: str) -> set[str]:
+    """Lowercased words (>= 3 letters) found in *text*."""
+    return {m.group(0).lower() for m in _WORD_RE.finditer(text or "")}
+
+
+def unreadable(source_text: str, markdown: str, known_words: set[str], *,
+               max_shared: float, min_known: float) -> bool:
+    """
+    Whether the source text cannot be read as the table: less than
+    *max_shared* of the transcription's salient tokens stand in it, AND less
+    than *min_known* of its words occur in the rest of the document
+    (*known_words*).
+
+    Both, because each alone misjudges. A table of names a short paper uses
+    nowhere else has few known words, but a sound transcription shares its
+    tokens, so a truncated one still fails. A transcription that shares
+    nothing with a source of known words is the transcription's fault. A
+    scanned book whose OCR layer reads its sideways tables upside down
+    ("Ayjiqixayy" for "flexibility") has both.
+    """
+    md = salient_tokens(markdown)
+    found = words(source_text)
+    if not md or not found:
+        return False
+    shared = len(salient_tokens(source_text) & md) / len(md)
+    known = len(found & known_words) / len(found)
+    return shared < max_shared and known < min_known
 
 
 def _data_rows(markdown: str) -> list[str]:
@@ -84,14 +119,27 @@ def assess(
     min_coverage: float = 0.5,
     max_duplication: float = 0.4,
     min_source_tokens: int = 8,
+    known_words: Optional[set[str]] = None,
+    max_shared: float = 0.25,
+    min_known: float = 0.5,
 ) -> tuple[bool, dict]:
     """
     Judge a table Markdown transcription. Returns (passed, metrics).
 
     Fails when there are no data rows, duplication exceeds *max_duplication*,
-    or coverage (when assessable) is below *min_coverage*.
+    or coverage (when assessable) is below *min_coverage*. A coverage below it
+    is not assessable where the source text is `unreadable` against
+    *known_words*, the words of the rest of the document; without them it is
+    taken as readable.
     """
     cov = coverage(source_text, markdown, min_source_tokens)
+    source_unreadable = (cov is not None and cov < min_coverage
+                         and known_words is not None
+                         and unreadable(source_text, markdown, known_words,
+                                        max_shared=max_shared,
+                                        min_known=min_known))
+    if source_unreadable:
+        cov = None
     dup = duplication(markdown)
     has_rows = bool(_data_rows(markdown))
     # An unassessable coverage cannot fail the gate — there is nothing to
@@ -104,4 +152,5 @@ def assess(
         "coverage_assessed": cov is not None,
         "duplication": round(dup, 3),
         "has_rows": has_rows,
+        "source_unreadable": source_unreadable,
     }

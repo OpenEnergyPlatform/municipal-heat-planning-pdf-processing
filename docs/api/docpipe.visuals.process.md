@@ -29,6 +29,7 @@ def process_table(
     model: str | None = None,
     lock: threading.Lock | None = None,
     source_text: str = "",
+    known_words: set[str] | None = None,
     before: dict | None = None,
 ) -> dict
 ```
@@ -42,7 +43,9 @@ it does, writes its rows under that table's head. The result then keeps
 the id of the table before it as ``after`` and the answer as
 ``continues`` (owner decision 2026-11-06).
 
-A QA gate checks coverage against *source_text* and row duplication; on
+A QA gate checks coverage against *source_text* and row duplication; a
+source text that cannot be read as the table against *known_words*, the
+words of the document's text, is no measure (`qa.unreadable`). On
 failure the table is still returned (best effort) but carries a
 ``qa_warning`` field. The result of the check is kept for every table the
 model transcribed, as ``qa`` (the metrics of the kept attempt and whether

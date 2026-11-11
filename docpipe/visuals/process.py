@@ -33,6 +33,8 @@ from .config import (
     TABLE_QA_MIN_COVERAGE,
     TABLE_QA_MAX_DUPLICATION,
     TABLE_QA_MIN_SOURCE_TOKENS,
+    TABLE_QA_MAX_SHARED_UNREADABLE,
+    TABLE_QA_MIN_KNOWN_WORDS,
     TABLE_QA_RETRY_TEMPERATURE,
     TABLE_QA_RETRY_PENALTY,
     figure_system_prompt,
@@ -54,12 +56,16 @@ _QA_RETRY_HINT = (
 )
 
 
-def _assess_table(markdown: str, source_text: str) -> tuple[bool, dict]:
+def _assess_table(markdown: str, source_text: str,
+                  known_words: set[str] | None) -> tuple[bool, dict]:
     return qa.assess(
         markdown, source_text,
         min_coverage=TABLE_QA_MIN_COVERAGE,
         max_duplication=TABLE_QA_MAX_DUPLICATION,
         min_source_tokens=TABLE_QA_MIN_SOURCE_TOKENS,
+        known_words=known_words,
+        max_shared=TABLE_QA_MAX_SHARED_UNREADABLE,
+        min_known=TABLE_QA_MIN_KNOWN_WORDS,
     )
 
 
@@ -97,6 +103,7 @@ def process_table(
     model: str | None = None,
     lock: threading.Lock | None = None,
     source_text: str = "",
+    known_words: set[str] | None = None,
     before: dict | None = None,
 ) -> dict:
     """
@@ -109,7 +116,9 @@ def process_table(
     the id of the table before it as ``after`` and the answer as
     ``continues`` (owner decision 2026-11-06).
 
-    A QA gate checks coverage against *source_text* and row duplication; on
+    A QA gate checks coverage against *source_text* and row duplication; a
+    source text that cannot be read as the table against *known_words*, the
+    words of the document's text, is no measure (`qa.unreadable`). On
     failure the table is still returned (best effort) but carries a
     ``qa_warning`` field. The result of the check is kept for every table the
     model transcribed, as ``qa`` (the metrics of the kept attempt and whether
@@ -167,7 +176,7 @@ def process_table(
         return result
 
     raw_md = response["markdown"]
-    passed, metrics = _assess_table(raw_md, source_text)
+    passed, metrics = _assess_table(raw_md, source_text, known_words)
 
     if not passed:
         retry = call_vision(
@@ -179,7 +188,8 @@ def process_table(
         # A retry that is a hole keeps the first attempt, which was read.
         if not isinstance(retry, Hole):
             retry_md = retry["markdown"]
-            passed2, metrics2 = _assess_table(retry_md, source_text)
+            passed2, metrics2 = _assess_table(retry_md, source_text,
+                                              known_words)
             # Keep the better attempt: prefer one that passes, else higher
             # coverage. An unassessable coverage is not "better" - there is
             # nothing to compare - so it never displaces the first attempt.
@@ -212,11 +222,16 @@ def process_table(
             stats.captions_generated += 1
         if not passed:
             stats.qa_failed_tables += 1
+        if metrics["source_unreadable"]:
+            stats.qa_unreadable_sources += 1
         if continues:
             stats.continued_tables += 1
         stats.processed_tables += 1
 
-    if passed:
+    if passed and metrics["source_unreadable"]:
+        log.info("  ✓ Table %s (its PDF text cannot be read as the table: "
+                 "coverage not assessed)", table["id"])
+    elif passed:
         log.info("  ✓ Table %s", table["id"])
     else:
         cov = metrics["coverage"]

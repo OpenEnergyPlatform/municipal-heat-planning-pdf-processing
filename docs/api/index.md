@@ -267,7 +267,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.visuals.models](docpipe.visuals.models.md): Data structures for the imageprocessing module. (3 classes)
 - [docpipe.visuals.pipeline](docpipe.visuals.pipeline.md): Orchestrates the imageprocessing stage. (6 functions)
 - [docpipe.visuals.process](docpipe.visuals.process.md): Core processing logic for table and figure enrichment. (2 functions)
-- [docpipe.visuals.qa](docpipe.visuals.qa.md): Quality checks for vision model table extraction. (5 functions)
+- [docpipe.visuals.qa](docpipe.visuals.qa.md): Quality checks for vision model table extraction. (7 functions)
 - [docpipe.visuals.replies](docpipe.visuals.replies.md): The reply each vision request asks for, as a JSON schema.
 - [docpipe.visuals.vision](docpipe.visuals.vision.md): Vision model interaction layer over an OpenAI compatible API. (3 functions)
 

@@ -89,6 +89,9 @@ class ProcessingStats:
     skipped_missing: int = 0
     captions_generated: int = 0
     qa_failed_tables: int = 0  # extracted but flagged low-quality by the QA gate
+    # Tables whose PDF text cannot be read as the table (qa.unreadable), so
+    # their coverage was not assessed.
+    qa_unreadable_sources: int = 0
     # Tables this run transcribed that continue the table before them
     # (continuation.py): the merge joins them there.
     continued_tables: int = 0
@@ -115,6 +118,7 @@ class ProcessingStats:
             f"{sep}\n"
             f"Tables:  {self.processed_tables}/{self.total_tables} succeeded"
             f" ({self.failed_tables} failed, {self.qa_failed_tables} low-QA,"
+            f" {self.qa_unreadable_sources} with unreadable PDF text,"
             f" {self.continued_tables} continue the table before)\n"
             f"Figures: {self.processed_figures}/{self.total_figures} succeeded"
             f" ({self.failed_figures} failed)\n"
