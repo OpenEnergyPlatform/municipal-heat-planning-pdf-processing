@@ -39,15 +39,13 @@ The active profile's extraction_spec.json, else kwp's.
 ### organisation_normaliser
 
 ```python
-def organisation_normaliser(spec_path: Path)
+def organisation_normaliser(drawing: dict)
 ```
 
-The organisation-key function of the spec's own profile's `kg.py`.
-
-Imported, not reimplemented: `profiles/<name>/kg.py` is what mints the
-organisation IRI (`mint("organisation", normalise(name))`), so this is
-the one function that decides which spellings share a node. It is a pure
-string function with no rdflib or database import behind it.
+The organisation-key function of the profile: the fold the graph
+writer mints an organisation's IRI with (`graphkit.normalise` with the
+legal forms of the drawing), so the spellings this list groups are the
+ones that share a node. None without a drawing.
 
 ### harvest_files
 
@@ -79,18 +77,29 @@ still a unit the plans use, and it is the row the list is grown from.
 not was read onto its entry by the model, which is what `unit_raw` is
 kept for.
 
+### drawing_of
+
+```python
+def drawing_of(spec_path: Path) -> dict
+```
+
+The drawing (`map`) of the graph file beside the spec, {} where
+there is none.
+
 ### organisation_parameters
 
 ```python
-def organisation_parameters(spec) -> list
+def organisation_parameters(spec, drawing: dict) -> list
 ```
 
-The spec's parameters that mint an organisation node, by `kg.node`.
+The spec's parameters that mint an organisation node: those an arrow
+of the drawing reads into a box of the organisation class.
 
 ### organisation_rows
 
 ```python
-def organisation_rows(files: list, spec, normalise=None) -> list
+def organisation_rows(files: list, spec, drawing: dict,
+                      normalise=None) -> list
 ```
 
 One row per organisation name as a plan writes it.

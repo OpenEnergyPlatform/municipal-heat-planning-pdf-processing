@@ -32,7 +32,9 @@ zusammenlegen"):
   and definition, a definition replaced by the ontology's, a property no
   field asks as a new field (a draft: it needs an example before the strict
   check takes it), or merged into an existing field as one more property it
-  writes (`also`).
+  writes: an arrow of the drawing of the profile's graph file, from the
+  field to the box of the property's class (`take` hands the drawing back
+  beside the spec).
 
 Author: Felix Vossel
 """
@@ -432,8 +434,9 @@ def differences(profile, spec_raw: Optional[dict], snapshot: Optional[dict],
         try:
             from docpipe.compile import shapes
             found, _prefixes = shapes.read(files)
-            rows = draft.differences(found,
-                                     draft.read_as_shapes(spec_raw, profile))
+            from docpipe import graphfile
+            rows = draft.differences(found, spec_raw,
+                                     drawing=graphfile.load(profile).map)
         except ImportError:
             skipped = "rdflib is not installed"
     by_field: dict = {}
@@ -504,21 +507,71 @@ def _key_like(vocabulary: dict, iri: str) -> str:
     return iri
 
 
-def _node_of(spec_raw: dict, shape_class: str) -> Optional[str]:
+def _box_of_class(drawing: dict, shape_class: str,
+                  field: str) -> Optional[dict]:
+    """The box of *drawing* whose class is *shape_class*: the one *field*
+    already has an arrow to where it has one, else the first."""
     from docpipe.compile import draft
     wanted = draft.local(shape_class or "")
-    for node, klass in draft._node_classes(spec_raw).items():
-        if klass == wanted:
-            return node
-    return None
+    boxes = [box for box in drawing.get("boxes") or ()
+             if isinstance(box.get("class"), str)
+             and draft.local(box["class"].split(":")[-1]) == wanted]
+    own = {arrow.get("to") for arrow in drawing.get("arrows") or ()
+           if arrow.get("from") == field}
+    return next((box for box in boxes if box["id"] in own),
+                boxes[0] if boxes else None)
+
+
+def _draw(drawing: dict, field: str, shape, prop, prefixes: dict) -> tuple:
+    """Draw an arrow from *field* to the box of the class of *shape*,
+    writing *prop*, into *drawing*: (done, what was said). Where no box of
+    that class exists one is added; where the arrow is drawn already,
+    nothing changes."""
+    from docpipe.compile import draft
+    if not drawing.get("boxes"):
+        return False, "the profile's graph file has no drawing to draw it in"
+    names = draft.Names({**prefixes, **(drawing.get("prefixes") or {})})
+    curie = names.curie(prop.path)
+    box = _box_of_class(drawing, shape.target_class, field)
+    if box is None:
+        klass = names.curie(shape.target_class)
+        wanted = draft.slug(shape.name) or "node"
+        wanted = wanted if wanted[0].isalpha() else f"node_{wanted}"
+        taken = {one["id"] for one in drawing["boxes"]}
+        name, number = wanted, 2
+        while name in taken:
+            name, number = f"{wanted}_{number}", number + 1
+        box = {"id": name, "class": klass, "count": "per_document",
+               "address": {"folder": name, "key": name, "from": [field],
+                           "fold": True},
+               "note": f"Added by a merge from the shape {shape.name}: one "
+                       f"node of this class per document, named after the "
+                       f"reading of {field}."}
+        drawing["boxes"].append(box)
+    if any(one.get("from") == field and one.get("to") == box["id"]
+           and one.get("property") == curie
+           for one in drawing.get("arrows") or ()):
+        return False, f"{field} writes {curie} on {box['id']} already"
+    drawing.setdefault("arrows", []).append(
+        {"from": field, "to": box["id"], "property": curie})
+    for prefix in names.used:
+        drawing.setdefault("prefixes", {}).setdefault(
+            prefix, names.prefixes[prefix])
+    return True, f"{field} writes what it writes as {curie} on {box['id']}"
 
 
 def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
          profile=None, files: Optional[list] = None) -> dict:
-    """{"data": the spec with the chosen rows applied, "done": [...],
-    "refused": [{"id", "why"}]}. *chosen* is [{"id", "action", "into"?}];
-    `into` names the field a property is merged into."""
+    """{"data": the spec with the chosen rows applied, "map": the drawing
+    of the profile's graph file with the arrows a merge or a new field
+    drew, None where it stayed as it was, "done": [...], "refused":
+    [{"id", "why"}]}. *chosen* is [{"id", "action", "into"?}]; `into` names
+    the field a property is merged into."""
+    from docpipe import graphfile
     data = copy.deepcopy(spec_raw)
+    drawing = copy.deepcopy(graphfile.load(profile).map or {}) \
+        if profile is not None else {}
+    before = copy.deepcopy(drawing)
     parameters = {one.get("uri"): one for one in data.get("parameters") or ()
                   if isinstance(one, dict)}
     found = None
@@ -582,80 +635,42 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
                                                      "such property"})
                 continue
             if action == "merge":
-                said = _merge(data, parameters, pick.get("into"), prop,
-                              found[1])
+                said = _merge(parameters, drawing, pick.get("into"), shape,
+                              prop, found[1])
             else:
-                said = _new_field(data, parameters, shape, prop, found[1],
-                                  snapshot)
+                said = _new_field(data, parameters, drawing, shape, prop,
+                                  found[1], snapshot)
             (done if said[0] else refused).append(
                 {"id": row_id, ("did" if said[0] else "why"): said[1]})
         else:
             refused.append({"id": row_id, "why": "no such row"})
-    return {"data": data, "done": done, "refused": refused}
+    return {"data": data, "map": drawing if drawing != before else None,
+            "done": done, "refused": refused}
 
 
 def merge_targets(spec_raw: Optional[dict]) -> list:
-    """[{"into", "label"}]: every predicate of every field a property of the
-    shapes can be merged into (`draft.predicate_places`): the value itself,
-    its unit, an edge of one of its axes. *into* is "field|key.key...", the
-    place `_merge` writes `also` to."""
-    from docpipe.compile import draft
-    out = []
-    for parameter in (spec_raw or {}).get("parameters") or ():
-        if not isinstance(parameter, dict) or not parameter.get("uri"):
-            continue
-        for where, block in draft.predicate_places(parameter):
-            what = (block.get("label") or block.get("schema_slot")
-                    or block.get("predicate"))
-            axis = f" · {where[1]}" if where[0] == "axes" else ""
-            out.append({"into": parameter["uri"] + "|" + ".".join(where),
-                        "label": f"{parameter['uri']}{axis}: {what}"})
-    return out
+    """[{"into", "label"}]: every field a property of the shapes can be
+    merged into. *into* is the field's name; the merge draws the arrow
+    from it."""
+    return [{"into": parameter["uri"],
+             "label": f"{parameter['uri']}: {parameter.get('label') or ''}"
+             .rstrip(": ")}
+            for parameter in (spec_raw or {}).get("parameters") or ()
+            if isinstance(parameter, dict) and parameter.get("uri")]
 
 
-def _same(one: dict, other: dict) -> bool:
-    return (one.get("prefix"), one.get("predicate")) \
-        == (other.get("prefix"), other.get("predicate"))
-
-
-def _merge(data, parameters, into, prop, prefixes) -> tuple:
-    """Write *prop* as a further predicate (`also`) of the block *into*
-    names ("field|key.key...", `merge_targets`): the graph then holds the
-    value that block writes under *prop* as well (`graphfile.add_also`). A
-    field with a single predicate may be named alone."""
-    from docpipe.compile import draft
-    field, _, where = str(into or "").partition("|")
-    parameter = parameters.get(field)
-    if parameter is None:
+def _merge(parameters, drawing, into, shape, prop, prefixes) -> tuple:
+    """Draw *prop* as one more property the field *into* writes: an arrow
+    from the field to the box of the shape's class (`_draw`), so the graph
+    holds the value the field reads under *prop* as well."""
+    field = str(into or "")
+    if field not in parameters:
         return False, f"{field!r} is no field"
-    places = draft.predicate_places(parameter)
-    if where:
-        block = next((one for at, one in places if ".".join(at) == where),
-                     None)
-        if block is None:
-            return False, f"{into!r} names no predicate {field} writes"
-    elif len(places) == 1:
-        block = places[0][1]
-    else:
-        return False, (f"{field} writes {len(places)} predicates; name the "
-                       f"one the property is merged into")
-    names = draft.Names(prefixes)
-    label = prop.name or draft.local(prop.path)
-    merged = draft._predicate(prop, label, names)
-    present = [block.get("also")] if isinstance(block.get("also"), dict) \
-        else list(block.get("also") or ())
-    if _same(block, merged) or any(_same(one, merged) for one in present
-                                   if isinstance(one, dict)):
-        return False, (f"{field} writes {merged['prefix']}:"
-                       f"{merged['predicate']} already")
-    block["also"] = merged if not present else present + [merged]
-    what = block.get("label") or block.get("schema_slot") \
-        or block.get("predicate")
-    return True, (f"{field} writes what it writes as {what} under "
-                  f"{merged['prefix']}:{merged['predicate']} as well")
+    return _draw(drawing, field, shape, prop, prefixes)
 
 
-def _new_field(data, parameters, shape, prop, prefixes, snapshot) -> tuple:
+def _new_field(data, parameters, drawing, shape, prop, prefixes,
+               snapshot) -> tuple:
     from docpipe.compile import draft
     single = copy.copy(shape)
     single.properties = [prop]
@@ -665,14 +680,29 @@ def _new_field(data, parameters, shape, prop, prefixes, snapshot) -> tuple:
                        "the graph's links say it, no field asks it")
     raw = draft.finished({"parameters": drafted["parameters"]})[
         "parameters"][0]
-    node = _node_of(data, shape.target_class)
-    if node and isinstance(raw.get("kg"), dict) \
-            and raw["kg"].get("node") == shape.name:
-        raw["kg"]["node"] = node
     name, number = raw["uri"], 2
     while name in parameters:
         name, number = f"{raw['uri']}_{number}", number + 1
+    shown = raw["uri"]
     raw["uri"] = name
+    # Its arrow: the drafted one, into the box the drawing has for the
+    # shape's class, else into the drafted box.
+    said = drafted["graph"]["map"]
+    boxes = {one["id"]: one for one in said["boxes"]}
+    if drawing.get("boxes"):
+        for arrow in [one for one in said["arrows"]
+                      if one.get("from") == shown]:
+            into = boxes[arrow["to"]]
+            here = _box_of_class(drawing, shape.target_class, name) \
+                if into.get("count") == "per_document" else None
+            if here is None and not any(one["id"] == into["id"]
+                                        for one in drawing["boxes"]):
+                drawing["boxes"].append(copy.deepcopy(into))
+            drawing.setdefault("arrows", []).append(
+                {**arrow, "from": name,
+                 "to": here["id"] if here is not None else into["id"]})
+        for prefix, namespace in (said.get("prefixes") or {}).items():
+            drawing.setdefault("prefixes", {}).setdefault(prefix, namespace)
     data.setdefault("parameters", []).append(raw)
     parameters[name] = raw
     return True, (f"{name}: a new field for {draft.local(prop.path)}; it "

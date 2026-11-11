@@ -35,7 +35,9 @@ zusammenlegen"):
   and definition, a definition replaced by the ontology's, a property no
   field asks as a new field (a draft: it needs an example before the strict
   check takes it), or merged into an existing field as one more property it
-  writes (`also`).
+  writes: an arrow of the drawing of the profile's graph file, from the
+  field to the box of the property's class (`take` hands the drawing back
+  beside the spec).
 
 Author: Felix Vossel
 
@@ -166,9 +168,11 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
          profile=None, files: Optional[list] = None) -> dict
 ```
 
-{"data": the spec with the chosen rows applied, "done": [...],
-"refused": [{"id", "why"}]}. *chosen* is [{"id", "action", "into"?}];
-`into` names the field a property is merged into.
+{"data": the spec with the chosen rows applied, "map": the drawing
+of the profile's graph file with the arrows a merge or a new field
+drew, None where it stayed as it was, "done": [...], "refused":
+[{"id", "why"}]}. *chosen* is [{"id", "action", "into"?}]; `into` names
+the field a property is merged into.
 
 ### merge_targets
 
@@ -176,9 +180,8 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
 def merge_targets(spec_raw: Optional[dict]) -> list
 ```
 
-[{"into", "label"}]: every predicate of every field a property of the
-shapes can be merged into (`draft.predicate_places`): the value itself,
-its unit, an edge of one of its axes. *into* is "field|key.key...", the
-place `_merge` writes `also` to.
+[{"into", "label"}]: every field a property of the shapes can be
+merged into. *into* is the field's name; the merge draws the arrow
+from it.
 
 [Back to the index](../README.md)

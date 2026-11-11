@@ -12,10 +12,11 @@ not an answer anyone outside this repository can use, and it is not
 one this repository can check.
 
 So the schema is generated from the spec, not written beside it. The
-parameters, their axes, the closed lists, the questions and the `kg`
-blocks all come from `profiles/<name>/extraction_spec.json`, so a
-spec change that is not reflected in the schema is a failing test
-rather than a stale document. Three schemas come out:
+parameters, their axes, the closed lists and the questions come from
+`profiles/<name>/extraction_spec.json`, and what a field becomes in the
+graph from the drawing in `profiles/<name>/graph.json`, so a change that
+is not reflected in the schema is a stale document and no silent one.
+Three schemas come out:
 
   harvest  one line of \<name>.jsonl: an accepted tuple or a refused
            claim
@@ -25,9 +26,11 @@ rather than a stale document. Three schemas come out:
 Every property carries a `description`, and every coordinate
 additionally carries `x-question` (the German question the model was
 asked), `x-options` (the closed list with the corpus spellings) and
-`x-kg` (what it becomes in the graph). `x-kg` is the spec's own `kg`
-block, the same one the serializer reads, so what a reader is told
-and what is written cannot drift apart.
+`x-kg` (what it becomes in the graph). `x-kg` lists the arrows of the
+drawing that read the field or the coordinate, the same drawing the
+serializer writes the graph from, so what a reader is told and what is
+written cannot drift apart: each says the box it points at, that box's
+class, the property it writes and the brick that makes its object.
 
     python -m docpipe.extraction.schema kwp            # print
     python -m docpipe.extraction.schema kwp --write    # write into the profile
@@ -39,10 +42,11 @@ Author: Felix Vossel
 ### harvest_schema
 
 ```python
-def harvest_schema(spec) -> dict
+def harvest_schema(spec, drawing=None) -> dict
 ```
 
-One line of \<name>.jsonl.
+One line of \<name>.jsonl. *drawing* (`graph.Drawing`) is what the
+`x-kg` of a field and of a coordinate says: the arrows that read it.
 
 ### stamp_schema
 
@@ -63,7 +67,7 @@ One line of \<name>.trace.jsonl.gz: one event, never an aggregate.
 ### build
 
 ```python
-def build(spec) -> dict
+def build(spec, drawing=None) -> dict
 ```
 
 The three schemas of one profile's extraction output.

@@ -64,7 +64,7 @@ DEFAULT = Path(__file__).resolve().parent / "builtin" / "default" / FILE
 DEFAULT_NAME = "default"
 ENV = "DOCPIPE_GRAPH_FILE"
 EFFECTS = ("report", "leave_out_value", "leave_out_paper", "stop")
-SECTIONS = ("classes", "constraints", "rules")
+SECTIONS = ("classes", "constraints", "rules", "map")
 ADDRESS_KEYS = ("folder", "key", "base")
 
 
@@ -80,6 +80,7 @@ class Graph:
     owners: dict = field(default_factory=dict)
     files: tuple = ()
     sha256: str = ""
+    map: dict = field(default_factory=dict)
 
     def written(self, klass: str) -> bool:
         return (self.classes.get(klass) or {}).get("written", True)
@@ -178,7 +179,114 @@ def parse(raw: str, where, known: Optional[dict] = None) -> dict:
         said = rule_problem(name, value, known)
         if said is not None:
             raise GraphError(f"{where}: {said}")
+    if out["map"]:
+        wrong = map_problem(out["map"])
+        if wrong:
+            raise GraphError(f"{where}: map: {wrong}")
     return out
+
+
+# -- the drawing: how the harvest becomes the graph ---------------------------
+
+MAP_KEYS = ("prefixes", "prefix_width", "legal_forms", "document",
+            "evidence", "boxes", "arrows")
+DOCUMENT_KEYS = ("facts", "admit", "check", "front_pages", "claims", "strict",
+                 "decisions")
+EVIDENCE_KEYS = ("prose", "join", "nodes")
+BOX_KEYS = ("id", "class", "class_brick", "count", "of", "among", "address",
+            "written", "required", "once", "same_node", "uuid", "evidence",
+            "admit", "settle", "table", "when", "value", "name",
+            "name_brick", "order", "names", "class_by", "strict", "note")
+ARROW_KEYS = ("from", "to", "property", "brick", "settings", "objects",
+              "evidence", "pick", "single", "first_in_file", "when", "order",
+              "cite_once", "note", "label", "accepted")
+COUNTS = ("per_document", "per_name", "per_distinct", "per_answer",
+          "per_value", "per_object")
+_NAME = re.compile(r"[A-Za-z][\w-]*:[\w.-]+|<[^>\s]+>")
+
+
+def _unknown(said: dict, allowed: tuple, what: str) -> Optional[str]:
+    unknown = sorted(set(said) - set(allowed))
+    if unknown:
+        return (f"{what} has no {unknown[0]!r}"
+                f"{_nearest(unknown[0], allowed)}")
+    return None
+
+
+def map_problem(drawing) -> Optional[str]:
+    """What is wrong with the shape of a drawing, None where nothing is:
+    every key known, every box named once, every arrow between boxes or
+    from a reading to a box, with a property. What a drawing names of a
+    spec, of the shapes and of the bricks is held to them where the
+    profile is known (`docpipe.extraction.graph.check`)."""
+    if not isinstance(drawing, dict):
+        return "a drawing is an object"
+    wrong = _unknown(drawing, MAP_KEYS, "a drawing")
+    if wrong:
+        return wrong
+    prefixes = drawing.get("prefixes") or {}
+    if not isinstance(prefixes, dict) or not all(
+            isinstance(iri, str) and re.match(r"https?://\S+[/#]$", iri)
+            for iri in prefixes.values()):
+        return "prefixes name an address ending in / or # each"
+    for part, keys in (("document", DOCUMENT_KEYS),
+                       ("evidence", EVIDENCE_KEYS)):
+        said = drawing.get(part) or {}
+        if not isinstance(said, dict):
+            return f"{part} is an object"
+        wrong = _unknown(said, keys, part)
+        if wrong:
+            return wrong
+    boxes = drawing.get("boxes")
+    if not isinstance(boxes, list) or not boxes:
+        return "a drawing has boxes"
+    seen: set = set()
+    for number, box in enumerate(boxes):
+        if not isinstance(box, dict):
+            return f"box {number + 1} is an object"
+        name = box.get("id")
+        if not isinstance(name, str) or not re.fullmatch(r"[a-z][a-z0-9_]*",
+                                                         name):
+            return f"box {number + 1}: its id is a lower-case word"
+        if name in seen:
+            return f"box {name} is drawn twice"
+        seen.add(name)
+        wrong = _unknown(box, BOX_KEYS, f"box {name}")
+        if wrong:
+            return wrong
+        if box.get("count") not in COUNTS:
+            return (f"box {name}: count is one of {', '.join(COUNTS)}"
+                    f"{_nearest(box.get('count'), COUNTS)}")
+        klass = box.get("class")
+        if klass is not None and not _NAME.fullmatch(str(klass)):
+            return f"box {name}: class {klass!r} is no prefixed name"
+        if "written" in box and not isinstance(box["written"], bool):
+            return f"box {name}: written is true or false"
+    arrows = drawing.get("arrows")
+    if not isinstance(arrows, list):
+        return "arrows are a list"
+    drawn: set = set()
+    for number, arrow in enumerate(arrows):
+        if not isinstance(arrow, dict):
+            return f"arrow {number + 1} is an object"
+        wrong = _unknown(arrow, ARROW_KEYS, f"arrow {number + 1}")
+        if wrong:
+            return wrong
+        if arrow.get("to") not in seen:
+            return (f"arrow {number + 1}: it points at "
+                    f"{arrow.get('to')!r}, which is no box"
+                    f"{_nearest(arrow.get('to'), seen)}")
+        if not isinstance(arrow.get("from"), str) or not arrow["from"]:
+            return f"arrow {number + 1}: it starts at a field or a box"
+        if not _NAME.fullmatch(str(arrow.get("property") or "")):
+            return (f"arrow {number + 1}: property "
+                    f"{arrow.get('property')!r} is no prefixed name")
+        key = (arrow["from"], arrow["to"], arrow["property"])
+        if key in drawn:
+            return (f"arrow {arrow['from']} -> {arrow['to']} "
+                    f"{arrow['property']} is drawn twice")
+        drawn.add(key)
+    return None
 
 
 def dump(data: dict, known: Optional[dict] = None, newline: str = "\n") -> str:
@@ -187,12 +295,13 @@ def dump(data: dict, known: Optional[dict] = None, newline: str = "\n") -> str:
     rules = data.get("rules") or {}
     ordered = {name: rules[name] for name in known if name in rules}
     ordered.update({k: v for k, v in rules.items() if k not in ordered})
-    text = json.dumps({"classes": dict(sorted((data.get("classes") or {})
-                                              .items())),
-                       "constraints": dict(sorted(
-                           (data.get("constraints") or {}).items())),
-                       "rules": ordered},
-                      ensure_ascii=False, indent=2) + "\n"
+    whole = {"classes": dict(sorted((data.get("classes") or {}).items())),
+             "constraints": dict(sorted(
+                 (data.get("constraints") or {}).items())),
+             "rules": ordered}
+    if data.get("map"):
+        whole["map"] = data["map"]
+    text = json.dumps(whole, ensure_ascii=False, indent=2) + "\n"
     return text if newline == "\n" else text.replace("\n", newline)
 
 
@@ -212,7 +321,13 @@ def line(profile) -> list:
 
 
 def _lay(into: dict, owners: dict, said: dict, owner: str) -> None:
+    # A drawing is one piece: the nearest file that has one has it whole.
+    if said.get("map"):
+        into["map"] = said["map"]
+        owners["map"] = owner
     for section in SECTIONS:
+        if section == "map":
+            continue
         for key, value in said[section].items():
             if section == "classes":
                 into[section][key] = {**into[section].get(key, {}), **value}
@@ -266,17 +381,14 @@ def load(profile=None, environ=None, skip_own: bool = False) -> Graph:
             else:
                 owners[f"rules/{name}"] = "environment"
     return Graph(data["classes"], data["constraints"], data["rules"], owners,
-                 tuple(files), digest.hexdigest())
+                 tuple(files), digest.hexdigest(), data["map"])
 
 
 _cache: dict = {}
 _envs: dict = {}
 
 
-def get(name: str, owner: str):
-    """The value of the graph rule *name* of the profile called *owner*,
-    as its files, `DOCPIPE_GRAPH_FILE` and the settings of its rules say it
-    now."""
+def _now(owner: str) -> Graph:
     from .profile import load_profile
     envs = _envs.get(owner)
     if envs is None:
@@ -287,10 +399,23 @@ def get(name: str, owner: str):
            tuple(os.environ.get(env) for env in envs))
     if key not in _cache:
         _cache[key] = load(load_profile(owner))
-    rules = _cache[key].rules
+    return _cache[key]
+
+
+def get(name: str, owner: str):
+    """The value of the graph rule *name* of the profile called *owner*,
+    as its files, `DOCPIPE_GRAPH_FILE` and the settings of its rules say it
+    now."""
+    rules = _now(owner).rules
     if name not in rules:
         raise GraphError(f"{name!r} is no graph rule of {owner}")
     return rules[name]
+
+
+def get_map(owner: str) -> dict:
+    """The drawing of the profile called *owner*, as its files and
+    `DOCPIPE_GRAPH_FILE` have it now; {} where none has one."""
+    return dict(_now(owner).map or {})
 
 
 def reset() -> None:
@@ -596,177 +721,3 @@ def _repeat(text: str, done: list) -> str:
             named = {node for node in nodes if f"<{node}>" in text}
             text = remove(text, named) if named else text
     return text
-
-
-# -- `also`: a value written under further predicates ------------------------
-
-def _listed(said) -> list:
-    if isinstance(said, dict):
-        return [said]
-    if isinstance(said, list):
-        return [one for one in said if isinstance(one, dict)]
-    return []
-
-
-def also_pairs(spec_raw: dict) -> list:
-    """[(classes, predicate block, [further predicate blocks])] of a spec
-    read as its shapes name its properties (`draft.read_as_shapes`): every
-    block that writes a predicate and names further ones (`also`), with the
-    classes of the node it writes on (`draft.field_classes`). A parameter's
-    `kg` block may name them beside its `property`, for that property."""
-    from .compile import draft
-    node_class = draft._node_classes(spec_raw)
-    out = []
-    for parameter in spec_raw.get("parameters") or ():
-        if not isinstance(parameter, dict):
-            continue
-        classes = draft.field_classes(parameter, node_class)
-        kg = parameter.get("kg")
-        if isinstance(kg, dict) and kg.get("also") \
-                and isinstance(kg.get("property"), dict):
-            out.append((classes, kg["property"], _listed(kg["also"])))
-        for _where, block in draft.predicate_places(parameter):
-            if block.get("also"):
-                out.append((classes, block, _listed(block["also"])))
-    return [one for one in out if one[2]]
-
-
-def _iri_of(block: dict, prefixes: dict) -> Optional[str]:
-    predicate = block.get("predicate")
-    if not isinstance(predicate, str):
-        return None
-    if predicate.startswith("http"):
-        return predicate
-    prefix = block.get("prefix")
-    return prefixes[prefix] + predicate if prefix in prefixes else None
-
-
-def _short(iri: str, prefixes: dict) -> Optional[str]:
-    """The prefixed name of *iri* under one of *prefixes*, None where none
-    binds it with a plain local name."""
-    for name, namespace in prefixes.items():
-        rest = iri[len(namespace):]
-        if iri.startswith(namespace) and re.fullmatch(r"[A-Za-z_][\w-]*",
-                                                      rest):
-            return f"{name}:{rest}"
-    return None
-
-
-def shape_prefixes(shapes) -> dict:
-    """{prefix: namespace} the shapes files declare."""
-    out: dict = {}
-    for path in shapes or ():
-        try:
-            out.update(dict(_PREFIX.findall(
-                Path(path).read_text(encoding="utf-8"))))
-        except OSError:
-            continue
-    return out
-
-
-def add_also(text: str, pairs: list, prefixes: Optional[dict] = None) -> tuple:
-    """(*text* with what `also` asks, the triples added): for every triple
-    whose predicate a block writes with `also`, on a node of one of the
-    block's classes, the same node and object under each further predicate,
-    where the node holds no value under it yet (a writer that writes it
-    itself, a scenario's acronym, keeps its own). Edited as text where every
-    block can be read, the writers' comments staying, else written anew by
-    rdflib; held against the graph it asks for either way. *prefixes*
-    {name: namespace} expand a further predicate the graph's header does not
-    bind (the shapes' own, where a merged property came from)."""
-    from rdflib import RDF, URIRef
-    from rdflib.compare import isomorphic
-    if not pairs:
-        return text, 0
-    own = dict(_PREFIX.findall(text))
-    known = {**(prefixes or {}), **own}
-    graph = _parsed(text)
-    held = set(graph.subject_predicates())
-    wanted: dict = {}
-    added: set = set()
-    for classes, main, further in pairs:
-        predicate = _iri_of(main, known)
-        if predicate is None:
-            continue
-        for subject, obj in graph.subject_objects(URIRef(predicate)):
-            if classes and not {local(one) for one in graph.objects(
-                    subject, RDF.type)} & set(classes):
-                continue
-            for block in further:
-                iri = _iri_of(block, known)
-                if iri is None or iri == predicate \
-                        or (subject, URIRef(iri)) in held:
-                    continue
-                added.add((subject, URIRef(iri), obj))
-                wanted.setdefault(str(subject), {}).setdefault(
-                    predicate, set()).add(iri)
-    if not added:
-        return text, 0
-    whole = _parsed(text)
-    for triple in added:
-        whole.add(triple)
-    try:
-        edited = _with_also(text, wanted, dict(own), known)
-        if isomorphic(_parsed(edited), whole):
-            return edited, len(added)
-    except ValueError:
-        pass
-    return whole.serialize(format="turtle"), len(added)
-
-
-def _with_also(text: str, wanted: dict, own: dict, known: dict) -> str:
-    """*text* with an entry for each further predicate after the entry of the
-    predicate it repeats, in the blocks of the nodes *wanted* names ({node:
-    {predicate: {further}}}); a prefix the header lacks is declared."""
-    header: list = []
-
-    def name_of(iri: str) -> str:
-        short = _short(iri, own)
-        if short:
-            return short
-        short = _short(iri, {k: v for k, v in known.items() if k not in own})
-        if short:
-            prefix = short.split(":", 1)[0]
-            own[prefix] = known[prefix]
-            header.append(f"@prefix {prefix}: <{known[prefix]}> .")
-            return short
-        return f"<{iri}>"
-
-    out = []
-    for block in _blocks(text):
-        found = _SUBJECT.match(block.split("\n", 1)[0])
-        todo = wanted.get(found.group(1)) if found else None
-        if not todo:
-            out.append(block)
-            continue
-        parsed = _entries(block)
-        if parsed is None or _render(*parsed) != block.rstrip("\n"):
-            raise ValueError("a block the edit cannot read")
-        subject, entries = parsed
-        grown = []
-        for comments, predicate, objects, end in entries:
-            grown.append([comments, predicate, objects, end])
-            bare = predicate[1:-1] if predicate.startswith("<") else \
-                _expand(predicate, own)
-            for further in sorted(todo.get(bare, ())):
-                grown.append([[], name_of(further), list(objects), end])
-        out.append(_render(subject, grown)
-                   + block[len(block.rstrip("\n")):])
-    edited = "\n\n".join(out)
-    if header:
-        lines = edited.split("\n")
-        at = max((number for number, line_ in enumerate(lines)
-                  if _PREFIX.match(line_)), default=-1)
-        edited = "\n".join(lines[:at + 1] + header + lines[at + 1:])
-    return edited
-
-
-def also(path: Path, pairs: list, prefixes: Optional[dict] = None) -> int:
-    """`add_also` on the graph written to *path*; the file is rewritten only
-    where a triple is added. Returns how many were."""
-    path = Path(path)
-    edited, count = add_also(path.read_text(encoding="utf-8"), pairs,
-                             prefixes)
-    if count:
-        _write(path, edited)
-    return count

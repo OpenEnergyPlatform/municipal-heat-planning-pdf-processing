@@ -6,15 +6,11 @@ serialize.py: Turns a document harvest into the profile's target graph.
 
 The module walks the JSONL harvest directory and keeps only the rows
 a run accepted (kind is "tuple"), grouped by document name (collect).
-run() hands each document's rows to a serializer, and the runner's
---serialize flag chooses it: profiles/\<name>/kg.py exposes
-make_serializer(db_path) where the profile writes its graph itself,
-and a profile without one gets the generic writer of graph.py, which
-writes what the `graph` block of the spec describes. What a profile's
-own serializer emits (Turtle with project IRI rules, LinkML YAML, or
-another format) is the profile's decision; the module guarantees only
-the walk, the per-document grouping, and that a refusal row never
-reaches the serializer.
+run() hands each document's rows to a serializer: the one writer of
+graph.py (`graph.make_serializer`), which writes what the drawing of
+the profile's graph file (`map` in graph.json) draws, with the bricks
+of the profile. The module guarantees only the walk, the per-document
+grouping, and that a refusal row never reaches the serializer.
 
 A serializer may leave, per document, which values it wrote
 (`claims`). run() then hands them to the provenance writer it was
@@ -107,16 +103,6 @@ What the profile's graph file asks of the graph written to *path*
 (`docpipe.graphfile`): classes left out, nodes named anew, the effects
 of the constraints. None, and the file untouched, where it asks
 nothing.
-
-### also_of_spec
-
-```python
-def also_of_spec(path: Path, profile, shapes=()) -> int
-```
-
-The triples the profile's spec asks for with `also` (a value written
-under further predicates, `graphfile.add_also`), added to the graph at
-*path*. Returns how many were added.
 
 ### kind_key
 

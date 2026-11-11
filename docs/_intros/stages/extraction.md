@@ -27,7 +27,7 @@ a harvest already written can use without starting a document over.
 | | |
 |---|---|
 | **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
-| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, a `survey/<document id>.json` per document, the order its pieces are read in, a `transcripts/<document id>.json` per document with figures, the caption and numbers its figures were transcribed into, `query_cache.db` once per run, a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile with a strict serializer, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
+| **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, a `survey/<document id>.json` per document, the order its pieces are read in, a `transcripts/<document id>.json` per document with figures, the caption and numbers its figures were transcribed into, `query_cache.db` once per run, a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile whose drawing asks for a strict graph, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
 | **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchors key and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, or timed out, is not stamped, which the run counts as a failure and answers with exit code 1. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
 
@@ -508,7 +508,7 @@ groups come first, so each is its value's first coordinate. A value read with
 another entry (`fields.kept` False) is asked nothing after it, its other
 coordinates `out_of_slice` (the way `closed` of the default drawing, a state box set to `out_of_slice`); a value whose entry stays open
 asks the coordinates after it. The graph takes a value only where every such entry
-is read as the one to keep (`fields.in_parameter`, `kg.held_back`); the others stay
+is read as the one to keep (`fields.in_parameter`; the graph's document condition `kept_coordinates`); the others stay
 in the harvest and are counted among what is not in the graph by choice. Nothing
 asks the field's values again after such a value.
 
@@ -724,7 +724,8 @@ organisation, year, short name: `works.fields`) are asked side by side, one
 `coord` request per detail, the question the profile wrote, the answer an address
 and words. Those values are values of that work: their `work` coordinate is the
 entry "another work" with the work's name under `work_means`. The harvest keeps
-them, the graph does not, since `work` keeps this publication only (`kg.held_back`).
+them, the graph does not, since `work` keeps this publication only (the document
+condition `kept_coordinates`).
 
 The work of a value (`Reader.work_coordinate`): a find whose lines cover the
 value's line gives that work, read and quoted with the find's line, window
@@ -2079,11 +2080,10 @@ prompt (one that cannot be loaded fails its own line and every line about
 what it has to hold; a parts file that cannot be composed with its template
 fails with the error that names the part, the profile and both files; the prompts
 of the harvest are checked by the run at its start, see The run harvests
-from the survey), the writer of the graph (the profile's own
-`kg.make_serializer`, else the generic writer, built as the run builds it by
-`graph.make_serializer` from the `graph` block of the spec; a block it refuses,
-such as the placeholder base that `docpipe compile spec` drafts, fails
-`serializer present`) and, for a profile that has a `vocabulary` module, its
+from the survey), the drawing of the graph (`map` of the
+profile's `graph.json`, held to the spec, the shapes and the bricks as the run
+holds it by `graph.check`; a field the spec does not ask or a brick no code
+has fails `graph drawing`) and, for a profile that has a `vocabulary` module, its
 ontology pin; a module that has `check` but not `load` or `foreign_labels`
 fails `vocabulary module is whole`.
 The keys of a request and of a reply belong to the stage and are checked by
@@ -2315,7 +2315,7 @@ harvest read with.
 | `--top-up-parameters` | CLI flag | off | Appends the parameters the spec has gained since a document was harvested to the harvest in `--out`, per document, with the harvest's own loop, instead of harvesting it again; needs the model and index. Refused together with `--top-up` (exit 2); `--top-up-key`, `--force` and `--force-stale` change nothing for it; its traces go to `trace-topup/`. Exit 1 when a document was not read completely, and nothing is written for it | `runner.main`, `topup_parameter.append_document` |
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per value of level C or D, up to N total | `review.run` |
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose spec, prompts and hooks the run reads; the stage refuses to run without one, in a line naming the available profiles, and `__main__.py` binds the flag before `runner` is imported | `runner.main`, `docpipe/profile.py` |
-| `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the profile's `kg.make_serializer`. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
+| `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the writer of the drawing of the profile's graph file. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
 | `--no-provenance` | CLI flag | off (the file is written) | With `--serialize`: no provenance file beside the graph, as `EXTRACT_PROVENANCE=0` | `runner.main`, `provenance.enabled` |
 | `FRAME` | profile hook | none | The frame coordinates (kwp: scenario and year): the plan's years date them, and `--top-up` blocks a changed key that names one (`runner.main`, `topup.actionable`). No coordinate of a plan closes a row: `SLICE`, `READ_IN_FULL` and `kept_quantities()` were deleted on 2026-11-10, and what closes a row now is a coordinate with an entry a value must have, the spec's `keep` at a coordinate (`fields.kept`, `fields.closed`; the scenarios spec uses it for `work`), which gives the state `out_of_slice` | `runner.main`, `topup.actionable` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |
@@ -2496,7 +2496,8 @@ apart. Called by its own CLI entry point, `runner.py`'s
 schema self-check, and `preflight.py`. `serialize.py`
 walks a harvest
 directory, keeps only the rows a run accepted (`collect`), and hands
-each document's rows to the profile's own `kg.make_serializer`; `run`
+each document's rows to the writer of `graph.py`, which writes the drawing of the
+profile's graph file; `run`
 refuses to write when no document produced anything, so an empty or
 unreadable directory cannot overwrite a valid graph from an earlier
 run. Called only by `runner.py`'s `--serialize` branch.

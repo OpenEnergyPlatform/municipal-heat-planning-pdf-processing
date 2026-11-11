@@ -17,11 +17,9 @@ The promises, each with a case that breaks it by construction:
 5. "stop" shuts the gate for a violation of its constraint.
 6. A rule the file sets reaches the writer: the rounding a number's
    readings are one statement within is the file's.
-7. A value a block of the spec writes with `also` stands under each further
-   predicate on every node of the block's classes, AND a node that holds a
-   value under it keeps its own, AND a node of another class gets none, AND
-   the writer's comments stay; a predicate the header does not bind is
-   declared from the shapes' prefixes.
+7. (A value written under further predicates is no pass over the written
+   graph any more: an arrow of the drawing writes each of them,
+   test_sources_page.py.)
 8. The provenance follows the graph: a node named anew is named anew there,
    AND a node left out takes every triple that names it out of it.
 9. A setting of a graph rule wins over the file, as for every rule: the
@@ -213,70 +211,6 @@ def test_a_rule_the_file_sets_reaches_the_writer(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv(graphfile.ENV)
         graphfile.reset()
-
-
-# -- `also`: a value written under further predicates ------------------------
-
-ALSO_TEXT = TEXT + f"""
-<{EX}org/y>
-    a ex:Org ;
-    rdfs:label "Y-Werke" ;
-    ex:name "Y" .
-"""
-
-
-def spec_with(also) -> dict:
-    return {"parameters": [{"uri": "organisation", "kg": {
-        "node": "organisation", "class": "ex:Org",
-        "property": {"prefix": "rdfs", "predicate": "label", "also": also}}}]}
-
-
-def test_also_writes_the_value_under_each_further_predicate():
-    pytest.importorskip("rdflib")
-    from rdflib import Literal, URIRef
-    pairs = graphfile.also_pairs(spec_with({"prefix": "ex",
-                                            "predicate": "name"}))
-    text, added = graphfile.add_also(ALSO_TEXT, pairs)
-    graph = graph_of(text)
-    name = URIRef("https://example.org/o/name")
-    assert added == 1
-    assert set(graph.objects(URIRef(f"{EX}org/x"), name)) \
-        == {Literal("Stadtwerke")}
-    # a node that holds a value under it keeps its own
-    assert set(graph.objects(URIRef(f"{EX}org/y"), name)) == {Literal("Y")}
-    # a node of another class gets none: the plan has a label too
-    assert not set(graph.objects(URIRef(f"{EX}plan/1"), name))
-    assert '# "1.200 MWh", p. 3' in text
-    # a further predicate the header does not bind is declared from the
-    # shapes' prefixes
-    dc = {"prefix": "dc", "predicate": "title"}
-    text, added = graphfile.add_also(
-        ALSO_TEXT, graphfile.also_pairs(spec_with(dc)),
-        {"dc": "http://purl.org/dc/terms/"})
-    assert added == 2 and "@prefix dc: <http://purl.org/dc/terms/> ." in text
-    assert set(graph_of(text).objects(
-        URIRef(f"{EX}org/x"), URIRef("http://purl.org/dc/terms/title"))) \
-        == {Literal("Stadtwerke")}
-    # the failure by construction: a spec without `also` adds nothing
-    assert graphfile.also_pairs(spec_with(None)) == []
-    assert graphfile.add_also(ALSO_TEXT, [], None) == (ALSO_TEXT, 0)
-
-
-def test_also_reads_a_block_inside_the_field_and_the_edges_of_its_axes():
-    spec = {"parameters": [{
-        "uri": "energy", "kg": {
-            "node": "value", "class": "ex:Value",
-            "number": {"prefix": "ex", "predicate": "number",
-                       "also": [{"prefix": "ex", "predicate": "amount"}]}},
-        "axes": {"carrier": {"kg": {
-            "role": "edge", "prefix": "ex", "predicate": "unit",
-            "also": {"prefix": "ex", "predicate": "carrier"}}}}}]}
-    pairs = graphfile.also_pairs(spec)
-    assert sorted(main["predicate"] for _c, main, _f in pairs) \
-        == ["number", "unit"]
-    text, added = graphfile.add_also(TEXT, pairs)
-    # value/a has a number and a unit, value/b a unit only
-    assert added == 3
 
 
 # -- the provenance follows the graph ---------------------------------------

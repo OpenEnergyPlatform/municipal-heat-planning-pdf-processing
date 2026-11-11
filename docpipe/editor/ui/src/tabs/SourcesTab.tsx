@@ -90,10 +90,13 @@ export function SourcesTab() {
       setTab('spec');
       // the Spec tab puts r.data in place of its spec, marks it as edited and clears its last answer
       request('spec', { taken: r.data });
-      showInfo(r.refused.length
+      // the Graph tab puts r.map in place of its drawing and marks it as edited
+      if (r.map) request('graph', { map: r.map });
+      const arrows = r.map ? ' ' + t('The arrows it drew are in the Graph tab; check and save them there.') : '';
+      showInfo((r.refused.length
         ? tn(r.done.length, '{n} change taken into the spec, {refused} refused ({why}). Check and save it in the Spec tab.', '{n} changes taken into the spec, {refused} refused ({why}). Check and save them in the Spec tab.',
           { refused: r.refused.length, why: r.refused.map((x: any) => tr(x.why)).join('; ') })
-        : tn(r.done.length, '{n} change taken into the spec. Check and save it in the Spec tab.', '{n} changes taken into the spec. Check and save them in the Spec tab.'));
+        : tn(r.done.length, '{n} change taken into the spec. Check and save it in the Spec tab.', '{n} changes taken into the spec. Check and save them in the Spec tab.')) + arrows);
     } catch (e) { showError(e); }
   }
   const pick = (id: string, action: string | null, into?: string) => {

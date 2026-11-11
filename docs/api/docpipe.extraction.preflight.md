@@ -18,8 +18,8 @@ a GPU run:
 
 It holds for any profile, wherever it lives. What it reads of a profile is
 what the run reads: the spec the profile names (`extraction.SPEC_PATH`),
-its prompts, the writer of its graph (its own `kg.make_serializer`, else
-the `graph` block of the spec), its `vocabulary` module where it has one.
+its prompts, the drawing of its graph (`map` of `graph.json`), its
+`vocabulary` module where it has one.
 The keys of a request and a reply are the stage's and are checked here by
 name. A wording the run depends on is the profile's, in the language of its
 prompts, so the profile says which passages its prompts have to hold
@@ -50,10 +50,15 @@ and not run: a check that cannot be read holds nothing.
 ### silent_parameters
 
 ```python
-def silent_parameters(raw: dict) -> list
+def silent_parameters(raw: dict, drawing=None) -> list
 ```
 
-Which parameters of a raw spec say nothing about the graph.
+Which parameters of a raw spec the drawing of the graph does not name.
+
+A field says what it becomes in the graph when the drawing names it as a
+source: an arrow starts at it, a box is of it or takes its value, name
+or address from it, or a brick or a box's `settle` names it
+(`graph.Drawing.says`). No drawing names nothing.
 
 A function rather than three lines inside `audit`, because a gate that
 cannot be handed a failing input is decoration, and `audit` can only be
@@ -91,13 +96,13 @@ that is no mapping at all, which is named once.
 def shape_properties(files, raw: dict, profile=None) -> tuple
 ```
 
-(properties no parameter asks, all properties) of the shapes.
+(properties no arrow writes, all properties) of the shapes.
 
 Both as sorted (shape, property) pairs, the property by the end of its
-IRI. A property is asked when a parameter's `kg` block names it or the
-graph block links it: `docpipe compile diff` decides that and this reads
-what it lists as "not_asked". The shapes file is read as the compiler
-reads it, which needs rdflib.
+IRI. A property is written when an arrow of the drawing of the
+profile's graph file writes it: `docpipe compile diff` decides that and
+this reads what it lists as "not_asked". The shapes file is read as the
+compiler reads it, which needs rdflib.
 
 ### shapes_verdict
 

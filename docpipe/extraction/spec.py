@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -144,12 +143,6 @@ class Axis:
     # five-field request for a coordinate the spec knew. What the unit does
     # NOT fix stays a question — the profile decides which is which.
     derive: Optional[dict] = None
-    # What this coordinate becomes in the graph: {"role": "type"|"edge"|
-    # "parent"|"comment", ...}. The serializer reads the predicate from here
-    # and the JSON schema publishes it, so the two cannot drift: a predicate
-    # changed in one place used to leave the other describing a graph nobody
-    # was writing.
-    kg: Optional[dict] = None
     # The entry of this coordinate's list a value must have to be a value of
     # its parameter at all (owner decisions 2026-11-07): "scenario year" for
     # a year, "this publication" for an author. Asked before the coordinates
@@ -224,11 +217,6 @@ class Parameter:
     # A free-text value that is the name the document gives a thing, merged
     # with the document's other names for it as on an axis.
     merged: Optional[str] = None
-    # What a row of this parameter becomes in the graph: which node, which
-    # class, which predicate carries the number and which the unit. Read by
-    # the serializer and published by the JSON schema, so neither can drift
-    # from the other.
-    kg: Optional[dict] = None
     # Asked once per document, with its title page and the pieces a search
     # finds best, never in every piece (owner decision 2026-11-08): a field
     # the document has once, its title, its authors, its organisation.
@@ -447,20 +435,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     axis_type = raw.get("type")
     enum = raw.get("enum")
     dynamic = bool(raw.get("dynamic", False))
-    kg = raw.get("kg")
-    if kg is not None:
-        if not isinstance(kg, dict) or not kg:
-            _fail(path, "kg must be a non-empty object")
-        role = kg.get("role")
-        if role not in ("type", "edge", "parent", "comment"):
-            _fail(path, "kg.role must be one of: type, edge, parent, comment")
-        # Or the slot of the profile's data schema that carries the
-        # predicate, which the profile resolves when it writes the graph.
-        if role == "edge" and not str(kg.get("predicate")
-                                      or kg.get("schema_slot") or "").strip():
-            _fail(path, "an edge names the predicate it writes, or the "
-                        "schema slot that does")
-        _validate_kg_ids(path, kg)
+    _refuse_kg(path, raw)
     if "evidence" in raw:
         # Refused rather than ignored, so the rule cannot come back through a
         # profile without anyone deciding it again.
@@ -542,7 +517,7 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
                 enum=enum, required=bool(raw.get("required", False)),
                 dynamic=dynamic, merged=merged, beside=beside,
                 question=question, derive=derive,
-                kg=kg, definitions=definitions, glosses=glosses, keep=keep,
+                definitions=definitions, glosses=glosses, keep=keep,
                 several=several,
                 groups=_entry_groups(f"{path}.vocabulary",
                                      raw.get("vocabulary")))
@@ -755,10 +730,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
     for key in ("once_per_document", "takes_group"):
         if key in raw and not isinstance(raw[key], bool):
             _fail(f"{path}.{key}", "true or false")
-    if raw.get("kg") is not None:
-        # The parameter's block used to be passed through unvalidated, which
-        # is the hole "OEO_00030022 organisation" came through.
-        _validate_kg_ids(path, raw["kg"])
+    _refuse_kg(path, raw)
     return Parameter(uri=raw["uri"], label=raw["label"],
                      description=raw["description"], value_type=value_type,
                      unit_target=unit_target, units_accepted=units,
@@ -770,7 +742,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      brief=brief.strip() if brief else None,
                      vocabulary_dynamic=vocabulary_dynamic,
                      merged=merged,
-                     axes=axes, example=example, kg=raw.get("kg"),
+                     axes=axes, example=example,
                      once_per_document=bool(raw.get("once_per_document",
                                                     False)),
                      takes_group=bool(raw.get(
@@ -1167,68 +1139,12 @@ def fingerprints(spec: "Spec") -> dict:
     return out
 
 
-_KG_ID = re.compile(r"^[A-Za-z]+_[0-9]+$")
-# A class of an ontology that numbers nothing: a prefixed name
-# ("schema:Person") or the IRI itself.
-_KG_NAME = re.compile(r"^(?:[A-Za-z][\w.-]*:[\w.-]+|https?://\S+)$")
-
-
-def kg_name(block: dict, prefixes: str) -> str:
-    """`{"prefix": "oeo", "predicate": "OEO_00000506"}` -> "oeo:OEO_00000506".
-
-    Qualified from the spec rather than from an f-string in a serializer, and
-    only against a prefix the profile's own Turtle header binds: the scenarios
-    graph writes four namespaces where kwp writes five, and the same block is
-    legal in one profile and unwritable in the other. `dc:abstract` in a kwp
-    block would look right in the diff and produce a file no reader can load.
-    """
-    prefix, predicate = block.get("prefix"), block.get("predicate")
-    if not prefix or not predicate:
-        raise KeyError(f"{block!r} is no predicate: it needs prefix and "
-                       f"predicate")
-    if f"@prefix {prefix}:" not in prefixes:
-        raise KeyError(f"prefix {prefix!r} is not declared in this profile's "
-                       f"header, so the Turtle would not parse")
-    return f"{prefix}:{predicate}"
-
-
-def _validate_kg_ids(path: str, kg) -> None:
-    """A class is an identifier and a predicate is one token.
-
-    Both were written by hand as an identifier plus a gloss -- "OEO_00030022
-    organisation", and worse "MHPO_00020018 heat plan area, BFO_0000050 part
-    of the municipality area" -- and a serializer reading that emits
-    `a oeo:OEO_00030022 organisation`, which is not Turtle. Refused where the
-    spec is read, so it cannot reach a graph.
-
-    A class is held to the identifier SHAPE and not merely to "no whitespace":
-    "organisation" alone would mint `oeo:organisation`. A predicate is held
-    only to being one token, because three legal predicates of the scenarios
-    profile are the words `abstract`, `acronym` and `label`.
-
-    A class may also be written with its prefix or as its IRI. Not every
-    ontology numbers its terms, and `schema:Person` says which namespace the
-    bare word would only suggest. A bare word stays refused.
-    """
-    if not isinstance(kg, dict):
-        return
-    # Every depth: a class sits on the block, on a map entry and on an axis'
-    # `linked_by` alike, and the worst string in the tree was three levels in.
-    blocks, stack = [], [kg]
-    while stack:
-        block = stack.pop()
-        blocks.append(block)
-        stack.extend(v for v in block.values() if isinstance(v, dict))
-    for block in blocks:
-        klass = block.get("class")
-        if klass is not None and not (_KG_ID.match(str(klass))
-                                      or _KG_NAME.match(str(klass))):
-            _fail(path, f"kg class {klass!r} is not an identifier: a class is "
-                        f"an id like OEO_00030022, a prefixed name or an "
-                        f"IRI, and the words for it belong in a label or a "
-                        f"note")
-        predicate = block.get("predicate")
-        if predicate is not None:
-            text = str(predicate)
-            if not text.strip() or text.split() != [text]:
-                _fail(path, f"kg predicate {predicate!r} is not one token")
+def _refuse_kg(path: str, raw: dict) -> None:
+    """What a field or a coordinate becomes in the graph is drawn in the
+    profile's graph file, not said in the spec: a `kg` block here is refused
+    rather than carried, so nobody keeps editing a description the writers no
+    longer read."""
+    if "kg" in raw:
+        _fail(f"{path}.kg", "a spec no longer says what a field becomes in "
+                            "the graph: the graph is drawn in graph.json "
+                            "(`map`, the Graph tab of `docpipe edit`)")

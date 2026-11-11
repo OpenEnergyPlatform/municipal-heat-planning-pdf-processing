@@ -142,8 +142,7 @@ since a browser moves such a key to the front of its object; Check says so.
 
 The stamp of a harvested document holds one fingerprint per question, and a
 run compares them one by one (see [the extraction stage](extraction.md)). So
-an edit that moves no question, such as a changed `_comment`, a `kg` block, a
-text in `plan_fields`, `works` or `beside`, or the key `of` of a plan field that
+an edit that moves no question, such as a changed `_comment`, a text in `plan_fields`, `works` or `beside`, or the key `of` of a plan field that
 is a year (it is in no fingerprint), leaves every document current.
 Where a key moved, the page names the pass that settles it:
 
@@ -172,21 +171,21 @@ the other empty stays editable in its form (the server still refuses it: two
 whole numbers or empty). Every value a form writes fits the same form again.
 `tests/test_editor_forms.py` holds all of these for both profiles' real files.
 
-- The `kg` block of a field and of a coordinate is a form of the keys the
-  profile's graph writer reads. The writer declares them in its own `kg.py`
-  (`KG_KEYS`: per key its kind, a one-line help and, for a choice, the
-  choices); a profile without a writer shows every key greyed. A predicate is
-  a record of prefix, predicate, label and datatype, `also` and `map` are rows
-  with + and -, a class or predicate is a text field that offers the classes
-  and predicates of the shapes where the Graph tab has them.
+- The Spec tab has no form for what a field becomes in the graph: that is an
+  arrow of the drawing in the Graph tab, and a spec that holds a `kg` block is
+  refused by Check with a pointer to the drawing. The settings of a brick in
+  the Graph tab are forms of the kinds the brick declares (a text, a list of
+  texts, a number, a flag, a class, a rule, a table, labels, fields or prose),
+  a property or class a text field that offers those of the shapes.
 - `derive` is "derived from" a select of the field's coordinates and "value" a
   select of the entries of the coordinate's own list.
 - `example` is the source as plain text, the defaults as one row of fields and
   the rows as a table with the columns value, quote and the coordinates (and
   their wordings) some row uses; a select adds a column.
 - `of` of a plan field is always two selects, the coordinate and its entry.
-- The address of a class in the Graph tab is a folder and a list of the
-  class's properties from the shapes, with up and down to change the order.
+- The address of a box in the Graph tab is a folder and a key, and the fields
+  (or `@name`, `@key`) its name is made of, with up and down to change the
+  order.
 
 ## Copies and removals
 
@@ -733,21 +732,55 @@ queries the profile is written against, the lists drawn from them and which
 coordinate answers from which list. It checks and saves the file. Fetch pulls
 the sources into a temporary folder; Apply writes the files a refresh writes
 into the profile and the fetched files and the lock into the upstream cache. The
-differences of the fetched shapes against the spec are shown per field, and a
-chosen row can be taken into the Spec tab (`sourcespage.py`). "Write a field
-under it as well" takes a property of the shapes into a field as a further
-predicate (`also`): the field's predicates, the value itself, its unit and an
-edge of one of its axes, are listed by `merge_targets`, and `_merge` writes
-`also` into the block chosen. The graph then holds what that block writes
-under the further predicate as well (see [the graph](graph.md)).
+differences of the fetched shapes against the spec and the drawing are shown
+per field, and a chosen row can be taken into the Spec tab (a new field, a
+draft) or into the drawing (`sourcespage.py`). "Also write a field under it"
+takes a property of the shapes into a field: the merge draws an arrow from the
+field (listed by `merge_targets`) to the box of the property's class, adding the
+box where the drawing has none, and hands the drawing back with the spec (`take`,
+its `map`). A new field brings its arrow in the same way. The arrows drawn are
+in the Graph tab; check and save them there. The graph then holds what the
+field reads under the further property as well (see [the graph](graph.md)).
 
 ## Graph
 
-The Graph tab shows the classes of the shapes with the fields that write each
-property and the effect of each constraint, and the writer rules, and edits
-`graph.json` (see [the graph](graph.md)). Write probe writes the graph of the
-page's harvest twice into a temporary folder and compares the two
-(`graphpage.py`, `graphprobe.py`).
+The Graph tab is the drawing of how the harvest becomes the graph: the `map` of
+`graph.json`, which the run's one program, `docpipe/extraction/graph.py`, writes
+every graph from (see [the graph](graph.md)). The page is `graphpage.py` and the
+graph endpoints of `server.py`, with the sources in `docpipe/editor/ui/src/graph/`.
+
+On the left are the fields of the harvest as the spec asks them, with a real
+example value each where a harvest is loaded. On the right are the boxes, one
+for each class of the graph, each with the properties the shapes give that class
+and the effect of each constraint; a property the shapes require is red until an
+arrow leads to it. An arrow is drawn by dragging from the dot of a field to a
+property of a box (the field is written under that property), from a field to a
+box (the field makes the box's nodes), or from a box to a box over a property
+(the nodes are linked). A box says how many nodes it has in a document (one,
+one for each name, one for each distinct reading, one for each answer, one for
+each number, one for each object another arrow wrote), how a node is named (its
+address) and what is admitted; an arrow says its property, the brick that makes
+the object of its triple and the brick's settings, whether one reading is
+written, which readings count and a note. A click on a box, an arrow or the
+document opens its settings in a panel; a brick comes from a list that says what
+it does, what it takes and what it gives. The order of the boxes is the order of
+the nodes in the graph, the order of the arrows the order of the properties. The
+rules of the program (the graph file's `rules`) are in the Rules drawer; the
+effect of a constraint (report, leave out the value, leave out the paper, stop)
+is set in the settings of the box whose properties it holds.
+
+Check holds the edited drawing to the run's own checks (`graphfile.map_problem`,
+`graph.check`) and names the box or arrow each problem is about; Save writes
+`map` into `graph.json` if the checks pass; Discard and Reload from disk return
+to the file; Undo and Redo walk back through the edits until saved. With a
+harvest loaded, the page also shows the triples one document would be written
+as, by the edited drawing and, with a switch, as the strict graph
+(`POST /api/graph/preview`); it writes into a temporary folder and sends no
+request to a model. Test write writes the graph of the page's harvest twice,
+once with the saved file and once with the edit, and compares the two (nodes
+kept and left out, violations by constraint, nodes named anew;
+`graphpage.py`, `graphprobe.py`). A change of the graph needs no model: it takes
+effect the next time the graph is written from the stored harvest.
 
 ## What the editor does not touch
 
@@ -1035,7 +1068,9 @@ zusammenlegen"):
   and definition, a definition replaced by the ontology's, a property no
   field asks as a new field (a draft: it needs an example before the strict
   check takes it), or merged into an existing field as one more property it
-  writes (`also`).
+  writes: an arrow of the drawing of the profile's graph file, from the
+  field to the box of the property's class (`take` hands the drawing back
+  beside the spec).
 
 Author: Felix Vossel
 
@@ -1062,6 +1097,13 @@ what the page draws and decides what a save writes:
 - `judge` and `save`: an edited graph file, read by the run's own parser.
   A profile that extends another writes only what differs from what it
   inherits, and the rules its writer reads.
+- the drawing: `view` also returns `map` (how the harvest becomes the
+  graph, `graphfile.get_map`), the fields of the harvest as the spec asks
+  them (with a real example of each where a harvest is loaded), the bricks
+  the run knows and the harvest's documents. `judge` holds an edited drawing
+  to the run's own checks (`graphfile.map_problem`, `graph.check`) and
+  names the box or arrow each problem is about. `preview` writes one
+  document of the harvest as the edited drawing says.
 - `probe`: the graph of the harvest the page was given, written twice into
   the temp directory, with the saved file and with the edited one, and what
   differs: per document the nodes kept and left out, per constraint its

@@ -96,19 +96,20 @@ def read_harvest(path: Path) -> tuple:
 def serialize_counts(serializer, name: str, tuples: list, records: list) -> dict:
     """Run the profile's serializer and pick the skip counts out of its log.
 
-    The counts live in a closure and reach the outside only as a log line, so
-    the line is captured rather than the function rewritten: the serializer
-    stays the one the corpus run uses, which is the whole point of measuring
-    with it.
+    The counts reach the outside only as the program's log line ("graph:
+    <document>: left out {reason: rows}"), so the line is captured rather
+    than the function rewritten: the serializer stays the one the corpus
+    run uses, which is the whole point of measuring with it.
     """
     before = len(records)
     ttl = serializer(name, tuples)
     skipped: dict = {}
     for record in records[before:]:
         message = record.getMessage()
-        if "skipped" not in message:
+        if not message.startswith(f"graph: {name}: ") \
+                or "left out " not in message:
             continue
-        start = message.find("{")
+        start = message.find("{", message.find("left out "))
         if start == -1:
             continue
         try:
@@ -230,13 +231,10 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     profile = load_profile(args.profile)
-    factory = profile.component("kg", "make_serializer")
-    if factory is None:
-        print(f"profiles/{profile.name}/kg.py has no make_serializer")
-        return 1
-    serializer = factory(args.db)
+    from docpipe.extraction import graph
+    serializer = graph.make_serializer(profile, args.db)
     collector = _Collect()
-    kg_log = logging.getLogger(f"profiles.{profile.name}.kg")
+    kg_log = logging.getLogger("docpipe.extraction.graph")
     kg_log.addHandler(collector)
     kg_log.setLevel(logging.INFO)
 

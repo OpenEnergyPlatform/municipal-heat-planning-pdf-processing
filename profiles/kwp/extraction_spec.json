@@ -416,11 +416,7 @@
             }
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl?",
-          "kg": {
-            "role": "type",
-            "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node."
-          }
+          "question": "Welche Größe ist diese Zahl?"
         },
         "what": {
           "type": "text",
@@ -540,12 +536,6 @@
           "derive": {
             "from": "unit",
             "value": "OEO_00140070"
-          },
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_aggregation_type",
-            "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit."
           }
         },
         "carrier": {
@@ -1350,23 +1340,6 @@
             }
           },
           "question": "Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_energy_carrier",
-            "label": "refers to energy carrier",
-            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-            "outside_root": {
-              "OEO_00000132": "district heating",
-              "OEO_00000139": "electrical energy",
-              "OEO_00000388": "solar thermal energy",
-              "OEO_00000191": "geothermal energy",
-              "OEO_00010114": "waste heat",
-              "OEO_00310004": "industrial waste heat",
-              "OEO_00000056": "ambient heat",
-              "OEO_00140105": "waste water heat",
-              "OEO_00140104": "surface water heat"
-            }
-          },
           "several": true
         },
         "sector": {
@@ -1496,13 +1469,6 @@
             }
           },
           "question": "Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_sector",
-            "label": "refers to sector",
-            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-            "total_class": "OEO_00000128"
-          },
           "several": true
         },
         "technology": {
@@ -1615,24 +1581,11 @@
             }
           },
           "question": "Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_technology",
-            "label": "refers to technology",
-            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          },
           "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_scenario_year_value",
-            "label": "has scenario year value",
-            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-            "datatype": "xsd:integer"
-          }
+          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?"
         },
         "scenario": {
           "vocabulary": {
@@ -1672,28 +1625,7 @@
             }
           },
           "required": false,
-          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "target": {
-                "schema_class": "TargetScenario"
-              },
-              "status_quo": {
-                "schema_class": "AggregatedInventoryAnalysis"
-              },
-              "trend": {
-                "class": "OEO_00020311",
-                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-              }
-            },
-            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-            "linked_by": {
-              "node": "heatplan",
-              "schema_slot": "has_part",
-              "label": "has part"
-            }
-          }
+          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?"
         },
         "spatial_scope": {
           "vocabulary": {
@@ -1721,25 +1653,7 @@
             }
           },
           "required": false,
-          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "municipality": {
-                "note": "the plan's own area, minted from the AGS"
-              },
-              "sub_area": {
-                "class": "MHPO_00020019",
-                "linked_by": {
-                  "node": "municipality",
-                  "prefix": "obo",
-                  "predicate": "BFO_0000050",
-                  "label": "part of"
-                }
-              }
-            },
-            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
-          }
+          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?"
         }
       },
       "example": {
@@ -1829,21 +1743,6 @@
             "quote": "| Heizöl | 1.440.048 | 28.116.204 | 203.458.519 |"
           }
         ]
-      },
-      "kg": {
-        "node": "value",
-        "class_from": "quantity",
-        "number": {
-          "schema_slot": "has_number",
-          "label": "has number",
-          "datatype": "xsd:float",
-          "from": "value_target"
-        },
-        "unit": {
-          "schema_slot": "has_unit",
-          "label": "has unit",
-          "from": "unit_target"
-        }
       }
     },
     {
@@ -2237,11 +2136,7 @@
             }
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl?",
-          "kg": {
-            "role": "type",
-            "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node."
-          }
+          "question": "Welche Größe ist diese Zahl?"
         },
         "what": {
           "type": "text",
@@ -2361,12 +2256,6 @@
           "derive": {
             "from": "unit",
             "value": "OEO_00140070"
-          },
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_aggregation_type",
-            "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit."
           }
         },
         "carrier": {
@@ -3171,23 +3060,6 @@
             }
           },
           "question": "Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_energy_carrier",
-            "label": "refers to energy carrier",
-            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-            "outside_root": {
-              "OEO_00000132": "district heating",
-              "OEO_00000139": "electrical energy",
-              "OEO_00000388": "solar thermal energy",
-              "OEO_00000191": "geothermal energy",
-              "OEO_00010114": "waste heat",
-              "OEO_00310004": "industrial waste heat",
-              "OEO_00000056": "ambient heat",
-              "OEO_00140105": "waste water heat",
-              "OEO_00140104": "surface water heat"
-            }
-          },
           "several": true
         },
         "sector": {
@@ -3317,13 +3189,6 @@
             }
           },
           "question": "Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_sector",
-            "label": "refers to sector",
-            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-            "total_class": "OEO_00000128"
-          },
           "several": true
         },
         "technology": {
@@ -3436,24 +3301,11 @@
             }
           },
           "question": "Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_technology",
-            "label": "refers to technology",
-            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          },
           "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_scenario_year_value",
-            "label": "has scenario year value",
-            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-            "datatype": "xsd:integer"
-          }
+          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?"
         },
         "scenario": {
           "vocabulary": {
@@ -3493,28 +3345,7 @@
             }
           },
           "required": false,
-          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "target": {
-                "schema_class": "TargetScenario"
-              },
-              "status_quo": {
-                "schema_class": "AggregatedInventoryAnalysis"
-              },
-              "trend": {
-                "class": "OEO_00020311",
-                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-              }
-            },
-            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-            "linked_by": {
-              "node": "heatplan",
-              "schema_slot": "has_part",
-              "label": "has part"
-            }
-          }
+          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?"
         },
         "spatial_scope": {
           "vocabulary": {
@@ -3542,25 +3373,7 @@
             }
           },
           "required": false,
-          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "municipality": {
-                "note": "the plan's own area, minted from the AGS"
-              },
-              "sub_area": {
-                "class": "MHPO_00020019",
-                "linked_by": {
-                  "node": "municipality",
-                  "prefix": "obo",
-                  "predicate": "BFO_0000050",
-                  "label": "part of"
-                }
-              }
-            },
-            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
-          }
+          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?"
         }
       },
       "example": {
@@ -3597,21 +3410,6 @@
             "quote": "| Gebäude Wärme | 10.123 | 1.843 | 5.292 |"
           }
         ]
-      },
-      "kg": {
-        "node": "value",
-        "class_from": "quantity",
-        "number": {
-          "schema_slot": "has_number",
-          "label": "has number",
-          "datatype": "xsd:float",
-          "from": "value_target"
-        },
-        "unit": {
-          "schema_slot": "has_unit",
-          "label": "has unit",
-          "from": "unit_target"
-        }
       }
     },
     {
@@ -3632,15 +3430,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "organisation",
-        "schema_class": "Organisation",
-        "edge_from_plan": {
-          "schema_slot": "has_organisation",
-          "label": "has organisation"
-        },
-        "label": "rdfs:label, legal form stripped"
-      },
       "axes": {
         "role": {
           "required": false,
@@ -3656,10 +3445,6 @@
               "spellings": [],
               "definition": "Die Gemeinde oder Stadt, für die der Plan gilt, als planungsverantwortliche Stelle."
             }
-          },
-          "kg": {
-            "role": "comment",
-            "note": "The MHPKG schema: a municipality acting as planning authority is NOT a second entity, so `municipality` links has_organisation to the plan's municipality node; `planner` mints an Organisation."
           }
         }
       },
@@ -3848,11 +3633,7 @@
             }
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl?",
-          "kg": {
-            "role": "type",
-            "note": "The class of the value node itself (rdf:type). OEO_00010157 is defined by its unit (\"a quantity value that has a power unit as unit\"), so it follows from units_accepted and is not a second assertion. An out:* answer is a deliberate non-class and mints no node."
-          }
+          "question": "Welche Größe ist diese Zahl?"
         },
         "what": {
           "type": "text",
@@ -3968,13 +3749,7 @@
             }
           },
           "required": false,
-          "question": "Wie fasst diese Leistung Werte über Zeit oder Raum zusammen?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_aggregation_type",
-            "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. ASKED here and derived on the two amount parameters: a watt is not an amount integrated over a span, so the unit fixes nothing."
-          }
+          "question": "Wie fasst diese Leistung Werte über Zeit oder Raum zusammen?"
         },
         "carrier": {
           "vocabulary": {
@@ -4778,23 +4553,6 @@
             }
           },
           "question": "Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_energy_carrier",
-            "label": "refers to energy carrier",
-            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-            "outside_root": {
-              "OEO_00000132": "district heating",
-              "OEO_00000139": "electrical energy",
-              "OEO_00000388": "solar thermal energy",
-              "OEO_00000191": "geothermal energy",
-              "OEO_00010114": "waste heat",
-              "OEO_00310004": "industrial waste heat",
-              "OEO_00000056": "ambient heat",
-              "OEO_00140105": "waste water heat",
-              "OEO_00140104": "surface water heat"
-            }
-          },
           "several": true
         },
         "sector": {
@@ -4924,13 +4682,6 @@
             }
           },
           "question": "Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_sector",
-            "label": "refers to sector",
-            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-            "total_class": "OEO_00000128"
-          },
           "several": true
         },
         "technology": {
@@ -5043,24 +4794,11 @@
             }
           },
           "question": "Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_technology",
-            "label": "refers to technology",
-            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          },
           "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr gilt diese Leistung, bei einer Bestandsanlage das Jahr der Bestandsaufnahme und nicht ihr Baujahr?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_scenario_year_value",
-            "label": "has scenario year value",
-            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-            "datatype": "xsd:integer"
-          }
+          "question": "Für welches Kalenderjahr gilt diese Leistung, bei einer Bestandsanlage das Jahr der Bestandsaufnahme und nicht ihr Baujahr?"
         },
         "scenario": {
           "vocabulary": {
@@ -5100,28 +4838,7 @@
             }
           },
           "required": false,
-          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "target": {
-                "schema_class": "TargetScenario"
-              },
-              "status_quo": {
-                "schema_class": "AggregatedInventoryAnalysis"
-              },
-              "trend": {
-                "class": "OEO_00020311",
-                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-              }
-            },
-            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-            "linked_by": {
-              "node": "heatplan",
-              "schema_slot": "has_part",
-              "label": "has part"
-            }
-          }
+          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?"
         },
         "spatial_scope": {
           "vocabulary": {
@@ -5149,25 +4866,7 @@
             }
           },
           "required": false,
-          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "municipality": {
-                "note": "the plan's own area, minted from the AGS"
-              },
-              "sub_area": {
-                "class": "MHPO_00020019",
-                "linked_by": {
-                  "node": "municipality",
-                  "prefix": "obo",
-                  "predicate": "BFO_0000050",
-                  "label": "part of"
-                }
-              }
-            },
-            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
-          }
+          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?"
         }
       },
       "example": {
@@ -5268,21 +4967,6 @@
             "quote": "| Spitzenlastkessel BHKW, Karl-Gehrmann-Str. 42 | 25,8 MW | |"
           }
         ]
-      },
-      "kg": {
-        "node": "value",
-        "class_from": "quantity",
-        "number": {
-          "schema_slot": "has_number",
-          "label": "has number",
-          "datatype": "xsd:float",
-          "from": "value_target"
-        },
-        "unit": {
-          "schema_slot": "has_unit",
-          "label": "has unit",
-          "from": "unit_target"
-        }
       }
     },
     {
@@ -5388,11 +5072,7 @@
             }
           },
           "required": false,
-          "question": "Welche Größe ist diese Zahl?",
-          "kg": {
-            "role": "type",
-            "note": "The class of the value node itself (rdf:type). OEO_00140127 fraction value falls under the MHPKG schema's RelationalQuantityValue. An out:* answer is a deliberate non-class and mints no node."
-          }
+          "question": "Welche Größe ist diese Zahl?"
         },
         "what": {
           "type": "text",
@@ -6265,23 +5945,6 @@
             }
           },
           "question": "Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_energy_carrier",
-            "label": "refers to energy carrier",
-            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-            "outside_root": {
-              "OEO_00000132": "district heating",
-              "OEO_00000139": "electrical energy",
-              "OEO_00000388": "solar thermal energy",
-              "OEO_00000191": "geothermal energy",
-              "OEO_00010114": "waste heat",
-              "OEO_00310004": "industrial waste heat",
-              "OEO_00000056": "ambient heat",
-              "OEO_00140105": "waste water heat",
-              "OEO_00140104": "surface water heat"
-            }
-          },
           "several": true
         },
         "sector": {
@@ -6411,13 +6074,6 @@
             }
           },
           "question": "Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_sector",
-            "label": "refers to sector",
-            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-            "total_class": "OEO_00000128"
-          },
           "several": true
         },
         "technology": {
@@ -6530,24 +6186,11 @@
             }
           },
           "question": "Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_technology",
-            "label": "refers to technology",
-            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          },
           "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt dieser Anteil?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_scenario_year_value",
-            "label": "has scenario year value",
-            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-            "datatype": "xsd:integer"
-          }
+          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt dieser Anteil?"
         },
         "scenario": {
           "vocabulary": {
@@ -6587,28 +6230,7 @@
             }
           },
           "required": false,
-          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "target": {
-                "schema_class": "TargetScenario"
-              },
-              "status_quo": {
-                "schema_class": "AggregatedInventoryAnalysis"
-              },
-              "trend": {
-                "class": "OEO_00020311",
-                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-              }
-            },
-            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-            "linked_by": {
-              "node": "heatplan",
-              "schema_slot": "has_part",
-              "label": "has part"
-            }
-          }
+          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?"
         },
         "spatial_scope": {
           "vocabulary": {
@@ -6636,25 +6258,7 @@
             }
           },
           "required": false,
-          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "municipality": {
-                "note": "the plan's own area, minted from the AGS"
-              },
-              "sub_area": {
-                "class": "MHPO_00020019",
-                "linked_by": {
-                  "node": "municipality",
-                  "prefix": "obo",
-                  "predicate": "BFO_0000050",
-                  "label": "part of"
-                }
-              }
-            },
-            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
-          }
+          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?"
         }
       },
       "example": {
@@ -6693,21 +6297,6 @@
             "quote": "| Davon Erdgas | 10,1<br>37 % | 5,4<br>20 % | 2,6<br>10 % | 0<br>0 % | 0<br>0 % |"
           }
         ]
-      },
-      "kg": {
-        "node": "value",
-        "class_from": "quantity",
-        "number": {
-          "schema_slot": "has_number",
-          "label": "has number",
-          "datatype": "xsd:float",
-          "from": "value_target"
-        },
-        "unit": {
-          "schema_slot": "has_unit",
-          "label": "has unit",
-          "from": "unit_target"
-        }
       }
     },
     {
@@ -6739,10 +6328,6 @@
           "derive": {
             "from": "unit",
             "value": "MHPO_00030021"
-          },
-          "kg": {
-            "role": "type",
-            "note": "The class of the value node itself (rdf:type), derived from the unit: a number of buildings is a building count and nothing else. The MHPKG schema holds no building count yet, so the strict graph leaves it out."
           },
           "question": "Welche Größe ist diese Zahl?"
         },
@@ -6864,12 +6449,6 @@
           "derive": {
             "from": "unit",
             "value": "OEO_00140069"
-          },
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_aggregation_type",
-            "label": "has aggregation type",
-            "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: a number of buildings is a stock at one point in time."
           }
         },
         "carrier": {
@@ -7674,23 +7253,6 @@
             }
           },
           "question": "Für welchen Energieträger gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Energieträgern aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_energy_carrier",
-            "label": "refers to energy carrier",
-            "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-            "outside_root": {
-              "OEO_00000132": "district heating",
-              "OEO_00000139": "electrical energy",
-              "OEO_00000388": "solar thermal energy",
-              "OEO_00000191": "geothermal energy",
-              "OEO_00010114": "waste heat",
-              "OEO_00310004": "industrial waste heat",
-              "OEO_00000056": "ambient heat",
-              "OEO_00140105": "waste water heat",
-              "OEO_00140104": "surface water heat"
-            }
-          },
           "several": true
         },
         "sector": {
@@ -7820,13 +7382,6 @@
             }
           },
           "question": "Für welchen Verbrauchssektor gilt diese Zahl, oder, wo ihre Tabelle oder ihr Satz nicht nach Sektoren aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_sector",
-            "label": "refers to sector",
-            "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-            "total_class": "OEO_00000128"
-          },
           "several": true
         },
         "technology": {
@@ -7939,24 +7494,11 @@
             }
           },
           "question": "Welcher Wärmeerzeugungstechnologie ordnet der Plan diese Zahl ausdrücklich zu, oder, wo ihre Tabelle oder ihr Satz nicht nach Technologien aufteilt, wonach teilt die Stelle stattdessen auf?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "refers_to_technology",
-            "label": "refers to technology",
-            "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
-          },
           "several": true
         },
         "year": {
           "type": "int",
-          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?",
-          "kg": {
-            "role": "edge",
-            "schema_slot": "has_scenario_year_value",
-            "label": "has scenario year value",
-            "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-            "datatype": "xsd:integer"
-          }
+          "question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?"
         },
         "scenario": {
           "vocabulary": {
@@ -7996,28 +7538,7 @@
             }
           },
           "required": false,
-          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "target": {
-                "schema_class": "TargetScenario"
-              },
-              "status_quo": {
-                "schema_class": "AggregatedInventoryAnalysis"
-              },
-              "trend": {
-                "class": "OEO_00020311",
-                "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-              }
-            },
-            "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-            "linked_by": {
-              "node": "heatplan",
-              "schema_slot": "has_part",
-              "label": "has part"
-            }
-          }
+          "question": "Auf welchen Zustand des Plans bezieht sich diese Zahl, auf seinen Bestand, ein Trend- oder ein Zielszenario?"
         },
         "spatial_scope": {
           "vocabulary": {
@@ -8045,25 +7566,7 @@
             }
           },
           "required": false,
-          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?",
-          "kg": {
-            "role": "parent",
-            "map": {
-              "municipality": {
-                "note": "the plan's own area, minted from the AGS"
-              },
-              "sub_area": {
-                "class": "MHPO_00020019",
-                "linked_by": {
-                  "node": "municipality",
-                  "prefix": "obo",
-                  "predicate": "BFO_0000050",
-                  "label": "part of"
-                }
-              }
-            },
-            "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
-          }
+          "question": "Für welches Gebiet gilt diese Zahl, für die ganze Gemeinde oder für ein Teilgebiet mit seinem Namen?"
         }
       },
       "example": {
@@ -8084,21 +7587,6 @@
             "quote": "| | Anzahl Gebäude: | 68 |"
           }
         ]
-      },
-      "kg": {
-        "node": "value",
-        "class_from": "quantity",
-        "number": {
-          "schema_slot": "has_number",
-          "label": "has number",
-          "datatype": "xsd:float",
-          "from": "value_target"
-        },
-        "unit": {
-          "schema_slot": "has_unit",
-          "label": "has unit",
-          "from": "unit_target"
-        }
       }
     }
   ]

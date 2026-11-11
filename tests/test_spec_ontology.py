@@ -27,6 +27,9 @@ import pytest
 
 from docpipe.extraction import fields, spec as spec_module
 from docpipe.extraction.fields import READ
+from docpipe import graphfile
+from docpipe.extraction import graph as program
+from docpipe.profile import load_profile
 from profiles.kwp import compute, kg, vocabulary
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -203,7 +206,8 @@ def value(**over):
 
 
 def graph(tmp_path, rows, strict=False):
-    serializer = kg.make_serializer(database(tmp_path), strict=strict)
+    serializer = program.make_serializer(load_profile("kwp"),
+                                         database(tmp_path), strict=strict)
     return serializer("plan", rows) or ""
 
 
@@ -221,30 +225,42 @@ def test_a_value_whose_area_the_plan_does_not_say_reaches_the_full_graph(
 
 def test_a_class_outside_the_schema_is_full_graph_only(tmp_path):
     diesel = value(carrier="OEO_00010242")
-    assert kg.strict_refusal(diesel) == "off_list:refers_to_energy_carrier"
+    why = kg.strict_refusal(diesel, kg._box("part").get("table") or {},
+                            kg.totals(kg.DRAWING, "value"))
+    assert why == "off_list:refers_to_energy_carrier"
     assert "OEO_00010242" in graph(tmp_path, [diesel])
     assert "OEO_00010242" not in graph(tmp_path, [diesel, value()],
                                        strict=True)
 
 
+# the field of the plan's makers, its role, and the property the drawing
+# writes from the plan to them
+ORGANISATION = "planning_organisation"
+MADE_BY = kg._arrow("plan", "office")["property"]
+BASE = graphfile.get("base", "kwp")
+
+
 def organisation(name: str, role: str):
-    return {"parameter": kg.ORGANISATION, "value": name, kg.ROLE: role,
+    return {"parameter": ORGANISATION, "value": name, "role": role,
             "quote": f"Auftraggeber: {name}"}
+
+
+def made_by(out: str) -> str:
+    """The object of the plan's maker edge in *out*."""
+    return out.split(MADE_BY, 1)[-1].split(" ;", 1)[0].strip()
 
 
 def test_the_municipality_as_maker_is_the_municipality_node(tmp_path):
     out = graph(tmp_path, [value(), organisation("Stadt Musterhausen",
                                                  "municipality")])
-    municipality = f"<{kg.BASE}municipality/AGS_09999999>"
-    assert f"{kg.P_ORGANISATION} {municipality}" in out
-    assert kg.mint("organisation", kg.normalise("Stadt Musterhausen")) not in out
+    assert made_by(out) == f"<{BASE}municipality/AGS_09999999>"
+    assert f"{BASE}organisation/" not in out
 
 
 def test_an_office_is_minted_as_an_organisation(tmp_path):
     out = graph(tmp_path, [value(), organisation("Zebau", "planner")])
-    assert kg.mint("organisation", kg.normalise("Zebau")) in out
-    assert f"<{kg.BASE}municipality/AGS_09999999> ;" not in out.split(
-        str(kg.P_ORGANISATION), 1)[-1].split(".", 1)[0]
+    assert made_by(out).startswith(f"<{BASE}organisation/")
+    assert '"Zebau"' in out
 
 
 def test_a_factor_stays_out_of_the_graph_and_the_amount_is_written(tmp_path):

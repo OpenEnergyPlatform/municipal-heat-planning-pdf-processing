@@ -72,6 +72,7 @@ Fields:
 - `owners: dict = field(default_factory=dict)`
 - `files: tuple = ()`
 - `sha256: str = ""`
+- `map: dict = field(default_factory=dict)`
 
 #### Graph.written
 
@@ -118,6 +119,18 @@ def parse(raw: str, where, known: Optional[dict] = None) -> dict
 The entries of the text *raw*, read strictly: {"classes",
 "constraints", "rules"}.
 
+### map_problem
+
+```python
+def map_problem(drawing) -> Optional[str]
+```
+
+What is wrong with the shape of a drawing, None where nothing is:
+every key known, every box named once, every arrow between boxes or
+from a reading to a box, with a property. What a drawing names of a
+spec, of the shapes and of the bricks is held to them where the
+profile is known (`docpipe.extraction.graph.check`).
+
 ### dump
 
 ```python
@@ -161,6 +174,15 @@ def get(name: str, owner: str)
 The value of the graph rule *name* of the profile called *owner*,
 as its files, `DOCPIPE_GRAPH_FILE` and the settings of its rules say it
 now.
+
+### get_map
+
+```python
+def get_map(owner: str) -> dict
+```
+
+The drawing of the profile called *owner*, as its files and
+`DOCPIPE_GRAPH_FILE` have it now; {} where none has one.
 
 ### reset
 
@@ -240,50 +262,5 @@ nodes (its provenance) and follow it: a node named anew is named anew
 there, a node left out takes every triple that names it along. A file is
 rewritten only where something changed. Returns what was done,
 counted.
-
-### also_pairs
-
-```python
-def also_pairs(spec_raw: dict) -> list
-```
-
-[(classes, predicate block, [further predicate blocks])] of a spec
-read as its shapes name its properties (`draft.read_as_shapes`): every
-block that writes a predicate and names further ones (`also`), with the
-classes of the node it writes on (`draft.field_classes`). A parameter's
-`kg` block may name them beside its `property`, for that property.
-
-### shape_prefixes
-
-```python
-def shape_prefixes(shapes) -> dict
-```
-
-{prefix: namespace} the shapes files declare.
-
-### add_also
-
-```python
-def add_also(text: str, pairs: list, prefixes: Optional[dict] = None) -> tuple
-```
-
-(*text* with what `also` asks, the triples added): for every triple
-whose predicate a block writes with `also`, on a node of one of the
-block's classes, the same node and object under each further predicate,
-where the node holds no value under it yet (a writer that writes it
-itself, a scenario's acronym, keeps its own). Edited as text where every
-block can be read, the writers' comments staying, else written anew by
-rdflib; held against the graph it asks for either way. *prefixes*
-{name: namespace} expand a further predicate the graph's header does not
-bind (the shapes' own, where a merged property came from).
-
-### also
-
-```python
-def also(path: Path, pairs: list, prefixes: Optional[dict] = None) -> int
-```
-
-`add_also` on the graph written to *path*; the file is rewritten only
-where a triple is added. Returns how many were.
 
 [Back to the index](../README.md)

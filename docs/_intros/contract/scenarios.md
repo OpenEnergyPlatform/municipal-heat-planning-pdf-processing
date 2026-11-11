@@ -43,8 +43,10 @@ section location among them, filled in as the source allows
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
 `x-question` is the sentence, in English, the model was asked for a
-coordinate. `x-kg` is the spec's own `kg` block, published unchanged,
-so this page cannot state something the serializer does not. Where a
+coordinate. `x-kg` lists the arrows of the profile's drawing that read the coordinate or
+the field (the box it points at, its class, the property and the brick),
+published as drawn, so this page cannot state something the graph writer
+does not. Where a
 coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a

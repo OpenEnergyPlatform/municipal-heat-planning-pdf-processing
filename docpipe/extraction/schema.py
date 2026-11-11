@@ -9,10 +9,11 @@ not an answer anyone outside this repository can use, and it is not
 one this repository can check.
 
 So the schema is generated from the spec, not written beside it. The
-parameters, their axes, the closed lists, the questions and the `kg`
-blocks all come from `profiles/<name>/extraction_spec.json`, so a
-spec change that is not reflected in the schema is a failing test
-rather than a stale document. Three schemas come out:
+parameters, their axes, the closed lists and the questions come from
+`profiles/<name>/extraction_spec.json`, and what a field becomes in the
+graph from the drawing in `profiles/<name>/graph.json`, so a change that
+is not reflected in the schema is a stale document and no silent one.
+Three schemas come out:
 
   harvest  one line of <name>.jsonl: an accepted tuple or a refused
            claim
@@ -22,9 +23,11 @@ rather than a stale document. Three schemas come out:
 Every property carries a `description`, and every coordinate
 additionally carries `x-question` (the German question the model was
 asked), `x-options` (the closed list with the corpus spellings) and
-`x-kg` (what it becomes in the graph). `x-kg` is the spec's own `kg`
-block, the same one the serializer reads, so what a reader is told
-and what is written cannot drift apart.
+`x-kg` (what it becomes in the graph). `x-kg` lists the arrows of the
+drawing that read the field or the coordinate, the same drawing the
+serializer writes the graph from, so what a reader is told and what is
+written cannot drift apart: each says the box it points at, that box's
+class, the property it writes and the brick that makes its object.
 
     python -m docpipe.extraction.schema kwp            # print
     python -m docpipe.extraction.schema kwp --write    # write into the profile
@@ -359,7 +362,22 @@ def _slot_rules(name: str, slot) -> dict:
     }
 
 
-def _tuple_schema(spec, parameter) -> dict:
+def _x_kg(drawing, arrows) -> list:
+    """What the arrows of a drawing say, as `x-kg` lists them: the box each
+    points at, its class, the property it writes and its brick."""
+    out = []
+    for arrow in arrows:
+        brick = arrow.get("brick")
+        brick = brick.get("brick") if isinstance(brick, dict) else brick
+        out.append({key: value for key, value in (
+            ("to", arrow["to"]),
+            ("class", drawing.box[arrow["to"]].get("class")),
+            ("property", arrow.get("property")), ("brick", brick))
+            if value})
+    return out
+
+
+def _tuple_schema(spec, parameter, drawing=None) -> dict:
     props: dict = {
         "kind": {"const": "tuple"},
         "quote": {"type": "string", "minLength": min_quote_chars(),
@@ -539,23 +557,26 @@ def _tuple_schema(spec, parameter) -> dict:
             slot.name, slot,
             f"Axis '{slot.name}' of {parameter.label}. {closed}"
             f"null unless {slot.name}_state is 'read' or 'derived'."))
-        axis = parameter.axes.get(slot.name)
-        if axis is not None and axis.kg:
-            props[slot.name]["x-kg"] = axis.kg
+        said = [] if drawing is None else drawing.readers(
+            parameter.uri, slot.name)
+        if said:
+            props[slot.name]["x-kg"] = _x_kg(drawing, said)
         required += [slot.name, f"{slot.name}_state"]
         rules.append(_slot_rules(slot.name, slot))
 
     out = {"type": "object", "properties": props, "required": required,
            "additionalProperties": False}
-    if parameter.kg:
-        out["x-kg"] = parameter.kg
+    said = drawing.readers(parameter.uri) if drawing is not None else []
+    if said:
+        out["x-kg"] = _x_kg(drawing, said)
     if rules:
         out["allOf"] = rules
     return out
 
 
-def harvest_schema(spec) -> dict:
-    """One line of <name>.jsonl."""
+def harvest_schema(spec, drawing=None) -> dict:
+    """One line of <name>.jsonl. *drawing* (`graph.Drawing`) is what the
+    `x-kg` of a field and of a coordinate says: the arrows that read it."""
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/harvest-line",
@@ -740,7 +761,7 @@ def harvest_schema(spec) -> dict:
                              "tuples", "refusals"],
                 "additionalProperties": False,
             },
-            **{f"tuple_{p.uri}": _tuple_schema(spec, p)
+            **{f"tuple_{p.uri}": _tuple_schema(spec, p, drawing)
                for p in spec.parameters},
         },
     }
@@ -1277,9 +1298,9 @@ def trace_schema() -> dict:
     }
 
 
-def build(spec) -> dict:
+def build(spec, drawing=None) -> dict:
     """The three schemas of one profile's extraction output."""
-    return {"harvest": harvest_schema(spec),
+    return {"harvest": harvest_schema(spec, drawing),
             "stamp": stamp_schema(),
             "trace": trace_schema()}
 
@@ -1319,6 +1340,19 @@ def _spec_file(profile_name: str) -> Path:
             else _profile_dir(profile_name) / "extraction_spec.json")
 
 
+def _drawing(profile_name: str):
+    """The drawing of the profile's graph file (`graph.Drawing`), None for a
+    profile that has none or is none yet."""
+    from docpipe import graphfile
+    from docpipe.profile import load_profile
+    from .graph import Drawing
+    try:
+        drawn = graphfile.load(load_profile(profile_name)).map
+    except (LookupError, ImportError, ValueError):
+        return None
+    return Drawing(drawn) if drawn else None
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("profile", help="profile name, e.g. kwp")
@@ -1331,7 +1365,7 @@ def main(argv=None) -> int:
     if not spec_file.is_file():
         print(f"no spec: {spec_file}")
         return 1
-    text = serialize(build(load_spec(spec_file)))
+    text = serialize(build(load_spec(spec_file), _drawing(args.profile)))
     if args.write:
         out = schema_path(args.profile)
         with io.open(out, "w", encoding="utf-8", newline=chr(10)) as handle:

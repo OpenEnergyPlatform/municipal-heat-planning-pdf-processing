@@ -113,12 +113,3 @@ def shapes_files() -> list:
     the Sources tab of `docpipe edit`)."""
     from profiles.kwp import vocabulary   # lazy: it reads the spec
     return [path for path in vocabulary.shapes() if path.is_file()]
-
-
-def spec_for_shapes(raw: dict) -> dict:
-    """The spec as the shapes name its properties: this profile's `kg`
-    blocks name schema slots and classes (`"schema_slot":
-    "refers_to_energy_carrier"`), which the MHPKG schema turns into the
-    predicate and class its shapes carry (`mhpkg.resolve`)."""
-    from profiles.kwp import mhpkg
-    return mhpkg.resolve(raw, mhpkg.load())

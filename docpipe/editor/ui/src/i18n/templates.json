@@ -38,5 +38,7 @@
  "{n} requests asked for the entry of a list; {late} of the lists shown had more than {meanings} entries, so their entries are shown by their names only.",
  "{n} shapes carry this path and the block does not say which node is meant",
  "{shape}: no parameter asks for this property",
- "{shape}: no parameter asks for this property (required: min {n})"
+ "{shape}: no parameter asks for this property (required: min {n})",
+ "{shape}: no arrow of the drawing writes this property",
+ "{shape}: no arrow of the drawing writes this property (required: min 1)"
 ]

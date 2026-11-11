@@ -8,6 +8,7 @@ release label, without a language tag, AND one its source does not name
 carries no label of ours. A region is the LCC country of its own name, else
 the one whose short name is among its labels, AND one that finds none or two
 stays unnamed."""
+import json
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -15,11 +16,21 @@ from pathlib import Path
 import pytest
 from rdflib import Graph, Literal, URIRef
 
-from docpipe.extraction import fields, gate
+from docpipe import graphfile
+from docpipe.extraction import fields, gate, graph as program
 from docpipe.extraction.shapemodel import Model, SchemaError
+from docpipe.extraction.spec import load as load_spec
+from docpipe.profile import load_profile
 from profiles.scenarios import completion, kg, vocabulary
 
 OEO = "https://openenergyplatform.org/ontology/oeo/"
+PROFILE = load_profile("scenarios")
+SPEC = load_spec(json.loads(
+    Path(PROFILE.component("extraction", "SPEC_PATH")).read_text(
+        encoding="utf-8")))
+DRAWING = program.load_drawing(PROFILE)
+PROSE = DRAWING.evidence["prose"]
+ALWAYS_TYPES = tuple(graphfile.load(PROFILE).rules["scenario_types_always"])
 
 
 def own(rows: list) -> list:
@@ -28,7 +39,7 @@ def own(rows: list) -> list:
     entry, by its key as the harvest keeps it, where the row says nothing of
     it."""
     for row in rows:
-        parameter = kg.SPEC.by_uri.get(row.get("parameter"))
+        parameter = SPEC.by_uri.get(row.get("parameter"))
         for slot in fields.axis_slots(parameter) if parameter else ():
             if slot.keep and f"{slot.name}_state" not in row:
                 row[slot.name] = slot.keep
@@ -43,12 +54,17 @@ def empty_db() -> Path:
     return path
 
 
-def make_serializer(db, *args, **kwargs):
-    """`kg.make_serializer` over rows of this publication (`own`); a database
-    that does not exist stands for one that has nothing to say (`empty_db`),
-    since the graph reads which documents had pages a model read from it."""
-    inner = kg.make_serializer(db if Path(db).exists() else empty_db(),
-                               *args, **kwargs)
+def make_serializer(db, groups=None, names=None, strict=False):
+    """The program's serializer of the scenarios drawing over rows of this
+    publication (`own`), with the *groups* and *names* given instead of the
+    last refresh's; a database that does not exist stands for one that has
+    nothing to say (`empty_db`), since the graph reads which documents had
+    pages a model read from it."""
+    extra = {key: value for key, value in
+             (("groups", groups), ("names", names)) if value is not None}
+    inner = program.make_serializer(
+        PROFILE, db if Path(db).exists() else empty_db(), strict=strict,
+        extra=extra)
 
     def serializer(name, rows):
         inner.decisions = serializer.decisions
@@ -170,20 +186,51 @@ def oekg(report_uuid=True, bundle_uuid=False, region="oeo:OEO_00020220"):
                        + shape("Scenario", "oeo:OEO_00000365", *factsheet))
 
 
-def test_scenarios_reads_what_occurs_once_and_what_must_occur_off_the_shapes():
-    bound = kg.bind(oekg())
-    assert "publication_doi" in bound.single
-    assert "publication_author" not in bound.single
-    assert {"publication_title", "publication_author",
-            "study_acronym"} <= set(bound.required)
-    assert "publication_doi" not in bound.required
-    assert bound.uuid_on == {"studyreport", "scenariofactsheet"}
-    assert bound.author == "OEO_00000064"
+def prefixed(name: str) -> str:
+    prefix, _, local = name.partition(":")
+    return DRAWING.prefixes[prefix] + local
 
 
-def test_scenarios_stops_on_a_path_the_shapes_dropped():
-    with pytest.raises(SchemaError):
-        kg.bind(oekg(region="oeo:OEO_00010378"))
+def disagreements(model) -> list:
+    """Where the drawing's cardinalities and uuid boxes are not what the
+    *model* says: a per-document field the drawing writes once and the
+    shapes do not allow once (or the reverse), a box that carries the uuid
+    path where the shapes' class does not (or the reverse)."""
+    found = []
+    for arrow in DRAWING.arrows:
+        box = DRAWING.box[arrow["to"]]
+        if DRAWING.kind_of(arrow) != "field"                 or box["count"] != "per_document":
+            continue
+        slot = model.slot(prefixed(box["class"]),
+                          path=prefixed(arrow["property"]))
+        if bool(arrow.get("single")) != slot.single:
+            found.append(f"single:{arrow['from']}")
+    for box in DRAWING.boxes:
+        if box.get("class") and bool(box.get("uuid")) != model.has(
+                prefixed(box["class"]), OEO + "OEO_00390095"):
+            found.append(f"uuid:{box['id']}")
+    return found
+
+
+def test_the_drawing_writes_once_and_mints_uuids_as_the_shapes_say():
+    assert disagreements(oekg()) == []
+    # the failure by construction: shapes that give the bundle a uuid path
+    assert disagreements(oekg(bundle_uuid=True)) == ["uuid:bundle"]
+    singles = {a["from"] for a in DRAWING.arrows if a.get("single")}
+    assert "publication_doi" in singles
+    assert "publication_author" not in singles
+
+
+def problems_of(monkeypatch, model) -> list:
+    monkeypatch.setattr(kg, "_MODEL", [model])
+    return [line for line in program.check(DRAWING, PROFILE)
+            if "the shapes give" in line]
+
+
+def test_the_check_names_a_path_the_shapes_dropped(monkeypatch):
+    assert problems_of(monkeypatch, oekg()) == []
+    (dropped,) = problems_of(monkeypatch, oekg(region="oeo:OEO_00010378"))
+    assert "OEO_00020220" in dropped
 
 
 def test_the_scenarios_graph_parses_and_carries_the_shapes_paths():
@@ -197,7 +244,7 @@ def test_the_scenarios_graph_parses_and_carries_the_shapes_paths():
              "value_uri": "https://openenergyplatform.org/ontology/oekg/"
                           "region/Germany",
              "scenario": "NDC", "scenario_raw": "NDC", "quote": "NDC Germany"}]
-    serializer = make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"))
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     uuid = URIRef(OEO + "OEO_00390095")
     region = URIRef(OEO + "OEO_00020220")
@@ -218,7 +265,7 @@ def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
                  "quote": "the ENGAGE project"},
                 {"parameter": "publication_abstract", "value": abstract,
                  "quote": abstract}]
-    serializer = make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"))
     first = serializer("a", rows("Paper A", "Sergey Paltsev", "Abstract A"))
     second = serializer("b", rows("Paper B", "SERGEY PALTSEV", "Abstract B"))
     graph = Graph().parse(data=first + "\n" + second, format="turtle")
@@ -241,7 +288,7 @@ def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
 # (owner decision 2026-11-07); two such papers stay two bundles in the upload
 # body, which then names no label.
 def bundle_labels(rows):
-    serializer = make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"))
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
     bundle = next(graph.subjects(predicate=None,
@@ -291,7 +338,7 @@ def dated(*years_on_pages, title_page=1):
 
 
 def year_in_graph(rows):
-    serializer = make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"))
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     return [str(o)[:4] for o in
             graph.objects(predicate=URIRef(OEO + "OEO_00390096"))]
@@ -357,7 +404,7 @@ def written_by(*names_on_pages):
 
 
 def serialized(rows):
-    return make_serializer(Path("no-such.db"), model=oekg())("doc", rows)
+    return make_serializer(Path("no-such.db"))("doc", rows)
 
 
 def test_the_authors_a_front_page_names_go_before_those_of_other_works():
@@ -376,7 +423,7 @@ def test_authors_looked_up_go_before_authors_read_off_the_front_pages():
 
 
 def test_an_author_taken_keeps_every_reading_of_the_name_as_evidence():
-    mark = kg.TRUST_PROSE["corroborated"]
+    mark = PROSE["corroborated"]
 
     def confirmed(rows):
         return sum(mark in line for line in serialized(rows).splitlines())
@@ -400,8 +447,8 @@ def confirmed_lines(*readings):
                  "value": "Ioannis Tsiropoulos", "quote": "Ioannis Tsiropoulos",
                  "provenance": {"page": 1, "owner_kind": "section",
                                 "owner_id": 1}})
-    serializer = make_serializer(Path("no-such.db"), model=oekg())
-    mark = kg.TRUST_PROSE["corroborated"]
+    serializer = make_serializer(Path("no-such.db"))
+    mark = PROSE["corroborated"]
     return sum(mark in line for line in serializer("doc", rows).splitlines())
 
 
@@ -447,8 +494,7 @@ LABEL = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
 def described(names, *documents):
     """The graph and the texts of *documents*, [(name, [region IRI])], each
     a study with one scenario, written with *names*."""
-    serializer = make_serializer(Path("no-such.db"), model=oekg(),
-                                    groups={}, names=names)
+    serializer = make_serializer(Path("no-such.db"), groups={}, names=names)
     texts = []
     for name, regions in documents:
         rows = [{"parameter": "publication_title", "value": f"Study {name}",
@@ -465,7 +511,7 @@ def described(names, *documents):
 
 
 def test_a_node_the_graph_points_at_is_described_once_by_its_own_source():
-    iam = OEO + kg.ALWAYS_TYPES[0]
+    iam = OEO + ALWAYS_TYPES[0]
     names = {REGION + "Germany": "Germany",
              iam: "integrated assessment modeling scenario"}
     graph, texts = described(names, ("a", [REGION + "Germany"]),
@@ -526,18 +572,12 @@ def test_a_kind_of_violation_the_last_graph_lacked_is_new():
         == ["Closed q value"]
 
 
-class _Profile:
-    name = "stub"
-
-    def component(self, module, attr):
-        def broken(db):
-            raise SchemaError("the shape of X has no property with path Y")
-        return broken if (module, attr) == ("kg", "make_serializer") else None
-
-
-def test_the_gate_shuts_on_a_serializer_that_does_not_build():
+def test_the_gate_shuts_on_a_serializer_that_does_not_build(monkeypatch):
+    def broken(profile, db, **kwargs):
+        raise SchemaError("the shape of X has no property with path Y")
+    monkeypatch.setattr(program, "make_serializer", broken)
     reasons = gate.check(Path("h"), Path("db"), Path("out.ttl"),
-                         profile=_Profile())
+                         profile=PROFILE)
     assert reasons and "does not build" in reasons[0]
 
 
@@ -553,7 +593,7 @@ def regions_of(raw):
              "value_uri": "out:multiregion", "value_raw": raw,
              "scenario": "NDC", "scenario_raw": "NDC",
              "quote": "NDC for OECD Europe"}]
-    serializer = make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"))
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     label = URIRef("http://www.w3.org/2000/01/rdf-schema#label")
     return [str(graph.value(node, label)) for node in
@@ -578,7 +618,7 @@ def acronyms_of(short_marked):
             {"parameter": "scenario_label", "value": "ENTSO-E DG",
              "quote": "ENTSO-E DG", "value_means": ["Distributed Generation"],
              **({"value_short": True} if short_marked else {})}]
-    serializer = make_serializer(Path("no-such.db"), model=oekg())
+    serializer = make_serializer(Path("no-such.db"))
     graph = Graph().parse(data=serializer("doc", rows), format="turtle")
     return [str(o) for o in graph.objects(
         predicate=URIRef("http://purl.org/dc/terms/acronym"))]

@@ -794,12 +794,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "has aggregation type",
-       "note": "Object is a named individual of OEO_00140068 aggregation type. Derived from the unit, never asked: a number of buildings is a stock at one point in time.",
-       "role": "edge",
-       "schema_slot": "has_aggregation_type"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00390023",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "arithmetic mean": {
         "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.",
@@ -1136,23 +1137,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to energy carrier",
-       "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-       "outside_root": {
-        "OEO_00000056": "ambient heat",
-        "OEO_00000132": "district heating",
-        "OEO_00000139": "electrical energy",
-        "OEO_00000191": "geothermal energy",
-        "OEO_00000388": "solar thermal energy",
-        "OEO_00010114": "waste heat",
-        "OEO_00140104": "surface water heat",
-        "OEO_00140105": "waste water heat",
-        "OEO_00310004": "industrial waste heat"
-       },
-       "role": "edge",
-       "schema_slot": "refers_to_energy_carrier"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370001",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfallbrennstoff": {
         "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
@@ -2245,10 +2236,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "note": "The class of the value node itself (rdf:type), derived from the unit: a number of buildings is a building count and nothing else. The MHPKG schema holds no building count yet, so the strict graph leaves it out.",
-       "role": "type"
-      },
       "x-options": {
        "building count": {
         "meaning": "Gebäudeanzahl: Misst die Anzahl der Gebäude in einem Gebäudebestand.",
@@ -2401,27 +2388,12 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "linked_by": {
-        "label": "has part",
-        "node": "heatplan",
-        "schema_slot": "has_part"
-       },
-       "map": {
-        "status_quo": {
-         "schema_class": "AggregatedInventoryAnalysis"
-        },
-        "target": {
-         "schema_class": "TargetScenario"
-        },
-        "trend": {
-         "class": "OEO_00020311",
-         "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-        }
-       },
-       "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "property": "obo:BFO_0000051",
+        "to": "part"
+       }
+      ],
       "x-options": {
        "Bestand": {
         "meaning": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.",
@@ -2590,13 +2562,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to sector",
-       "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-       "role": "edge",
-       "schema_slot": "refers_to_sector",
-       "total_class": "OEO_00000128"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00020519",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfall- und Abwassersektor": {
         "meaning": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
@@ -2824,24 +2796,14 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "map": {
-        "municipality": {
-         "note": "the plan's own area, minted from the AGS"
-        },
-        "sub_area": {
-         "class": "MHPO_00020019",
-         "linked_by": {
-          "label": "part of",
-          "node": "municipality",
-          "predicate": "BFO_0000050",
-          "prefix": "obo"
-         }
-        }
-       },
-       "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "brick": "node_name",
+        "class": "mhpo:MHPO_00020019",
+        "property": "rdfs:label",
+        "to": "area"
+       }
+      ],
       "x-options": {
        "Gemeindegebiet": {
         "meaning": "Das ganze Gemeinde- oder Stadtgebiet des Plans.",
@@ -3105,12 +3067,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to technology",
-       "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional.",
-       "role": "edge",
-       "schema_slot": "refers_to_technology"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370003",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Biomasseheizung": {
         "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
@@ -3570,13 +3533,13 @@
        "integer",
        "null"
       ],
-      "x-kg": {
-       "datatype": "xsd:integer",
-       "label": "has scenario year value",
-       "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-       "role": "edge",
-       "schema_slot": "has_scenario_year_value"
-      },
+      "x-kg": [
+       {
+        "brick": "whole_number",
+        "property": "oeo:OEO_00020440",
+        "to": "value"
+       }
+      ],
       "x-question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?"
      },
      "year_link_quote": {
@@ -3717,21 +3680,18 @@
      "spatial_scope_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class_from": "quantity",
-     "node": "value",
-     "number": {
-      "datatype": "xsd:float",
-      "from": "value_target",
-      "label": "has number",
-      "schema_slot": "has_number"
+    "x-kg": [
+     {
+      "brick": "decimal",
+      "property": "oeo:OEO_00140178",
+      "to": "value"
      },
-     "unit": {
-      "from": "unit_target",
-      "label": "has unit",
-      "schema_slot": "has_unit"
+     {
+      "brick": "value_unit",
+      "property": "oeo:OEO_00040010",
+      "to": "value"
      }
-    }
+    ]
    },
    "tuple_emission": {
     "additionalProperties": false,
@@ -4169,12 +4129,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "has aggregation type",
-       "note": "Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit.",
-       "role": "edge",
-       "schema_slot": "has_aggregation_type"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00390023",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "arithmetic mean": {
         "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.",
@@ -4511,23 +4472,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to energy carrier",
-       "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-       "outside_root": {
-        "OEO_00000056": "ambient heat",
-        "OEO_00000132": "district heating",
-        "OEO_00000139": "electrical energy",
-        "OEO_00000191": "geothermal energy",
-        "OEO_00000388": "solar thermal energy",
-        "OEO_00010114": "waste heat",
-        "OEO_00140104": "surface water heat",
-        "OEO_00140105": "waste water heat",
-        "OEO_00310004": "industrial waste heat"
-       },
-       "role": "edge",
-       "schema_slot": "refers_to_energy_carrier"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370001",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfallbrennstoff": {
         "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
@@ -5630,10 +5581,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node.",
-       "role": "type"
-      },
       "x-options": {
        "Anteil in Prozent": {
         "meaning": "Ein Anteil in Prozent, keine Menge.",
@@ -5855,27 +5802,12 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "linked_by": {
-        "label": "has part",
-        "node": "heatplan",
-        "schema_slot": "has_part"
-       },
-       "map": {
-        "status_quo": {
-         "schema_class": "AggregatedInventoryAnalysis"
-        },
-        "target": {
-         "schema_class": "TargetScenario"
-        },
-        "trend": {
-         "class": "OEO_00020311",
-         "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-        }
-       },
-       "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "property": "obo:BFO_0000051",
+        "to": "part"
+       }
+      ],
       "x-options": {
        "Bestand": {
         "meaning": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.",
@@ -6044,13 +5976,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to sector",
-       "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-       "role": "edge",
-       "schema_slot": "refers_to_sector",
-       "total_class": "OEO_00000128"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00020519",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfall- und Abwassersektor": {
         "meaning": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
@@ -6278,24 +6210,14 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "map": {
-        "municipality": {
-         "note": "the plan's own area, minted from the AGS"
-        },
-        "sub_area": {
-         "class": "MHPO_00020019",
-         "linked_by": {
-          "label": "part of",
-          "node": "municipality",
-          "predicate": "BFO_0000050",
-          "prefix": "obo"
-         }
-        }
-       },
-       "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "brick": "node_name",
+        "class": "mhpo:MHPO_00020019",
+        "property": "rdfs:label",
+        "to": "area"
+       }
+      ],
       "x-options": {
        "Gemeindegebiet": {
         "meaning": "Das ganze Gemeinde- oder Stadtgebiet des Plans.",
@@ -6559,12 +6481,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to technology",
-       "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional.",
-       "role": "edge",
-       "schema_slot": "refers_to_technology"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370003",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Biomasseheizung": {
         "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
@@ -7359,13 +7282,13 @@
        "integer",
        "null"
       ],
-      "x-kg": {
-       "datatype": "xsd:integer",
-       "label": "has scenario year value",
-       "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-       "role": "edge",
-       "schema_slot": "has_scenario_year_value"
-      },
+      "x-kg": [
+       {
+        "brick": "whole_number",
+        "property": "oeo:OEO_00020440",
+        "to": "value"
+       }
+      ],
       "x-question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?"
      },
      "year_link_quote": {
@@ -7506,21 +7429,18 @@
      "spatial_scope_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class_from": "quantity",
-     "node": "value",
-     "number": {
-      "datatype": "xsd:float",
-      "from": "value_target",
-      "label": "has number",
-      "schema_slot": "has_number"
+    "x-kg": [
+     {
+      "brick": "decimal",
+      "property": "oeo:OEO_00140178",
+      "to": "value"
      },
-     "unit": {
-      "from": "unit_target",
-      "label": "has unit",
-      "schema_slot": "has_unit"
+     {
+      "brick": "value_unit",
+      "property": "oeo:OEO_00040010",
+      "to": "value"
      }
-    }
+    ]
    },
    "tuple_energy_consumption": {
     "additionalProperties": false,
@@ -7958,12 +7878,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "has aggregation type",
-       "note": "Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit.",
-       "role": "edge",
-       "schema_slot": "has_aggregation_type"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00390023",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "arithmetic mean": {
         "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze.",
@@ -8300,23 +8221,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to energy carrier",
-       "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-       "outside_root": {
-        "OEO_00000056": "ambient heat",
-        "OEO_00000132": "district heating",
-        "OEO_00000139": "electrical energy",
-        "OEO_00000191": "geothermal energy",
-        "OEO_00000388": "solar thermal energy",
-        "OEO_00010114": "waste heat",
-        "OEO_00140104": "surface water heat",
-        "OEO_00140105": "waste water heat",
-        "OEO_00310004": "industrial waste heat"
-       },
-       "role": "edge",
-       "schema_slot": "refers_to_energy_carrier"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370001",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfallbrennstoff": {
         "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
@@ -9437,10 +9348,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "note": "The class of the value node itself (rdf:type). An out:* answer is a deliberate non-class and mints no node.",
-       "role": "type"
-      },
       "x-options": {
        "Anteil in Prozent": {
         "meaning": "Ein Anteil in Prozent, keine Menge.",
@@ -9742,27 +9649,12 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "linked_by": {
-        "label": "has part",
-        "node": "heatplan",
-        "schema_slot": "has_part"
-       },
-       "map": {
-        "status_quo": {
-         "schema_class": "AggregatedInventoryAnalysis"
-        },
-        "target": {
-         "schema_class": "TargetScenario"
-        },
-        "trend": {
-         "class": "OEO_00020311",
-         "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-        }
-       },
-       "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "property": "obo:BFO_0000051",
+        "to": "part"
+       }
+      ],
       "x-options": {
        "Bestand": {
         "meaning": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.",
@@ -9931,13 +9823,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to sector",
-       "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-       "role": "edge",
-       "schema_slot": "refers_to_sector",
-       "total_class": "OEO_00000128"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00020519",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfall- und Abwassersektor": {
         "meaning": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
@@ -10165,24 +10057,14 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "map": {
-        "municipality": {
-         "note": "the plan's own area, minted from the AGS"
-        },
-        "sub_area": {
-         "class": "MHPO_00020019",
-         "linked_by": {
-          "label": "part of",
-          "node": "municipality",
-          "predicate": "BFO_0000050",
-          "prefix": "obo"
-         }
-        }
-       },
-       "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "brick": "node_name",
+        "class": "mhpo:MHPO_00020019",
+        "property": "rdfs:label",
+        "to": "area"
+       }
+      ],
       "x-options": {
        "Gemeindegebiet": {
         "meaning": "Das ganze Gemeinde- oder Stadtgebiet des Plans.",
@@ -10446,12 +10328,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to technology",
-       "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional.",
-       "role": "edge",
-       "schema_slot": "refers_to_technology"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370003",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Biomasseheizung": {
         "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
@@ -11016,13 +10899,13 @@
        "integer",
        "null"
       ],
-      "x-kg": {
-       "datatype": "xsd:integer",
-       "label": "has scenario year value",
-       "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-       "role": "edge",
-       "schema_slot": "has_scenario_year_value"
-      },
+      "x-kg": [
+       {
+        "brick": "whole_number",
+        "property": "oeo:OEO_00020440",
+        "to": "value"
+       }
+      ],
       "x-question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt diese Zahl?"
      },
      "year_link_quote": {
@@ -11163,21 +11046,18 @@
      "spatial_scope_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class_from": "quantity",
-     "node": "value",
-     "number": {
-      "datatype": "xsd:float",
-      "from": "value_target",
-      "label": "has number",
-      "schema_slot": "has_number"
+    "x-kg": [
+     {
+      "brick": "decimal",
+      "property": "oeo:OEO_00140178",
+      "to": "value"
      },
-     "unit": {
-      "from": "unit_target",
-      "label": "has unit",
-      "schema_slot": "has_unit"
+     {
+      "brick": "value_unit",
+      "property": "oeo:OEO_00040010",
+      "to": "value"
      }
-    }
+    ]
    },
    "tuple_heat_load": {
     "additionalProperties": false,
@@ -11615,12 +11495,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "has aggregation type",
-       "note": "Object is a named individual of OEO_00140068 aggregation type. ASKED here and derived on the two amount parameters: a watt is not an amount integrated over a span, so the unit fixes nothing.",
-       "role": "edge",
-       "schema_slot": "has_aggregation_type"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00390023",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "arithmetic mean": {
         "meaning": "Durchschnittswert, berechnet als arithmetisches Mittel über Datensätze, etwa eine mittlere Leistung.",
@@ -11957,23 +11838,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to energy carrier",
-       "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-       "outside_root": {
-        "OEO_00000056": "ambient heat",
-        "OEO_00000132": "district heating",
-        "OEO_00000139": "electrical energy",
-        "OEO_00000191": "geothermal energy",
-        "OEO_00000388": "solar thermal energy",
-        "OEO_00010114": "waste heat",
-        "OEO_00140104": "surface water heat",
-        "OEO_00140105": "waste water heat",
-        "OEO_00310004": "industrial waste heat"
-       },
-       "role": "edge",
-       "schema_slot": "refers_to_energy_carrier"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370001",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfallbrennstoff": {
         "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
@@ -13089,10 +12960,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "note": "The class of the value node itself (rdf:type). OEO_00010157 is defined by its unit (\"a quantity value that has a power unit as unit\"), so it follows from units_accepted and is not a second assertion. An out:* answer is a deliberate non-class and mints no node.",
-       "role": "type"
-      },
       "x-options": {
        "Blockgröße": {
         "meaning": "Block size is the declared net capacity of a power generating unit.",
@@ -13364,27 +13231,12 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "linked_by": {
-        "label": "has part",
-        "node": "heatplan",
-        "schema_slot": "has_part"
-       },
-       "map": {
-        "status_quo": {
-         "schema_class": "AggregatedInventoryAnalysis"
-        },
-        "target": {
-         "schema_class": "TargetScenario"
-        },
-        "trend": {
-         "class": "OEO_00020311",
-         "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-        }
-       },
-       "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "property": "obo:BFO_0000051",
+        "to": "part"
+       }
+      ],
       "x-options": {
        "Bestand": {
         "meaning": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.",
@@ -13553,13 +13405,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to sector",
-       "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-       "role": "edge",
-       "schema_slot": "refers_to_sector",
-       "total_class": "OEO_00000128"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00020519",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfall- und Abwassersektor": {
         "meaning": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
@@ -13787,24 +13639,14 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "map": {
-        "municipality": {
-         "note": "the plan's own area, minted from the AGS"
-        },
-        "sub_area": {
-         "class": "MHPO_00020019",
-         "linked_by": {
-          "label": "part of",
-          "node": "municipality",
-          "predicate": "BFO_0000050",
-          "prefix": "obo"
-         }
-        }
-       },
-       "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "brick": "node_name",
+        "class": "mhpo:MHPO_00020019",
+        "property": "rdfs:label",
+        "to": "area"
+       }
+      ],
       "x-options": {
        "Gemeindegebiet": {
         "meaning": "Das ganze Gemeinde- oder Stadtgebiet des Plans.",
@@ -14068,12 +13910,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to technology",
-       "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional.",
-       "role": "edge",
-       "schema_slot": "refers_to_technology"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370003",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Biomasseheizung": {
         "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
@@ -14573,13 +14416,13 @@
        "integer",
        "null"
       ],
-      "x-kg": {
-       "datatype": "xsd:integer",
-       "label": "has scenario year value",
-       "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-       "role": "edge",
-       "schema_slot": "has_scenario_year_value"
-      },
+      "x-kg": [
+       {
+        "brick": "whole_number",
+        "property": "oeo:OEO_00020440",
+        "to": "value"
+       }
+      ],
       "x-question": "Für welches Kalenderjahr gilt diese Leistung, bei einer Bestandsanlage das Jahr der Bestandsaufnahme und nicht ihr Baujahr?"
      },
      "year_link_quote": {
@@ -14720,21 +14563,18 @@
      "spatial_scope_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class_from": "quantity",
-     "node": "value",
-     "number": {
-      "datatype": "xsd:float",
-      "from": "value_target",
-      "label": "has number",
-      "schema_slot": "has_number"
+    "x-kg": [
+     {
+      "brick": "decimal",
+      "property": "oeo:OEO_00140178",
+      "to": "value"
      },
-     "unit": {
-      "from": "unit_target",
-      "label": "has unit",
-      "schema_slot": "has_unit"
+     {
+      "brick": "value_unit",
+      "property": "oeo:OEO_00040010",
+      "to": "value"
      }
-    }
+    ]
    },
    "tuple_planning_organisation": {
     "additionalProperties": false,
@@ -15012,10 +14852,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "note": "The MHPKG schema: a municipality acting as planning authority is NOT a second entity, so `municipality` links has_organisation to the plan's municipality node; `planner` mints an Organisation.",
-       "role": "comment"
-      },
       "x-options": {
        "andere Organisation": {
         "meaning": "Ein Büro oder eine andere Organisation, die den Plan erstellt hat, nicht die Kommune des Plans selbst.",
@@ -15177,15 +15013,19 @@
      "role_state"
     ],
     "type": "object",
-    "x-kg": {
-     "edge_from_plan": {
-      "label": "has organisation",
-      "schema_slot": "has_organisation"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00030022",
+      "property": "oeo:OEO_00000510",
+      "to": "office"
      },
-     "label": "rdfs:label, legal form stripped",
-     "node": "organisation",
-     "schema_class": "Organisation"
-    }
+     {
+      "brick": "node_name",
+      "class": "oeo:OEO_00030022",
+      "property": "rdfs:label",
+      "to": "office"
+     }
+    ]
    },
    "tuple_share": {
     "additionalProperties": false,
@@ -15796,23 +15636,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to energy carrier",
-       "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding.",
-       "outside_root": {
-        "OEO_00000056": "ambient heat",
-        "OEO_00000132": "district heating",
-        "OEO_00000139": "electrical energy",
-        "OEO_00000191": "geothermal energy",
-        "OEO_00000388": "solar thermal energy",
-        "OEO_00010114": "waste heat",
-        "OEO_00140104": "surface water heat",
-        "OEO_00140105": "waste water heat",
-        "OEO_00310004": "industrial waste heat"
-       },
-       "role": "edge",
-       "schema_slot": "refers_to_energy_carrier"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370001",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfallbrennstoff": {
         "meaning": "Brennstoff, bei dem das Material Abfall ist, umfasst alle Abfallarten.",
@@ -16920,10 +16750,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "note": "The class of the value node itself (rdf:type). OEO_00140127 fraction value falls under the MHPKG schema's RelationalQuantityValue. An out:* answer is a deliberate non-class and mints no node.",
-       "role": "type"
-      },
       "x-options": {
        "Anteil elektrischer Energie": {
         "meaning": "An electrical energy share value is a fraction value that quantifies the share of electrical energy (degree of electrification).",
@@ -17137,27 +16963,12 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "linked_by": {
-        "label": "has part",
-        "node": "heatplan",
-        "schema_slot": "has_part"
-       },
-       "map": {
-        "status_quo": {
-         "schema_class": "AggregatedInventoryAnalysis"
-        },
-        "target": {
-         "schema_class": "TargetScenario"
-        },
-        "trend": {
-         "class": "OEO_00020311",
-         "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
-        }
-       },
-       "note": "Which container node holds the value: the plan has the container by `linked_by`, and the edge from the container down to the value is structural and named in kg.py. Only the target scenario is serialized today (G2).",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "property": "obo:BFO_0000051",
+        "to": "part"
+       }
+      ],
       "x-options": {
        "Bestand": {
         "meaning": "Erhoben oder bilanziert für ein vergangenes oder das laufende Jahr: Bestandsanalyse, Ist-Zustand, Bilanzjahr, Ausgangslage, Energiebilanz, „bislang“, „derzeit“, „wird verbraucht“, oder ein Jahr vor der Erstellung des Plans im Titel.",
@@ -17326,13 +17137,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to sector",
-       "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown.",
-       "role": "edge",
-       "schema_slot": "refers_to_sector",
-       "total_class": "OEO_00000128"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00020519",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Abfall- und Abwassersektor": {
         "meaning": "A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.",
@@ -17560,24 +17371,14 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "map": {
-        "municipality": {
-         "note": "the plan's own area, minted from the AGS"
-        },
-        "sub_area": {
-         "class": "MHPO_00020019",
-         "linked_by": {
-          "label": "part of",
-          "node": "municipality",
-          "predicate": "BFO_0000050",
-          "prefix": "obo"
-         }
-        }
-       },
-       "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area.",
-       "role": "parent"
-      },
+      "x-kg": [
+       {
+        "brick": "node_name",
+        "class": "mhpo:MHPO_00020019",
+        "property": "rdfs:label",
+        "to": "area"
+       }
+      ],
       "x-options": {
        "Gemeindegebiet": {
         "meaning": "Das ganze Gemeinde- oder Stadtgebiet des Plans.",
@@ -17841,12 +17642,13 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "label": "refers to technology",
-       "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional.",
-       "role": "edge",
-       "schema_slot": "refers_to_technology"
-      },
+      "x-kg": [
+       {
+        "brick": "answer_class",
+        "property": "oeo:OEO_00370003",
+        "to": "value"
+       }
+      ],
       "x-options": {
        "Biomasseheizung": {
         "meaning": "Biomasseheizung: Verbrennungsbasierte Wärmeerzeugung unter Verwendung von Biomasse.",
@@ -18423,13 +18225,13 @@
        "integer",
        "null"
       ],
-      "x-kg": {
-       "datatype": "xsd:integer",
-       "label": "has scenario year value",
-       "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated.",
-       "role": "edge",
-       "schema_slot": "has_scenario_year_value"
-      },
+      "x-kg": [
+       {
+        "brick": "whole_number",
+        "property": "oeo:OEO_00020440",
+        "to": "value"
+       }
+      ],
       "x-question": "Für welches Kalenderjahr oder welchen Zeitraum von Jahren gilt dieser Anteil?"
      },
      "year_link_quote": {
@@ -18570,21 +18372,18 @@
      "spatial_scope_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class_from": "quantity",
-     "node": "value",
-     "number": {
-      "datatype": "xsd:float",
-      "from": "value_target",
-      "label": "has number",
-      "schema_slot": "has_number"
+    "x-kg": [
+     {
+      "brick": "decimal",
+      "property": "oeo:OEO_00140178",
+      "to": "value"
      },
-     "unit": {
-      "from": "unit_target",
-      "label": "has unit",
-      "schema_slot": "has_unit"
+     {
+      "brick": "value_unit",
+      "property": "oeo:OEO_00040010",
+      "to": "value"
      }
-    }
+    ]
    }
   },
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/harvest-line",

@@ -252,7 +252,7 @@ shipped profile provides.
 | Reading the values out | the file `flow.json` of the profile's folder | optional for a profile that extends another: the `numbers` it sets differently, laid over the inherited file number by number, and the `flow` (the drawing) where it draws otherwise; the default profile's file is the whole flow, `numbers` and `flow` (`extraction.flow`) | not provided; the default's numbers are read | not provided; the default's numbers are read |
 | Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | the study regions this publication names, out of 249 (`profiles/scenarios/regions.json`) |
 | Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5510`) | the plan's own municipality name | not provided |
-| The knowledge graph | `kg.make_serializer` | optional for `--serialize` (`component`, `docpipe/extraction/runner.py:5371`); without one the generic writer built from the spec's `graph` block is used, and a profile with neither is refused with `SystemExit` (`docpipe/extraction/runner.py:5379-5383`) | tuples to MHPKG Turtle | tuples to OEKG Turtle |
+| The knowledge graph | the `map` (drawing) of the profile's `graph.json`; `kg.BRICKS` for the bricks only the profile needs | required for `--serialize`: every profile's graph is written by the core's program from its drawing (`docpipe/extraction/graph.py`), and a graph file without a drawing is refused with the reason (`parser.error`) | the drawing of tuples to MHPKG Turtle | the drawing of tuples to OEKG Turtle |
 | The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 Two entries say more than the table. `prompts/extraction/phrases.json` names
@@ -458,8 +458,10 @@ word" (see [Running the pipeline](running.md)).
 
 6. **Add extraction, if this corpus should feed a knowledge graph.** Write
    `extraction_spec.json` by hand, add `extraction.py` with `SPEC_PATH` at
-   least, `kg.py` with `make_serializer` (or a `graph` block in the spec,
-   which the generic writer reads instead), and `prompts/extraction/*.md`. Two
+   least, a `graph.json` whose `map` draws what the fields become in the graph
+   (`docpipe compile apply --out` writes a first one beside a drafted spec; the
+   Graph tab of `docpipe edit` draws it), a `kg.py` with `BRICKS` where the core's bricks do
+   not suffice, and `prompts/extraction/*.md`. Two
    of those prompts, `review` and `example`, are parts files that name a template
    of the core, and `extraction.py` then declares
    `CONTRACT_LANGUAGE` for the language they are in (see The extraction
@@ -471,10 +473,10 @@ word" (see [Running the pipeline](running.md)).
    `spec present`, also when an `extraction_spec.json` lies beside it), one
    anchor per axis question and none for the
    value, the anchors prompt's presence and non-empty text, the passages of
-   `PROMPT_CHECKS`, the writer of the graph
-   (built as the run builds it, so a `graph` block it refuses, such as the
-   placeholder base `docpipe compile spec` drafts, fails `serializer
-   present`), the checked-in schema, and the ontology pin of a profile that
+   `PROMPT_CHECKS`, the drawing of the graph
+   (held to the spec, the shapes and the bricks as the run holds it,
+   `graph.check`, so a field the spec does not ask or a brick no code has
+   fails `graph drawing`), the checked-in schema, and the ontology pin of a profile that
    has a `vocabulary` module. It prints one line per check and exits 1 when
    one fails, so it stands before a corpus run; with no name it checks the
    profile in effect, and a profile may be named by its directory, as for

@@ -39,7 +39,7 @@
       {
         "shape": "study",
         "property": "BFO_0000051",
-        "reason": "has part: the serializer writes it from the kg block of the scenario coordinate, the bundle holds its report and its factsheets, and no parameter asks for it"
+        "reason": "has part: the graph writer draws it from the scenario coordinate (the drawing in graph.json), the bundle holds its report and its factsheets, and no parameter asks for it"
       },
       {
         "shape": "scenario",

@@ -9,8 +9,7 @@ publishes (`mhpkg/schema/mhpkg_target_scenario.yaml`), pulled by every
 `vocabulary --refresh` at its current version and kept beside the profile as
 `mhpkg_schema.yaml`, so a machine without network reads the schema the last
 run read. kg.py takes from it every predicate, every class and every closed
-list, and the spec names schema slots instead of predicates
-(`"schema_slot": "refers_to_energy_carrier"`, `resolve`).
+list.
 
 The schema is a draft with open term requests: some of its slot_uris are not
 yet in the pinned OEO or MHPO. They are written as the schema says and
@@ -129,17 +128,6 @@ def load(path: Path = SCHEMA_PATH) -> Shape
 ```
 
 The schema the last refresh pulled, parsed once per process.
-
-### resolve
-
-```python
-def resolve(spec_raw: dict, shape: Shape) -> dict
-```
-
-A copy of the spec whose `schema_slot` and `schema_class` entries carry
-the predicate and class the schema gives them, in the spec's own grammar
-(`prefix` + `predicate`, bare `class`), so every reader of the `kg`
-blocks reads the schema's terms without knowing it.
 
 ### missing_terms
 

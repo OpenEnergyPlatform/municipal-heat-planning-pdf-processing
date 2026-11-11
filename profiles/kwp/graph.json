@@ -5,5 +5,424 @@
     "base": "https://openenergyplatform.org/id/mhpkg/",
     "rounding_tolerance": 0.02,
     "contested_in_full": true
+  },
+  "map": {
+    "prefixes": {
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#",
+      "obo": "http://purl.obolibrary.org/obo/",
+      "mhpo": "https://purl.org/mhpo/ontology/",
+      "oeo": "https://openenergyplatform.org/ontology/oeo/"
+    },
+    "prefix_width": 6,
+    "legal_forms": "(gmbh\\s*&\\s*co\\.?\\s*kg|gmbh|mbh|ag|kg|ohg|e\\.?\\s*v\\.?|gbr|se|ug)",
+    "document": {
+      "facts": {
+        "brick": "plan_register"
+      },
+      "strict": true,
+      "claims": {
+        "brick": "value_bodies",
+        "document": "plan",
+        "box": "value",
+        "settings": {
+          "part": "part",
+          "area": "area",
+          "whole": "municipality",
+          "box": "value"
+        }
+      }
+    },
+    "boxes": [
+      {
+        "id": "plan",
+        "class": "mhpo:MHPO_00020003",
+        "count": "per_document",
+        "same_node": "refuse",
+        "address": {
+          "folder": "heatplan",
+          "name": "AGS_{ags}_{published}"
+        },
+        "note": "One node per plan, named by its register key and its full publication date. A second document with the same key is refused whole (a stale duplicate harvest)."
+      },
+      {
+        "id": "part",
+        "count": "per_answer",
+        "of": "scenario",
+        "among": "value",
+        "table": {
+          "status_quo": {
+            "class": "mhpo:MHPO_00020005",
+            "folder": "inventoryanalysis",
+            "label": "Bestandsanalyse",
+            "schema_class": "AggregatedInventoryAnalysis"
+          },
+          "trend": {
+            "class": "oeo:OEO_00020311",
+            "folder": "referencescenario",
+            "label": "Trendszenario",
+            "note": "with existing measures scenario. Not OEO_00020314 reference scenario: that one is defined by a ROLE (`scenario and has role some reference role`) and carries no content, so it says a scenario was used as a comparison and not what it assumes. A Trendszenario is the continuation under the measures already decided, which is what WEM means."
+          },
+          "target": {
+            "class": "mhpo:MHPO_00020007",
+            "folder": "targetscenario",
+            "label": "Zielszenario",
+            "schema_class": "TargetScenario"
+          }
+        },
+        "address": {
+          "name": "AGS_{ags}_{published}"
+        },
+        "strict": {
+          "requires": [
+            "target"
+          ]
+        },
+        "note": "Which part of the plan holds a value: one node for each scenario the document's values are read in (inventory, trend, target; the table gives each its class, folder and label). The plan reaches it by the arrow plan -> part, the part its values by the arrow part -> value. The strict graph keeps only the parts the MHPKG schema has (schema_class) and leaves out a document without a target scenario (strict, requires)."
+      },
+      {
+        "id": "value",
+        "count": "per_value",
+        "of": [
+          "energy_consumption",
+          "emission",
+          "heat_load",
+          "share",
+          "building_count"
+        ],
+        "required": true,
+        "admit": [
+          {
+            "brick": "quantity_listed"
+          },
+          {
+            "brick": "part_known",
+            "settings": {
+              "box": "part"
+            }
+          },
+          {
+            "brick": "scope_listed",
+            "settings": {
+              "entries": [
+                "municipality",
+                "sub_area"
+              ]
+            }
+          },
+          {
+            "brick": "sub_area_named"
+          },
+          {
+            "brick": "year_read"
+          },
+          {
+            "brick": "unit_listed"
+          },
+          {
+            "brick": "unit_in_ontology"
+          },
+          {
+            "brick": "aggregation_listed"
+          },
+          {
+            "brick": "schema_admits",
+            "graph": "strict",
+            "settings": {
+              "part": "part",
+              "box": "value"
+            }
+          }
+        ],
+        "address": {
+          "brick": "value_identity",
+          "settings": {
+            "part": "part",
+            "box": "value"
+          }
+        },
+        "settle": {
+          "wording": [
+            "subject",
+            "whole",
+            "carrier_raw",
+            "sector_raw"
+          ]
+        },
+        "class_brick": {
+          "brick": "value_class",
+          "settings": {
+            "part": "part",
+            "coordinate": "quantity"
+          }
+        },
+        "evidence": {
+          "brick": "value_passage",
+          "settings": {
+            "prose": {
+              "level": "Trust: {level}",
+              "image_origin": "from an image",
+              "image_origin_named": "from an image ({image})",
+              "corroborated": "confirmed by a second reading",
+              "reasons": "{reasons}",
+              "review": "review recommended"
+            },
+            "join": " · "
+          }
+        }
+      },
+      {
+        "id": "office",
+        "class": "oeo:OEO_00030022",
+        "count": "per_distinct",
+        "of": "planning_organisation",
+        "when": [
+          {
+            "brick": "answer_is",
+            "settings": {
+              "coordinate": "role",
+              "not": "municipality"
+            }
+          },
+          {
+            "brick": "named"
+          }
+        ],
+        "name_brick": {
+          "brick": "without_legal_form"
+        },
+        "once": "per_file",
+        "address": {
+          "folder": "organisation",
+          "key": "organisation",
+          "from": [
+            "@key"
+          ]
+        },
+        "note": "The MHPKG schema: a municipality acting as planning authority is NOT a second entity, so `municipality` links has_organisation to the plan's municipality node; `planner` mints an Organisation."
+      },
+      {
+        "id": "area",
+        "class": "mhpo:MHPO_00020019",
+        "count": "per_distinct",
+        "among": "value",
+        "value": "spatial_scope_raw",
+        "when": [
+          {
+            "brick": "answer_is",
+            "settings": {
+              "coordinate": "spatial_scope",
+              "is": "sub_area"
+            }
+          },
+          {
+            "brick": "has_words",
+            "settings": {
+              "coordinate": "spatial_scope_raw"
+            }
+          }
+        ],
+        "name": "last",
+        "name_brick": {
+          "brick": "trimmed"
+        },
+        "order": "sorted",
+        "address": {
+          "folder": "heatplanarea",
+          "key": "heatplanarea",
+          "from": [
+            "@fact:ags",
+            "@key"
+          ]
+        },
+        "note": "The schema has no relation from a value to its area, so a sub_area value is serialized with the area in its IRI and its comment but without an edge to the area node. Not TERM REQUEST 1, which asks for the plan's area."
+      },
+      {
+        "id": "municipality",
+        "class": "mhpo:MHPO_00020017",
+        "count": "per_document",
+        "address": {
+          "folder": "municipality",
+          "name": "AGS_{ags}"
+        },
+        "note": "the plan's own area, minted from the AGS"
+      }
+    ],
+    "arrows": [
+      {
+        "from": "plan",
+        "to": "plan",
+        "property": "rdfs:label",
+        "brick": "template",
+        "settings": {
+          "text": "Kommunale Wärmeplanung {place} {year}"
+        }
+      },
+      {
+        "from": "plan",
+        "to": "plan",
+        "property": "oeo:OEO_00390096",
+        "brick": "fact",
+        "settings": {
+          "fact": "published",
+          "datatype": "xsd:date"
+        }
+      },
+      {
+        "from": "plan",
+        "to": "office",
+        "property": "oeo:OEO_00000510",
+        "objects": "joined",
+        "label": "has organisation"
+      },
+      {
+        "from": "plan",
+        "to": "municipality",
+        "property": "oeo:OEO_00000510",
+        "objects": "joined",
+        "when": {
+          "field": "planning_organisation",
+          "coordinate": "role",
+          "is": "municipality"
+        },
+        "note": "The schema: a municipality acting as planning authority is not a second entity, so the plan's municipality node is its organisation."
+      },
+      {
+        "from": "plan",
+        "to": "part",
+        "property": "obo:BFO_0000051",
+        "objects": "joined",
+        "label": "has part"
+      },
+      {
+        "from": "part",
+        "to": "part",
+        "property": "rdfs:label",
+        "brick": "template",
+        "settings": {
+          "text": "{label} {place} {year}"
+        }
+      },
+      {
+        "from": "part",
+        "to": "value",
+        "property": "mhpo:MHPO_0002028",
+        "objects": "joined"
+      },
+      {
+        "from": "value_target",
+        "to": "value",
+        "property": "oeo:OEO_00140178",
+        "brick": "decimal",
+        "label": "has number"
+      },
+      {
+        "from": "unit_target",
+        "to": "value",
+        "property": "oeo:OEO_00040010",
+        "brick": "value_unit",
+        "label": "has unit"
+      },
+      {
+        "from": "carrier",
+        "to": "value",
+        "property": "oeo:OEO_00370001",
+        "brick": "answer_class",
+        "settings": {
+          "prefix": "oeo",
+          "family": "OEO_",
+          "outside_root": {
+            "OEO_00000132": "district heating",
+            "OEO_00000139": "electrical energy",
+            "OEO_00000388": "solar thermal energy",
+            "OEO_00000191": "geothermal energy",
+            "OEO_00010114": "waste heat",
+            "OEO_00310004": "industrial waste heat",
+            "OEO_00000056": "ambient heat",
+            "OEO_00140105": "waste water heat",
+            "OEO_00140104": "surface water heat"
+          }
+        },
+        "label": "refers to energy carrier",
+        "note": "Object is an OEO class (punning). The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization: refers to energy carrier. Its range is energy carrier, and the classes in outside_root are not under it in OEO; they are written all the same and counted, as input for the carrier axioms the ontology side is adding."
+      },
+      {
+        "from": "sector",
+        "to": "value",
+        "property": "oeo:OEO_00020519",
+        "brick": "answer_class",
+        "settings": {
+          "prefix": "oeo",
+          "family": "OEO_",
+          "total_class": "OEO_00000128"
+        },
+        "label": "refers to sector",
+        "note": "Object is an OEO sector class. The predicate is the MHPKG schema's slot, read from mhpkg_schema.yaml at serialization. A number its table does not split by sector (out:total) is written as total_class, the parent the schema names for a figure reported without a sector breakdown."
+      },
+      {
+        "from": "technology",
+        "to": "value",
+        "property": "oeo:OEO_00370003",
+        "brick": "answer_class",
+        "settings": {
+          "prefix": "oeo",
+          "family": "OEO_"
+        },
+        "label": "refers to technology",
+        "note": "Object is an OEO heat generation technology class (punning), the MHPKG schema's slot. A number not split by technology (out:total) writes no edge: the schema's slot is optional."
+      },
+      {
+        "from": "year",
+        "to": "value",
+        "property": "oeo:OEO_00020440",
+        "brick": "whole_number",
+        "label": "has scenario year value",
+        "note": "The calendar year as an integer literal, as the MHPKG schema's slot has it. A unit entry that names no period carries the flag period:unstated."
+      },
+      {
+        "from": "aggregation",
+        "to": "value",
+        "property": "oeo:OEO_00390023",
+        "brick": "answer_class",
+        "settings": {
+          "prefix": "oeo"
+        },
+        "label": "has aggregation type",
+        "note": "Object is a named individual of OEO_00140068 aggregation type. Asked; where no answer is read, derived from a unit that converts onto the parameter's own unit."
+      },
+      {
+        "from": "planning_organisation",
+        "to": "office",
+        "property": "rdfs:label",
+        "brick": "node_name",
+        "settings": {
+          "form": "line"
+        }
+      },
+      {
+        "from": "spatial_scope_raw",
+        "to": "area",
+        "property": "rdfs:label",
+        "brick": "node_name",
+        "settings": {
+          "form": "line"
+        }
+      },
+      {
+        "from": "area",
+        "to": "municipality",
+        "property": "obo:BFO_0000050",
+        "label": "part of"
+      },
+      {
+        "from": "municipality",
+        "to": "municipality",
+        "property": "rdfs:label",
+        "brick": "template",
+        "settings": {
+          "text": "Gemeindegebiet {place}"
+        }
+      }
+    ]
   }
 }

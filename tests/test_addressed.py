@@ -65,10 +65,12 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from docpipe.extraction import (addressed, fields, flow, runner, schema,
-                                trust, units, verify, wording)
+from docpipe.extraction import (addressed, fields, flow, graph, runner,
+                                schema, trust, units, verify, wording)
 from docpipe.extraction.addressed import Asks, Names, Plan, Reader
+from docpipe.extraction.bricks import Call
 from docpipe.extraction.pipeline import Source
+from docpipe.profile import load_profile
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
 from profiles.scenarios import kg
@@ -115,8 +117,7 @@ SPEC = load_spec({
         "example": {"source": "Im Jahr 2022 verbrauchte die Stadt 300 MWh "
                               "Erdgas für Wärme.",
                     "tuples": [{"value": 300, "quote": "verbrauchte die "
-                                                       "Stadt 300 MWh Erdgas"}]},
-        "kg": {}}]})
+                                                       "Stadt 300 MWh Erdgas"}]}}]})
 ENERGY = SPEC.by_uri["energy"]
 SLOTS = {slot.name: slot for slot in fields.axis_slots(ENERGY)}
 
@@ -1048,7 +1049,14 @@ def test_the_details_of_new_works_run_side_by_side_before_any_value_is_read():
                        for c in r.claims]
     assert organisation["value"] == "IRENA"
     assert organisation["work_means"] == ["IRENA 2018"]
-    assert kg.held_back({"parameter": "study_organisation", **organisation}) \
+    # The scenarios drawing admits a row only where its kept dimensions
+    # hold (`kept_coordinates`), which refuses this one for its work.
+    profile = load_profile("scenarios")
+    assert {"brick": "kept_coordinates"} \
+        in graph.load_drawing(profile).document["admit"]
+    kept = graph.registry(profile)["kept_coordinates"]
+    row = {"parameter": "study_organisation", **organisation}
+    assert kept.run(Call(doc=SimpleNamespace(spec=SCENARIOS), row=row)) \
         == f"work:{work_label(addressed.ANOTHER_WORK)}"
 
 

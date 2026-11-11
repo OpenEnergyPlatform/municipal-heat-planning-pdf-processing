@@ -112,7 +112,8 @@ def spec_terms(spec_raw: dict) -> dict
 ### carrier_problems
 
 ```python
-def carrier_problems(spec_raw: dict, snapshot: dict) -> list
+def carrier_problems(spec_raw: dict, snapshot: dict,
+                     drawing: dict) -> list
 ```
 
 A carrier the ontology does not call a carrier, undeclared.
@@ -124,7 +125,9 @@ the declared ones. Undeclared is the drift this exists to catch: a carrier
 that is not one and nobody decided.
 
 Stays in the profile because `outside_root` is this profile's answer to a
-question the other one does not have.
+question the other one does not have. It is declared in the settings of
+the arrow of the *drawing* (the `map` of its graph file) that reads the
+carrier.
 
 ### edges
 
@@ -132,12 +135,9 @@ question the other one does not have.
 def edges(spec_raw: dict, shape=None) -> list
 ```
 
-Every triple shape this profile emits, the spec's and the writer's.
-
-The `kg` blocks carry most of them and `kg.py` declares the handful that
-sit behind no parameter, so the two together are the whole output and the
-pin can be asked about all of it. *shape* is the schema, the profile's
-own where not given.
+Every triple shape this profile emits: the drawing of its graph file
+(`map`), so the pin can be asked about all of it. *shape* is unused and
+stays for the callers that pass the schema.
 
 ### schema_predicates
 

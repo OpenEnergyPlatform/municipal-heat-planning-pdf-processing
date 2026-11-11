@@ -14,7 +14,6 @@ import {
 import { isObj, own, type Obj } from '../lib/util';
 import { rich, t, tr } from '../lib/i18n';
 import { markDirty, S } from './state';
-import { useShapes } from './shapes';
 import { EntriesTable, type ListRef } from './entries';
 
 export interface FormField { key: string; widget: string; help?: string; choices?: string[]; default?: any; of?: string; only?: string[] }
@@ -107,21 +106,6 @@ export function StringsEditor({ obj, k, keep, list }: { obj: Obj; k: string; kee
       ))}
       <Box><Button size="xs" variant="light" leftSection={<IconPlus size={14} />}
         onClick={() => { focusLast.current = true; setItems([...items, '']); }}>{t('Add')}</Button></Box>
-    </Stack>
-  );
-}
-
-/* kg: the keys the program that writes the profile's graph reads, as a form; any other key stays and is shown greyed */
-function KgW({ f, obj }: { f: FormField; obj: Obj }) {
-  const lists = useShapes();
-  const kk = S.form.kg_keys || {};
-  const keys = (kk[f.of || ''] || []) as any[];
-  const spec = useMemo(() => DF().recordOf(keys), [JSON.stringify(keys)]); // eslint-disable-line react-hooks/exhaustive-deps
-  const { root, api } = useFormField(obj, f.key, spec, markDirty);
-  return (
-    <Stack gap="xs">
-      {keys.length ? null : <Text size="sm" c="orange">{t('{why}; every key stays as it is.', { why: kk.why ? tr(kk.why) : t('The program that writes the graph names no keys') })}</Text>}
-      <FormNode spec={spec} st={root} api={api} path={[]} lists={lists} />
     </Stack>
   );
 }
@@ -351,7 +335,6 @@ function Widget({ f, obj, orig, ctx }: { f: FormField; obj: Obj; orig: Obj | nul
     case 'choice': return <ChoiceW f={f} obj={obj} />;
     case 'number': return <NumberW f={f} obj={obj} />;
     case 'strings': return <StringsEditor obj={obj} k={f.key} list={ctx.coordNames} />;
-    case 'kg': return <KgW f={f} obj={obj} />;
     case 'derive': return <DeriveW f={f} obj={obj} />;
     case 'example': return <ExampleW f={f} obj={obj} />;
     case 'units': return <UnitsW f={f} obj={obj} orig={orig} />;

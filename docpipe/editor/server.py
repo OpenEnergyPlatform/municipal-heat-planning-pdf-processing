@@ -346,6 +346,7 @@ class App:
             "/api/graph/check": ("POST", self._graph_check),
             "/api/graph/save": ("POST", self._graph_save),
             "/api/graph/probe": ("POST", self._graph_probe),
+            "/api/graph/preview": ("POST", self._graph_preview),
         }
         if path not in routes:
             raise _Refusal(404, f"no such endpoint: {path}")
@@ -967,25 +968,52 @@ class App:
         own = graphfile.path_of(self.profile)
         return own, (self.files.read(own) if own.is_file() else None)
 
+    def _spec_object(self):
+        """The spec the page edits, as the run reads it; None where it has
+        none or cannot be read (the Spec tab says why)."""
+        raw = self._spec_raw()
+        if raw is None:
+            return None
+        from ..extraction import runner as runner_map
+        try:
+            return runner_map.load_spec(raw)
+        except Exception:
+            return None
+
     def _graph(self, query, body) -> dict:
         own, raw = self._graph_file()
         return graphpage.view(
             self.profile, raw, self.shown, self._spec_raw(),
             sourcespage.shape_files(self.profile, self.cache),
-            self.snapshot())
+            self.snapshot(), self._spec_object(), self.harvest)
 
     def _graph_check(self, query, body) -> dict:
         own, raw = self._graph_file()
         report = graphpage.judge(self.profile, raw, body.get("data"),
-                                 self.shown(own))
+                                 self.shown(own), self._spec_object())
         report.pop("text", None)
         return report
+
+    def _graph_preview(self, query, body) -> dict:
+        """One document of the harvest written as the drawing on the page
+        says, nothing saved and no model asked."""
+        if self.harvest is None:
+            raise _Refusal(400, "the page was started without a harvest "
+                                "(docpipe edit --harvest DIR): there is "
+                                "nothing to write a graph of")
+        try:
+            return graphpage.preview(
+                self.profile, body.get("data"), self.harvest,
+                body.get("document"), self._corpus_db(body),
+                bool(body.get("strict")), self._spec_object())
+        except graphpage.PreviewError as exc:
+            raise _Refusal(400, str(exc))
 
     def _graph_save(self, query, body) -> dict:
         own, raw = self._graph_file()
         report, written, remove = graphpage.save(
             self.profile, raw, body.get("data"), body.get("base"),
-            self.shown(own))
+            self.shown(own), self._spec_object())
         if written is not None:
             self.files.write(own, written)
         elif remove:

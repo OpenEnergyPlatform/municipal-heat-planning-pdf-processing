@@ -1,7 +1,26 @@
 """What the graph does with different numbers on one identity."""
+from types import SimpleNamespace
+
 import pytest
 
+from docpipe.extraction import graphkit, readings
+from docpipe.extraction.bricks import Call
+from docpipe.extraction.graph import load_drawing
+from docpipe.graphfile import load as load_graph_file
+from docpipe.profile import load_profile
 from profiles.kwp import kg
+
+PROFILE = load_profile("kwp")
+DRAWING = load_drawing(PROFILE)
+RULES = load_graph_file(PROFILE).rules
+VALUE = DRAWING.box["value"]
+# The graph's own folding of a name and the stand-in of a document that
+# mints the coordinates themselves, as the address brick sees them.
+DOC = SimpleNamespace(
+    writer=SimpleNamespace(drawing=DRAWING),
+    address_of_answer=lambda box, answer: "part",
+    fold=lambda text: graphkit.normalise(str(text), DRAWING.legal_forms),
+    mint=lambda folder, key, name: name)
 
 
 def row(value, subject=None, quote=None, passage=None):
@@ -14,9 +33,16 @@ def row(value, subject=None, quote=None, passage=None):
     return found
 
 
+def address(one, label=""):
+    return kg._identity(Call(doc=DOC, row=one, label=label,
+                             settings=VALUE["address"]["settings"]))
+
+
 def settled(rows, keep_open=True):
-    iri = kg._value_iri("part", rows[0])
-    return kg.settle(iri, rows, "part", keep_open=keep_open)
+    return readings.settle(
+        address(rows[0]), rows, address, fold=DOC.fold,
+        wording=tuple(VALUE["settle"]["wording"]),
+        tolerance=float(RULES["rounding_tolerance"]), keep_open=keep_open)
 
 
 def test_the_subject_of_a_number_splits_two_rows_into_two_nodes():

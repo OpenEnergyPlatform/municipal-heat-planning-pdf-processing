@@ -22,8 +22,8 @@ identifier walk, and the two checks every profile shares (a term the
 ontology does not have, a term the ontology has deprecated) are the
 same question in every profile, so they live here.
 
-The kind recorded for each term matters beyond bookkeeping. A `kg`
-block names predicates, and a predicate is an owl:ObjectProperty; an
+The kind recorded for each term matters beyond bookkeeping. The arrows
+of a drawing name predicates, and a predicate is an owl:ObjectProperty; an
 index built over classes and individuals alone would report every
 predicate as missing. That is why the scenarios profile had no
 snapshot before this module existed: its seventeen identifiers are
@@ -82,8 +82,8 @@ def index(graph, language: str) -> dict
 
 identifier -> {kind, label, alt_labels, definition, parents, deprecated}.
 
-Properties as well as classes and individuals. Without them a spec's `kg`
-blocks -- which name predicates and nothing else -- read as a list of
+Properties as well as classes and individuals. Without them a drawing's
+arrows -- which name predicates and nothing else -- read as a list of
 terms the ontology does not have.
 
 `parents` is what a term is under: a class's superclasses, a property's
@@ -114,7 +114,7 @@ def spec_terms(spec_raw: dict) -> dict
 Every ontology identifier the spec names, and where it names it.
 
 The whole spec, at any depth, in keys as well as values: a vocabulary
-writes its terms as KEYS, a `kg` block writes them as values, and one
+writes its terms as KEYS, an arrow writes them as values, and one
 profile spells them bare while the other spells them as IRIs. The version
 this replaces walked three named places, matched bare identifiers only,
 and reported zero identifiers for the scenarios spec -- a checker that
@@ -125,7 +125,7 @@ checks nothing reads exactly like a spec with nothing wrong.
 ```python
 def build(closure: Path, sets: dict, spec_raw: dict, *, language: str,
           extra: Optional[list] = None, base: str = "",
-          also: tuple = ()) -> dict
+          also: tuple = (), drawing: Optional[dict] = None) -> dict
 ```
 
 The vocabulary snapshot, from the ontology files as they stand.
@@ -134,11 +134,13 @@ The vocabulary snapshot, from the ontology files as they stand.
 profile's to say (see `index`); there is no default, so a caller cannot
 leave it to the core. `extra` are further files parsed into the same
 graph (MHPO, say); `base` is the IRI prefix whose ontology header carries
-the version to pin. `also` are identifiers the snapshot has to carry
-although the spec does not name them: the classes a writer's own edges
-name. `edge_problems` asks whether a subject is under a predicate's
-domain, and a subject the snapshot does not carry has no parents to
-answer with.
+the version to pin. `drawing` is the drawing of the profile's graph
+(`graph.json`, `map`): every term it names is carried, as every term the
+spec names is. `also` are identifiers the snapshot has to carry
+although neither names them: the classes a writer's own edges name.
+`edge_problems` asks whether a subject is under a predicate's domain,
+and a subject the snapshot does not carry has no parents to answer
+with.
 
 ### with_context
 
@@ -206,33 +208,66 @@ The two complaints every profile shares: absent, and deprecated.
 Silent about a family the snapshot does not cover; `uncovered` reports
 those, so a term nobody can check is a named gap rather than an error.
 
+### drawing_identifier
+
+```python
+def drawing_identifier(value) -> Optional[str]
+```
+
+`identifier`, also of a prefixed name as a drawing writes it
+(`oeo:OEO_00390096`, `mhpo:MHPO_00020003`).
+
+### drawing_term_problems
+
+```python
+def drawing_term_problems(drawing: dict, snapshot: dict,
+                          noted_elsewhere=()) -> list
+```
+
+`term_problems` for the identifiers a drawing names
+(`drawing_terms`): absent, and deprecated. *noted_elsewhere* are the
+identifiers a profile holds to the pin in a report of their own (the
+terms a schema prescribes); they are not reported twice.
+
 ### kind_problems
 
 ```python
-def kind_problems(spec_raw: dict, snapshot: dict) -> list
+def kind_problems(drawing: dict, snapshot: dict) -> list
 ```
 
-A `kg` block's predicate that the ontology does not call a property.
+A property of the drawing that the ontology does not call a property.
 
-The block says what a coordinate becomes in the graph, and a class written
-where a predicate belongs emits Turtle that parses and asserts nonsense.
+An arrow says what a reading becomes in the graph, and a class written
+where a property belongs emits Turtle that parses and asserts nonsense.
 Only checkable since the index carries the kind.
 
-### spec_edges
+### drawing_terms
 
 ```python
-def spec_edges(spec_raw: dict) -> list
+def drawing_terms(drawing: dict) -> dict
 ```
 
-Every triple shape the spec's `kg` blocks promise.
+Every ontology identifier a drawing names, and where: the classes of
+its boxes and tables, its properties, and what its bricks are set to.
 
-Derived, never listed: the parameter's `class_from` names the axis whose
-options are the classes a value node can carry, so each of those is a
-subject; `number` and `unit` are its own predicates, and an axis with
-role `edge` is one predicate whose objects are that axis' options. A
-parent axis contributes the edge from the node above down to the
-container it mints. What is left over is the handful of edges behind no
-parameter, and those are the profile's to declare.
+### drawing_edges
+
+```python
+def drawing_edges(drawing: dict, spec_raw: dict, bricks=None) -> list
+```
+
+Every triple shape a drawing writes: {where, subject, predicate,
+object, datatype, accepted}, the subject's class, the predicate, and the
+object's class or the literal's datatype, each as far as the drawing
+says it.
+
+Derived, never listed: a box that takes its class from a coordinate
+(KWP's value) has every class that coordinate offers as a subject; an
+arrow whose brick writes an answer has every entry of the coordinate's
+list as an object (`Brick.writes`); an arrow from one box to another has
+the classes of both. An arrow may say why it is written against the
+ontology (`accepted`), and the reason travels with it to
+`edge_problems`.
 
 ### ancestors
 

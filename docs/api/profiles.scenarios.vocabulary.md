@@ -23,8 +23,8 @@ the model and a list nobody pulled is not the OEKG's current one.
 Why this profile needed it more than the other one. Its spec names 32 ontology
 identifiers and, before this, exactly zero of them were checked against
 anything: the old walk looked in three named places, and this profile writes
-its terms as full IRIs in vocabulary KEYS and as predicates inside `kg`
-blocks. Most of them ARE predicates, so an index over classes and individuals
+its terms as full IRIs in vocabulary KEYS and as predicates on the arrows
+of its drawing. Most of them ARE predicates, so an index over classes and individuals
 would have called every one of them missing.
 
 Author: Felix Vossel
@@ -230,7 +230,8 @@ checked-in file.
 def edges(spec_raw: dict) -> list
 ```
 
-Every triple shape this profile emits, the spec's and the writer's.
+Every triple shape this profile emits: the drawing of its graph
+file (`map`).
 
 ### check
 
@@ -238,7 +239,8 @@ Every triple shape this profile emits, the spec's and the writer's.
 def check(spec_raw: dict, snapshot: dict) -> list
 ```
 
-Every complaint the pinned ontology has about this spec.
+Every complaint the pinned ontology has about this spec and the
+drawing of its graph.
 
 ### foreign_labels
 

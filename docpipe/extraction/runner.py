@@ -4128,8 +4128,9 @@ def main(argv: Optional[list] = None) -> int:
                              "harvest needs and exit (feed it to the "
                              "server's --max-model-len)")
     parser.add_argument("--serialize", type=Path, default=None, metavar="TTL",
-                        help="No harvest: hand the JSONL in OUT to the "
-                             "profile's kg.make_serializer and write TTL")
+                        help="No harvest: write the JSONL in OUT as the "
+                             "drawing of the profile's graph file says, as "
+                             "TTL")
     parser.add_argument("--no-provenance", dest="provenance",
                         action="store_false",
                         help="With --serialize: do not write the "
@@ -4294,26 +4295,13 @@ def main(argv: Optional[list] = None) -> int:
                         "written from the profile's own spec and not from "
                         "%s", args.spec)
         from . import graph, provenance
-        factory = profile.component("kg", "make_serializer")
+        # The drawing of the profile's graph file says what an answer
+        # becomes; the program writes it (`graph.py`).
+        try:
+            serializer = graph.make_serializer(profile, args.db)
+        except graph.GraphError as exc:
+            parser.error(str(exc))
         described = profile.component("kg", "PROVENANCE") or {}
-        if factory is not None:
-            serializer = factory(args.db)
-        else:
-            # No writer of its own: the graph block of the spec says what
-            # an answer becomes, where the spec has one. The profile's, and
-            # never --spec's: --serialize does not read that option.
-            raw_spec_path = profile.component("extraction", "SPEC_PATH")
-            if raw_spec_path is None:
-                parser.error(f"profile {profile.name!r} has no extraction "
-                             f"spec and no kg.make_serializer: nothing "
-                             f"says what its graph is")
-            try:
-                serializer = graph.make_serializer(json.loads(
-                    Path(raw_spec_path).read_text(encoding="utf-8")))
-            except graph.GraphError as exc:
-                parser.error(f"{raw_spec_path}: {exc}")
-            described = {"base": serializer.base,
-                         **(serializer.provenance or {})}
         writer = None
         if args.provenance and provenance.enabled() \
                 and described.get("base"):
@@ -4335,12 +4323,13 @@ def main(argv: Optional[list] = None) -> int:
         # A profile whose data schema closes its lists more tightly than the
         # graph does writes the graph a second time as that schema takes it,
         # beside the full one; the full one keeps everything that was read.
-        strict = profile.component("kg", "make_strict_serializer")
-        if strict is not None:
+        if serializer.writer.drawing.document.get("strict"):
             beside = Path(args.serialize).with_suffix(".strict.ttl")
             try:
                 indexes.append({})
-                taken = serialize_run(args.out, beside, strict(args.db),
+                taken = serialize_run(args.out, beside,
+                                      graph.make_serializer(
+                                          profile, args.db, strict=True),
                                       index=indexes[-1])
                 log.info("serialize: %d document(s) as the data schema takes "
                          "them -> %s", len(taken), beside)

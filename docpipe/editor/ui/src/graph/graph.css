@@ -1,0 +1,67 @@
+/* The canvas of the Graph tab: fields on the left, boxes with their properties on the right, arrows between them.
+   --gr-c is the colour of a field's kind. */
+
+.gr-bar { border-bottom: 1px solid var(--mantine-color-default-border); }
+.gr-side { border-left: 1px solid var(--mantine-color-default-border); background: var(--mantine-color-body); }
+.gr-canvas { background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8)); }
+.gr-canvas .react-flow { --xy-background-color: transparent; }
+.gr-canvas .react-flow__minimap { border-radius: 8px; overflow: hidden; }
+.gr-empty { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.gr-empty > * { pointer-events: auto; max-width: 420px; }
+
+.gr-field {
+  width: 100%; height: 100%; box-sizing: border-box; padding: 8px 14px; border-radius: 12px; cursor: pointer;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-left: 6px solid var(--gr-c);
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex; flex-direction: column; justify-content: center;
+}
+.gr-field:hover { box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14); }
+
+.gr-box {
+  width: 100%; height: 100%; box-sizing: border-box; border-radius: 14px; overflow: visible;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  border-top: 6px solid var(--mantine-color-indigo-6);
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+.gr-head { height: 78px; padding: 10px 14px; cursor: pointer; position: relative; border-bottom: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5)); }
+.gr-row { height: 34px; padding: 0 14px; display: flex; align-items: center; gap: 8px; position: relative; box-sizing: border-box; }
+.gr-row:hover { background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-5)); }
+.gr-red { background: color-mix(in srgb, var(--mantine-color-red-6) 10%, transparent); }
+.gr-outside { background: color-mix(in srgb, var(--mantine-color-orange-6) 8%, transparent); }
+.gr-more { height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.gr-more:hover { background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-5)); border-radius: 0 0 14px 14px; }
+.gr-row-add { opacity: 0; }
+.gr-row:hover .gr-row-add { opacity: 1; }
+.gr-sel { outline: 3px solid var(--mantine-color-indigo-5); outline-offset: 2px; }
+.gr-bad { border-color: var(--mantine-color-red-6) !important; box-shadow: 0 0 0 2px color-mix(in srgb, var(--mantine-color-red-6) 35%, transparent); }
+.gr-off { opacity: 0.55; }
+
+/* the handles: small dots, bold when the pointer is near */
+.gr-h { opacity: 0.35; background: var(--mantine-color-indigo-6) !important; }
+.gr-row:hover .gr-h, .gr-head:hover .gr-h { opacity: 1; }
+.gr-row .react-flow__handle-left { left: -6px; }
+.gr-row .react-flow__handle-right { right: -6px; }
+.gr-head .react-flow__handle-left { left: -6px; }
+
+.gr-edge { stroke: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2)) !important; stroke-width: 1.6 !important; fill: none; }
+.gr-edge-of { stroke-dasharray: 6 5; stroke: light-dark(var(--mantine-color-teal-5), var(--mantine-color-teal-7)) !important; }
+.gr-edge-link { stroke: var(--mantine-color-indigo-5) !important; stroke-width: 2.2 !important; }
+.gr-edge-sel { stroke: var(--mantine-color-orange-6) !important; stroke-width: 3 !important; }
+.gr-edge-bad { stroke: var(--mantine-color-red-6) !important; stroke-width: 3 !important; }
+.gr-edge-label {
+  position: absolute; pointer-events: all; cursor: pointer; max-width: 220px; padding: 1px 6px; border-radius: 8px;
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+
+.gr-preview { border-top: 1px solid var(--mantine-color-default-border); background: var(--mantine-color-body); }
+.gr-pre { max-height: 280px; overflow: auto; }
+.gr-ttl {
+  margin: 0; padding: 8px 10px; white-space: pre-wrap; font-size: 12px; font-family: var(--mantine-font-family-monospace); border-radius: 6px;
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+}
+.gr-pick { display: block; width: 100%; padding: 8px 12px; border-radius: 10px; }
+.gr-pick:hover { background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5)); }

@@ -17,7 +17,7 @@ import { SpecTab } from './tabs/SpecTab';
 import { PromptsTab } from './tabs/PromptsTab';
 import { FlowTab } from './flow/FlowTab';
 import { SourcesTab } from './tabs/SourcesTab';
-import { GraphTab } from './tabs/GraphTab';
+import { GraphTab } from './graph/GraphTab';
 import { RulesDrawer } from './tabs/RulesDrawer';
 
 const PANES: Record<TabName, () => ReactNode> = {

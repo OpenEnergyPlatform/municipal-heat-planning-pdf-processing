@@ -34,15 +34,4 @@ The MHPKG shapes of the last `vocabulary --refresh`, or none: the
 files the spec is held against (`docpipe compile diff`, the preflight,
 the Sources tab of `docpipe edit`).
 
-### spec_for_shapes
-
-```python
-def spec_for_shapes(raw: dict) -> dict
-```
-
-The spec as the shapes name its properties: this profile's `kg`
-blocks name schema slots and classes (`"schema_slot":
-"refers_to_energy_carrier"`), which the MHPKG schema turns into the
-predicate and class its shapes carry (`mhpkg.resolve`).
-
 [Back to the index](../README.md)

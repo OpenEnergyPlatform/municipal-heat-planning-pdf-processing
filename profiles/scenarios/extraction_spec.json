@@ -115,16 +115,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "studyreport",
-        "class": "OEO_00020012",
-        "property": {
-          "prefix": "rdfs",
-          "predicate": "label",
-          "label": "label"
-        },
-        "note": "Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
-      },
       "brief": "The title of this publication, as it prints it.",
       "once_per_document": true
     },
@@ -164,22 +154,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "author",
-        "class": "OEO_00000064",
-        "property": {
-          "prefix": "rdfs",
-          "predicate": "label",
-          "label": "label"
-        },
-        "edge_from": {
-          "node": "studyreport",
-          "prefix": "oeo",
-          "predicate": "OEO_00000506",
-          "label": "has author"
-        },
-        "note": "One node per distinct name. Two spellings of one person are one node and keep both passages."
-      },
       "brief": "A person who wrote this publication.",
       "once_per_document": true
     },
@@ -214,16 +188,6 @@
             "quote": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619."
           }
         ]
-      },
-      "kg": {
-        "node": "studyreport",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00390096",
-          "label": "has publication date",
-          "datatype": "xsd:dateTime"
-        },
-        "note": "A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's."
       },
       "brief": "The year this publication was published.",
       "once_per_document": true
@@ -260,14 +224,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "studyreport",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00390098",
-          "label": "has doi"
-        }
-      },
       "brief": "The Digital Object Identifier of this publication.",
       "once_per_document": true
     },
@@ -302,14 +258,6 @@
             "quote": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system."
           }
         ]
-      },
-      "kg": {
-        "node": "scenariobundle",
-        "property": {
-          "prefix": "dc",
-          "predicate": "abstract"
-        },
-        "note": "On the bundle, not on the report: the shapes carry the study's abstract there."
       },
       "brief": "A summary of this publication and its study, as the publication prints it.",
       "once_per_document": true
@@ -350,21 +298,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "organisation",
-        "class": "OEO_00030022",
-        "property": {
-          "prefix": "rdfs",
-          "predicate": "label",
-          "label": "label"
-        },
-        "edge_from": {
-          "node": "scenariobundle",
-          "prefix": "oeo",
-          "predicate": "OEO_00000510",
-          "label": "has organisation"
-        }
-      },
       "brief": "An organisation in which this publication was created.",
       "once_per_document": true
     },
@@ -399,21 +332,6 @@
             "quote": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A."
           }
         ]
-      },
-      "kg": {
-        "node": "funder",
-        "class": "OEO_00090001",
-        "property": {
-          "prefix": "rdfs",
-          "predicate": "label",
-          "label": "label"
-        },
-        "edge_from": {
-          "node": "scenariobundle",
-          "prefix": "oeo",
-          "predicate": "OEO_00000509",
-          "label": "has funding source"
-        }
       },
       "brief": "A body that supports the work of this publication by giving money.",
       "once_per_document": true
@@ -450,16 +368,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "scenariobundle",
-        "class": "OEO_00020227",
-        "property": {
-          "prefix": "rdfs",
-          "predicate": "label",
-          "label": "label"
-        },
-        "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07)."
-      },
       "brief": "The name of the study this publication reports on; a study is a project with the goal to methodologically investigate something.",
       "once_per_document": true
     },
@@ -494,13 +402,6 @@
             "quote": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020."
           }
         ]
-      },
-      "kg": {
-        "node": "scenariobundle",
-        "property": {
-          "prefix": "dc",
-          "predicate": "acronym"
-        }
       },
       "brief": "The short name or acronym of the study this publication reports on; not every study has one.",
       "once_per_document": true
@@ -731,15 +632,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "scenariobundle",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00390071",
-          "label": "has study descriptor tag"
-        },
-        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      },
       "brief": "A keyword that describes the study.",
       "once_per_document": true
     },
@@ -867,15 +759,6 @@
             "quote": "following the Common Reporting Format (CRF) of the 2006 IPCC Guidelines"
           }
         ]
-      },
-      "kg": {
-        "node": "scenariobundle",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00390079",
-          "label": "based on sector division"
-        },
-        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
       },
       "brief": "A sector division the study is based on: a specific way to subdivide a system, such as the CRF, an energy balance or the study's own list of sectors.",
       "once_per_document": true
@@ -1886,15 +1769,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "scenariobundle",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00020439",
-          "label": "covers sector (shortcut)"
-        },
-        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      },
       "brief": "A sector the study covers.",
       "once_per_document": true
     },
@@ -2182,15 +2056,6 @@
           }
         ]
       },
-      "kg": {
-        "node": "scenariobundle",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00020438",
-          "label": "covers technology (shortcut)"
-        },
-        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
-      },
       "brief": "A technology the study covers.",
       "once_per_document": true
     },
@@ -2217,20 +2082,6 @@
         ]
       },
       "merged": "scenario",
-      "kg": {
-        "node": "scenariofactsheet",
-        "class": "OEO_00000365",
-        "property": {
-          "prefix": "rdfs",
-          "predicate": "label",
-          "label": "label"
-        },
-        "also": {
-          "prefix": "dc",
-          "predicate": "acronym"
-        },
-        "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. A name is the entry of the publication's list of scenarios it was asked to be, and labels that entry's factsheet (`value_means`, docpipe/extraction/addressed.py)."
-      },
       "brief": "A scenario of this publication by the name it prints: a scenario contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.",
       "axes": {
         "work": {
@@ -2400,18 +2251,6 @@
               ],
               "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
             }
-          },
-          "kg": {
-            "role": "parent",
-            "node": "scenariofactsheet",
-            "class": "OEO_00000365",
-            "linked_by": {
-              "node": "scenariobundle",
-              "prefix": "obo",
-              "predicate": "BFO_0000051",
-              "label": "has part"
-            },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2431,15 +2270,6 @@
             "quote": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100."
           }
         ]
-      },
-      "kg": {
-        "node": "scenariofactsheet",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00390073",
-          "label": "has scenario type"
-        },
-        "note": "The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer."
       },
       "brief": "The type of a scenario."
     },
@@ -2469,18 +2299,6 @@
               ],
               "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
             }
-          },
-          "kg": {
-            "role": "parent",
-            "node": "scenariofactsheet",
-            "class": "OEO_00000365",
-            "linked_by": {
-              "node": "scenariobundle",
-              "prefix": "obo",
-              "predicate": "BFO_0000051",
-              "label": "has part"
-            },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2493,13 +2311,6 @@
             "quote": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021."
           }
         ]
-      },
-      "kg": {
-        "node": "scenariofactsheet",
-        "property": {
-          "prefix": "dc",
-          "predicate": "abstract"
-        }
       },
       "brief": "The description of what a single scenario assumes or depicts.",
       "takes_group": false
@@ -2530,18 +2341,6 @@
               ],
               "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
             }
-          },
-          "kg": {
-            "role": "parent",
-            "node": "scenariofactsheet",
-            "class": "OEO_00000365",
-            "linked_by": {
-              "node": "scenariobundle",
-              "prefix": "obo",
-              "predicate": "BFO_0000051",
-              "label": "has part"
-            },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2588,16 +2387,6 @@
           "something else that is not a country of the list"
         ]
       },
-      "kg": {
-        "node": "scenariofactsheet",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00020220",
-          "label": "has study region",
-          "accepted": "the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)"
-        },
-        "note": "The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle."
-      },
       "brief": "The region a scenario studies, the spatial focus of its investigation."
     },
     {
@@ -2642,18 +2431,6 @@
               ],
               "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
             }
-          },
-          "kg": {
-            "role": "parent",
-            "node": "scenariofactsheet",
-            "class": "OEO_00000365",
-            "linked_by": {
-              "node": "scenariobundle",
-              "prefix": "obo",
-              "predicate": "BFO_0000051",
-              "label": "has part"
-            },
-            "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
           }
         }
       },
@@ -2671,16 +2448,6 @@
             "quote": "Results for the CurPol scenario are reported for 2030, 2050 and 2070."
           }
         ]
-      },
-      "kg": {
-        "node": "scenariofactsheet",
-        "property": {
-          "prefix": "oeo",
-          "predicate": "OEO_00020440",
-          "label": "has scenario year value",
-          "datatype": "xsd:dateTime"
-        },
-        "note": "One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands."
       },
       "brief": "A year of the period a scenario investigates, its scenario horizon."
     }

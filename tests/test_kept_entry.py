@@ -12,14 +12,16 @@ another entry is the reading's own promise (`tests/test_addressed.py`).
 """
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from rdflib import Graph, URIRef
 
-from docpipe.extraction import fields
+from docpipe.extraction import fields, graph as program
+from docpipe.extraction.bricks import Call
 from docpipe.extraction.spec import SpecError, load as load_spec
-from profiles.scenarios import kg
-from test_graph_from_shapes import OEO, empty_db, oekg
+from docpipe.profile import load_profile
+from test_graph_from_shapes import OEO, empty_db
 
 SPEC_PATH = (Path(__file__).resolve().parent.parent / "profiles"
              / "scenarios" / "extraction_spec.json")
@@ -53,8 +55,15 @@ def harvest(other_year_kind):
     ]
 
 
+def held_back(row):
+    """Why the drawing's `kept_coordinates` brick refuses *row*, else None."""
+    kept = program.registry(load_profile("scenarios"))["kept_coordinates"]
+    return kept.run(Call(doc=SimpleNamespace(spec=SPEC), row=row))
+
+
 def graph_of(rows):
-    serializer = kg.make_serializer(empty_db(), model=oekg())
+    serializer = program.make_serializer(load_profile("scenarios"),
+                                         empty_db())
     text = serializer("doc", rows)
     graph = Graph().parse(data=text, format="turtle")
     years = {str(o)[:4] for o in graph.objects(
@@ -67,9 +76,9 @@ def test_the_graph_takes_only_values_read_with_the_entry_they_must_have():
     text, years = graph_of(rows)
     assert years == {"2030"}
     assert "Ada Lovelace" in text and "Bob Other" not in text
-    assert kg.held_back(rows[2]) == "work:out:another_work"
-    assert kg.held_back(rows[5]) == f"year_kind:{fields.UNANSWERED}"
-    assert kg.held_back(rows[1]) is None
+    assert held_back(rows[2]) == "work:out:another_work"
+    assert held_back(rows[5]) == f"year_kind:{fields.UNANSWERED}"
+    assert held_back(rows[1]) is None
     # The same harvest with 2018 read as a scenario year: it is taken.
     _text, years = graph_of(harvest(SCENARIO_YEAR))
     assert years == {"2030", "2018"}

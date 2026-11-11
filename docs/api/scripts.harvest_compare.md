@@ -61,10 +61,10 @@ def serialize_counts(serializer, name: str, tuples: list, records: list) -> dict
 
 Run the profile's serializer and pick the skip counts out of its log.
 
-The counts live in a closure and reach the outside only as a log line, so
-the line is captured rather than the function rewritten: the serializer
-stays the one the corpus run uses, which is the whole point of measuring
-with it.
+The counts reach the outside only as the program's log line ("graph:
+\<document>: left out {reason: rows}"), so the line is captured rather
+than the function rewritten: the serializer stays the one the corpus
+run uses, which is the whole point of measuring with it.
 
 ### trace_costs
 

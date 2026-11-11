@@ -40,7 +40,7 @@ from docpipe.extraction.compute import (Number, Question, inherited, keys_of,
 from docpipe.extraction.pipeline import answer_in_quote
 from docpipe.extraction.verify import Refusal, verify_tuple
 from docpipe import graphfile
-from profiles.kwp.kg import _precision
+from docpipe.extraction.readings import precision as _precision
 
 SHARE = "share"
 AREA = "spatial_scope"

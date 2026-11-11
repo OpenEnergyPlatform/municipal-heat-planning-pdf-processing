@@ -50,16 +50,11 @@ def cases(name):
     """[(label, recipe, value)] for every JSON-typed value of the profile's
     spec and rules files."""
     profile = load_profile(name)
-    keys = specs.kg_keys(profile)
-    assert keys["why"] is None, keys["why"]
     spec = spec_of(name)
     out = []
     for parameter in spec["parameters"]:
         uri = parameter["uri"]
         coordinates = list((parameter.get("axes") or {}))
-        if "kg" in parameter:
-            out.append((f"{name}:{uri}.kg", {"recipe": "kg",
-                        "decls": keys["field"]}, parameter["kg"]))
         if "example" in parameter:
             numeric = parameter.get("value_type", "float") in ("float", "int")
             out.append((f"{name}:{uri}.example", {
@@ -67,9 +62,6 @@ def cases(name):
                 "value": parameter["example"], "numeric": numeric},
                 parameter["example"]))
         for axis, block in (parameter.get("axes") or {}).items():
-            if "kg" in block:
-                out.append((f"{name}:{uri}.{axis}.kg", {
-                    "recipe": "kg", "decls": keys["axis"]}, block["kg"]))
             if "derive" in block:
                 out.append((f"{name}:{uri}.{axis}.derive",
                             {"recipe": "derive"}, block["derive"]))
@@ -171,7 +163,7 @@ def with_unknown(value):
 
 @needs_node
 def test_every_form_gives_back_the_identical_value_of_the_real_files():
-    assert len(ALL) > 100
+    assert len(ALL) > 40
     answers = run_node([{"op": "roundtrip", "recipe": r, "value": v}
                         for _l, r, v in ALL])
     bad = {label: roundtrip_problems(value, answer.get("value"))
@@ -200,14 +192,12 @@ def test_a_converter_that_breaks_the_promise_is_caught(defect):
 
 @needs_node
 def test_a_value_that_does_not_fit_its_form_is_kept_as_it_is():
-    odd = [({"recipe": "kg", "decls": specs.kg_keys(load_profile("kwp"))
-             ["axis"]}, {"role": ["not", "a", "text"], "label": {"x": 1}}),
-           ({"recipe": "rule", "rule": {"kind": "range", "columns": [],
+    odd = [({"recipe": "rule", "rule": {"kind": "range", "columns": [],
                                         "of": "text"}}, "1900-2100")]
     answers = run_node([{"op": "roundtrip", "recipe": r, "value": v}
                         for r, v in odd])
     assert [a["value"] for a in answers] == [v for _r, v in odd]
-    assert unfit([("odd", a) for a in answers]) == ["odd", "odd"]
+    assert unfit([("odd", a) for a in answers]) == ["odd"]
 
 
 def unfit(results):
@@ -258,7 +248,7 @@ def test_an_edit_through_one_field_changes_only_the_key_it_shows(name):
                          "path": leaf["path"],
                          "text": text_for(leaf["kind"])})
             meta.append((label, value, leaf))
-    assert len(jobs) > 500
+    assert len(jobs) > 250
     done = run_node(jobs)
     bad = []
     for (label, value, leaf), answer in zip(meta, done):
@@ -288,35 +278,13 @@ def test_the_edit_check_can_fail():
     assert edit_problems(before, {"a": 1, "b": 2}, ["a"])          # dropped
 
 
-@needs_node
-def test_emptying_a_field_removes_its_key_and_nothing_else():
-    recipe = {"recipe": "kg", "decls": specs.kg_keys(load_profile("scenarios"))
-              ["axis"]}
-    value = {"role": "parent", "node": "scenariofactsheet",
-             "class": "OEO_00000365", "note": "n"}
-    after = run_node([{"op": "edit", "recipe": recipe, "value": value,
-                       "path": ["node"], "text": ""}])[0]["value"]
-    assert after == {"role": "parent", "class": "OEO_00000365", "note": "n"}
-    assert list(after) == ["role", "class", "note"]
-
-
-@needs_node
-def test_a_field_filled_for_the_first_time_goes_at_the_end():
-    recipe = {"recipe": "kg", "decls": specs.kg_keys(load_profile("kwp"))
-              ["axis"]}
-    value = {"role": "type", "note": "n"}
-    after = run_node([{"op": "edit", "recipe": recipe, "value": value,
-                       "path": ["label"], "text": "x"}])[0]["value"]
-    assert list(after) == ["role", "note", "label"]
-
-
 # -- 3. a key the form does not know is kept ------------------------------------
 
 @needs_node
 def test_a_key_the_form_does_not_know_is_kept_where_it_stood():
     pool = [(label, r, with_unknown(v)) for label, r, v in ALL
             if with_unknown(v) is not None]
-    assert len(pool) > 50
+    assert len(pool) > 30
     answers = run_node([{"op": "roundtrip", "recipe": r, "value": v}
                         for _l, r, v in pool])
     bad = [label for (label, _r, value), a in zip(pool, answers)
@@ -392,54 +360,19 @@ def test_a_range_is_two_numbers_and_empty_is_no_bound():
 
 # -- what the Python side declares -----------------------------------------------
 
-@needs_node
-def test_every_kind_a_writer_names_is_a_kind_of_the_forms():
-    out = subprocess.run(
-        [NODE, "-e", "console.log(JSON.stringify(Object.keys("
-                     "require('./docpipe/editor/web/forms.js').KINDS)))"],
-        cwd=ROOT, capture_output=True, text=True, check=True).stdout
-    kinds = set(json.loads(out))
-    for name in PROFILES:
-        keys = specs.kg_keys(load_profile(name))
-        for where in ("field", "axis"):
-            declared = keys[where]
-            assert declared and len({d["key"] for d in declared}) == len(
-                declared)
-            for decl in declared:
-                assert decl["help"].strip(), decl
-                assert decl.get("choices") or decl["kind"] in kinds, decl
-
-
-@pytest.mark.parametrize("name", PROFILES)
-def test_the_writer_names_every_key_its_spec_uses(name):
-    keys = specs.kg_keys(load_profile(name))
-    field = {d["key"] for d in keys["field"]}
-    axis = {d["key"] for d in keys["axis"]}
-    used_field, used_axis = set(), set()
-    for parameter in spec_of(name)["parameters"]:
-        used_field |= set(parameter.get("kg") or {})
-        for block in (parameter.get("axes") or {}).values():
-            used_axis |= set(block.get("kg") or {})
-    assert used_field <= field, used_field - field
-    assert used_axis <= axis, used_axis - axis
-
-
-def test_a_profile_without_a_writer_names_no_keys_and_says_why():
-    keys = specs.kg_keys(load_profile("default"))
-    assert keys["field"] == [] and keys["axis"] == [] and keys["why"]
-
-
-def test_the_form_of_the_spec_carries_the_keys_and_no_field_is_json():
+def test_the_spec_form_has_no_json_field_and_none_for_the_graph():
     form = specs.form(load_profile("kwp"))
-    assert form["kg_keys"]["why"] is None
-    widgets = {f["widget"] for kind, fields in form.items()
-               if kind != "kg_keys" for f in fields}
+    widgets = {f["widget"] for fields in form.values() for f in fields}
     assert "json" not in widgets
+    # what a field becomes in the graph is drawn in the graph file, so the
+    # spec's form offers no `kg` and names no keys of one
+    assert "kg_keys" not in form
+    for kind in ("parameter", "axis"):
+        assert "kg" not in {f["key"] for f in form[kind]}
     by_key = {f["key"]: f for f in form["parameter"]}
-    assert (by_key["kg"]["widget"], by_key["kg"]["of"]) == ("kg", "field")
     assert by_key["example"]["widget"] == "example"
     axis = {f["key"]: f for f in form["axis"]}
-    assert (axis["kg"]["of"], axis["derive"]["widget"]) == ("axis", "derive")
+    assert axis["derive"]["widget"] == "derive"
 
 
 def test_every_kind_of_rule_has_a_form_and_none_is_json():

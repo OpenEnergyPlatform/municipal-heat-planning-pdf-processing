@@ -89,9 +89,11 @@ def build(closure: Path, mhpo: Path = None, shape=None) -> dict:
             sets[f"mhpkg:{name}"] = ("class", OEO + local)
     named = {curie.partition(":")[2] for curie in shape.curies()
              if curie.partition(":")[0] in ("oeo", "mhpo")}
+    from docpipe import graphfile
     return ontology.build(
         closure, sets, spec_raw, extra=[mhpo] if mhpo else None, base=OEO,
         also=tuple(sorted(set(edge_terms(spec_raw, shape)) | named)),
+        drawing=graphfile.load(load_profile(PROFILE)).map,
         language=load_profile(PROFILE).require("extraction",
                                                "ALT_LABEL_LANGUAGE"))
 
@@ -168,7 +170,8 @@ def spec_terms(spec_raw: dict) -> dict:
     return ontology.spec_terms(spec_raw)
 
 
-def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
+def carrier_problems(spec_raw: dict, snapshot: dict,
+                     drawing: dict) -> list:
     """A carrier the ontology does not call a carrier, undeclared.
 
     This profile is allowed to offer a heat source under `carrier` -- district
@@ -178,13 +181,20 @@ def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
     that is not one and nobody decided.
 
     Stays in the profile because `outside_root` is this profile's answer to a
-    question the other one does not have.
+    question the other one does not have. It is declared in the settings of
+    the arrow of the *drawing* (the `map` of its graph file) that reads the
+    carrier.
     """
+    from docpipe.extraction.graph import Drawing
     terms, sets = snapshot["terms"], snapshot["sets"]
     problems: list = []
+    drawn = Drawing(drawing)
     for parameter in spec_raw.get("parameters", []):
         carrier = (parameter.get("axes") or {}).get("carrier") or {}
-        declared = set((carrier.get("kg") or {}).get("outside_root") or {})
+        declared = {uri for arrow in drawn.readers(parameter.get("uri"),
+                                                   "carrier")
+                    for uri in (arrow.get("settings") or {}).get(
+                        "outside_root") or {}}
         allowed = set(sets.get("energy_carrier") or ())
         for uri in (carrier.get("vocabulary") or {}):
             name = ontology.identifier(uri)
@@ -198,22 +208,20 @@ def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
                 label = (terms.get(name) or {}).get("label", "?")
                 problems.append(
                     f"{parameter.get('uri')}.carrier: {uri} ({label}) is not "
-                    f"an energy carrier and is not declared in kg.outside_root")
+                    f"an energy carrier and is not declared in outside_root")
     return problems
 
 
 def edges(spec_raw: dict, shape=None) -> list:
-    """Every triple shape this profile emits, the spec's and the writer's.
-
-    The `kg` blocks carry most of them and `kg.py` declares the handful that
-    sit behind no parameter, so the two together are the whole output and the
-    pin can be asked about all of it. *shape* is the schema, the profile's
-    own where not given.
-    """
-    from profiles.kwp import kg, mhpkg   # here: kg reads the spec at import
-    shape = shape if shape is not None else mhpkg.load()
-    return (list(ontology.spec_edges(mhpkg.resolve(spec_raw, shape)))
-            + list(kg.EDGES))
+    """Every triple shape this profile emits: the drawing of its graph file
+    (`map`), so the pin can be asked about all of it. *shape* is unused and
+    stays for the callers that pass the schema."""
+    from docpipe import graphfile
+    from docpipe.extraction.bricks import registry
+    from docpipe.profile import load_profile
+    profile = load_profile(PROFILE)
+    return ontology.drawing_edges(graphfile.load(profile).map, spec_raw,
+                                  registry(profile))
 
 
 def schema_predicates() -> set:
@@ -253,15 +261,24 @@ def check(spec_raw: dict, snapshot: dict) -> list:
     """Every complaint the pinned ontology has about this spec; about the
     terms the MHPKG schema prescribes, `schema_notes`."""
     # The spec as written: a slot it names is the schema's term and is held
-    # to the pin in `schema_notes`, not here.
+    # to the pin in `schema_notes`, not here; so is a term of the schema the
+    # pin does not have yet, which the drawing writes as the schema says.
+    from profiles.kwp import mhpkg
     prescribed = schema_predicates()
+    from docpipe import graphfile
+    from docpipe.profile import load_profile
+    drawing = graphfile.load(load_profile(PROFILE)).map
+    open_requests = [curie.partition(":")[2] for curie in
+                     mhpkg.missing_terms(mhpkg.load(), snapshot["terms"])]
     return (ontology.term_problems(spec_raw, snapshot)
-            + ontology.kind_problems(spec_raw, snapshot)
+            + ontology.drawing_term_problems(drawing, snapshot,
+                                             open_requests)
+            + ontology.kind_problems(drawing, snapshot)
             + ontology.edge_problems(
                 [e for e in edges(spec_raw)
                  if ontology.identifier(e.get("predicate")) not in prescribed],
                 snapshot)
-            + carrier_problems(spec_raw, snapshot)
+            + carrier_problems(spec_raw, snapshot, drawing)
             + ontology.set_problems(spec_raw, snapshot, axis_sets()))
 
 

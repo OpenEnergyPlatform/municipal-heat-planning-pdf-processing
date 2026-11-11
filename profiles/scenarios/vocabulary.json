@@ -3778,6 +3778,23 @@
     "OEO_00000368"
    ]
   },
+  "OEO_00390095": {
+   "alt_labels": [],
+   "definition": "has uuid is the relation between a factsheet or report and the 128-bit label used to identify it in a computer system.",
+   "deprecated": false,
+   "domain": [
+    "IAO_0000088",
+    "OEO_00000162"
+   ],
+   "kind": "data_property",
+   "label": "has uuid",
+   "parents": [
+    "topDataProperty"
+   ],
+   "range": [
+    "xsd:string"
+   ]
+  },
   "OEO_00390096": {
    "alt_labels": [],
    "definition": "has publication date is the relation between a report and the year it was published in.",

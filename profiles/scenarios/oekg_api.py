@@ -66,7 +66,6 @@ from typing import Optional
 
 from docpipe import upstream
 from docpipe.extraction.serialize import collect
-from docpipe.extraction.shapemodel import Model
 from profiles.scenarios import kg, vocabulary
 
 HERE = Path(__file__).resolve().parent
@@ -445,24 +444,31 @@ def list_problems(shapes) -> list:
     from rdflib.collection import Collection
     out = []
     for parameter in kg._SPEC["parameters"]:
-        block = (parameter.get("kg") or {}).get("property")
         offered = {iri for iri in parameter.get("vocabulary") or ()
                    if kg.in_graph(iri)}
-        if not block or not offered:
+        if not offered:
             continue
-        allowed: set = set()
-        for shape in shapes.subjects(URIRef(SH + "path"), _iri(kg._name(block))):
-            head = shapes.value(shape, URIRef(SH + "in"))
-            if head is not None:
-                allowed |= {str(item) for item in Collection(shapes, head)}
-        if not allowed:
-            continue
-        for iri in sorted(offered - allowed):
-            out.append(f"{parameter['uri']}: the spec offers "
-                       f"{iri.rsplit('/', 1)[-1]}, which the shapes do not list")
-        for iri in sorted(allowed - offered):
-            out.append(f"{parameter['uri']}: the shapes list "
-                       f"{iri.rsplit('/', 1)[-1]}, which the spec does not offer")
+        # The properties the drawing writes the field's answer under.
+        for predicate in dict.fromkeys(
+                arrow["property"] for arrow in kg.DRAWING["arrows"]
+                if arrow["from"] == parameter["uri"]):
+            allowed: set = set()
+            for shape in shapes.subjects(URIRef(SH + "path"),
+                                         _iri(predicate)):
+                head = shapes.value(shape, URIRef(SH + "in"))
+                if head is not None:
+                    allowed |= {str(item) for item in Collection(shapes,
+                                                                 head)}
+            if not allowed:
+                continue
+            for iri in sorted(offered - allowed):
+                out.append(f"{parameter['uri']}: the spec offers "
+                           f"{iri.rsplit('/', 1)[-1]}, which the shapes do "
+                           f"not list")
+            for iri in sorted(allowed - offered):
+                out.append(f"{parameter['uri']}: the shapes list "
+                           f"{iri.rsplit('/', 1)[-1]}, which the spec does "
+                           f"not offer")
     return out
 
 
@@ -554,7 +560,7 @@ def graph(payload: dict, known: dict, origin: Optional[dict] = None):
     named(bundle, kg.P_FUNDER, payload.get("funders"), kg.CLS_FUNDER, "funder",
           ("funders",))
     for key, api_key in TAG_KEYS.items():
-        listed(bundle, kg._property(key), payload.get(api_key))
+        listed(bundle, kg.tag_property(key), payload.get(api_key))
 
     for place, paper in enumerate(payload.get("study_reports") or ()):
         report = node("report")
@@ -791,7 +797,7 @@ def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
     """
     # The bodies are read with the paths of the same shapes they are held
     # to, so the dry run and the verdict speak of one file.
-    reader = kg.make_study_reader(db, model=Model.from_graph(shapes))
+    reader = kg.make_study_reader(db)
     schema = RequestSchema(openapi)
     context = vocabulary.context()
     studies, without = [], []

@@ -3,8 +3,12 @@ import json
 from types import SimpleNamespace
 
 from docpipe.extraction import fields, pipeline, runner
+from docpipe.extraction.bricks import Call
+from docpipe.extraction.graph import load_drawing, registry
+from docpipe.profile import load_profile
 from docpipe.extraction.spec import load as load_spec
 from profiles.kwp import extraction as kwp, kg
+from test_value_identity import settled
 
 TABLE = ("| Sektor | Erdgas | Wärmenetze |\n| --- | --- | --- |\n"
          "| Wohnen | 120 | 80 |\n")
@@ -93,9 +97,20 @@ def test_a_number_of_buildings_is_a_building_count():
     assert runner.keeps_row(slots["quantity"], row.claim["quantity"], None)
 
 
+def typed_as(row):
+    """The class the drawing's `value_class` brick writes a value as (the
+    full graph: its own class only)."""
+    drawing = load_drawing(load_profile("kwp"))
+    ref = drawing.box["value"]["class_brick"]
+    brick = registry(load_profile("kwp"))[ref["brick"]]
+    return brick.run(Call(doc=SimpleNamespace(strict=False),
+                          node=SimpleNamespace(row=row),
+                          settings=ref["settings"]))
+
+
 def test_a_building_count_is_written_as_mhpos_class_in_the_count_unit():
     row = {"parameter": "building_count", "quantity": "MHPO_00030021"}
-    assert kg.typed_as(row) == "mhpo:MHPO_00030021"
+    assert typed_as(row) == "mhpo:MHPO_00030021"
     assert kg.unit_of(row) == "UO_0000189"
     _lines, bindings = kg.value_bindings({"quantity": "MHPO_00030021"})
     assert bindings["QUANTITY"] == ("iri", kg.PREFIX_IRI["mhpo"]
@@ -125,7 +140,6 @@ def share_row(value, whole):
 
 def test_the_whole_of_a_share_splits_two_numbers_into_two_nodes():
     rows = [share_row(41, "Wärmebedarf"), share_row(30, "Emissionen")]
-    kept, _lost, _marks = kg.settle(kg._value_iri("part", rows[0]), rows,
-                                    "part", keep_open=True)
+    kept, _lost, _marks = settled(rows)
     assert sorted(r["whole"] for r in kept.values()) == ["Emissionen",
                                                          "Wärmebedarf"]

@@ -38,16 +38,12 @@ SHUT = 3
 
 
 def _serializer(profile, db: Path):
-    factory = profile.component("kg", "make_serializer")
-    if factory is not None:
-        return factory(db)
+    """The program that writes the drawing of *profile*'s graph file."""
     from . import graph
-    spec_path = profile.component("extraction", "SPEC_PATH")
-    if spec_path is None:
-        raise ValueError(f"profile {profile.name!r} has no extraction spec "
-                         f"and no kg.make_serializer")
-    return graph.make_serializer(json.loads(
-        Path(spec_path).read_text(encoding="utf-8")))
+    try:
+        return graph.make_serializer(profile, db)
+    except graph.GraphError as exc:
+        raise ValueError(str(exc)) from exc
 
 
 def _stopping(out: Path, profile, paths: list) -> list:

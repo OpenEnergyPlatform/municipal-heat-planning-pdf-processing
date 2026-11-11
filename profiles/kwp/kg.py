@@ -1,16 +1,20 @@
 """
-kg.py: Serializes harvested tuples into MHPKG Turtle.
+kg.py: The bricks only the kwp profile's graph needs, and how the answer
+app asks that graph.
 
-The IRI policy is rebuilt from the schema repo's mint_slice.py and must stay
-a pure function of the data: two runs over the same plan mint byte-identical
-IRIs (tested against their published reference UUIDs). The value coordinates
-are the seven mint_slice.py lists: part, quantity, carrier, sector, year,
-aggregation and the sub-area.
+How the harvest of a heat plan becomes the MHPKG graph is the drawing in
+graph.json beside this file (`map`), written by the core's program
+(`docpipe/extraction/graph.py`). Here are the pieces only this profile has:
+what the register knows of a plan (its AGS, publication date and
+municipality), which numbers the graph takes and why the others stay in the
+harvest, the address of a number (the coordinate list of the IRI policy,
+mint_slice.py), its class and unit, the comment lines above it, and what the
+provenance file records of it.
 
-Serialized is what the graph can hold: a value whose scenario names one of
-the three plan parts of PARTS, whose scope is the municipality, whose
-indicator label is accepted and whose year is read. Everything else stays in
-the JSONL harvest and is counted here, not lost.
+The IRI policy must stay a pure function of the data: two runs over the
+same plan mint byte-identical IRIs.
+
+Author: Felix Vossel
 """
 from __future__ import annotations
 
@@ -18,186 +22,110 @@ import json
 import logging
 import re
 import sqlite3
-from collections import Counter
 from pathlib import Path
 from typing import Optional
 
 from docpipe import graphfile
-from docpipe.extraction import graphkit
+from docpipe.extraction.bricks import Brick, Call, Setting
 from docpipe.extraction.fields import DERIVED
-from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment, ttl_escape
-from docpipe.extraction.identity import tuple_ids
-from docpipe.extraction.spec import kg_name, load as load_spec
+from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment
+from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.trust import check_prose, render, trust
 from docpipe.store.schema import readonly_uri
-from docpipe.extraction.trust import LEVELS, check_prose, render, trust
 from profiles.kwp import mhpkg
 
 log = logging.getLogger(__name__)
 
-# Where the nodes are named, how far apart two readings of one number may
-# lie and whether a still contested number stays in the full graph are rules
-# of graph.json beside this file (`docpipe.graphfile`, the Graph tab of
-# `docpipe edit`).
-
-# The keys of a `kg` block this writer (and the checks that read the blocks:
-# docpipe/ontology.py, docpipe/compile/draft.py, profiles/kwp/mhpkg.py) read,
-# each with the kind of form `docpipe edit` shows it as
-# (docpipe/editor/web/forms.js) and what it does. A key not named here stays
-# in the spec file as it is.
-KG_KEYS = {
-    "field": [
-        {"key": "node", "kind": "text",
-         "help": "The kind of node this field writes (value, organisation)."},
-        {"key": "class", "kind": "class",
-         "help": "The class of the node this field mints, where it is one."},
-        {"key": "class_from", "kind": "text",
-         "help": "The coordinate whose entries are the classes a value "
-                 "node can carry."},
-        {"key": "schema_class", "kind": "text",
-         "help": "The class as the MHPKG schema names it."},
-        {"key": "number", "kind": "slot",
-         "help": "The predicate that carries the value's number."},
-        {"key": "unit", "kind": "slot",
-         "help": "The predicate that carries the value's unit."},
-        {"key": "edge_from_plan", "kind": "link",
-         "help": "The predicate that hangs the node off the plan."},
-        {"key": "label", "kind": "text",
-         "help": "How the node's label is made."},
-    ],
-    "axis": [
-        {"key": "role", "kind": "text",
-         "choices": ["type", "edge", "parent", "comment"],
-         "help": "What the answer of this coordinate does in the graph."},
-        {"key": "schema_slot", "kind": "text",
-         "help": "The slot of the MHPKG schema that carries the predicate."},
-        {"key": "predicate", "kind": "text",
-         "help": "The predicate an edge is written under, where the schema "
-                 "gives none."},
-        {"key": "prefix", "kind": "text",
-         "help": "The prefix of that predicate."},
-        {"key": "linked_by", "kind": "link",
-         "help": "The predicate that hangs every container of this "
-                 "coordinate off the plan."},
-        {"key": "map", "kind": "classmap",
-         "help": "For a parent: each answer with the class it puts on its "
-                 "container and the edge up from it."},
-        {"key": "datatype", "kind": "datatype",
-         "help": "The datatype of a literal the coordinate writes."},
-        {"key": "label", "kind": "text",
-         "help": "The predicate's label."},
-        {"key": "note", "kind": "note",
-         "help": "A note for people; the writer does not read it."},
-        {"key": "outside_root", "kind": "labels",
-         "help": "Carrier classes the ontology does not place under energy "
-                 "carrier: class -> its name."},
-        {"key": "total_class", "kind": "class",
-         "help": "The class written for out:total, a figure reported "
-                 "without this breakdown."},
-        {"key": "no_edge_for", "kind": "texts",
-         "help": "Entries that write no edge."},
-        {"key": "object_class", "kind": "class",
-         "help": "The class of the node an edge points at."},
-    ],
-}
-
-BASE = graphfile.get("base", "kwp")
 OEO = "https://openenergyplatform.org/ontology/oeo/"
-NS_MHPKG = graphkit.base_namespace(BASE)
+
+# The MHPKG schema the last refresh pulled (mhpkg.py): the closed lists and
+# the value classes of the strict graph are its.
+SHAPE = mhpkg.load()
+_SPEC = json.loads(
+    Path(__file__).with_name("extraction_spec.json").read_text(
+        encoding="utf-8"))
+# The spec as the extraction stage loads it. The answer app's graph route
+# reads its lists off it (`docpipe.inference.kg_route`).
+SPEC = load_spec(_SPEC)
+
+# The drawing, as the graph file of this profile has it now.
+DRAWING = graphfile.get_map("kwp")
+PREFIX_IRI = dict(DRAWING.get("prefixes") or {})
 
 # Where the provenance of this graph's values is written under, and the
 # vocabulary that says it (docpipe/extraction/provenance.py). The terms are
 # the ones proposed to the ontology; until they are published there they
 # resolve nowhere, which is why the provenance is a file of its own.
-PROVENANCE = {"base": BASE, "prefix": "mhpx",
+PROVENANCE = {"base": graphfile.get("base", "kwp"), "prefix": "mhpx",
               "iri": "https://purl.org/mhpo/prov/"}
-
-# Up here because every identifier below is qualified against it as it is
-# read, and a prefix this header does not bind writes Turtle nobody can load.
-PREFIXES = """\
-@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
-@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
-@prefix obo:   <http://purl.obolibrary.org/obo/> .
-@prefix mhpo:  <https://purl.org/mhpo/ontology/> .
-@prefix oeo:   <https://openenergyplatform.org/ontology/oeo/> .
-"""
-# The same header as a dict, so a qualified name can be expanded to the IRI
-# the graph holds it under. Parsed out of PREFIXES rather than typed twice.
-PREFIX_IRI = dict(re.findall(r"@prefix\s+(\w+):\s+<([^>]+)>", PREFIXES))
 
 
 def expand(name: str) -> str:
-    """`mhpo:MHPO_00020007` -> the full IRI, from the header this graph writes.
-
-    Two of the three plan parts are mhpo: and one is oeo:, so a query that
-    assumed one namespace would bind IRIs no graph holds and return nothing,
-    silently. An unbound prefix raises rather than defaults.
-    """
+    """`mhpo:MHPO_00020007` -> the full IRI, from the header this graph
+    writes. An unbound prefix raises rather than defaults."""
     prefix, _, local = str(name).partition(":")
     if not local or prefix not in PREFIX_IRI:
-        raise KeyError(f"{name!r} is bound to no prefix of PREFIXES")
+        raise KeyError(f"{name!r} is bound to no prefix of the drawing")
     return PREFIX_IRI[prefix] + local
-
-# Nine classes the plans name in their carrier column are NOT under
-# `energy carrier` (OEO_00020039) in OEO -- district heating is a grid-bound
-# heat transfer, electrical energy sits under energy and commodity, solar
-# thermal energy under thermal energy, and the ambient heat sources under
-# thermal energy too. The schema's `refers to energy carrier` ranges over
-# energy carrier, so writing them types them as carriers; they are written
-# all the same, because the plans report them as carriers, and counted, as
-# the argument for the carrier axioms the ontology side is adding. The
-# strict graph (`strict_refusal`) leaves out every carrier the schema's own
-# list does not hold.
-#
-# WHICH nine is still the spec's to declare (`kg.outside_root` on the carrier
-# axis) and the pinned closure's to confirm: profiles/kwp/vocabulary.py
-# refuses a carrier that is neither under the root nor declared, so a tenth
-# cannot be added here by forgetting to mention it.
-LEGAL = r"(gmbh\s*&\s*co\.?\s*kg|gmbh|mbh|ag|kg|ohg|e\.?\s*v\.?|gbr|se|ug)"
-
-# The spec with every `schema_slot` and `schema_class` filled from the MHPKG
-# schema the last refresh pulled (mhpkg.py): the predicates and classes below
-# are the schema's, read at import, and never typed here.
-SHAPE = mhpkg.load()
-_SPEC = mhpkg.resolve(json.loads(
-    Path(__file__).with_name("extraction_spec.json").read_text(encoding="utf-8")),
-    SHAPE)
-
-
-def is_class(value) -> bool:
-    """True for a real OEO class, false for every deliberate non-class.
-
-    The axes hold entries that say what a row IS when no class fits — a sum,
-    a residual, a sector the source calls unknown. They are answers, not
-    classes, and writing one as `oeo:out:total` mints an IRI that does not
-    exist. Checked by shape rather than by prefix so a new entry cannot slip
-    past by being spelled differently.
-    """
-    return bool(_OEO_CLASS.fullmatch(str(value or "")))
 
 
 _OEO_CLASS = re.compile(r"OEO_\d+")
-# The target quantity is per OEO class, not per parameter: which class a
-# value is gets decided by the model on the `quantity` axis, and the unit
-# hangs off the class.
-# The classes the graph takes. The remaining entries of the list start with
-# `out:` (NOT_IN_GRAPH) and are deliberately choosable non-classes: a
-# cumulative sum, an avoided or captured amount, a useful energy. They stand
-# in the selection so the model can CHOOSE them, instead of reaching for the
-# nearest real class.
+_IDENTIFIER = re.compile(r"[A-Za-z]+_[0-9]+")
+# Which prefix an identifier belongs to, by its family. Unknown family is an
+# error and not a default: defaulting to oeo: would mint oeo:UO_0000111, an
+# IRI that does not exist, and say nothing.
+_NAMESPACE = {"OEO_": "oeo", "MHPO_": "mhpo", "BFO_": "obo", "UO_": "obo"}
+
+
+def is_class(value) -> bool:
+    """True for a real OEO class, false for every deliberate non-class: the
+    axes hold entries that say what a row IS when no class fits."""
+    return bool(_OEO_CLASS.fullmatch(str(value or "")))
+
+
+def qualified(identifier: str) -> str:
+    """A bare ontology id as this graph writes it."""
+    if not _IDENTIFIER.fullmatch(str(identifier)):
+        raise KeyError(f"{identifier!r} is no bare identifier")
+    for family, prefix in _NAMESPACE.items():
+        if identifier.startswith(family):
+            return f"{prefix}:{identifier}"
+    raise KeyError(f"no prefix is bound for the family of {identifier!r}")
+
+
+def _bare(name: str) -> str:
+    return str(name).split(":")[-1]
+
+
+def has_property(klass: str, prop: str) -> Optional[bool]:
+    """Whether the MHPKG schema gives the class (a curie) the property (a
+    curie); None where the schema has no such class."""
+    name = SHAPE.class_named(klass)
+    if name is None:
+        return None
+    return any(SHAPE.has_slot(name, slot)
+               for slot, block in SHAPE.slots.items()
+               if (block or {}).get("slot_uri") == prop)
+
+
+# The classes the graph takes: the entries of the class list that are no
+# `out:` answer. A cumulative sum, an avoided or captured amount stand in the
+# list so the model can choose them instead of the nearest real class.
 QUANTITIES = frozenset(uri for par in _SPEC["parameters"]
                        if par.get("unit_target")
                        for uri in par["axes"]["quantity"]["vocabulary"]
                        if not uri.startswith(NOT_IN_GRAPH))
-# The unit a value is written in is its parameter's, not its class's: a
-# technological flow potential is an energy in MWh/a and a power in MW. An
-# entry of units_accepted may convert onto a unit of its own ("target"): an
-# emission factor in g CO2/kWh.
+# The unit a value is written in is its parameter's; an entry of
+# units_accepted may convert onto a unit of its own ("target").
 UNIT_TARGET = {par["uri"]: par["unit_target"] for par in _SPEC["parameters"]
                if par.get("unit_target")}
 ENTRY_TARGET = {(par["uri"], unit): entry["target"]
                 for par in _SPEC["parameters"]
                 for unit, entry in (par.get("units_accepted") or {}).items()
                 if isinstance(entry, dict) and entry.get("target")}
+AGGREGATIONS = {uri for par in _SPEC["parameters"]
+                if "aggregation" in par.get("axes", {})
+                for uri in par["axes"]["aggregation"]["vocabulary"]}
 
 
 def target_of(row: dict) -> Optional[str]:
@@ -207,239 +135,50 @@ def target_of(row: dict) -> Optional[str]:
 
 
 def unit_of(row: dict) -> Optional[str]:
-    """The unit the graph writes this value in, None outside the graph:
-    the unit its number was converted onto, where that is an ontology term.
-    g CO2/kWh is none in OEO 2.14, so an emission factor stays in the
-    harvest until the ontology has one (owner decision 2026-11-07)."""
+    """The unit the graph writes this value in, None outside the graph: the
+    unit its number was converted onto, where that is an ontology term."""
     if row.get("quantity") not in QUANTITIES:
         return None
     target = target_of(row)
     return target if target and _IDENTIFIER.fullmatch(target) else None
 
 
-def typed_as(row: dict, schema_class: Optional[str] = None) -> str:
-    """The classes a value node is written as: its own, in the prefix of its
-    ontology (a building count is MHPO's), and in the strict graph the
-    schema's class above it."""
-    typed = qualified(row["quantity"])
-    if schema_class and SHAPE.cls(schema_class) != typed:
-        # A CO2-equivalent value IS a greenhouse gas emission value; a shape
-        # without a reasoner only sees the class written.
-        typed += f", {SHAPE.cls(schema_class)}"
-    return typed
-# How a value is aggregated over time or space is chosen by the model from
-# the five classes OEO carries under `aggregation type`. It used to always
-# say `integral` here, so a peak load was asserted as a year's sum.
-AGGREGATIONS = {uri for par in _SPEC["parameters"]
-                if "aggregation" in par.get("axes", {})
-                for uri in par["axes"]["aggregation"]["vocabulary"]}
-
-
-def _predicate(name: str) -> str:
-    """The predicate the spec's `kg` block gives this axis, qualified.
-
-    Written down once. The predicate used to stand as a literal here and be
-    described a second time wherever the graph was documented, and a change
-    in one place left the other describing a graph nobody was writing. The
-    JSON schema publishes the same block, so what a reader is told and what
-    is emitted are one string.
-
-    Qualified, because the prefix was the half that stayed behind: the
-    identifier came from the spec and `oeo:` from an f-string here, and this
-    graph writes five namespaces.
-    """
-    for par in _SPEC["parameters"]:
-        axis = (par.get("axes") or {}).get(name) or {}
-        block = axis.get("kg") or {}
-        if block.get("role") == "edge" and block.get("predicate"):
-            return kg_name(block, PREFIXES)
-    raise KeyError(f"no kg edge predicate for axis {name!r} in the spec")
-
-
-def _value_predicate(key: str) -> str:
-    """The predicate carrying a value's number or its unit, qualified."""
-    for par in _SPEC["parameters"]:
-        block = (par.get("kg") or {}).get(key) or {}
-        if block.get("predicate"):
-            return kg_name(block, PREFIXES)
-    raise KeyError(f"no kg {key} predicate in the spec")
-
-
-# Which prefix an identifier belongs to, by its family. A class is written as
-# a bare id in the spec -- one spelling in both profiles -- so the prefix is
-# recovered here rather than repeated beside every one of them. Unknown
-# family is an error and not a default: defaulting to oeo: would mint
-# oeo:UO_0000111, an IRI that does not exist, and say nothing.
-_NAMESPACE = {"OEO_": "oeo", "MHPO_": "mhpo", "BFO_": "obo", "UO_": "obo"}
-_IDENTIFIER = re.compile(r"[A-Za-z]+_[0-9]+")
-
-
-def qualified(identifier: str) -> str:
-    """A bare ontology id as this graph writes it."""
-    if not _IDENTIFIER.fullmatch(str(identifier)):
-        raise KeyError(f"{identifier!r} is no bare identifier -- a class is "
-                       f"an id like OEO_00030022, and a family test alone "
-                       f"would qualify a glossed one silently")
-    for family, prefix in _NAMESPACE.items():
-        if identifier.startswith(family):
-            return f"{prefix}:{identifier}"
-    raise KeyError(f"no prefix is bound for the family of {identifier!r}")
-
-
-def _parameter(uri: str) -> dict:
-    for par in _SPEC["parameters"]:
-        if par["uri"] == uri:
-            return par
-    raise KeyError(f"no parameter {uri!r} in the spec")
-
-
-def _class(uri: str) -> str:
-    """The class of the node this parameter mints, qualified."""
-    block = (_parameter(uri).get("kg") or {})
-    if "class" not in block:
-        raise KeyError(f"parameter {uri!r} mints no node of its own")
-    return qualified(block["class"])
-
-
-def _edge_from_plan(uri: str) -> str:
-    """The predicate hanging this parameter's node off the plan."""
-    block = (_parameter(uri).get("kg") or {})
-    if "edge_from_plan" not in block:
-        raise KeyError(f"parameter {uri!r} hangs off no plan")
-    return kg_name(block["edge_from_plan"], PREFIXES)
-
-
-def _parent(axis: str) -> dict:
-    for par in _SPEC["parameters"]:
-        block = ((par.get("axes") or {}).get(axis) or {}).get("kg") or {}
-        if block.get("role") == "parent":
-            return block
-    raise KeyError(f"axis {axis!r} names no parent node in the spec")
-
-
-def _parent_class(axis: str, key: str) -> str:
-    """The bare class one answer of a parent axis puts on its container."""
-    entry = (_parent(axis).get("map") or {}).get(key)
-    if not isinstance(entry, dict) or "class" not in entry:
-        raise KeyError(f"{axis}={key!r} names no class, so it mints no node")
-    return entry["class"]
-
-
-def _parent_link(axis: str, key: str) -> str:
-    """The predicate hanging one answer's node off the node above it."""
-    entry = (_parent(axis).get("map") or {}).get(key)
-    if not isinstance(entry, dict) or "linked_by" not in entry:
-        raise KeyError(f"{axis}={key!r} hangs off nothing")
-    return kg_name(entry["linked_by"], PREFIXES)
-
-
-def _linked_by(axis: str) -> str:
-    """The predicate hanging every container of this axis off the plan."""
-    block = _parent(axis)
-    if "linked_by" not in block:
-        raise KeyError(f"axis {axis!r} says nothing about its edge upward")
-    return kg_name(block["linked_by"], PREFIXES)
-
-
-P_NUMBER = _value_predicate("number")           # has number
-P_UNIT = _value_predicate("unit")               # has unit
-# The schema's slots: refers to energy carrier, refers to sector, refers to
-# technology, and the year as an integer literal.
-P_CARRIER = _predicate("carrier")
-P_SECTOR = _predicate("sector")
-P_TECHNOLOGY = _predicate("technology")
-P_YEAR = _predicate("year")
-P_AGGREGATION = _predicate("aggregation")       # has aggregation type
-
-# The spec as the extraction stage loads it. The answer app's graph route
-# reads its lists off it (`docpipe.inference.kg_route`).
-SPEC = load_spec(_SPEC)
-
-# Which part of a heat plan a value hangs under, by the scenario it belongs
-# to. The law names three of them and MHPO asserts the has-part edges for
-# them (mhpo-edit.owl L123-125), so this is a table and not a judgement.
-#
-# Only the target scenario was ever written. Everything else the harvest read
-# was collected, verified and then dropped at the gate: measured on Kassel,
-# 45 tuples for the scenario alone, 25 of them a stock take that the plan
-# states as its own starting point. The Waermeplanungsgesetz asks for the
-# inventory in §15 and the graph had no node for it.
-# The class is ontology and comes from the spec. The path segment mints node
-# identity (`mint`, below) and the German word is what a reader sees, and
-# neither is a graph identifier -- moving them into the file that is free to
-# edit would make an IRI free to change, which it is not.
-_PART_MINT = {
-    # The IRI policy's segment (mint_slice.py, `mhpkg_iri_policy.shacl.ttl`).
-    "status_quo": ("inventoryanalysis", "Bestandsanalyse"),
-    "trend": ("referencescenario", "Trendszenario"),
-    "target": ("targetscenario", "Zielszenario"),
-}
-PARTS = {key: (qualified(_parent_class("scenario", key)), segment, label)
-         for key, (segment, label) in _PART_MINT.items()}
-
-def _outside_root() -> dict:
-    """The carrier classes OEO does not place under `energy carrier`.
-
-    Declared in the spec's kg block and read from there, not listed twice.
-    The plans write these in the carrier column constantly -- district heat,
-    electricity, solar thermal, the ambient heat sources -- and offering them
-    at all is the point: without the classes the model mapped 36 of them onto
-    solar thermal energy, which is a wrong triple rather than a missing one.
-    """
-    out: dict = {}
-    for par in _SPEC["parameters"]:
-        block = ((par.get("axes") or {}).get("carrier") or {}).get("kg") or {}
-        out.update(block.get("outside_root") or {})
-    return out
-
-
-CARRIER_OUTSIDE_ROOT = _outside_root()
-
-
-def _total_class(axis: str) -> Optional[str]:
-    """The class an axis writes for `out:total`, where it names one: the
-    schema's parent for a figure reported without that breakdown."""
-    for par in _SPEC["parameters"]:
-        block = ((par.get("axes") or {}).get(axis) or {}).get("kg") or {}
-        if block.get("total_class"):
-            return block["total_class"]
-    return None
-
-
-TOTAL_CLASS = {axis: _total_class(axis) for axis in ("carrier", "sector")}
-
-ORGANISATION = "planning_organisation"
-# Which body an organisation row is: the plan's own municipality or another.
-ROLE = "role"
-CLS_ORGANISATION = _class(ORGANISATION)                    # oeo: organisation
-CLS_PLAN_AREA = qualified(_parent_class("spatial_scope", "sub_area"))
-P_ORGANISATION = _edge_from_plan(ORGANISATION)             # oeo: has organisation
-P_PART_OF = _parent_link("spatial_scope", "sub_area")      # obo: part of
-P_HAS_PART = _linked_by("scenario")                        # obo: has part
-
-# Behind no harvested value, so behind no parameter, so not in the spec: the
-# plan node and the municipality node exist for every plan whatever the model
-# answers, the publication date is a column of Documents and not a reading,
-# and the hop from a container down to a value has no key in the kg grammar.
-# All four are the schema's.
-CLS_HEATPLAN = SHAPE.cls("MunicipalHeatPlan")
-CLS_MUNICIPALITY = SHAPE.cls("MunicipalityArea")
-P_PUBLICATION_DATE = SHAPE.slot("has_publication_date")
 # The plan parts the schema holds values in, and the slot that holds them.
 CONTAINERS = ("TargetScenario", "AggregatedInventoryAnalysis")
 CONTAINER_SLOT = "covers_parameter"
-P_HAS_QUANTITY_VALUE = SHAPE.slot(CONTAINER_SLOT)
-# Which schema class each scenario's part is, where the schema has one.
-PART_SCHEMA = {key: entry.get("schema_class")
-               for key, entry in (_parent("scenario").get("map") or {}).items()
-               if isinstance(entry, dict) and entry.get("schema_class")}
 
 
-def schema_class_of(row: dict) -> Optional[str]:
-    """The schema class this value is in its part: the class the model chose,
-    or the schema's value class it falls under (the snapshot's
-    `mhpkg:<class>` set, built from the closure), or None."""
-    container = PART_SCHEMA.get(row.get("scenario"))
+def _box(box_id: str) -> dict:
+    return next(box for box in DRAWING.get("boxes") or ()
+                if box.get("id") == box_id)
+
+
+def _arrow(source: str, to: str) -> dict:
+    return next(arrow for arrow in DRAWING.get("arrows") or ()
+                if arrow.get("from") == source and arrow.get("to") == to)
+
+
+def totals(drawing: dict, box_id: str) -> dict:
+    """{coordinate: class} the arrows of *box_id* write for out:total."""
+    return {arrow["from"]: (arrow.get("settings") or {}).get("total_class")
+            for arrow in drawing.get("arrows") or ()
+            if arrow.get("to") == box_id}
+
+
+def written(row: dict, axis: str, total: dict):
+    """What the graph writes for this coordinate: the class read, or for a
+    number the plan does not split by this axis (`out:total`) the class the
+    drawing names for it, or nothing."""
+    value = row.get(axis)
+    if value == "out:total":
+        return total.get(axis)
+    return value
+
+
+def schema_class_of(row: dict, table: dict) -> Optional[str]:
+    """The schema class this value is in its part: the class the model
+    chose, or the schema's value class it falls under, or None."""
+    container = (table.get(row.get("scenario")) or {}).get("schema_class")
     if container not in CONTAINERS:
         return None
     quantity = row.get("quantity")
@@ -452,23 +191,19 @@ def schema_class_of(row: dict) -> Optional[str]:
     return None
 
 
-def strict_refusal(row: dict) -> Optional[str]:
-    """Why this value has no place in the strict graph, or None.
-
-    The strict graph holds what the schema's shapes take: a value class the
-    part holds, every required slot, and every slot's answer from the
-    schema's own closed list. Not a judgement about the reading -- the full
-    graph keeps all of it -- but what a validator of the schema will accept.
-    """
-    name = schema_class_of(row)
+def strict_refusal(row: dict, table: dict, total: dict) -> Optional[str]:
+    """Why this value has no place in the strict graph, or None: the strict
+    graph holds what the schema's shapes take, a value class the part
+    holds, every required slot, and every slot's answer from the schema's
+    own closed list."""
+    name = schema_class_of(row, table)
     if name is None:
         return "class"
     if row.get("spatial_scope") != "municipality":
         return "area"           # the schema relates no value to an area
-    unit = unit_of(row)
-    given = {"has_unit": unit,
-             "refers_to_energy_carrier": written(row, "carrier"),
-             "refers_to_sector": written(row, "sector"),
+    given = {"has_unit": unit_of(row),
+             "refers_to_energy_carrier": written(row, "carrier", total),
+             "refers_to_sector": written(row, "sector", total),
              "refers_to_technology": row.get("technology"),
              "has_aggregation_type": row.get("aggregation")}
     required = SHAPE.required(name)
@@ -488,78 +223,17 @@ def strict_refusal(row: dict) -> Optional[str]:
     return None
 
 
-def _bare(name: str) -> str:
-    """The identifier out of a qualified one, for the table below."""
-    return str(name).split(":")[-1]
-
-
-# Every triple shape this serializer writes that no `kg` block carries, so
-# that `ontology.edge_problems` can hold ALL of them to the pinned ontology
-# and not most of them. Built from the constants above rather than typed out
-# again, and held against the rendered Turtle by a test, so it can drift from
-# neither. The check this feeds is not academic: three edges named a domain
-# (`study`, an occurrent) that every value node is disjoint from, so the
-# graph asserted something no reasoner can satisfy, and every check we had
-# passed it.
-EDGES = tuple(
-    [{"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
-      "predicate": _bare(P_PUBLICATION_DATE), "datatype": "xsd:date",
-      "accepted": ("the MHPKG schema prescribes this slot on the plan with "
-                   "range date and calls it a near miss itself: OEO declares "
-                   "domain report and range xsd:dateTime")},
-     {"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
-      "predicate": _bare(P_ORGANISATION), "object": _bare(CLS_ORGANISATION)},
-     {"where": "kg.py area", "subject": _bare(CLS_PLAN_AREA),
-      "predicate": _bare(P_PART_OF), "object": _bare(CLS_MUNICIPALITY)}]
-    + [{"where": "kg.py plan", "subject": _bare(CLS_HEATPLAN),
-        "predicate": _bare(P_HAS_PART), "object": _bare(cls)}
-       for cls, _segment, _label in PARTS.values()]
-    + [{"where": "kg.py part", "subject": _bare(cls),
-        "predicate": _bare(P_HAS_QUANTITY_VALUE), "object": quantity}
-       for cls, _segment, _label in PARTS.values()
-       for quantity in sorted(QUANTITIES)]
-)
-
-
-def normalise(label: str) -> str:
-    """The umlaut rule from the policy, applied in order."""
-    return graphkit.normalise(label, LEGAL)
-
-
-def display_name(label: str) -> str:
-    """The name as the graph shows it: the document's own spelling, minus the
-    legal form. `normalise` decides identity and casefolds for that; a label a
-    reader sees must keep its capitals, and kassel_valid.ttl shows the
-    stripped form."""
-    s = re.sub(r"\s+", " ", str(label)).strip()
-    return re.sub(rf"[\s,]+{LEGAL}\.?$", "", s, flags=re.I).strip(" ,")
-
-
-def mint(collection: str, name: str) -> str:
-    """Tier 3: UUIDv5 over the identifying name. Never v4 — v4 is random."""
-    return (f"{BASE}{collection}/"
-            f"{graphkit.mint_uuid(NS_MHPKG, collection, name)}")
-
-
 def _iso_date(raw) -> str:
-    """`published` as the IRI policy spells it: YYYY-MM-DD.
-
-    Ingest writes it as YYYYMMDD (source.py, strftime("%Y%m%d")), the same way
-    the corpus writes it into file names. mint_slice.py and therefore every
-    minted IRI speak the dashed form. One place converts, and it takes both so
-    that a corpus written either way serializes.
-
-    Without this the serializer produced an empty graph for the whole corpus
-    while its tests passed: the fixture wrote the dashed form the DB never has.
-    """
+    """`published` as the IRI policy spells it: YYYY-MM-DD. Ingest writes
+    YYYYMMDD; one place converts, and it takes both."""
     text = str(raw or "").strip()
     if re.fullmatch(r"\d{8}", text):
         return f"{text[:4]}-{text[4:6]}-{text[6:]}"
     return text[:10]
 
 
-def _document_identity(db_path: Path, name: str):
-    """(ags, published, municipality name, transcribed page count) or None."""
+def document_identity(db_path: Path, name: str):
+    """(ags, published, municipality name) or None."""
     conn = sqlite3.connect(readonly_uri(db_path), uri=True)
     try:
         row = conn.execute(
@@ -568,17 +242,6 @@ def _document_identity(db_path: Path, name: str):
         if row is None:
             return None
         document_id, published = row
-        try:
-            # How many of this plan's pages a MODEL read rather than the PDF.
-            # Eleven plans of the corpus have no text layer at all, and their
-            # section text is itself a reading -- a value from one of them
-            # cannot be an A no matter how local its passages are. NULL where
-            # nobody looked, which is not the same as zero.
-            transcribed = conn.execute(
-                "SELECT page_text_transcribed FROM Documents WHERE id = ?",
-                (document_id,)).fetchone()[0]
-        except sqlite3.OperationalError:      # a database predating WP11
-            transcribed = None
         try:
             meta = conn.execute(
                 "SELECT dm.municipality_ags, m.name FROM DocumentMeta dm "
@@ -594,238 +257,35 @@ def _document_identity(db_path: Path, name: str):
     published = _iso_date(published)
     if not ags.isdigit() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", published):
         return None
-    return ags.zfill(8), published, (meta[1] if meta else None), transcribed
+    return ags.zfill(8), published, (meta[1] if meta else None)
 
 
-def plan_iri(ags: str, published: str) -> str:
-    """Tier 2: the plan's register key and its full publication date."""
-    return f"{BASE}heatplan/AGS_{ags}_{published}"
+def facts_of(identity) -> dict:
+    ags, published, municipality = identity
+    return {"ags": ags, "published": published, "year": published[:4],
+            "municipality": municipality,
+            "place": municipality or f"AGS {ags}"}
 
 
 def heatplan_iri(db_path: Path, name: str) -> Optional[str]:
-    """The plan node the serializer mints for this document, or None.
-
-    One minting site for the graph and for whoever asks it. The app was one
-    f-string away from building its own, and `_iso_date` is exactly where a
-    second copy diverges: ingest stores YYYYMMDD, the policy wants
-    YYYY-MM-DD, and that mismatch once produced an empty graph with every
-    test green.
-    """
-    identity = _document_identity(db_path, name)
+    """The plan node the drawing makes for this document, or None: one
+    making for the graph and for whoever asks it."""
+    identity = document_identity(db_path, name)
     if identity is None:
         return None
-    ags, published, _municipality, _transcribed = identity
-    return plan_iri(ags, published)
+    plan = _box("plan")
+    folder = (plan.get("address") or {}).get("folder")
+    words = (plan.get("address") or {}).get("name") or ""
+    base = graphfile.get("base", "kwp")
+    return f"{base}{folder}/{words.format(**facts_of(identity))}"
 
 
-def written(row: dict, axis: str):
-    """What the graph writes for this coordinate: the class read, or for a
-    number the plan does not split by this axis (`out:total`) the class the
-    spec names for it (`total_class`, the schema's parent for a figure
-    without that breakdown), or nothing."""
-    value = row.get(axis)
-    if value == "out:total":
-        return TOTAL_CLASS.get(axis)
-    return value
+# -- the words above a number ----------------------------------------------------
 
-
-def _value_iri(heatplan: str, row: dict, label: str = "") -> str:
-    # mint_slice.py's coordinate list; absent coordinates are empty segments
-    # so the arity never varies. *label* is the plan's own wording, appended
-    # only for a node that `settle` split off by wording.
-    #
-    # A carrier or sector names the node only where it gets an edge, and the
-    # edge writer takes a class and nothing else. An out: answer ("Summe")
-    # and an unstated coordinate serialize alike, and minted apart they were
-    # two nodes for one fact, the second a silent double count (owner
-    # decision 2026-09-23; the formula is mint_slice.py's and moves with it).
-    # The area names the node only where it IS the identity. For a sub-area
-    # it is: one plan carries four separate gas tables, one per heat-network
-    # area, and without the name they collide onto one node and the conflict
-    # guard drops all four. For the whole plan area it is not, and putting it
-    # in there splits one fact into as many nodes as the document has words
-    # for the place. Measured over 20 plans: Bad Segeberg states its 2,272 t
-    # of 2040 on pages 71, 72 and 73 as "Waermesektor", "Projektgebiet" and
-    # "Stadtgebiet", and became three indistinguishable nodes. 129 of 1,294
-    # nodes were repeats of that shape.
-    area = (normalise(row.get("spatial_scope_raw") or "")
-            if row.get("spatial_scope") == "sub_area" else "")
-    carrier, sector = written(row, "carrier"), written(row, "sector")
-    technology = row.get("technology")
-    coordinates = "|".join([
-        heatplan,
-        f"{OEO}{row['quantity']}",
-        f"{OEO}{carrier}" if is_class(carrier) else "",
-        f"{OEO}{sector}" if is_class(sector) else "",
-        str(row["year"]),
-        f"{OEO}{row['aggregation']}" if row.get("aggregation") else "",
-        area,
-    # The technology only where one was read, so every value without one
-    # keeps the IRI it had before the axis existed.
-    ] + ([f"{OEO}{technology}"] if is_class(technology) else [])
-      + ([label] if label else []))
-    return mint("value", coordinates)
-
-
-# How far apart two readings of one number may lie and still be one rounded
-# statement of it: "rund 1,6 Mio. MWh" beside a table's 1.626.000. corpus_m5
-# dropped both sides of 642 such identities. The rule `rounding_tolerance`,
-# read where it is used, as `compute.same_number` reads it. And the rule
-# `contested_in_full`: whether a number still contested after wording,
-# rounding and trust stays in the full graph as a node of its own (owner
-# decision 2026-11-02).
-_RANK = {level: rank for rank, level in enumerate(LEVELS)}
-
-
-def _precision(row: dict) -> int:
-    """Significant digits of the number as the plan printed it."""
-    printed = (row.get("value") if row.get("value") is not None
-               else row.get("value_target"))
-    try:
-        digits = re.sub(r"[^0-9]", "", format(float(printed), "f"))
-    except (TypeError, ValueError):
-        digits = re.sub(r"[^0-9]", "", str(printed))
-    return len(digits.strip("0")) or len(digits)
-
-
-def wording_key(row: dict) -> str:
-    """The plan's words for what tells two numbers on one identity apart: the
-    number's own subject, the whole a share is part of, and the two
-    coordinates that fold onto one class. Two numbers of one table row are
-    told apart by the coordinates each was read with (owner decision
-    2026-11-07: no head of a column).
-
-    "Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
-    OEO_00000405 and are not one number, and neither are "Bis 1918" and
-    "Unbekannt" in one column of a table; the wording is what tells them
-    apart, and it is what the node is named by when they collide.
-    """
-    return " / ".join(str(row.get(key) or "").strip()
-                      for key in ("subject", "whole", "carrier_raw",
-                                  "sector_raw")
-                      ).strip(" /")
-
-
-def place(row: dict) -> tuple:
-    """The passage a row was read from, where the plan prints its number."""
-    provenance = row.get("provenance") or {}
-    return provenance.get("owner_kind"), provenance.get("owner_id")
-
-
-def settle(iri: str, rows: list, part: str, *,
-           transcribed: bool = False, keep_open: bool = False) -> tuple:
-    """({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
-
-    One number several times is one node, marked as confirmed where a second
-    passage prints it: one passage read twice is one statement, whatever its
-    quotes (owner decision 2026-11-05). Different
-    numbers are settled in this order (owner decision 2026-09-23): the plan's
-    different wording splits them into a node each, named by that wording; a
-    rounded statement of the other loses to the more precise one; a lower
-    trust grade loses to the higher; and what is left is a question for a
-    human. With *keep_open* each of those stays as a node of its own, marked
-    as contested (owner decision 2026-11-02: 13,015 tuples of 100 plans left
-    the graph here, most of them different rows of one table); without it,
-    as for the strict graph, nothing stays. Every winner says in its comment
-    what it won over, so a curator can still audit the pick. The counts are
-    per tuple that left the graph: a repeat of the winner is a `duplicate`, a
-    repeat of a loser is one too, and the losers are `conflict:<rule>`.
-    `conflict:open` counts nodes kept, not tuples lost.
-    """
-    kept: dict = {}
-    skipped: Counter = Counter()
-    marks: dict = {}
-    targets = {r["value_target"] for r in rows}
-    by_wording: dict = {}
-    for row in rows:
-        by_wording.setdefault(normalise(wording_key(row)), []).append(row)
-    if len(targets) > 1 and len(by_wording) > 1:
-        for key, group in by_wording.items():
-            label = wording_key(group[0])
-            sub_iri = _value_iri(part, group[0], label=key)
-            got, lost, named = settle(sub_iri, group, part,
-                                      transcribed=transcribed,
-                                      keep_open=keep_open)
-            kept.update(got)
-            skipped.update(lost)
-            for node in got:
-                marks[node] = dict(named.get(node, {}), named=label)
-        skipped["split:wording"] += 1
-        return kept, skipped, marks
-    claims: dict = {}
-    for row in rows:
-        claims.setdefault(row["value_target"], []).append(row)
-    skipped["duplicate"] += len(rows) - len(claims)
-
-    def keep(row: dict, **mark) -> None:
-        kept[iri] = row
-        if len({place(other) for other in claims[row["value_target"]]}) > 1:
-            mark["corroborated"] = True
-        if mark:
-            marks[iri] = mark
-
-    if len(claims) == 1:
-        keep(rows[0])
-        return kept, skipped, marks
-    distinct = [group[0] for group in claims.values()]
-    low, high = min(claims), max(claims)
-    if high and (high - low) / abs(high) \
-            <= graphfile.get("rounding_tolerance", "kwp"):
-        best = max(_precision(r) for r in distinct)
-        top = [r for r in distinct if _precision(r) == best]
-        if len(top) == 1:
-            keep(top[0], resolved="rounding")
-            skipped["conflict:rounding"] += len(distinct) - 1
-            return kept, skipped, marks
-    graded = [(_RANK[trust(r, transcribed=transcribed)["level"]], i, r)
-              for i, r in enumerate(distinct)]
-    best_rank = min(g[0] for g in graded)
-    winners = [g for g in graded if g[0] == best_rank]
-    if len(winners) == 1:
-        keep(winners[0][2], resolved="trust")
-        skipped["conflict:trust"] += len(distinct) - 1
-        return kept, skipped, marks
-    if keep_open:
-        for row in distinct:
-            node = _value_iri(part, row, label="|".join((
-                wording_key(row), normalise(row.get("quote") or ""),
-                str(row["value_target"]))))
-            kept[node] = row
-            marks[node] = {"conflict": True}
-        skipped["conflict:open"] += len(distinct)
-        return kept, skipped, marks
-    skipped["conflict"] += len(distinct)
-    return kept, skipped, marks
-
-
-# The words of the trust line; the marks and their order are the core's
-# (docpipe.extraction.trust.MARKS). English, the project's own language: the
-# corpus the graph is read from is German, but German stays only in what the
-# model reads or writes, and a Turtle comment is neither.
-TRUST_PROSE = check_prose({
-    "level": "Trust: {level}",
-    "image_origin": "from an image",
-    "image_origin_named": "from an image ({image})",
-    "corroborated": "confirmed by a second reading",
-    "reasons": "{reasons}",
-    "review": "review recommended",
-}, "profiles/kwp/kg.py TRUST_PROSE")
-TRUST_JOIN = " · "
-
-
-# A plan's own name for a sub-area is printed as the plan quotes it, and
-# corpus_m5 wrote 18 labels like "Eignungsgebiet "Bad Dürrheim Nord"" that
-# stop every Turtle parser: a label goes through `ttl_escape`, a comment
-# through `ttl_comment`.
-
-
-# Short English labels for the two coordinates that mint no OEO class of
-# their own -- the scenario part and the whole-municipality scope -- and for
-# an axis' `out:` entries, which are deliberate non-classes and so hold no
-# vocabulary.json label either. The spec's own label for each of these is
-# worded for the model's prompt and stays German on purpose (`extraction_spec
-# .json`'s own `label`); this is the short table for the one place a reader
-# of the GRAPH sees them.
+# Short English labels for the two coordinates that make no OEO class of
+# their own -- the plan part and the whole municipality -- and for an axis'
+# `out:` entries, which hold no vocabulary label either. The spec's own
+# labels are worded for the model's prompt and stay German on purpose.
 SCENARIO_LABEL_EN = {"status_quo": "baseline inventory",
                      "trend": "trend scenario", "target": "target scenario"}
 OUT_LABEL_EN = {
@@ -842,15 +302,8 @@ OUT_LABEL_EN = {
 
 
 def _english_label(uri) -> str:
-    """A coordinate's value in English: the pinned vocabulary's own label for
-    a real OEO class, the short label above for a deliberate non-class, or
-    the bare identifier when neither table holds it.
-
-    Not `label_of`, below: that one gives a reader of the ANSWER APP the
-    spec's own first spelling, German, because the corpus is German and so
-    is that reader. This is for a Turtle comment, whose reader reads the
-    project's other language.
-    """
+    """A coordinate's value in English: the pinned vocabulary's label for a
+    real OEO class, the short label above for a deliberate non-class."""
     if not uri:
         return ""
     if is_class(uri):
@@ -860,23 +313,14 @@ def _english_label(uri) -> str:
     return OUT_LABEL_EN.get(uri, _bare(uri))
 
 
-def evidence_comment(row: dict, document: str, *,
-                     transcribed: bool = False,
-                     conflict: bool = False,
+def evidence_comment(row: dict, document: str, prose: dict, join: str, *,
+                     transcribed: bool = False, conflict: bool = False,
                      corroborated: bool = False,
                      resolved: Optional[str] = None,
                      named: Optional[str] = None) -> list:
-    """Where this value was read, as comment lines above its node.
-
-    The prototype's evidence: the wording the document used, the passage it
-    was read in, and the page it stands on. A comment rather than triples
-    because the shapes are sh:closed and an extra triple on a value node
-    invalidates it.
-    """
-    # How much of this value the run can stand behind, in the one place a
-    # reader of the graph looks. Every accepted tuple is verified, and that
-    # is a floor and not a grade: the level adds what else is known, an
-    # image origin, a computed number, a contested identity.
+    """Where this value was read, as comment lines above its node: the
+    coordinates in English, the passage, the page, how it was aggregated,
+    what was computed, and how far the run stands behind it."""
     verdict = trust(row, transcribed=transcribed, conflict=conflict,
                     corroborated=corroborated)
     prov = row.get("provenance") or {}
@@ -886,19 +330,19 @@ def evidence_comment(row: dict, document: str, *,
     kind = {"section": "section", "table": "table",
             "figure": "figure"}.get(prov.get("owner_kind"))
     if kind:
-        where.append(kind + (f' "{prov["title"]}"' if prov.get("title") else ""))
-    # The row's own coordinates, in English: the class the model chose, not
-    # the document's raw wording, which stays German because the plan does.
-    # A named sub-area is the one exception -- its own name is the reading,
-    # not a spec label, and it stays exactly as the plan spells it.
-    scope = ("whole municipality" if row.get("spatial_scope") == "municipality"
+        where.append(kind + (f' "{prov["title"]}"' if prov.get("title")
+                             else ""))
+    scope = ("whole municipality"
+             if row.get("spatial_scope") == "municipality"
              else (row.get("spatial_scope_raw") or "").strip() or "sub-area")
     what = [_english_label(row.get("quantity")),
-           SCENARIO_LABEL_EN.get(row.get("scenario"), row.get("scenario") or ""),
-           scope,
-           _english_label(row.get("carrier")),
-           _english_label(row.get("sector"))]
-    lines = [ttl_comment(" · ".join(x for x in what if x))] if any(what) else []
+            SCENARIO_LABEL_EN.get(row.get("scenario"),
+                                  row.get("scenario") or ""),
+            scope,
+            _english_label(row.get("carrier")),
+            _english_label(row.get("sector"))]
+    lines = [ttl_comment(" · ".join(x for x in what if x))] if any(what) \
+        else []
     if row.get("quote"):
         lines.append(ttl_comment(f'"{row["quote"]}"'))
     elif row.get("reading"):
@@ -908,11 +352,6 @@ def evidence_comment(row: dict, document: str, *,
     lines.append(ttl_comment(", ".join(where)))
     aggregation = row.get("aggregation")
     if aggregation:
-        # How this coordinate was arrived at, in the one place a reader of the
-        # graph looks. `derived` is not a weaker reading than `read`, it is a
-        # different one: the spec decided it from the unit the value request
-        # had already quoted, and saying so is the difference between a fact
-        # and a default.
         raw = (row.get("aggregation_raw") or "").strip()
         if row.get("aggregation_state") == DERIVED:
             note = f"Aggregation: {aggregation}"
@@ -921,27 +360,21 @@ def evidence_comment(row: dict, document: str, *,
         elif raw:
             lines.append(ttl_comment(f'Aggregation: {aggregation} "{raw}"'))
     if row.get("compute"):
-        # A value the sandbox computed carries the code and its inputs, so the
-        # arithmetic is checkable without re-running anything.
         lines.append(ttl_comment(f"computed: {row['compute']}"))
     if row.get("flags"):
         lines.append(ttl_comment("Flags: " + ", ".join(row["flags"])))
     if named:
-        # Split off another reading of the same coordinates by the plan's
-        # own words for them; the words are what makes this node this node.
         lines.append(ttl_comment(f'Named by the plan\'s wording: "{named}"'))
     if resolved:
         lines.append(ttl_comment(
             {"rounding": "Kept over a rounded reading of the same number",
              "trust": "Kept over a reading of the same coordinates with a "
                       "lower trust level"}[resolved]))
-    lines.append(ttl_comment(render(verdict, TRUST_PROSE,
-                                    join=TRUST_JOIN, row=row)))
+    lines.append(ttl_comment(render(verdict, prose, join=join, row=row)))
     return lines
 
 
 def _class_iri(identifier) -> Optional[str]:
-    """The IRI of a class the graph writes, or None for what is no class."""
     if not identifier or not is_class(identifier):
         return None
     try:
@@ -950,321 +383,264 @@ def _class_iri(identifier) -> Optional[str]:
         return None
 
 
-def make_strict_serializer(db_path: Path):
-    """The graph as the MHPKG schema's shapes take it (`strict_refusal`),
-    written beside the full one as `<graph>.strict.ttl`."""
-    return make_serializer(db_path, strict=True)
+# -- the bricks ------------------------------------------------------------------
+
+def _register(call: Call):
+    doc = call.doc
+    identity = document_identity(doc.writer.db_path, doc.name)
+    if identity is None:
+        log.warning("graph: %s: no AGS or publication date -- %d tuple(s) "
+                    "not written", doc.name,
+                    sum(len(rows) for rows in doc.admitted.values()))
+        return None
+    return facts_of(identity)
 
 
-def make_serializer(db_path: Path, strict: bool = False):
-    """(document name, accepted tuple rows) -> TTL string or None.
-
-    What was written for a document is left in `serializer.claims[name]`:
-    the plan's node, and for every value its node, its row and the node or
-    class each coordinate became. The provenance file is written from that.
-
-    *strict* writes only what the schema's shapes take, and types a value
-    whose class falls under a schema value class with that class as well.
-    """
-    header_pending = [True]
-    # (ags, published) -> document name. Value IRIs are pure functions of
-    # these coordinates, so two documents claiming one identity would merge
-    # their numbers onto shared nodes — e.g. a stale JSONL left behind by a
-    # register-link rename. The first claimant wins, the rest are refused
-    # whole, loudly.
-    claimed: dict = {}
-    # Organisation IRIs whose node this run has already written. The IRI is
-    # minted over the normalised name, so plans spelling one office
-    # differently share the node, and each writing its own label gave it
-    # several: 12 of 196 in corpus_m5 ("EGS-Plan", "EGS-plan", "egs-plan"),
-    # where the schema's shape allows one. The node is written once, with the
-    # first spelling in harvest order, which serialize.collect keeps sorted.
-    labelled: set = set()
-
-    def serializer(name: str, rows: list):
-        skipped: dict = {}
-        outside_root: dict = {}
-
-        def skip(reason: str, n: int = 1) -> None:
-            skipped[reason] = skipped.get(reason, 0) + n
-
-        offices: dict = {}
-        # The plan's own municipality as the body that made it. The MHPKG
-        # schema: "A municipality acting as planning authority is NOT a
-        # second entity", so it is the municipality node and is not minted.
-        by_municipality = False
-        kept = []
-        for row in rows:
-            if row.get("parameter") == ORGANISATION:
-                label = row.get("value")
-                if row.get(ROLE) == "municipality":
-                    by_municipality = True
-                elif isinstance(label, str) and normalise(label):
-                    offices.setdefault(normalise(label), display_name(label))
-                continue
-            # Which OEO class this number is, the model chose from the class
-            # list with the ontology's own definitions in front of it. What it
-            # could not place keeps its wording and is counted, instead of
-            # being guessed at from a table of German spellings.
-            quantity = row.get("quantity")
-            scope = row.get("spatial_scope")
-            area = (row.get("spatial_scope_raw") or "").strip()
-            if quantity not in QUANTITIES:
-                # The model chose one of the classes the graph does not take
-                # -- a potential, a cumulative sum, a captured amount.
-                # Counted by what it chose, which is the useful thing to
-                # read. FIRST: a row the gate closed on its quantity never
-                # had its scenario asked, and counted under the scenario it
-                # was "scenario_unread" -- 37,333 of corpus_m5's 42,882, a
-                # gate decision reported as a reading failure.
-                skip(f"not_a_class:{quantity or row.get('quantity_raw') or '?'}")
-            elif row.get("scenario") not in PARTS:
-                # A scenario nobody read is not the same finding as one the
-                # graph has no node for, and counting them together hid the
-                # first: a row with no scenario at all is a coordinate the
-                # sweep never closed, and it is the sweep that has to answer
-                # for it.
-                skip("scenario_unread" if not row.get("scenario")
-                     else f"scenario:{row['scenario']}")
-            elif scope is not None and scope not in ("municipality",
-                                                     "sub_area"):
-                # The schema relates no value to an area, so a value whose
-                # area the plan does not say is kept in the full graph (owner
-                # decision 2026-11-07, no more than ontology and graph
-                # demand); the strict graph keeps the municipality's alone.
-                skip("spatial_scope")
-            elif scope == "sub_area" and not area:
-                # Two unnamed sub-areas are one node and one is silently lost.
-                skip("sub_area_unnamed")
-            elif not isinstance(row.get("year"), int):
-                skip("year")
-            # A number whose unit no list holds has no converted value, and
-            # one converted onto a unit the ontology does not have has no
-            # unit to be written in: both stay in the harvest with their
-            # wording (owner decisions 2026-11-07).
-            elif row.get("value_target") is None:
-                skip(f"unit_unlisted:{row.get('unit_raw') or '?'}")
-            elif unit_of(row) is None:
-                skip(f"unit_not_in_ontology:{target_of(row)}")
-            # A value without an aggregation is written without that edge:
-            # neither the ontology nor the full graph demands one, and the
-            # strict graph refuses it where the schema's class requires it
-            # (`strict_refusal`, missing:has_aggregation_type). It is never
-            # set to a year's sum by default, which would be a claim nothing
-            # in the document made (owner decision 2026-11-07).
-            elif row.get("aggregation") \
-                    and row["aggregation"] not in AGGREGATIONS:
-                skip(f"aggregation:{row['aggregation']}")
-            elif strict and strict_refusal(row):
-                skip(f"mhpkg:{strict_refusal(row)}")
-            else:
-                kept.append(row)
-        if not kept:
-            if skipped:
-                log.info("kg: %s: nothing serializable (skipped %s)", name, skipped)
-            return None
-
-        identity = _document_identity(db_path, name)
-        if identity is None:
-            log.warning("kg: %s: no AGS or publication date — %d tuple(s) "
-                        "not serialized", name, len(kept))
-            return None
-        ags, published, municipality, transcribed = identity
-        owner = claimed.setdefault((ags, published), name)
-        if owner != name:
-            log.error("kg: %s claims AGS %s / %s already serialized for %s — "
-                      "%d tuple(s) refused (stale duplicate harvest?)",
-                      name, ags, published, owner, len(kept))
-            return None
-        heatplan = plan_iri(ags, published)
-        part_iri = {key: f"{BASE}{segment}/AGS_{ags}_{published}"
-                    for key, (_cls, segment, _label) in PARTS.items()}
-        municipality_iri = f"{BASE}municipality/AGS_{ags}"
-        place = ttl_escape(municipality or f"AGS {ags}")
-
-        # Every row that minted one identity, settled together (`settle`):
-        # a repeat is one node marked as read twice, and different numbers
-        # are told apart by the plan's wording, by rounding, or by trust
-        # before they are a question for a human. What leaves the graph is
-        # counted per tuple: counting only the second claimant once made
-        # every report short by one per contested identity (Kassel: 217
-        # counted where 317 tuples were lost across 100 identities).
-        claims: dict = {}
-        for row in kept:
-            claims.setdefault(_value_iri(part_iri[row["scenario"]], row),
-                              []).append(row)
-        values: dict = {}
-        marks: dict = {}
-        for iri, rows_of in claims.items():
-            got, lost, named = settle(iri, rows_of, part_iri[rows_of[0]["scenario"]],
-                                      transcribed=bool(transcribed),
-                                      keep_open=(not strict
-                                                 and graphfile.get(
-                                                     "contested_in_full",
-                                                     "kwp")))
-            values.update(got)
-            marks.update(named)
-            for reason, n in lost.items():
-                skip(reason, n)
-        if not values:
-            log.info("kg: %s: nothing serializable (skipped %s)", name, skipped)
-            return None
-        if strict and not any(r["scenario"] == "target"
-                              for r in values.values()):
-            # The schema's plan has exactly one target scenario, and one
-            # that holds no value is a part the shapes refuse as well.
-            log.info("kg: %s: no target-scenario value, the plan is left "
-                     "out of the strict graph (%d value(s))", name,
-                     len(values))
-            return None
-        if skipped:
-            log.info("kg: %s: %d value(s) serialized, skipped %s",
-                     name, len(values), dict(skipped))
-
-        # The commissioned planning office, minted over the normalised name:
-        # "Kassel Wärme Ingenieurbüro GmbH" and the same spelling without its
-        # legal form mint one node, not two.
-        office_iris = {mint("organisation", key): label
-                       for key, label in offices.items()}
-        areas = {normalise(r["spatial_scope_raw"]): r["spatial_scope_raw"].strip()
-                 for r in values.values()
-                 if r.get("spatial_scope") == "sub_area"
-                 and (r.get("spatial_scope_raw") or "").strip()}
-        # Which parts this plan really has. A node for a part with no
-        # value in it would be an empty claim, and a has-part edge to it
-        # a wrong one: the plan does not stop having an inventory because
-        # we could not read one, but the graph must not say we read it.
-        by_part: dict = {}
-        for iri, row in values.items():
-            by_part.setdefault(row["scenario"], {})[iri] = row
-        part_refs = " ,\n        ".join(
-            f"<{part_iri[key]}>" for key in PARTS if key in by_part)
-
-        office_edge = ""
-        makers = list(office_iris) + ([municipality_iri] if by_municipality
-                                      else [])
-        if makers:
-            refs = " ,\n        ".join(f"<{i}>" for i in makers)
-            office_edge = f"\n    {P_ORGANISATION} {refs} ;"
-
-        parts = []
-        if header_pending[0]:
-            header_pending[0] = False
-            parts.append(PREFIXES)
-        parts.append(f"""\
-<{heatplan}>
-    a {CLS_HEATPLAN} ;
-    rdfs:label "Kommunale Wärmeplanung {place} {published[:4]}" ;
-    {P_PUBLICATION_DATE} "{published}"^^xsd:date ;{office_edge}
-    {P_HAS_PART} {part_refs} .
-""")
-        for key in PARTS:
-            if key not in by_part:
-                continue
-            cls, _segment, label = PARTS[key]
-            value_refs = " ,\n        ".join(
-                f"<{iri}>" for iri in by_part[key])
-            parts.append(f"""\
-<{part_iri[key]}>
-    a {cls} ;
-    rdfs:label "{label} {place} {published[:4]}" ;
-    {P_HAS_QUANTITY_VALUE} {value_refs} .
-""")
-        for iri, row in values.items():
-            lines = evidence_comment(row, name, transcribed=bool(transcribed),
-                                     **marks.get(iri, {}))
-            typed = typed_as(row, schema_class_of(row) if strict else None)
-            lines += [f"<{iri}>",
-                      f"    a {typed} ;",
-                     f"    {P_NUMBER} \"{float(row['value_target'])!r}\"^^xsd:float ;",
-                     f"    {P_UNIT} {qualified(unit_of(row))} ;"]
-            carrier = written(row, "carrier")
-            if carrier and is_class(carrier):
-                if carrier in CARRIER_OUTSIDE_ROOT:
-                    # Counted, not dropped: the count is what argues for the
-                    # axioms that would let them be called carriers.
-                    label = CARRIER_OUTSIDE_ROOT[carrier]
-                    outside_root[label] = outside_root.get(label, 0) + 1
-                lines.append(f"    {P_CARRIER} oeo:{carrier} ;")
-            sector = written(row, "sector")
-            if sector and is_class(sector):
-                lines.append(f"    {P_SECTOR} oeo:{sector} ;")
-            technology = row.get("technology")
-            if technology and is_class(technology):
-                lines.append(f"    {P_TECHNOLOGY} oeo:{technology} ;")
-            lines.append(f"    {P_YEAR} \"{int(row['year'])}\"^^xsd:integer ;")
-            if row.get("aggregation"):
-                lines.append(f"    {P_AGGREGATION} oeo:{row['aggregation']} ;")
-            lines[-1] = lines[-1][:-1] + "."
-            parts.append("\n".join(lines) + "\n")
-        if outside_root:
-            log.info("kg: %s: %d value(s) keep a carrier OEO does not call a "
-                     "carrier, serialized and counted: %s", name,
-                     sum(outside_root.values()), dict(outside_root))
-        for iri, label in office_iris.items():
-            if iri in labelled:
-                continue
-            labelled.add(iri)
-            parts.append(f"<{iri}>\n"
-                         f"    a {CLS_ORGANISATION} ;\n"
-                         f"    rdfs:label \"{ttl_escape(label)}\" .\n")
-        # Sub-areas exist as nodes and are part of the municipality area. What
-        # is missing is the edge from a VALUE to the area it holds for: the
-        # schema has no slot for it, and its TERM REQUEST 1 asks for a
-        # different edge, from the plan to the area it plans. So the area is
-        # in the value's identity and in its comment. OEO's `has spatial
-        # region` (OEO_00010378) would fit and is a question to the schema
-        # side.
-        for key, label in sorted(areas.items()):
-            parts.append(f"<{mint('heatplanarea', f'{ags}|{key}')}>\n"
-                         f"    a {CLS_PLAN_AREA} ;\n"
-                         f"    rdfs:label \"{ttl_escape(label)}\" ;\n"
-                         f"    {P_PART_OF} <{municipality_iri}> .\n")
-        parts.append(f"""\
-<{municipality_iri}>
-    a {CLS_MUNICIPALITY} ;
-    rdfs:label "Gemeindegebiet {place}" .
-""")
-        names = dict(zip(map(id, rows), tuple_ids(name, rows)))
-
-        def bodies(row: dict) -> dict:
-            area = municipality_iri
-            if row.get("spatial_scope") == "sub_area":
-                key = normalise(row["spatial_scope_raw"])
-                area = mint("heatplanarea", f"{ags}|{key}")
-            found = {"quantity": _class_iri(row.get("quantity")),
-                     "carrier": _class_iri(written(row, "carrier")),
-                     "sector": _class_iri(written(row, "sector")),
-                     "technology": _class_iri(row.get("technology")),
-                     "aggregation": _class_iri(row.get("aggregation")),
-                     "scenario": part_iri[row["scenario"]],
-                     "spatial_scope": area}
-            return {axis: iri for axis, iri in found.items() if iri}
-
-        serializer.claims[name] = {
-            "document": heatplan, "transcribed": bool(transcribed),
-            "values": [{"about": iri, "row": row, "id": names.get(id(row)),
-                        "bodies": bodies(row)}
-                       for iri, row in values.items()]}
-        return "\n".join(parts)
-
-    serializer.claims = {}
-    return serializer
+def _quantity_listed(call: Call) -> Optional[str]:
+    quantity = call.row.get("quantity")
+    if quantity in QUANTITIES:
+        return None
+    return f"not_a_class:{quantity or call.row.get('quantity_raw') or '?'}"
 
 
-# --- Asking the graph -------------------------------------------------------
+def _part_known(call: Call) -> Optional[str]:
+    table = call.doc.writer.drawing.box[call.settings.get("box", "part")] \
+        .get("table") or {}
+    scenario = call.row.get("scenario")
+    if scenario in table:
+        return None
+    return "scenario_unread" if not scenario else f"scenario:{scenario}"
+
+
+def _scope_listed(call: Call) -> Optional[str]:
+    scope = call.row.get("spatial_scope")
+    if scope is not None and scope not in (call.settings.get("entries")
+                                           or ()):
+        return "spatial_scope"
+    return None
+
+
+def _sub_area_named(call: Call) -> Optional[str]:
+    if call.row.get("spatial_scope") == "sub_area" \
+            and not (call.row.get("spatial_scope_raw") or "").strip():
+        return "sub_area_unnamed"
+    return None
+
+
+def _year_read(call: Call) -> Optional[str]:
+    return None if isinstance(call.row.get("year"), int) else "year"
+
+
+def _unit_listed(call: Call) -> Optional[str]:
+    if call.row.get("value_target") is None:
+        return f"unit_unlisted:{call.row.get('unit_raw') or '?'}"
+    return None
+
+
+def _unit_in_ontology(call: Call) -> Optional[str]:
+    if unit_of(call.row) is None:
+        return f"unit_not_in_ontology:{target_of(call.row)}"
+    return None
+
+
+def _aggregation_listed(call: Call) -> Optional[str]:
+    aggregation = call.row.get("aggregation")
+    if aggregation and aggregation not in AGGREGATIONS:
+        return f"aggregation:{aggregation}"
+    return None
+
+
+def _schema_admits(call: Call) -> Optional[str]:
+    drawing = call.doc.writer.drawing
+    part = call.settings.get("part", "part")
+    why = strict_refusal(call.row, drawing.box[part].get("table") or {},
+                         totals(drawing.raw, call.settings.get("box",
+                                                               "value")))
+    return f"mhpkg:{why}" if why else None
+
+
+def _identity(call: Call) -> str:
+    """mint_slice.py's coordinate list; absent coordinates are empty
+    segments so the arity never varies. A carrier or sector names the node
+    only where it gets an edge; the area only for a sub-area, where it is
+    the identity; the technology only where one was read, so every value
+    without one keeps the IRI it had before the axis existed; *label* only
+    for a node split off by its wording."""
+    doc, row = call.doc, call.row
+    total = totals(doc.writer.drawing.raw, call.settings.get("box", "value"))
+    part = doc.address_of_answer(call.settings.get("part", "part"),
+                                 row["scenario"])
+    area = (doc.fold(row.get("spatial_scope_raw") or "")
+            if row.get("spatial_scope") == "sub_area" else "")
+    carrier = written(row, "carrier", total)
+    sector = written(row, "sector", total)
+    technology = row.get("technology")
+    coordinates = "|".join([
+        part,
+        f"{OEO}{row['quantity']}",
+        f"{OEO}{carrier}" if is_class(carrier) else "",
+        f"{OEO}{sector}" if is_class(sector) else "",
+        str(row["year"]),
+        f"{OEO}{row['aggregation']}" if row.get("aggregation") else "",
+        area,
+    ] + ([f"{OEO}{technology}"] if is_class(technology) else [])
+      + ([call.label] if call.label else []))
+    return doc.mint("value", "value", coordinates)
+
+
+def _value_class(call: Call) -> str:
+    row = call.node.row
+    typed = qualified(row[call.settings.get("coordinate", "quantity")])
+    if not call.doc.strict:
+        return typed
+    part = call.doc.writer.drawing.box[call.settings.get("part", "part")]
+    schema = schema_class_of(row, part.get("table") or {})
+    if schema and SHAPE.cls(schema) != typed:
+        # A CO2-equivalent value IS a greenhouse gas emission value; a shape
+        # without a reasoner only sees the class written.
+        typed += f", {SHAPE.cls(schema)}"
+    return typed
+
+
+def _unit(call: Call) -> list:
+    unit = unit_of(call.row)
+    if unit is None:
+        return []
+    return [(qualified(unit), expand(qualified(unit)))]
+
+
+def _passage(call: Call) -> list:
+    node = call.node
+    prose = call.settings.get("prose") or {}
+    return evidence_comment(node.row, call.doc.name, prose,
+                            call.settings.get("join") or " · ",
+                            transcribed=call.doc.transcribed,
+                            **(node.data.get("marks") or {}))
+
+
+def _bodies(call: Call) -> dict:
+    doc, row = call.doc, call.node.row
+    said = call.settings
+    total = totals(doc.writer.drawing.raw, said.get("box", "value"))
+    whole = (doc.nodes.get(said.get("whole", "municipality")) or [None])[0]
+    area = whole.iri if whole else None
+    if row.get("spatial_scope") == "sub_area":
+        node = doc.node_of(said.get("area", "area"),
+                           doc.fold(row["spatial_scope_raw"]))
+        area = node.iri if node else area
+    found = {"quantity": _class_iri(row.get("quantity")),
+             "carrier": _class_iri(written(row, "carrier", total)),
+             "sector": _class_iri(written(row, "sector", total)),
+             "technology": _class_iri(row.get("technology")),
+             "aggregation": _class_iri(row.get("aggregation")),
+             "scenario": doc.address_of_answer(said.get("part", "part"),
+                                               row["scenario"]),
+             "spatial_scope": area}
+    return {axis: iri for axis, iri in found.items() if iri}
+
+
+_CONDITION = ("a reading", "a reason")
+BRICKS = (
+    Brick("plan_register", "facts",
+          "Looks the plan up in the register: its AGS, its publication "
+          "date and its municipality ({ags}, {published}, {year}, "
+          "{place}); a plan without AGS or date is not written.",
+          "a document", "facts", _register),
+    Brick("quantity_listed", "condition",
+          "Takes a number only where its class is one of the classes the "
+          "graph takes (no out: answer).", *_CONDITION, _quantity_listed),
+    Brick("part_known", "condition",
+          "Takes a number only where its scenario is an answer of the table "
+          "of plan parts.", *_CONDITION, _part_known,
+          (Setting("box", "text", "the box of the plan parts", "part"),)),
+    Brick("scope_listed", "condition",
+          "Takes a number only where its area, where one was read, is one "
+          "of the entries.", *_CONDITION, _scope_listed,
+          (Setting("entries", "texts", "the areas the graph takes"),)),
+    Brick("sub_area_named", "condition",
+          "Takes a number of a sub-area only where the plan names the "
+          "sub-area.", *_CONDITION, _sub_area_named),
+    Brick("year_read", "condition",
+          "Takes a number only where its year was read.", *_CONDITION,
+          _year_read),
+    Brick("unit_listed", "condition",
+          "Takes a number only where its unit is listed and it was "
+          "converted.", *_CONDITION, _unit_listed),
+    Brick("unit_in_ontology", "condition",
+          "Takes a number only where the unit it was converted onto is an "
+          "ontology term.", *_CONDITION, _unit_in_ontology),
+    Brick("aggregation_listed", "condition",
+          "Takes a number only where its aggregation, where one was read, "
+          "is listed.", *_CONDITION, _aggregation_listed),
+    Brick("schema_admits", "condition",
+          "Takes a number only where the MHPKG schema's shapes take it: a "
+          "value class its part holds, every required slot, every answer "
+          "from the schema's closed lists.", *_CONDITION, _schema_admits,
+          (Setting("part", "text", "the box of the plan parts", "part"),
+           Setting("box", "text", "the box of the numbers", "value"))),
+    Brick("value_identity", "address",
+          "Makes a number's address from the IRI policy's dimensions: plan "
+          "part, class, carrier, sector, year, aggregation, sub-area and "
+          "technology, and the plan's words where they split it.",
+          "a reading", "an address", _identity,
+          (Setting("part", "text", "the box of the plan parts", "part"),
+           Setting("box", "text", "the box of the numbers", "value"))),
+    Brick("value_class", "class",
+          "Writes a number as the class its quantity was read as, and in "
+          "the strict graph also as the schema's value class above it.",
+          "a number", "classes", _value_class,
+          (Setting("part", "text", "the box of the plan parts", "part"),
+           Setting("coordinate", "text", "the dimension whose answer is "
+                   "the class", "quantity"))),
+    Brick("value_unit", "object",
+          "Writes the unit the number was converted onto.", "a number",
+          "a unit", _unit, writes="key:unit_target"),
+    Brick("value_passage", "evidence",
+          "Writes above a number its dimensions in English, the passage, "
+          "the page, how it was aggregated or computed and its trust "
+          "level.", "a number", "comment lines", _passage,
+          (Setting("prose", "prose", "the words of the trust line"),
+           Setting("join", "text", "what joins its pieces", " · "))),
+    Brick("value_bodies", "claims",
+          "Records for the provenance file the node or class each "
+          "dimension of a number became.", "a number", "dimensions",
+          _bodies,
+          (Setting("part", "text", "the box of the plan parts", "part"),
+           Setting("area", "text", "the box of the sub-areas", "area"),
+           Setting("whole", "text", "the box of the municipality",
+                   "municipality"),
+           Setting("box", "text", "the box of the numbers", "value"))),
+)
+
+
+# -- asking the graph ------------------------------------------------------------
 #
 # The coordinates a question can fix, in the order the spec asks them. Two
-# real axes are deliberately absent. `spatial_scope` enters a value's identity,
-# but the graph has no edge from a value to its area (the schema has no slot
-# for one), so there is nothing to filter on: a sub-area value and the
-# municipality's come back in one list. `aggregation` is returned rather than
-# constrained, so a peak load and an annual total sit in one list with the
-# label telling them apart.
+# real axes are deliberately absent: `spatial_scope` has no edge from a
+# value (the schema has no slot for one), and `aggregation` is returned
+# rather than constrained.
 COORDINATE_AXES = ("scenario", "quantity", "carrier", "sector", "year")
 
-# The query, over the same constants the serializer writes with, so the two
-# cannot drift: the schema's slots, the year an integer literal.
+_VALUE = _box("value")
+# The trust words of the comment above a number, for the answer app.
+TRUST_PROSE = check_prose(dict((_VALUE.get("evidence") or {}).get(
+    "settings", {}).get("prose") or {}), "graph.json map, value evidence")
+TRUST_JOIN = (_VALUE.get("evidence") or {}).get("settings", {}).get(
+    "join") or " · "
+PARTS = {key: (entry.get("class"), entry.get("folder"), entry.get("label"))
+         for key, entry in (_box("part").get("table") or {}).items()}
+P_HAS_PART = _arrow("plan", "part")["property"]
+P_HAS_QUANTITY_VALUE = _arrow("part", "value")["property"]
+P_NUMBER = _arrow("value_target", "value")["property"]
+P_UNIT = _arrow("unit_target", "value")["property"]
+P_CARRIER = _arrow("carrier", "value")["property"]
+P_SECTOR = _arrow("sector", "value")["property"]
+P_TECHNOLOGY = _arrow("technology", "value")["property"]
+P_YEAR = _arrow("year", "value")["property"]
+P_AGGREGATION = _arrow("aggregation", "value")["property"]
+
+# The query, over the same drawing the graph is written from, so the two
+# cannot drift.
 VALUE_QUERY = "\n".join(
     [f"PREFIX {prefix}: <{iri}>" for prefix, iri in PREFIX_IRI.items()]
     + [f"""
@@ -1291,11 +667,9 @@ ORDER BY ?year ?number"""])
 def value_bindings(coordinates: dict) -> tuple:
     """(constraint lines for ##CONSTRAINTS##, {variable: (kind, value)}).
 
-    An unbound axis adds no line, which is why the constraints are text and
-    not initBindings alone. The kinds are plain strings ("iri", "literal") so
-    this module stays rdflib-free; the core wraps them. Gates: a quantity the
-    graph does not hold and any `out:` entry are dropped here, because
-    `oeo:out:share` is an IRI that does not exist.
+    An unbound axis adds no line. A quantity the graph does not hold and any
+    `out:` entry are dropped here, because `oeo:out:share` is an IRI that
+    does not exist.
     """
     lines, bindings = [], {}
     scenario = coordinates.get("scenario")
@@ -1321,7 +695,8 @@ def value_bindings(coordinates: dict) -> tuple:
 
 def _first_spelling(entry) -> Optional[str]:
     if isinstance(entry, dict):
-        return entry.get("label") or next(iter(entry.get("spellings") or []), None)
+        return entry.get("label") or next(iter(entry.get("spellings") or []),
+                                          None)
     if isinstance(entry, (list, tuple)) and entry:
         return entry[0]
     return None
@@ -1329,19 +704,15 @@ def _first_spelling(entry) -> Optional[str]:
 
 def label_of(identifier: str) -> str:
     """What a reader calls a class: the spec's first spelling for it, else
-    the pinned vocabulary's label, else the identifier itself.
-
-    Takes the full IRI the query returns, a qualified name or a bare id, so
-    the display never carries a second table of German words.
-    """
+    the pinned vocabulary's label, else the identifier itself."""
     text = str(identifier or "")
     bare = text[len(OEO):] if text.startswith(OEO) else _bare(text)
     for par in _SPEC["parameters"]:
         for axis in (par.get("axes") or {}).values():
-            spelling = _first_spelling((axis.get("vocabulary") or {}).get(bare))
+            spelling = _first_spelling((axis.get("vocabulary") or {}).get(
+                bare))
             if spelling:
                 return spelling
     from profiles.kwp import vocabulary
     term = vocabulary.load()["terms"].get(bare) or {}
     return term.get("label") or bare
-

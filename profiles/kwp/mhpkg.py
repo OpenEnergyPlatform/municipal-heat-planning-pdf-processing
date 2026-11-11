@@ -6,8 +6,7 @@ publishes (`mhpkg/schema/mhpkg_target_scenario.yaml`), pulled by every
 `vocabulary --refresh` at its current version and kept beside the profile as
 `mhpkg_schema.yaml`, so a machine without network reads the schema the last
 run read. kg.py takes from it every predicate, every class and every closed
-list, and the spec names schema slots instead of predicates
-(`"schema_slot": "refers_to_energy_carrier"`, `resolve`).
+list.
 
 The schema is a draft with open term requests: some of its slot_uris are not
 yet in the pinned OEO or MHPO. They are written as the schema says and
@@ -124,32 +123,6 @@ def load(path: Path = SCHEMA_PATH) -> Shape:
     if path == SCHEMA_PATH:
         _SHAPE[:] = [shape]
     return shape
-
-
-def resolve(spec_raw: dict, shape: Shape) -> dict:
-    """A copy of the spec whose `schema_slot` and `schema_class` entries carry
-    the predicate and class the schema gives them, in the spec's own grammar
-    (`prefix` + `predicate`, bare `class`), so every reader of the `kg`
-    blocks reads the schema's terms without knowing it."""
-    import copy
-
-    def fill(block):
-        if isinstance(block, dict):
-            for key, value in list(block.items()):
-                fill(value)
-            slot = block.get("schema_slot")
-            if slot:
-                prefix, _, local = shape.slot(slot).partition(":")
-                block["prefix"], block["predicate"] = prefix, local
-            cls = block.get("schema_class")
-            if cls:
-                block["class"] = shape.cls(cls).partition(":")[2]
-        elif isinstance(block, list):
-            for item in block:
-                fill(item)
-        return block
-
-    return fill(copy.deepcopy(spec_raw))
 
 
 def missing_terms(shape: Shape, terms: dict) -> list:

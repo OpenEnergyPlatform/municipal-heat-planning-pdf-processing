@@ -20,8 +20,8 @@ the model and a list nobody pulled is not the OEKG's current one.
 Why this profile needed it more than the other one. Its spec names 32 ontology
 identifiers and, before this, exactly zero of them were checked against
 anything: the old walk looked in three named places, and this profile writes
-its terms as full IRIs in vocabulary KEYS and as predicates inside `kg`
-blocks. Most of them ARE predicates, so an index over classes and individuals
+its terms as full IRIs in vocabulary KEYS and as predicates on the arrows
+of its drawing. Most of them ARE predicates, so an index over classes and individuals
 would have called every one of them missing.
 
 Author: Felix Vossel
@@ -109,7 +109,7 @@ def build(closure: Path, regions_path: Path = REGIONS_PATH) -> dict:
     *regions_path* (the profile's own file where not given)."""
     spec_raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
     snapshot = ontology.build(
-        closure, sets(), spec_raw, base=OEO,
+        closure, sets(), spec_raw, base=OEO, drawing=_drawing(),
         language=load_profile(PROFILE).require("extraction",
                                                "ALT_LABEL_LANGUAGE"))
     # The regions are not in any ontology release: they are individuals the
@@ -563,16 +563,28 @@ def region_problems(snapshot: dict, regions=None) -> list:
     return problems
 
 
+def _drawing() -> dict:
+    from docpipe import graphfile
+    from docpipe.profile import load_profile
+    return graphfile.load(load_profile(PROFILE)).map
+
+
 def edges(spec_raw: dict) -> list:
-    """Every triple shape this profile emits, the spec's and the writer's."""
-    from profiles.scenarios import kg     # here: kg reads the spec at import
-    return list(ontology.spec_edges(spec_raw)) + list(kg.edges())
+    """Every triple shape this profile emits: the drawing of its graph
+    file (`map`)."""
+    from docpipe.extraction.bricks import registry
+    from docpipe.profile import load_profile
+    return ontology.drawing_edges(_drawing(), spec_raw,
+                                  registry(load_profile(PROFILE)))
 
 
 def check(spec_raw: dict, snapshot: dict) -> list:
-    """Every complaint the pinned ontology has about this spec."""
+    """Every complaint the pinned ontology has about this spec and the
+    drawing of its graph."""
+    drawing = _drawing()
     return (ontology.term_problems(spec_raw, snapshot)
-            + ontology.kind_problems(spec_raw, snapshot)
+            + ontology.drawing_term_problems(drawing, snapshot)
+            + ontology.kind_problems(drawing, snapshot)
             + ontology.edge_problems(edges(spec_raw), snapshot)
             + ontology.set_problems(spec_raw, snapshot, axis_sets())
             + region_problems(snapshot))

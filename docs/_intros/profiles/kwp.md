@@ -75,7 +75,7 @@ table gives kwp's own answer.
 | Extraction | `extraction.py` | `SPEC_PATH`, `FRAME`, the rule `span_marks`, `document_context`, `PROMPT_CHECKS` (empty), `ALT_LABEL_LANGUAGE`, `CONTRACT_LANGUAGE` | the spec (its `plan_fields` block holds what a plan settles for all its values and its own years: its settings, base year and target year, each a name, a meaning and a search sentence, the two years with `of`, the pairs of the frame that are the plan's own state and its target), the frame axes, the marks (the rule `span_marks` of `rules.json`) a value stated for a span of years takes on each of its rows (`out:approximate`), and the language (`"de"`) of the core's templates its parts files are put together with |
 | Extraction | `prompts/extraction/phrases.json` | 55 sentences | the German sentences the stage writes to the model outside its prompts (the list of a closed coordinate in a refused pair stands under `"scenarios"`), laid over the built-in profile's |
 | Extraction | `prompts/extraction/*.md` | 13 prompt ids | phrase and anchors as plain files; review and example as parts files that name a template of the core; `compute`; and the eight prompts of the harvest, `transcribe`, `find`, `docfield`, `coord`, `search`, `list`, `check` and `follow` (see The prompts) |
-| The graph | `kg.py` | `make_serializer` and seven more names | MHPKG Turtle, the coordinate query, the trust wording |
+| The graph | `graph.json`, `kg.py` | the drawing (`map`), `BRICKS`, `context`, `has_property` and the query names | MHPKG Turtle (written by the core's program from the drawing), the coordinate query, the trust wording |
 | The answer app | `inference.py` | `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the marker of a value read off a chart and the graph route's refusal sentences |
 | The answer app | `prompts/inference/phrases.json` | 32 sentences | the German chat wording |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
@@ -171,7 +171,7 @@ carries when a passage genuinely does not state it is `out:unstated`
 (`docpipe/extraction/fields.py:38` to `48`), and a profile's own vocabulary
 rides the same prefix so a serializer can refuse every one of them by
 shape rather than by a second, hand-kept list
-(`profiles/kwp/kg.py:95` to `104`, `is_class`). Much of `quantity`'s own
+(`profiles/kwp/kg.py`, `is_class`). Much of `quantity`'s own
 list that is left is such an entry: a share expressed as a percentage, a
 per-person or per-area figure, a cumulative, avoided or captured emission, and
 a residual catch-all, so the model can name what a number really is instead of
@@ -342,20 +342,22 @@ first used, under the names they had as module constants
 
 ## The knowledge graph
 
-`profiles/kwp/kg.py` turns an accepted harvest into MHPKG Turtle, the
-target graph on the Open Energy Platform. It takes its terms from the MHPKG
-LinkML data schema (`mhpkg/schema/mhpkg_target_scenario.yaml` of the OEKG
-repository): `python -m profiles.kwp.vocabulary --refresh` pulls it each time
-into `profiles/kwp/mhpkg_schema.yaml` beside the OEO and MHPO snapshots, the
-spec's `kg` blocks name `schema_slot` and `schema_class` instead of a prefix
-and predicate, and `profiles/kwp/mhpkg.py` resolves them. A schema term the
+The drawing in `profiles/kwp/graph.json` (`map`) turns an accepted harvest into
+MHPKG Turtle, the target graph on the Open Energy Platform, written by the
+core's program (`docpipe/extraction/graph.py`); `profiles/kwp/kg.py` holds the
+bricks only this graph needs. The terms come from the MHPKG LinkML data
+schema (`mhpkg/schema/mhpkg_target_scenario.yaml` of the OEKG repository):
+`python -m profiles.kwp.vocabulary --refresh` pulls it each time into
+`profiles/kwp/mhpkg_schema.yaml` beside the OEO and MHPO snapshots; the
+arrows of the drawing write the schema's slots as their properties (`refers to
+energy carrier` and the like), and `profiles/kwp/mhpkg.py` gives the bricks
+the schema's classes and closed lists. A schema term the
 pinned OEO or MHPO lacks is written as the schema says and printed by the
 vocabulary check as `note mhpkg:`, never a failure. Five namespaces are declared
-once, `rdfs`, `xsd`, `obo`, `mhpo` and `oeo`
-(`profiles/kwp/kg.py:49` to `55`), and every identifier the serializer
-writes is qualified against exactly that header; a predicate whose prefix
-the header does not bind raises rather than silently writing Turtle
-nobody can load (`kg_name`, `docpipe/extraction/spec.py:683` to `700`).
+once, in the `prefixes` of the drawing, `rdfs`, `xsd`, `obo`, `mhpo` and `oeo`,
+and every property and class of the drawing is a name with one of these
+prefixes; the check of the drawing refuses one that is no prefixed name
+(`graphfile.map_problem`).
 The full mechanism is on [stages/graph.md](../stages/graph.md); this
 section names what is specific to kwp's own graph.
 
@@ -389,18 +391,16 @@ technology writes no edge.
 A named sub area is linked `part of` the municipality. An organisation
 node is written once per run, with the first spelling in harvest
 order, even when a later plan in the same run spells the office
-differently: a run-level `labelled` set in `make_serializer` keeps a
-second `rdfs:label` off the shared node (`profiles/kwp/kg.py:745` to
-`750`, `944` to `946`).
+differently: the box of the offices says `once: per_file`, so a later
+document does not write a second `rdfs:label` on the shared node.
 
 The IRI base is `https://openenergyplatform.org/id/mhpkg/`
-(`profiles/kwp/kg.py:36`). Every minted collection draws its own UUIDv5
+(the graph file's rule `base`). Every minted collection draws its own UUIDv5
 sub-namespace off that base, and minting always uses UUIDv5 over an
-identifying name, never UUIDv4 (`profiles/kwp/kg.py:369` to `372`,
-`mint`), so two runs over one document produce byte-identical Turtle. The plan
+identifying name, never UUIDv4 (`graphkit.mint_uuid`), so two runs over one document produce byte-identical Turtle. The plan
 and municipality nodes are not minted at all: their IRIs are built
 directly from the register key, `heatplan/AGS_<ags>_<published>` and
-`municipality/AGS_<ags>` (`profiles/kwp/kg.py:431` to `433`, `834`). The
+`municipality/AGS_<ags>` (the `address.name` of their boxes). The
 inventory part's path segment is `inventoryanalysis`.
 
 A value's identity is a UUIDv5 over its own coordinates joined in order:
@@ -408,17 +408,17 @@ the scenario part's IRI, the quantity class, the carrier and sector
 classes where they are real OEO classes (`is_class`; a deliberate
 `out:` answer or an unmapped wording is left out exactly like an
 absent one), the year, the aggregation, and, only for a named sub area,
-the normalised area wording (`profiles/kwp/kg.py:452` to `482`,
-`_value_iri`). These are the same seven coordinates the schema
+the normalised area wording (`profiles/kwp/kg.py`, the brick
+`value_identity`). These are the same seven coordinates the schema
 repository's own `mint_slice.py` mints: part, quantity, carrier, sector,
 year, aggregation and the sub-area, so two runs over one document mint
 byte-identical IRIs with no deviation from the published list, which
 `mint_slice.py` must apply the same carrier and sector rule to keep
-matching (`profiles/kwp/kg.py:6` to `8`, `448` to `452`). The area is left out of a
+matching (the docstring of `_identity`). The area is left out of a
 whole-plan-area value's identity, since one 2040 figure stated under
 three different whole-plan-area wordings on three pages of one plan
 became three indistinguishable nodes before this rule, 129 of 1,294 value
-nodes overall (`profiles/kwp/kg.py:462` to `470`); a named sub area keeps
+nodes overall; a named sub area keeps
 its wording, since one plan can carry several sub-area tables whose
 figures would otherwise collide onto one node instead.
 
@@ -427,14 +427,14 @@ read: the wording and quote, the page and its table, figure or section,
 whether the aggregation was read or derived, and a trust line rendered
 from the same six marks `docpipe/extraction/trust.py` defines for every
 profile, in English here, checked against the core's own list at import
-(`check_prose`, `profiles/kwp/kg.py:587` to `594`). Comments only, never
-triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
-would invalidate the node it documents (`evidence_comment`,
-`profiles/kwp/kg.py:645` to `718`).
+(`check_prose`, applied to the `evidence.prose` of the box). Comments only,
+never triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
+would invalidate the node it documents (the brick `value_passage`,
+`evidence_comment`).
 
 Each serialize call writes two graphs. `<graph>.ttl` holds everything that
-was read, in our classes. `<graph>.strict.ttl` (the profile's
-`make_strict_serializer`) holds only the values the data schema takes: a
+was read, in our classes. `<graph>.strict.ttl` (the same drawing
+written a second time, the document's `strict`) holds only the values the data schema takes: a
 class the part holds, every required slot, and carrier, sector and technology
 from the schema's own lists; a plan with no target-scenario value is left
 out. Each refusal is counted as `mhpkg:<reason>` (`class`, `area`,
@@ -446,7 +446,7 @@ requires one; a value without `spatial_scope` is kept in the full graph and
 refused by the strict one as `area`. Both files are
 SHACL-validated against the refreshed shapes.
 
-What the serializer refuses, briefly (in full on
+What the writer refuses, briefly (in full on
 [stages/graph.md](../stages/graph.md)): a row failing the quantity,
 scenario, year or aggregation-list gate, or a number without `value_target`
 (`unit_unlisted:<unit_raw>`) or converted onto a unit the ontology lacks
@@ -500,7 +500,7 @@ graph-route hooks at start-up (`docpipe/inference/kg_route.py:52` to `57`,
 (`docpipe/inference/kg_route.py:66` to `78`, the `Hooks` dataclass): a
 SPARQL template (`VALUE_QUERY`), the five axes a question may fix, in
 order, `(scenario, quantity, carrier, sector, year)`
-(`COORDINATE_AXES`, `profiles/kwp/kg.py:996` to `1003`), `heatplan_iri`,
+(`COORDINATE_AXES`, `profiles/kwp/kg.py`), `heatplan_iri`,
 `value_bindings`, `label_of`, and the same `TRUST_PROSE` the serializer
 writes with. `spatial_scope` is left out because the graph has no edge
 yet from a value to its area; `aggregation` is left out because the route

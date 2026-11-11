@@ -57,8 +57,8 @@ contribute `computed`, `catalogue`, `not_located` or
 `review:disagree` (`FLAG_REASONS`, `trust.py`), each of them a `D`;
 `catalogue` marks a value a profile looked up in an open catalogue record
 that values read from the document found (owner decision 2026-11-04). `conflict`, a `D`
-too, is added by a profile's own graph serializer resolving two competing
-readings of one coordinate: kwp settles them first (`settle`: by the plan's
+too, is added by the graph writer resolving two competing
+readings of one coordinate: kwp's drawing settles them first (`readings.settle`: by the plan's
 wording, by rounding, by trust), drops every claimant of what stays tied and
 never marks `conflict`, scenarios keeps a chosen reading and marks it
 `conflict` (`profiles/kwp/kg.py:514-580`, `profiles/scenarios/kg.py:701-702`;
@@ -91,7 +91,7 @@ value a `D`.
 
 ## What the marks of a trust line say
 
-A profile's serializer writes one line above every value node, built from
+The graph writer writes one line above every value node, built from
 up to six marks in a fixed order: `level`, `image_origin` or
 `image_origin_named`, `corroborated`, `reasons`, `review` (`trust.marks`,
 `trust.py:182-214`). Only the marks a verdict actually has appear (`review`
@@ -99,8 +99,8 @@ on a `C` or a `D`), and `image_origin_named` replaces `image_origin` when the
 row's provenance records the image's file name. Each mark's wording is the
 profile's own:
 the [kwp](../profiles/kwp.md) and [scenarios](../profiles/scenarios.md)
-serializers each state a `TRUST_PROSE` table, both in English
-(`profiles/kwp/kg.py:587-594`, `profiles/scenarios/kg.py:464-471`), and a
+drawings each state the words in the `evidence.prose` of their graph file, both in English
+(checked against the core's marks by `check_prose`), and a
 profile missing a mark, or wording one that is not on this list, is
 refused at import (`trust.check_prose`, `trust.py:217-229`). The reason tokens are never
 translated, so a curator greps for `exhausted:carrier` in either corpus and

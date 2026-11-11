@@ -166,7 +166,7 @@ def _lists_of(data: dict, key: str) -> Optional[tuple]:
             return None
     else:
         return None
-    rest = {k: v for k, v in block.items() if k not in ("vocabulary", "kg")}
+    rest = {k: v for k, v in block.items() if k != "vocabulary"}
     return _entries(block.get("vocabulary")), rest
 
 
@@ -867,10 +867,6 @@ HELP = {
         "A real passage of a document with the values it states. Requests "
         "for this field show it as their example, and the run's golden "
         "test uses it. Every field needs one."),
-    ("parameter", "kg"): (
-        "What a value of this field becomes in the graph: which node, "
-        "which class, and which property carries the number and which "
-        "the unit. The graph and the page's Graph tab read it."),
     ("axis", "question"): (
         "The one line that a request asks for this dimension. Each "
         "dimension is asked in a line of its own, so the model cannot skip "
@@ -903,10 +899,6 @@ HELP = {
         "the unit the number is printed in. No request asks for it. "
         "Use this only for a dimension that every accepted unit "
         "fixes. Empty: the dimension is asked."),
-    ("axis", "kg"): (
-        "What this dimension becomes in the graph: the type of the "
-        "node, a property, a parent or a comment. The graph and the "
-        "Graph tab read it."),
     ("entry", "label"): (
         "The name of the entry. This is what the model is offered in the "
         "list and answers with, so it should be the name a reader would "
@@ -1014,15 +1006,13 @@ _FORM = {
                   ("unit_target", "line", {}),
                   ("integrated", "bool", {"default": True}),
                   ("units_accepted", "units", {}),
-                  ("example", "example", {}),
-                  ("kg", "kg", {"of": "field"})],
+                  ("example", "example", {})],
     "axis": [("question", "text", {}),
              ("required", "bool", {"default": False}),
              ("several", "bool", {"default": False}),
              ("merged", "line", {}),
              ("keep", "line", {}),
-             ("derive", "derive", {}),
-             ("kg", "kg", {"of": "axis"})],
+             ("derive", "derive", {})],
     "entry": [("label", "line", {}),
               ("spellings", "strings", {}),
               ("definition", "text", {}),
@@ -1042,27 +1032,6 @@ _FORM = {
 }
 
 
-def kg_keys(profile=None) -> dict:
-    """{"field": [...], "axis": [...], "why": None or the reason none are
-    known}: the keys of a `kg` block the profile's graph writer reads, each
-    {"key", "kind", "help"} (`KG_KEYS` of its kg.py). A key not listed is
-    one the writer does not name; the page keeps it and shows it greyed."""
-    from ..profile import active_profile
-    profile = profile or active_profile()
-    if profile is None:
-        return {"field": [], "axis": [], "why": "no profile is active"}
-    try:
-        declared = profile.component("kg", "KG_KEYS")
-    except Exception as exc:         # a writer that does not import
-        return {"field": [], "axis": [], "why": f"the writer of "
-                f"{profile.name} cannot be loaded: {exc}"}
-    if not isinstance(declared, dict):
-        return {"field": [], "axis": [],
-                "why": f"the writer of {profile.name} names no keys"}
-    return {"field": list(declared.get("field", [])),
-            "axis": list(declared.get("axis", [])), "why": None}
-
-
 def form(profile=None) -> dict:
     """The form of each kind of node, {kind: [{"key", "widget", "help",
     ...}]}: the keys `spec.py` reads, each with what the page says of it
@@ -1080,5 +1049,4 @@ def form(profile=None) -> dict:
                               "help": HELP.get((kind, key), ""), **extras})
     for kind, said in ABOUT.items():
         out[kind][0]["about"] = said
-    out["kg_keys"] = kg_keys(profile)
     return out

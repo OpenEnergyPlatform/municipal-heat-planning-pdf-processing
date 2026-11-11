@@ -23,8 +23,8 @@ from pathlib import Path
 
 from rdflib import Graph, URIRef
 
-from profiles.scenarios import extraction, kg, vocabulary
-from test_graph_from_shapes import OEO, make_serializer, oekg
+from profiles.scenarios import extraction, vocabulary
+from test_graph_from_shapes import OEO, make_serializer
 
 REGION = "https://openenergyplatform.org/ontology/oekg/region/"
 REGIONS = {REGION + "France": ["France"], REGION + "Spain": ["Spain"],
@@ -70,8 +70,7 @@ def regions_written(*uris):
     rows += [{"parameter": "scenario_region", "value": uri, "value_uri": uri,
               "value_raw": "Europe", "scenario": "NDC", "scenario_raw": "NDC",
               "quote": "NDC covers Europe"} for uri in uris]
-    serializer = make_serializer(Path("no-such.db"), model=oekg(),
-                                    groups=GROUPS)
+    serializer = make_serializer(Path("no-such.db"), groups=GROUPS)
     text = serializer("doc", rows)
     graph = Graph().parse(data=text, format="turtle")
     return {str(o) for o in graph.objects(

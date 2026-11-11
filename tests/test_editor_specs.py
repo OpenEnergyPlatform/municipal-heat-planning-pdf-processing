@@ -61,8 +61,21 @@ def test_a_spec_the_loader_refuses_is_not_written_and_names_the_field():
 
 
 def test_a_key_a_browser_would_move_is_refused():
-    numbered = edited(lambda d: d["parameters"][0]["kg"].update({"2021": 1}))
-    assert specs.problem(numbered)["where"].endswith(".kg.2021")
+    numbered = edited(lambda d: d["parameters"][0]["units_accepted"].update(
+        {"2021": 1}))
+    assert specs.problem(numbered)["where"].endswith(".units_accepted.2021")
+    assert specs.problem(KWP) is None
+
+
+def test_a_spec_that_still_says_what_a_field_becomes_is_refused():
+    # the graph is drawn in graph.json: a `kg` block of a field or of one of
+    # its coordinates is named and refused, the spec without one loads
+    for put in (lambda d: d["parameters"][0].update({"kg": {"node": "x"}}),
+                lambda d: d["parameters"][0]["axes"]["carrier"].update(
+                    {"kg": {"role": "type"}})):
+        refused = specs.problem(edited(put))
+        assert refused["where"].endswith(".kg"), refused
+        assert "graph.json" in refused["message"]
     assert specs.problem(KWP) is None
 
 
@@ -151,7 +164,6 @@ def test_a_changed_definition_moves_the_key_of_its_field():
 def test_a_comment_a_graph_note_and_a_settled_text_move_no_key():
     def reworded(data):
         data["_comment"].append("Eine Anmerkung.")
-        data["parameters"][0]["kg"]["note"] = "Eine Anmerkung zum Graphen."
         data["plan_fields"]["target_year"]["means"] += " Auch ein Etappenziel."
     assert moved(reworded) == {}
     # and the file still changes, so "no key" is not "no edit"

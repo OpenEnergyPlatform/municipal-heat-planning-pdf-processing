@@ -47,8 +47,10 @@ section location among them, filled in as the source allows
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
 `x-question` is the sentence, in English, the model was asked for a
-coordinate. `x-kg` is the spec's own `kg` block, published unchanged,
-so this page cannot state something the serializer does not. Where a
+coordinate. `x-kg` lists the arrows of the profile's drawing that read the coordinate or
+the field (the box it points at, its class, the property and the brick),
+published as drawn, so this page cannot state something the graph writer
+does not. Where a
 coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
@@ -200,16 +202,9 @@ The units numbers were read with that are no entry of their parameter's list, as
 
 ## `publication_abstract`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'predicate': 'abstract', 'prefix': 'dc'}`
-
-<details><summary>Why</summary>
-
-On the bundle, not on the report: the shapes carry the study's abstract there.
-
-</details>
+- box `bundle` (`oeo:OEO_00020227`), property `dc:abstract`
 
 ### `at`
 
@@ -398,18 +393,10 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `publication_author`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00000064`
-- `edge_from`: `{'label': 'has author', 'node': 'studyreport', 'predicate': 'OEO_00000506', 'prefix': 'oeo'}`
-- `node`: `author`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
-
-<details><summary>Why</summary>
-
-One node per distinct name. Two spellings of one person are one node and keep both passages.
-
-</details>
+- box `author` (`oeo:OEO_00000064`), property `oeo:OEO_00000506`
+- box `author` (`oeo:OEO_00000064`), property `rdfs:label`, brick `node_name`
 
 ### `at`
 
@@ -598,16 +585,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `publication_date`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `studyreport`
-- `property`: `{'datatype': 'xsd:dateTime', 'label': 'has publication date', 'predicate': 'OEO_00390096', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's.
-
-</details>
+- box `report` (`oeo:OEO_00020012`), property `oeo:OEO_00390096`, brick `year_to_datetime`
 
 ### `at`
 
@@ -796,10 +776,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `publication_doi`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `studyreport`
-- `property`: `{'label': 'has doi', 'predicate': 'OEO_00390098', 'prefix': 'oeo'}`
+- box `report` (`oeo:OEO_00020012`), property `oeo:OEO_00390098`
 
 ### `at`
 
@@ -988,17 +967,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `publication_title`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00020012`
-- `node`: `studyreport`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
-
-<details><summary>Why</summary>
-
-Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.
-
-</details>
+- box `report` (`oeo:OEO_00020012`), property `rdfs:label`
 
 ### `at`
 
@@ -1187,10 +1158,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `scenario_abstract`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariofactsheet`
-- `property`: `{'predicate': 'abstract', 'prefix': 'dc'}`
+- box `scenario` (`oeo:OEO_00000365`), property `dc:abstract`
 
 ### `at`
 
@@ -1309,17 +1279,6 @@ The prompt's own wording:
 
 </details>
 
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
-
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).
-
-</details>
-
 ### `scenario_link_quote`
 
 Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
@@ -1392,18 +1351,10 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `scenario_label`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `also`: `{'predicate': 'acronym', 'prefix': 'dc'}`
-- `class`: `OEO_00000365`
-- `node`: `scenariofactsheet`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
-
-<details><summary>Why</summary>
-
-The name the publication prints labels the factsheet, and the acronym beside it carries the same string. A name is the entry of the publication's list of scenarios it was asked to be, and labels that entry's factsheet (`value_means`, docpipe/extraction/addressed.py).
-
-</details>
+- box `scenario` (`oeo:OEO_00000365`), property `rdfs:label`, brick `node_name`
+- box `scenario` (`oeo:OEO_00000365`), property `dc:acronym`, brick `short_name`
 
 ### `at`
 
@@ -1596,16 +1547,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `scenario_region`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariofactsheet`
-- `property`: `{'accepted': 'the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)', 'label': 'has study region', 'predicate': 'OEO_00020220', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.
-
-</details>
+- box `scenario` (`oeo:OEO_00000365`), property `oeo:OEO_00020220`, brick `region`
 
 ### `at`
 
@@ -1724,17 +1668,6 @@ The prompt's own wording:
 
 </details>
 
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
-
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).
-
-</details>
-
 ### `scenario_link_quote`
 
 Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.
@@ -1847,16 +1780,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `scenario_type`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariofactsheet`
-- `property`: `{'label': 'has scenario type', 'predicate': 'OEO_00390073', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer.
-
-</details>
+- box `scenario` (`oeo:OEO_00000365`), property `oeo:OEO_00390073`, brick `entry`
 
 ### `at`
 
@@ -1972,17 +1898,6 @@ The prompt's own wording:
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical
-
-</details>
-
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
-
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).
 
 </details>
 
@@ -2132,16 +2047,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `scenario_year`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariofactsheet`
-- `property`: `{'datatype': 'xsd:dateTime', 'label': 'has scenario year value', 'predicate': 'OEO_00020440', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands.
-
-</details>
+- box `scenario` (`oeo:OEO_00000365`), property `oeo:OEO_00020440`, brick `year_to_datetime`
 
 ### `at`
 
@@ -2257,17 +2165,6 @@ The prompt's own wording:
   - also written: all scenarios
 - **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
   - also written: historical
-
-</details>
-
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
-
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).
 
 </details>
 
@@ -2402,10 +2299,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_acronym`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'predicate': 'acronym', 'prefix': 'dc'}`
+- box `bundle` (`oeo:OEO_00020227`), property `dc:acronym`
 
 ### `at`
 
@@ -2594,16 +2490,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_descriptor`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'has study descriptor tag', 'predicate': 'OEO_00390071', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
-
-</details>
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00390071`, brick `entry`
 
 ### `at`
 
@@ -2881,12 +2770,10 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_funder`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00090001`
-- `edge_from`: `{'label': 'has funding source', 'node': 'scenariobundle', 'predicate': 'OEO_00000509', 'prefix': 'oeo'}`
-- `node`: `funder`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+- box `funder` (`oeo:OEO_00090001`), property `oeo:OEO_00000509`
+- box `funder` (`oeo:OEO_00090001`), property `rdfs:label`, brick `node_name`
 
 ### `at`
 
@@ -3075,12 +2962,10 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_organisation`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00030022`
-- `edge_from`: `{'label': 'has organisation', 'node': 'scenariobundle', 'predicate': 'OEO_00000510', 'prefix': 'oeo'}`
-- `node`: `organisation`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+- box `organisation` (`oeo:OEO_00030022`), property `oeo:OEO_00000510`
+- box `organisation` (`oeo:OEO_00030022`), property `rdfs:label`, brick `node_name`
 
 ### `at`
 
@@ -3269,17 +3154,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_project_name`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00020227`
-- `node`: `scenariobundle`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
-
-<details><summary>Why</summary>
-
-Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07).
-
-</details>
+- box `bundle` (`oeo:OEO_00020227`), property `rdfs:label`
 
 ### `at`
 
@@ -3468,16 +3345,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_sector`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'covers sector (shortcut)', 'predicate': 'OEO_00020439', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
-
-</details>
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00020439`, brick `entry`
 
 ### `at`
 
@@ -4017,16 +3887,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_sector_division`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'based on sector division', 'predicate': 'OEO_00390079', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
-
-</details>
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00390079`, brick `entry`
 
 ### `at`
 
@@ -4283,16 +4146,9 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `study_technology`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'covers technology (shortcut)', 'predicate': 'OEO_00020438', 'prefix': 'oeo'}`
-
-<details><summary>Why</summary>
-
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
-
-</details>
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00020438`, brick `entry`
 
 ### `at`
 

@@ -8,8 +8,9 @@ import sqlite3
 
 import pytest
 
-from profiles.scenarios import kg
-from test_graph_from_shapes import make_serializer, oekg
+from docpipe.extraction import graph
+from docpipe.profile import load_profile
+from test_graph_from_shapes import make_serializer
 
 
 def database(tmp_path, transcribed: dict):
@@ -39,7 +40,7 @@ def levels(text):
 
 def test_a_document_with_pages_a_model_read_is_graded_at_best_b(tmp_path):
     db = database(tmp_path, {"read": 3, "printed": 0, "unlooked": None})
-    serializer = make_serializer(db, model=oekg())
+    serializer = make_serializer(db)
     read = serializer("read", rows("A Read Study"))
     printed = serializer("printed", rows("A Printed Study"))
     unlooked = serializer("unlooked", rows("An Unlooked Study"))
@@ -50,4 +51,12 @@ def test_a_document_with_pages_a_model_read_is_graded_at_best_b(tmp_path):
 
 def test_a_database_that_cannot_be_opened_stops_the_graph(tmp_path):
     with pytest.raises(sqlite3.Error):
-        kg.make_serializer(tmp_path / "missing" / "scenarios.db", model=oekg())
+        graph.make_serializer(load_profile("scenarios"),
+                              tmp_path / "missing" / "scenarios.db")
+
+
+def test_a_file_that_is_no_database_stops_the_graph(tmp_path):
+    broken = tmp_path / "scenarios.db"
+    broken.write_bytes(b"this is not a database" * 200)
+    with pytest.raises(sqlite3.Error):
+        graph.make_serializer(load_profile("scenarios"), broken)

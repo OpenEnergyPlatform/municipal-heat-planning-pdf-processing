@@ -795,14 +795,13 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariobundle",
-     "note": "On the bundle, not on the report: the shapes carry the study's abstract there.",
-     "property": {
-      "predicate": "abstract",
-      "prefix": "dc"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00020227",
+      "property": "dc:abstract",
+      "to": "bundle"
      }
-    }
+    ]
    },
    "tuple_publication_author": {
     "additionalProperties": false,
@@ -1241,22 +1240,19 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class": "OEO_00000064",
-     "edge_from": {
-      "label": "has author",
-      "node": "studyreport",
-      "predicate": "OEO_00000506",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00000064",
+      "property": "oeo:OEO_00000506",
+      "to": "author"
      },
-     "node": "author",
-     "note": "One node per distinct name. Two spellings of one person are one node and keep both passages.",
-     "property": {
-      "label": "label",
-      "predicate": "label",
-      "prefix": "rdfs"
+     {
+      "brick": "node_name",
+      "class": "oeo:OEO_00000064",
+      "property": "rdfs:label",
+      "to": "author"
      }
-    }
+    ]
    },
    "tuple_publication_date": {
     "additionalProperties": false,
@@ -1695,16 +1691,14 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "studyreport",
-     "note": "A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's.",
-     "property": {
-      "datatype": "xsd:dateTime",
-      "label": "has publication date",
-      "predicate": "OEO_00390096",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "year_to_datetime",
+      "class": "oeo:OEO_00020012",
+      "property": "oeo:OEO_00390096",
+      "to": "report"
      }
-    }
+    ]
    },
    "tuple_publication_doi": {
     "additionalProperties": false,
@@ -2143,14 +2137,13 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "studyreport",
-     "property": {
-      "label": "has doi",
-      "predicate": "OEO_00390098",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00020012",
+      "property": "oeo:OEO_00390098",
+      "to": "report"
      }
-    }
+    ]
    },
    "tuple_publication_title": {
     "additionalProperties": false,
@@ -2589,16 +2582,13 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class": "OEO_00020012",
-     "node": "studyreport",
-     "note": "Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.",
-     "property": {
-      "label": "label",
-      "predicate": "label",
-      "prefix": "rdfs"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00020012",
+      "property": "rdfs:label",
+      "to": "report"
      }
-    }
+    ]
    },
    "tuple_scenario_abstract": {
     "additionalProperties": false,
@@ -2871,18 +2861,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "class": "OEO_00000365",
-       "linked_by": {
-        "label": "has part",
-        "node": "scenariobundle",
-        "predicate": "BFO_0000051",
-        "prefix": "obo"
-       },
-       "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).",
-       "role": "parent"
-      },
       "x-options": {
        "several scenarios": {
         "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
@@ -3050,13 +3028,13 @@
      "scenario_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariofactsheet",
-     "property": {
-      "predicate": "abstract",
-      "prefix": "dc"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00000365",
+      "property": "dc:abstract",
+      "to": "scenario"
      }
-    }
+    ]
    },
    "tuple_scenario_label": {
     "additionalProperties": false,
@@ -3503,20 +3481,20 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "also": {
-      "predicate": "acronym",
-      "prefix": "dc"
+    "x-kg": [
+     {
+      "brick": "node_name",
+      "class": "oeo:OEO_00000365",
+      "property": "rdfs:label",
+      "to": "scenario"
      },
-     "class": "OEO_00000365",
-     "node": "scenariofactsheet",
-     "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. A name is the entry of the publication's list of scenarios it was asked to be, and labels that entry's factsheet (`value_means`, docpipe/extraction/addressed.py).",
-     "property": {
-      "label": "label",
-      "predicate": "label",
-      "prefix": "rdfs"
+     {
+      "brick": "short_name",
+      "class": "oeo:OEO_00000365",
+      "property": "dc:acronym",
+      "to": "scenario"
      }
-    }
+    ]
    },
    "tuple_scenario_region": {
     "additionalProperties": false,
@@ -3789,18 +3767,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "class": "OEO_00000365",
-       "linked_by": {
-        "label": "has part",
-        "node": "scenariobundle",
-        "predicate": "BFO_0000051",
-        "prefix": "obo"
-       },
-       "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).",
-       "role": "parent"
-      },
       "x-options": {
        "several scenarios": {
         "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
@@ -4068,16 +4034,14 @@
      "scenario_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariofactsheet",
-     "note": "The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle.",
-     "property": {
-      "accepted": "the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)",
-      "label": "has study region",
-      "predicate": "OEO_00020220",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "region",
+      "class": "oeo:OEO_00000365",
+      "property": "oeo:OEO_00020220",
+      "to": "scenario"
      }
-    }
+    ]
    },
    "tuple_scenario_type": {
     "additionalProperties": false,
@@ -4350,18 +4314,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "class": "OEO_00000365",
-       "linked_by": {
-        "label": "has part",
-        "node": "scenariobundle",
-        "predicate": "BFO_0000051",
-        "prefix": "obo"
-       },
-       "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).",
-       "role": "parent"
-      },
       "x-options": {
        "several scenarios": {
         "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
@@ -4766,15 +4718,14 @@
      "scenario_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariofactsheet",
-     "note": "The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer.",
-     "property": {
-      "label": "has scenario type",
-      "predicate": "OEO_00390073",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "entry",
+      "class": "oeo:OEO_00000365",
+      "property": "oeo:OEO_00390073",
+      "to": "scenario"
      }
-    }
+    ]
    },
    "tuple_scenario_year": {
     "additionalProperties": false,
@@ -5079,18 +5030,6 @@
        "string",
        "null"
       ],
-      "x-kg": {
-       "class": "OEO_00000365",
-       "linked_by": {
-        "label": "has part",
-        "node": "scenariobundle",
-        "predicate": "BFO_0000051",
-        "prefix": "obo"
-       },
-       "node": "scenariofactsheet",
-       "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py).",
-       "role": "parent"
-      },
       "x-options": {
        "several scenarios": {
         "meaning": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.",
@@ -5387,16 +5326,14 @@
      "scenario_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariofactsheet",
-     "note": "One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands.",
-     "property": {
-      "datatype": "xsd:dateTime",
-      "label": "has scenario year value",
-      "predicate": "OEO_00020440",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "year_to_datetime",
+      "class": "oeo:OEO_00000365",
+      "property": "oeo:OEO_00020440",
+      "to": "scenario"
      }
-    }
+    ]
    },
    "tuple_study_acronym": {
     "additionalProperties": false,
@@ -5835,13 +5772,13 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariobundle",
-     "property": {
-      "predicate": "acronym",
-      "prefix": "dc"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00020227",
+      "property": "dc:acronym",
+      "to": "bundle"
      }
-    }
+    ]
    },
    "tuple_study_descriptor": {
     "additionalProperties": false,
@@ -6583,15 +6520,14 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariobundle",
-     "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written.",
-     "property": {
-      "label": "has study descriptor tag",
-      "predicate": "OEO_00390071",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "entry",
+      "class": "oeo:OEO_00020227",
+      "property": "oeo:OEO_00390071",
+      "to": "bundle"
      }
-    }
+    ]
    },
    "tuple_study_funder": {
     "additionalProperties": false,
@@ -7030,21 +6966,19 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class": "OEO_00090001",
-     "edge_from": {
-      "label": "has funding source",
-      "node": "scenariobundle",
-      "predicate": "OEO_00000509",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00090001",
+      "property": "oeo:OEO_00000509",
+      "to": "funder"
      },
-     "node": "funder",
-     "property": {
-      "label": "label",
-      "predicate": "label",
-      "prefix": "rdfs"
+     {
+      "brick": "node_name",
+      "class": "oeo:OEO_00090001",
+      "property": "rdfs:label",
+      "to": "funder"
      }
-    }
+    ]
    },
    "tuple_study_organisation": {
     "additionalProperties": false,
@@ -7483,21 +7417,19 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class": "OEO_00030022",
-     "edge_from": {
-      "label": "has organisation",
-      "node": "scenariobundle",
-      "predicate": "OEO_00000510",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00030022",
+      "property": "oeo:OEO_00000510",
+      "to": "organisation"
      },
-     "node": "organisation",
-     "property": {
-      "label": "label",
-      "predicate": "label",
-      "prefix": "rdfs"
+     {
+      "brick": "node_name",
+      "class": "oeo:OEO_00030022",
+      "property": "rdfs:label",
+      "to": "organisation"
      }
-    }
+    ]
    },
    "tuple_study_project_name": {
     "additionalProperties": false,
@@ -7936,16 +7868,13 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "class": "OEO_00020227",
-     "node": "scenariobundle",
-     "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07).",
-     "property": {
-      "label": "label",
-      "predicate": "label",
-      "prefix": "rdfs"
+    "x-kg": [
+     {
+      "class": "oeo:OEO_00020227",
+      "property": "rdfs:label",
+      "to": "bundle"
      }
-    }
+    ]
    },
    "tuple_study_sector": {
     "additionalProperties": false,
@@ -9313,15 +9242,14 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariobundle",
-     "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written.",
-     "property": {
-      "label": "covers sector (shortcut)",
-      "predicate": "OEO_00020439",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "entry",
+      "class": "oeo:OEO_00020227",
+      "property": "oeo:OEO_00020439",
+      "to": "bundle"
      }
-    }
+    ]
    },
    "tuple_study_sector_division": {
     "additionalProperties": false,
@@ -9956,15 +9884,14 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariobundle",
-     "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written.",
-     "property": {
-      "label": "based on sector division",
-      "predicate": "OEO_00390079",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "entry",
+      "class": "oeo:OEO_00020227",
+      "property": "oeo:OEO_00390079",
+      "to": "bundle"
      }
-    }
+    ]
    },
    "tuple_study_technology": {
     "additionalProperties": false,
@@ -10748,15 +10675,14 @@
      "work_state"
     ],
     "type": "object",
-    "x-kg": {
-     "node": "scenariobundle",
-     "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written.",
-     "property": {
-      "label": "covers technology (shortcut)",
-      "predicate": "OEO_00020438",
-      "prefix": "oeo"
+    "x-kg": [
+     {
+      "brick": "entry",
+      "class": "oeo:OEO_00020227",
+      "property": "oeo:OEO_00020438",
+      "to": "bundle"
      }
-    }
+    ]
    }
   },
   "$id": "https://openenergyplatform.org/schema/mhpkg/extraction/harvest-line",

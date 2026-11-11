@@ -196,10 +196,11 @@ def _diff(args) -> int:
         if path is None:
             raise SystemExit("no spec: give --spec, or a --profile that "
                              "has one")
-    # A profile that names its properties through a schema of its own is
-    # held to the shapes with them (`read_as_shapes`).
-    rows = drafting.differences(
-        found, drafting.read_as_shapes(_read(path), profile), terms)
+    # What the spec's fields become is the drawing of the profile's graph
+    # file, so that is what the spec is held to the shapes with.
+    from .. import graphfile
+    drawing = graphfile.load(profile).map if profile is not None else None
+    rows = drafting.differences(found, _read(path), terms, drawing=drawing)
     kinds: dict = {}
     for row in rows:
         kinds.setdefault(row["kind"], []).append(row)
@@ -374,6 +375,15 @@ def _apply(args) -> int:
             return 1
         _write(args.out, drafting.finished(done))
         print(f"{args.out}: written")
+        # The drawing of what the fields become goes beside the spec, where
+        # a profile keeps its graph file, unless it has one.
+        from .. import graphfile
+        graph = Path(args.out).with_name(graphfile.FILE)
+        said = drafting.graph_file(done)
+        if said and not graph.exists():
+            graph.write_text(graphfile.dump(said), encoding="utf-8",
+                             newline="\n")
+            print(f"{graph}: written")
     return 0
 
 

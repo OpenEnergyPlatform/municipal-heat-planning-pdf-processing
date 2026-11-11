@@ -645,11 +645,14 @@ def render_profile_page(name: str, harvest: dict, intro: str) -> str:
                 axes.append(f"`{axis}` ({len(choices)} options)")
             else:
                 axes.append(f"`{axis}` ({kinds[0] if kinds else 'per document'})")
-        kg = body.get("x-kg") if isinstance(body.get("x-kg"), dict) else {}
-        node = kg.get("node", "")
+        arrows = body.get("x-kg") if isinstance(body.get("x-kg"),
+                                                list) else []
+        boxes = list(dict.fromkeys(str(one["to"]) for one in arrows
+                                   if isinstance(one, dict)
+                                   and one.get("to")))
         out.append(f"| `{key[len('tuple_'):]}` | {kind} | "
                    f"{', '.join(axes) or 'none'} | "
-                   f"{'`' + str(node) + '`' if node else ''} |")
+                   f"{', '.join('`' + box + '`' for box in boxes)} |")
     out += ["", "[Back to the index](../README.md)", ""]
     return NEWLINE.join(out)
 
@@ -669,17 +672,21 @@ def _option_lines(options: dict) -> list:
     return out
 
 
-def _kg_lines(kg: dict) -> list:
+def _kg_lines(arrows: list) -> list:
+    """One line per arrow of the drawing that reads the field: the box it
+    points at, its class, the property it writes and its brick."""
     out = []
-    for key in sorted(kg):
-        value = kg[key]
-        if key == "note":
+    for arrow in arrows:
+        if not isinstance(arrow, dict):
             continue
-        out.append(f"- `{key}`: `{value}`")
-    note = kg.get("note")
-    if note:
-        out += ["", "<details><summary>Why</summary>", "", str(note), "",
-                "</details>"]
+        line = f"- box `{arrow.get('to', '')}`"
+        if arrow.get("class"):
+            line += f" (`{arrow['class']}`)"
+        if arrow.get("property"):
+            line += f", property `{arrow['property']}`"
+        if arrow.get("brick"):
+            line += f", brick `{arrow['brick']}`"
+        out.append(line)
     return out
 
 
@@ -713,8 +720,9 @@ def render_contract_page(profile: str, schema: dict, stamp=None,
         if body.get("description"):
             out += [str(body["description"]), ""]
         kg = body.get("x-kg")
-        if isinstance(kg, dict):
-            out += ["How the row becomes a node:", ""] + _kg_lines(kg) + [""]
+        if isinstance(kg, list) and kg:
+            out += ["The arrows of the drawing that read the row:",
+                    ""] + _kg_lines(kg) + [""]
         for key in sorted(body.get("properties") or {}):
             prop = body["properties"][key] or {}
             out += [f"### `{key}`", ""]
@@ -735,8 +743,9 @@ def render_contract_page(profile: str, schema: dict, stamp=None,
                         f"({len(options)})</summary>", ""]
                 out += _option_lines(options) + ["", "</details>", ""]
             prop_kg = prop.get("x-kg")
-            if isinstance(prop_kg, dict):
-                out += _kg_lines(prop_kg) + [""]
+            if isinstance(prop_kg, list) and prop_kg:
+                out += ["The arrows of the drawing that read it:",
+                        ""] + _kg_lines(prop_kg) + [""]
         if body.get("allOf"):
             out += ["A coordinate is `null` unless its `<axis>_state` says it "
                     "was read or derived; that is what the `allOf` branches "

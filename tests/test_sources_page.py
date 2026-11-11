@@ -14,14 +14,16 @@ The promises, each with a case that breaks it by construction:
 3. A checked row "new entry" puts exactly that entry into the list, with the
    ontology's name and definition, AND the spec the Spec tab saves holds it;
    an entry the pinned ontology does not carry is refused.
-4. The comparison reads KWP as its shapes name its properties: no field of
-   KWP is "without a graph block" once its schema slots are resolved.
+4. The comparison reads what a field becomes from the drawing of the
+   profile's graph file: no field of KWP is "without an arrow" with its
+   drawing, AND every one is without it where no drawing is given.
 5. The page never shows a token's value, only whether it is set.
-6. "Write a field under it as well" puts the property beside the predicate
-   the choice names (`also`), every predicate of every field being offered,
-   AND the written graph then holds that predicate's value under it; a
-   field of several predicates named alone, and a property merged twice,
-   are refused.
+6. "Write a field under it as well" draws an arrow from the field to the
+   box of the property's class, AND the written graph then holds the
+   field's value under that property; where the drawing has no box of the
+   class one is added; a field the spec does not have and a property
+   merged twice are refused; and a choice that draws nothing hands no
+   drawing back.
 
 Author: Felix Vossel
 """
@@ -63,7 +65,7 @@ def profile(tmp_path):
     """scenarios with a folder of its own, its spec and its sources."""
     home = tmp_path / "scenarios"
     home.mkdir()
-    for name in ("extraction_spec.json", "sources.json"):
+    for name in ("extraction_spec.json", "sources.json", "graph.json"):
         shutil.copy(REPO / "profiles" / "scenarios" / name, home)
     (home / "vocabulary.json").write_text(json.dumps(pinned("OEO_00020309")),
                                           encoding="utf-8")
@@ -204,7 +206,7 @@ def test_a_checked_new_entry_comes_with_the_ontology_s_name(
                          if one["uri"] == "scenario_type"][0]["vocabulary"]
 
 
-def test_kwp_is_held_to_its_shapes_by_the_names_its_schema_gives():
+def test_kwp_is_held_to_its_shapes_by_what_its_drawing_writes():
     pytest.importorskip("rdflib")
     profile = load_profile("kwp")
     files = sourcespage.shape_files(profile)
@@ -212,13 +214,15 @@ def test_kwp_is_held_to_its_shapes_by_the_names_its_schema_gives():
         pytest.skip("no MHPKG shapes in the cache")
     spec = json.loads((REPO / "profiles" / "kwp" / "extraction_spec.json")
                       .read_text(encoding="utf-8"))
+    from docpipe import graphfile
     from docpipe.compile import draft, shapes
     found, _ = shapes.read(files)
-    resolved = draft.differences(found, draft.read_as_shapes(spec, profile))
-    assert not [row for row in resolved if row["kind"] == "no_graph_block"]
-    # the failure by construction: the spec as written names no predicate
-    written = draft.differences(found, spec)
-    assert [row for row in written if row["kind"] == "no_graph_block"]
+    drawn = draft.differences(found, spec,
+                              drawing=graphfile.load(profile).map)
+    assert not [row for row in drawn if row["kind"] == "no_graph_block"]
+    # the failure by construction: with no drawing no arrow writes a field
+    bare = draft.differences(found, spec)
+    assert [row for row in bare if row["kind"] == "no_graph_block"]
 
 
 def test_a_token_is_shown_as_set_never_as_its_value(tmp_path, profile,
@@ -245,41 +249,116 @@ def test_a_token_is_shown_as_set_never_as_its_value(tmp_path, profile,
 
 
 
-def test_a_merge_writes_the_property_beside_the_predicate_it_names():
-    pytest.importorskip("rdflib")
-    from docpipe import graphfile
-    from docpipe.compile.shapes import Property
-    data = {"parameters": [{"uri": "energy", "kg": {
-        "node": "value", "class": "ex:Value",
-        "number": {"prefix": "ex", "predicate": "number",
-                   "label": "has number"},
-        "unit": {"prefix": "ex", "predicate": "unit", "label": "has unit"}},
-        "axes": {"carrier": {"kg": {"role": "edge", "prefix": "ex",
-                                    "predicate": "carrier"}}}}]}
-    parameters = {one["uri"]: one for one in data["parameters"]}
-    prop = Property(path="https://example.org/o/amount", name="amount")
-    prefixes = {"ex": "https://example.org/o/"}
-    assert {one["into"] for one in sourcespage.merge_targets(data)} == {
-        "energy|kg.number", "energy|kg.unit", "energy|axes.carrier.kg"}
-    done, said = sourcespage._merge(data, parameters, "energy|kg.number",
-                                    prop, prefixes)
-    assert done, said
-    kg = data["parameters"][0]["kg"]
-    assert kg["number"]["also"] == {"prefix": "ex", "predicate": "amount",
-                                    "label": "amount"}
-    assert "also" not in kg["unit"]
-    text = """@prefix ex: <https://example.org/o/> .
+THING = "https://example.org/o/"
 
-<https://example.org/id/value/1>
-    a ex:Value ;
-    ex:number 5 ;
-    ex:unit ex:MWh .
-"""
-    out, added = graphfile.add_also(text, graphfile.also_pairs(data))
-    assert added == 1 and "ex:amount 5" in out
-    # the failure by construction: named alone, a field of three predicates
-    # is refused, and so is a property merged a second time
-    assert not sourcespage._merge(data, parameters, "energy", prop,
-                                  prefixes)[0]
-    assert not sourcespage._merge(data, parameters, "energy|kg.number", prop,
-                                  prefixes)[0]
+
+def thing_drawing() -> dict:
+    return {"prefixes": {"ex": THING,
+                         "rdfs": "http://www.w3.org/2000/01/rdf-schema#"},
+            "prefix_width": 6,
+            "boxes": [{"id": "thing", "class": "ex:Thing",
+                       "count": "per_document",
+                       "address": {"folder": "thing", "key": "thing",
+                                   "from": ["energy"], "fold": True}}],
+            "arrows": [{"from": "energy", "to": "thing",
+                        "property": "rdfs:label"}]}
+
+
+def written_text(drawing: dict) -> str:
+    """The graph the drawing writes for one document that has one reading of
+    the field `energy`."""
+    from docpipe.extraction import graph, spec as spec_module
+    from docpipe.extraction.bricks import registry
+    spec = spec_module.load({"parameters": [{
+        "uri": "energy", "label": "Energy", "value_type": "text",
+        "description": "The name of the thing this passage says it is, as "
+                       "the document prints it.",
+        "example": {"source": "Der Plan heißt Wärmeplan Nord.",
+                    "tuples": [{"value": "Wärmeplan Nord",
+                                "quote": "heißt Wärmeplan Nord"}]}}]})
+    writer = graph.Writer(graph.Drawing(drawing), spec=spec,
+                          rules={"base": "https://example.org/id/"},
+                          bricks=registry())
+    row = {"kind": "tuple", "parameter": "energy", "value": "Wärmeplan Nord",
+           "value_raw": "Wärmeplan Nord", "unit": None, "state": "read",
+           "quote": "Der Plan heißt Wärmeplan Nord.", "trust": "A",
+           "tier": "text",
+           "provenance": {"page": 1, "owner_kind": "section",
+                          "owner_id": 1}}
+    written = writer.write("doc1", [row])
+    return written.text() if written else ""
+
+
+def test_a_merge_draws_the_property_the_field_is_then_written_under():
+    pytest.importorskip("rdflib")
+    from docpipe.compile.shapes import Property, Shape
+    shape = Shape(iri="", name="Thing", target_class=THING + "Thing")
+    prop = Property(path=THING + "amount", name="amount")
+    parameters = {"energy": {"uri": "energy"}}
+    drawing = thing_drawing()
+    # the failure by construction: before the merge the property is not
+    # drawn and the graph does not hold it
+    assert "ex:amount" not in written_text(drawing)
+    done, said = sourcespage._merge(parameters, drawing, "energy", shape,
+                                    prop, {"ex": THING})
+    assert done, said
+    assert {"from": "energy", "to": "thing", "property": "ex:amount"} \
+        in drawing["arrows"]
+    assert len(drawing["boxes"]) == 1
+    assert 'ex:amount "Wärmeplan Nord"' in written_text(drawing)
+    # merged a second time, or into a field the spec does not have: refused,
+    # and the drawing stays as it was
+    before = json.dumps(drawing)
+    assert not sourcespage._merge(parameters, drawing, "energy", shape,
+                                  prop, {"ex": THING})[0]
+    assert not sourcespage._merge(parameters, drawing, "nothing", shape,
+                                  prop, {"ex": THING})[0]
+    assert json.dumps(drawing) == before
+
+
+def test_a_merge_into_a_class_the_drawing_has_no_box_for_adds_the_box():
+    pytest.importorskip("rdflib")
+    from docpipe.compile.shapes import Property, Shape
+    shape = Shape(iri="", name="Other", target_class=THING + "Other")
+    prop = Property(path=THING + "amount", name="amount")
+    drawing = thing_drawing()
+    done, said = sourcespage._merge({"energy": {"uri": "energy"}}, drawing,
+                                    "energy", shape, prop, {"ex": THING})
+    assert done, said
+    box = [one for one in drawing["boxes"] if one["id"] != "thing"]
+    assert [one["class"] for one in box] == ["ex:Other"]
+    assert {"from": "energy", "to": box[0]["id"],
+            "property": "ex:amount"} in drawing["arrows"]
+    text = written_text(drawing)
+    assert "a ex:Other" in text and 'ex:amount "Wärmeplan Nord"' in text
+    # a profile whose graph file has no drawing has nothing to draw in
+    assert not sourcespage._merge({"energy": {"uri": "energy"}}, {},
+                                  "energy", shape, prop, {"ex": THING})[0]
+
+
+def test_take_hands_back_the_drawing_only_where_a_merge_changed_it(
+        tmp_path, profile):
+    pytest.importorskip("rdflib")
+    shapes = tmp_path / "more.ttl"
+    shapes.write_text(SHAPES.replace(
+        "sh:path oeo:OEO_00390073 ;\n                  sh:in ( oeo:"
+        f"OEO_00020309 oeo:{IAM} oeo:OEO_99999999 )",
+        "sh:path oeo:OEO_99990001 ; sh:name \"widget\""), encoding="utf-8")
+    spec = json.loads((Path(profile.package_dir) / "extraction_spec.json")
+                      .read_text(encoding="utf-8"))
+    row = "not_asked|factsheet|OEO_99990001"
+    taken = sourcespage.take(spec, [{"id": row, "action": "merge",
+                                     "into": "scenario_abstract"}],
+                             None, profile, [shapes])
+    assert not taken["refused"], taken["refused"]
+    arrows = [one for one in taken["map"]["arrows"]
+              if one["from"] == "scenario_abstract"
+              and one["property"] == "oeo:OEO_99990001"]
+    assert len(arrows) == 1 and arrows[0]["to"] == "scenario"
+    assert taken["data"] == spec           # a merge never touches the spec
+    # the failure by construction: a choice that is refused draws nothing
+    none = sourcespage.take(spec, [{"id": row, "action": "merge",
+                                    "into": "no_such_field"}],
+                            None, profile, [shapes])
+    assert none["refused"] and none["map"] is None
+

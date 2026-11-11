@@ -15,8 +15,8 @@ a GPU run:
 
 It holds for any profile, wherever it lives. What it reads of a profile is
 what the run reads: the spec the profile names (`extraction.SPEC_PATH`),
-its prompts, the writer of its graph (its own `kg.make_serializer`, else
-the `graph` block of the spec), its `vocabulary` module where it has one.
+its prompts, the drawing of its graph (`map` of `graph.json`), its
+`vocabulary` module where it has one.
 The keys of a request and a reply are the stage's and are checked here by
 name. A wording the run depends on is the profile's, in the language of its
 prompts, so the profile says which passages its prompts have to hold
@@ -71,15 +71,22 @@ def prompt_checks(declared) -> tuple:
     return good, bad
 
 
-def silent_parameters(raw: dict) -> list:
-    """Which parameters of a raw spec say nothing about the graph.
+def silent_parameters(raw: dict, drawing=None) -> list:
+    """Which parameters of a raw spec the drawing of the graph does not name.
+
+    A field says what it becomes in the graph when the drawing names it as a
+    source: an arrow starts at it, a box is of it or takes its value, name
+    or address from it, or a brick or a box's `settle` names it
+    (`graph.Drawing.says`). No drawing names nothing.
 
     A function rather than three lines inside `audit`, because a gate that
     cannot be handed a failing input is decoration, and `audit` can only be
     handed a profile's own files, which are, by the time anyone runs it, the
     ones that pass.
     """
-    return [p["uri"] for p in raw.get("parameters", ()) if not p.get("kg")]
+    said = drawing.says() if drawing is not None else set()
+    return [p["uri"] for p in raw.get("parameters", ())
+            if p["uri"] not in said]
 
 
 def left_out_of(profile) -> object:
@@ -120,21 +127,23 @@ def not_extracted(declared) -> tuple:
 
 
 def shape_properties(files, raw: dict, profile=None) -> tuple:
-    """(properties no parameter asks, all properties) of the shapes.
+    """(properties no arrow writes, all properties) of the shapes.
 
     Both as sorted (shape, property) pairs, the property by the end of its
-    IRI. A property is asked when a parameter's `kg` block names it or the
-    graph block links it: `docpipe compile diff` decides that and this reads
-    what it lists as "not_asked". The shapes file is read as the compiler
-    reads it, which needs rdflib.
+    IRI. A property is written when an arrow of the drawing of the
+    profile's graph file writes it: `docpipe compile diff` decides that and
+    this reads what it lists as "not_asked". The shapes file is read as the
+    compiler reads it, which needs rdflib.
     """
+    from docpipe import graphfile
     from docpipe.compile import draft, shapes
     found, _prefixes = shapes.read(files)
     every = sorted({(shape.name, draft.local(prop.path))
                     for shape in found for prop in shape.properties})
+    drawing = graphfile.load(profile).map if profile is not None else {}
     unasked = sorted({(row["shape"], row["path"])
-                      for row in draft.differences(
-                          found, draft.read_as_shapes(raw, profile))
+                      for row in draft.differences(found, raw,
+                                                   drawing=drawing)
                       if row["kind"] == "not_asked"})
     return unasked, every
 
@@ -362,35 +371,23 @@ def audit(name: str) -> list:
             continue
         as_the_profile_words_it(where, text)
 
-    # What writes the graph, found the way the run finds it: the profile's
-    # own writer, else the generic one, which needs the spec to say what an
-    # answer becomes.
+    # What writes the graph: the drawing of the profile's graph file, held
+    # to the spec, the shapes and the bricks the way the run builds it
+    # (`graph.check`): a field the spec does not ask, a brick no code has, a
+    # property the shapes do not give a class is refused there after the
+    # harvest, which is what this stands before.
+    from . import graph
+    drawing = None
     try:
-        factory = profile.component("kg", "make_serializer")
-    except Exception as exc:        # a writer that does not import writes nothing
-        check("serializer present", False, f"{type(exc).__name__}: {exc}")
+        drawing = graph.load_drawing(profile)
+        found = graph.check(drawing, profile)
+    except Exception as exc:
+        check("graph drawing", False, f"{type(exc).__name__}: {exc}")
     else:
-        if factory is not None:
-            module = sys.modules.get(getattr(factory, "__module__", ""))
-            check("serializer present", True,
-                  str(getattr(module, "__file__", "") or factory))
-        elif not isinstance(raw.get("graph"), dict):
-            check("serializer present", False,
-                  "no kg.make_serializer and no graph block in the spec: "
-                  "nothing says what the graph is")
-        else:
-            # Built here as the run builds it: a block the generic writer
-            # refuses (a base that is still the draft's placeholder, a
-            # parameter on a node nobody declared) is refused there after
-            # the harvest, which is what this stands before.
-            from . import graph
-            try:
-                graph.make_serializer(raw)
-            except graph.GraphError as exc:
-                check("serializer present", False, str(exc))
-            else:
-                check("serializer present", True,
-                      "the generic writer, from the graph block of the spec")
+        check("graph drawing", not found,
+              "; ".join(found) if found
+              else f"{len(drawing.boxes)} boxes, {len(drawing.arrows)} "
+                   f"arrows")
 
     # The published shape of what this run writes. It is generated, so a spec
     # change that nobody regenerated leaves the schema describing a harvest
@@ -407,7 +404,7 @@ def audit(name: str) -> list:
     written = schema_mod.schema_path(name)
     if check("schema present", written.is_file(), str(written)):
         current = (written.read_text(encoding="utf-8")
-                   == schema_mod.serialize(schema_mod.build(spec)))
+                   == schema_mod.serialize(schema_mod.build(spec, drawing)))
         check("schema current", current,
               "" if current else
               f"python -m docpipe.extraction.schema {name} --write")
@@ -496,20 +493,20 @@ def audit(name: str) -> list:
                 check("sources unchanged since reviewed", not moved,
                       "; ".join(moved), fatal=False)
 
-    # A coordinate the graph takes has to say what it becomes there. Not
-    # every axis does (some are read for the record and never serialized),
-    # but an axis with no kg block at all is one nobody decided about.
+    # A coordinate the graph takes has to be named by the drawing of it. Not
+    # every axis is (some are read for the record and never serialized), but
+    # an axis the drawing does not name at all is one nobody decided about.
+    said = drawing.says() if drawing is not None else set()
     silent = [f"{p.uri}.{axis_name}" for p in spec.parameters
-              for axis_name, axis in p.axes.items() if not axis.kg]
+              for axis_name in p.axes if axis_name not in said]
     check("every axis says what it becomes in the graph", not silent,
           ", ".join(silent), fatal=False)
 
     # And the same question one level up, which was asked nowhere: the axes
     # of a parameter can all be answered while the parameter's own value says
     # nothing about the graph it lands in. A parameter without an axis is one
-    # the axis check above cannot see. Read from the raw file: `kg` is passed
-    # through to the serializer and is not a field of the loaded Parameter.
-    mute = silent_parameters(raw)
+    # the axis check above cannot see.
+    mute = silent_parameters(raw, drawing)
     check("every parameter says what it becomes in the graph", not mute,
           ", ".join(mute), fatal=False)
 
