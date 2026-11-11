@@ -100,7 +100,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.editor.requests](docpipe.editor.requests.md): The model requests of an extraction trace, read from its events. (2 classes, 3 functions)
 - [docpipe.editor.rulespage](docpipe.editor.rulespage.md): The rules of a profile as `docpipe edit` shows and sets them, each in the tab it belongs to. (4 functions)
 - [docpipe.editor.sentences](docpipe.editor.sentences.md): A text cut into sentences and the diff of two such texts. (3 functions)
-- [docpipe.editor.server](docpipe.editor.server.md): The local server of `docpipe edit` and the one file guard. (2 classes, 3 functions)
+- [docpipe.editor.server](docpipe.editor.server.md): The local server of `docpipe edit` and the one file guard. (2 classes, 4 functions)
 - [docpipe.editor.sourcespage](docpipe.editor.sourcespage.md): Where a profile's ontology, shapes and graph come from, as `docpipe edit` shows, fetches and applies them, and what they say differently from the spec. (15 functions)
 - [docpipe.editor.specs](docpipe.editor.specs.md): What the editor does with a profile's extraction spec. (1 class, 19 functions)
 - [docpipe.editor.trying](docpipe.editor.trying.md): A recorded request sent once more with a changed prompt, and what the new answer is worth. (1 class, 6 functions)

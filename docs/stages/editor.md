@@ -7,7 +7,7 @@ closed lists the answers are chosen from, the texts a model is shown about a
 document and the examples. It is a long file, and one line of it can make a
 stored harvest stale. A profile also holds its prompts, the files a model is
 told its task in, and the sentences its stages say to the model outside them.
-`docpipe edit` shows these as a page in the browser with five tabs and a Rules pane. The Spec tab
+`docpipe edit` shows these as a page in the browser with five tabs and a Rules drawer. The Spec tab
 shows the spec, one form per question, and says what an edit costs the next run
 before it is written. The Prompts tab edits the prompt files and the sentence
 files of the profile; with a harvest folder it also shows what an edit does to
@@ -16,7 +16,7 @@ tab draws how a document is read, as boxes and frames, edits that drawing and
 the numbers that bound it, which stand in the profile's `flow.json`, and tries
 the drawing on a document with made-up answers. What a box does is code and is
 not in the page. The Sources tab edits `sources.json`, the Graph
-tab `graph.json`, and the Rules pane, which the Rules button of a tab opens,
+tab `graph.json`, and the Rules drawer, which the Rules button of a tab opens,
 the rules of that tab.
 
 ```
@@ -39,12 +39,31 @@ The server binds `127.0.0.1` only, answers a request only if its `Host` is
 `Content-Type: application/json` and the header `X-Docpipe-Edit: 1`, which the
 page sends and a form on another site cannot. A request it refuses is read to
 its end before the connection closes, so the refusal arrives instead of a
-reset connection. The page is one HTML file with plain JavaScript and one
-style sheet, with no build step, and loads nothing from outside.
+reset connection. The page loads nothing from outside and uses the system's
+fonts. The server serves only `/` (`index.html`), `/forms.js` and the files
+`/assets/<name>.js` and `/assets/<name>.css` with a plain name.
 
-The header has five tabs, **Spec**, **Prompts**, **Flow**, **Sources** and **Graph**, a **Rules** button on the tabs that have rules, marks a tab that
-holds edits not yet saved and says whether there are any. The rest of this section is the
-Spec tab. On the left is a tree, on the right the form of the selected node:
+The page is built from the sources in `docpipe/editor/ui/` (React, TypeScript,
+Mantine, React Flow and Tabler icons, built by Vite), and the built page is
+committed in `docpipe/editor/web/`: `index.html`, `assets/index-<hash>.js` and
+`.css`, `forms.js` (the form logic the page and the node tests share) and
+`third-party-licenses.md` (name, version, licence and licence text of every
+library inside the built page, written by the build). Running `docpipe edit`
+needs no Node. Node is needed only to change the page: in `docpipe/editor/ui`,
+`npm ci`, then `npm run build` (a type check, then Vite writes into `web/` and
+replaces `web/assets/` whole). `npm run dev` serves the sources and passes
+`/api` and `/forms.js` to a running `docpipe edit` (`DOCPIPE_EDIT_URL`, default
+`http://127.0.0.1:8765`).
+
+The head shows the profile and the branch, the five tabs **Spec**, **Prompts**,
+**Flow**, **Sources** and **Graph** as pills with a dot on a tab that holds
+edits not yet saved, a badge that says **Unsaved edits** or **All saved**, a
+**Rules** button on the tabs that have rules, which opens the rules of the tab
+in a drawer on the right (with Check, Save and Discard there), and a switch
+between light and dark colours, which the browser remembers. Ctrl+S saves and
+Ctrl+Enter checks the tab, or the open drawer. Leaving the page with unsaved
+edits asks first. A tab is loaded the first time it is opened and kept while
+the page is open. The rest of this section is the Spec tab. On the left is a tree, on the right the form of the selected node:
 
 - the top-level questions (`_comment`, `parameter_question`, `unit_question`);
 - what a document settles for all its values (`plan_fields`) and its other
@@ -119,14 +138,16 @@ behind it (`specs.changes`).
 ## Forms, not JSON
 
 No value of the Spec, Rules, Graph or Flow tab is typed as JSON; JSON stands only in
-the files the page writes. The Flow tab draws its file (`web/flow.js`, see Flow);
+the files the page writes. The Flow tab draws its file (`docpipe/editor/ui/src/flow/`, see Flow);
 for the other three the conversion between a value and its form is
 `web/forms.js`, which runs in the page and in node. A form given a value and
 no edit gives the identical value back, key order included, so the file is
 written back byte for byte; an edit through one field changes only the key
 that field shows; a key the form does not know is kept where it stood and shown
-greyed. A value that does not fit its form is kept as it is. `tests/
-test_editor_forms.py` holds all three for both profiles' real files.
+greyed. A value that does not fit its form is kept as it is. A range with one bound and
+the other empty stays editable in its form (the server still refuses it: two
+whole numbers or empty). Every value a form writes fits the same form again.
+`tests/test_editor_forms.py` holds all of these for both profiles' real files.
 
 - The `kg` block of a field and of a coordinate is a form of the keys the
   profile's graph writer reads. The writer declares them in its own `kg.py`
@@ -456,10 +477,11 @@ A box is one kind of the library (`extraction.blocks`). Each kind has a label,
 a group (start, prepare, order, ask, check, remember, state, end), what it takes
 and gives (the arrow before and after it: document, pieces, supply, answers,
 values and so on), its settings with their defaults, the frames it has to stand
-in, and a sentence on what it does. The library is on the left of the tab and
-can be searched: a box is dragged onto an arrow or, with a click, put after the
-chosen box. A box can also be moved with the arrows of its card, duplicated and
-deleted.
+in, and a sentence on what it does. The library is a searchable dialog: the "+" on an arrow opens it and puts the
+picked box or frame there. A right click on a box or frame opens a menu: Move
+up, Move down, Duplicate, Put a box after it, Wrap in Round, If / else or For
+each, Switch off or on, Delete. Shift or Ctrl click chooses several steps that
+stand one after another, so they can be wrapped together.
 
 Some boxes are fixed: the document, the transcription of the figures, the
 cutting into pieces, the lists of the document and the writing cannot be
@@ -530,15 +552,25 @@ request whose prompt neither the profile nor a profile it extends writes.
 
 ### The tab
 
-The library is on the left, the drawing in the middle, and on the right the
-settings of the chosen box: its settings, its own values, its condition ("only
-when"), whether it is on, and the first request a Try made at it. A frame has
-its own form (what it repeats, its order, side by side, the times of a round
-and its stop, the ways of an if). With nothing chosen the right side shows the
-numbers of the flow. The drawing runs top to bottom, each arrow carrying what the
-box before it gives, a frame around its boxes, which can be folded. A problem is
-shown at its box, and a card shows the number of requests its box asked in the
-recorded traces and in the last Try.
+The drawing is a canvas, and on the right stand the settings of the chosen
+step: for a box its settings, its own values, its condition ("only when"),
+whether it is on, and the first request a Try made at it; a frame has its own
+form (what it repeats, its order, side by side, the times of a round and its
+stop, the ways of an if). With nothing chosen the right side shows the numbers
+of the flow or Try. The drawing runs top to bottom: a frame (For each, Round,
+If / else) is a coloured area around its column of boxes, the ways of an if
+stand side by side, and each arrow is labelled with what the box before it
+gives and the condition of the step it leads to. A frame opens and closes with
+its arrow button or a double click; toolbar buttons open or close every frame
+and show the whole drawing, and the first view shows the top of the drawing at
+a readable size. The layout is computed from the nesting; no position is stored
+in the flow file. Ctrl+Z undoes an edit and Ctrl+Y does it again, until the next
+save. A short guide, "How to use this tab", stands above the canvas, folded
+until opened. A problem is marked red at its box and listed above the canvas; a
+click on it opens the frames around that box and brings it into view. A card
+shows the number of requests its box asked in the recorded traces and in the
+last Try. After Discard the page asks for the measurements again for the
+numbers it puts back.
 
 The flow has twelve numbers, each a whole number, and each says what it counts:
 
@@ -649,12 +681,12 @@ of a group's pair and an entry of its list.
 
 ## Rules
 
-Each tab that has rules shows them in a panel: each rule with its help, its
+Each tab that has rules shows them in a drawer, opened by its Rules button: each rule with its help, its
 kind and its bounds, taken from the profile's `rules.json` (the default
 profile's file names all of them, a profile's file only what it sets
 differently). A value is checked against the bounds before it is saved
 (`/api/rules`, `/check`, `/save` in `rulespage.py`). An `EXTRACT_*` setting
-wins over the file and the panel says so. No rule makes a harvest stale.
+wins over the file and the drawer says so. No rule makes a harvest stale.
 A rule of kind map is a table of names and values with + and -, one of kind
 table a table with its columns and a row to add, one of kind range two number
 fields, from and to, an empty one meaning no bound; no value is typed as JSON

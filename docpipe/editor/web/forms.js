@@ -88,7 +88,7 @@ function fits(spec, v) {
     case 'record': return isObj(v);
     case 'rows': return Array.isArray(v) || (spec.one && isObj(v));
     case 'map': return isObj(v);
-    case 'bounds': return v === null || (Array.isArray(v) && v.length === 2 && v.every(x => Number.isInteger(x)));
+    case 'bounds': return v === null || (Array.isArray(v) && v.length === 2 && v.every(x => x === null || Number.isInteger(x)));
   }
   return false;
 }

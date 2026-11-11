@@ -82,11 +82,26 @@ PREVIEW_NOTES = ("parameter", "coordinate", "owner", "value", "at", "attempt",
 SECRET_SETTINGS = ("base_url", "api_key")
 # what is served at "/": path -> (file in WEB, content type)
 PAGES = {"/": ("index.html", "text/html; charset=utf-8"),
-         "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-         "/flow.js": ("flow.js", "text/javascript; charset=utf-8"),
-         "/forms.js": ("forms.js", "text/javascript; charset=utf-8"),
-         "/style.css": ("style.css", "text/css; charset=utf-8"),
-         "/flow.css": ("flow.css", "text/css; charset=utf-8")}
+         "/forms.js": ("forms.js", "text/javascript; charset=utf-8")}
+# the built page (docpipe/editor/ui, `npm run build`) under /assets/: a plain
+# file name, no folder, with one of these endings
+ASSETS = "/assets/"
+ASSET_NAME = re.compile(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*")
+ASSET_KINDS = {".js": "text/javascript; charset=utf-8",
+               ".css": "text/css; charset=utf-8"}
+
+
+def page_file(path: str) -> Optional[tuple]:
+    """The file of the page a GET of *path* is answered with, as (its name
+    in WEB, its content type); None where the page has no such file."""
+    if path in PAGES:
+        return PAGES[path]
+    if path.startswith(ASSETS):
+        name = path[len(ASSETS):]
+        kind = ASSET_KINDS.get(os.path.splitext(name)[1])
+        if kind and ASSET_NAME.fullmatch(name) and ".." not in name:
+            return "assets/" + name, kind
+    return None
 
 
 # -- the one file guard --------------------------------------------------------
@@ -1154,9 +1169,10 @@ class _Handler(BaseHTTPRequestHandler):
                                                   keep_blank_values=True)),
                 None)
             return self._json(status, obj)
-        if parts.path not in PAGES:
+        page = page_file(parts.path)
+        if page is None:
             return self._json(404, {"error": f"not found: {parts.path}"})
-        name, kind = PAGES[parts.path]
+        name, kind = page
         try:
             payload = self.server.app.files.read(WEB / name)
         except (OSError, PermissionError) as exc:

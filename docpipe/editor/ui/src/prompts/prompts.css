@@ -1,0 +1,38 @@
+/* what Mantine does not draw for the Prompts tab: the chat bubbles, numbered lines, the list of recorded requests */
+
+.pr-cols { display: flex; flex: 1; min-height: 0; }
+.pr-col { min-height: 0; overflow: auto; padding: 12px; box-sizing: border-box; }
+.pr-left { width: 290px; flex: none; border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); }
+.pr-main { flex: 1 1 0; min-width: 0; }
+.pr-right { width: 520px; flex: none; border-left: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); }
+@media (max-width: 1500px) { .pr-right { width: 420px; } }
+
+.pr-stage { text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; font-weight: 700; color: var(--mantine-color-dimmed); padding: 10px 4px 2px; }
+
+.pr-area textarea { font-family: var(--mantine-font-family-monospace); font-size: 14px; line-height: 1.45; }
+
+.pr-reqlist { max-height: 280px; overflow: auto; border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); border-radius: var(--mantine-radius-md); }
+.pr-req { display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; border-bottom: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5)); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.pr-req:hover { background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6)); }
+.pr-req.sel { background: light-dark(var(--mantine-color-blue-0), rgba(34, 139, 230, 0.2)); }
+.pr-req b { display: block; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.pr-req small { display: block; font-size: 12px; color: var(--mantine-color-dimmed); overflow-wrap: anywhere; }
+
+/* the chat, after scripts/chat_view.py */
+.pr-msg { padding: 10px 14px; border-radius: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mantine-font-family-monospace); font-size: 13px; line-height: 1.5; }
+.pr-msg.system { background: light-dark(#eef0f3, #262a30); }
+.pr-msg.user { background: light-dark(#e8f0fb, #1c2a3d); margin-right: 28px; }
+.pr-msg.assistant { background: light-dark(#e6f4ea, #1d3325); margin-left: 28px; }
+.pr-msg.check { background: light-dark(#fff1df, #3a2c18); }
+.pr-role { font: 600 11px var(--mantine-font-family); text-transform: uppercase; color: var(--mantine-color-dimmed); margin-bottom: 4px; }
+.pr-ln { display: block; min-height: 1.5em; }
+.pr-ln.hit { background: light-dark(#ffe58a, #6b5a10); }
+.pr-key { color: var(--mantine-color-dimmed); }
+.pr-gonebox { margin-top: 8px; padding-top: 6px; border-top: 1px dashed light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-3)); }
+
+.pr-hit { background: light-dark(var(--mantine-color-green-1), rgba(47, 158, 68, 0.3)); }
+.pr-lost { background: light-dark(var(--mantine-color-red-1), rgba(224, 49, 49, 0.3)); text-decoration: line-through; }
+.pr-pair { padding: 6px 0; border-top: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5)); font-size: 14px; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.pr-out { margin: 0; padding: 8px 10px; max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mantine-font-family-monospace); font-size: 13px; border-radius: var(--mantine-radius-sm);
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8)); border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); }

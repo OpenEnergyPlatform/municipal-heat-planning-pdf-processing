@@ -1,0 +1,3 @@
+node_modules/
+# the page's own modules: the repository's ignore file leaves out every lib/ of a Python build
+!src/lib/

@@ -1,0 +1,35 @@
+/* What Mantine does not draw itself: the panes under the head, diffs, keys in code type. Colours come from Mantine's
+   variables, so both colour schemes hold. */
+
+html, body, #root { height: 100%; }
+body { font-size: 16px; }
+
+.dp-main { height: 100vh; padding-top: 64px; box-sizing: border-box; }
+.dp-pane { height: calc(100vh - 64px); overflow: hidden; display: flex; flex-direction: column; }
+
+.dp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mantine-color-orange-6); }
+
+.dp-key { font-size: 0.85em; }
+
+.dp-diff {
+  margin: 0; padding: 8px 10px; border-radius: var(--mantine-radius-sm); overflow: auto; max-height: 480px;
+  font-family: var(--mantine-font-family-monospace); font-size: 13px; line-height: 1.45;
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+.dp-diff > div { white-space: pre-wrap; word-break: break-word; }
+.dp-diff-add { background: light-dark(var(--mantine-color-green-0), rgba(47, 158, 68, 0.18)); color: light-dark(var(--mantine-color-green-9), var(--mantine-color-green-3)); }
+.dp-diff-del { background: light-dark(var(--mantine-color-red-0), rgba(224, 49, 49, 0.18)); color: light-dark(var(--mantine-color-red-9), var(--mantine-color-red-3)); }
+.dp-diff-hunk { color: light-dark(var(--mantine-color-indigo-7), var(--mantine-color-indigo-3)); }
+.dp-diff-hdr { color: var(--mantine-color-dimmed); font-weight: 600; }
+
+.dp-formtable td, .dp-formtable th { vertical-align: top; }
+.dp-record { padding-left: 10px; border-left: 2px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); }
+.dp-formrow { padding: 6px; border-radius: var(--mantine-radius-sm); background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-7)); }
+
+/* a marked place: the field an error names, a changed sentence */
+.dp-flag { outline: 2px solid var(--mantine-color-orange-5); outline-offset: 2px; border-radius: var(--mantine-radius-sm); }
+.dp-changed { background: light-dark(var(--mantine-color-yellow-1), rgba(250, 176, 5, 0.18)); }
+.dp-gone { text-decoration: line-through; color: var(--mantine-color-dimmed); }
+.dp-mono { font-family: var(--mantine-font-family-monospace); }
+.dp-scroll { overflow: auto; min-height: 0; }

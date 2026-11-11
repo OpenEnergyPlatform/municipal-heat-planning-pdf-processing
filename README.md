@@ -270,7 +270,7 @@ documents its configuration.
 
 ## Editing a profile
 
-`docpipe edit --profile NAME [--harvest DIR] [--port N] [--no-browser]` opens a local page (127.0.0.1 only, nothing is loaded from outside) with five tabs and a Rules pane:
+`docpipe edit --profile NAME [--harvest DIR] [--port N] [--no-browser]` opens a local page (127.0.0.1 only, nothing is loaded from outside) with five tabs and a Rules drawer:
 
 | Tab | Edits |
 | --- | --- |
@@ -280,7 +280,7 @@ documents its configuration.
 | Sources | `sources.json` |
 | Graph | `graph.json` |
 
-It writes only inside the profile's folder. See [the editor chapter](docs/stages/editor.md).
+It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node; changing the page needs it (`npm ci` and `npm run build` in `docpipe/editor/ui`). See [the editor chapter](docs/stages/editor.md).
 
 ## Collaboration
 

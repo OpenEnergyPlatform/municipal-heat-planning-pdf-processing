@@ -156,6 +156,15 @@ def call(self, method: str, path: str, query: dict,
 
 ## Functions
 
+### page_file
+
+```python
+def page_file(path: str) -> Optional[tuple]
+```
+
+The file of the page a GET of *path* is answered with, as (its name
+in WEB, its content type); None where the page has no such file.
+
 ### sha256
 
 ```python

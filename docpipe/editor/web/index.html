@@ -3,37 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>docpipe spec editor</title>
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="flow.css">
+<title>docpipe edit</title>
+<script src="forms.js"></script>
+  <script type="module" crossorigin src="./assets/index-C56pmaKZ.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CAj31MxT.css">
 </head>
 <body>
-<header id="hdr"></header>
-<div id="errbar" hidden></div>
-<div id="layout">
-  <nav id="tree" aria-label="Spec tree"></nav>
-  <section id="center">
-    <main id="main"></main>
-    <section id="panel"></section>
-  </section>
-</div>
-<div id="prompts" hidden>
-  <nav id="pl-left" aria-label="Prompts and sentences">
-    <div class="pr-filterbox"><input id="pl-filter" type="text" placeholder="Filter prompts" spellcheck="false"></div>
-    <div id="pl-items"></div>
-  </nav>
-  <section id="pl-main" aria-label="Editor"></section>
-  <section id="pl-right" aria-label="Recorded requests"></section>
-</div>
-<div id="flow" hidden>
-  <div id="fl-wrap" aria-label="Flow"></div>
-</div>
-<div id="sources" class="tab-pane" hidden aria-label="Sources"></div>
-<div id="graph" class="tab-pane" hidden aria-label="Graph"></div>
-<div id="rules" class="tab-pane" hidden aria-label="Rules"></div>
-<div id="modal" hidden></div>
-<script src="flow.js"></script>
-<script src="forms.js"></script>
-<script src="app.js"></script>
+<div id="root"></div>
 </body>
 </html>

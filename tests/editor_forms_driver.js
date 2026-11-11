@@ -29,12 +29,20 @@ function spoil(kind, value) {
   return value;
 }
 
+// Whether the form keeps a part of the value as it is (shown as text, not as fields), at any depth.
+function anyOdd(st) {
+  if (!st || typeof st !== 'object') return false;
+  if (st.odd) return true;
+  const kids = [...Object.values(st.cells || {}), ...(st.rows || []), ...(st.pairs || []).map(p => p.state)];
+  return kids.some(anyOdd);
+}
+
 const jobs = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const answers = jobs.map(job => {
   const spec = specOf(job.recipe);
   const st = F.stateOf(spec, job.value);
   const give = v => job.broken ? spoil(job.broken, v) : v;
-  if (job.op === 'roundtrip') return { value: give(F.valueOf(st)) };
+  if (job.op === 'roundtrip') return { value: give(F.valueOf(st)), odd: anyOdd(st) };
   if (job.op === 'leaves') return { leaves: F.leaves(st) };
   if (job.op === 'edit') { F.edit(st, job.path, job.text); return { value: give(F.valueOf(st)) }; }
   if (job.op === 'add_row') { const i = F.addRow(st, job.path); return { index: i, value: F.valueOf(st) }; }

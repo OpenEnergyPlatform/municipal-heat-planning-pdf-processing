@@ -1,0 +1,492 @@
+/* The Flow tab: the drawing of boxes and frames a run does (extraction/flow.py, engine.py) on a canvas, its library, its
+   numbers, checked and saved through /api/flow, tried on one document with made-up answers (/api/flow/try). The tree
+   the server sent is kept and edited in place, so a key no control shows goes back as it came; every edit can be
+   undone until the next save. */
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Node,
+} from '@xyflow/react';
+import {
+  Accordion, ActionIcon, Alert, Anchor, Badge, Box, Button, Center, Code, Group, List, Loader, Menu, ScrollArea,
+  SegmentedControl, Stack, Text, Tooltip,
+} from '@mantine/core';
+import {
+  IconArrowBackUp, IconArrowDown, IconArrowForwardUp, IconArrowUp, IconCheck, IconCopy, IconDeviceFloppy,
+  IconFocusCentered, IconFrame, IconArrowsMinimize, IconArrowsMaximize, IconPlayerPlay, IconPower, IconTrash, IconX,
+} from '@tabler/icons-react';
+import { api, apiR } from '../lib/api';
+import { askConfirm, showError, showInfo } from '../lib/dialogs';
+import { loadState, setDirty, tabStore, useTabActions } from '../lib/nav';
+import { clone } from '../lib/util';
+import { Diff } from '../components/Bits';
+import { layout, type Decor } from './layout';
+import {
+  ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, libBox, listOf, moveBy, remove, siblingsRun, walk,
+  wrap, type FlowData, type Step,
+} from './model';
+import { Ctx, DotNode, FrameNode, StepEdge, StepNode, WayNode, type FlowCtx } from './nodes';
+import { LibraryModal, type Pick } from './Library';
+import { NumbersPane, StepSettings, type Panel } from './Settings';
+import { TryPane } from './TryPane';
+import { HowTo } from './HowTo';
+import './flow.css';
+
+const nodeTypes = { step: StepNode, frame: FrameNode, way: WayNode, dot: DotNode };
+const edgeTypes = { step: StepEdge };
+const edgeDefaults = { markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 } };
+const READABLE = 0.8;    // below this zoom the words of a box are too small to read
+
+interface Report { source: 'check' | 'save'; r?: any; error?: string }
+
+interface State {
+  loaded: boolean; loading: boolean; data: FlowData | null; tree: Step[]; cur: Record<string, number | string>;
+  sel: string | null; multi: Set<string>; open: Set<string>; report: Report | null; busy: boolean;
+  meas: any; trial: any; trying: boolean; docs: { id: number | string; title: string }[] | null;
+  tryst: { doc: string; pages: string; mode: string }; side: 'numbers' | 'try';
+  undo: string[]; redo: string[]; snap: string; fit: number;
+}
+
+export function FlowTab() {
+  return <ReactFlowProvider><FlowInner /></ReactFlowProvider>;
+}
+
+function FlowInner() {
+  const F = useRef<State>({
+    loaded: false, loading: false, data: null, tree: [], cur: {}, sel: null, multi: new Set(), open: new Set(),
+    report: null, busy: false, meas: null, trial: null, trying: false, docs: null,
+    tryst: { doc: '', pages: '', mode: 'nothing' }, side: 'numbers', undo: [], redo: [], snap: '', fit: 0,
+  }).current;
+  const [version, touch] = useReducer((x: number) => x + 1, 0);
+  const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
+  const [lib, setLib] = useState<{ list: string; at: number; where: string } | null>(null);
+  const flow = useReactFlow();
+
+  const numbers = () => { const o: Record<string, number | string> = {}; for (const n of F.data!.numbers) o[n.name] = F.cur[n.name]; return o; };
+  const numDirty = () => !!F.data && F.data.numbers.some(n => F.cur[n.name] !== n.value);
+  const treeDirty = () => !!F.data && JSON.stringify(F.tree) !== JSON.stringify(F.data.tree);
+  const dirty = () => numDirty() || treeDirty();
+  const stamp = () => JSON.stringify({ tree: F.tree, cur: F.cur });
+
+  /* An edit lays the drawing out anew, and a frame that opens or grows pushes everything around it aside. So before
+     the layout changes, the screen place of the step being worked on is noted (with its neighbours and the frames
+     around it, in case it goes), and after the new layout the canvas is moved so that the first of them still drawn
+     stands where it stood. */
+  const placedNow = useRef<Node[]>([]);
+  const anchor = useRef<{ id: string; x: number; y: number }[] | null>(null);
+  const absolute = (nodes: Node[], id: string) => {
+    const by = new Map(nodes.map(n => [n.id, n]));
+    let n = by.get(id), x = 0, y = 0;
+    if (!n) return null;
+    while (n) { x += n.position.x; y += n.position.y; n = n.parentId ? by.get(n.parentId) : undefined; }
+    return { x, y };
+  };
+  const pin = (...ids: (string | null | undefined)[]) => {
+    if (anchor.current) return;
+    const vp = flow.getViewport();
+    const got: { id: string; x: number; y: number }[] = [];
+    for (const id of ids) {
+      if (!id) continue;
+      const p = absolute(placedNow.current, id);
+      if (p) got.push({ id, x: p.x * vp.zoom + vp.x, y: p.y * vp.zoom + vp.y });
+    }
+    anchor.current = got.length ? got : null;
+  };
+  /* a step, then the steps beside it in its column, then the frames around it */
+  const around = (id: string | null): string[] => {
+    if (!id) return [];
+    const got = find(F.tree, id);
+    if (!got) return [id];
+    const i = got.steps.indexOf(got.n);
+    return [id, got.steps[i - 1]?.id, got.steps[i + 1]?.id, ...ancestors(F.tree, id).reverse()].filter(Boolean) as string[];
+  };
+
+  /* every edit: what the last check or try said is gone, and the state before it can be had back */
+  const remember = () => { const now = stamp(); if (now !== F.snap) { F.undo.push(F.snap); F.redo = []; F.snap = now; } };
+  const edited = () => { pin(...around(F.sel)); F.report = null; F.trial = null; remember(); touch(); };
+  const restore = (s: string) => {
+    pin(...around(F.sel));
+    const o = JSON.parse(s);
+    const numbersMoved = JSON.stringify(o.cur) !== JSON.stringify(F.cur);
+    F.tree = o.tree; F.cur = o.cur; F.snap = s; F.report = null; F.trial = null;
+    if (F.sel && !find(F.tree, F.sel)) F.sel = null;
+    F.multi = new Set([...F.multi].filter(id => find(F.tree, id)));
+    touch();
+    if (numbersMoved) measured();
+  };
+  const undo = () => { if (!F.undo.length) return; F.redo.push(F.snap); restore(F.undo.pop()!); };
+  const redo = () => { if (!F.redo.length) return; F.undo.push(F.snap); restore(F.redo.pop()!); };
+
+  const measured = useCallback(async () => {
+    if (!F.data) return;
+    try { F.meas = await apiR('/api/flow/measured', { numbers: numbers(), trace: null }); }
+    catch { F.meas = null; }
+    touch();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const load = async (keep: boolean) => {
+    if (F.loading) return;
+    F.loading = true; touch();
+    try {
+      const d = await api<FlowData>('GET', '/api/flow');
+      const prevCur = F.cur, prevTree = F.loaded ? F.tree : null;
+      F.data = d; F.cur = {};
+      for (const n of d.numbers) F.cur[n.name] = keep && Object.prototype.hasOwnProperty.call(prevCur, n.name) ? prevCur[n.name] : n.value;
+      F.tree = keep && prevTree ? prevTree : clone(d.tree);
+      F.report = null; F.loaded = true;
+      if (!keep) { F.undo = []; F.redo = []; }
+      F.snap = stamp();
+      if (F.sel && !find(F.tree, F.sel)) F.sel = null;
+      F.fit++;
+    } catch (e) {
+      F.loading = false;
+      if (F.loaded) showError(e); else F.report = { source: 'check', error: (e as Error).message };
+      touch();
+      return;
+    }
+    F.loading = false; touch();
+    measured();
+  };
+  useEffect(() => { load(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const check = async () => {
+    if (!F.data || F.busy) return;
+    F.busy = true; touch();
+    try { F.report = { source: 'check', r: await apiR('/api/flow/check', { numbers: numbers(), tree: F.tree }) }; }
+    catch (e) { F.report = { source: 'check', error: (e as Error).message }; }
+    F.busy = false; touch();
+  };
+  const save = async () => {
+    if (!F.data || F.busy || !dirty()) return;
+    F.busy = true; touch();
+    let saved: any = null;
+    try {
+      const r = await apiR('/api/flow/save', { numbers: numbers(), tree: F.tree, base: F.data.base == null ? null : F.data.base });
+      if (r.saved) saved = r; else F.report = { source: 'save', r };
+    } catch (e) { F.report = { source: 'save', error: (e as Error).message }; }
+    F.busy = false;
+    if (saved) {
+      showInfo('Saved ' + (saved.file || 'the flow file') + ' (' + (saved.writes || 'written') + ').');
+      await load(false);
+      loadState().catch(() => {});
+    } else touch();
+  };
+  const discard = async () => {
+    if (!F.data || !dirty() || F.busy) return;
+    if (!await askConfirm('Discard changes', 'Discard the edited drawing and numbers? Ctrl+Z brings them back.', 'Discard')) return;
+    const numbersMoved = numDirty();
+    F.tree = clone(F.data.tree); for (const n of F.data.numbers) F.cur[n.name] = n.value;
+    edited();
+    if (numbersMoved) measured();   // what the last runs measured is shown at the numbers in the fields
+  };
+  const reload = async () => {
+    if (dirty() && !await askConfirm('Reload from disk', 'The flow file changed on disk. Reloading drops the edits.', 'Drop my edits and reload')) return;
+    await load(false);
+  };
+  const tryIt = async () => {
+    if (F.trying || !F.data) return;
+    F.trying = true; touch();
+    const body: Record<string, unknown> = { tree: F.tree, numbers: numbers(), mode: F.tryst.mode };
+    if (F.tryst.doc) {
+      body.document = Number(F.tryst.doc);
+      const m = /^\s*(\d+)\s*-\s*(\d+)\s*$/.exec(F.tryst.pages || '');
+      if (m) body.pages = [Number(m[1]), Number(m[2])];
+    }
+    try { F.trial = await apiR('/api/flow/try', body); }
+    catch (e) { F.trial = { error: (e as Error).message }; }
+    F.trying = false; touch();
+  };
+  const loadDocs = async () => {
+    if (F.docs) return;
+    try { F.docs = (await api('GET', '/api/flow/documents')).documents || []; } catch { F.docs = []; }
+    touch();
+  };
+
+  useTabActions('flow', { check, save });
+  useEffect(() => { setDirty('flow', F.loaded && dirty()); });
+  useEffect(() => {
+    const keys = (ev: KeyboardEvent) => {
+      const cur = tabStore.get();
+      if (cur.tab !== 'flow' || cur.rules || !(ev.ctrlKey || ev.metaKey)) return;
+      const t = ev.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      const k = ev.key.toLowerCase();
+      if (k === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); }
+      else if (k === 'y' || (k === 'z' && ev.shiftKey)) { ev.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', keys);
+    return () => window.removeEventListener('keydown', keys);
+  });
+
+  /* -- what the canvas shows -- */
+  const problems = useMemo(() => {
+    const m = new Map<string, string[]>();
+    if (!F.data) return m;
+    const R = F.report && F.report.r;
+    const said: { id?: string; message: string }[] = R && R.errors ? R.errors : F.data.problems || [];
+    for (const p of said) if (p.id) m.set(p.id, [...(m.get(p.id) || []), p.message]);
+    return m;
+  }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
+  const placed = useMemo(() => {
+    if (!F.data) return { nodes: [], edges: [] };
+    const boxes = F.trial && F.trial.boxes ? F.trial.boxes as Record<string, { requests: number }> : null;
+    const tried = boxes ? Object.fromEntries(Object.entries(boxes).map(([k, v]) => [k, v.requests])) : null;
+    const decor: Decor = {
+      open: F.open, selected: new Set([...F.multi, ...(F.sel ? [F.sel] : [])]), problems,
+      measured: F.meas && F.meas.steps ? F.meas.steps : null, tried,
+      triedMost: tried ? Math.max(1, ...Object.values(tried)) : 0,
+    };
+    return layout(F.data, F.tree, decor);
+  }, [version, problems]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const a = anchor.current;
+    anchor.current = null;
+    placedNow.current = placed.nodes;
+    if (!a) return;
+    const vp = flow.getViewport();
+    for (const p of a) {
+      const now = absolute(placed.nodes, p.id);
+      if (now) { flow.setViewport({ x: p.x - now.x * vp.zoom, y: p.y - now.y * vp.zoom, zoom: vp.zoom }); return; }
+    }
+  }, [placed]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* the first view: the whole drawing if it can be read whole, else its top at a size that can be read, scrolled down
+     with the wheel */
+  const canvas = useRef<HTMLDivElement>(null);
+  const showTop = (duration: number) => {
+    const el = canvas.current;
+    const top = placed.nodes.filter(n => !n.parentId);
+    if (!el || !top.length) return;
+    const W = el.clientWidth, H = el.clientHeight;
+    const b = flow.getNodesBounds(top);
+    const whole = Math.min(W / (b.width * 1.12), H / (b.height * 1.12));
+    if (whole >= READABLE) { flow.fitView({ padding: 0.06, maxZoom: 1, duration }); return; }
+    const z = Math.max(READABLE, Math.min(1, W / (b.width + 80)));
+    flow.setViewport({ x: (W - b.width * z) / 2 - b.x * z, y: 28 - b.y * z, zoom: z }, { duration });
+  };
+  useEffect(() => {
+    if (!F.fit) return;
+    const t = setTimeout(() => showTop(300), 120);
+    return () => clearTimeout(t);
+  }, [F.fit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* opens every frame around a step, chooses it and brings it to the middle */
+  const reveal = (id: string) => {
+    for (const a of ancestors(F.tree, id)) F.open.add(a);
+    F.sel = id; F.multi = new Set([id]); touch();
+    setTimeout(() => flow.fitView({ nodes: [{ id }], maxZoom: 1.1, duration: 400, padding: 0.6 }), 60);
+  };
+  const toggle = (id: string) => { pin(...around(id)); if (F.open.has(id)) F.open.delete(id); else F.open.add(id); touch(); };
+  const openAll = (open: boolean) => {
+    F.open = new Set(open ? [...walk(F.tree)].filter(([n]) => kindOf(n) !== 'box').map(([n]) => n.id) : []);
+    F.fit++; touch();
+  };
+  const focusNumber = (name: string) => {
+    F.sel = null; F.side = 'numbers'; touch();
+    setTimeout(() => { const el = document.querySelector<HTMLInputElement>('[data-number="' + name + '"] input'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 50);
+  };
+
+  /* -- edits of the drawing -- */
+  const put = (list: string, at: number, p: Pick) => {
+    const steps = listOf(F.tree, list);
+    if (!steps || !F.data) return;
+    const n = fresh(F.tree, F.data.conditions, p.kind, 'arg' in p ? p.arg : undefined);
+    insertAt(steps, at, n);
+    for (const a of ancestors(F.tree, n.id)) F.open.add(a);
+    F.sel = n.id; F.multi = new Set([n.id]);
+    edited();
+  };
+  const listKeyOf = (id: string): { list: string; at: number } | null => {
+    const got = find(F.tree, id);
+    if (!got) return null;
+    const keyOf = (steps: Step[]): string => {
+      if (steps === F.tree) return 'root';
+      for (const [n] of walk(F.tree)) {
+        const k = kindOf(n);
+        if ((k === 'each' || k === 'round') && n.steps === steps) return n.id;
+        if (k === 'if') {
+          const i = (n.if || []).findIndex((w: { steps: Step[] }) => w.steps === steps);
+          if (i >= 0) return n.id + '#' + i;
+          if (n.else === steps) return n.id + '#else';
+        }
+      }
+      return 'root';
+    };
+    return { list: keyOf(got.steps), at: got.steps.indexOf(got.n) + 1 };
+  };
+  const removable = (n: Step) => { const b = kindOf(n) === 'box' && F.data ? libBox(F.data.library, n.box) : null; return !(b && (b.fixed || !b.switch)); };
+  const act = (what: string, id: string, arg?: string) => {
+    const got = find(F.tree, id);
+    if (!got || !F.data) return;
+    pin(...around(id));
+    if (what === 'up' || what === 'down') { if (moveBy(F.tree, id, what === 'up' ? -1 : 1)) edited(); return; }
+    if (what === 'duplicate') { const c = duplicate(F.tree, id); if (c) { F.sel = c.id; F.multi = new Set([c.id]); edited(); } return; }
+    if (what === 'delete') { if (remove(F.tree, id)) { if (F.sel === id) F.sel = null; F.multi.delete(id); edited(); } return; }
+    if (what === 'off') { if (got.n.off) delete got.n.off; else got.n.off = true; edited(); return; }
+    if (what === 'wrap') {
+      const ids = F.multi.has(id) && F.multi.size > 1 ? [...F.multi] : [id];
+      if (!siblingsRun(F.tree, ids)) { showError(new Error('Only boxes and frames that stand right after one another in the same column can be wrapped together.')); return; }
+      const [kind, each] = (arg || 'round').split(':');
+      const f = wrap(F.tree, F.data.conditions, ids, kind as 'each' | 'round' | 'if', each);
+      if (f) { F.open.add(f.id); for (const a of ancestors(F.tree, f.id)) F.open.add(a); F.sel = f.id; F.multi = new Set([f.id]); edited(); }
+    }
+  };
+
+  const ctx: FlowCtx | null = F.data ? {
+    lib: F.data.library, never: F.data.never || {}, toggle,
+    add: (list, at) => setLib({ list, at, where: 'here' }),
+  } : null;
+
+  const onNodeClick = (ev: React.MouseEvent, node: Node) => {
+    if (node.type !== 'step' && node.type !== 'frame') return;
+    if (ev.shiftKey || ev.ctrlKey || ev.metaKey) {
+      if (F.multi.has(node.id)) F.multi.delete(node.id); else F.multi.add(node.id);
+      F.sel = node.id;
+    } else { F.sel = node.id; F.multi = new Set([node.id]); }
+    touch();
+  };
+  const onNodeContextMenu = (ev: React.MouseEvent, node: Node) => {
+    if (node.type !== 'step' && node.type !== 'frame') return;
+    ev.preventDefault();
+    if (!F.multi.has(node.id)) { F.sel = node.id; F.multi = new Set([node.id]); touch(); }
+    setMenu({ x: ev.clientX, y: ev.clientY, id: node.id });
+  };
+
+  if (!F.data || !ctx) {
+    return <Center h="100%">{F.report && F.report.error ? <Alert color="red">{F.report.error}</Alert> : <Loader />}</Center>;
+  }
+  const d = F.data;
+  const status = !d.exists ? 'not written yet: the drawing and every number come from ' + d.starts_from
+    : d.whole ? 'the whole flow of this profile' : (d.drawn_by === d.starts_from ? 'numbers of its own, the drawing of ' + d.drawn_by : 'its own drawing');
+  const sel = F.sel ? find(F.tree, F.sel) : null;
+  const panel: Panel = {
+    data: d, cur: F.cur, meas: F.meas, trial: F.trial,
+    problemsOf: id => (problems.get(id) || []).map(message => ({ message })),
+    edited,
+    numberSet: (name, v) => { F.cur[name] = v; F.report = null; remember(); touch(); measured(); },
+    select: id => { F.sel = id; F.multi = new Set(id ? [id] : []); touch(); },
+  };
+  const isDirty = dirty();
+  const menuStep = menu ? find(F.tree, menu.id) : null;
+
+  return (
+    <Ctx.Provider value={ctx}>
+      <Stack gap={0} h="100%">
+        <Group px="md" py={8} gap="sm" justify="space-between" className="fl-bar" wrap="nowrap">
+          <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+            <Code>{d.file}</Code>
+            <Text size="sm" c="dimmed" lineClamp={1}>{status}</Text>
+          </Group>
+          <Group gap={6} wrap="nowrap">
+            <Tooltip label="Undo (Ctrl+Z)"><ActionIcon variant="default" size="lg" disabled={!F.undo.length} onClick={undo} aria-label="Undo"><IconArrowBackUp size={18} /></ActionIcon></Tooltip>
+            <Tooltip label="Redo (Ctrl+Y)"><ActionIcon variant="default" size="lg" disabled={!F.redo.length} onClick={redo} aria-label="Redo"><IconArrowForwardUp size={18} /></ActionIcon></Tooltip>
+            <Tooltip label="Open every frame"><ActionIcon variant="default" size="lg" onClick={() => openAll(true)} aria-label="Open every frame"><IconArrowsMaximize size={18} /></ActionIcon></Tooltip>
+            <Tooltip label="Close every frame"><ActionIcon variant="default" size="lg" onClick={() => openAll(false)} aria-label="Close every frame"><IconArrowsMinimize size={18} /></ActionIcon></Tooltip>
+            <Tooltip label="Show the whole drawing"><ActionIcon variant="default" size="lg" onClick={() => flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 })} aria-label="Show the whole drawing"><IconFocusCentered size={18} /></ActionIcon></Tooltip>
+            <Button variant="default" leftSection={<IconCheck size={16} />} loading={F.busy} onClick={check} title="Ctrl+Enter">Check</Button>
+            <Button leftSection={<IconDeviceFloppy size={16} />} disabled={F.busy || !isDirty} onClick={save} title="Ctrl+S">Save</Button>
+            <Button variant="default" leftSection={<IconX size={16} />} disabled={F.busy || !isDirty} onClick={discard}>Discard</Button>
+            <Button variant="light" color="orange" leftSection={<IconPlayerPlay size={16} />} loading={F.trying}
+              onClick={() => { F.sel = null; F.multi = new Set(); F.side = 'try'; touch(); }}>Try</Button>
+          </Group>
+        </Group>
+        <Box px="md" pb={8}><HowTo /></Box>
+        <ReportStrip R={F.report} problems={d.problems} onStep={reveal} onNumber={focusNumber} onReload={reload} />
+        <Group gap={0} wrap="nowrap" style={{ flex: 1, minHeight: 0 }} align="stretch">
+          <Box ref={canvas} style={{ flex: 1, minWidth: 0, position: 'relative' }} className="fl-canvas">
+            <ReactFlow nodes={placed.nodes} edges={placed.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+              defaultEdgeOptions={edgeDefaults} nodesDraggable={false} nodesConnectable={false} elementsSelectable
+              deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null} panOnScroll zoomOnDoubleClick={false}
+              minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }}
+              onNodeClick={onNodeClick} onNodeContextMenu={onNodeContextMenu}
+              onPaneClick={() => { if (F.sel || F.multi.size) { F.sel = null; F.multi = new Set(); touch(); } }}>
+              <Background gap={24} size={1} />
+              <MiniMap pannable zoomable nodeStrokeWidth={2} />
+              <Controls showInteractive={false} />
+            </ReactFlow>
+          </Box>
+          <ScrollArea w={380} className="fl-side" type="auto">
+            <Box p="md">
+              {sel ? <StepSettings key={sel.n.id} P={panel} n={sel.n} /> : (
+                <Stack gap="md">
+                  <SegmentedControl fullWidth value={F.side} onChange={v => { F.side = v as 'numbers' | 'try'; touch(); }}
+                    data={[{ value: 'numbers', label: 'Numbers' }, { value: 'try', label: 'Try' }]} />
+                  {F.side === 'numbers' ? <NumbersPane P={panel} /> : (
+                    <TryPane st={F.tryst} set={s => { Object.assign(F.tryst, s); touch(); }} docs={F.docs} loadDocs={loadDocs}
+                      trying={F.trying} trial={F.trial} run={tryIt} />
+                  )}
+                </Stack>
+              )}
+            </Box>
+          </ScrollArea>
+        </Group>
+      </Stack>
+      <LibraryModal lib={d.library} opened={!!lib} where={lib ? lib.where : ''} onClose={() => setLib(null)}
+        onPick={p => { const l = lib; setLib(null); if (l) put(l.list, l.at, p); }} />
+      <Menu opened={!!menu} onChange={o => { if (!o) setMenu(null); }} position="bottom-start" withinPortal shadow="md" width={240}>
+        <Menu.Target><Box style={{ position: 'fixed', left: menu ? menu.x : 0, top: menu ? menu.y : 0, width: 1, height: 1 }} /></Menu.Target>
+        <Menu.Dropdown>
+          {menuStep && (<>
+            <Menu.Label>{labelOf(d.library, menuStep.n)}</Menu.Label>
+            <Menu.Item leftSection={<IconArrowUp size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === 0} onClick={() => act('up', menuStep.n.id)}>Move up</Menu.Item>
+            <Menu.Item leftSection={<IconArrowDown size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === menuStep.steps.length - 1} onClick={() => act('down', menuStep.n.id)}>Move down</Menu.Item>
+            <Menu.Item leftSection={<IconCopy size={16} />} onClick={() => act('duplicate', menuStep.n.id)}>Duplicate</Menu.Item>
+            <Menu.Item leftSection={<IconFrame size={16} />} onClick={() => { const at = listKeyOf(menuStep.n.id); if (at) setLib({ ...at, where: 'after ' + labelOf(d.library, menuStep.n) }); }}>Put a box after it…</Menu.Item>
+            <Menu.Divider />
+            <Menu.Label>Wrap {F.multi.size > 1 && F.multi.has(menuStep.n.id) ? 'the ' + F.multi.size + ' chosen' : 'it'} in</Menu.Label>
+            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>Round</Menu.Item>
+            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>If / else</Menu.Item>
+            {Object.keys(d.library.each).map(e => <Menu.Item key={e} onClick={() => act('wrap', menuStep.n.id, 'each:' + e)}>For each {e}</Menu.Item>)}
+            <Menu.Divider />
+            {removable(menuStep.n) && <Menu.Item leftSection={<IconPower size={16} />} onClick={() => act('off', menuStep.n.id)}>{menuStep.n.off ? 'Switch on' : 'Switch off'}</Menu.Item>}
+            {removable(menuStep.n) && <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={() => act('delete', menuStep.n.id)}>Delete</Menu.Item>}
+          </>)}
+        </Menu.Dropdown>
+      </Menu>
+    </Ctx.Provider>
+  );
+}
+
+/* what the last check or save said, above the canvas */
+function ReportStrip({ R, problems, onStep, onNumber, onReload }: {
+  R: Report | null; problems: { id?: string; name?: string; message: string }[];
+  onStep: (id: string) => void; onNumber: (name: string) => void; onReload: () => void;
+}) {
+  const item = (e: { id?: string; name?: string; message: string }, i: number) => (
+    <List.Item key={i}>
+      {e.id ? <><Anchor component="button" type="button" onClick={() => onStep(e.id!)}>{e.id}</Anchor>: </> : null}
+      {e.name ? <><Anchor component="button" type="button" onClick={() => onNumber(e.name!)}>{e.name}</Anchor>: </> : null}
+      {e.message}
+    </List.Item>
+  );
+  if (!R) {
+    if (!problems || !problems.length) return null;
+    return <Box px="md" pb={8}><Alert color="red" title="The drawing on disk has problems"><List size="sm">{problems.map(item)}</List></Alert></Box>;
+  }
+  if (R.error) return <Box px="md" pb={8}><Alert color="red">{R.error}</Alert></Box>;
+  const r = R.r || {};
+  const errs: { id?: string; name?: string; message: string }[] = r.errors || [];
+  return (
+    <ScrollArea.Autosize mah="32vh" px="md" pb={8}>
+      <Stack gap="xs">
+        {R.source === 'save' && r.reason === 'moved' && (
+          <Alert color="red"><Group justify="space-between"><Text size="sm">{r.message}</Text><Button size="xs" color="red" variant="white" onClick={onReload}>Reload from disk</Button></Group></Alert>
+        )}
+        {errs.length > 0 && <Alert color="red" title={'The run could not do this (' + errs.length + ')'}><List size="sm" spacing={2}>{errs.map(item)}</List></Alert>}
+        {!errs.length && r.ok && <Alert color="teal" title="The run can do this drawing." />}
+        {!errs.length && (r.changed || []).length > 0 && (
+          <Alert color="gray" title="Changes">
+            <List size="sm" spacing={2}>{r.changed.map((c: any, i: number) => <List.Item key={i}>{c.name === 'flow' ? c.to : <><Code>{c.name}</Code>: {String(c.from)} → {String(c.to)}</>}</List.Item>)}</List>
+          </Alert>
+        )}
+        {(r.diff || []).length > 0 && (
+          <Accordion variant="contained">
+            <Accordion.Item value="diff"><Accordion.Control>Diff of {r.file || 'the file'}</Accordion.Control>
+              <Accordion.Panel><Diff text={r.diff} /></Accordion.Panel></Accordion.Item>
+          </Accordion>
+        )}
+        {(r.says || []).map((s: string, i: number) => <Text key={i} size="sm" c="dimmed">{s}</Text>)}
+        {R.source === 'save' && !r.saved && r.reason === 'invalid' && <Badge color="red">Not saved</Badge>}
+      </Stack>
+    </ScrollArea.Autosize>
+  );
+}

@@ -40,9 +40,9 @@ COST = {
              "written from the stored harvest; no model is asked.",
 }
 
-# The form the page gives each kind of rule (app.js `ruleInput`); no kind is
-# typed as JSON. `rows` is a table with + and -, `pair` a two-column table,
-# `bounds` two number fields.
+# The form the page gives each kind of rule (ui/src/rules/RuleInputs.tsx);
+# no kind is typed as JSON. `rows` is a table with + and -, `pair` a
+# two-column table, `bounds` two number fields.
 FORMS = {"whole": "number", "number": "number", "switch": "checkbox",
          "choice": "select", "text": "line", "chars": "line",
          "texts": "lines", "map": "pairs", "table": "rows",

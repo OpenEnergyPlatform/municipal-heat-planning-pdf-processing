@@ -207,6 +207,36 @@ def test_a_value_that_does_not_fit_its_form_is_kept_as_it_is():
     answers = run_node([{"op": "roundtrip", "recipe": r, "value": v}
                         for r, v in odd])
     assert [a["value"] for a in answers] == [v for _r, v in odd]
+    assert unfit([("odd", a) for a in answers]) == ["odd", "odd"]
+
+
+def unfit(results):
+    """The labels whose value its form, given it again, keeps as it is
+    instead of showing it as a form."""
+    return [label for label, answer in results if answer.get("odd")]
+
+
+@needs_node
+def test_every_value_a_form_writes_fits_the_form_again():
+    """A form shows what it wrote: every field of every form, set to a value
+    and emptied, gives a value the same form takes again as a form."""
+    listed = run_node([{"op": "leaves", "recipe": r, "value": v}
+                       for _l, r, v in ALL])
+    jobs, meta = [], []
+    for (label, recipe, value), answer in zip(ALL, listed):
+        for leaf in answer["leaves"]:
+            for text in (text_for(leaf["kind"]), ""):
+                jobs.append({"op": "edit", "recipe": recipe, "value": value,
+                             "path": leaf["path"], "text": text})
+                meta.append((f"{label} {leaf['path']}={text!r}", recipe))
+    assert len(jobs) > 1000
+    written = run_node(jobs)
+    again = [(label, recipe, answer["value"])
+             for (label, recipe), answer in zip(meta, written)
+             if "value" in answer]
+    shown = run_node([{"op": "roundtrip", "recipe": r, "value": v}
+                      for _l, r, v in again])
+    assert unfit([(label, a) for (label, _r, _v), a in zip(again, shown)]) == []
 
 
 # -- 2. an edit changes only its key ------------------------------------------

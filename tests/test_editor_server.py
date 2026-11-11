@@ -361,10 +361,48 @@ def test_the_endpoints_need_no_network(tmp_path, monkeypatch):
     assert status == 200 and found["total"] == 1
 
 
+# Addresses a built page holds without loading them: XML namespaces, the
+# documentation links in the libraries' error messages and the attribution
+# link of the canvas library, which the page does not draw.
+NOT_LOADED = ("http://www.w3.org/", "https://react.dev/errors/",
+              "https://mantine.dev/", "https://reactflow.dev")
+
+
+def outside_loads(name: str, text: str) -> list:
+    """What a file of the page would load from another host: an src or href
+    of the HTML that is not a path of this server, a url() or @import of the
+    CSS with a host, an address in the script that is none of NOT_LOADED."""
+    import re
+    if name.endswith(".html"):
+        return [ref for ref in re.findall(r'(?:src|href)\s*=\s*"([^"]*)"',
+                                          text)
+                if re.match(r"^([a-z][a-z0-9+.-]*:|//)", ref, re.I)]
+    if name.endswith(".css"):
+        return re.findall(r"url\(\s*['\"]?((?:[a-z]+:)?//[^)'\"]*)", text,
+                          re.I) + re.findall(r"@import[^;]*//[^;]*", text)
+    return [url for url in re.findall(r"(?:https?:)?//[A-Za-z0-9.-]+\.[a-z]{2,}"
+                                      r"[^\s'\"`)]*", text)
+            if not url.startswith(NOT_LOADED)]
+
+
+def page_files() -> list:
+    return [WEB / "index.html", WEB / "forms.js"] + sorted(
+        (WEB / "assets").glob("*"))
+
+
 def test_the_page_loads_nothing_from_outside():
-    for name in ("index.html", "app.js", "style.css"):
-        text = (WEB / name).read_text(encoding="utf-8")
-        assert "http://" not in text and "https://" not in text, name
+    files = page_files()
+    assert any(path.suffix == ".js" for path in files[2:])
+    for path in files:
+        assert outside_loads(path.name, path.read_text(encoding="utf-8"))             == [], path.name
+    # each kind of file names what it would load from another host
+    assert outside_loads("index.html", '<script src="https://cdn.example.org'
+                                       '/react.js"></script>')
+    assert outside_loads("a.css", "@font-face{src:url(https://fonts.example"
+                                  ".org/f.woff2)}")
+    assert outside_loads("a.js", 'fetch("https://cdn.example.org/x.json")')
+    assert outside_loads("a.js", 'createElementNS("http://www.w3.org/2000/'
+                                 'svg","svg")') == []
 
 
 # -- the answers around the endpoints ------------------------------------------
@@ -557,12 +595,29 @@ def test_state_and_the_page_are_served(running):
     status, headers, raw = fetch(running, "GET", "/")
     assert status == 200 and raw == (WEB / "index.html").read_bytes()
     assert headers["Content-Type"].startswith("text/html")
-    status, headers, raw = fetch(running, "GET", "/app.js")
-    assert status == 200 and headers["Content-Type"].startswith(
-        "text/javascript")
-    assert fetch(running, "GET", "/style.css")[0] == 200
-    assert fetch(running, "GET", "/server.py")[0] == 404
-    assert fetch(running, "GET", "/../server.py")[0] == 404
+    import re
+    built = re.findall(r'(?:src|href)="\./(assets/[^"]+)"',
+                       raw.decode("utf-8"))
+    assert {Path(name).suffix for name in built} == {".js", ".css"}
+    for name in built + ["forms.js"]:
+        status, headers, got = fetch(running, "GET", "/" + name)
+        assert status == 200 and got == (WEB / name).read_bytes()
+        assert headers["Content-Type"].startswith(
+            "text/javascript" if name.endswith(".js") else "text/css")
+    for path in ("/server.py", "/../server.py", "/assets/../server.py",
+                 "/assets/..%2Fserver.py", "/assets/x.py", "/assets/a/b.js",
+                 "/assets/", "/app.js"):
+        assert fetch(running, "GET", path)[0] == 404, path
+
+
+def test_only_files_of_the_built_page_are_served():
+    assert server.page_file("/assets/index-C87fkepS.js") == (
+        "assets/index-C87fkepS.js", "text/javascript; charset=utf-8")
+    assert server.page_file("/assets/index.css")[1].startswith("text/css")
+    for path in ("/assets/../server.py", "/assets/..js", "/assets/a/b.js",
+                 "/assets/x.py", "/assets/.hidden.js", "/assets/",
+                 "/style.css", "/server.py"):
+        assert server.page_file(path) is None, path
 
 
 def test_the_server_binds_only_to_the_loopback(tmp_path):
