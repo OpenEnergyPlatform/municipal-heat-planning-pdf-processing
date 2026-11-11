@@ -44,7 +44,13 @@ same arguments.
 The pipeline itself is generic: `docpipe/` knows about PDFs, not about heat
 plans. What a project contributes lives in `profiles/<name>/` — where its
 documents come from (`source.py`), the tables it adds (`schema.sql`), the
-prompts it runs on (`prompts/<stage>/`) and the filters its app offers.
+prompts it runs on (`prompts/<stage>/`, with the sentences a stage says outside
+them in `phrases.json` beside them) and the filters its app offers. The rules
+a run follows are files too: `rules.json`, `flow.json` (how a document is
+read, see stage 7), `sources.json` (the ontology, shapes and graph sources) and
+`graph.json` (which classes are written, the address rules and what each shape
+constraint does). `docpipe edit` shows and sets them (see
+[Editing a profile](#editing-a-profile)).
 
 Pick one per run: the `profile` key of `docpipe.toml`, `--profile <name>` on a
 command, or `DOCPIPE_PROFILE`. The profile also decides where the data lives
@@ -77,15 +83,14 @@ The documentation site is published at
 It carries the pipeline walkthrough, a chapter per stage, a page per profile,
 the artifact hand-off, the harvest contract and an API reference with one
 page per module, and its sources are under [docs/](docs/README.md). Every
-page there except the three hand-written ones (`pipeline.md`, `running.md`,
-`glossary.md`) is generated from the code it describes by
-`scripts/build_docs.py`, the API reference from the signatures and
-docstrings, and the test suite fails when a page and its source disagree. Read the Docs builds and
-hosts the pages from `.readthedocs.yaml`, one version per branch and tag, and
-`.github/workflows/docs.yml` renders the pages from the code on every push to
-`develop` and commits them when they changed, checks them on every tag and
-every pull request that touches a documented source, and runs the same Sphinx
-build either way.
+page there except the hand-written ones (`pipeline.md`, `running.md`,
+`glossary.md` and the introductions under `docs/_intros/`) is generated from
+the code it describes by `scripts/build_docs.py`, the API reference from the
+signatures and docstrings. Read the Docs builds and hosts the pages from
+`.readthedocs.yaml`, one version per branch and tag, and
+`.github/workflows/docs.yml` renders the pages on every push to `develop` and
+commits them when they changed, checks them on every tag and every pull request that touches a documented
+source, and runs the same Sphinx build either way.
 
 ## Pipeline Overview
 
@@ -139,7 +144,7 @@ Documents sharing a `group_key` are versions of the same work; the profile decid
 
 ### 2. Layout detection (`docpipe.preprocessing`, stage 2)
 
-Each PDF page is rendered to a high-resolution PNG and analysed by [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors), which classifies structural elements — tables, figures, titles, text blocks, headers/footers, page numbers, captions — each with a bounding box and a confidence score.
+Each PDF page is rendered to a high-resolution PNG and analysed by [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors), which classifies structural elements — tables, figures, titles, text blocks, headers/footers, page numbers, captions — each with a bounding box and a confidence score. Pages can be rendered in worker processes (`DOCPIPE_LAYOUT_RENDER_PROCS`) while the main process runs the model.
 
 ### 3. Text extraction & structure (`docpipe.preprocessing`, stage 3)
 
@@ -151,7 +156,7 @@ Output: `sections.json` per PDF.
 
 ### 4. LLM refinement (`docpipe.refinement`)
 
-An LLM served locally via [vLLM](https://github.com/vllm-project/vllm) cleans the artefacts that are hard to catch deterministically: misattributed captions, residual boilerplate, bibliography pages. It operates in a sliding window over a document's sections (carrying context from the previous window so it can merge across window boundaries) and, per section, decides to keep, merge into the previous section, split, remove, or replace it. Bibliographies are converted to BibTeX.
+An LLM served locally via [vLLM](https://github.com/vllm-project/vllm) cleans the artefacts that are hard to catch deterministically: misattributed captions, residual boilerplate, bibliography pages. It operates in a sliding window over a document's sections (carrying context from the previous window so it can merge across window boundaries) and, per section, decides to keep, merge into the previous section, split, remove, or replace it. A section stays within the section word limit after a merge. Bibliographies are converted to BibTeX.
 
 Output: `sections_refined.json`. A window the model server does not serve (no connection, a timeout, a 429, a 5xx) leaves the document unrefined: no `sections_refined.json` is written, the usable replies are kept in `sections_refined.partial.json`, the stage exits non-zero, and the next run asks only for the windows that are missing. A cut of an oversized section the server does not answer ends the pass the same way, with nothing kept: the next run starts with the cut.
 
@@ -169,7 +174,11 @@ Output: `visuals.json`.
 
 ### 7. Reading the values out (`docpipe.extraction` + profile)
 
-The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). For every document the stage retrieves the passages that fit, asks the LLM one request per field, and accepts a value only when the quoted passage really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty. The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. A document one of whose requests ended on a 429 or a 5xx, or timed out, is written but not stamped, so the next run harvests it again and this run exits 1. A document whose database row names another PDF checksum than its stamp does is reported stale, skipped, and read again only with `--force-stale`. The contract of that file is published on the documentation site, one page per profile.
+The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). A document is read in pieces: the code numbers the sentences and the cells of every table, a piece is at most eight sentences or table rows (a table's head is shown with each of its pieces), and the model answers with addresses (`row.column`) and words, one question per request. A search orders the pieces with a reranker (a vLLM `/rerank` server, `RERANK_BASE_URL`) using a search sentence the model writes for each field and document, and shows at most 50 of them. A field with a closed list is asked with its list and answers with the number of an entry; the work a value belongs to is asked once per piece. A value is accepted only when the quoted line really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty.
+
+The order of these steps is not fixed in code. It is a drawing of boxes and frames (each, round, if) in the profile's `flow.json`, which the run executes exactly as drawn (`docpipe/extraction/engine.py`, `blocks.py`, `conditions.py`); the built-in default holds the whole drawing and the numbers that bound it. A request the server refuses (4xx except 429) is asked three times at most; if the refusal stays, the document is left unfinished and unstamped, and a later run reads it again.
+
+The result is one JSONL harvest and one stamp per document, so a re-run with the same spec, prompts and model skips what is already done and a changed question redoes only the coordinate it touches. A document one of whose requests ended on a 429 or a 5xx, or timed out, is written but not stamped, so the next run harvests it again and this run exits 1. A document whose database row names another PDF checksum than its stamp does is reported stale, skipped, and read again only with `--force-stale`. Every model request is sent with `tool_choice: none`. The contract of the harvest is published on the documentation site, one page per profile; details are in [the extraction chapter](docs/stages/extraction.md).
 
 ### 8. The knowledge graph (`docpipe.extraction --serialize`)
 
@@ -258,6 +267,20 @@ values-index` built their vectors and by closed questions where it did not, and
 has a review page where people decide whether harvested values are right;
 `docpipe evaluate` counts against those decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
 documents its configuration.
+
+## Editing a profile
+
+`docpipe edit --profile NAME [--harvest DIR] [--port N] [--no-browser]` opens a local page (127.0.0.1 only, nothing is loaded from outside) with five tabs and a Rules pane:
+
+| Tab | Edits |
+| --- | --- |
+| Spec | the extraction spec, one form per question, with what an edit costs the next run (with `--harvest`, which stored documents it makes stale) |
+| Prompts | the prompt and sentence files, each shown with the recorded requests as the edit would send them; Try re-sends at most three of them to the endpoint named by `EDIT_TRY_BASE_URL`, `EDIT_TRY_MODEL` and `EDIT_TRY_API_KEY` |
+| Flow | the drawing in `flow.json` and the numbers that bound it; Try runs the drawing on made-up answers and sends nothing |
+| Sources | `sources.json` |
+| Graph | `graph.json` |
+
+It writes only inside the profile's folder. See [the editor chapter](docs/stages/editor.md).
 
 ## Collaboration
 
