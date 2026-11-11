@@ -2,6 +2,7 @@
    widgets and sent back whole. `view` redraws the tree and the form, `meta` only the toolbar and the
    result, so an edit does not draw the whole form again. */
 import { askConfirm, askText, showError, showInfo } from '../lib/dialogs';
+import { t } from '../lib/i18n';
 import { errText, get, post } from '../lib/api';
 import { loadState, setDirty, Store } from '../lib/nav';
 import { clone, isObj, type Obj } from '../lib/util';
@@ -72,7 +73,7 @@ export async function loadAll() {
   ensureSel(); S.rev++; touch();
 }
 export async function reload() {
-  if (S.dirty && !await askConfirm('Reload from disk', 'There are unsaved edits. Reloading discards them.', 'Discard and reload')) return;
+  if (S.dirty && !await askConfirm(t('Reload from disk'), t('There are unsaved edits. Reloading discards them.'), t('Discard and reload'))) return;
   await run(loadAll);
 }
 
@@ -118,12 +119,12 @@ export async function removeOnServer(body: Obj, what: string) {
     if (!r.ok) throw new Error(errText(r.error));
     S.data = r.data; markDirty();
     S.rev++;
-    showInfo('Removed ' + what + ' here. It is written with the next confirmed save.');
+    showInfo(t('Removed {what} here. It is written with the next confirmed save.', { what }));
   });
 }
 
 export async function copyNode(kind: 'field' | 'coordinate', n: { uri: string; name?: string }) {
-  const key = await askText(kind === 'field' ? 'Copy as new field' : 'Copy as new coordinate', 'New key', '');
+  const key = await askText(kind === 'field' ? t('Copy as new field') : t('Copy as new dimension'), t('New key'), '');
   if (!key) return;
   await run(async () => {
     const r = await post('/api/spec/copy', { data: S.data, kind, field: n.uri, coordinate: kind === 'coordinate' ? n.name : null, key });
@@ -132,12 +133,14 @@ export async function copyNode(kind: 'field' | 'coordinate', n: { uri: string; n
     S.sel = kind === 'field' ? { t: 'param', uri: key } : { t: 'axis', uri: n.uri, name: key };
     S.expanded.add(n.uri); S.expanded.add(key);
     ensureSel(); S.rev++; S.resetScroll = true;
-    showInfo('Copied. A copied field has no example: write its own before saving.');
+    showInfo(t('Copied. A copied field has no example: write its own before saving.'));
   });
 }
 export async function deleteNode(kind: 'field' | 'coordinate' | 'plan_field' | 'works', n: Obj) {
-  const what = { field: 'field ' + n.uri, coordinate: 'coordinate ' + n.name + ' of ' + n.uri, plan_field: 'plan field ' + n.key, works: 'the works block' }[kind];
-  if (!await askConfirm('Delete', 'Delete ' + what + '?\nIt is removed here and written with the next confirmed save.', 'Delete')) return;
+  const what = kind === 'field' ? t('field {uri}', { uri: n.uri })
+    : kind === 'coordinate' ? t('dimension {name} of {uri}', { name: n.name, uri: n.uri })
+    : kind === 'plan_field' ? t('field of the whole document {key}', { key: n.key }) : t('the works block');
+  if (!await askConfirm(t('Delete'), t('Delete {what}?\nIt is removed here and written with the next confirmed save.', { what }), t('Delete'))) return;
   const body: Obj = { kind };
   if (kind === 'field') body.field = n.uri;
   if (kind === 'coordinate') { body.field = n.uri; body.coordinate = n.name; }
@@ -148,7 +151,7 @@ export async function deleteNode(kind: 'field' | 'coordinate' | 'plan_field' | '
     S.data = r.data; markDirty();
     S.sel = kind === 'coordinate' ? { t: 'param', uri: n.uri } : { t: 'spec' };
     ensureSel(); S.rev++; S.resetScroll = true;
-    showInfo('Removed ' + what + ' here. It is written with the next confirmed save.');
+    showInfo(t('Removed {what} here. It is written with the next confirmed save.', { what }));
   });
 }
 export function addPlanField(k: string) {

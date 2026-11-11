@@ -87,42 +87,73 @@ class Number:
 # nowhere in the code.
 NUMBERS = (
     Number("piece_lines", 1,
-           "Lines of a piece a document is read in; a table's head is shown "
-           "with each of its pieces."),
+           "The most lines one chunk has. The document is cut into chunks of "
+           "this size, and a request reads one chunk at a time. A table's "
+           "head is shown with each of its chunks. A larger number sends "
+           "fewer, longer chunks; a smaller number sends more, shorter "
+           "chunks and more requests."),
     Number("title_page_lines", 1,
-           "Lines of the document's first page a request shows as its title "
-           "page."),
+           "The number of lines from the document's first page that a "
+           "request shows as its title page. The title page tells the model "
+           "which document it reads. "
+           "A larger number shows more of the first page in every request "
+           "that uses it."),
     Number("headings", 0,
-           "Headings a request shows up to a value's place, its own last."),
+           "The number of headings a request shows above the line it asks "
+           "about, the nearest heading last. Headings tell the model which "
+           "section a line belongs to. A larger number shows more of the "
+           "outline above the line; 0 shows no heading."),
     Number("list_meanings", 0,
-           "Entries up to which a list is shown with what each entry means; "
-           "a longer list shows its names only, and one whose entries name "
-           "groups is asked group first."),
+           "The longest list that is shown with what each entry means. A "
+           "longer list shows only the names of its entries. A list whose "
+           "entries belong to groups is then asked in two steps, first the "
+           "group, then the entry. A larger number explains more lists "
+           "entry by entry and makes their requests longer."),
     Number("search_pieces", 1,
-           "Pieces a search shows for an open coordinate or for a field the "
-           "document has once.", "EXTRACT_SEARCH_PIECES"),
+           "The number of chunks a search shows when it looks for an open "
+           "dimension or for a field asked once per document. A larger "
+           "number searches further down the ranking and finds more, at the "
+           "price of more requests. A smaller number is cheaper and can "
+           "miss a value.", "EXTRACT_SEARCH_PIECES"),
     Number("search_tables", 0,
-           "Share of a search's pieces that are the best pieces of tables, "
-           "taken first; the three shares are scaled to the pieces of the "
-           "search, the rest are the best of any kind.",
+           "The share of a search's chunks that are the best chunks of "
+           "tables; these are taken first. The shares of tables, figures and "
+           "text are scaled to the number of chunks of the search, and the "
+           "rest are the best chunks of any kind. A larger share favours "
+           "tables.",
            "EXTRACT_SEARCH_SHARES", 0),
     Number("search_figures", 0,
-           "Share of a search's pieces that are the best pieces of figures, "
-           "taken first.", "EXTRACT_SEARCH_SHARES", 1),
+           "The share of a search's chunks that are the best chunks of "
+           "figures; these are taken first, as for tables. A larger share "
+           "favours figures and leaves fewer places for the other kinds. A "
+           "share of 0 takes no figure first.", "EXTRACT_SEARCH_SHARES", 1),
     Number("search_text", 0,
-           "Share of a search's pieces that are the best pieces of text, "
-           "taken first.", "EXTRACT_SEARCH_SHARES", 2),
+           "The share of a search's chunks that are the best chunks of "
+           "running text; these are taken first, as for tables. A larger "
+           "share favours text and leaves fewer places for the other kinds. "
+           "A share of 0 takes no text first.", "EXTRACT_SEARCH_SHARES", 2),
     Number("search_per_request", 1,
-           "Pieces one request of a search shows.", "EXTRACT_SEARCH_CHUNKS"),
+           "The number of chunks of a search that one request shows. A "
+           "search with more chunks than this is split into several "
+           "requests. A larger number needs fewer requests, each longer; a "
+           "smaller number needs more requests, each shorter.",
+           "EXTRACT_SEARCH_CHUNKS"),
     Number("listed_field_factor", 1,
-           "Times the pieces of a search that a field the document has once "
-           "reads where its values come from a list."),
+           "The factor by which a search for a field asked once per "
+           "document shows more chunks when the field's values come from a "
+           "list. Such a field has to be found among many possible entries. "
+           "A larger factor searches more chunks for it; 1 searches as many "
+           "as for any other field."),
     Number("follow_ups", 0,
-           "Times a request is asked again whose answer did not hold, each "
-           "time with the answer and why it did not hold."),
+           "How often a request is asked again when its answer failed a "
+           "check. Each time the request shows the answer and what failed. "
+           "A larger number gives the model more chances to correct a "
+           "value; 0 never asks again."),
     Number("replies", 1,
-           "Replies out of their form a request takes before it is left "
-           "unanswered; a request the server refuses is asked as often.",
+           "How many answers in the wrong form a request accepts before it "
+           "is left without an answer. A request the server refuses is asked "
+           "as often. A larger number is more patient with a model that "
+           "answers badly, at the price of more requests.",
            "EXTRACT_MAX_RETRIES"),
 )
 BY_NAME = {number.name: number for number in NUMBERS}

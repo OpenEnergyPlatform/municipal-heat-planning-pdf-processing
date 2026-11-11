@@ -1,6 +1,7 @@
 /* The pure part of the Prompts tab: what is sent back for a prompt, settings in its front matter, dirty tests, the
-   difference of two wordings, the addresses an answer names. */
+   difference of two wordings, the line numbers an answer names. */
 import { clone } from '../lib/util';
+import { t } from '../lib/i18n';
 
 export interface Part { mark: string; kind: string; keys: string[]; text: string }
 export interface Cut { front: string; common: string; parts: Part[] }
@@ -20,7 +21,7 @@ export type X = Ed | Ph;
 
 /* The run reads a marker only on a line of its own. So the text before a marker ends its line, and a marker ends its
    line before its text: what is typed at the end of one box must not run into the marker of the next. */
-export const lineEnded = (t: string) => (t === '' || t.endsWith('\n')) ? t : t + '\n';
+export const lineEnded = (s: string) => (s === '' || s.endsWith('\n')) ? s : s + '\n';
 
 /* the one function that builds the text sent back for a prompt */
 export function rawOf(E: Ed): string {
@@ -73,18 +74,18 @@ export function diffSegs(a: unknown, b: unknown) {
   };
 }
 
-export const reqLabel = (r: any) => [r.kind, r.parameter, r.coordinate].filter(Boolean).join(' · ') + (r.asked ? ' (asks again: ' + r.asked + ')' : '');
+export const reqLabel = (r: any) => [r.kind, r.parameter, r.coordinate].filter(Boolean).join(' · ') + (r.asked ? ' ' + t('(asks again: {asked})', { asked: r.asked }) : '');
 export function reqSub(r: any): string {
   const a: string[] = [];
-  if (r.owner != null) a.push('passage ' + r.owner);
-  if (r.value != null) a.push('value ' + r.value + (r.at ? ' @' + r.at : ''));
-  if (r.ms != null) a.push(Math.round(r.ms) + ' ms');
-  a.push((r.prompt_tokens == null ? '?' : r.prompt_tokens) + '/' + (r.completion_tokens == null ? '?' : r.completion_tokens) + ' tok');
-  if (r.attempt > 1) a.push('attempt ' + r.attempt);
+  if (r.owner != null) a.push(t('section, table or figure {owner}', { owner: String(r.owner) }));
+  if (r.value != null) a.push(r.at ? t('value {value}, line {at}', { value: String(r.value), at: String(r.at) }) : t('value {value}', { value: String(r.value) }));
+  if (r.ms != null) a.push(t('{n} ms', { n: Math.round(r.ms) }));
+  a.push(t('{prompt}/{completion} tokens', { prompt: r.prompt_tokens == null ? '?' : r.prompt_tokens, completion: r.completion_tokens == null ? '?' : r.completion_tokens }));
+  if (r.attempt > 1) a.push(t('attempt {n}', { n: r.attempt }));
   return a.join(' · ');
 }
 
-/* the lines an answer's addresses name ("19.2", "A3-A5") */
+/* the lines an answer's line numbers name ("19.2", "A3-A5") */
 export function addrs(a: unknown): Set<string> {
   const out: string[] = [];
   const add = (x: unknown) => {
@@ -105,9 +106,9 @@ export function lineKey(s: unknown): string | null { const m = String(s).match(/
 
 export function prettyAnswer(a: any): string {
   if (a && a.answer_json) {
-    let t = JSON.stringify(a.answer_json, null, 2);
-    if (Array.isArray(a.spelled) && a.spelled.length) t += '\n= ' + a.spelled.join('; ');
-    return t;
+    let out = JSON.stringify(a.answer_json, null, 2);
+    if (Array.isArray(a.spelled) && a.spelled.length) out += '\n= ' + a.spelled.join('; ');
+    return out;
   }
   return a && a.answer != null ? String(a.answer) : '';
 }

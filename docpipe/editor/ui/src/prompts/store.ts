@@ -3,6 +3,7 @@
    the page is open, and the tab keeps working when another tab is shown. Components read it after `useStore(tick)`. */
 import { api, apiR } from '../lib/api';
 import { askConfirm, showError } from '../lib/dialogs';
+import { t } from '../lib/i18n';
 import { clone } from '../lib/util';
 import { loadState, Store } from '../lib/nav';
 import { type Ed, type Ph, type X, type ShownCell, type Cut, bodyFromCut, edDirty, isDirty, makeEd, makePh, phDirty, rawOf, stampOf } from './logic';
@@ -50,8 +51,8 @@ export async function loadPrompts() {
   try {
     P.list = await api('GET', '/api/prompts');
     P.loaded = true;
-    const tr = P.list.traces || [];
-    if (!P.trace || !tr.some((t: any) => t.name === P.trace)) P.trace = tr.length ? tr[0].name : null;
+    const logs = P.list.traces || [];
+    if (!P.trace || !logs.some((l: any) => l.name === P.trace)) P.trace = logs.length ? logs[0].name : null;
   } catch (e) {
     P.loadErr = (e as Error).message;
   }
@@ -164,8 +165,8 @@ function adoptPhrases(x: Ph, d: any, stamp: string | null) {
 }
 export async function actDiscard(x: X | null) {
   if (!x) return;
-  const what = x.kind === 'prompt' ? x.id : 'the sentences of ' + x.module;
-  if (!await askConfirm('Discard changes', 'Discard the changes to ' + what + '?', 'Discard')) return;
+  const what = x.kind === 'prompt' ? x.id : t('the text blocks of {module}', { module: x.module });
+  if (!await askConfirm(t('Discard changes'), t('Discard the changes to {what}?', { what }), t('Discard'))) return;
   if (x.kind === 'prompt') { x.cut = clone(x.detail.cut); x.cut.parts = x.cut.parts || []; x.body = bodyFromCut(x.cut); }
   else x.table = clone(x.detail.table || {});
   x.rep = null; x.review = null;
@@ -173,7 +174,7 @@ export async function actDiscard(x: X | null) {
   if (x.kind === 'prompt') schedulePreview();
 }
 export async function reloadFromDisk(x: X) {
-  if (isDirty(x) && !await askConfirm('Reload from disk', 'The file changed on disk. Reloading drops the changes in the editor.', 'Drop my changes and reload')) return;
+  if (isDirty(x) && !await askConfirm(t('Reload from disk'), t('The file changed on disk. Reloading drops the changes in the editor.'), t('Drop my changes and reload'))) return;
   try {
     if (x.kind === 'prompt') adoptPrompt(x, await api('GET', '/api/prompt?id=' + encodeURIComponent(x.id)), null);
     else adoptPhrases(x, await api('GET', '/api/phrases?module=' + encodeURIComponent(x.module)), null);
@@ -189,7 +190,7 @@ async function runReview(x: X) {
   bump();
 }
 
-/* ---------- the sentences a trace shows ---------- */
+/* ---------- the text blocks a request log shows ---------- */
 
 export async function fetchShown(x: Ph, key: string, text: string) {
   const cell: ShownCell = { loading: true, trace: P.trace, text };

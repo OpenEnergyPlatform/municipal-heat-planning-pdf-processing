@@ -253,8 +253,8 @@ def form(profile=None) -> dict
 ```
 
 The form of each kind of node, {kind: [{"key", "widget", "help",
-...}]}: the keys `spec.py` reads, each with the comment the code writes
-at its field. A key that is not here is one the form does not know; the
+...}]}: the keys `spec.py` reads, each with what the page says of it
+(`HELP`). A key that is not here is one the form does not know; the
 page leaves it in the file as it is.
 
 [Back to the index](../README.md)

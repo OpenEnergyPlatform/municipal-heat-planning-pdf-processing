@@ -6,9 +6,10 @@ import { FormNode, useFormState } from '../components/FormNode';
 import { AreaBox, NumberBox, TextBox } from '../components/Inputs';
 import { Help } from '../components/Bits';
 import { clone, same } from '../lib/util';
+import { rich, t, tr } from '../lib/i18n';
 
 export type Rule = Record<string, any>;
-/* onChange(value, reset): reset = true draws the input anew from the value (use inherited, discard) */
+/* onChange(value, reset): reset = true draws the input anew from the value (use the default, discard) */
 export type RuleChange = (v: any, reset?: boolean) => void;
 
 export const ruleChanged = (r: Rule, cur: unknown) => !same(cur, r.value);
@@ -24,7 +25,7 @@ function RuleForm({ r, spec, cur, onChange, epoch }: { r: Rule; spec: Kind; cur:
 export function RuleInput({ r, cur, onChange, epoch }: { r: Rule; cur: any; onChange: RuleChange; epoch: number }) {
   const kind = r.kind;
   if (kind === 'switch') {
-    return <Switch checked={!!cur} label={cur ? 'on' : 'off'} onChange={e => onChange(e.currentTarget.checked)} />;
+    return <Switch checked={!!cur} label={cur ? t('on') : t('off')} onChange={e => onChange(e.currentTarget.checked)} />;
   }
   if (kind === 'choice') {
     const opts: string[] = (r.choices || []).slice();
@@ -34,7 +35,7 @@ export function RuleInput({ r, cur, onChange, epoch }: { r: Rule; cur: any; onCh
   }
   if (kind === 'whole' || kind === 'number') {
     return <NumberBox value={cur == null ? '' : String(cur)} step={kind === 'whole' ? '1' : 'any'} min={r.least} max={r.most}
-      onText={t => { const s = t.trim(); onChange(s === '' ? null : (isNaN(Number(s)) ? s : Number(s))); }} />;
+      onText={text => { const s = text.trim(); onChange(s === '' ? null : (isNaN(Number(s)) ? s : Number(s))); }} />;
   }
   if (kind === 'text' || kind === 'chars') {
     return <TextBox mono value={cur == null ? '' : String(cur)} onText={onChange} />;
@@ -42,10 +43,10 @@ export function RuleInput({ r, cur, onChange, epoch }: { r: Rule; cur: any; onCh
   if (kind === 'texts') {
     const n = Array.isArray(cur) ? cur.length : 0;
     return <AreaBox mono minRows={Math.min(8, Math.max(2, n + 1))} maxRows={12} value={Array.isArray(cur) ? cur.join('\n') : ''}
-      onText={t => onChange(t.split('\n').map(s => s.trim()).filter(Boolean))} />;
+      onText={text => onChange(text.split('\n').map(s => s.trim()).filter(Boolean))} />;
   }
   const spec = DF().ruleSpec(r as { kind: string });
-  if (!spec) return <Text size="sm" c="red">No form for a rule of kind {String(kind)}.</Text>;
+  if (!spec) return <Text size="sm" c="red">{t('No form for a rule of kind {kind}.', { kind: String(kind) })}</Text>;
   return <RuleForm r={r} spec={spec} cur={cur} onChange={onChange} epoch={epoch} />;
 }
 
@@ -58,23 +59,23 @@ export function RuleRow({ r, cur, onChange, epoch }: { r: Rule; cur: any; onChan
       <Stack gap={6}>
         <Group gap={6}>
           <Code fw={600}>{r.name}</Code>
-          {r.own || r.declared_here ? <Badge color="teal" variant="light">{r.owner || 'set by this profile'}</Badge>
-            : <Badge color="gray" variant="light">{r.owner || 'inherited'}</Badge>}
-          {r.decided ? <Badge color="gray" variant="outline">decided {r.decided}</Badge> : null}
+          {r.own || r.declared_here ? <Badge color="teal" variant="light">{t('set in this profile')}</Badge>
+            : <Badge color="gray" variant="light">{r.set_in ? t('set in profile {name}', { name: r.set_in }) : t('default')}</Badge>}
+          {r.decided ? <Badge color="gray" variant="outline">{t('decided on {date}', { date: r.decided })}</Badge> : null}
           {r.setting ? <Badge color={wins ? 'orange' : 'gray'} variant="light">
-            setting {r.setting}{wins ? ' is set and wins' : ' wins where set'}</Badge> : null}
-          {changed ? <Badge color="orange" variant="filled">edited</Badge> : null}
+            {wins ? t('setting {setting} is set and takes precedence', { setting: r.setting }) : t('setting {setting} takes precedence where it is set', { setting: r.setting })}</Badge> : null}
+          {changed ? <Badge color="orange" variant="filled">{t('edited')}</Badge> : null}
         </Group>
-        <Help text={r.help || ''} />
+        <Help text={tr(r.help || '')} />
         <Group align="flex-start" gap="sm" wrap="nowrap">
           <Box style={{ flex: 1, minWidth: 0 }}><RuleInput r={r} cur={cur} onChange={onChange} epoch={epoch} /></Box>
           {r.has_inherited && !same(cur, r.inherited)
             ? <Tooltip label={JSON.stringify(r.inherited)} multiline maw={420}>
-                <Button size="xs" variant="default" onClick={() => onChange(clone(r.inherited), true)}>use inherited</Button>
+                <Button size="xs" variant="default" onClick={() => onChange(clone(r.inherited), true)}>{t('use default')}</Button>
               </Tooltip>
             : null}
         </Group>
-        {r.where ? <Text size="xs" c="dimmed" className="dp-mono">applied in {r.where}</Text> : null}
+        {r.where ? <Text size="xs" c="dimmed" className="dp-mono">{t('used in {where}', { where: r.where })}</Text> : null}
       </Stack>
     </Paper>
   );
@@ -90,7 +91,7 @@ export function GroupedRules({ rules, curOf, onChange, epoch }: {
     <Accordion multiple variant="separated" radius="md" defaultValue={names} key={names.join('|')}>
       {[...groups.entries()].map(([g, rs]) => (
         <Accordion.Item key={g} value={g}>
-          <Accordion.Control>{g} ({rs.length})</Accordion.Control>
+          <Accordion.Control>{rich(tr(g))} ({rs.length})</Accordion.Control>
           <Accordion.Panel>
             <Stack gap="sm">
               {rs.map(r => <RuleRow key={r.name} r={r} cur={curOf(r.name)} epoch={epoch}

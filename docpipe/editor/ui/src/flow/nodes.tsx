@@ -1,4 +1,4 @@
-/* How a box, a frame, the head of a way and an arrow look on the canvas. */
+/* How a step, a loop, round or branching, the head of a branch and an arrow look on the canvas. */
 import { createContext, useContext, type ReactNode } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getStraightPath, Handle, Position, type EdgeProps, type NodeProps } from '@xyflow/react';
 import { ActionIcon, Badge, Box, Group, Text, Tooltip } from '@mantine/core';
@@ -9,23 +9,31 @@ import {
 import type { EdgeData, StepData } from './layout';
 import type { Library } from './model';
 import { libBox } from './model';
+import { num, t, tn, tr, useLang } from '../lib/i18n';
 
-/* the groups of the library: their word, colour and sign */
-export const GROUPS: Record<string, { word: string; color: string; icon: (p: { size?: number }) => ReactNode }> = {
-  start: { word: 'Start', color: 'teal', icon: p => <IconPlayerPlay {...p} /> },
-  prepare: { word: 'Prepare', color: 'cyan', icon: p => <IconScissors {...p} /> },
-  order: { word: 'Order', color: 'blue', icon: p => <IconArrowsSort {...p} /> },
-  ask: { word: 'Ask', color: 'indigo', icon: p => <IconMessageQuestion {...p} /> },
-  check: { word: 'Check', color: 'grape', icon: p => <IconChecks {...p} /> },
-  remember: { word: 'Remember', color: 'violet', icon: p => <IconBookmark {...p} /> },
-  state: { word: 'State', color: 'orange', icon: p => <IconFlag {...p} /> },
-  end: { word: 'End', color: 'green', icon: p => <IconFlagCheck {...p} /> },
+/* the groups of the library: their colour and sign (their word is groupWord) */
+export const GROUPS: Record<string, { color: string; icon: (p: { size?: number }) => ReactNode }> = {
+  start: { color: 'teal', icon: p => <IconPlayerPlay {...p} /> },
+  prepare: { color: 'cyan', icon: p => <IconScissors {...p} /> },
+  order: { color: 'blue', icon: p => <IconArrowsSort {...p} /> },
+  ask: { color: 'indigo', icon: p => <IconMessageQuestion {...p} /> },
+  check: { color: 'grape', icon: p => <IconChecks {...p} /> },
+  remember: { color: 'violet', icon: p => <IconBookmark {...p} /> },
+  state: { color: 'orange', icon: p => <IconFlag {...p} /> },
+  end: { color: 'green', icon: p => <IconFlagCheck {...p} /> },
 };
-export const FRAMES: Record<string, { word: string; color: string; icon: (p: { size?: number }) => ReactNode }> = {
-  each: { word: 'For each', color: 'gray', icon: p => <IconRepeat {...p} /> },
-  round: { word: 'Round', color: 'yellow', icon: p => <IconRefresh {...p} /> },
-  if: { word: 'If / else', color: 'pink', icon: p => <IconGitBranch {...p} /> },
+/* the word of a group of the library; a group the page does not know is shown by its key */
+export const groupWord = (key: string): string => ({
+  start: t('Start'), prepare: t('Prepare'), order: t('Search'), ask: t('Ask the model'), check: t('Check'),
+  remember: t('Remember'), state: t('State'), end: t('End'),
+} as Record<string, string>)[key] || key;
+/* loops, rounds and branchings: their colour and sign (their word is frameWord) */
+export const FRAMES: Record<string, { color: string; icon: (p: { size?: number }) => ReactNode }> = {
+  each: { color: 'gray', icon: p => <IconRepeat {...p} /> },
+  round: { color: 'yellow', icon: p => <IconRefresh {...p} /> },
+  if: { color: 'pink', icon: p => <IconGitBranch {...p} /> },
 };
+export const frameWord = (kind: string): string => ({ each: t('Loop'), round: t('Round'), if: t('Branching') } as Record<string, string>)[kind] || kind;
 
 export interface FlowCtx {
   lib: Library;
@@ -47,24 +55,26 @@ const Handles = () => (
 function lookOf(c: FlowCtx, d: StepData) {
   if (d.kind === 'box') {
     const b = libBox(c.lib, d.step.box);
-    const g = GROUPS[b ? b.group : ''] || { word: '', color: 'gray', icon: (p: { size?: number }) => <IconFileText {...p} /> };
-    return { ...g, sub: b && b.asks ? 'asks ' + b.asks : (b ? g.word.toLowerCase() : 'unknown box'), never: c.never[d.step.box] || '' };
+    const g = GROUPS[b ? b.group : ''] || { color: 'gray', icon: (p: { size?: number }) => <IconFileText {...p} /> };
+    const word = b ? groupWord(b.group) : '';
+    return { ...g, sub: b && b.asks ? t('prompt: {prompt}', { prompt: b.asks }) : (b ? word : t('unknown step')), never: tr(c.never[d.step.box] || '') };
   }
   const f = FRAMES[d.kind] || FRAMES.each;
-  return { ...f, sub: (d.inside ?? 0) + ' inside', never: '' };
+  return { ...f, sub: t('{n} inside', { n: d.inside ?? 0 }), never: '' };
 }
 
 function Counts({ d }: { d: StepData }) {
   return (
     <Group gap={4} wrap="nowrap">
-      {d.measured != null && <Tooltip label="requests of this box in the recorded runs"><Badge size="xs" variant="light" color="gray">{d.measured.toLocaleString('en-US')} last run</Badge></Tooltip>}
-      {d.tried != null && <Tooltip label="requests of this box in the try"><Badge size="xs" variant="filled" color="orange">{d.tried} in try</Badge></Tooltip>}
+      {d.measured != null && <Tooltip label={t('requests of this step in the recorded runs')}><Badge size="xs" variant="light" color="gray">{t('{n} last run', { n: num(d.measured) })}</Badge></Tooltip>}
+      {d.tried != null && <Tooltip label={t('requests of this step in the dry run')}><Badge size="xs" variant="filled" color="orange">{t('{n} in dry run', { n: d.tried })}</Badge></Tooltip>}
     </Group>
   );
 }
 
-/* a box, or a frame drawn closed */
+/* a step, or a loop, round or branching drawn closed */
 export function StepNode({ id, data, selected }: NodeProps) {
+  useLang();
   const c = useCtx();
   const d = data as StepData;
   const look = lookOf(c, d);
@@ -82,14 +92,14 @@ export function StepNode({ id, data, selected }: NodeProps) {
         <Box style={{ minWidth: 0, flex: 1 }}>
           <Text fw={600} size="sm" lineClamp={1} title={d.label}>{d.label}</Text>
           <Group gap={6} wrap="nowrap">
-            <Text size="xs" c="dimmed" lineClamp={1}>{off ? (d.step.off ? 'switched off' : 'never taken here') : look.sub}</Text>
+            <Text size="xs" c="dimmed" lineClamp={1}>{off ? (d.step.off ? t('switched off') : t('never taken here')) : look.sub}</Text>
             <Counts d={d} />
           </Group>
         </Box>
         {d.problems.length > 0 && <Tooltip label={d.problems.join('\n')} multiline w={320}><Badge color="red" size="sm" circle>{d.problems.length}</Badge></Tooltip>}
         {frame && (
-          <Tooltip label="Open the frame">
-            <ActionIcon variant="subtle" size="sm" aria-label="Open the frame" onClick={e => { e.stopPropagation(); c.toggle(id); }}>
+          <Tooltip label={t('Open')}>
+            <ActionIcon variant="subtle" size="sm" aria-label={t('Open')} onClick={e => { e.stopPropagation(); c.toggle(id); }}>
               <IconChevronRight size={16} />
             </ActionIcon>
           </Tooltip>
@@ -99,8 +109,9 @@ export function StepNode({ id, data, selected }: NodeProps) {
   );
 }
 
-/* a frame drawn open: a coloured area with its head; its steps are nodes of their own inside it */
+/* a loop, round or branching drawn open: a coloured area with its head; its steps are nodes of their own inside it */
 export function FrameNode({ id, data, selected }: NodeProps) {
+  useLang();
   const c = useCtx();
   const d = data as StepData;
   const f = FRAMES[d.kind] || FRAMES.each;
@@ -109,30 +120,31 @@ export function FrameNode({ id, data, selected }: NodeProps) {
       style={{ ['--fl-c' as string]: `var(--mantine-color-${f.color}-6)` }} data-id={id}>
       <Handles />
       <Group className="fl-frame-head" gap={8} wrap="nowrap" px={12}>
-        <ActionIcon variant="subtle" size="sm" aria-label="Close the frame" onClick={e => { e.stopPropagation(); c.toggle(id); }}>
+        <ActionIcon variant="subtle" size="sm" aria-label={t('Close')} onClick={e => { e.stopPropagation(); c.toggle(id); }}>
           <IconChevronDown size={16} />
         </ActionIcon>
         <Box className="fl-icon">{f.icon({ size: 18 })}</Box>
         <Box style={{ minWidth: 0, flex: 1 }}>
           <Text fw={650} size="sm" lineClamp={1}>{d.label}</Text>
-          <Text size="xs" c="dimmed" lineClamp={1}>{frameSays(d)}</Text>
+          <Text size="xs" c="dimmed" lineClamp={1}>{frameSays(d, c.lib)}</Text>
         </Box>
         {d.problems.length > 0 && <Tooltip label={d.problems.join('\n')} multiline w={320}><Badge color="red" size="sm" circle>{d.problems.length}</Badge></Tooltip>}
       </Group>
     </Box>
   );
 }
-function frameSays(d: StepData): string {
+function frameSays(d: StepData, lib: Library): string {
   const n = d.step, bits: string[] = [];
-  if (d.kind === 'each' && n.together) bits.push('side by side');
-  if (d.kind === 'each' && n.order) bits.push('order: ' + String(n.order).replace('_', ' '));
-  if (d.kind === 'round' && n.stop) bits.push('stops when it holds');
-  if (n.when) bits.push('only under a condition');
-  if (n.off) bits.push('switched off');
-  return bits.join(' · ') || (d.inside + ' boxes and frames inside');
+  if (d.kind === 'each' && n.together) bits.push(t('side by side'));
+  if (d.kind === 'each' && n.order) bits.push(t('order: {order}', { order: tr((lib.order_words || {})[n.order] || String(n.order).replace('_', ' ')) }));
+  if (d.kind === 'round' && n.stop) bits.push(t('stops when its condition is met'));
+  if (n.when) bits.push(t('only under a condition'));
+  if (n.off) bits.push(t('switched off'));
+  return bits.join(' · ') || tn(d.inside ?? 0, '{n} step inside', '{n} steps inside');
 }
 
 export function WayNode({ data }: NodeProps) {
+  useLang();
   const label = String((data as { label: string }).label);
   return (
     <Box className="fl-way" title={label}>
@@ -143,8 +155,9 @@ export function WayNode({ data }: NodeProps) {
 }
 export function DotNode() { return <Box className="fl-dot"><Handles /></Box>; }
 
-/* an arrow: what it carries, the condition of the step it leads to, and "+" to put a box or a frame there */
+/* an arrow: what it carries, the condition of the step it leads to, and "+" to put a step, loop, round or branching there */
 export function StepEdge({ id, sourceX, sourceY, targetX, targetY, data, markerEnd }: EdgeProps) {
+  useLang();
   const c = useCtx();
   const d = data as EdgeData;
   const [path, lx, ly] = getStraightPath({ sourceX, sourceY, targetX, targetY });
@@ -155,8 +168,8 @@ export function StepEdge({ id, sourceX, sourceY, targetX, targetY, data, markerE
       <EdgeLabelRenderer>
         <Group gap={6} wrap="nowrap" className="fl-edge-label nodrag nopan" data-edge={id}
           style={{ transform: `translate(-11px, -50%) translate(${lx}px, ${ly}px)` }}>
-          <Tooltip label="Put a box or a frame here">
-            <ActionIcon size="sm" radius="xl" variant="default" aria-label="Put a box or a frame here" onClick={() => c.add(d.list, d.at)}>
+          <Tooltip label={t('Put a step, loop, round or branching here')}>
+            <ActionIcon size="sm" radius="xl" variant="default" aria-label={t('Put a step, loop, round or branching here')} onClick={() => c.add(d.list, d.at)}>
               <IconPlus size={14} />
             </ActionIcon>
           </Tooltip>

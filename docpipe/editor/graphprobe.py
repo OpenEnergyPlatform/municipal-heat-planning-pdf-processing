@@ -1,7 +1,7 @@
 """
 graphprobe.py: The graph of a local harvest as a profile's graph file has
 it written, into a folder of the temp directory, for the Graph tab of
-`docpipe edit` ("Write probe"). A process of its own, because a writer reads
+`docpipe edit` ("Test write"). A process of its own, because a writer reads
 its rules when it is imported:
 
     python -m docpipe.editor.graphprobe PROFILE HARVEST DB OUT

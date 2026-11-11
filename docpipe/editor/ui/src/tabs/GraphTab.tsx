@@ -1,5 +1,5 @@
-/* The Graph tab: what the written graph keeps (GET /api/graph): the rules of the writer, and one card per class of the
-   shapes with its address, its properties, the fields that write each property and what each constraint does. The tab
+/* The Graph tab: what the written graph keeps (GET /api/graph): the rules of the program that writes it, and one card per class of the
+   shapes with its name, its properties, the fields that write each property and what each constraint does. The tab
    is one file on purpose; the cards read and change `cur` in place, and Check and Save send it whole. */
 import { useEffect, useReducer, useRef } from 'react';
 import {
@@ -10,10 +10,12 @@ import { IconArrowDown, IconArrowUp, IconCheck, IconDeviceFloppy, IconPencil, Ic
 import { api, apiR } from '../lib/api';
 import { showError, showInfo } from '../lib/dialogs';
 import { loadState, openSpec, setDirty, useTabActions } from '../lib/nav';
-import { clone, isObj, same } from '../lib/util';
+import { clone, isObj, same, wrote } from '../lib/util';
+import { rich, t, tr } from '../lib/i18n';
 import { Report, type Reported } from '../components/Report';
 import { TextBox } from '../components/Inputs';
 import { GroupedRules } from '../rules/RuleInputs';
+import { Put } from '../prompts/Reports';
 
 const graphData = (d: any) => ({
   classes: clone(d.set.classes || {}) as Record<string, any>,
@@ -49,7 +51,7 @@ export function GraphTab() {
     try {
       const r = await apiR('/api/graph/' + what, what === 'save' ? { data: GR.cur, base: GR.data.base } : { data: GR.cur });
       if (what === 'save' && r.saved) {
-        showInfo('Saved ' + r.file + ' (' + r.writes + ').');
+        showInfo(t('Saved {file} ({writes}).', { file: r.file, writes: wrote(r.writes) }));
         GR.busy = false;
         loadState().catch(showError);
         await load();
@@ -82,43 +84,45 @@ export function GraphTab() {
       <Group px="md" py="sm" justify="space-between" wrap="nowrap" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
         <Group gap="sm">
           <Code>{d.file}</Code>
-          {!d.exists && <Text size="sm" c="dimmed">not written yet</Text>}
+          {!d.exists && <Text size="sm" c="dimmed">{t('not written yet')}</Text>}
         </Group>
         <Group gap="xs" wrap="nowrap">
-          <TextBox w={300} placeholder="corpus database (default: the profile's)" mono value={GR.db}
-            onText={t => { GR.db = t; }} />
-          <Tooltip label="Write the graph of the page's harvest with the saved file and with this one, into the temp directory">
-            <Button variant="light" loading={GR.busy === 'probe'} disabled={!!GR.busy} onClick={probe}>Write probe</Button>
+          <TextBox w={300} placeholder={t('corpus database (default: the profile\'s)')} mono value={GR.db}
+            onText={text => { GR.db = text; }} />
+          <Tooltip label={t('Writes the graph of the harvest of this page twice into the temp directory, once with the saved file and once with your edits, and compares the two. Nothing in the profile changes.')}>
+            <Button variant="light" loading={GR.busy === 'probe'} disabled={!!GR.busy} onClick={probe}>{t('Test write')}</Button>
           </Tooltip>
-          <Button variant="default" leftSection={<IconCheck size={16} />} disabled={!!GR.busy} onClick={() => send('check')}>Check</Button>
-          <Button leftSection={<IconDeviceFloppy size={16} />} disabled={!!GR.busy || !isDirty} onClick={() => send('save')}>Save</Button>
-          <Button variant="subtle" disabled={!isDirty} onClick={() => { GR.cur = graphData(d); GR.report = null; GR.epoch++; touch(); }}>Discard</Button>
+          <Button variant="default" leftSection={<IconCheck size={16} />} disabled={!!GR.busy} onClick={() => send('check')}>{t('Check')}</Button>
+          <Button leftSection={<IconDeviceFloppy size={16} />} disabled={!!GR.busy || !isDirty} onClick={() => send('save')}>{t('Save')}</Button>
+          <Button variant="subtle" disabled={!isDirty} onClick={() => { GR.cur = graphData(d); GR.report = null; GR.epoch++; touch(); }}>{t('Discard')}</Button>
         </Group>
       </Group>
       <ScrollArea style={{ flex: 1 }} type="auto">
         <Stack p="md" gap="md">
-          <Text size="sm" c="dimmed">{d.cost + ' ' + d.gate}</Text>
+          <Text size="sm" c="dimmed">{rich(tr(d.cost) + ' ' + tr(d.gate))}</Text>
           <Report R={GR.report} onReload={load} />
           {P ? (
             <Paper withBorder radius="md" p="md">
               <Stack gap="xs">
-                <Text fw={700}>Probe in <Code>{GR.probe.folder}</Code></Text>
-                <Text size="sm">triples {P.triples.before} → {P.triples.after}, named anew: {P.readdressed}
-                  {P.also ? ', written under a further predicate of the spec: ' + P.also : ''}</Text>
+                <Text fw={700}>{rich(t('Test write in `{folder}`', { folder: GR.probe.folder }))}</Text>
+                <Text size="sm">{P.also
+                  ? t('triples {before} → {after}, nodes given a new name: {renamed}; also written under another property of the spec: {also}', { before: P.triples.before, after: P.triples.after, renamed: P.readdressed, also: P.also })
+                  : t('triples {before} → {after}, nodes given a new name: {renamed}', { before: P.triples.before, after: P.triples.after, renamed: P.readdressed })}</Text>
                 <Accordion variant="contained">
                   <Accordion.Item value="docs">
-                    <Accordion.Control>documents that differ ({P.documents.length})</Accordion.Control>
+                    <Accordion.Control>{t('documents that differ ({n})', { n: P.documents.length })}</Accordion.Control>
                     <Accordion.Panel>
                       <Stack gap={2}>
                         {P.documents.map((x: any) => (
-                          <Text size="sm" key={x.document}><Code>{x.document}</Code>: nodes {x.before.kept || 0} → {x.after.kept || 0}, violations {x.before.violations || 0} → {x.after.violations || 0}
-                            {x.after.left_out && x.after.left_out.length ? ', left out: ' + x.after.left_out.map((l: any) => l.constraint).join('; ') : ''}</Text>
+                          <Text size="sm" key={x.document}>{x.after.left_out && x.after.left_out.length
+                            ? <Put text={t('{doc}: nodes {nb} → {na}, violations {vb} → {va}, left out: {left}')} slots={{ doc: <Code>{x.document}</Code>, nb: x.before.kept || 0, na: x.after.kept || 0, vb: x.before.violations || 0, va: x.after.violations || 0, left: x.after.left_out.map((l: any) => l.constraint).join('; ') }} />
+                            : <Put text={t('{doc}: nodes {nb} → {na}, violations {vb} → {va}')} slots={{ doc: <Code>{x.document}</Code>, nb: x.before.kept || 0, na: x.after.kept || 0, vb: x.before.violations || 0, va: x.after.violations || 0 }} />}</Text>
                         ))}
                       </Stack>
                     </Accordion.Panel>
                   </Accordion.Item>
                   <Accordion.Item value="viol">
-                    <Accordion.Control>violations by constraint</Accordion.Control>
+                    <Accordion.Control>{t('violations by constraint')}</Accordion.Control>
                     <Accordion.Panel>
                       <Stack gap={2}>
                         {(P.violations || []).map((v: any) => <Text size="sm" key={v.key}><Code>{v.key}</Code>: {v.before} → {v.after}</Text>)}
@@ -130,18 +134,18 @@ export function GraphTab() {
             </Paper>
           ) : null}
 
-          <Text fw={700} size="lg">Rules of the writer</Text>
+          <Text fw={700} size="lg">{t('Rules of the program that writes the graph')}</Text>
           <GroupedRules rules={d.rules} epoch={GR.epoch} curOf={n => cur.rules[n]}
             onChange={(n, v, reset) => { cur.rules[n] = v; if (reset) GR.epoch++; changed(); }} />
 
-          <Text fw={700} size="lg">Classes of the shapes, the fields that write each property, and what each constraint does</Text>
-          {d.skipped ? <Text size="sm" c="dimmed">{d.skipped}</Text>
+          <Text fw={700} size="lg">{t('Classes of the shapes, the fields that write each property, and what each constraint does')}</Text>
+          {d.skipped ? <Text size="sm" c="dimmed">{rich(tr(d.skipped))}</Text>
             : (d.classes || []).map((c: any) => <ClassCard key={c.id} c={c} ctx={ctx} />)}
 
-          <Text fw={700} size="lg">Classes the writer writes that no shape names</Text>
+          <Text fw={700} size="lg">{t('Classes the program writes that no shape names')}</Text>
           {extra.length
             ? extra.map(k => <ClassCard key={k} c={{ id: k, shape: null, label: null, properties: [] }} ctx={ctx} />)
-            : <Text size="sm" c="dimmed">{GR.probe ? 'none' : 'They are listed once a probe has written the graph.'}</Text>}
+            : <Text size="sm" c="dimmed">{GR.probe ? t('none') : t('They are listed once a test write has been run.')}</Text>}
         </Stack>
       </ScrollArea>
     </Stack>
@@ -162,7 +166,7 @@ function ConstraintChip({ c, ctx }: { c: any; ctx: Ctx }) {
           if (v === 'report') delete cur.constraints[c.key]; else cur.constraints[c.key] = v;
           changed();
         }} />
-      {said ? <Text size="sm" c="dimmed">violations {said.before} → {said.after}</Text> : null}
+      {said ? <Text size="sm" c="dimmed">{t('violations {before} → {after}', { before: said.before, after: said.after })}</Text> : null}
     </Group>
   );
 }
@@ -203,30 +207,30 @@ function ClassCard({ c, ctx }: { c: any; ctx: Ctx }) {
     <Paper withBorder radius="md" p="md" style={written ? undefined : { opacity: 0.6 }}>
       <Stack gap="sm">
         <Group gap="sm" wrap="wrap">
-          <Switch checked={written} label="written" onChange={e => setWritten(e.currentTarget.checked)} />
+          <Switch checked={written} label={t('written')} onChange={e => setWritten(e.currentTarget.checked)} />
           <Text fw={700}>{c.label || c.id}</Text>
           <Code>{c.id}</Code>
-          {c.shape ? <Text size="sm" c="dimmed">shape {c.shape}</Text> : null}
-          {n ? <Badge variant="light">{n.before} → {n.after} nodes</Badge> : null}
+          {c.shape ? <Text size="sm" c="dimmed">{t('shape {shape}', { shape: c.shape })}</Text> : null}
+          {n ? <Badge variant="light">{t('{before} → {after} nodes', { before: n.before, after: n.after })}</Badge> : null}
         </Group>
         <Group gap="xs" align="center">
-          <Text size="sm">address: folder</Text>
-          <TextBox w={220} size="xs" mono placeholder="as the writer names it" value={folder} onText={t => setAddr(t, keys)} />
-          <Text size="sm">made of the values of</Text>
+          <Text size="sm">{t('node name: folder')}</Text>
+          <TextBox w={220} size="xs" mono placeholder={t('as the program names it')} value={folder} onText={text => setAddr(text, keys)} />
+          <Text size="sm">{t('made of the values of')}</Text>
           {keys.map((k, i) => (
             <Group key={i} gap={2} wrap="nowrap">
-              {keyChoice(k, v => { const ks = keys.slice(); if (v) ks[i] = v; else ks.splice(i, 1); setAddr(folder, ks); }, '(remove)')}
-              <ActionIcon variant="subtle" size="sm" disabled={i === 0} aria-label="Earlier"
+              {keyChoice(k, v => { const ks = keys.slice(); if (v) ks[i] = v; else ks.splice(i, 1); setAddr(folder, ks); }, t('(remove)'))}
+              <ActionIcon variant="subtle" size="sm" disabled={i === 0} aria-label={t('Earlier')}
                 onClick={() => { const ks = keys.slice(); [ks[i - 1], ks[i]] = [ks[i], ks[i - 1]]; setAddr(folder, ks); }}><IconArrowUp size={14} /></ActionIcon>
-              <ActionIcon variant="subtle" size="sm" disabled={i === keys.length - 1} aria-label="Later"
+              <ActionIcon variant="subtle" size="sm" disabled={i === keys.length - 1} aria-label={t('Later')}
                 onClick={() => { const ks = keys.slice(); [ks[i + 1], ks[i]] = [ks[i], ks[i + 1]]; setAddr(folder, ks); }}><IconArrowDown size={14} /></ActionIcon>
-              <ActionIcon variant="subtle" size="sm" color="red" aria-label="Remove"
+              <ActionIcon variant="subtle" size="sm" color="red" aria-label={t('Remove')}
                 onClick={() => { const ks = keys.slice(); ks.splice(i, 1); setAddr(folder, ks); }}><IconX size={14} /></ActionIcon>
             </Group>
           ))}
           {offered.length || keys.length
-            ? keyChoice('', v => { if (v) setAddr(folder, keys.concat([v])); }, '+ property', 200)
-            : <Text size="sm" c="dimmed">no properties in the shapes</Text>}
+            ? keyChoice('', v => { if (v) setAddr(folder, keys.concat([v])); }, t('+ property'), 200)
+            : <Text size="sm" c="dimmed">{t('no properties in the shapes')}</Text>}
         </Group>
         {(c.properties || []).length > 0 && (
           <Table withTableBorder className="dp-formtable">
@@ -237,12 +241,12 @@ function ClassCard({ c, ctx }: { c: any; ctx: Ctx }) {
                   <Table.Td w="30%">
                     {p.fields.length
                       ? <Stack gap={2}>{p.fields.map((f: string) => (
-                          <Tooltip key={f} label="Open the field in the Spec tab">
+                          <Tooltip key={f} label={t('Open the field in the Spec tab')}>
                             <Anchor component="button" type="button" size="sm" ta="left" onClick={() => openSpec({ t: 'param', uri: f })}>
                               <IconPencil size={12} style={{ verticalAlign: -1 }} /> ← {f}
                             </Anchor>
                           </Tooltip>))}</Stack>
-                      : <Text size="sm" c="dimmed">no field</Text>}
+                      : <Text size="sm" c="dimmed">{t('no field')}</Text>}
                   </Table.Td>
                   <Table.Td><Stack gap={4}>{(p.constraints || []).map((k: any) => <ConstraintChip key={k.key} c={k} ctx={ctx} />)}</Stack></Table.Td>
                 </Table.Tr>

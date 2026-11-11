@@ -59,6 +59,24 @@ ROLES = ("text", "title", "head", "body", "foot", "figure", "number",
          "heading")
 COORDINATE_KINDS = ("number", "list", "text", "name", "work", "quantity")
 PASSAGE_KINDS = ("section", "table", "figure")
+# What the page shows for each choice; the code word stays in the flow file.
+STATE_WORDS = {
+    READ: "read", SAID_UNSTATED: "not stated in the document",
+    UNBACKED: "answer not backed by its quote",
+    EXHAUSTED: "still open when the search ended", UNANSWERED: "no answer",
+    DERIVED: "derived, not asked",
+    OUT_OF_SLICE: "not asked: another dimension excludes the value",
+    "open": "still open (search ended, no answer or not backed)",
+    "none": "no state yet"}
+ROLE_WORDS = {"text": "sentence", "title": "title of a table",
+              "head": "table head", "body": "table row",
+              "foot": "line under a table",
+              "figure": "line of a figure's caption",
+              "number": "number of a figure", "heading": "heading"}
+KIND_WORDS = {"number": "number", "list": "entry of a list", "text": "text",
+              "name": "name", "work": "work",
+              "quantity": "what a number is"}
+PASSAGE_WORDS = {"section": "text", "table": "table", "figure": "figure"}
 
 
 class ConditionError(ValueError):
@@ -72,6 +90,7 @@ class Prop:
     kind: str
     label: str
     choices: tuple = ()
+    words: Optional[dict] = None    # choice -> what the page shows
 
 
 @dataclass(frozen=True)
@@ -88,70 +107,71 @@ class Subject:
 SUBJECTS = {s.name: s for s in (
     Subject("line", "the next line", (
         Prop("heading", YES, "is a heading"),
-        Prop("passage_begins", YES, "begins a passage (section, table or "
-             "figure)"),
+        Prop("passage_begins", YES, "begins a section, table or figure"),
         Prop("table_begins", YES, "begins a table"),
         Prop("figure_begins", YES, "begins a figure"),
         Prop("new_page", YES, "stands on a new page"),
-        Prop("role", CHOICE, "role", ROLES),
-        Prop("lines_in_piece", NUMBER, "lines of the piece so far"),
+        Prop("role", CHOICE, "kind of line", ROLES, ROLE_WORDS),
+        Prop("lines_in_piece", NUMBER, "lines of the chunk so far"),
     )),
     Subject("field", "the field", (
         Prop("has_list", YES, "has a list"),
         Prop("numbers", YES, "is a field of numbers"),
-        Prop("once", YES, "stands once in a document"),
-        Prop("takes_group", YES, "takes groups"),
+        Prop("once", YES, "is asked once per document"),
+        Prop("takes_group", YES, "splits a group of entries into its "
+             "members"),
         Prop("name", TEXT, "name"),
     )),
     Subject("value", "the value", (
         Prop("field", TEXT, "field"),
-        Prop("words", TEXT, "words"),
-        Prop("length", NUMBER, "length of its words"),
-        Prop("scenario_name", YES, "is a name of the list of scenarios"),
-        Prop("passage", CHOICE, "kind of its passage", PASSAGE_KINDS),
+        Prop("words", TEXT, "wording"),
+        Prop("length", NUMBER, "length of its wording"),
+        Prop("scenario_name", YES, "names a scenario of the document's "
+             "list"),
+        Prop("passage", CHOICE, "stands in", PASSAGE_KINDS, PASSAGE_WORDS),
     )),
-    Subject("coordinate", "the coordinate", (
+    Subject("coordinate", "the dimension", (
         Prop("name", TEXT, "name"),
-        Prop("state", CHOICE, "state", STATES),
-        Prop("kind", CHOICE, "kind", COORDINATE_KINDS),
-        Prop("own_only", YES, "only its value's own place says it"),
+        Prop("state", CHOICE, "state", STATES, STATE_WORDS),
+        Prop("kind", CHOICE, "kind", COORDINATE_KINDS, KIND_WORDS),
+        Prop("own_only", YES, "is stated only where the value stands"),
         Prop("required", YES, "must be read for the value to count"),
         Prop("year", YES, "is a year"),
-        Prop("closed_before", YES, "an earlier coordinate read the value "
-             "as no value of its field"),
-        Prop("plan_years", YES, "the document has base or target years "
-             "for it"),
+        Prop("closed_before", YES, "follows a dimension that found the "
+             "value does not belong to its field"),
+        Prop("plan_years", YES, "has base or target years in the "
+             "document"),
     )),
     Subject("answer", "the answer", (
-        Prop("answered", YES, "came back in its form"),
-        Prop("zero", YES, "names no address (0)"),
-        Prop("finds", NUMBER, "number of finds that hold"),
-        Prop("other_passage", YES, "stands in another passage than the "
-             "value"),
-        Prop("words_empty", YES, "has no words"),
+        Prop("answered", YES, "came back in the expected form"),
+        Prop("zero", YES, "names no line (0)"),
+        Prop("finds", NUMBER, "number of finds that pass the checks"),
+        Prop("other_passage", YES, "comes from another section, table or "
+             "figure than the value"),
+        Prop("words_empty", YES, "has no wording"),
     )),
     Subject("quote", "the quote", (
         Prop("length", NUMBER, "length in characters"),
         Prop("lines", NUMBER, "number of lines"),
-        Prop("number", YES, "prints a number"),
-        Prop("year", YES, "prints a year"),
+        Prop("number", YES, "contains a number"),
+        Prop("year", YES, "contains a year"),
     )),
-    Subject("pieces", "the pieces", (
+    Subject("pieces", "the chunks", (
         Prop("shown", NUMBER, "shown so far"),
-        Prop("left", NUMBER, "left in the supply"),
-        Prop("never_shown", NUMBER, "of the document never shown"),
+        Prop("left", NUMBER, "left among the search hits"),
+        Prop("never_shown", NUMBER, "of the document not shown yet"),
     )),
     Subject("round", "the round", (
-        Prop("number", NUMBER, "number"),
+        Prop("number", NUMBER, "number of the round"),
     )),
     Subject("document", "the document", (
         Prop("works", YES, "keeps a list of works"),
         Prop("plan_years", YES, "has base or target years"),
-        Prop("pieces", NUMBER, "number of pieces"),
+        Prop("pieces", NUMBER, "number of chunks"),
     )),
     Subject("run", "the run", (
-        Prop("whole", YES, "reads the whole document (not --start-at or a "
-             "pass over a stored harvest)"),
+        Prop("whole", YES, "reads the whole document (not only the places "
+             "an earlier harvest found)"),
     )),
 )}
 
@@ -349,6 +369,7 @@ def catalogue() -> list:
              "props": [{"name": p.name, "kind": p.kind, "label": p.label,
                         "ops": list(OPS[p.kind]),
                         **({"choices": list(p.choices)} if p.choices
-                           else {})}
+                           else {}),
+                        **({"words": dict(p.words)} if p.words else {})}
                        for p in s.props]}
             for s in SUBJECTS.values()]

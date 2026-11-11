@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Box, Button, Center, Group, Loader } from '@mantine/core';
 import { IconDeviceFloppy, IconListCheck, IconRefresh } from '@tabler/icons-react';
 import { showError } from '../lib/dialogs';
+import { t } from '../lib/i18n';
 import { useStore, useTabActions, useRequests } from '../lib/nav';
 import { doCheck, doSave, loadAll, meta, reload, S, select, takeData } from '../spec/state';
 import { Tree } from '../spec/Tree';
@@ -16,11 +17,11 @@ function Toolbar() {
   return (
     <Group gap="xs" px="md" pt="xs" justify="space-between">
       <Group gap="xs">
-        <Button variant="default" leftSection={<IconRefresh size={16} />} disabled={S.busy} onClick={() => reload()}>Reload from disk</Button>
+        <Button variant="default" leftSection={<IconRefresh size={16} />} disabled={S.busy} onClick={() => reload()}>{t('Reload from disk')}</Button>
       </Group>
       <Group gap="xs">
-        <Button variant="default" leftSection={<IconListCheck size={16} />} disabled={S.busy} title="Ctrl+Enter" onClick={() => doCheck()}>Check</Button>
-        <Button leftSection={<IconDeviceFloppy size={16} />} disabled={S.busy} loading={S.busy} title="Ctrl+S" onClick={() => doSave(false)}>Save</Button>
+        <Button variant="default" leftSection={<IconListCheck size={16} />} disabled={S.busy} title={t('Ctrl+Enter')} onClick={() => doCheck()}>{t('Check')}</Button>
+        <Button leftSection={<IconDeviceFloppy size={16} />} disabled={S.busy} loading={S.busy} title={t('Ctrl+S')} onClick={() => doSave(false)}>{t('Save')}</Button>
       </Group>
     </Group>
   );
@@ -38,7 +39,7 @@ export function SpecTab() {
     else if (p.node) select(p.node, p.flag);
   });
   if (phase === 'loading') return <Center style={{ flex: 1 }}><Loader /></Center>;
-  if (phase !== 'ready') return <Alert color="red" m="md" title="The spec could not be loaded">{phase}</Alert>;
+  if (phase !== 'ready') return <Alert color="red" m="md" title={t('The spec could not be loaded')}>{phase}</Alert>;
   return (
     <Box style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <Tree />

@@ -51,6 +51,9 @@ chunk
   `docpipe/inference/chunker.py` and assembled by `pack_chunks`. Distinct
   from the chunking pipeline stage, whose own retrieval unit is a section;
   see [app](stages/app.md).
+  The page of `docpipe edit` uses "chunk" for a piece of a document read by the
+  extraction (at most eight sentences, or a table's header plus eight rows); see
+  [the editor](stages/editor.md).
 
 citation
 : One retrieved source shown under an inference-app answer: a dict of its
@@ -120,12 +123,21 @@ derived coordinate
   the wording it was derived from; see [extraction](stages/extraction.md)
   and [states](contract/states.md).
 
+dimension
+: The word the page of `docpipe edit` uses for a coordinate or an axis;
+  see coordinate and axis.
+
 document
 : One row of the `Documents` table: a filename, a profile-supplied
   `external_id`, an optional `group_key`, and the version-linking columns
   `is_current` and `supersedes`. Written by `docpipe/store/documents.py`,
   which a profile's own metadata table extends; see
   [store](stages/store.md).
+
+dry run
+: The word the page of `docpipe edit` uses for its Try in the Flow tab, which
+  reads a document by the drawing with placeholder answers and no model;
+  see [the editor](stages/editor.md).
 
 dynamic list
 : A closed vocabulary that is real but exists only per document, such as
@@ -258,6 +270,10 @@ layout
   `docpipe/preprocessing/layout.py`; see
   [preprocessing](stages/preprocessing.md).
 
+line number
+: The word the page of `docpipe edit` uses for the address of a line a request
+  shows; in a table it is `row.column`. See [the editor](stages/editor.md).
+
 merged
 : A spec flag, `"merged": "<kind>"`, on a free-text axis or a free-text
   value: the name a document gives a thing (a scenario) is read as printed,
@@ -280,6 +296,10 @@ out: sentinel
   like any other but refused as a class or an IRI by a profile's
   serializer, for example `profiles/kwp/kg.py`'s `NOT_IN_GRAPH`; see
   [graph](stages/graph.md).
+
+occurrences
+: The word the page of `docpipe edit` uses for the readings of a value, the
+  places of a document that gave it. See [the editor](stages/editor.md).
 
 owner
 : The `(owner_kind, owner_id)` pair naming which section, table or figure
@@ -385,6 +405,9 @@ remap
   settle. Implemented in `docpipe/extraction/remap.py`; see
   [extraction](stages/extraction.md).
 
+request log
+: The word the page of `docpipe edit` uses for a trace; see trace.
+
 resume stamp
 : `<document>.stamp.json`, the record of what produced a document's
   harvest: the spec's sha256, the model, the anchor set, one fingerprint
@@ -429,6 +452,10 @@ row name
   decision is about the row it was made on; the review page keys a row by this
   name. `gold.row_name` in `docpipe/extraction/gold.py`; see [measuring a
   harvest](stages/evaluation.md).
+
+search hits
+: The word the page of `docpipe edit` uses for the supply of a search, the
+  chunks it shows. See [the editor](stages/editor.md).
 
 section
 : One assembled unit of document structure: a title, joined prose content,

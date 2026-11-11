@@ -57,11 +57,11 @@ from docpipe import upstream
 CR, LF = "\r", "\n"
 FETCH_FOLDER = "docpipe-sources-fetch"
 FETCH_ID = re.compile(r"^fetch-\d{8}-\d{6}-[A-Za-z0-9_-]+$")
-COST = ("A change of the sources takes effect at the next fetch: \"Fetch\" "
-        "pulls them into a folder of its own and shows what moved, "
-        "\"Apply\" writes the lists and the lock. No harvest goes stale; a "
-        "list that gained an entry costs a remap of the stored harvest, no "
-        "model.")
+COST = ("A change takes effect at the next fetch. \"Fetch\" downloads the "
+        "sources into a folder of their own and shows what changed; "
+        "\"Apply\" then writes the lists and the lock file. Harvests that "
+        "are already written stay valid. A list with a new entry needs a "
+        "remap of the stored harvest, which asks no model.")
 
 
 def sha256(data: bytes) -> str:
@@ -456,8 +456,8 @@ def differences(profile, spec_raw: Optional[dict], snapshot: Optional[dict],
                               row["path"], iri),
                 "takes": bool(term.get("label")) and kind in ACTIONS,
                 "why": None if term.get("label") or kind not in ACTIONS
-                else "the pinned ontology does not carry it; fetch and "
-                     "apply the sources first"})
+                else "the pinned version of the ontology does not have "
+                     "it; fetch and apply the sources first"})
         by_field.setdefault(row["parameter"], []).append(
             {**row, "entries": entries,
              "actions": list(ACTIONS.get(kind, ()))})
@@ -543,8 +543,8 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
                 continue
             listing = _list_of(parameter, axis or None)
             if listing is None:
-                refused.append({"id": row_id, "why": f"{field} has no axis "
-                                                     f"{axis}"})
+                refused.append({"id": row_id,
+                                "why": f"{field} has no dimension {axis}"})
                 continue
             entry = {"label": term["label"], "spellings": []}
             if term.get("definition"):

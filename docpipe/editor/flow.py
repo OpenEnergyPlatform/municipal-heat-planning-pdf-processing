@@ -48,9 +48,9 @@ from . import prompts as prompt_files
 STAGE = "extraction"
 # The passes that take a document's own years from its stored values.
 PASSES = "--top-up, --top-up-open"
-STALE = ("A changed flow makes no harvest stale: a stamp names the numbers "
-         "each pass read a document with and is compared by its questions "
-         "alone.")
+STALE = ("Saving a changed flow does not make the harvests that are "
+         "already written stale. They stay valid, and a run you start reads "
+         "with the new flow.")
 CR, LF = "\r", "\n"
 
 
@@ -114,30 +114,54 @@ def _names(data: dict) -> list:
 
 # name -> (what the list is, what is said where it is empty, its entries)
 SWITCHES = {
-    "plan_fields": ("asked once of a document",
-                    "the spec asks nothing once of a document", _plan_fields),
-    "works": ("the list of other works",
-              "the spec keeps no list of other works", _works),
-    "names": ("the names a document's lists are built from",
-              "the spec builds no list of names", _names),
+    "plan_fields": (
+        "fields of the whole document",
+        "The spec has no field of the whole document, so nothing is asked "
+        "once for all values. To change it: add a field under the fields of "
+        "the whole document in the Spec tab.",
+        _plan_fields),
+    "works": (
+        "the list of other works",
+        "The spec keeps no list of other works, so every value belongs to "
+        "this publication. To change it: add the works in the Spec tab.",
+        _works),
+    "names": (
+        "the names the document's lists are built from",
+        "The spec builds no list of names, so no list of scenarios or works "
+        "grows while a document is read. To change it: set the key `merged` "
+        "on a field or a dimension in the Spec tab.",
+        _names),
     "once_per_document": (
-        "fields the document has once",
-        "the spec marks no field as once per document",
+        "fields asked once per document",
+        "The spec marks no field as asked once per document, so every "
+        "field is asked in every chunk. To change it: check "
+        "`once_per_document` on a field in the Spec tab.",
         lambda data: [_field(p) for p in _fields(data)
                       if p.get("once_per_document")]),
     "own_passage": (
-        "only the value's own passage says them, so they are never searched",
-        "the spec names no such coordinate", _of_group("own_passage")),
+        "dimensions stated only where the value stands, so never searched",
+        "No group of the spec names a dimension that is stated only where "
+        "the value stands. To change it: list the dimension under "
+        "`own_passage` of a group in the Spec tab.",
+        _of_group("own_passage")),
     "own_value": (
-        "printed with the value itself, asked once and never searched",
-        "the spec names no such coordinate", _of_group("own_value")),
+        "dimensions printed with the number itself, asked once and never "
+        "searched",
+        "No group of the spec names a dimension that is printed with the "
+        "number itself. To change it: list the dimension under `own_value` "
+        "of a group in the Spec tab.",
+        _of_group("own_value")),
     "takes_group": (
         "fields that keep the words of a group as they stand",
-        "every field takes the members of a group",
+        "Every field splits the words of a group into its members, so no "
+        "field keeps them as they stand. To change it: uncheck "
+        "`takes_group` on a field in the Spec tab.",
         lambda data: [_field(p) for p in _fields(data)
                       if not p.get("takes_group",
                                    rules.get("default_takes_group"))]),
-    "compute": ("the profile computes", "this profile computes nothing",
+    "compute": ("what the profile computes",
+                "This profile computes nothing, so the step never takes "
+                "part in a run.",
                 lambda data: []),
 }
 def _switch(name: str, data: Optional[dict]) -> dict:
@@ -168,8 +192,10 @@ def _never(prompts: dict, data: Optional[dict], computes: bool) -> dict:
     for box in blocks.LIBRARY.values():
         why = None
         if box.asks and not prompts[box.asks]["written"]:
-            why = (f"no profile of the line writes the prompt "
-                   f"{prompts[box.asks]['id']}, so no run asks it")
+            why = (f"Neither this profile nor the profiles it builds on "
+                   f"write the prompt {prompts[box.asks]['id']}, so no run "
+                   f"asks it. To change it: write that prompt for this "
+                   f"profile.")
         if why is None and box.spec is not None:
             if box.spec == "compute":
                 held = computes
@@ -178,7 +204,8 @@ def _never(prompts: dict, data: Optional[dict], computes: bool) -> dict:
             if not held:
                 why = (SWITCHES[box.spec][1] if data is not None
                        or box.spec == "compute"
-                       else "this profile has no extraction spec")
+                       else "This profile has no extraction spec, so no "
+                       "run takes this step.")
         if why:
             out[box.type] = why
     return out
@@ -195,13 +222,14 @@ def _notes(data: Optional[dict]) -> list:
         rule = entry.get("of") if isinstance(entry, dict) else None
         if not isinstance(rule, dict) or not rule:
             continue
-        which = " and ".join(f"{name} is {value}"
-                             for name, value in rule.items())
+        which = ", ".join(f"{name} = {value}"
+                          for name, value in rule.items())
         out.append({
-            "says": f"{key}: a pass over a stored harvest ({PASSES}) takes "
-                    f"it from the stored values whose {which}. A run that "
-                    f"reads a document asks it for the year (the step "
-                    f"\"settled\") and does not read this rule.",
+            "says": f"{key}: a later run over a stored harvest ({PASSES}) "
+                    f"takes this year from the stored values with {which}. "
+                    f"A run that reads a document asks the model for the "
+                    f"year and does not use this rule. To change it: edit "
+                    f"the key `of` of this field in the Spec tab.",
             "to": {"t": "plan", "key": key}})
     return out
 
@@ -382,10 +410,12 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
                 and number.env not in told:
             told.add(number.env)
             says.append(
-                f"{number.env} is set here "
+                f"The run setting {number.env} is set here "
                 f"({in_effect.origin[number.name]}: "
-                f"{os.environ[number.env]}) and wins over the named number "
-                f"for a run started here, never over a box's own value.")
+                f"{os.environ[number.env]}). It overrides the number of the "
+                f"flow for a run started here, but not a step's own value. "
+                f"To change it: unset the setting, or give the step its "
+                f"own value.")
     edited = [] if errors or drawing == flow.tree else tree_changes(
         flow.tree, drawing)
     return {"ok": not errors, "errors": errors,

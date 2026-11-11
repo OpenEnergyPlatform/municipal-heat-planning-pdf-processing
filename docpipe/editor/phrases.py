@@ -36,8 +36,9 @@ from typing import Callable, Optional
 from .. import phrases as phrase_files
 from . import specs
 
-NO_STALE = ("A changed sentence makes no harvest stale: a stamp rests on "
-            "the questions of the spec alone.")
+NO_STALE = ("A changed text block leaves the harvests that are already "
+            "written valid. Only a change of the questions in the Spec tab "
+            "makes a document be read again.")
 SHOWN_LIMIT = 20
 
 
@@ -357,8 +358,8 @@ def shown_in(requests: list, old: str, new: str,
     out = {"searched": len(requests), "found": 0, "shown": [], "why": None}
     made = _pattern(old)
     if made is None:
-        out["why"] = ("this sentence has no words of its own to find in a "
-                      "record")
+        out["why"] = ("This text block has no words of its own, so it cannot "
+                      "be found in a request log.")
         return out
     pattern, groups = made
     for index, request in enumerate(requests):
@@ -383,6 +384,7 @@ def shown_in(requests: list, old: str, new: str,
             "parameter": request.get("parameter"),
             "before": hit.group(0),
             "after": None if lacking else after,
-            "why": (f"the record does not show {sorted(set(lacking))}, "
-                    f"which the new wording uses") if lacking else None})
+            "why": (f"The new wording uses {sorted(set(lacking))}, which "
+                    f"the request log does not show for this request.")
+            if lacking else None})
     return out

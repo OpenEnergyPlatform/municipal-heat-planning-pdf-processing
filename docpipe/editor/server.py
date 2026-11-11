@@ -386,7 +386,8 @@ class App:
         raw = self.files.read(self._need_spec())
         data = specs.parse(raw)
         snapshot = self.snapshot()
-        return {"data": data, "base": sha256(raw), "form": specs.form(),
+        return {"data": data, "base": sha256(raw),
+                "form": specs.form(self.profile),
                 "pin": specs.pin(data, snapshot) if snapshot else {},
                 "notes": specs.notes(data, snapshot) if snapshot else []}
 
@@ -569,9 +570,11 @@ class App:
         harvest folder holds a trace."""
         if self.traces.names():
             return None
-        return ("no harvest folder was given (--harvest)"
+        return ("No harvest folder was given to the page (--harvest), so "
+                "there is no request log to show."
                 if self.harvest is None
-                else "the harvest folder holds no trace (*.trace.jsonl.gz)")
+                else "The harvest folder holds no request log "
+                     "(*.trace.jsonl.gz), so there is no request to show.")
 
     def _prompts(self, query, body) -> dict:
         found = self.traces.names()

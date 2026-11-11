@@ -2,9 +2,20 @@
    Save of the open tab for the keyboard. Small stores read with useSyncExternalStore, no library. */
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { get } from './api';
+import { t } from './i18n';
 
 export type TabName = 'spec' | 'prompts' | 'flow' | 'sources' | 'graph';
-export const TAB_LABELS: Record<string, string> = { spec: 'Spec', prompts: 'Prompts', flow: 'Flow', sources: 'Sources', graph: 'Graph' };
+/* the name of a tab in the page's language (read where it is shown, so it follows a change of the language) */
+export function tabLabel(name: string): string {
+  switch (name) {
+    case 'spec': return t('Spec');
+    case 'prompts': return t('Prompts');
+    case 'flow': return t('Flow');
+    case 'sources': return t('Sources');
+    case 'graph': return t('Graph');
+    default: return name;
+  }
+}
 /* the tabs whose rules stand in the profile's rules file (GET /api/rules?tab=...) */
 export const RULE_TABS = ['spec', 'prompts', 'flow', 'sources'];
 

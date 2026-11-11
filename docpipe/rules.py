@@ -89,225 +89,412 @@ _r = rule
 # Every rule of the core, in the order a file writes them and a tab shows
 # them. What each is stands in the default profile's file.
 RULES = (
-    # -- spec: what backs a value -----------------------------------------------
-    _r("quote_min_chars", "spec", "What backs a value", "whole",
-       "Characters a quote has at least, so that it names a place; a "
-       "shorter quote is widened with the lines around it where the reading "
-       "shows them, and refused where it stays shorter.", least=1,
+    # -- spec: what a quote must show -----------------------------------------
+    _r("quote_min_chars", "spec", "What a quote must show", "whole",
+       "A quote must have at least this many characters, so that it names "
+       "one place in the document and not a phrase that occurs everywhere. A "
+       "quote that is too short is extended with the lines around it; if it "
+       "is still too short, the answer is refused. A larger number makes "
+       "quotes more precise and refuses more answers.", least=1,
        where="verify.py, units.py (short_quote)"),
-    _r("word_joiners", "spec", "What backs a value", "chars",
-       "Characters that join a name or a number to more of itself: a "
-       "wording beside a letter or a digit, or beside one of these and then "
-       "a letter or a digit, is part of a longer name (\"OECD\" does not "
-       "stand in \"non-OECD\").", empty=True, where="verify.py (_alone)"),
-    _r("minus_signs", "spec", "What backs a value", "chars",
-       "The signs of a negative number as a document prints them and a "
-       "model retypes them; a printed sign is part of the number (\"-1.155\" "
-       "backs -1155, \"1.155\" does not).", decided="2026-11-01",
+    _r("word_joiners", "spec", "What a quote must show", "chars",
+       "These characters join a name to a longer one. A wording that stands "
+       "next to a letter or digit, or next to one of these characters and "
+       "then a letter or digit, is only part of a longer name and does not "
+       "count as stated, so \"OECD\" is not found in \"non-OECD\". Every "
+       "character you add makes this check stricter. Empty: only a letter or "
+       "digit directly beside the wording makes it part of a longer name.",
+       empty=True,
+       where="verify.py (_alone)"),
+    _r("minus_signs", "spec", "What a quote must show", "chars",
+       "These characters count as the minus sign of a number, because a PDF "
+       "prints one sign and a model retypes another. A printed sign belongs "
+       "to the number: the quote \"-1.155\" backs -1155, but \"1.155\" does "
+       "not. A dash after a letter, a digit or a separator joins two things, "
+       "as in \"2020-2030\", and is no sign. A character you remove is no "
+       "longer read as a minus sign. Decided on 2026-11-01.",
+       decided="2026-11-01",
        where="verify.py (numbers_in, canonical_number)"),
-    _r("dotted_date_year", "spec", "What backs a value", "switch",
-       "Whether the year at the end of a dotted date (\"Stand 09.12.2025\") "
-       "stands in a quote as the year it prints.",
+    _r("dotted_date_year", "spec", "What a quote must show", "switch",
+       "On: the year at the end of a date written with dots, such as \"Stand "
+       "09.12.2025\", counts as a number the quote prints, so that quote "
+       "backs the year 2025. Off: only a year that stands as a number of its "
+       "own counts, and a year that only a dotted date prints is not found "
+       "in its quote.",
        where="verify.py (numbers_in)"),
-    _r("same_characters", "spec", "What backs a value", "map",
-       "Characters a quote and its source are compared as: quotation marks "
-       "and dashes a PDF prints and a model retypes, the thin spaces, the "
-       "soft hyphen (to nothing). Both sides are brought into this one "
-       "shape before the check runs; it is not a check.", empty=True,
+    _r("same_characters", "spec", "What a quote must show", "map",
+       "Characters that count as the same when a quote is compared with its "
+       "source. Before the check, each key is replaced by its value on both "
+       "sides, for example curly quotation marks by the straight one, dashes "
+       "by a hyphen and the soft hyphen by nothing. Only keys of one "
+       "character are used, and this is no check of its own. Add a pair when "
+       "a PDF prints a character that the model retypes differently. Empty: "
+       "no characters are treated as the same.",
+       empty=True,
        where="verify.py (flat)"),
-    # -- spec: numbers and years -------------------------------------------------
+    # -- spec: numbers and years ----------------------------------------------
     _r("decimal_mark", "spec", "Numbers and years", "choice",
-       "How the documents write the decimal. It decides only what the digits "
-       "leave open: \"3,251\" is 3.251 with the comma and 3251 with the "
-       "point.", choices=(",", "."), where="verify.py (decimal_mark)"),
+       "How the documents write the decimal mark. It matters only where the "
+       "digits leave it open: \"3,251\" is 3.251 with a decimal comma and "
+       "3251 with a decimal point. Comma: a point groups thousands, as in "
+       "German plans. Point: a comma groups thousands, as in English texts.",
+       choices=(",", "."),
+       where="verify.py (decimal_mark)"),
     _r("year_range", "spec", "Numbers and years", "range",
-       "The years a year of a value can be; a number outside is no year "
-       "(a zone number like 169002). Empty: every number.", empty=True,
+       "The range a year of a value can lie in, from the first to the last "
+       "year. A number outside it is refused as a year, such as a zone "
+       "number like 169002, and the model is asked again. Empty: any number "
+       "can be a year.",
+       empty=True,
        decided="2026-11-01", where="pipeline.py (year rules)"),
     _r("year_words", "spec", "Numbers and years", "range",
-       "The years a text is searched for where it names a year in words or "
-       "a span (\"bis 2045\").", decided="2026-11-07",
+       "The range of years looked for when the words of a find name a year "
+       "or a span, such as \"bis 2045\". Only a number of four digits inside "
+       "this range counts as a year. A wider range finds more years and also "
+       "more numbers that are none.", decided="2026-11-07",
        where="addressed.py (years_in)"),
     _r("unit_factor_places", "spec", "Numbers and years", "whole",
-       "Decimal places a value keeps when it is converted into its field's "
-       "unit.", least=0, where="verify.py (_check_value)"),
+       "The number of decimal places a value keeps after it is converted "
+       "into the unit of its field. A larger number keeps the converted "
+       "value more exact. 0 rounds it to a whole number.",
+       least=0, where="verify.py (_check_value)"),
     _r("year_by_plan_word", "spec", "Numbers and years", "switch",
-       "Whether a year the quote does not print is read where it is one of "
-       "the plan's base or target years and the quote carries the plan's "
-       "word for that state (\"Basisjahr\", \"Zieljahr\").",
+       "On: a year that the quote does not print is still read when it is "
+       "one of the document's base or target years and the quote has the "
+       "document's word for it, such as \"Basisjahr\" or \"Zieljahr\". The "
+       "model chooses among those years. Off: a year counts only when its "
+       "quote prints it as a number.",
        decided="2026-09-22, 2026-10-06", where="pipeline.py (named_year)"),
-    # -- spec: lists and wordings ------------------------------------------------
-    _r("wording_most_chars", "spec", "Lists and wordings", "whole",
-       "Characters a wording that differs from its chosen entry keeps at "
-       "most; it is kept in whole words and counted.", least=1,
+    # -- spec: lists and wording ----------------------------------------------
+    _r("wording_most_chars", "spec", "Lists and wording", "whole",
+       "The most characters a wording may have to count as naming the list "
+       "entry that was chosen. A longer wording, usually a footnote and no "
+       "label, does not count: the row is kept, marked and counted, and not "
+       "refused. A larger number accepts longer wordings as naming the "
+       "entry.", least=1,
        where="pipeline.py (_raw_foreign)"),
-    # -- spec: spans and groups --------------------------------------------------
-    _r("span_words", "spec", "Spans and groups", "texts",
-       "Words that make a span of years with a later year (\"bis 2045\"): "
-       "the value is read for every year of the span.", empty=True,
+    # -- spec: spans of years and groups --------------------------------------
+    _r("span_words", "spec", "Spans of years and groups", "texts",
+       "Words that make a span of years when the wording of a find has them "
+       "and names two years, such as \"bis 2045\". A value stated for a span "
+       "is read for every year of it. Add a word to recognise more spans. "
+       "Empty: only the dashes of `span_dashes` make a span.", empty=True,
        decided="2026-11-07", where="addressed.py (span)"),
-    _r("span_dashes", "spec", "Spans and groups", "chars",
-       "Dashes that make a span of years between two years (\"2030-2045\").",
+    _r("span_dashes", "spec", "Spans of years and groups", "chars",
+       "Dashes that make a span of years when the wording of a find has one "
+       "and names two years, such as \"2030-2045\". A value stated for a "
+       "span is read for every year of it. Empty: only the words of "
+       "`span_words` make a span; with both empty, only the first year is "
+       "read.",
        empty=True, decided="2026-11-07", where="addressed.py (span)"),
-    _r("span_marks", "spec", "Spans and groups", "map",
-       "What every row of a value for a span of years is marked with, "
-       "coordinate -> entry.", empty=True, decided="2026-11-07",
+    _r("span_marks", "spec", "Spans of years and groups", "map",
+       "What the rows of a value stated for a span of years are marked with, "
+       "as dimension -> entry. Each row of the span that read nothing for "
+       "that dimension gets the entry, marked as derived, with the wording "
+       "and quote of the span as its evidence. For example, qualifier -> "
+       "out:approximate marks every year of the span as approximate. Empty: "
+       "the rows get no mark. Decided on 2026-11-07.",
+       empty=True, decided="2026-11-07",
        where="runner.py (span rows)"),
-    # -- spec: where the spec is silent -----------------------------------------
-    _r("default_takes_group", "spec", "Where the spec is silent", "switch",
-       "Whether words for several entries (\"all scenarios\") become one row "
-       "per member where the field does not say.", decided="2026-11-08",
+    # -- spec: defaults where the spec says nothing ---------------------------
+    _r("default_takes_group", "spec", "Defaults where the spec says nothing",
+       "switch",
+       "On: words that name several entries, such as \"all scenarios\", "
+       "become one row per member, for every field whose Spec does not say "
+       "otherwise. Off: such words stay one row. A single field can override "
+       "this with its key `takes_group` in the Spec tab.",
+       decided="2026-11-08",
        where="spec.py (Parameter), addressed.py"),
-    _r("description_least_words", "spec", "Where the spec is silent",
-       "whole", "Words a field's description has at least.", least=0,
+    _r("description_least_words", "spec", "Defaults where the spec says "
+                                          "nothing",
+       "whole", "The fewest words the description of a field may have. A "
+       "shorter description is refused when the Spec is loaded, because the "
+       "description is the definition the model reads. A larger number "
+       "demands fuller descriptions. 0 accepts any.", least=0,
        where="spec.py (load)"),
-    _r("example_least_words", "spec", "Where the spec is silent", "whole",
-       "Words the passage of a field's example has at least.", least=0,
+    _r("example_least_words", "spec", "Defaults where the spec says nothing",
+       "whole",
+       "The fewest words the source text of a field's example may have. A "
+       "shorter text is refused when the Spec is loaded, because an example "
+       "must be a real snippet and no placeholder. A larger number demands "
+       "longer examples. 0 accepts any.", least=0,
        where="spec.py (load)"),
-    # -- prompts: how a place is shown ------------------------------------------
-    _r("lines_around", "prompts", "How a place is shown", "whole",
-       "Lines a request shows before and after the line of a value in text; "
-       "a table shows the value's own row under its head.", least=0,
+    # -- prompts: how a place in the document is shown ------------------------
+    _r("lines_around", "prompts", "How a place in the document is shown",
+       "whole",
+       "How many sentences a request shows before and after the line of a "
+       "value in running text. In a table it shows the value's row under the "
+       "table head instead. A larger number gives the model more context and "
+       "makes every request longer. 0 shows only the value's own line.",
+       least=0,
        decided="2026-11-08", where="addressed.py (show_value)"),
-    _r("letter_title_page", "prompts", "How a place is shown", "text",
-       "The letter the title page is shown under.", decided="2026-11-08",
+    _r("letter_title_page", "prompts", "How a place in the document is shown",
+       "text",
+       "The letter put before the line numbers of the title page in a "
+       "request, so that \"T3\" names the third line of the title page. The "
+       "model cites a line by this letter and number. Use a letter that no "
+       "other block uses.",
+       decided="2026-11-08",
        where="units.py"),
-    _r("letter_headings", "prompts", "How a place is shown", "text",
-       "The letter the headings are shown under.", decided="2026-11-08",
+    _r("letter_headings", "prompts", "How a place in the document is shown",
+       "text",
+       "The letter put before the line numbers of the headings above the "
+       "value in a request, so that \"H2\" names the second heading shown. "
+       "The model cites a line by this letter and number. Use a letter that "
+       "no other block uses.",
+       decided="2026-11-08",
        where="units.py"),
-    _r("letter_settings", "prompts", "How a place is shown", "text",
-       "The letter what the document settles is shown under.",
+    _r("letter_settings", "prompts", "How a place in the document is shown",
+       "text",
+       "The letter put before the line numbers of the fields of the whole "
+       "document in a request, such as its base year or municipality, so "
+       "that \"F1\" names the first of them. The model cites a line by this "
+       "letter and number. Use a letter that no other block uses.",
        decided="2026-11-08", where="units.py"),
-    _r("letters_others", "prompts", "How a place is shown", "chars",
-       "The letters other pieces are shown under, in order; the three "
-       "letters above are left out.", decided="2026-11-08",
+    _r("letters_others", "prompts", "How a place in the document is shown",
+       "chars",
+       "The letters put before the line numbers of the other chunks a "
+       "request shows, one letter for each chunk, in this order. The letters "
+       "of the title page, the headings and the fields of the whole document "
+       "are skipped.", decided="2026-11-08",
        where="units.py"),
-    _r("head_joiner", "prompts", "How a place is shown", "text",
-       "What joins the words of a table's head over one cell.",
+    _r("head_joiner", "prompts", "How a place in the document is shown",
+       "text",
+       "What joins the words of a table head when several head rows stand "
+       "above one cell, such as \"2030 / Bestand\". The request shows the "
+       "joined words as the head of that cell. Change it to the separator "
+       "the model should read between them.",
        where="units.py (head_of)"),
-    # -- prompts: examples -------------------------------------------------------
+    # -- prompts: examples ----------------------------------------------------
     _r("example_words", "prompts", "Examples", "text",
-       "What an example answer writes as its words.",
+       "What the example answer of a request gives as the wording of a "
+       "value. It is a placeholder, so that the model cannot copy a real "
+       "wording from the example. A real word here would be copied into "
+       "answers.",
        decided="2026-11-06, 2026-11-07", where="fields.py"),
     _r("example_year", "prompts", "Examples", "text",
-       "What an example answer writes as a year.", decided="2026-11-06",
+       "What the example answer of a request gives as a year. It is a "
+       "placeholder, so that the model cannot copy a real year from the "
+       "example. A real year here would be copied into answers.",
+       decided="2026-11-06",
        where="fields.py"),
     _r("example_cell", "prompts", "Examples", "whole",
-       "The cell of a table row an example answer names.", least=1,
+       "Which cell of a table row the example answer of a request names, "
+       "counted from 1. A row with fewer cells gets its last cell, and a row "
+       "with one cell gets no cell. A different number only changes the "
+       "example, not how answers are read.", least=1,
        decided="2026-11-09", where="addressed.py (first_address)"),
-    # -- prompts: where the prompt says nothing ---------------------------------
-    _r("temperature", "prompts", "Where the prompt says nothing", "number",
-       "The temperature of a request whose prompt names none.", least=0,
+    # -- prompts: defaults where the prompt says nothing ----------------------
+    _r("temperature", "prompts", "Defaults where the prompt says nothing",
+       "number",
+       "The temperature of a request whose prompt sets none. It decides how "
+       "much the model's answers vary: 0 makes them repeatable, a larger "
+       "number up to 2 varies them. A prompt that sets its own temperature "
+       "wins.", least=0,
        most=2, where="runner.py"),
-    _r("max_tokens", "prompts", "Where the prompt says nothing", "whole",
-       "The answer length of a request whose prompt names none.", least=1,
+    _r("max_tokens", "prompts", "Defaults where the prompt says nothing",
+       "whole",
+       "The longest answer, in tokens, of a request whose prompt sets none. "
+       "A larger number lets long answers finish and makes every request "
+       "reserve more room in the model's window. An answer that is cut off "
+       "at the limit is not read, and the run splits the request where it "
+       "can.",
+       least=1,
        where="runner.py"),
-    _r("max_tokens_phrase", "prompts", "Where the prompt says nothing",
-       "whole", "The answer length of a search sentence whose prompt names "
-       "none.", least=1, where="runner.py (phrase)"),
-    _r("max_tokens_review", "prompts", "Where the prompt says nothing",
-       "whole", "The answer length of a second reading whose prompt names "
-       "none.", least=1, where="runner.py (review)"),
-    _r("max_tokens_compute", "prompts", "Where the prompt says nothing",
-       "whole", "The answer length of a calculation whose prompt names "
-       "none.", least=1, where="runner.py (compute)"),
-    _r("retry_temperature_step", "prompts", "Where the prompt says nothing",
-       "number", "How much each reply that could not be read raises the "
-       "temperature of the next attempt.", least=0,
+    _r("max_tokens_phrase", "prompts",
+       "Defaults where the prompt says nothing",
+       "whole", "The longest answer, in tokens, of a search sentence whose "
+       "prompt sets none. A search sentence is short, so a small number is "
+       "enough. A larger number allows longer sentences but reserves more "
+       "room in the model's window.", least=1, where="runner.py (phrase)"),
+    _r("max_tokens_review", "prompts",
+       "Defaults where the prompt says nothing",
+       "whole", "The longest answer, in tokens, of a second reading whose "
+       "prompt sets none. A larger number lets longer checks finish and "
+       "reserves more room in the model's window. An answer that is cut off "
+       "at the limit is not read.", least=1, where="runner.py (review)"),
+    _r("max_tokens_compute", "prompts", "Defaults where the prompt says "
+                                        "nothing",
+       "whole", "The longest answer, in tokens, of a calculation whose "
+       "prompt sets none. A calculation answers with code or with a number "
+       "and its evidence. A larger number lets longer code finish and "
+       "reserves more room in the model's window.",
+       least=1, where="runner.py (compute)"),
+    _r("retry_temperature_step", "prompts", "Defaults where the prompt says "
+                                            "nothing",
+       "number", "How much the temperature rises for the next attempt after "
+       "each answer that could not be read. A request asked again at "
+       "temperature 0 comes back the same, so every faulty answer raises the "
+       "temperature by this step. A larger number changes the repeats more. "
+       "0 asks every attempt the same way.", least=0,
        env="EXTRACT_RETRY_TEMPERATURE_STEP", where="runner.py"),
-    _r("retry_temperature_most", "prompts", "Where the prompt says nothing",
-       "number", "The highest temperature an attempt is raised to.",
+    _r("retry_temperature_most", "prompts", "Defaults where the prompt says "
+                                            "nothing",
+       "number", "The highest temperature an attempt is raised to; the rises "
+       "of `retry_temperature_step` stop here. A lower number keeps repeats "
+       "closer to the first answer. A higher number lets a stubborn request "
+       "vary more.",
        least=0, most=2, where="runner.py"),
-    _r("image_max_side", "prompts", "Where the prompt says nothing", "whole",
-       "Pixels the longer side of a figure's image is sent with at most.",
+    _r("image_max_side", "prompts", "Defaults where the prompt says nothing",
+       "whole",
+       "The most pixels the longer side of the image of a table or figure is "
+       "sent with; a larger image is scaled down. A larger number shows the "
+       "model more detail and uses more of its window, one image token for "
+       "every 28 by 28 pixels. A smaller number saves room and loses fine "
+       "print.",
        least=28, env="EXTRACT_IMAGE_MAX_SIDE", decided="2026-11-08",
        where="runner.py"),
-    _r("heading_in_front_chars", "prompts", "Where the prompt says nothing",
-       "whole", "A source's heading is put in front of its text unless it "
-       "stands in its first this many characters.", least=0,
+    _r("heading_in_front_chars", "prompts", "Defaults where the prompt says "
+                                            "nothing",
+       "whole", "A section's heading is put in front of its text, so that a "
+       "quote may cite it, unless it already stands within this many first "
+       "characters of the text. A larger number leaves more headings where "
+       "they are, because they stand early in the text. 0 always puts the "
+       "heading in front.", least=0,
        where="runner.py"),
-    # -- flow: pieces ------------------------------------------------------------
-    _r("sentence_marks", "flow", "Pieces", "chars",
-       "Marks that end a sentence where a capital or a digit follows.",
+    # -- flow: chunks ---------------------------------------------------------
+    _r("sentence_marks", "flow", "Chunks", "chars",
+       "Marks that end a sentence when a space and then a capital letter or "
+       "a digit follow. A sentence is the unit of a numbered line in running "
+       "text, and a chunk holds a number of them. Fewer marks make longer "
+       "lines, more marks split the text finer. A number with a point, such "
+       "as \"12.\", never ends a sentence.",
        decided="2026-11-08", where="units.py"),
-    _r("abbreviations", "flow", "Pieces", "texts",
-       "Abbreviations whose point ends no sentence, as the documents print "
-       "them.", empty=True, decided="2026-11-08", where="units.py"),
-    _r("title_page_also", "flow", "Pieces", "whole",
-       "The page whose first lines are the title page where the first page "
-       "has none.", least=1, decided="2026-11-08", where="units.py"),
-    # -- flow: search ------------------------------------------------------------
+    _r("abbreviations", "flow", "Chunks", "texts",
+       "Abbreviations, as the documents print them, whose full stop does not "
+       "end a sentence, such as \"z. B.\" or \"Abb.\". Text that ends in one "
+       "of them is not split there. Add the abbreviations of your documents. "
+       "Empty: every full stop before a capital letter ends a sentence.",
+       empty=True, decided="2026-11-08",
+       where="units.py"),
+    _r("title_page_also", "flow", "Chunks", "whole",
+       "The page whose first lines are the title page when the first page "
+       "has none. The first page is tried first. A document with a cover "
+       "page of no text can name its second page here.",
+       least=1, decided="2026-11-08", where="units.py"),
+    # -- flow: search ---------------------------------------------------------
     _r("rerank", "flow", "Search", "switch",
-       "Whether the reranker orders the pieces of a search once, with the "
-       "search sentence; without it they stay in the document's order.",
+       "On: the reranker orders the chunks a search found once, with the "
+       "search sentence, and the best come first. Off: they stay in the "
+       "order of the embedding search. Only a search with at least two "
+       "chunks is ordered.",
        decided="2026-11-06, 2026-11-08", where="addressed.py"),
     _r("fetches", "flow", "Search", "texts",
-       "What a reply may fetch itself beside the pieces shown: the next or "
-       "the previous piece, a table or figure it names, a search for a "
-       "pattern, the pieces like one shown. Fetched pieces do not count "
-       "against the search's pieces.",
+       "What an answer may ask to see besides the chunks shown. `next` and "
+       "`previous` are the chunk after the last and before the first one "
+       "shown, `item` is a table or figure it names, `search` is the chunks "
+       "that match a pattern, and `similar` is the chunks closest to a text "
+       "it writes. Chunks asked for this way come first in the next request, "
+       "and no chunk is shown twice. Remove an entry to forbid it. Empty: "
+       "the model sees only the chunks of the search.",
        choices=("next", "previous", "item", "search", "similar"), empty=True,
        decided="2026-11-07, 2026-11-09", where="addressed.py"),
     _r("question_as_sentence", "flow", "Search", "switch",
-       "Whether a search sentence that is a question is taken (and "
-       "counted), or the search runs with the field's own sentence "
-       "instead.", decided="2026-11-08", where="addressed.py"),
-    # -- flow: asking again and giving up ---------------------------------------
+       "On: a search sentence that is a question is used, and the run counts "
+       "it. Off: such a sentence is replaced by the field's own search "
+       "sentence. A question is a sentence that ends in a question mark or "
+       "starts with a question word.",
+       decided="2026-11-08", where="addressed.py"),
+    # -- flow: asking again and giving up -------------------------------------
     _r("retry_wait_s", "flow", "Asking again and giving up", "number",
-       "Seconds per attempt waited after a reply that could not be read.",
+       "The seconds the run waits before it asks again after an answer that "
+       "could not be read. The wait is this number times the number of the "
+       "attempt, up to `retry_wait_most_s`. A larger number slows the "
+       "repeats and spares the server. 0 asks again at once.",
        least=0, env="EXTRACT_RETRY_WAIT", where="runner.py"),
     _r("retry_wait_most_s", "flow", "Asking again and giving up", "number",
-       "Seconds waited at most after a reply that could not be read.",
+       "The most seconds the run waits before it asks again after an answer "
+       "that could not be read. The waits of `retry_wait_s` grow by attempt "
+       "and stop here. A larger number lets later attempts wait longer.",
        least=0, env="EXTRACT_RETRY_WAIT_MAX", where="runner.py"),
     _r("transport_wait_s", "flow", "Asking again and giving up", "number",
-       "Seconds waited after the first failure to reach the server, doubled "
-       "each time.", least=0, env="EXTRACT_TRANSPORT_WAIT",
+       "The seconds the run waits after the first failure to reach the "
+       "server. The wait doubles with every further failed attempt, up to "
+       "`transport_wait_most_s`. A larger number gives a restarting server "
+       "more time to come back.", least=0, env="EXTRACT_TRANSPORT_WAIT",
        where="runner.py"),
     _r("transport_wait_most_s", "flow", "Asking again and giving up",
-       "number", "Seconds waited at most between two attempts to reach the "
-       "server.", least=0, env="EXTRACT_TRANSPORT_WAIT_MAX",
+       "number", "The most seconds the run waits between two attempts to "
+       "reach the server. The waits of `transport_wait_s` double and stop "
+       "here. A larger number lets a long outage be waited out with fewer "
+       "attempts.", least=0, env="EXTRACT_TRANSPORT_WAIT_MAX",
        where="runner.py"),
     _r("repeat_timeout_s", "flow", "Asking again and giving up", "number",
-       "Seconds a repeated request waits for its answer.", least=1,
+       "The seconds a repeated request waits for its answer, at least, after "
+       "a request has timed out. The first attempt keeps the run's own time "
+       "limit. A larger number gives a slow server more time and holds one "
+       "thread longer. A smaller number gives up on such a request sooner.",
+       least=1,
        env="EXTRACT_RETRY_TIMEOUT", where="runner.py"),
     _r("server_dead_after_s", "flow", "Asking again and giving up",
-       "number", "Seconds without an answer from the server after which the "
-       "run halts.", least=1, env="EXTRACT_SERVER_DEAD_AFTER",
+       "number", "The seconds without any answer from the model server after "
+       "which the run ends at once. What was read so far is written and "
+       "stamped, and a later run picks up there. A larger number waits "
+       "longer for a restarting server. This applies to the run's own "
+       "server, not to a hosted one.",
+       least=1, env="EXTRACT_SERVER_DEAD_AFTER",
        where="runner.py"),
     _r("server_probe_every_s", "flow", "Asking again and giving up",
-       "number", "Seconds between two probes of a server that does not "
-       "answer.", least=1, where="runner.py"),
+       "number",
+       "The seconds between two checks whether the model server answers. A "
+       "failed check starts the clock of `server_dead_after_s`, and an "
+       "answer stops it. A smaller number finds a dead server sooner and "
+       "sends more checks.", least=1,
+       where="runner.py"),
     _r("unreachable_share", "flow", "Asking again and giving up", "number",
-       "Share of a document's sources that never reached the server above "
-       "which the document counts as not read.", least=0, most=1,
+       "The share of a document's sections, tables and figures whose "
+       "requests never reached the server, above which the document counts "
+       "as not read. Such a document gets no stamp, so a later run reads it "
+       "again. A larger number tolerates more lost requests. 1 never counts "
+       "a document as not read for this reason.", least=0, most=1,
        where="runner.py"),
     _r("least_answer_tokens", "flow", "Asking again and giving up", "whole",
-       "Tokens a request must leave its answer at least, or it is not sent.",
+       "The fewest tokens a request must leave for its answer in the model's "
+       "window. With less room the request is not sent and counts as an "
+       "answer that was cut off. A larger number refuses requests with long "
+       "prompts sooner. A smaller number sends them and risks a cut-off "
+       "answer.",
        least=1, where="runner.py"),
-    # -- flow: reading again -----------------------------------------------------
-    _r("question_keys", "flow", "Reading again", "texts",
-       "The keys of a stamp that decide whether a document is read again: "
-       "a changed question of the spec under one of them. Model, prompts, "
-       "flow and rules are never compared.", decided="2026-09-10",
+    # -- flow: reading a document again ---------------------------------------
+    _r("question_keys", "flow", "Reading a document again", "texts",
+       "The beginnings of the stamp keys that decide whether a document is "
+       "read again. Each such key records one question of the Spec, such as "
+       "a field, a list of entries or a dimension. A document is read again "
+       "when one of these questions has changed since its stamp. The model, "
+       "the prompts, the flow and the rules are never compared. Remove an "
+       "entry to stop changes of that kind from causing a new reading.",
+       decided="2026-09-10",
        where="runner.py (stale)"),
-    # -- flow: calculation -------------------------------------------------------
+    # -- flow: calculation ----------------------------------------------------
     _r("code_rounds", "flow", "Calculation", "whole",
-       "Runs of code a calculation question gets at most.", least=1,
+       "The most code runs a calculation may use before it must answer. Each "
+       "run executes the code the model wrote and shows it the output. A "
+       "larger number gives the model more tries to get a calculation right "
+       "and costs more requests. A smaller number ends calculations sooner.",
+       least=1,
        env="EXTRACT_CODE_ROUNDS", decided="2026-11-03", where="runner.py"),
     _r("code_output_chars", "flow", "Calculation", "whole",
-       "Characters of a code run's output the model is shown.", least=1,
+       "The most characters of the output of a code run that the model is "
+       "shown. Longer output is cut off. A larger number shows more of a "
+       "long result and makes the next request longer.", least=1,
        where="runner.py"),
     _r("compute_shown", "flow", "Calculation", "map",
-       "How many of each kind the gathering tools of a calculation show: "
-       "sections, tables, figures.", of="whole", decided="2026-11-04",
+       "How many of the best search hits the search tools of a calculation "
+       "show, for each kind: sections, tables and figures. A larger number "
+       "gives the calculation more to find numbers in and makes its requests "
+       "longer. 0 shows none of that kind.", of="whole", decided="2026-11-04",
        where="reading.py"),
-    # -- flow: documents ---------------------------------------------------------
+    # -- flow: documents ------------------------------------------------------
     _r("largest_first", "flow", "Documents", "switch",
-       "Whether the documents of a run are read largest first; otherwise in "
-       "the order of their names.", where="runner.py"),
+       "On: the documents of a run are read largest first, by their number "
+       "of sections, so that the end of the run is not one long document "
+       "alone. Off: they are read in the order of their names.",
+       where="runner.py"),
     _r("same_request_once", "flow", "Documents", "switch",
-       "Whether a request a document has already sent word for word is "
-       "answered from the first.", decided="2026-11-07",
+       "On: a request that a document has already sent word for word is "
+       "answered with the first answer, and it is not sent again. Off: every "
+       "request is sent. Requests that belong to no document are always "
+       "sent.", decided="2026-11-07",
        where="scheduler.py"),
 )
 BY_NAME = {one.name: one for one in RULES}

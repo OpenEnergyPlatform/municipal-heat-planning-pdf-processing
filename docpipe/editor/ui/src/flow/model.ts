@@ -1,21 +1,25 @@
-/* The drawing of a flow as data: the steps of the profile's flow file (extraction/flow.py, blocks.py, conditions.py) and
-   every edit of it. The page keeps the tree the server sent and changes it in place, so a key no control shows goes back
-   as it came. */
+/* The flow as data: the steps of the profile's flow file (extraction/flow.py, blocks.py, conditions.py) and every edit
+   of it. The page keeps the tree the server sent and changes it in place, so a key no control shows goes back as it
+   came. */
 import { isObj, type Obj } from '../lib/util';
+import { t, tn, tr } from '../lib/i18n';
 
 export type Step = Obj & { id: string };
 export interface Way { when?: Cond; steps: Step[] }
 export interface Row { of: string; is: string; op?: string; value?: unknown; not?: boolean }
 export type Cond = { all: Row[] } | { any: Row[] };
 
-export interface LibSetting { key: string; kind: string; label: string; default?: unknown; number?: string; choices?: string[]; help?: string; where?: string[] }
+export interface LibSetting { key: string; kind: string; label: string; default?: unknown; number?: string; choices?: string[]; words?: Record<string, string>; help?: string; where?: string[] }
 export interface LibBox {
   type: string; label: string; group: string; takes: string; gives: string; says: string; code: string; asks: string | null;
   needs: string[]; settings: LibSetting[]; fixed: string; switch: boolean; decided: string; attached: string[];
   prepares: boolean; spec: string | null; top: boolean; marks: string[];
 }
-export interface Library { boxes: LibBox[]; each: Record<string, string>; which: Record<string, string>; orders: Record<string, string[]> }
-export interface Prop { name: string; kind: string; label: string; ops: string[]; choices?: string[] }
+export interface Library {
+  boxes: LibBox[]; each: Record<string, string>; which: Record<string, string>; orders: Record<string, string[]>;
+  arrows: Record<string, string>; each_titles: Record<string, string>; order_words: Record<string, string>;
+}
+export interface Prop { name: string; kind: string; label: string; ops: string[]; choices?: string[]; words?: Record<string, string> }
 export interface Subject { name: string; label: string; props: Prop[] }
 export interface FlowNumber {
   name: string; help: string; least: number; value: number; own: boolean; inherited: number | null; owner: string;
@@ -35,14 +39,14 @@ export type Kind = 'box' | 'each' | 'round' | 'if' | '';
 export const kindOf = (n: unknown): Kind =>
   (['box', 'each', 'round', 'if'] as const).find(k => isObj(n) && Object.prototype.hasOwnProperty.call(n, k)) || '';
 
-/* the lists of steps inside a frame: one for each and round, one per way of an if (and its else) */
+/* the lists of steps inside a loop, round or branching: one for a loop and a round, one per branch of a branching (and its else) */
 export interface StepList { key: string; label: string; way?: Way; steps: Step[] }
 export function lists(n: Step): StepList[] {
   const k = kindOf(n);
   if (k === 'each' || k === 'round') { n.steps = n.steps || []; return [{ key: n.id, label: '', steps: n.steps }]; }
   if (k === 'if') {
-    const out: StepList[] = (n.if || []).map((w: Way, i: number) => ({ key: n.id + '#' + i, label: 'way ' + (i + 1), way: w, steps: (w.steps = w.steps || []) }));
-    if (Object.prototype.hasOwnProperty.call(n, 'else')) out.push({ key: n.id + '#else', label: 'else', steps: n.else });
+    const out: StepList[] = (n.if || []).map((w: Way, i: number) => ({ key: n.id + '#' + i, label: t('branch {n}', { n: i + 1 }), way: w, steps: (w.steps = w.steps || []) }));
+    if (Object.prototype.hasOwnProperty.call(n, 'else')) out.push({ key: n.id + '#else', label: t('else'), steps: n.else });
     return out;
   }
   return [];
@@ -54,7 +58,7 @@ export function find(tree: Step[], id: string) {
   for (const [n, steps, parent] of walk(tree)) if (n.id === id) return { n, steps, parent };
   return null;
 }
-/* the list a key names: "root", a frame's id, "<if id>#<way index>", "<if id>#else" */
+/* the list a key names: "root", the id of a loop or round, "<if id>#<branch index>", "<if id>#else" */
 export function listOf(tree: Step[], key: string): Step[] | null {
   if (key === 'root') return tree;
   const [id, part] = key.split('#');
@@ -63,7 +67,7 @@ export function listOf(tree: Step[], key: string): Step[] | null {
   const l = lists(got.n).find(x => x.key === (part === undefined ? id : key));
   return l ? l.steps : null;
 }
-/* the frames around a step, outermost first */
+/* the loops, rounds and branchings around a step, outermost first */
 export function ancestors(tree: Step[], id: string): string[] {
   const out: string[] = [];
   const down = (steps: Step[], path: string[]): boolean => {
@@ -86,43 +90,58 @@ export const libBox = (lib: Library, t: string) => (lib.boxes || []).find(b => b
 
 export function labelOf(lib: Library, n: Step): string {
   const k = kindOf(n);
-  if (k === 'box') { const b = libBox(lib, n.box); return b ? b.label : n.box; }
-  if (k === 'each') return 'For each ' + n.each + (n.which ? ' (' + (lib.which[n.which] || n.which) + ')' : '');
-  if (k === 'round') return n.round && n.round.most ? 'Round, at most ' + n.round.most + (n.round.most === 1 ? ' time' : ' times') : 'Round, until the supply is used up';
-  return 'If';
+  if (k === 'box') { const b = libBox(lib, n.box); return b ? tr(b.label) : n.box; }
+  if (k === 'each') {
+    const title = tr((lib.each_titles || {})[n.each]) || t('For each {name}', { name: n.each });
+    return n.which ? t('{title} ({which})', { title, which: tr(lib.which[n.which] || n.which) }) : title;
+  }
+  if (k === 'round') return n.round && n.round.most ? tn(n.round.most, 'Round, at most {n} time', 'Round, at most {n} times') : t('Round, until the search hits are used up');
+  return t('Branching (if / else)');
 }
+/* what an arrow after a step carries, in words: a step gives a key of library.arrows, a loop what it goes through */
+/* what a loop hands on: the kind of thing it goes through, as an arrow says it */
+const ARROW_OF_EACH: Record<string, string> = { coordinate: 'coordinates', value: 'values', field: 'fields', piece: 'pieces', settled: 'fields' };
 export function giveOf(lib: Library, n: Step): string {
   const k = kindOf(n);
-  if (k === 'box') { const b = libBox(lib, n.box); return b ? b.gives : ''; }
-  if (k === 'each') return n.each === 'coordinate' ? 'coordinates' : n.each === 'value' ? 'values' : n.each === 'field' ? 'fields' : n.each;
+  const arrows = lib.arrows || {};
+  const word = (key: string) => tr(arrows[key] || key);
+  if (k === 'box') { const b = libBox(lib, n.box); return b && b.gives ? word(b.gives) : ''; }
+  if (k === 'each') return word(ARROW_OF_EACH[n.each] || n.each);
   return '';
 }
 
 /* -- conditions ------------------------------------------------------------------------------------------------- */
 
-export const OPS: Record<string, string> = {
-  is: 'is', is_not: 'is not', less: 'less than', more: 'more than', at_least: 'at least', at_most: 'at most',
-  contains: 'contains', empty: 'is empty', one_of: 'is one of',
-};
+/* the comparisons of a condition in words */
+export const opWord = (op: string): string => ({
+  is: t('is'), is_not: t('is not'), less: t('less than'), more: t('more than'), at_least: t('at least'), at_most: t('at most'),
+  contains: t('contains'), empty: t('is empty'), one_of: t('is one of'),
+} as Record<string, string>)[op] || op;
+/* a value of a property of kind "choice", in words */
+export const choiceWord = (p: Prop, v: string): string => tr((p.words || {})[v] || v);
 export const subjectOf = (subjects: Subject[], name: string) => subjects.find(s => s.name === name);
 export const propOf = (subjects: Subject[], row: Row) => { const s = subjectOf(subjects, row.of); return s && s.props.find(p => p.name === row.is); };
 export const firstProp = (subjects: Subject[], s: string) => { const x = subjectOf(subjects, s); return x ? x.props[0].name : ''; };
 export const rowsOf = (c: Cond): Row[] => ('all' in c ? c.all : c.any) || [];
 
-/* "when the coordinate's state is one of read and the coordinate is a year" */
+/* "when the dimension's state is one of read and the dimension is a year" */
 export function sentence(subjects: Subject[], c: unknown): string {
   if (!isObj(c)) return '';
-  const joiner = c.all ? ' and ' : ' or ';
-  return 'when ' + ((c.all || c.any || []) as Row[]).map(r => {
+  const joiner = c.all ? ' ' + t('and') + ' ' : ' ' + t('or') + ' ';
+  const rows = ((c.all || c.any || []) as Row[]).map(r => {
     const s = subjectOf(subjects, r.of), p = propOf(subjects, r);
     if (!s || !p) return '(?)';
-    if (p.kind === 'yes') return s.label + (r.not ? ' not: ' : ' ') + p.label;
-    const v = Array.isArray(r.value) ? r.value.join(' or ') : r.value;
-    return s.label + "'s " + p.label + (r.not ? ' not ' : ' ') + (OPS[r.op || ''] || r.op) + (r.op === 'empty' ? '' : ' ' + v);
+    const subject = tr(s.label), prop = tr(p.label);
+    if (p.kind === 'yes') return r.not ? t('not ({subject} · {prop})', { subject, prop }) : t('{subject} · {prop}', { subject, prop });
+    const op = opWord(r.op || '');
+    if (r.op === 'empty') return r.not ? t('not ({subject} · {prop} {op})', { subject, prop, op }) : t('{subject} · {prop} {op}', { subject, prop, op });
+    const value = Array.isArray(r.value) ? r.value.map(v => p.kind === 'choice' ? choiceWord(p, String(v)) : String(v)).join(' ' + t('or') + ' ') : String(r.value);
+    return r.not ? t('not ({subject} · {prop} {op} {value})', { subject, prop, op, value }) : t('{subject} · {prop} {op} {value}', { subject, prop, op, value });
   }).join(joiner);
+  return t('when {condition}', { condition: rows });
 }
-/* What the old editor did each time it drew a row: a property that is a yes has no comparison and no value, any other
-   takes the first comparison it offers where the row has none it knows. */
+/* A property that is a yes has no comparison and no value; any other takes the first comparison it offers where the row
+   has none it knows. */
 export function normRow(subjects: Subject[], r: Row): Row {
   const p = propOf(subjects, r);
   if (p && p.kind !== 'yes') { if (!p.ops.includes(r.op || '')) r.op = p.ops[0]; }
@@ -186,7 +205,7 @@ export function siblingsRun(tree: Step[], ids: string[]): { steps: Step[]; from:
   for (let i = 1; i < at.length; i++) if (at[i] !== at[i - 1] + 1) return null;
   return { steps, from: at[0], count: at.length };
 }
-/* a frame around steps that stand next to each other: it takes their place and holds them */
+/* a loop, round or branching around steps that stand next to each other: it takes their place and holds them */
 export function wrap(tree: Step[], subjects: Subject[], ids: string[], kind: 'each' | 'round' | 'if', arg?: string): Step | null {
   const run = siblingsRun(tree, ids);
   if (!run) return null;
@@ -195,5 +214,5 @@ export function wrap(tree: Step[], subjects: Subject[], ids: string[], kind: 'ea
   if (kind === 'if') frame.if[0].steps = inner; else frame.steps = inner;
   return frame;
 }
-/* the steps inside a frame, all of them, for "N boxes and frames inside" */
+/* the steps inside a loop, round or branching, all of them, for "N steps inside" */
 export const inside = (n: Step) => [...walk(lists(n).flatMap(l => l.steps))].length;

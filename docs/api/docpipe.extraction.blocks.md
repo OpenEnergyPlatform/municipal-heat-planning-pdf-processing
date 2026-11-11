@@ -51,6 +51,7 @@ Fields:
 - `choices: tuple = ()`
 - `help: str = ""`
 - `where: tuple = ()`: the frames it applies in, () = everywhere
+- `words: tuple = ()`: what the page shows for each choice
 
 ### Box
 

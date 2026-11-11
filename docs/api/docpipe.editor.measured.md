@@ -14,10 +14,16 @@ names a place (so how many of those answers a smaller budget would have
 come too late for), at which attempt a reply was read, how many answers
 were asked again, how long the lists were that requests showed.
 
+Every sentence is one template of `SAID` with its numbers as {names}, in
+the words of the page: the page finds its German by that template
+(ui/src/i18n/templates.json), so no sentence is glued from pieces. A kind of
+request and the cause of an unreadable reply are named as code, as the
+request log names them.
+
 Nothing here reads a file: it takes the requests `requests.Trace` made of a
 trace. Nothing here says whether an answer held; a trace does not record
-that. So a sentence speaks of "an answer that names a place", never of a
-value read.
+that. So a sentence speaks of "an answer that gives a line number", never
+of a value read.
 
 Which pieces of a search count toward its budget is noted with each of its
 requests since 2026-11-10 (`shows`: "found" for those of the budget, "near"

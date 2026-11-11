@@ -11,10 +11,16 @@ names a place (so how many of those answers a smaller budget would have
 come too late for), at which attempt a reply was read, how many answers
 were asked again, how long the lists were that requests showed.
 
+Every sentence is one template of `SAID` with its numbers as {names}, in
+the words of the page: the page finds its German by that template
+(ui/src/i18n/templates.json), so no sentence is glued from pieces. A kind of
+request and the cause of an unreadable reply are named as code, as the
+request log names them.
+
 Nothing here reads a file: it takes the requests `requests.Trace` made of a
 trace. Nothing here says whether an answer held; a trace does not record
-that. So a sentence speaks of "an answer that names a place", never of a
-value read.
+that. So a sentence speaks of "an answer that gives a line number", never
+of a value read.
 
 Which pieces of a search count toward its budget is noted with each of its
 requests since 2026-11-10 (`shows`: "found" for those of the budget, "near"
@@ -35,7 +41,7 @@ from ..extraction.spec import PLAN_FIELDS
 
 # The notes that say which value's search a request belongs to.
 SEARCH = ("doc", "parameter", "coordinate", "owner", "value")
-# What a request of a search shows, its trace's `shows` (`engine.SearchSupply`).
+# What a request of a search shows: its trace's `shows`, engine.SearchSupply.
 FOUND, NEAR = "found", "near"
 
 
@@ -278,12 +284,85 @@ def joined(many: list) -> dict:
                       for key in ("steps", "read", "unreadable", "follow")}}
 
 
-def _count(n: int, one: str, many: Optional[str] = None) -> str:
-    return f"{n:,} {one if n == 1 else (many or one + 's')}"
+# The sentences of what the traces say, one template each with its numbers
+# as {names}. A template whose count is its subject has a form for one and
+# one for many.
+SAID = {
+    "searches": (
+        "Of {n} search for an open dimension, {found} ended with an answer "
+        "that gives a line number and {open} without one.",
+        "Of {n} searches for an open dimension, {found} ended with an answer "
+        "that gives a line number and {open} without one."),
+    "after_budget": (
+        "Those answers came after {least} to {most} shown chunks of the "
+        "budget, half of them within {median}, {late} of them only after "
+        "more than {budget}."),
+    "after_all": (
+        "Those answers came after {least} to {most} shown chunks, half of "
+        "them within {median}, {late} of them only after more than "
+        "{budget}."),
+    "docfields": (
+        "For fields asked once per document, {n} request found something, "
+        "{late} of them only after more than {budget} shown chunks.",
+        "For fields asked once per document, {n} requests found something, "
+        "{late} of them only after more than {budget} shown chunks."),
+    "listed": (
+        "For fields asked once per document that have a list, {n} request "
+        "found something, {late} of them only after more than {limit} shown "
+        "chunks ({budget} times {factor}).",
+        "For fields asked once per document that have a list, {n} requests "
+        "found something, {late} of them only after more than {limit} shown "
+        "chunks ({budget} times {factor})."),
+    "per_search": (
+        "The search sent {sent} requests.",
+        "The {n} searches sent {sent} requests, {mean} each on average."),
+    "follow": (
+        "{n} answer did not pass the checks and was asked again, by kind of "
+        "request: {listed}.",
+        "{n} answers did not pass the checks and were asked again, by kind "
+        "of request: {listed}."),
+    "follow_none": "Every answer passed the checks, so none was asked again.",
+    "read": (
+        "{n} reply was read, {late} of them only after more than {replies} "
+        "attempts. Attempt \u2192 replies read: {by_attempt}.",
+        "{n} replies were read, {late} of them only after more than "
+        "{replies} attempts. Attempt \u2192 replies read: {by_attempt}."),
+    "lost": (
+        "{n} reply could not be read, by cause: {listed}.",
+        "{n} replies could not be read, by cause: {listed}."),
+    "lists": (
+        "{n} request asked for the entry of a list; {late} of the lists "
+        "shown had more than {meanings} entries, so their entries are shown "
+        "by their names only.",
+        "{n} requests asked for the entry of a list; {late} of the lists "
+        "shown had more than {meanings} entries, so their entries are shown "
+        "by their names only."),
+}
+# What `notes` says of traces written before a search noted its budget.
+NOT_NOTED = (
+    "These request logs were written before a search noted which of its "
+    "chunks count toward its budget; the neighbouring chunks of a value and "
+    "the chunks the model fetched itself do not. For them every chunk a "
+    "search showed is counted, so an answer may seem to come later than it "
+    "did within the budget.")
+
+
+def _say(key: str, n: Optional[int] = None, **values) -> str:
+    """The sentence *key* of SAID with its values written in: its form for
+    one where the count *n* is 1, every whole number with its thousands
+    marked."""
+    form = SAID[key]
+    if isinstance(form, tuple):
+        form = form[0] if n == 1 else form[1]
+    if n is not None:
+        values["n"] = n
+    return form.format(**{name: f"{value:,}" if isinstance(value, int)
+                          else value for name, value in values.items()})
 
 
 def _listed(counts: dict) -> str:
-    return ", ".join(f"{name} {n:,}" for name, n
+    """Names with their counts, the most first, each name as code."""
+    return ", ".join(f"`{name}` {n:,}" for name, n
                      in sorted(counts.items(), key=lambda kv: -kv[1]))
 
 
@@ -302,84 +381,60 @@ def says(found: dict, numbers: dict) -> dict:
     ended = [search["after"] for search in searches if search["found"]]
     budget, factor = whole("search_pieces"), whole("listed_field_factor")
     if budget is not None and searches:
-        sentence = (f"Of {_count(len(searches), 'search', 'searches')} for "
-                    f"an open coordinate, {len(ended):,} ended with an "
-                    f"answer that names a place and "
-                    f"{len(searches) - len(ended):,} without one.")
+        out["search_pieces"].append(_say(
+            "searches", len(searches), found=len(ended),
+            open=len(searches) - len(ended)))
         if ended:
             # Only where every search noted it are these the budget's.
-            pieces = "shown pieces of the budget" \
-                if all(search["noted"] for search in searches) \
-                else "shown pieces"
-            sentence += (
-                f" Those answers came after {min(ended):,} to "
-                f"{max(ended):,} {pieces}, half of them "
-                f"within {int(statistics.median(ended)):,}; "
-                f"{after(ended, budget):,} came after more than "
-                f"{budget:,}.")
-        out["search_pieces"].append(sentence)
+            noted = all(search["noted"] for search in searches)
+            out["search_pieces"].append(_say(
+                "after_budget" if noted else "after_all", least=min(ended),
+                most=max(ended), median=int(statistics.median(ended)),
+                late=after(ended, budget), budget=budget))
     plain, listed = found["docfields"]["plain"], found["docfields"]["listed"]
     if budget is not None and plain:
-        out["search_pieces"].append(
-            f"For fields the document has once, "
-            f"{_count(len(plain), 'request')} found something; "
-            f"{after(plain, budget):,} of them after more than {budget:,} "
-            f"shown pieces.")
+        out["search_pieces"].append(_say(
+            "docfields", len(plain), late=after(plain, budget),
+            budget=budget))
     if budget is not None and factor is not None and listed:
-        out["listed_field_factor"].append(
-            f"For fields the document has once that have a list, "
-            f"{_count(len(listed), 'request')} found something; "
-            f"{after(listed, budget * factor):,} of them after more than "
-            f"{budget * factor:,} shown pieces ({budget:,} times "
-            f"{factor:,}).")
+        out["listed_field_factor"].append(_say(
+            "listed", len(listed), late=after(listed, budget * factor),
+            limit=budget * factor, budget=budget, factor=factor))
     if whole("search_per_request") is not None and searches:
         sent = sum(search["requests"] for search in searches)
-        out["search_per_request"].append(
-            f"The {_count(len(searches), 'search', 'searches')} sent "
-            f"{_count(sent, 'request')}, {sent / len(searches):.1f} each on "
-            f"average.")
+        out["search_per_request"].append(_say(
+            "per_search", len(searches), sent=sent,
+            mean=f"{sent / len(searches):.1f}"))
     if whole("follow_ups") is not None and found["requests"]:
         asked = sum(found["follow"].values())
         out["follow_ups"].append(
-            f"{_count(asked, 'answer')} did not hold and "
-            f"{'was' if asked == 1 else 'were'} asked again"
-            + (f": {_listed(found['follow'])}." if asked else "."))
+            _say("follow", asked, listed=_listed(found["follow"]))
+            if asked else _say("follow_none"))
     replies = whole("replies")
     if replies is not None and found["read"]:
         read = found["read"]
         attempts = [attempt for attempt, n in read.items()
                     for _ in range(n)]
-        by_attempt = ", ".join(
-            f"{n:,} at attempt {attempt}"
-            for attempt, n in sorted(read.items()))
-        sentence = (f"{_count(len(attempts), 'reply', 'replies')} "
-                    f"{'was' if len(attempts) == 1 else 'were'} read: "
-                    f"{by_attempt}; {after(attempts, replies):,} only after "
-                    f"more than {replies:,} attempts.")
+        by_attempt = "; ".join(f"{attempt} \u2192 {n:,}"
+                               for attempt, n in sorted(read.items()))
+        out["replies"].append(_say(
+            "read", len(attempts), late=after(attempts, replies),
+            replies=replies, by_attempt=by_attempt))
         lost = sum(found["unreadable"].values())
         if lost:
-            sentence += (f" {_count(lost, 'reply', 'replies')} could not be "
-                         f"read ({_listed(found['unreadable'])}).")
-        out["replies"].append(sentence)
+            out["replies"].append(_say(
+                "lost", lost, listed=_listed(found["unreadable"])))
     meanings = whole("list_meanings")
     if meanings is not None and found["lists"]:
         lists = found["lists"]
-        out["list_meanings"].append(
-            f"{_count(len(lists), 'request')} asked for the entry of a "
-            f"list; {after(lists, meanings):,} of the lists shown had more "
-            f"than {meanings:,} entries, which are shown by their names "
-            f"only.")
+        out["list_meanings"].append(_say(
+            "lists", len(lists), late=after(lists, meanings),
+            meanings=meanings))
     return dict(out)
 
 
 def notes(found: dict) -> list:
     """What has to be said about how the traces were counted."""
-    out = []
     if any(not search["noted"] for search in found["searches"]):
-        out.append(
-            "These traces were written before a search noted which of its "
-            "pieces count toward its budget (the pieces beside the value "
-            "and those the model fetched itself do not): for them the "
-            "pieces of every request of a search are counted, so a place "
-            "may be counted later than the budget saw it.")
-    return out
+        return [NOT_NOTED]
+    return []

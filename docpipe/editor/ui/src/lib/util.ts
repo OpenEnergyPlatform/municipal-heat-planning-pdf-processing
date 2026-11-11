@@ -1,4 +1,5 @@
 /* Small helpers every tab uses. */
+import { num, t } from './i18n';
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 export type Obj = Record<string, any>;
@@ -9,15 +10,22 @@ export const clone = <T,>(v: T): T => (v === undefined ? v : JSON.parse(JSON.str
 export const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
 export const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-export const plural = (n: number, w: string) => n + ' ' + w + (n === 1 ? '' : 's');
-export const mb = (b: number) => (b / 1e6).toFixed(1) + ' MB';
-export const thousands = (n: number) => n.toLocaleString('en-US');
+/* sizes and counts as the page's language writes numbers */
+export const mb = (b: number) => num(b / 1e6, 1) + ' MB';
+export const thousands = (n: number) => num(n);
 
 /* a value as one short line: a text as it is, anything else as JSON ("(none)" for nothing) */
 export function shown(v: unknown): string {
-  if (v === null || v === undefined) return '(none)';
+  if (v === null || v === undefined) return t('(none)');
   if (typeof v === 'string') return v;
   return JSON.stringify(v);
+}
+
+/* what a save did to its file (the server's "writes"), in the page's language */
+export function wrote(w: string | undefined): string {
+  const words: Record<string, string> = { created: t('created'), changed: t('changed'), removed: t('removed'),
+    unchanged: t('unchanged') };
+  return (w && words[w]) || w || t('written');
 }
 
 /* the class of one line of a unified diff */

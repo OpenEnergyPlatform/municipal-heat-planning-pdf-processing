@@ -285,9 +285,9 @@ def test_a_try_sends_one_call_per_named_request_and_no_more_than_three(
     assert calls[0]["response_format"] == record.sent(0)["response_format"]
     with pytest.raises(trying.Refused, match="3 requests at most"):
         run([0, 1, 2, 3])
-    with pytest.raises(trying.Refused, match="no request"):
+    with pytest.raises(trying.Refused, match="at least one request"):
         run([])
-    with pytest.raises(trying.Refused, match="no model"):
+    with pytest.raises(trying.Refused, match="No model is set up"):
         run([0], {"configured": False, "why": trying.NO_MODEL})
     assert len(calls) == 2
 

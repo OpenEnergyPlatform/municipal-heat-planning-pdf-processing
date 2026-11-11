@@ -27,17 +27,16 @@ CR, LF = "\r", "\n"
 
 # What a change of a rule costs, by its tab.
 COST = {
-    "spec": "A rule of what backs a value takes effect the next time a "
-            "document is read; no harvest goes stale, the stamp names the "
-            "rules and nothing compares them.",
-    "prompts": "A rule of what a request shows takes effect with the next "
-               "request; no harvest goes stale.",
-    "flow": "A rule of the flow takes effect the next time a document is "
-            "read; no harvest goes stale.",
-    "sources": "A rule of the sources takes effect at the next fetch of the "
-               "sources (the Sources tab), which writes the lists anew.",
-    "graph": "A rule of the graph takes effect the next time the graph is "
-             "written from the stored harvest; no model is asked.",
+    "spec": "A change takes effect the next time a document is read. "
+            "Harvests that are already written stay valid.",
+    "prompts": "A change takes effect with the next request the run sends. "
+               "Harvests that are already written stay valid.",
+    "flow": "A change takes effect the next time a document is read. "
+            "Harvests that are already written stay valid.",
+    "sources": "A change takes effect the next time the sources are fetched "
+               "in the Sources tab. That fetch writes the lists anew.",
+    "graph": "A change takes effect the next time the graph is written "
+             "from the stored harvest. No model is asked for it.",
 }
 
 # The form the page gives each kind of rule (ui/src/rules/RuleInputs.tsx);
@@ -83,6 +82,8 @@ def view(profile, tab: str, own_raw: Optional[bytes], shown) -> dict:
             and name in below.values,
             "owner": owner, "own": owner == f"{rule_files.FILE} of "
                                             f"{profile.name}",
+            # the profile whose file sets it, for "set in profile ..."
+            "set_in": owner.rpartition(" of ")[2] or None,
             "declared_here": name in mine,
             "in_effect": taken.values[name],
             "origin": taken.owners.get(name, owner)})

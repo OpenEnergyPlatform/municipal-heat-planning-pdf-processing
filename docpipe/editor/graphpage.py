@@ -41,12 +41,13 @@ from docpipe import graphfile, ontology
 CR, LF = "\r", "\n"
 PROBE_FOLDER = "docpipe-graph-probe"
 PROBE_TIMEOUT = 1800          # seconds, one writing of the graph
-COST = ("A change of the graph file costs no model: it takes effect the next "
-        "time the graph is written from the stored harvest. \"Write probe\" "
-        "shows what it does to the harvest the page was given.")
-GATE = ("\"stop\" works through the gate (python -m docpipe.extraction.gate), "
-        "which shuts before a job starts its model; no job script runs the "
-        "gate yet.")
+COST = ("A change of the graph needs no model. It takes effect the next "
+        "time the graph is written from the stored harvest. \"Test write\" "
+        "shows what the change does to the harvest the page was given, "
+        "before you rely on it.")
+GATE = ("A rule set to \"stop\" refuses the run in the check that a job "
+        "makes before it starts its model. No job script makes this check "
+        "yet, so \"stop\" has no effect on a job today.")
 COMPONENTS = (("min_count", "MinCount"), ("max_count", "MaxCount"),
               ("choices", "In"), ("classes", "Class"),
               ("datatype", "Datatype"), ("node", "Node"))

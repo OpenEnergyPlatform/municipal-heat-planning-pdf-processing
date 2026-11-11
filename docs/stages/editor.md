@@ -7,17 +7,17 @@ closed lists the answers are chosen from, the texts a model is shown about a
 document and the examples. It is a long file, and one line of it can make a
 stored harvest stale. A profile also holds its prompts, the files a model is
 told its task in, and the sentences its stages say to the model outside them.
-`docpipe edit` shows these as a page in the browser with five tabs and a Rules drawer. The Spec tab
-shows the spec, one form per question, and says what an edit costs the next run
-before it is written. The Prompts tab edits the prompt files and the sentence
-files of the profile; with a harvest folder it also shows what an edit does to
-the requests recorded there, and it can send a few of them once more. The Flow
-tab draws how a document is read, as boxes and frames, edits that drawing and
-the numbers that bound it, which stand in the profile's `flow.json`, and tries
-the drawing on a document with made-up answers. What a box does is code and is
-not in the page. The Sources tab edits `sources.json`, the Graph
-tab `graph.json`, and the Rules drawer, which the Rules button of a tab opens,
-the rules of that tab.
+`docpipe edit` shows these as a page in the browser with five tabs and a Rules
+drawer. The Spec tab shows the spec, one form per question, and says what an
+edit costs the next run before it is written. The Prompts tab edits the prompt
+files and the sentence files of the profile; with a harvest folder it also shows
+what an edit does to the requests recorded there, and it can send a few of them
+once more. The Flow tab draws how a document is read, as steps, loops, rounds
+and branchings, edits that flow and the numbers that bound it, which stand in
+the profile's `flow.json`, and runs it on a document as a dry run with
+placeholder answers. What a box does is code and is not in the page. The Sources
+tab edits `sources.json`, the Graph tab `graph.json`, and the Rules drawer,
+which the Rules button of a tab opens, the rules of that tab.
 
 ```
 docpipe edit --profile kwp
@@ -60,22 +60,45 @@ The head shows the profile and the branch, the five tabs **Spec**, **Prompts**,
 edits not yet saved, a badge that says **Unsaved edits** or **All saved**, a
 **Rules** button on the tabs that have rules, which opens the rules of the tab
 in a drawer on the right (with Check, Save and Discard there), and a switch
-between light and dark colours, which the browser remembers. Ctrl+S saves and
-Ctrl+Enter checks the tab, or the open drawer. Leaving the page with unsaved
-edits asks first. A tab is loaded the first time it is opened and kept while
-the page is open. The rest of this section is the Spec tab. On the left is a tree, on the right the form of the selected node:
+between light and dark colours and one between English and German, which the
+browser remembers. Ctrl+S saves and Ctrl+Enter checks the tab, or the open
+drawer. Leaving the page with unsaved edits asks first. A tab is loaded the
+first time it is opened and kept while the page is open.
+
+The page speaks English or German. The switch in the head picks the language;
+the browser remembers it (`docpipe-edit-language` in `localStorage`) and, the
+first time, follows its own. Every text the page writes goes through `t()` or
+`tn()` (for counts) with an English literal, and its German stands in
+`docpipe/editor/ui/src/i18n/de.json`, keyed by that English text. Every
+explanation the server sends (what a step does, the help of a rule or of a key
+of the spec, the details of the sources, what the request logs measured) goes
+through `tr()`: the exact entry, or one of the server's own templates in
+`i18n/templates.json`, English texts with `{names}` the server fills in. The
+numbers the server filled in are written the page's way (German "9.206", "4,2"),
+and a server text shown as an element goes through `rich()`, so its `code` shows
+as code. What comes from a source is never translated: labels and definitions of
+the ontology, field names and texts of the spec, prompts, text of documents,
+file names and code names. `tests/test_editor_i18n.py` holds the promise that
+every text the page shows has a German version, each part with a case that
+breaks it. The page says step, loop, round and branching, chunk, dimension, line
+number and request log where the flow file, the code and this page say box,
+frame, piece, coordinate, address and trace (see the glossary).
+
+The rest of this section is the Spec tab. On the left is a tree, on the right
+the form of the selected node:
 
 - the top-level questions (`_comment`, `parameter_question`, `unit_question`);
-- what a document settles for all its values (`plan_fields`) and its other
+- the fields of the whole document (`plan_fields`) and its other
   works (`works`), where the spec has them, with a button to add one it does
   not have;
 - the groups, and the fields. A field opens into its own list (`vocabulary`),
   the entries a list closed per document always has beside the document's
-  own (`beside`) and its coordinates, each with its own list.
+  own (`beside`) and its dimensions (`coordinates`), each with its own list.
 
-The keys of a form are the ones `docpipe/extraction/spec.py` reads, each with
-the comment the code writes at its field (`specs.form`); a few keys the code
-leaves without a comment have a sentence of the form's own. A key the form
+The keys of a form are the ones `docpipe/extraction/spec.py` reads (`specs.form`),
+each with what the page says of it, written for someone who edits the spec,
+not for the code (`specs.HELP`); the lists of the fields of the whole document
+and of the works have a sentence above them (`specs.ABOUT`). A key the form
 does not know stays in the file as it is. An edit is made in the page's copy
 of the spec; nothing is written until Save.
 
@@ -552,24 +575,24 @@ request whose prompt neither the profile nor a profile it extends writes.
 
 ### The tab
 
-The drawing is a canvas, and on the right stand the settings of the chosen
-step: for a box its settings, its own values, its condition ("only when"),
-whether it is on, and the first request a Try made at it; a frame has its own
-form (what it repeats, its order, side by side, the times of a round and its
-stop, the ways of an if). With nothing chosen the right side shows the numbers
-of the flow or Try. The drawing runs top to bottom: a frame (For each, Round,
+The drawing is a canvas, and on the right stand the settings of the chosen step:
+for a box its settings, its own values, its condition ("only when"), whether it
+is on, and the first request a dry run made at it; a frame has its own form
+(what it repeats, its order, side by side, the times of a round and its stop,
+the ways of an if). With nothing chosen the right side shows the numbers of the
+flow or the dry run. The drawing runs top to bottom: a frame (For each, Round,
 If / else) is a coloured area around its column of boxes, the ways of an if
-stand side by side, and each arrow is labelled with what the box before it
-gives and the condition of the step it leads to. A frame opens and closes with
-its arrow button or a double click; toolbar buttons open or close every frame
-and show the whole drawing, and the first view shows the top of the drawing at
-a readable size. The layout is computed from the nesting; no position is stored
-in the flow file. Ctrl+Z undoes an edit and Ctrl+Y does it again, until the next
+stand side by side, and each arrow is labelled with what the box before it gives
+and the condition of the step it leads to. A frame opens and closes with its
+arrow button or a double click; toolbar buttons open or close every frame and
+show the whole drawing, and the first view shows the top of the drawing at a
+readable size. The layout is computed from the nesting; no position is stored in
+the flow file. Ctrl+Z undoes an edit and Ctrl+Y does it again, until the next
 save. A short guide, "How to use this tab", stands above the canvas, folded
 until opened. A problem is marked red at its box and listed above the canvas; a
 click on it opens the frames around that box and brings it into view. A card
-shows the number of requests its box asked in the recorded traces and in the
-last Try. After Discard the page asks for the measurements again for the
+shows the number of requests its box asked in the recorded request logs and in
+the last dry run. After Discard the page asks for the measurements again for the
 numbers it puts back.
 
 The flow has twelve numbers, each a whole number, and each says what it counts:
@@ -612,14 +635,14 @@ inherited value leaves the file, and a file that would hold neither is removed
 own file is the whole flow, so a save there writes every number and the drawing.
 The file keeps its line endings; a new file is written with plain ones.
 
-### Try
+### Dry run
 
-The Flow tab's **Try** reads one document by the drawing on the page, with the
-numbers as edited, and sends nothing (`flowtry.py`). Every request is built in
-full as it would go out and kept. The document is one of the corpus database,
-optionally some pages of it, or, without one, a plan made up from the examples of
-the profile's spec. The answers are made up, each in its request's own form, in
-one of two modes:
+The Flow tab's **Dry run** reads one document by the drawing on the page, with
+the numbers as edited, and sends nothing (`flowtry.py`). Every request is built
+in full as it would go out and kept. The document is one of the corpus database,
+optionally some pages of it, or, without one, a plan made up from the examples
+of the profile's spec. The answers are placeholders, each in its request's own
+form, in one of two modes:
 
 - "nothing": a find, and the question of a field the document has once, names
   the first number its piece prints where the field is a number (nothing where
@@ -638,43 +661,54 @@ document was cut into.
 
 ### What a trace measured
 
-With `--harvest` the tab says, beside the number it measures, what the traces of
-that harvest measured, recounted as a number is typed (`measured.says`). A request
-of a trace names the box that asked it, which is how the cards count requests;
-a trace written before names none, and its requests are counted at the box of the
-default drawing that asks their kind.
+With `--harvest` the tab says, beside the number it measures, what the request
+logs of that harvest measured, recounted as a number is typed (`measured.says`).
+A request of a trace names the box that asked it, which is how the cards count
+requests; a trace written before names none, and its requests are counted at the
+box of the default drawing that asks their kind.
 
-- how many searches for an open coordinate ended with an answer that names a
-  place and how many without one, after how many shown pieces of the budget
-  those answers came (the least, the most and the middle one), and how many came
-  after more than the typed budget; how many requests the searches sent;
-- for the fields the document has once, how many requests found something and
-  how many of them only after more than the typed budget of shown pieces (for a
+Every sentence is one template of `measured.SAID` (a form for one and one for
+many where a count is the subject) in the page's words, with its numbers as
+`{names}`; the page finds its German by the template. A kind of request (`find`,
+`coord`, ...) and the cause of an unreadable reply (`missing_key`, ...) are
+named as code, as the request log names them. The sentences say:
+
+- of the searches for an open dimension, how many ended with an answer that
+  gives a line number and how many without one; after how many shown chunks of
+  the budget those answers came (the least, the most and the middle one), and how
+  many came only after more than the typed budget; how many requests the
+  searches sent, and the mean per search;
+- for the fields asked once per document, how many requests found something and
+  how many of them only after more than the typed budget of shown chunks (for a
   field with a list, the budget times `listed_field_factor`);
-- how many answers were asked again, per kind of request;
-- how many replies were read at the first, second and later attempt, and how many
-  could not be read, by cause;
-- how many lists were longer than the typed number of entries.
+- how many answers did not pass the checks and were asked again, by kind of
+  request, or that none was;
+- how many replies were read, how many only after more than the typed number of
+  attempts, and the replies read per attempt ("Attempt → replies read: 1 →
+  9,206; 2 → 239"); how many could not be read, by cause;
+- how many requests for the entry of a list showed a list longer than the typed
+  number of entries, whose entries are then shown by their names only.
 
 Two limits belong to these counts. A trace does not record whether an answer
-held, so the tab counts an answer that names a place, and not a value read. And
-"came after more than N" estimates what a smaller budget would have cost, since
-a smaller budget also changes which pieces are picked. A trace written before a
-search noted which of its pieces count toward its budget (`shows`: `near` for the
-pieces beside the value, `found` for those of the budget, `fetched` for those the
-model fetched itself, which count toward no budget) is counted over all its
-pieces, and the tab says so. The traces are read by `measured.light`, which does
-not put the requests back together, and the counts of a trace are kept per state
-of its file. Without `--harvest`, or with a folder that holds no trace, the tab
+passed the checks, so the tab counts an answer that gives a line number, and not
+a value read. And "came after more than N" estimates what a smaller budget would
+have cost, since a smaller budget also changes which pieces are picked. A trace
+written before a search noted which of its pieces count toward its budget
+(`shows`: `near` for the pieces beside the value, `found` for those of the
+budget, `fetched` for those the model fetched itself, which count toward no
+budget) is counted over all its pieces, and the tab says so
+(`measured.NOT_NOTED`). The traces are read by `measured.light`, which does not
+put the requests back together, and the counts of a trace are kept per state of
+its file. Without `--harvest`, or with a folder that holds no trace, the tab
 says that and counts nothing.
 
 Below the drawing the tab lists the year rules of the spec as notes (the key
 `of` of a plan field that is a year; see [the extraction stage](extraction.md)),
-each a link to the plan field in the Spec tab, and the other settings of an
-extraction run, read only, each with its value and where it comes from as
-`docpipe config` lists them. The value of a secret setting (a key, a token) is
-never sent to the page, which shows only whether one is set, and what an address
-carries before its host (a user, a password) is replaced by `***@`.
+each a link to the field of the whole document in the Spec tab, and the other
+settings of an extraction run, read only, each with its value and where it comes
+from as `docpipe config` lists them. The value of a secret setting (a key, a
+token) is never sent to the page, which shows only whether one is set, and what
+an address carries before its host (a user, a password) is replaced by `***@`.
 
 The Spec tab's form of a plan field that is a year has the key `of`: a coordinate
 of a group's pair and an entry of its list.
@@ -732,9 +766,9 @@ from the last commit, to show both in the header, and changes nothing with it.
 
 It sends over a network in exactly one case: a Try of the Prompts tab, to the
 endpoint the installation names, one request for each request named in the click
-and at most three (see Try). The Try of the Flow tab sends nothing. The page itself is served on `127.0.0.1` and talks to nothing
-else, and no other action of the editor sends a request to a model or to any
-other host.
+and at most three (see Try). The dry run of the Flow tab sends nothing. The page
+itself is served on `127.0.0.1` and talks to nothing else, and no other action
+of the editor sends a request to a model or to any other host.
 
 After a spec save a button regenerates the schema and the documentation pages
 (`python -m docpipe.extraction.schema <profile> --write`, then
@@ -1042,7 +1076,7 @@ Author: Felix Vossel
 
 graphprobe.py: The graph of a local harvest as a profile's graph file has
 it written, into a folder of the temp directory, for the Graph tab of
-`docpipe edit` ("Write probe"). A process of its own, because a writer reads
+`docpipe edit` ("Test write"). A process of its own, because a writer reads
 its rules when it is imported:
 
     python -m docpipe.editor.graphprobe PROFILE HARVEST DB OUT

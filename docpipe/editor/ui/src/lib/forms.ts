@@ -2,6 +2,8 @@
    page loads before itself (window.DPForms) and the tests run in node (tests/editor_forms_driver.js). This module only
    names its parts for TypeScript. */
 
+import { t } from './i18n';
+
 export interface Kind {
   k: 'text' | 'number' | 'bool' | 'record' | 'rows' | 'map' | 'bounds';
   fields?: Field[]; item?: Kind; value?: Kind; one?: boolean;
@@ -42,6 +44,6 @@ export interface DPForms {
 declare global { interface Window { DPForms: DPForms } }
 
 export const DF = (): DPForms => {
-  if (!window.DPForms) throw new Error('forms.js is not loaded: the page needs /forms.js beside it.');
+  if (!window.DPForms) throw new Error(t('forms.js is not loaded: the page needs /forms.js beside it.'));
   return window.DPForms;
 };

@@ -1,35 +1,38 @@
-/* The library a "+" opens: the frames and every kind of box, each with the sentence of what it does, a search over both. */
+/* The library a "+" opens: the loops, rounds, branchings and every kind of step, each with the sentence of what it does, a search over all. */
 import { useMemo, useState } from 'react';
 import { Badge, Box, Group, Modal, ScrollArea, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
-import { FRAMES, GROUPS } from './nodes';
+import { FRAMES, GROUPS, frameWord, groupWord } from './nodes';
+import { t, tr, useLang } from '../lib/i18n';
 import type { Library } from './model';
 
 export type Pick = { kind: 'box'; arg: string } | { kind: 'each'; arg: string } | { kind: 'round' } | { kind: 'if' };
 interface Item { label: string; says: string; pick: Pick; color: string; icon: React.ReactNode; group: string }
 
-export function LibraryModal({ lib, opened, where, onClose, onPick }: {
-  lib: Library; opened: boolean; where: string; onClose: () => void; onPick: (p: Pick) => void;
+export function LibraryModal({ lib, opened, after, onClose, onPick }: {
+  lib: Library; opened: boolean; after: string | null; onClose: () => void; onPick: (p: Pick) => void;
 }) {
+  const lang = useLang();
   const [q, setQ] = useState('');
   const items = useMemo(() => {
     const out: Item[] = [];
-    for (const [what, says] of Object.entries(lib.each)) out.push({ label: 'For each ' + what, says, pick: { kind: 'each', arg: what }, color: FRAMES.each.color, icon: FRAMES.each.icon({ size: 18 }), group: 'Frames' });
-    out.push({ label: 'Round', says: 'Its boxes again: at most N times, or until the supply is used up; stops where a condition holds.', pick: { kind: 'round' }, color: FRAMES.round.color, icon: FRAMES.round.icon({ size: 18 }), group: 'Frames' });
-    out.push({ label: 'If / else', says: 'Ways side by side, each under its condition, the last without one; they join again below.', pick: { kind: 'if' }, color: FRAMES.if.color, icon: FRAMES.if.icon({ size: 18 }), group: 'Frames' });
+    const frames = t('Loops, rounds and branchings');
+    for (const [what, says] of Object.entries(lib.each)) out.push({ label: tr((lib.each_titles || {})[what]) || t('For each {name}', { name: what }), says: tr(says), pick: { kind: 'each', arg: what }, color: FRAMES.each.color, icon: FRAMES.each.icon({ size: 18 }), group: frames });
+    out.push({ label: frameWord('round'), says: t('Runs the steps inside it again and again. To change it: set "at most N times" or "until the search hits are used up" under "repeats", and add a condition under "stop when" that ends the rounds early.'), pick: { kind: 'round' }, color: FRAMES.round.color, icon: FRAMES.round.icon({ size: 18 }), group: frames });
+    out.push({ label: frameWord('if'), says: t('Runs only the first branch whose condition is met. To change it: give each branch its condition, and the last branch, without a condition, runs when no other branch does. All branches join again below.'), pick: { kind: 'if' }, color: FRAMES.if.color, icon: FRAMES.if.icon({ size: 18 }), group: frames });
     for (const b of lib.boxes) {
-      const g = GROUPS[b.group] || { word: b.group, color: 'gray', icon: () => null };
-      out.push({ label: b.label, says: b.says, pick: { kind: 'box', arg: b.type }, color: g.color, icon: g.icon({ size: 18 }), group: g.word || b.group });
+      const g = GROUPS[b.group] || { color: 'gray', icon: () => null };
+      out.push({ label: tr(b.label), says: tr(b.says), pick: { kind: 'box', arg: b.type }, color: g.color, icon: g.icon({ size: 18 }), group: groupWord(b.group) });
     }
     return out;
-  }, [lib]);
+  }, [lib, lang]);
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const shown = items.filter(it => words.every(w => (it.label + ' ' + it.says + ' ' + it.group).toLowerCase().includes(w)));
   const groups = [...new Set(shown.map(it => it.group))];
   return (
-    <Modal opened={opened} onClose={() => { setQ(''); onClose(); }} size="xl" title={<Text fw={650}>Put a box or a frame {where}</Text>}>
+    <Modal opened={opened} onClose={() => { setQ(''); onClose(); }} size="xl" title={<Text fw={650}>{after ? t('Put a step, loop, round or branching after {step}', { step: after }) : t('Put a step, loop, round or branching here')}</Text>}>
       <Stack gap="sm">
-        <TextInput leftSection={<IconSearch size={16} />} placeholder="Search the library" value={q} data-autofocus
+        <TextInput leftSection={<IconSearch size={16} />} placeholder={t('Search the library')} value={q} data-autofocus
           onChange={e => setQ(e.currentTarget.value)} />
         <ScrollArea.Autosize mah="60vh">
           <Stack gap="md">
@@ -52,7 +55,7 @@ export function LibraryModal({ lib, opened, where, onClose, onPick }: {
                 </Stack>
               </Box>
             ))}
-            {!shown.length && <Text c="dimmed">Nothing in the library matches.</Text>}
+            {!shown.length && <Text c="dimmed">{t('Nothing in the library matches your search. Try fewer or other words.')}</Text>}
           </Stack>
         </ScrollArea.Autosize>
       </Stack>

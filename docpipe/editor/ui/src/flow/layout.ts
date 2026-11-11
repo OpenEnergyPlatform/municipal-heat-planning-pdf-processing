@@ -1,25 +1,26 @@
-/* Where every box and frame stands. The drawing is a nested list, so its picture follows from the nesting: a list is a
-   column from top to bottom, a frame is a coloured area around its column, the ways of an if stand side by side. No
-   position is stored; the page lays the drawing out again after every edit. */
+/* Where every step stands. The flow is a nested list, so its picture follows from the nesting: a list is a column from
+   top to bottom, a loop, round or branching is a coloured area around its column, the branches of a branching stand side
+   by side. No position is stored; the page lays the flow out again after every edit. */
 import { Position, type Edge, type Node } from '@xyflow/react';
+import { t } from '../lib/i18n';
 import { giveOf, inside, kindOf, labelOf, lists, sentence, type FlowData, type Step } from './model';
 
 export const BOX_W = 300;
 export const BOX_H = 54;
 const GAP = 34;          // between two steps of a column: the arrow, its "+" and beside it what it carries
 const DOT = 12;          // where a column begins and ends
-const PAD = 22;          // inside a frame, left and right
-const HEAD = 58;         // a frame's head
+const PAD = 22;          // inside a loop, round or branching, left and right
+const HEAD = 58;         // the head of a loop, round or branching
 const FOOT = 18;
-const WAY_GAP = 36;      // between the ways of an if
-const WAY_HEAD = 34;     // the condition of a way
+const WAY_GAP = 36;      // between the branches of a branching
+const WAY_HEAD = 34;     // the condition of a branch
 
 export interface Decor {
-  open: Set<string>;                       // the frames drawn open
+  open: Set<string>;                       // the loops, rounds and branchings drawn open
   selected: Set<string>;
   problems: Map<string, string[]>;         // step id -> what the check says about it
   measured: Record<string, number> | null; // step id -> requests of the recorded runs
-  tried: Record<string, number> | null;    // step id -> requests of the try
+  tried: Record<string, number> | null;    // step id -> requests of the dry run
   triedMost: number;
 }
 
@@ -87,7 +88,7 @@ export function layout(data: FlowData, tree: Step[], decor: Decor): Placed {
         const total = cols.reduce((sum, c) => sum + c.w, 0) + WAY_GAP * Math.max(0, cols.length - 1);
         let wx = (s.w - total) / 2;
         ls.forEach((l, i) => {
-          const label = k === 'if' ? (l.label === 'else' ? 'else' : 'only ' + sentence(subjects, l.way && l.way.when)) : '';
+          const label = k === 'if' ? (l.key.endsWith('#else') ? t('else') : t('only {condition}', { condition: sentence(subjects, l.way && l.way.when) })) : '';
           place(l.key, l.steps, wx, HEAD, n.id, depth + 1, k === 'if' ? { label } : null);
           wx += cols[i].w + WAY_GAP;
         });
@@ -105,7 +106,7 @@ export function layout(data: FlowData, tree: Step[], decor: Decor): Placed {
       const after = j < steps.length ? steps[j] : null;
       const e: EdgeData = {
         list: key, at: j, gives: before ? giveOf(lib, before) : '',
-        when: after && after.when ? 'only ' + sentence(subjects, after.when) : '',
+        when: after && after.when ? t('only {condition}', { condition: sentence(subjects, after.when) }) : '',
       };
       out.edges.push({ id: 'e:' + key + ':' + j, source: items[j], target: items[j + 1], type: 'step', data: e,
         zIndex: 1000 + depth, selectable: false, focusable: false });
@@ -114,7 +115,7 @@ export function layout(data: FlowData, tree: Step[], decor: Decor): Placed {
 
   place('root', tree, 0, 0, undefined, 0, null);
   /* the sizes are known, so they are given as measured: React Flow then keeps where each node's handles are when the
-     drawing is laid out anew, and the arrows stay drawn */
+     flow is laid out anew, and the arrows stay drawn */
   for (const n of out.nodes) {
     const w = n.width!, h = n.height!;
     n.measured = { width: w, height: h };

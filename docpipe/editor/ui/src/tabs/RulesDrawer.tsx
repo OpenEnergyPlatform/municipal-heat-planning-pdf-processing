@@ -4,8 +4,9 @@ import { useEffect, useReducer, useRef } from 'react';
 import { Button, Code, Drawer, Group, Loader, Stack, Text } from '@mantine/core';
 import { api, apiR } from '../lib/api';
 import { askConfirm, showError, showInfo } from '../lib/dialogs';
-import { closeRules, loadState, openRules, setDirty, useTabActions } from '../lib/nav';
-import { clone } from '../lib/util';
+import { closeRules, loadState, openRules, setDirty, tabLabel, useTabActions } from '../lib/nav';
+import { rich, t, tr } from '../lib/i18n';
+import { clone, wrote } from '../lib/util';
 import { Report, type Reported } from '../components/Report';
 import { GroupedRules, ruleChanged } from '../rules/RuleInputs';
 
@@ -36,7 +37,7 @@ export function RulesDrawer({ tab }: { tab: string | null }) {
     (async () => {
       if (RU.data && dirty()) {
         if (RU.tab === tab) return;                       // reopened: the edits are still there
-        if (!await askConfirm('Rules', 'The rules of ' + RU.tab + ' have unsaved edits. Drop them?', 'Drop')) {
+        if (!await askConfirm(t('Rules'), t('The rules of the {tab} tab have unsaved edits. Drop them?', { tab: tabLabel(RU.tab!) }), t('Drop'))) {
           openRules(RU.tab!); return;
         }
       }
@@ -57,7 +58,7 @@ export function RulesDrawer({ tab }: { tab: string | null }) {
     try {
       const r = await apiR('/api/rules/' + what, what === 'save' ? { values, base: RU.data.base } : { values });
       if (what === 'save' && r.saved) {
-        showInfo('Saved ' + r.file + ' (' + r.writes + ').');
+        showInfo(t('Saved {file} ({writes}).', { file: r.file, writes: wrote(r.writes) }));
         RU.busy = false;
         loadState().catch(showError);
         await load(RU.tab!);
@@ -81,7 +82,7 @@ export function RulesDrawer({ tab }: { tab: string | null }) {
   const d = RU.data;
   return (
     <Drawer opened={tab != null} onClose={closeRules} position="right" size={720} padding="md"
-      title={<Text fw={700} size="lg">Rules of the {RU.tab ?? tab} tab</Text>}>
+      title={<Text fw={700} size="lg">{t('Rules of the {tab} tab', { tab: tabLabel((RU.tab ?? tab) as string) })}</Text>}>
       {RU.loading && <Group justify="center" p="xl"><Loader /></Group>}
       {RU.error && <Text c="red">{RU.error}</Text>}
       {d && (
@@ -89,20 +90,20 @@ export function RulesDrawer({ tab }: { tab: string | null }) {
           <Group justify="space-between" wrap="nowrap" align="flex-start">
             <Stack gap={2}>
               <Code>{d.file}</Code>
-              {!d.exists && <Text size="sm" c="dimmed">Not written yet: every rule is inherited.</Text>}
+              {!d.exists && <Text size="sm" c="dimmed">{t('No file is written yet, so every rule has its default value. Saving a changed rule writes the file.')}</Text>}
             </Stack>
             <Group gap="xs" wrap="nowrap">
-              <Button variant="default" disabled={RU.busy} loading={RU.busy} onClick={() => send('check')}>Check</Button>
-              <Button disabled={RU.busy || !isDirty} onClick={() => send('save')}>Save</Button>
-              <Button variant="subtle" disabled={!isDirty} onClick={discard}>Discard</Button>
+              <Button variant="default" disabled={RU.busy} loading={RU.busy} onClick={() => send('check')}>{t('Check')}</Button>
+              <Button disabled={RU.busy || !isDirty} onClick={() => send('save')}>{t('Save')}</Button>
+              <Button variant="subtle" disabled={!isDirty} onClick={discard}>{t('Discard')}</Button>
             </Group>
           </Group>
-          {d.cost && <Text size="sm" c="dimmed">{d.cost}</Text>}
+          {d.cost && <Text size="sm" c="dimmed">{rich(tr(d.cost))}</Text>}
           <Report R={RU.report} onName={onName} onReload={() => load(RU.tab!)} />
           {d.rules.length
             ? <GroupedRules rules={d.rules} epoch={RU.epoch} curOf={n => RU.cur[n]}
                 onChange={(n, v, reset) => { RU.cur[n] = v; RU.report = null; if (reset) RU.epoch++; touch(); }} />
-            : <Text c="dimmed">No rule of this profile belongs to this tab.</Text>}
+            : <Text c="dimmed">{t('This profile has no rule for this tab, so there is nothing to set here.')}</Text>}
         </Stack>
       )}
     </Drawer>

@@ -15,6 +15,7 @@ import {
   setEntryName, shortId,
 } from '../lib/spec';
 import { isObj, own, type Obj } from '../lib/util';
+import { t, tn } from '../lib/i18n';
 import { findParam, markDirty, removeOnServer, S, structural } from './state';
 import { SpecForm } from './widgets';
 
@@ -47,7 +48,7 @@ function SpellingAdd({ onAdd }: { onAdd: (v: string) => boolean }) {
       if (text.trim() === '') return;
       if (onAdd(text)) setText('');
     }}>
-      <TextBox w={150} placeholder="add spelling" value={text} onText={setText} />
+      <TextBox w={150} placeholder={t('add spelling')} value={text} onText={setText} />
     </Box>
   );
 }
@@ -65,29 +66,29 @@ function EntryRow({ id, lref, selected, onSelect, open, onToggle, onSpelling }: 
   useEffect(() => { if (flagged) ref.current?.scrollIntoView({ block: 'center' }); }, [flagged]);
 
   const addSpelling = (v: string) => {
-    if (hasSpelling(list(), id, v)) { showError(new Error('"' + v + '" is already a name or spelling of ' + id + '.')); return false; }
+    if (hasSpelling(list(), id, v)) { showError(new Error(t('"{v}" is already a name or spelling of {id}.', { v, id }))); return false; }
     insertSpelling(list(), id, v); markDirty(); onSpelling();
     return true;
   };
   const removeSpelling = (s: string) => removeOnServer(
-    { kind: 'spelling', field: lref.uri, coordinate: lref.coordinate, list: lref.key, entry: id, spelling: s }, 'the spelling "' + s + '"');
+    { kind: 'spelling', field: lref.uri, coordinate: lref.coordinate, list: lref.key, entry: id, spelling: s }, t('the spelling "{s}"', { s }));
   const removeEntry = () => removeOnServer(
-    { kind: 'entry', field: lref.uri, coordinate: lref.coordinate, list: lref.key, entry: id }, 'the entry ' + id);
+    { kind: 'entry', field: lref.uri, coordinate: lref.coordinate, list: lref.key, entry: id }, t('the entry {id}', { id }));
 
   return (
     <>
       <Table.Tr ref={ref} className={'dp-spec-row' + (flagged ? ' dp-flag' : '')} data-sel={selected ? 'true' : undefined} data-id={id}
         onFocus={() => onSelect(id)}>
-        <Table.Td onClick={() => onSelect(id)} title={id + ' (click to select: a new entry is added after the selected row)'} style={{ cursor: 'pointer' }}>
+        <Table.Td onClick={() => onSelect(id)} title={t('{id} (click to select: a new entry is added after the selected row)', { id })} style={{ cursor: 'pointer' }}>
           <Text size="sm" ff="monospace" style={{ wordBreak: 'break-all' }}>{shortId(id)}</Text>
-          {notes.length ? <Tooltip label={<Box style={{ whiteSpace: 'pre-wrap' }}>{notes.map(n => n.text).join('\n')}</Box>}><Badge color="yellow" size="sm">note</Badge></Tooltip> : null}
+          {notes.length ? <Tooltip label={<Box style={{ whiteSpace: 'pre-wrap' }}>{notes.map(n => n.text).join('\n')}</Box>}><Badge color="yellow" size="sm">{t('note')}</Badge></Tooltip> : null}
         </Table.Td>
-        <Table.Td miw={200}><TextBox value={p.name} onText={t => { setEntryName(list(), id, t); markDirty(); redraw(); }} /></Table.Td>
+        <Table.Td miw={200}><TextBox value={p.name} onText={v => { setEntryName(list(), id, v); markDirty(); redraw(); }} /></Table.Td>
         <Table.Td miw={240}>
           <Group gap={6}>
             <Pill.Group>
               {p.spellings.map((s, i) => <Pill key={i + ':' + s} size="md" withRemoveButton onRemove={() => removeSpelling(s)}
-                removeButtonProps={{ 'aria-label': 'Remove spelling', title: 'Remove spelling' }}>{s}</Pill>)}
+                removeButtonProps={{ 'aria-label': t('Remove spelling'), title: t('Remove spelling') }}>{s}</Pill>)}
             </Pill.Group>
             <SpellingAdd onAdd={addSpelling} />
           </Group>
@@ -95,8 +96,8 @@ function EntryRow({ id, lref, selected, onSelect, open, onToggle, onSpelling }: 
         <Table.Td><Text size="sm">{p.group}</Text></Table.Td>
         <Table.Td>
           <Group gap={6} wrap="nowrap">
-            <Button size="xs" variant="default" onClick={() => onToggle(id)}>Details</Button>
-            <Button size="xs" variant="light" color="red" leftSection={<IconTrash size={14} />} onClick={removeEntry}>Remove</Button>
+            <Button size="xs" variant="default" onClick={() => onToggle(id)}>{t('Details')}</Button>
+            <Button size="xs" variant="light" color="red" leftSection={<IconTrash size={14} />} onClick={removeEntry}>{t('Remove')}</Button>
           </Group>
         </Table.Td>
       </Table.Tr>
@@ -111,25 +112,25 @@ function Detail({ id, lref, onChange }: { id: string; lref: ListRef; onChange: (
   const p = entryParts(get_());
   const pin = S.pin && S.pin[id];
   const notes = notesFor(S.notes, lref.uri, lref.coordinate, id);
-  const set = (key: string, t: string) => { setEntryField(list(), id, key, t); markDirty(); onChange(); };
+  const set = (key: string, v: string) => { setEntryField(list(), id, key, v); markDirty(); onChange(); };
   const ff = ((S.form && S.form.entry) || []).filter((f: Obj) => !ENTRY_KEYS.includes(f.key));
   const origList = lref.orig() && isObj(lref.orig()![lref.key]) ? lref.orig()![lref.key] : {};
   return (
     <Stack gap="sm" p="xs">
       {notes.map((n, i) => <Alert key={i} color="yellow" p="xs">{n.kind + ': ' + n.text}</Alert>)}
       <Group align="flex-start" grow>
-        <AreaBox label="definition (spec)" minRows={4} value={p.definition} onText={t => set('definition', t)} />
+        <AreaBox label={t('definition (spec)')} minRows={4} value={p.definition} onText={v => set('definition', v)} />
         <Box>
-          <Group gap={6}><Text size="sm" fw={500}>definition (ontology snapshot)</Text>{pin && pin.deprecated ? <Badge color="red" size="sm">deprecated</Badge> : null}</Group>
+          <Group gap={6}><Text size="sm" fw={500}>{t('definition (ontology snapshot)')}</Text>{pin && pin.deprecated ? <Badge color="red" size="sm">{t('deprecated')}</Badge> : null}</Group>
           <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-            {pin ? ((pin.label ? pin.label + ': ' : '') + (pin.definition || '(no definition)')) : (id.startsWith('out:') ? '(the profile\'s own entry)' : '(not a term of the snapshot)')}
+            {pin ? ((pin.label ? pin.label + ': ' : '') + (pin.definition || t('(no definition)'))) : (id.startsWith('out:') ? t('(the profile\'s own entry)') : t('(not a term of the snapshot)'))}
           </Text>
-          {pin && pin.alt_labels && pin.alt_labels.length ? <Help text={'alt labels: ' + pin.alt_labels.join(', ')} /> : null}
+          {pin && pin.alt_labels && pin.alt_labels.length ? <Help text={t('alt labels: {labels}', { labels: pin.alt_labels.join(', ') })} /> : null}
         </Box>
       </Group>
       <Group align="flex-start" grow>
-        <AreaBox label="gloss" minRows={3} value={p.gloss} onText={t => set('gloss', t)} />
-        <TextBox label="group" value={p.group} onText={t => set('group', t)} />
+        <AreaBox label={t('gloss')} minRows={3} value={p.gloss} onText={v => set('gloss', v)} />
+        <TextBox label={t('group')} value={p.group} onText={v => set('group', v)} />
       </Group>
       {!Array.isArray(get_()) && ff.length
         ? <SpecForm fields={ff} obj={get_()} orig={origList[id] && isObj(origList[id]) ? origList[id] : null} ctx={{ skipQuiet: new Set(ENTRY_KEYS) }} />
@@ -151,14 +152,14 @@ export function EntriesTable({ lref }: { lref: ListRef }) {
     <Stack gap="xs">
       <Group gap="sm">
         <TextInput style={{ flex: 1, minWidth: 220 }} leftSection={<IconSearch size={16} />} spellCheck={false}
-          placeholder="Filter by id, name or spelling" value={q} onChange={e => setQ(e.currentTarget.value)} />
-        <Text size="sm" c="dimmed">{shownIds.length + ' of ' + ids.length + ' entries shown'}</Text>
-        <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => termDialog(lref, selected)}>Add entry…</Button>
-        <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => ownDialog(lref, selected)}>Add own entry (out:)…</Button>
+          placeholder={t('Filter by id, name or spelling')} value={q} onChange={e => setQ(e.currentTarget.value)} />
+        <Text size="sm" c="dimmed">{t('{shown} of {total} entries shown', { shown: shownIds.length, total: ids.length })}</Text>
+        <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => termDialog(lref, selected)}>{t('Add entry…')}</Button>
+        <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => ownDialog(lref, selected)}>{t('Add own entry (out:)…')}</Button>
       </Group>
       <Table.ScrollContainer minWidth={760}>
         <Table withTableBorder className="dp-spec-table">
-          <Table.Thead><Table.Tr><Table.Th>id</Table.Th><Table.Th>name</Table.Th><Table.Th>spellings</Table.Th><Table.Th>group</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+          <Table.Thead><Table.Tr><Table.Th>{t('id')}</Table.Th><Table.Th>{t('name')}</Table.Th><Table.Th>{t('spellings')}</Table.Th><Table.Th>{t('group')}</Table.Th><Table.Th /></Table.Tr></Table.Thead>
           <Table.Tbody>
             {shownIds.map(id => (
               <Fragment key={id}>
@@ -176,7 +177,7 @@ export function EntriesTable({ lref }: { lref: ListRef }) {
 function addToList(lref: ListRef, afterId: string | null, id: string, entry: unknown): boolean {
   const hd = lref.holder()!;
   if (!isObj(hd[lref.key])) hd[lref.key] = {};
-  if (own(hd[lref.key], id)) { showError(new Error('The entry ' + id + ' is in this list already.')); return false; }
+  if (own(hd[lref.key], id)) { showError(new Error(t('The entry {id} is in this list already.', { id }))); return false; }
   hd[lref.key] = listWithEntryAfter(hd[lref.key], afterId, id, entry);
   markDirty();
   return true;
@@ -189,7 +190,7 @@ function TermDialog({ lref, afterId, modalId }: { lref: ListRef; afterId: string
   const [busy, setBusy] = useState(true);
   const seq = useRef(0);
   useEffect(() => {
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const my = ++seq.current;
       setBusy(true);
       try {
@@ -198,35 +199,35 @@ function TermDialog({ lref, afterId, modalId }: { lref: ListRef; afterId: string
       } catch (e) { if (my === seq.current) showError(e); }
       if (my === seq.current) setBusy(false);
     }, q === '' && res === null ? 0 : 250);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
   const cur = currentList(lref);
   return (
     <Stack>
       <TextInput data-autofocus leftSection={<IconSearch size={16} />} spellCheck={false} value={q} onChange={e => setQ(e.currentTarget.value)}
-        placeholder="Search the ontology snapshot by id, label or alternative label" rightSection={busy ? <Loader size={16} /> : null} />
-      {res ? <Text size="sm" c="dimmed">{res.total + ' terms match' + (res.terms.length < res.total ? ' (first ' + res.terms.length + ' shown)' : '')}</Text> : null}
+        placeholder={t('Search the ontology snapshot by id, label or alternative label')} rightSection={busy ? <Loader size={16} /> : null} />
+      {res ? <Text size="sm" c="dimmed">{res.terms.length < res.total ? t('{total} terms match (first {shown} shown)', { total: res.total, shown: res.terms.length }) : tn(res.total, '{n} term matches', '{n} terms match')}</Text> : null}
       <Stack gap="xs" mah="55vh" style={{ overflow: 'auto' }}>
-        {(res ? res.terms : []).map(t => (
-          <Group key={t.id} justify="space-between" wrap="nowrap" align="flex-start">
+        {(res ? res.terms : []).map(term => (
+          <Group key={term.id} justify="space-between" wrap="nowrap" align="flex-start">
             <Box style={{ minWidth: 0 }}>
-              <Group gap={6}><Code>{t.id}</Code><Text fw={600}>{t.label || ''}</Text>{t.deprecated ? <Badge color="red" size="sm">deprecated</Badge> : null}</Group>
-              <Text size="sm" c="dimmed">{(t.definition || '').slice(0, 200)}</Text>
+              <Group gap={6}><Code>{term.id}</Code><Text fw={600}>{term.label || ''}</Text>{term.deprecated ? <Badge color="red" size="sm">{t('deprecated')}</Badge> : null}</Group>
+              <Text size="sm" c="dimmed">{(term.definition || '').slice(0, 200)}</Text>
             </Box>
-            <Button size="xs" variant="light" disabled={own(cur, t.id)}
-              onClick={() => { if (addToList(lref, afterId, t.id, newEntryFromTerm({ label: t.label || '', definition: t.definition }))) { modals.close(modalId); structural(); } }}>
-              {own(cur, t.id) ? 'In list' : 'Add'}
+            <Button size="xs" variant="light" disabled={own(cur, term.id)}
+              onClick={() => { if (addToList(lref, afterId, term.id, newEntryFromTerm({ label: term.label || '', definition: term.definition }))) { modals.close(modalId); structural(); } }}>
+              {own(cur, term.id) ? t('In list') : t('Add')}
             </Button>
           </Group>
         ))}
       </Stack>
-      <Group justify="flex-end"><Button variant="default" onClick={() => modals.close(modalId)}>Close</Button></Group>
+      <Group justify="flex-end"><Button variant="default" onClick={() => modals.close(modalId)}>{t('Close')}</Button></Group>
     </Stack>
   );
 }
 function termDialog(lref: ListRef, afterId: string | null) {
   const id = 'spec-term-' + Math.random().toString(36).slice(2);
-  modals.open({ modalId: id, title: 'Add entry', size: 'lg', centered: true, children: <TermDialog lref={lref} afterId={afterId} modalId={id} /> });
+  modals.open({ modalId: id, title: t('Add entry'), size: 'lg', centered: true, children: <TermDialog lref={lref} afterId={afterId} modalId={id} /> });
 }
 
 function OwnDialog({ lref, afterId, modalId }: { lref: ListRef; afterId: string | null; modalId: string }) {
@@ -234,22 +235,22 @@ function OwnDialog({ lref, afterId, modalId }: { lref: ListRef; afterId: string 
   const [name, setName] = useState('');
   const add = () => {
     const i = id.trim(); const n = name;
-    if (!i.startsWith('out:') || i.length <= 4) { showError(new Error('The id of an own entry starts with "out:" and has a name after it.')); return; }
-    if (!n.trim()) { showError(new Error('An entry needs a name.')); return; }
+    if (!i.startsWith('out:') || i.length <= 4) { showError(new Error(t('The id of an own entry starts with "out:" and has a name after it.'))); return; }
+    if (!n.trim()) { showError(new Error(t('An entry needs a name.'))); return; }
     if (addToList(lref, afterId, i, { label: n })) { modals.close(modalId); structural(); }
   };
   return (
     <Stack>
-      <TextBox label="Id (starts with out:)" value={id} onText={setId} />
-      <TextBox label="Name" placeholder="name" value={name} onText={setName} />
+      <TextBox label={t('Id (starts with out:)')} value={id} onText={setId} />
+      <TextBox label={t('Name')} placeholder={t('name')} value={name} onText={setName} />
       <Group justify="flex-end">
-        <Button variant="default" onClick={() => modals.close(modalId)}>Cancel</Button>
-        <Button onClick={add}>Add</Button>
+        <Button variant="default" onClick={() => modals.close(modalId)}>{t('Cancel')}</Button>
+        <Button onClick={add}>{t('Add')}</Button>
       </Group>
     </Stack>
   );
 }
 function ownDialog(lref: ListRef, afterId: string | null) {
   const id = 'spec-own-' + Math.random().toString(36).slice(2);
-  modals.open({ modalId: id, title: 'Add own entry', centered: true, children: <OwnDialog lref={lref} afterId={afterId} modalId={id} /> });
+  modals.open({ modalId: id, title: t('Add own entry'), centered: true, children: <OwnDialog lref={lref} afterId={afterId} modalId={id} /> });
 }

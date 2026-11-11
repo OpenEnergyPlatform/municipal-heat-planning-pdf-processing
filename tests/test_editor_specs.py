@@ -212,11 +212,20 @@ def test_a_key_the_form_does_not_know_is_written_back_where_it_stood():
         "uri", "mystery"]
 
 
-def test_the_form_s_help_is_the_comment_of_the_code():
-    by_key = {field["key"]: field for field in specs.form()["axis"]}
-    assert by_key["question"]["help"].startswith(
-        "The one line the field request asks.")
+def test_every_key_of_the_form_says_what_it_is(monkeypatch):
+    """Every key of the form carries a help of its own, written for the
+    page (`specs.HELP`), not the comment the code writes at its field."""
+    form = specs.form()
+    silent = [(kind, field["key"]) for kind, fields in form.items()
+              if kind != "kg_keys" for field in fields if not field["help"]]
+    assert not silent, silent
+    by_key = {field["key"]: field for field in form["axis"]}
+    assert by_key["question"]["help"] == specs.HELP[("axis", "question")]
     assert by_key["several"]["widget"] == "bool"
+    # the failure by construction: a key the table does not explain
+    monkeypatch.delitem(specs.HELP, ("axis", "question"))
+    assert {field["key"]: field for field in specs.form()["axis"]}[
+        "question"]["help"] == ""
     # Every key of both specs' coordinates is a key of the form or one of
     # the four kinds a coordinate is, so the form leaves none of today's
     # keys unexplained.

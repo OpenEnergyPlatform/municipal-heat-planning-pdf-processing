@@ -3,6 +3,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { IconChevronDown, IconChevronRight, IconPlus } from '@tabler/icons-react';
 import { useStore } from '../lib/nav';
+import { t, tn } from '../lib/i18n';
 import { isObj, own, type Obj } from '../lib/util';
 import type { SpecNode } from '../lib/spec';
 import { addPlanField, addWorks, listCount, nodeKey, S, select, touch, view } from './state';
@@ -10,11 +11,11 @@ import { addPlanField, addWorks, listCount, nodeKey, S, select, touch, view } fr
 const PLAN_KEYS = ['settings', 'base_year', 'target_year'];
 
 function kindLabel(ax: Obj): string {
-  if (own(ax, 'vocabulary')) return 'list · ' + listCount(ax.vocabulary) + ' entries';
+  if (own(ax, 'vocabulary')) return t('list · {n} entries', { n: listCount(ax.vocabulary) });
   if (own(ax, 'type')) return String(ax.type);
-  if (own(ax, 'enum')) return 'strings';
-  if (own(ax, 'dynamic')) return 'per document';
-  return 'no kind';
+  if (own(ax, 'enum')) return t('strings');
+  if (own(ax, 'dynamic')) return t('per document');
+  return t('no kind');
 }
 
 function Node({ n, label, sub, l1, caret }: { n: SpecNode; label: string; sub?: string; l1?: boolean; caret?: ReactNode }) {
@@ -42,22 +43,22 @@ export function Tree() {
   const planKeys = Object.keys(isObj(d.plan_fields) ? d.plan_fields : {});
   return (
     <div className="dp-spec-tree" ref={box}>
-      <Head>Questions</Head>
-      <Node n={{ t: 'spec' }} label="Top-level questions" />
-      <Head>Document</Head>
+      <Head>{t('Spec')}</Head>
+      <Node n={{ t: 'spec' }} label={t('Questions and note')} />
+      <Head>{t('Document')}</Head>
       {PLAN_KEYS.map(k => isObj(d.plan_fields) && own(d.plan_fields, k)
-        ? <Node key={k} n={{ t: 'plan', key: k }} label={k} sub="plan field" />
-        : <AddNode key={k} text={'Add plan field ' + k} onClick={() => addPlanField(k)} />)}
-      {planKeys.filter(k => !PLAN_KEYS.includes(k)).map(k => <Node key={k} n={{ t: 'plan', key: k }} label={k} sub="plan field" />)}
-      {own(d, 'works') ? <Node n={{ t: 'works' }} label="works" sub="other works" /> : <AddNode text="Add works" onClick={addWorks} />}
-      <Head>Groups ({groups.length})</Head>
+        ? <Node key={k} n={{ t: 'plan', key: k }} label={k} sub={t('field of the whole document')} />
+        : <AddNode key={k} text={t('Add field of the whole document {key}', { key: k })} onClick={() => addPlanField(k)} />)}
+      {planKeys.filter(k => !PLAN_KEYS.includes(k)).map(k => <Node key={k} n={{ t: 'plan', key: k }} label={k} sub={t('field of the whole document')} />)}
+      {own(d, 'works') ? <Node n={{ t: 'works' }} label="works" sub={t('other works')} /> /* i18n-ignore: the key's name */ : <AddNode text={t('Add works')} onClick={addWorks} />}
+      <Head>{t('Groups ({n})', { n: groups.length })}</Head>
       {groups.map(g => <Node key={g} n={{ t: 'group', name: g }} label={g}
-        sub={d.groups[g] && Array.isArray(d.groups[g].coordinates) ? d.groups[g].coordinates.length + ' coordinates' : ''} />)}
-      <Head>Fields ({ps.length})</Head>
+        sub={d.groups[g] && Array.isArray(d.groups[g].coordinates) ? tn(d.groups[g].coordinates.length, '{n} dimension', '{n} dimensions') : ''} />)}
+      <Head>{t('Fields ({n})', { n: ps.length })}</Head>
       {ps.map(p => {
         const open = S.expanded.has(p.uri);
         const caret = (
-          <span className="dp-spec-caret" role="button" aria-label={open ? 'Fold' : 'Unfold'}
+          <span className="dp-spec-caret" role="button" aria-label={open ? t('Collapse') : t('Expand')}
             onClick={ev => { ev.stopPropagation(); if (open) S.expanded.delete(p.uri); else S.expanded.add(p.uri); touch(); }}>
             {open ? <IconChevronDown size={16} /> : <IconChevronRight size={16} />}
           </span>
@@ -68,7 +69,7 @@ export function Tree() {
             {open ? (
               <>
                 {(['vocabulary', 'beside'] as const).filter(l => isObj(p[l])).map(l =>
-                  <Node key={l} l1 n={{ t: 'plist', uri: p.uri, list: l }} label={l === 'vocabulary' ? 'list' : 'beside list'} sub={listCount(p[l]) + ' entries'} />)}
+                  <Node key={l} l1 n={{ t: 'plist', uri: p.uri, list: l }} label={l === 'vocabulary' ? t('list') : t('answers outside the list')} sub={tn(listCount(p[l]), '{n} entry', '{n} entries')} />)}
                 {isObj(p.axes) ? Object.entries(p.axes).map(([name, ax]) =>
                   <Node key={name} l1 n={{ t: 'axis', uri: p.uri, name }} label={name} sub={isObj(ax) ? kindLabel(ax) : ''} />) : null}
               </>

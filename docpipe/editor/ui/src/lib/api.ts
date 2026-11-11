@@ -1,14 +1,15 @@
 /* The only way the page talks to its server: relative URLs, JSON, and on every POST the two headers the server asks for
    (server.py refuses a POST without them). The body is JSON.stringify of what the caller hands in, nothing added. */
 import { isObj } from './util';
+import { t } from './i18n';
 
 const POST_HEADERS = { 'Content-Type': 'application/json', 'X-Docpipe-Edit': '1' };
 
 function errText(e: unknown): string {
-  if (!e) return 'unknown error';
+  if (!e) return t('unknown error');
   if (typeof e === 'string') return e;
   const o = e as { message?: string; where?: string };
-  return (o.message || 'error') + (o.where ? ' (' + o.where + ')' : '');
+  return (o.message || t('error')) + (o.where ? ' (' + o.where + ')' : '');
 }
 
 async function send(method: 'GET' | 'POST', url: string, body?: unknown): Promise<{ res: Response; j: any }> {
@@ -19,10 +20,10 @@ async function send(method: 'GET' | 'POST', url: string, body?: unknown): Promis
   }
   let res: Response;
   try { res = await fetch(url, opts); }
-  catch (e) { throw new Error('The server cannot be reached: ' + (e as Error).message); }
+  catch (e) { throw new Error(t('The server cannot be reached: {reason}', { reason: (e as Error).message })); }
   let j: any;
   try { j = await res.json(); }
-  catch { throw new Error('The server answered ' + res.status + ' without JSON.'); }
+  catch { throw new Error(t('The server answered {status} without JSON.', { status: String(res.status) })); }
   return { res, j };
 }
 
@@ -30,7 +31,7 @@ async function send(method: 'GET' | 'POST', url: string, body?: unknown): Promis
 export async function api<T = any>(method: 'GET' | 'POST', url: string, body?: unknown): Promise<T> {
   const { res, j } = await send(method, url, body);
   if (isObj(j) && typeof j.error === 'string') throw new Error(j.error);
-  if (!res.ok && !(isObj(j) && ('saved' in j || 'ok' in j))) throw new Error(errText(j && j.error) || ('The server answered ' + res.status + '.'));
+  if (!res.ok && !(isObj(j) && ('saved' in j || 'ok' in j))) throw new Error(errText(j && j.error) || t('The server answered {status}.', { status: String(res.status) }));
   return j as T;
 }
 
@@ -39,7 +40,7 @@ export async function apiR<T = any>(url: string, body?: unknown): Promise<T> {
   const { res, j } = await send('POST', url, body);
   if (isObj(j) && ('ok' in j || 'saved' in j)) return j as T;
   if (isObj(j) && typeof j.error === 'string') throw new Error(j.error);
-  if (!res.ok) throw new Error('The server answered ' + res.status + '.');
+  if (!res.ok) throw new Error(t('The server answered {status}.', { status: String(res.status) }));
   return j as T;
 }
 

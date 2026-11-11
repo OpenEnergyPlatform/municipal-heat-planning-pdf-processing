@@ -1,7 +1,7 @@
-/* The Flow tab: the drawing of boxes and frames a run does (extraction/flow.py, engine.py) on a canvas, its library, its
-   numbers, checked and saved through /api/flow, tried on one document with made-up answers (/api/flow/try). The tree
-   the server sent is kept and edited in place, so a key no control shows goes back as it came; every edit can be
-   undone until the next save. */
+/* The Flow tab: the flow of steps, loops, rounds and branchings a run does (extraction/flow.py, engine.py) on a canvas,
+   its library, its numbers, checked and saved through /api/flow, run dry on one document with placeholder answers
+   (/api/flow/try). The tree the server sent is kept and edited in place, so a key no control shows goes back as it came;
+   every edit can be undone until the next save. */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Node,
@@ -15,16 +15,17 @@ import {
   IconFocusCentered, IconFrame, IconArrowsMinimize, IconArrowsMaximize, IconPlayerPlay, IconPower, IconTrash, IconX,
 } from '@tabler/icons-react';
 import { api, apiR } from '../lib/api';
+import { rich, t, tr, useLang } from '../lib/i18n';
 import { askConfirm, showError, showInfo } from '../lib/dialogs';
 import { loadState, setDirty, tabStore, useTabActions } from '../lib/nav';
-import { clone } from '../lib/util';
+import { clone, wrote } from '../lib/util';
 import { Diff } from '../components/Bits';
 import { layout, type Decor } from './layout';
 import {
   ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, libBox, listOf, moveBy, remove, siblingsRun, walk,
   wrap, type FlowData, type Step,
 } from './model';
-import { Ctx, DotNode, FrameNode, StepEdge, StepNode, WayNode, type FlowCtx } from './nodes';
+import { Ctx, DotNode, FrameNode, StepEdge, StepNode, WayNode, frameWord, type FlowCtx } from './nodes';
 import { LibraryModal, type Pick } from './Library';
 import { NumbersPane, StepSettings, type Panel } from './Settings';
 import { TryPane } from './TryPane';
@@ -34,7 +35,20 @@ import './flow.css';
 const nodeTypes = { step: StepNode, frame: FrameNode, way: WayNode, dot: DotNode };
 const edgeTypes = { step: StepEdge };
 const edgeDefaults = { markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 } };
-const READABLE = 0.8;    // below this zoom the words of a box are too small to read
+/* React Flow's own words (the tooltips of its buttons, the title of the overview, what a screen reader says of a step
+   or an arrow), in the page's language */
+const flowWords = () => ({
+  'node.a11yDescription.default': t('Press Enter or Space to choose this step and Escape to cancel.'),
+  'node.a11yDescription.keyboardDisabled': t('Press Enter or Space to choose this step and Escape to cancel.'),
+  'edge.a11yDescription.default': t('Press Enter or Space to choose this arrow and Escape to cancel.'),
+  'controls.ariaLabel': t('View of the flow'),
+  'controls.zoomIn.ariaLabel': t('Zoom in'),
+  'controls.zoomOut.ariaLabel': t('Zoom out'),
+  'controls.fitView.ariaLabel': t('Show the whole flow'),
+  'minimap.ariaLabel': t('Overview of the flow'),
+  'handle.ariaLabel': t('End of an arrow'),
+});
+const READABLE = 0.8;    // below this zoom the words of a step are too small to read
 
 interface Report { source: 'check' | 'save'; r?: any; error?: string }
 
@@ -51,6 +65,7 @@ export function FlowTab() {
 }
 
 function FlowInner() {
+  const lang = useLang();
   const F = useRef<State>({
     loaded: false, loading: false, data: null, tree: [], cur: {}, sel: null, multi: new Set(), open: new Set(),
     report: null, busy: false, meas: null, trial: null, trying: false, docs: null,
@@ -58,7 +73,7 @@ function FlowInner() {
   }).current;
   const [version, touch] = useReducer((x: number) => x + 1, 0);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
-  const [lib, setLib] = useState<{ list: string; at: number; where: string } | null>(null);
+  const [lib, setLib] = useState<{ list: string; at: number; after: string | null } | null>(null);
   const flow = useReactFlow();
 
   const numbers = () => { const o: Record<string, number | string> = {}; for (const n of F.data!.numbers) o[n.name] = F.cur[n.name]; return o; };
@@ -67,9 +82,9 @@ function FlowInner() {
   const dirty = () => numDirty() || treeDirty();
   const stamp = () => JSON.stringify({ tree: F.tree, cur: F.cur });
 
-  /* An edit lays the drawing out anew, and a frame that opens or grows pushes everything around it aside. So before
-     the layout changes, the screen place of the step being worked on is noted (with its neighbours and the frames
-     around it, in case it goes), and after the new layout the canvas is moved so that the first of them still drawn
+  /* An edit lays the flow out anew, and a loop, round or branching that opens or grows pushes everything around it aside. So before
+     the layout changes, the screen place of the step being worked on is noted (with its neighbours and the loops,
+     rounds and branchings around it, in case it goes), and after the new layout the canvas is moved so that the first of them still drawn
      stands where it stood. */
   const placedNow = useRef<Node[]>([]);
   const anchor = useRef<{ id: string; x: number; y: number }[] | null>(null);
@@ -91,7 +106,7 @@ function FlowInner() {
     }
     anchor.current = got.length ? got : null;
   };
-  /* a step, then the steps beside it in its column, then the frames around it */
+  /* a step, then the steps beside it in its column, then the loops, rounds and branchings around it */
   const around = (id: string | null): string[] => {
     if (!id) return [];
     const got = find(F.tree, id);
@@ -165,21 +180,21 @@ function FlowInner() {
     } catch (e) { F.report = { source: 'save', error: (e as Error).message }; }
     F.busy = false;
     if (saved) {
-      showInfo('Saved ' + (saved.file || 'the flow file') + ' (' + (saved.writes || 'written') + ').');
+      showInfo(t('Saved {file} ({writes}).', { file: saved.file || t('the flow file'), writes: wrote(saved.writes) }));
       await load(false);
       loadState().catch(() => {});
     } else touch();
   };
   const discard = async () => {
     if (!F.data || !dirty() || F.busy) return;
-    if (!await askConfirm('Discard changes', 'Discard the edited drawing and numbers? Ctrl+Z brings them back.', 'Discard')) return;
+    if (!await askConfirm(t('Discard changes'), t('Discard the edited flow and numbers? Ctrl+Z brings them back.'), t('Discard'))) return;
     const numbersMoved = numDirty();
     F.tree = clone(F.data.tree); for (const n of F.data.numbers) F.cur[n.name] = n.value;
     edited();
     if (numbersMoved) measured();   // what the last runs measured is shown at the numbers in the fields
   };
   const reload = async () => {
-    if (dirty() && !await askConfirm('Reload from disk', 'The flow file changed on disk. Reloading drops the edits.', 'Drop my edits and reload')) return;
+    if (dirty() && !await askConfirm(t('Reload from disk'), t('The flow file changed on disk. Reloading drops the edits.'), t('Drop my edits and reload'))) return;
     await load(false);
   };
   const tryIt = async () => {
@@ -236,7 +251,7 @@ function FlowInner() {
       triedMost: tried ? Math.max(1, ...Object.values(tried)) : 0,
     };
     return layout(F.data, F.tree, decor);
-  }, [version, problems]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [version, problems, lang]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const a = anchor.current;
     anchor.current = null;
@@ -249,7 +264,7 @@ function FlowInner() {
     }
   }, [placed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* the first view: the whole drawing if it can be read whole, else its top at a size that can be read, scrolled down
+  /* the first view: the whole flow if it can be read whole, else its top at a size that can be read, scrolled down
      with the wheel */
   const canvas = useRef<HTMLDivElement>(null);
   const showTop = (duration: number) => {
@@ -269,7 +284,7 @@ function FlowInner() {
     return () => clearTimeout(t);
   }, [F.fit]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* opens every frame around a step, chooses it and brings it to the middle */
+  /* opens every loop, round and branching around a step, chooses it and brings it to the middle */
   const reveal = (id: string) => {
     for (const a of ancestors(F.tree, id)) F.open.add(a);
     F.sel = id; F.multi = new Set([id]); touch();
@@ -285,7 +300,7 @@ function FlowInner() {
     setTimeout(() => { const el = document.querySelector<HTMLInputElement>('[data-number="' + name + '"] input'); if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); } }, 50);
   };
 
-  /* -- edits of the drawing -- */
+  /* -- edits of the flow -- */
   const put = (list: string, at: number, p: Pick) => {
     const steps = listOf(F.tree, list);
     if (!steps || !F.data) return;
@@ -324,7 +339,7 @@ function FlowInner() {
     if (what === 'off') { if (got.n.off) delete got.n.off; else got.n.off = true; edited(); return; }
     if (what === 'wrap') {
       const ids = F.multi.has(id) && F.multi.size > 1 ? [...F.multi] : [id];
-      if (!siblingsRun(F.tree, ids)) { showError(new Error('Only boxes and frames that stand right after one another in the same column can be wrapped together.')); return; }
+      if (!siblingsRun(F.tree, ids)) { showError(new Error(t('Only steps, loops, rounds and branchings that stand right after one another in the same column can be wrapped together.'))); return; }
       const [kind, each] = (arg || 'round').split(':');
       const f = wrap(F.tree, F.data.conditions, ids, kind as 'each' | 'round' | 'if', each);
       if (f) { F.open.add(f.id); for (const a of ancestors(F.tree, f.id)) F.open.add(a); F.sel = f.id; F.multi = new Set([f.id]); edited(); }
@@ -333,7 +348,7 @@ function FlowInner() {
 
   const ctx: FlowCtx | null = F.data ? {
     lib: F.data.library, never: F.data.never || {}, toggle,
-    add: (list, at) => setLib({ list, at, where: 'here' }),
+    add: (list, at) => setLib({ list, at, after: null }),
   } : null;
 
   const onNodeClick = (ev: React.MouseEvent, node: Node) => {
@@ -355,8 +370,8 @@ function FlowInner() {
     return <Center h="100%">{F.report && F.report.error ? <Alert color="red">{F.report.error}</Alert> : <Loader />}</Center>;
   }
   const d = F.data;
-  const status = !d.exists ? 'not written yet: the drawing and every number come from ' + d.starts_from
-    : d.whole ? 'the whole flow of this profile' : (d.drawn_by === d.starts_from ? 'numbers of its own, the drawing of ' + d.drawn_by : 'its own drawing');
+  const status = !d.exists ? t('not written yet: the flow and every number come from {name}', { name: d.starts_from })
+    : d.whole ? t('the whole flow of this profile') : (d.drawn_by === d.starts_from ? t('numbers of its own, the flow of {name}', { name: d.drawn_by }) : t('its own flow'));
   const sel = F.sel ? find(F.tree, F.sel) : null;
   const panel: Panel = {
     data: d, cur: F.cur, meas: F.meas, trial: F.trial,
@@ -377,16 +392,16 @@ function FlowInner() {
             <Text size="sm" c="dimmed" lineClamp={1}>{status}</Text>
           </Group>
           <Group gap={6} wrap="nowrap">
-            <Tooltip label="Undo (Ctrl+Z)"><ActionIcon variant="default" size="lg" disabled={!F.undo.length} onClick={undo} aria-label="Undo"><IconArrowBackUp size={18} /></ActionIcon></Tooltip>
-            <Tooltip label="Redo (Ctrl+Y)"><ActionIcon variant="default" size="lg" disabled={!F.redo.length} onClick={redo} aria-label="Redo"><IconArrowForwardUp size={18} /></ActionIcon></Tooltip>
-            <Tooltip label="Open every frame"><ActionIcon variant="default" size="lg" onClick={() => openAll(true)} aria-label="Open every frame"><IconArrowsMaximize size={18} /></ActionIcon></Tooltip>
-            <Tooltip label="Close every frame"><ActionIcon variant="default" size="lg" onClick={() => openAll(false)} aria-label="Close every frame"><IconArrowsMinimize size={18} /></ActionIcon></Tooltip>
-            <Tooltip label="Show the whole drawing"><ActionIcon variant="default" size="lg" onClick={() => flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 })} aria-label="Show the whole drawing"><IconFocusCentered size={18} /></ActionIcon></Tooltip>
-            <Button variant="default" leftSection={<IconCheck size={16} />} loading={F.busy} onClick={check} title="Ctrl+Enter">Check</Button>
-            <Button leftSection={<IconDeviceFloppy size={16} />} disabled={F.busy || !isDirty} onClick={save} title="Ctrl+S">Save</Button>
-            <Button variant="default" leftSection={<IconX size={16} />} disabled={F.busy || !isDirty} onClick={discard}>Discard</Button>
+            <Tooltip label={t('Undo (Ctrl+Z)')}><ActionIcon variant="default" size="lg" disabled={!F.undo.length} onClick={undo} aria-label={t('Undo')}><IconArrowBackUp size={18} /></ActionIcon></Tooltip>
+            <Tooltip label={t('Redo (Ctrl+Y)')}><ActionIcon variant="default" size="lg" disabled={!F.redo.length} onClick={redo} aria-label={t('Redo')}><IconArrowForwardUp size={18} /></ActionIcon></Tooltip>
+            <Tooltip label={t('Open every loop, round and branching')}><ActionIcon variant="default" size="lg" onClick={() => openAll(true)} aria-label={t('Open every loop, round and branching')}><IconArrowsMaximize size={18} /></ActionIcon></Tooltip>
+            <Tooltip label={t('Close every loop, round and branching')}><ActionIcon variant="default" size="lg" onClick={() => openAll(false)} aria-label={t('Close every loop, round and branching')}><IconArrowsMinimize size={18} /></ActionIcon></Tooltip>
+            <Tooltip label={t('Show the whole flow')}><ActionIcon variant="default" size="lg" onClick={() => flow.fitView({ padding: 0.08, maxZoom: 1, duration: 300 })} aria-label={t('Show the whole flow')}><IconFocusCentered size={18} /></ActionIcon></Tooltip>
+            <Button variant="default" leftSection={<IconCheck size={16} />} loading={F.busy} onClick={check} title={t('Ctrl+Enter')}>{t('Check')}</Button>
+            <Button leftSection={<IconDeviceFloppy size={16} />} disabled={F.busy || !isDirty} onClick={save} title={t('Ctrl+S')}>{t('Save')}</Button>
+            <Button variant="default" leftSection={<IconX size={16} />} disabled={F.busy || !isDirty} onClick={discard}>{t('Discard')}</Button>
             <Button variant="light" color="orange" leftSection={<IconPlayerPlay size={16} />} loading={F.trying}
-              onClick={() => { F.sel = null; F.multi = new Set(); F.side = 'try'; touch(); }}>Try</Button>
+              onClick={() => { F.sel = null; F.multi = new Set(); F.side = 'try'; touch(); }}>{t('Dry run')}</Button>
           </Group>
         </Group>
         <Box px="md" pb={8}><HowTo /></Box>
@@ -396,7 +411,7 @@ function FlowInner() {
             <ReactFlow nodes={placed.nodes} edges={placed.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
               defaultEdgeOptions={edgeDefaults} nodesDraggable={false} nodesConnectable={false} elementsSelectable
               deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null} panOnScroll zoomOnDoubleClick={false}
-              minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }}
+              minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }} ariaLabelConfig={flowWords()}
               onNodeClick={onNodeClick} onNodeContextMenu={onNodeContextMenu}
               onPaneClick={() => { if (F.sel || F.multi.size) { F.sel = null; F.multi = new Set(); touch(); } }}>
               <Background gap={24} size={1} />
@@ -409,10 +424,10 @@ function FlowInner() {
               {sel ? <StepSettings key={sel.n.id} P={panel} n={sel.n} /> : (
                 <Stack gap="md">
                   <SegmentedControl fullWidth value={F.side} onChange={v => { F.side = v as 'numbers' | 'try'; touch(); }}
-                    data={[{ value: 'numbers', label: 'Numbers' }, { value: 'try', label: 'Try' }]} />
+                    data={[{ value: 'numbers', label: t('Numbers') }, { value: 'try', label: t('Dry run') }]} />
                   {F.side === 'numbers' ? <NumbersPane P={panel} /> : (
                     <TryPane st={F.tryst} set={s => { Object.assign(F.tryst, s); touch(); }} docs={F.docs} loadDocs={loadDocs}
-                      trying={F.trying} trial={F.trial} run={tryIt} />
+                      trying={F.trying} trial={F.trial} run={tryIt} subjects={d.conditions} />
                   )}
                 </Stack>
               )}
@@ -420,25 +435,25 @@ function FlowInner() {
           </ScrollArea>
         </Group>
       </Stack>
-      <LibraryModal lib={d.library} opened={!!lib} where={lib ? lib.where : ''} onClose={() => setLib(null)}
+      <LibraryModal lib={d.library} opened={!!lib} after={lib ? lib.after : null} onClose={() => setLib(null)}
         onPick={p => { const l = lib; setLib(null); if (l) put(l.list, l.at, p); }} />
       <Menu opened={!!menu} onChange={o => { if (!o) setMenu(null); }} position="bottom-start" withinPortal shadow="md" width={240}>
         <Menu.Target><Box style={{ position: 'fixed', left: menu ? menu.x : 0, top: menu ? menu.y : 0, width: 1, height: 1 }} /></Menu.Target>
         <Menu.Dropdown>
           {menuStep && (<>
             <Menu.Label>{labelOf(d.library, menuStep.n)}</Menu.Label>
-            <Menu.Item leftSection={<IconArrowUp size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === 0} onClick={() => act('up', menuStep.n.id)}>Move up</Menu.Item>
-            <Menu.Item leftSection={<IconArrowDown size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === menuStep.steps.length - 1} onClick={() => act('down', menuStep.n.id)}>Move down</Menu.Item>
-            <Menu.Item leftSection={<IconCopy size={16} />} onClick={() => act('duplicate', menuStep.n.id)}>Duplicate</Menu.Item>
-            <Menu.Item leftSection={<IconFrame size={16} />} onClick={() => { const at = listKeyOf(menuStep.n.id); if (at) setLib({ ...at, where: 'after ' + labelOf(d.library, menuStep.n) }); }}>Put a box after it…</Menu.Item>
+            <Menu.Item leftSection={<IconArrowUp size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === 0} onClick={() => act('up', menuStep.n.id)}>{t('Move up')}</Menu.Item>
+            <Menu.Item leftSection={<IconArrowDown size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === menuStep.steps.length - 1} onClick={() => act('down', menuStep.n.id)}>{t('Move down')}</Menu.Item>
+            <Menu.Item leftSection={<IconCopy size={16} />} onClick={() => act('duplicate', menuStep.n.id)}>{t('Duplicate')}</Menu.Item>
+            <Menu.Item leftSection={<IconFrame size={16} />} onClick={() => { const at = listKeyOf(menuStep.n.id); if (at) setLib({ ...at, after: labelOf(d.library, menuStep.n) }); }}>{t('Put a step, loop, round or branching after it…')}</Menu.Item>
             <Menu.Divider />
-            <Menu.Label>Wrap {F.multi.size > 1 && F.multi.has(menuStep.n.id) ? 'the ' + F.multi.size + ' chosen' : 'it'} in</Menu.Label>
-            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>Round</Menu.Item>
-            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>If / else</Menu.Item>
-            {Object.keys(d.library.each).map(e => <Menu.Item key={e} onClick={() => act('wrap', menuStep.n.id, 'each:' + e)}>For each {e}</Menu.Item>)}
+            <Menu.Label>{F.multi.size > 1 && F.multi.has(menuStep.n.id) ? t('Wrap the {n} chosen in', { n: F.multi.size }) : t('Wrap it in')}</Menu.Label>
+            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>{frameWord('round')}</Menu.Item>
+            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>{frameWord('if')}</Menu.Item>
+            {Object.keys(d.library.each).map(e => <Menu.Item key={e} onClick={() => act('wrap', menuStep.n.id, 'each:' + e)}>{rich(tr((d.library.each_titles || {})[e]) || t('For each {name}', { name: e }))}</Menu.Item>)}
             <Menu.Divider />
-            {removable(menuStep.n) && <Menu.Item leftSection={<IconPower size={16} />} onClick={() => act('off', menuStep.n.id)}>{menuStep.n.off ? 'Switch on' : 'Switch off'}</Menu.Item>}
-            {removable(menuStep.n) && <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={() => act('delete', menuStep.n.id)}>Delete</Menu.Item>}
+            {removable(menuStep.n) && <Menu.Item leftSection={<IconPower size={16} />} onClick={() => act('off', menuStep.n.id)}>{menuStep.n.off ? t('Switch on') : t('Switch off')}</Menu.Item>}
+            {removable(menuStep.n) && <Menu.Item color="red" leftSection={<IconTrash size={16} />} onClick={() => act('delete', menuStep.n.id)}>{t('Delete')}</Menu.Item>}
           </>)}
         </Menu.Dropdown>
       </Menu>
@@ -451,6 +466,7 @@ function ReportStrip({ R, problems, onStep, onNumber, onReload }: {
   R: Report | null; problems: { id?: string; name?: string; message: string }[];
   onStep: (id: string) => void; onNumber: (name: string) => void; onReload: () => void;
 }) {
+  useLang();
   const item = (e: { id?: string; name?: string; message: string }, i: number) => (
     <List.Item key={i}>
       {e.id ? <><Anchor component="button" type="button" onClick={() => onStep(e.id!)}>{e.id}</Anchor>: </> : null}
@@ -460,7 +476,7 @@ function ReportStrip({ R, problems, onStep, onNumber, onReload }: {
   );
   if (!R) {
     if (!problems || !problems.length) return null;
-    return <Box px="md" pb={8}><Alert color="red" title="The drawing on disk has problems"><List size="sm">{problems.map(item)}</List></Alert></Box>;
+    return <Box px="md" pb={8}><Alert color="red" title={t('The flow on disk has problems')}><List size="sm">{problems.map(item)}</List></Alert></Box>;
   }
   if (R.error) return <Box px="md" pb={8}><Alert color="red">{R.error}</Alert></Box>;
   const r = R.r || {};
@@ -469,23 +485,23 @@ function ReportStrip({ R, problems, onStep, onNumber, onReload }: {
     <ScrollArea.Autosize mah="32vh" px="md" pb={8}>
       <Stack gap="xs">
         {R.source === 'save' && r.reason === 'moved' && (
-          <Alert color="red"><Group justify="space-between"><Text size="sm">{r.message}</Text><Button size="xs" color="red" variant="white" onClick={onReload}>Reload from disk</Button></Group></Alert>
+          <Alert color="red"><Group justify="space-between"><Text size="sm">{r.message}</Text><Button size="xs" color="red" variant="white" onClick={onReload}>{t('Reload from disk')}</Button></Group></Alert>
         )}
-        {errs.length > 0 && <Alert color="red" title={'The run could not do this (' + errs.length + ')'}><List size="sm" spacing={2}>{errs.map(item)}</List></Alert>}
-        {!errs.length && r.ok && <Alert color="teal" title="The run can do this drawing." />}
+        {errs.length > 0 && <Alert color="red" title={t('The run could not do this ({n})', { n: errs.length })}><List size="sm" spacing={2}>{errs.map(item)}</List></Alert>}
+        {!errs.length && r.ok && <Alert color="teal" title={t('The run can do this flow.')} />}
         {!errs.length && (r.changed || []).length > 0 && (
-          <Alert color="gray" title="Changes">
-            <List size="sm" spacing={2}>{r.changed.map((c: any, i: number) => <List.Item key={i}>{c.name === 'flow' ? c.to : <><Code>{c.name}</Code>: {String(c.from)} → {String(c.to)}</>}</List.Item>)}</List>
+          <Alert color="gray" title={t('Changes')}>
+            <List size="sm" spacing={2}>{r.changed.map((c: any, i: number) => <List.Item key={i}>{c.name === 'flow' ? tr(c.to) : <><Code>{c.name}</Code>: {String(c.from)} → {String(c.to)}</>}</List.Item>)}</List>
           </Alert>
         )}
         {(r.diff || []).length > 0 && (
           <Accordion variant="contained">
-            <Accordion.Item value="diff"><Accordion.Control>Diff of {r.file || 'the file'}</Accordion.Control>
+            <Accordion.Item value="diff"><Accordion.Control>{t('Diff of {file}', { file: r.file || t('the file') })}</Accordion.Control>
               <Accordion.Panel><Diff text={r.diff} /></Accordion.Panel></Accordion.Item>
           </Accordion>
         )}
-        {(r.says || []).map((s: string, i: number) => <Text key={i} size="sm" c="dimmed">{s}</Text>)}
-        {R.source === 'save' && !r.saved && r.reason === 'invalid' && <Badge color="red">Not saved</Badge>}
+        {(r.says || []).map((s: string, i: number) => <Text key={i} size="sm" c="dimmed">{rich(tr(s))}</Text>)}
+        {R.source === 'save' && !r.saved && r.reason === 'invalid' && <Badge color="red">{t('Not saved')}</Badge>}
       </Stack>
     </ScrollArea.Autosize>
   );

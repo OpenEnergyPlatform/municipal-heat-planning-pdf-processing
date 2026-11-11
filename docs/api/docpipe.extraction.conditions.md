@@ -60,6 +60,7 @@ Fields:
 - `kind: str`
 - `label: str`
 - `choices: tuple = ()`
+- `words: Optional[dict] = None`: choice -> what the page shows
 
 ### Subject
 

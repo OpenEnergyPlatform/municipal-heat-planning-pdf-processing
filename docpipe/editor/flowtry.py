@@ -50,8 +50,10 @@ MODES = ("nothing", "first_line")
 # the sentence's full stop or comma after it is not part of its words.
 NUMBER = re.compile(r"-?\d+(?:[.,]\d+)*")
 WORD = re.compile(r"[^\W\d_]{3,}")
-ORDER_SAID = ("Tried without the embedder and the reranker: a search shows "
-              "the pieces in the document's order. A run never does.")
+ORDER_SAID = ("A dry run has no embedding model and no reranker. A search "
+              "in it therefore shows the chunks in the order of the "
+              "document, which a real run never does; a real run orders "
+              "them by how well they fit the search sentence.")
 
 
 class Refused(ValueError):

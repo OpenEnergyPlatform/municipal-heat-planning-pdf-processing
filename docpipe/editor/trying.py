@@ -36,9 +36,10 @@ from . import prompts
 
 LIMIT = 3
 TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
-NO_MODEL = ("no model is named for trying: set EDIT_TRY_BASE_URL (with "
-            "EDIT_TRY_API_KEY and EDIT_TRY_MODEL), or LLM_BASE_URL for the "
-            "text model of the run")
+NO_MODEL = ("No model is set up for Try, so no request can be sent. To "
+            "set one up, set EDIT_TRY_BASE_URL together with "
+            "EDIT_TRY_API_KEY and EDIT_TRY_MODEL, or set LLM_BASE_URL for "
+            "the text model of the run.")
 # A line as a request shows it: a block's letter, its number, its text.
 _SHOWN = re.compile(r"^([A-Z]?)(\d+) (.*)$", re.S)
 # The key of a message under which the entries of a list stand, each under
@@ -231,10 +232,10 @@ def run(profile, trace, indexes: list, edits: dict, read: Callable, *,
     instruction cannot be put together is not sent and says why."""
     indexes = list(indexes)
     if not indexes:
-        raise Refused("no request was named")
+        raise Refused("Choose at least one request to send.")
     if len(indexes) > LIMIT:
-        raise Refused(f"a click sends {LIMIT} requests at most; "
-                      f"{len(indexes)} were named")
+        raise Refused(f"One click on Try sends {LIMIT} requests at most, "
+                      f"but {len(indexes)} were chosen.")
     config = config or settings()
     if not config.get("configured"):
         raise Refused(config.get("why") or NO_MODEL)
@@ -243,7 +244,7 @@ def run(profile, trace, indexes: list, edits: dict, read: Callable, *,
     for index in indexes:
         if not isinstance(index, int) \
                 or not 0 <= index < len(trace.requests):
-            raise Refused(f"the trace has no request {index!r}")
+            raise Refused(f"The request log has no request {index!r}.")
         request, sent = trace.requests[index], trace.sent(index)
         old = {"answer": request.get("answer"),
                "answer_json": request.get("answer_json"),

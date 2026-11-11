@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Alert, Badge, Box, Button, Group, NativeSelect, Stack, Text, Title } from '@mantine/core';
 import { IconCopy, IconTrash } from '@tabler/icons-react';
 import { useStore } from '../lib/nav';
+import { t, tn } from '../lib/i18n';
 import { axisKinds, type SpecNode } from '../lib/spec';
 import { isObj, type Obj } from '../lib/util';
 import { copyNode, deleteNode, ensureSel, listCount, nodeObj, S, touch, view } from './state';
@@ -11,13 +12,13 @@ import { EntriesTable, refFor } from './entries';
 
 export function titleOf(n: SpecNode): [string, string] {
   switch (n.t) {
-    case 'spec': return ['Top-level questions', ''];
-    case 'plan': return ['Plan field ' + n.key, 'What a document settles once for all its values.'];
-    case 'works': return ['Works', 'Other works a document presents beside itself.'];
-    case 'group': return ['Group ' + n.name, 'Coordinates a document prints together.'];
-    case 'param': return ['Field ' + n.uri, ''];
-    case 'plist': return ['Field ' + n.uri + ' · ' + (n.list === 'beside' ? 'beside list' : 'list'), 'Fixed entries; edits are written with the next save.'];
-    case 'axis': return ['Coordinate ' + n.name + ' of field ' + n.uri, ''];
+    case 'spec': return [t('Questions and note of the spec'), ''];
+    case 'plan': return [t('Field of the whole document {key}', { key: n.key }), t('A field of the whole document holds for all values of a document, such as its base year or its municipality.')];
+    case 'works': return [t('Works'), t('The works are the other studies or plans that a document presents, compares or cites besides itself. Here you set what is asked about each new work.')];
+    case 'group': return [t('Group {name}', { name: n.name }), t('A group holds dimensions that a document prints together, for example in one table.')];
+    case 'param': return [t('Field {uri}', { uri: n.uri }), ''];
+    case 'plist': return [n.list === 'beside' ? t('Field {uri} · answers outside the list', { uri: n.uri }) : t('Field {uri} · list', { uri: n.uri }), t('These are the entries of the list. A value the model reads for this field must be one of them. Your edits to the entries are written with the next save.')];
+    case 'axis': return [t('Dimension {name} of field {uri}', { name: n.name, uri: n.uri }), ''];
   }
 }
 
@@ -25,18 +26,18 @@ function Actions({ n }: { n: SpecNode }) {
   const busy = S.busy;
   if (n.t === 'param') return (
     <Group gap="xs">
-      <Button variant="default" disabled={busy} leftSection={<IconCopy size={16} />} onClick={() => copyNode('field', n)}>Copy as new field…</Button>
-      <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('field', n)}>Delete field</Button>
+      <Button variant="default" disabled={busy} leftSection={<IconCopy size={16} />} onClick={() => copyNode('field', n)}>{t('Copy as new field…')}</Button>
+      <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('field', n)}>{t('Delete field')}</Button>
     </Group>
   );
   if (n.t === 'axis') return (
     <Group gap="xs">
-      <Button variant="default" disabled={busy} leftSection={<IconCopy size={16} />} onClick={() => copyNode('coordinate', n)}>Copy as new coordinate…</Button>
-      <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('coordinate', n)}>Delete coordinate</Button>
+      <Button variant="default" disabled={busy} leftSection={<IconCopy size={16} />} onClick={() => copyNode('coordinate', n)}>{t('Copy as new dimension…')}</Button>
+      <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('coordinate', n)}>{t('Delete dimension')}</Button>
     </Group>
   );
-  if (n.t === 'plan') return <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('plan_field', n)}>Remove plan field</Button>;
-  if (n.t === 'works') return <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('works', n)}>Remove works</Button>;
+  if (n.t === 'plan') return <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('plan_field', n)}>{t('Remove field of the whole document')}</Button>;
+  if (n.t === 'works') return <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('works', n)}>{t('Remove works')}</Button>;
   return null;
 }
 
@@ -57,40 +58,40 @@ function AxisView({ n, obj, orig }: { n: Extract<SpecNode, { t: 'axis' }>; obj: 
   const mark = S.flag && S.flag.entry;
   return (
     <Stack gap="md">
-      <Section>What the coordinate reads</Section>
+      <Section>{t('Possible answers of the dimension')}</Section>
       {kinds.length !== 1 ? (
-        <Alert color="yellow">{kinds.length ? 'More than one of vocabulary, type, enum, dynamic is set; the loader wants exactly one.' : 'None of vocabulary, type, enum, dynamic is set; the loader wants exactly one.'}</Alert>
+        <Alert color="yellow">{kinds.length ? t('More than one of vocabulary, type, enum and dynamic is set for this dimension, but the run needs exactly one of them. Remove the others so that the Spec can be saved.') : t('None of vocabulary, type, enum and dynamic is set for this dimension, but the run needs exactly one of them. Set one so that the Spec can be saved.')}</Alert>
       ) : null}
       {kinds.map(k => {
         if (k === 'vocabulary') return (
           <Stack key={k} gap="xs">
-            <Group gap="xs"><Badge variant="light">a list of entries</Badge><Text size="sm">{listCount(obj.vocabulary) + ' entries'}</Text></Group>
+            <Group gap="xs"><Badge variant="light">{t('a list of entries')}</Badge><Text size="sm">{tn(listCount(obj.vocabulary), '{n} entry', '{n} entries')}</Text></Group>
             <EntriesTable lref={refFor(n.uri, n.name, 'vocabulary', mark)} />
           </Stack>
         );
         if (k === 'type') return (
           <FlaggedKey key={k} k="type">
-            <Group gap="xs"><Badge variant="light">a free value</Badge><Text fw={600}>type</Text><TypeSelect obj={obj} /></Group>
+            <Group gap="xs"><Badge variant="light">{t('a free value')}</Badge><Text fw={600}>type</Text>{/* i18n-ignore: the key's name */}<TypeSelect obj={obj} /></Group>
           </FlaggedKey>
         );
         if (k === 'enum') return (
           <FlaggedKey key={k} k="enum">
-            <Stack gap="xs"><Badge variant="light" w="fit-content">a list of strings</Badge><StringsEditor obj={obj} k="enum" keep /></Stack>
+            <Stack gap="xs"><Badge variant="light" w="fit-content">{t('a list of strings')}</Badge><StringsEditor obj={obj} k="enum" keep /></Stack>
           </FlaggedKey>
         );
         return (
           <FlaggedKey key={k} k="dynamic">
-            <Group gap="xs"><Badge variant="light">closed per document</Badge><Text size="sm">The profile closes the list of this coordinate for each document.</Text></Group>
+            <Group gap="xs"><Badge variant="light">{t('set per document')}</Badge><Text size="sm">{t('The list of this dimension is not fixed in the Spec: the profile sets it anew for each document.')}</Text></Group>
           </FlaggedKey>
         );
       })}
       {isObj(obj.beside) ? (
         <>
-          <Section>Beside list</Section>
+          <Section>{t('Answers outside the list')}</Section>
           <EntriesTable lref={refFor(n.uri, n.name, 'beside', mark)} />
         </>
       ) : null}
-      <Section>The other keys of the coordinate</Section>
+      <Section>{t('The other keys of the dimension')}</Section>
       <SpecForm fields={f.axis} obj={obj} orig={orig} ctx={{ skip: quiet, skipQuiet: quiet }} />
     </Stack>
   );

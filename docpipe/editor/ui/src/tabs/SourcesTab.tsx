@@ -9,10 +9,12 @@ import { IconCheck, IconCloudDownload, IconDeviceFloppy, IconPlus, IconTrash } f
 import { api, apiR } from '../lib/api';
 import { askConfirm, askText, showError, showInfo } from '../lib/dialogs';
 import { dirtyStore, loadState, openRules, request, setDirty, setTab, useTabActions } from '../lib/nav';
-import { clone, plural, same } from '../lib/util';
+import { clone, same, wrote } from '../lib/util';
+import { rich, t, tn, tr } from '../lib/i18n';
 import { shortId } from '../lib/spec';
 import { AreaBox, TextBox } from '../components/Inputs';
 import { Report, type Reported } from '../components/Report';
+import { Put } from '../prompts/Reports';
 
 const sourcesData = (d: any) => ({
   sources: clone(Object.fromEntries(d.sources.map((s: any) => [s.name, Object.assign({ kind: s.kind }, s.source)]))) as Record<string, any>,
@@ -48,7 +50,7 @@ export function SourcesTab() {
     try {
       const r = await apiR('/api/sources/' + what, what === 'save' ? { data: SR.cur, base: SR.data.base } : { data: SR.cur });
       if (what === 'save' && r.saved) {
-        showInfo('Saved ' + r.file + ' (' + r.writes + ').');
+        showInfo(t('Saved {file} ({writes}).', { file: r.file, writes: wrote(r.writes) }));
         SR.busy = false;
         loadState().catch(showError);
         await load();
@@ -69,11 +71,11 @@ export function SourcesTab() {
   }
   async function doApply() {
     if (!SR.fetch || SR.busy) return;
-    if (!await askConfirm('Apply the fetch', 'Write the lists of ' + SR.fetch.id + ' into the profile and its lock into the cache? The spec stays as it is.', 'Apply')) return;
+    if (!await askConfirm(t('Apply the fetch'), t('Write the lists of {id} into the profile and its lock into the cache? The spec stays as it is.', { id: SR.fetch.id }), t('Apply'))) return;
     SR.busy = true; touch();
     try {
       const r = await api('POST', '/api/sources/apply', { fetch: SR.fetch.id });
-      showInfo('Applied ' + r.applied + ': ' + r.profile_files.length + ' file(s) of the profile, ' + r.cache_files + ' file(s) into the cache, lock ' + r.lock + '.');
+      showInfo(t('Applied {applied}: {profile} of the profile, {cache} into the cache, lock {lock}.', { applied: r.applied, profile: tn(r.profile_files.length, '{n} file', '{n} files'), cache: tn(r.cache_files, '{n} file', '{n} files'), lock: r.lock }));
       SR.fetch = null;
       loadState().catch(showError);
     } catch (e) { showError(e); }
@@ -81,14 +83,17 @@ export function SourcesTab() {
   }
   async function doTake() {
     if (!SR.picks.size) return;
-    if (dirtyStore.get().spec && !await askConfirm('Take into the spec', 'The Spec tab has unsaved edits; the taken rows are applied to the spec as saved on disk and replace them.', 'Replace my edits')) return;
+    if (dirtyStore.get().spec && !await askConfirm(t('Take into the spec'), t('The Spec tab has unsaved edits; the rows you take are applied to the spec as saved on disk and replace them.'), t('Replace my edits'))) return;
     try {
       const r = await api('POST', '/api/sources/take', { chosen: [...SR.picks.values()], fetch: SR.fetch ? SR.fetch.id : null });
       SR.picks.clear(); touch();
       setTab('spec');
       // the Spec tab puts r.data in place of its spec, marks it as edited and clears its last answer
       request('spec', { taken: r.data });
-      showInfo(plural(r.done.length, 'change') + ' taken into the spec' + (r.refused.length ? ', ' + r.refused.length + ' refused (' + r.refused.map((x: any) => x.why).join('; ') + ')' : '') + '. Check and save them there.');
+      showInfo(r.refused.length
+        ? tn(r.done.length, '{n} change taken into the spec, {refused} refused ({why}). Check and save it in the Spec tab.', '{n} changes taken into the spec, {refused} refused ({why}). Check and save them in the Spec tab.',
+          { refused: r.refused.length, why: r.refused.map((x: any) => tr(x.why)).join('; ') })
+        : tn(r.done.length, '{n} change taken into the spec. Check and save it in the Spec tab.', '{n} changes taken into the spec. Check and save them in the Spec tab.'));
     } catch (e) { showError(e); }
   }
   const pick = (id: string, action: string | null, into?: string) => {
@@ -107,27 +112,27 @@ export function SourcesTab() {
       <Group px="md" py="sm" justify="space-between" wrap="nowrap" className="dp-bar" style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}>
         <Group gap="sm" wrap="wrap">
           <Code>{d.file}</Code>
-          {!d.exists && <Text size="sm" c="dimmed">{d.inherited_from ? 'inherited from ' + d.inherited_from : 'not written yet'}</Text>}
-          <Text size="sm" c="dimmed">lock: {d.lock.file}{d.lock.fetched_at ? ', fetched ' + d.lock.fetched_at : ', never fetched'}</Text>
+          {!d.exists && <Text size="sm" c="dimmed">{d.inherited_from ? t('default from profile {name}', { name: d.inherited_from }) : t('not written yet')}</Text>}
+          <Text size="sm" c="dimmed">{d.lock.fetched_at ? t('lock: {file}, fetched {at}', { file: d.lock.file, at: d.lock.fetched_at }) : t('lock: {file}, never fetched', { file: d.lock.file })}</Text>
         </Group>
         <Group gap="xs" wrap="nowrap">
-          <Button variant="default" onClick={() => openRules('sources')}>Rules</Button>
-          <Button variant="default" leftSection={<IconCheck size={16} />} disabled={!!SR.busy} onClick={() => send('check')}>Check</Button>
-          <Button leftSection={<IconDeviceFloppy size={16} />} disabled={!!SR.busy || !isDirty} onClick={() => send('save')}>Save</Button>
-          <Tooltip label={isDirty ? 'Save the sources first: a fetch reads the saved file' : 'Pull every source into a folder of the temp directory and show what moved'}>
+          <Button variant="default" onClick={() => openRules('sources')}>{t('Rules')}</Button>
+          <Button variant="default" leftSection={<IconCheck size={16} />} disabled={!!SR.busy} onClick={() => send('check')}>{t('Check')}</Button>
+          <Button leftSection={<IconDeviceFloppy size={16} />} disabled={!!SR.busy || !isDirty} onClick={() => send('save')}>{t('Save')}</Button>
+          <Tooltip label={isDirty ? t('Save the sources first, because a fetch reads the saved file and not your edits.') : t('Downloads every source into a folder of the temp directory and shows what changed against the lists of the profile. Nothing is written to the profile until you press Apply.')}>
             <Button variant="light" leftSection={<IconCloudDownload size={16} />} loading={SR.busy === 'fetch'}
-              disabled={!!SR.busy || !d.fetches || isDirty} onClick={doFetch}>Fetch</Button>
+              disabled={!!SR.busy || !d.fetches || isDirty} onClick={doFetch}>{t('Fetch')}</Button>
           </Tooltip>
         </Group>
       </Group>
       <ScrollArea style={{ flex: 1 }} type="auto">
         <Stack p="md" gap="md">
-          {d.cost && <Text size="sm" c="dimmed">{d.cost}</Text>}
+          {d.cost && <Text size="sm" c="dimmed">{rich(tr(d.cost))}</Text>}
           <Report R={SR.report} onReload={load} />
           <Grid gap="lg">
             <Grid.Col span={{ base: 12, xl: 7 }}>
               <Stack gap="md">
-                <Text fw={700} size="lg">Sources</Text>
+                <Text fw={700} size="lg">{t('Sources')}</Text>
                 {Object.entries(cur.sources).map(([name, src]) => {
                   const shown = d.sources.find((s: any) => s.name === name);
                   const k = kinds[src.kind] || { needs: [], may: [] };
@@ -139,14 +144,14 @@ export function SourcesTab() {
                             <Code fw={700}>{name}</Code>
                             <NativeSelect w={150} value={src.kind} data={Object.keys(kinds)}
                               onChange={e => { cur.sources[name] = { kind: e.currentTarget.value }; changed(); }} />
-                            {(kinds[src.kind] || {}).stands ? <Badge variant="light" color="gray">{kinds[src.kind].stands}</Badge> : null}
-                            {shown && shown.locked ? <Badge color="teal" variant="light">locked {shown.locked.version || shown.locked.note || '?'}</Badge>
-                              : <Badge color="orange" variant="light">not in the lock</Badge>}
+                            {(kinds[src.kind] || {}).stands ? <Badge variant="light" color="gray">{rich(tr(kinds[src.kind].stands))}</Badge> : null}
+                            {shown && shown.locked ? <Badge color="teal" variant="light">{t('locked {version}', { version: shown.locked.version || shown.locked.note || '?' })}</Badge>
+                              : <Badge color="orange" variant="light">{t('not in the lock')}</Badge>}
                             {shown && shown.token ? <Badge color={shown.token.set ? 'teal' : 'orange'} variant="light">
-                              {shown.token.env} {shown.token.set ? 'is set' : 'is not set'}</Badge> : null}
+                              {shown.token.set ? t('{env} is set', { env: shown.token.env }) : t('{env} is not set', { env: shown.token.env })}</Badge> : null}
                           </Group>
-                          <Tooltip label="Remove this source">
-                            <ActionIcon variant="subtle" color="red" aria-label="Remove this source"
+                          <Tooltip label={t('Remove this source')}>
+                            <ActionIcon variant="subtle" color="red" aria-label={t('Remove this source')}
                               onClick={() => { delete cur.sources[name]; changed(); }}><IconTrash size={18} /></ActionIcon>
                           </Tooltip>
                         </Group>
@@ -162,15 +167,15 @@ export function SourcesTab() {
                           </Table.Tbody>
                         </Table>
                         {shown && shown.locked && (shown.locked.changed_since_reviewed || []).length
-                          ? <Alert color="yellow">changed since reviewed: {shown.locked.changed_since_reviewed.join(', ')}</Alert> : null}
+                          ? <Alert color="yellow">{t('changed since reviewed: {what}', { what: shown.locked.changed_since_reviewed.join(', ') })}</Alert> : null}
                       </Stack>
                     </Paper>
                   );
                 })}
 
-                <Text fw={700} size="lg" mt="sm">Lists</Text>
+                <Text fw={700} size="lg" mt="sm">{t('Lists')}</Text>
                 <Table withTableBorder className="dp-formtable">
-                  <Table.Thead><Table.Tr><Table.Th>list</Table.Th><Table.Th>kind</Table.Th><Table.Th>root</Table.Th><Table.Th>entries now</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+                  <Table.Thead><Table.Tr><Table.Th>{t('list')}</Table.Th><Table.Th>{t('kind')}</Table.Th><Table.Th>{t('root')}</Table.Th><Table.Th>{t('entries now')}</Table.Th><Table.Th /></Table.Tr></Table.Thead>
                   <Table.Tbody>
                     {Object.entries(cur.lists).map(([name, l]) => {
                       const now = d.lists.find((x: any) => x.name === name);
@@ -179,10 +184,10 @@ export function SourcesTab() {
                           <Table.Td><Code>{name}</Code></Table.Td>
                           <Table.Td><NativeSelect value={l.kind} data={d.list_kinds || ['class', 'individual']}
                             onChange={e => { l.kind = e.currentTarget.value; changed(); }} /></Table.Td>
-                          <Table.Td><TextBox mono value={l.root} onText={t => { l.root = t; changed(); }} /></Table.Td>
+                          <Table.Td><TextBox mono value={l.root} onText={text => { l.root = text; changed(); }} /></Table.Td>
                           <Table.Td>{now && now.members != null ? String(now.members) : ''}</Table.Td>
                           <Table.Td>
-                            <ActionIcon variant="subtle" color="red" aria-label="Remove this list" onClick={() => {
+                            <ActionIcon variant="subtle" color="red" aria-label={t('Remove this list')} onClick={() => {
                               delete cur.lists[name];
                               for (const [a, n] of Object.entries(cur.axis_lists)) if (n === name) delete cur.axis_lists[a];
                               changed();
@@ -194,9 +199,9 @@ export function SourcesTab() {
                   </Table.Tbody>
                 </Table>
 
-                <Text fw={700} size="lg" mt="sm">Which coordinate answers from which list</Text>
+                <Text fw={700} size="lg" mt="sm">{t('Which dimension answers from which list')}</Text>
                 <Table withTableBorder className="dp-formtable">
-                  <Table.Thead><Table.Tr><Table.Th>coordinate</Table.Th><Table.Th>answers from the list</Table.Th><Table.Th /></Table.Tr></Table.Thead>
+                  <Table.Thead><Table.Tr><Table.Th>{t('dimension')}</Table.Th><Table.Th>{t('answers from the list')}</Table.Th><Table.Th /></Table.Tr></Table.Thead>
                   <Table.Tbody>
                     {Object.entries(cur.axis_lists).map(([axis, name]) => (
                       <Table.Tr key={axis}>
@@ -204,7 +209,7 @@ export function SourcesTab() {
                         <Table.Td><NativeSelect value={name} data={Object.keys(cur.lists)}
                           onChange={e => { cur.axis_lists[axis] = e.currentTarget.value; changed(); }} /></Table.Td>
                         <Table.Td>
-                          <ActionIcon variant="subtle" color="red" aria-label="Remove this coordinate"
+                          <ActionIcon variant="subtle" color="red" aria-label={t('Remove this dimension')}
                             onClick={() => { delete cur.axis_lists[axis]; changed(); }}><IconTrash size={18} /></ActionIcon>
                         </Table.Td>
                       </Table.Tr>
@@ -214,17 +219,17 @@ export function SourcesTab() {
 
                 <Group gap="xs">
                   <Button variant="default" leftSection={<IconPlus size={16} />} onClick={async () => {
-                    const n = await askText('Add a source', 'Name of the source', '');
+                    const n = await askText(t('Add a source'), t('Name of the source'), '');
                     if (n && !cur.sources[n]) { cur.sources[n] = { kind: 'url' }; changed(); }
-                  }}>Add a source</Button>
+                  }}>{t('Add a source')}</Button>
                   <Button variant="default" leftSection={<IconPlus size={16} />} onClick={async () => {
-                    const n = await askText('Add a list', 'Name of the list', '');
+                    const n = await askText(t('Add a list'), t('Name of the list'), '');
                     if (n && !cur.lists[n]) { cur.lists[n] = { kind: 'class', root: '' }; changed(); }
-                  }}>Add a list</Button>
+                  }}>{t('Add a list')}</Button>
                   <Button variant="default" leftSection={<IconPlus size={16} />} onClick={async () => {
-                    const n = await askText('A coordinate that answers from a list', 'Name of the coordinate', '');
+                    const n = await askText(t('A dimension that answers from a list'), t('Name of the dimension'), '');
                     if (n && Object.keys(cur.lists).length) { cur.axis_lists[n] = Object.keys(cur.lists)[0]; changed(); }
-                  }}>Add a coordinate</Button>
+                  }}>{t('Add a dimension')}</Button>
                 </Group>
               </Stack>
             </Grid.Col>
@@ -233,8 +238,8 @@ export function SourcesTab() {
               <Stack gap="md">
                 {SR.fetch ? <FetchBox f={SR.fetch} busy={!!SR.busy} onApply={doApply}
                   onDrop={() => { SR.fetch = null; SR.picks.clear(); touch(); }} /> : null}
-                <Text fw={700} size="lg">{SR.fetch ? 'What the fetched shapes and ontology say otherwise than the spec'
-                  : 'What the shapes and the ontology say otherwise than the spec'}</Text>
+                <Text fw={700} size="lg">{SR.fetch ? t('Where the fetched shapes and ontology differ from the spec')
+                  : t('Where the shapes and the ontology differ from the spec')}</Text>
                 <Differences key={SR.fetch ? SR.fetch.id : 'saved'} D={D} picks={SR.picks} pick={pick} onTake={doTake} />
               </Stack>
             </Grid.Col>
@@ -248,7 +253,7 @@ export function SourcesTab() {
 /* one field of a source: an empty text removes the key, lists are one line each */
 function SourceField({ obj, field, onChange }: { obj: Record<string, any>; field: string; onChange: () => void }) {
   if (field === 'until_released') {
-    return <Checkbox checked={!!obj[field]} label="until released"
+    return <Checkbox checked={!!obj[field]} label={t('until released')}
       onChange={e => { if (e.currentTarget.checked) obj[field] = true; else delete obj[field]; onChange(); }} />;
   }
   if (field === 'files' || field === 'paths' || field === 'query') {
@@ -264,21 +269,21 @@ function FetchBox({ f, busy, onApply, onDrop }: { f: any; busy: boolean; onApply
   return (
     <Paper withBorder radius="md" p="md">
       <Stack gap="xs">
-        <Text fw={700}>Fetched into <Code>{f.id}</Code></Text>
+        <Text fw={700}>{rich(t('Fetched into `{id}`', { id: f.id }))}</Text>
         {moved.length
-          ? moved.map((s: any) => <Text key={s.name} size="sm"><Code>{s.name}</Code>: {s.before || '(none)'} → {s.after || s.note || '(none)'}</Text>)
-          : <Text size="sm" c="dimmed">No source moved.</Text>}
+          ? moved.map((s: any) => <Text key={s.name} size="sm"><Code>{s.name}</Code>: {s.before || t('(none)')} → {s.after || s.note || t('(none)')}</Text>)
+          : <Text size="sm" c="dimmed">{t('No source changed.')}</Text>}
         {(f.lists || []).length > 0 && (
           <Accordion variant="contained" multiple>
             {(f.lists || []).map((l: any) => (
               <Accordion.Item key={l.list} value={l.list}>
-                <Accordion.Control>{l.list}: {l.before} → {l.after} entries ({l.added.length} new, {l.gone.length} gone, {l.renamed.length} renamed, {l.redefined.length} defined anew)</Accordion.Control>
+                <Accordion.Control>{t('{list}: {before} → {after} entries ({added} new, {gone} gone, {renamed} renamed, {redefined} with a new definition)', { list: l.list, before: l.before, after: l.after, added: l.added.length, gone: l.gone.length, renamed: l.renamed.length, redefined: l.redefined.length })}</Accordion.Control>
                 <Accordion.Panel>
                   <Stack gap={2}>
                     {l.added.map((x: any) => <Text size="sm" key={'a' + x.id}>+ <Code>{x.id}</Code> {x.label || ''}</Text>)}
                     {l.gone.map((x: any) => <Text size="sm" key={'g' + x.id}>− <Code>{x.id}</Code> {x.label || ''}</Text>)}
                     {l.renamed.map((x: any) => <Text size="sm" key={'r' + x.id}><Code>{x.id}</Code>: {x.from} → {x.to}</Text>)}
-                    {l.redefined.map((x: any) => <Text size="sm" key={'d' + x.id}><Code>{x.id}</Code> ({x.label || ''}) defined anew</Text>)}
+                    {l.redefined.map((x: any) => <Text size="sm" key={'d' + x.id}><Put text={t('{id} ({label}) has a new definition')} slots={{ id: <Code>{x.id}</Code>, label: x.label || '' }} /></Text>)}
                   </Stack>
                 </Accordion.Panel>
               </Accordion.Item>
@@ -286,13 +291,13 @@ function FetchBox({ f, busy, onApply, onDrop }: { f: any; busy: boolean; onApply
           </Accordion>
         )}
         {(f.files || []).filter((x: any) => x.changed).map((x: any) => (
-          <Text size="sm" key={x.file}><Code>{x.file}</Code>{x.entries ? ': ' + x.entries.before + ' → ' + x.entries.after + ' entries' : ': changed'}</Text>
+          <Text size="sm" key={x.file}><Put text={x.entries ? t('{file}: {before} → {after} entries') : t('{file}: changed')} slots={{ file: <Code>{x.file}</Code>, before: x.entries ? x.entries.before : '', after: x.entries ? x.entries.after : '' }} /></Text>
         ))}
         <Group gap="xs">
-          <Tooltip label="Write the lists into the profile and the lock into the cache; the spec stays">
-            <Button disabled={busy} onClick={onApply}>Apply</Button>
+          <Tooltip label={t('Writes the lists of this fetch into the profile and its lock into the cache. The Spec stays as it is.')}>
+            <Button disabled={busy} onClick={onApply}>{t('Apply')}</Button>
           </Tooltip>
-          <Button variant="default" onClick={onDrop}>Drop this fetch</Button>
+          <Button variant="default" onClick={onDrop}>{t('Drop this fetch')}</Button>
         </Group>
       </Stack>
     </Paper>
@@ -302,8 +307,8 @@ function FetchBox({ f, busy, onApply, onDrop }: { f: any; busy: boolean; onApply
 function Differences({ D, picks, pick, onTake }: {
   D: any; picks: Map<string, Pick>; pick: (id: string, action: string | null, into?: string) => void; onTake: () => void;
 }) {
-  if (!D) return <Text size="sm" c="dimmed">No spec to compare.</Text>;
-  if (D.skipped) return <Text size="sm" c="dimmed">Not compared: {D.skipped}</Text>;
+  if (!D) return <Text size="sm" c="dimmed">{t('No spec to compare.')}</Text>;
+  if (D.skipped) return <Text size="sm" c="dimmed">{t('Not compared: {why}', { why: tr(D.skipped) })}</Text>;
   const targets: { into: string; label: string }[] = D.targets || [];
   const openFields = D.fields.filter((f: any) => f.rows.some((r: any) => (r.actions || []).length)).map((f: any) => f.field);
   return (
@@ -311,7 +316,7 @@ function Differences({ D, picks, pick, onTake }: {
       <Accordion multiple variant="separated" radius="md" defaultValue={[...openFields, ...(D.unasked.length ? ['__unasked'] : [])]}>
         {D.fields.map((f: any) => (
           <Accordion.Item key={f.field} value={f.field}>
-            <Accordion.Control><Code>{f.field}</Code> {plural(f.rows.length, 'difference')}</Accordion.Control>
+            <Accordion.Control><Code>{f.field}</Code> {tn(f.rows.length, '{n} difference', '{n} differences')}</Accordion.Control>
             <Accordion.Panel>
               <Stack gap="sm">{f.rows.map((r: any, i: number) => <DiffRow key={i} r={r} picks={picks} pick={pick} />)}</Stack>
             </Accordion.Panel>
@@ -319,7 +324,7 @@ function Differences({ D, picks, pick, onTake }: {
         ))}
         {D.unasked.length ? (
           <Accordion.Item value="__unasked">
-            <Accordion.Control>Properties of the shapes no field asks ({D.unasked.length})</Accordion.Control>
+            <Accordion.Control>{t('Properties of the shapes that no field asks for ({n})', { n: D.unasked.length })}</Accordion.Control>
             <Accordion.Panel>
               <Stack gap="sm">{D.unasked.map((r: any) => <UnaskedRow key={r.id} r={r} targets={targets} pick={pick} />)}</Stack>
             </Accordion.Panel>
@@ -327,8 +332,8 @@ function Differences({ D, picks, pick, onTake }: {
         ) : null}
       </Accordion>
       <Group gap="sm">
-        <Button disabled={!picks.size} onClick={onTake}>Take into the spec</Button>
-        <Text size="sm" c="dimmed">The spec is changed in the Spec tab, where it is checked and saved with what it costs.</Text>
+        <Button disabled={!picks.size} onClick={onTake}>{t('Take into the spec')}</Button>
+        <Text size="sm" c="dimmed">{t('The Spec is not changed here. Rows you take over are applied in the Spec tab, where they are checked and saved and where the cost of the change is shown.')}</Text>
       </Group>
     </Stack>
   );
@@ -341,23 +346,23 @@ function DiffRow({ r, picks, pick }: { r: any; picks: Map<string, Pick>; pick: (
         <Badge variant="light" color="gray">{r.kind}</Badge>
         {r.axis ? <Badge variant="light" color="gray">{r.axis}</Badge> : null}
         <Code>{r.path || ''}</Code>
-        <Text size="sm">{r.detail}</Text>
+        <Text size="sm">{rich(tr(r.detail))}</Text>
       </Group>
       {(r.entries || []).length > 0 && (
         <Stack gap={4} pl="md">
           {r.entries.map((e: any) => (
-            <Tooltip key={e.id} label={e.definition || e.why || ''} disabled={!(e.definition || e.why)} multiline maw={420}>
+            <Tooltip key={e.id} label={e.definition || (e.why ? tr(e.why) : '')} disabled={!(e.definition || e.why)} multiline maw={420}>
               <Checkbox disabled={!e.takes} checked={picks.has(e.id)} onChange={c => pick(e.id, c.currentTarget.checked ? 'add' : null)}
-                label={<><Code>{shortId(e.iri)}</Code> {e.label || '(the pinned ontology does not carry it)'}</>} />
+                label={<><Code>{shortId(e.iri)}</Code> {e.label || t('(not in the pinned ontology)')}</>} />
             </Tooltip>
           ))}
         </Stack>
       )}
       {r.kind && r.kind.startsWith('definition_') && (
         <Stack gap={4} pl="md">
-          <Checkbox checked={picks.has(r.id)} onChange={c => pick(r.id, c.currentTarget.checked ? 'replace' : null)} label="take the ontology's definition" />
-          <Text size="sm" c="dimmed">spec: {r.spec || '(none)'}</Text>
-          <Text size="sm" c="dimmed">ontology: {r.ontology || ''}</Text>
+          <Checkbox checked={picks.has(r.id)} onChange={c => pick(r.id, c.currentTarget.checked ? 'replace' : null)} label={t('take the ontology\'s definition')} />
+          <Text size="sm" c="dimmed">{t('spec: {text}', { text: r.spec || t('(none)') })}</Text>
+          <Text size="sm" c="dimmed">{t('ontology: {text}', { text: r.ontology || '' })}</Text>
         </Stack>
       )}
     </Stack>
@@ -370,12 +375,12 @@ function UnaskedRow({ r, targets, pick }: { r: any; targets: { into: string; lab
   const set = (a: string, i: string) => pick(r.id, a || null, a === 'merge' ? i : undefined);
   return (
     <Stack gap={4}>
-      <Group gap={6}><Code>{r.shape + '.' + r.path}</Code><Text size="sm" c="dimmed">{r.detail}</Text></Group>
+      <Group gap={6}><Code>{r.shape + '.' + r.path}</Code><Text size="sm" c="dimmed">{rich(tr(r.detail))}</Text></Group>
       <Group gap="xs">
         <NativeSelect value={act} onChange={e => { setAct(e.currentTarget.value); set(e.currentTarget.value, into); }}
-          data={[{ value: '', label: '—' }, { value: 'new_field', label: 'new field (draft)' }, { value: 'merge', label: 'write a field under it as well' }]} />
+          data={[{ value: '', label: '—' }, { value: 'new_field', label: t('new field (draft)') }, { value: 'merge', label: t('also write a field under it') }]} />
         {act === 'merge' && (
-          <NativeSelect value={into} title="The value written under this property as well: a field, its unit or an axis of it"
+          <NativeSelect value={into} title={t('Chooses what is also written under this property: a field, the unit of a field or a dimension of a field.')}
             onChange={e => { setInto(e.currentTarget.value); set(act, e.currentTarget.value); }}
             data={targets.map(x => ({ value: x.into, label: x.label }))} />
         )}

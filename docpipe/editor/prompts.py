@@ -39,8 +39,9 @@ from . import sentences as by_sentence
 from . import specs
 
 # What a changed prompt costs a harvest (rule of 2026-09-10).
-NO_STALE = ("A changed prompt makes no harvest stale: a stamp rests on the "
-            "questions of the spec alone.")
+NO_STALE = ("A changed prompt leaves the harvests that are already written "
+            "valid. Only a change of the questions in the Spec tab makes a "
+            "document be read again.")
 # The requests whose instruction is the part of the prompt their message
 # carries (`runner.request_prompt`), and those sent the prompt whole.
 CUT = ("find", "docfield", "coord", "list", "names", "search", "check",

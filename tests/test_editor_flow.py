@@ -79,7 +79,7 @@ def number_of(shown: dict, name: str) -> dict:
     return next(n for n in shown["numbers"] if n["name"] == name)
 
 
-# -- the drawing ---------------------------------------------------------------------
+# -- the drawing --------------------------------------------------------------
 
 def test_a_number_says_what_the_files_say_and_where_it_comes_from(
         profile, monkeypatch):
@@ -134,11 +134,14 @@ def test_a_box_no_run_of_the_profile_takes_says_why():
     # the failures by construction: the prompt is written and the spec or
     # the profile does not ask for the box
     assert view(kwp, computes=False)["never"]["compute"] \
-        == "this profile computes nothing"
+        == ("This profile computes nothing, so the step never takes "
+            "part in a run.")
     bare = copy.deepcopy(SPEC["scenarios"])
     del bare["works"]
     assert view(scenarios, bare)["never"]["works"] \
-        == "the spec keeps no list of other works"
+        == ("The spec keeps no list of other works, so every value belongs "
+            "to this publication. To change it: add the works in the Spec "
+            "tab.")
 
 
 def test_a_switch_lists_what_the_spec_says_and_leads_into_it():
@@ -169,14 +172,14 @@ def test_the_rule_for_a_pass_over_a_stored_harvest_stands_below_the_drawing():
     notes = view(load_profile("kwp"))["notes"]
     assert [note["to"] for note in notes] == [
         {"t": "plan", "key": "base_year"}, {"t": "plan", "key": "target_year"}]
-    assert "scenario is status_quo" in notes[0]["says"]
-    assert "scenario is target" in notes[1]["says"]
+    assert "scenario = status_quo" in notes[0]["says"]
+    assert "scenario = target" in notes[1]["says"]
     assert all("--top-up" in note["says"] for note in notes)
     # the failure by construction: a spec that says no such rule has no note
     assert view(load_profile("scenarios"))["notes"] == []
 
 
-# -- check and save ------------------------------------------------------------------
+# -- check and save -----------------------------------------------------------
 
 def test_a_save_writes_only_what_differs_from_the_inherited(profile):
     report = flow_view.judge(profile, None,
@@ -345,7 +348,7 @@ def test_the_whole_file_keeps_its_drawing_and_changes_one_line(tmp_path):
                                   for n in shown["numbers"])
 
 
-# -- the server ------------------------------------------------------------------------
+# -- the server ---------------------------------------------------------------
 
 def make_app(tmp_path, profile, harvest=None) -> server.App:
     root = tmp_path / "repo"
@@ -436,7 +439,7 @@ def test_no_key_and_no_token_is_shown_or_written(tmp_path, profile,
     assert not told["saved"] and not own_file(profile).exists()
 
 
-# -- what the traces say ---------------------------------------------------------------
+# -- what the traces say ------------------------------------------------------
 
 def search(value: str, *asked) -> list:
     """The requests of one value's search: (pieces shown, what they are or
@@ -474,23 +477,26 @@ def test_a_budget_is_measured_by_the_places_that_came_after_it():
         (4, True), (36, True), (51, True), (5, False)]
     said = measured.says(found, {"search_pieces": 35,
                                  "search_per_request": 5})
-    (budget,), (per_request,) = said["search_pieces"], \
+    (searched, budget), (per_request,) = said["search_pieces"], \
         said["search_per_request"]
-    assert "Of 4 searches for an open coordinate, 3 ended with an answer " \
-           "that names a place and 1 without one." in budget
-    assert "after 4 to 51 shown pieces of the budget" in budget
-    assert budget.endswith("2 came after more than 35.")
-    assert per_request.startswith("The 4 searches sent 24 requests")
+    assert searched == "Of 4 searches for an open dimension, 3 ended with " \
+        "an answer that gives a line number and 1 without one."
+    assert budget == "Those answers came after 4 to 51 shown chunks of " \
+        "the budget, half of them within 36, 2 of them only after more " \
+        "than 35."
+    assert per_request == "The 4 searches sent 24 requests, 6.0 each on " \
+        "average."
     assert measured.notes(found) == []
     # the failure by construction: a trace that does not say which pieces
     # count has every piece counted, and says so
     found = measured.facts(searches(noted=False))
     assert [s["after"] for s in found["searches"]] == [6, 39, 51, 7]
-    (budget,) = measured.says(found, {"search_pieces": 35,
-                                      "search_per_request": 5})[
+    (_, budget) = measured.says(found, {"search_pieces": 35,
+                                        "search_per_request": 5})[
         "search_pieces"]
-    assert "after 6 to 51 shown pieces," in budget
-    assert len(measured.notes(found)) == 1
+    assert budget.startswith("Those answers came after 6 to 51 shown "
+                             "chunks, half")
+    assert measured.notes(found) == [measured.NOT_NOTED]
 
 
 def test_replies_are_measured_by_the_attempt_they_were_read_at():
@@ -502,10 +508,12 @@ def test_replies_are_measured_by_the_attempt_they_were_read_at():
     found = measured.facts(asked)
     assert found["read"] == {1: 2, 2: 1, 3: 1}
     assert found["unreadable"] == {"syntax": 1}
-    (said,) = measured.says(found, {"replies": 2})["replies"]
-    assert "4 replies were read: 2 at attempt 1, 1 at attempt 2, 1 at " \
-           "attempt 3; 1 only after more than 2 attempts." in said
-    assert "1 reply could not be read (syntax 1)." in said
+    (said, lost) = measured.says(found, {"replies": 2})["replies"]
+    assert said == "4 replies were read, 1 of them only after more than 2 " \
+        "attempts. Attempt \u2192 replies read: 1 \u2192 2; 2 \u2192 1; " \
+        "3 \u2192 1."
+    # a cause is named as code, as the request log names it
+    assert lost == "1 reply could not be read, by cause: `syntax` 1."
     # the failure by construction: a number that is none says nothing
     assert measured.says(found, {"replies": ""}) == {}
 
@@ -621,8 +629,8 @@ def test_the_page_is_told_what_was_measured_and_why_not(tmp_path, profile,
                                                     "trace": None})
     assert (status, told["harvest"], told["why"], told["traces"],
             told["requests"]) == (200, True, None, 1, 8)
-    assert told["says"]["search_pieces"][0].endswith(
-        "1 came after more than 4.")
+    assert told["says"]["search_pieces"][1].endswith(
+        "1 of them only after more than 4.")
     assert set(told["says"]) <= {number.name for number in flow.NUMBERS}
     assert told["steps"]["finds"] == 2
     # asked for by name it is the same trace; one that is not there is not
@@ -633,9 +641,10 @@ def test_the_page_is_told_what_was_measured_and_why_not(tmp_path, profile,
     # the failures by construction: no harvest, and a harvest without a trace
     bare = make_app(tmp_path, profile)
     assert post(bare, "/api/flow/measured", {"numbers": numbers})[1] == {
-        "harvest": False, "why": "no harvest folder was given (--harvest)",
+        "harvest": False, "why": "No harvest folder was given to the page "
+        "(--harvest), so there is no request log to show.",
         "traces": 0, "requests": 0, "says": {}, "steps": {}, "notes": []}
     (tmp_path / "empty").mkdir()
     told = post(make_app(tmp_path, profile, tmp_path / "empty"),
                 "/api/flow/measured", {"numbers": numbers})[1]
-    assert told["harvest"] and "holds no trace" in told["why"]
+    assert told["harvest"] and "holds no request log" in told["why"]

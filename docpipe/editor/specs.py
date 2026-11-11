@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import copy
 import difflib
-import inspect
 import json
 import re
 from pathlib import Path
@@ -748,143 +747,299 @@ def terms(snapshot: dict, query: str, limit: int = 50) -> dict:
     return {"terms": found[:max(1, int(limit))], "total": len(found)}
 
 
-# -- the form: the fields `spec.py` knows, with its comments -------------------
+# -- the form: the keys `spec.py` reads, each with what the page says of it ---
 
-def _comments(cls) -> dict:
-    """{field: the comment the code writes at it} of a dataclass of
-    `spec.py`: the comment lines above a field and the one behind it."""
-    out: dict = {}
-    pending: list = []
-    for line in inspect.getsource(cls).splitlines():
-        text = line.strip()
-        if text.startswith("#"):
-            pending.append(text.lstrip("#").strip())
-            continue
-        match = re.match(r"^    (\w+): [^#]*?(?:#\s*(.*))?$", line)
-        if match:
-            words = pending + ([match.group(2)] if match.group(2) else [])
-            if words:
-                out[match.group(1)] = " ".join(w for w in words if w)
-        pending = []
-    return out
-
-
-# What the form says of a key the dataclasses leave without a comment.
-_OWN_HELP = {
-    ("parameter", "uri"): "The key of the field: it names the field in "
-                          "every stamp and in every row of a harvest.",
-    ("parameter", "label"): "The name of the field as a request shows it.",
-    ("parameter", "description"): "What a value of this field is, in the "
-                                  "ontology's words: the definition a "
-                                  "request shows (at least 8 words).",
-    ("parameter", "value_type"): "What a value is: a number (float, int), "
-                                 "the document's own words (text) or an "
-                                 "entry of a list (category).",
-    ("parameter", "unit_target"): "The unit every value of a numeric field "
-                                  "is converted onto.",
-    ("parameter", "units_accepted"): "The units a number of this field may "
-                                     "be printed in, each with its factor "
-                                     "onto the target unit.",
-    ("parameter", "example"): "A real passage of a document and the values "
-                              "it states: the example a request shows and "
-                              "the run's golden test.",
-    ("axis", "required"): "Whether a value without this coordinate is "
-                          "refused.",
-    ("entry", "label"): "The name of the entry: what the model is offered "
-                        "and answers with.",
-    ("entry", "spellings"): "Other ways a document writes this entry; a "
-                            "stored wording is mapped onto the entry by "
-                            "them.",
-    ("unit", "factor"): "The factor onto the field's target unit.",
-    ("spec", "_comment"): "A note for people; no request shows it and no "
-                          "stamp depends on it.",
-    ("group", "coordinates"): "The coordinates of this group; each "
-                              "coordinate of the spec is in exactly one "
-                              "group.",
-    ("group", "read_in"): "The step that reads the group.",
-    ("plan_field", "name"): "The name a request shows for it.",
-    ("plan_field", "means"): "What it is, as a request shows it.",
-    ("plan_field", "sentence"): "A sentence in the document's form, which "
-                                "the pieces it is asked over are found "
-                                "with.",
-    ("plan_field", "of"): "Which values of the document are of this state "
-                          "of it: a coordinate of a group's pair and the "
-                          "entry of its list. Read only by a pass over a "
-                          "stored harvest (--top-up, --top-up-open), which "
-                          "takes this year from the stored values; a run "
-                          "that reads a document asks it the year and does "
-                          "not read this.",
-    ("works", "name"): "The name a request shows for another work.",
-    ("works", "means"): "What counts as another work, as a request shows "
-                        "it.",
-    ("works", "fields"): "What is asked at the line of a new work: field "
-                         "-> the question.",
+# What the form says of each key, for someone who edits the spec, not the
+# code: the comments at the fields of `spec.py` are written for the code.
+HELP = {
+    ("spec", "_comment"): (
+        "A note for the people who edit the spec. No request shows it and "
+        "no stamp depends on it, so changing it costs nothing. Empty: "
+        "there is no note."),
+    ("spec", "parameter_question"): (
+        "The line of the request that asks which field a value belongs to. "
+        "Every request that finds a value shows it beside the list of "
+        "fields. It must not be empty, because without it the run cannot "
+        "tell the fields apart. Changing it changes how every value is "
+        "assigned."),
+    ("spec", "unit_question"): (
+        "The line of the request that asks in which of a field's accepted "
+        "units a number is printed. It is shown with the units of every "
+        "field of numbers. It must not be empty as soon as the spec has a "
+        "field of numbers; without such a field it is not used."),
+    ("group", "coordinates"): (
+        "The dimensions this group reads together. Every dimension of the "
+        "spec belongs to exactly one group, so adding a dimension to this "
+        "group takes it out of another. A dimension that is in no group "
+        "makes the spec invalid."),
+    ("group", "where"): (
+        "Where a document prints the dimensions of this group, in the "
+        "words the requests show. The model looks there for them. It must "
+        "not be empty."),
+    ("group", "read_in"): (
+        "The step of the flow that reads this group. The only choice is "
+        "reading: every value of the group is read by its own request, "
+        "and each dimension is answered and quoted for itself."),
+    ("group", "definition"): (
+        "Which description of a field the requests of this group show. "
+        "Brief: the short description (the key `brief` of the field). "
+        "Full: the field's whole definition, which a group needs when it "
+        "tells values apart by every distinction the definition makes."),
+    ("group", "own_passage"): (
+        "The dimensions of this group that are stated only where the value "
+        "stands, such as what a number counts. They are asked again with "
+        "the lines around the value and are never searched for elsewhere in "
+        "the document. Empty: no dimension is read this way. A dimension "
+        "cannot be here and in `own_value`."),
+    ("group", "own_value"): (
+        "The dimensions of this group that are printed with the number "
+        "itself, such as \"ca.\" or \"bis zu\". They are read once with the "
+        "value and never asked again; \"not stated\" is then the answer "
+        "that nothing qualifies the number. Empty: no dimension is read "
+        "this way. A dimension cannot be here and in `own_passage`."),
+    ("group", "pair"): (
+        "The dimensions that make up the pair of a value, normally its "
+        "scenario and its year. The document's base and target years refer "
+        "to this pair, and every value is asked its own scenario and year. "
+        "Empty: the pair is made of all dimensions of the group."),
+    ("parameter", "uri"): (
+        "The key of the field. It names the field in every stamp and in "
+        "every row of a harvest, so changing it makes the harvests that "
+        "name the old key stale."),
+    ("parameter", "label"): (
+        "The name of the field as a request shows it to the model. A "
+        "clear name helps the model assign a value to the right field."),
+    ("parameter", "description"): (
+        "What a value of this field is, in the words of the ontology. "
+        "This is the definition that requests show where the short "
+        "description is not used. It needs at least as many words as "
+        "the rule `description_least_words` says, or the Spec is "
+        "refused."),
+    ("parameter", "brief"): (
+        "What a value of this field is, in one paragraph. Most requests "
+        "show this short description instead of the full definition. "
+        "Empty: the requests show the full description. A group whose "
+        "`definition` is Full always shows the full description."),
+    ("parameter", "value_type"): (
+        "What a value of this field is. float and int are numbers, with "
+        "or without decimals, and need a target unit and accepted units. "
+        "text is the document's own words. category is one entry of a "
+        "list, which the model must choose from."),
+    ("parameter", "once_per_document"): (
+        "Checked: the field is asked once per document, with the title page "
+        "and the chunks a search finds best for it. Use this for a field a "
+        "document states once, such as its title, its authors or its "
+        "organisation. Not checked: the field is asked in every chunk, "
+        "which finds every value but costs a request per chunk."),
+    ("parameter", "takes_group"): (
+        "Checked: a value stated for a group (\"all scenarios\") becomes "
+        "one row for each member the document names. Use this for years, "
+        "regions and types. Not checked: the words of the group stay as "
+        "they stand, as is right for a description. Unset: the rule "
+        "`default_takes_group` decides."),
+    ("parameter", "merged"): (
+        "For a field of free text that is the name the document gives "
+        "something, such as a scenario: the names that mean the same thing "
+        "become one entry of the document's list. The text of this key is "
+        "the kind of thing that is named. Empty: the field is not a name "
+        "and builds no list."),
+    ("parameter", "vocabulary_dynamic"): (
+        "Checked: the list of this field is closed but differs from "
+        "document to document, so the profile fills it in before the "
+        "harvest. Not checked: the list is the one written in the spec."),
+    ("parameter", "unit_target"): (
+        "The unit that every value of this field of numbers is converted "
+        "into. Each accepted unit says by which factor it converts. A "
+        "field of numbers needs a target unit; a field of another type "
+        "has none."),
+    ("parameter", "integrated"): (
+        "Checked: the unit is an amount over a period, such as a "
+        "consumption in MWh/a, and a number printed without its period is "
+        "flagged as having left something out. Not checked: the unit is "
+        "a rate, such as a power in MW, which has no period to leave "
+        "out. A checked field needs `names_period` on every unit."),
+    ("parameter", "units_accepted"): (
+        "The units in which a number of this field may be printed, each "
+        "with its factor for converting into the target unit. The model "
+        "chooses one of these entries for every number, with the quote "
+        "that shows the unit."),
+    ("parameter", "example"): (
+        "A real passage of a document with the values it states. Requests "
+        "for this field show it as their example, and the run's golden "
+        "test uses it. Every field needs one."),
+    ("parameter", "kg"): (
+        "What a value of this field becomes in the graph: which node, "
+        "which class, and which property carries the number and which "
+        "the unit. The graph and the page's Graph tab read it."),
+    ("axis", "question"): (
+        "The one line that a request asks for this dimension. Each "
+        "dimension is asked in a line of its own, so the model cannot skip "
+        "it among others."),
+    ("axis", "required"): (
+        "Checked: a value without this dimension is refused. Not "
+        "checked: the value is kept without this dimension."),
+    ("axis", "several"): (
+        "Checked: a value that the document states for several entries "
+        "of the list becomes one row for each entry, so \"Fernwärme + "
+        "Gas-NT\" is read once for Fernwärme and once for Gas. Not "
+        "checked: such a value gets one entry only."),
+    ("axis", "merged"): (
+        "For a dimension of free text that is the name the document gives "
+        "something, such as a scenario: a value stated for several names "
+        "becomes one row per name. Which names mean the same thing is "
+        "asked while the document is read. Empty: the dimension is an "
+        "ordinary one."),
+    ("axis", "keep"): (
+        "The entry of this dimension's list that a value must have to "
+        "count as a value of its field, such as \"scenario year\" for a "
+        "year or \"this publication\" for an author. Only a value read "
+        "with this entry goes into the graph; a value read with another "
+        "entry, or whose entry stayed open, stays in the harvest only. A "
+        "step with the condition \"follows a dimension that found the "
+        "value does not belong to its field\" stops asking such a value "
+        "further. Empty: every entry counts."),
+    ("axis", "derive"): (
+        "Decides this dimension without asking: its entry follows from "
+        "the unit the number is printed in. No request asks for it. "
+        "Use this only for a dimension that every accepted unit "
+        "fixes. Empty: the dimension is asked."),
+    ("axis", "kg"): (
+        "What this dimension becomes in the graph: the type of the "
+        "node, a property, a parent or a comment. The graph and the "
+        "Graph tab read it."),
+    ("entry", "label"): (
+        "The name of the entry. This is what the model is offered in the "
+        "list and answers with, so it should be the name a reader would "
+        "give the entry."),
+    ("entry", "spellings"): (
+        "Other ways in which a document writes this entry. A stored "
+        "wording is mapped onto the entry by them. Empty: only the "
+        "label is known."),
+    ("entry", "definition"): (
+        "What the ontology says that the entry means, in one sentence. "
+        "A request shows it with the list as long as the list is not "
+        "longer than the number `list_meanings` of the flow. Empty: the "
+        "entry is shown by its name."),
+    ("entry", "gloss"): (
+        "One line in the language of the profile that says what the entry "
+        "means. It is shown instead of the definition and written once by "
+        "the model from the definition. Empty: the definition is shown."),
+    ("entry", "group"): (
+        "The group the entry belongs to. A list longer than the number "
+        "`list_meanings` of the flow is asked in two steps, first the "
+        "group, then the entry. Empty: the entry is in no group, and its "
+        "list is asked in one step."),
+    ("unit", "factor"): (
+        "The factor by which a number in this unit is multiplied to give "
+        "the field's target unit, so 1 means that the unit is the target "
+        "unit itself."),
+    ("unit", "names_period"): (
+        "Checked: the unit names a period, such as \"MWh/a\" or \"t per "
+        "year\". Not checked: it is a plain amount, such as \"MWh\". "
+        "Every unit of a field whose `integrated` is checked must say "
+        "which of the two it is."),
+    ("unit", "target"): (
+        "The unit this unit converts into where that is not the field's "
+        "target unit, such as an emission factor in g CO2/kWh, which has "
+        "no factor onto tonnes. A unit the ontology does not know keeps "
+        "the value in the harvest and out of the graph. Empty: the "
+        "field's target unit."),
+    ("plan_field", "name"): (
+        "The name that a request shows for this field of the whole "
+        "document."),
+    ("plan_field", "means"): (
+        "What this field is, as a request shows it. The model reads it to "
+        "know what to look for once for the whole document."),
+    ("plan_field", "sentence"): (
+        "A sentence as the document would print it. The chunks that the "
+        "field is asked over are found with this search sentence, so it "
+        "should sound like the document and not like a question."),
+    ("plan_field", "of"): (
+        "Which stored values have this year: a dimension and an entry of "
+        "its list, such as scenario = status_quo. Only a later run over a "
+        "stored harvest (--top-up, --top-up-open) reads it. A run that "
+        "reads the document asks the model for the year."),
+    ("works", "name"): (
+        "The name that a request shows for another work, such as a study "
+        "or a plan that the document presents, compares or cites."),
+    ("works", "means"): (
+        "What counts as another work, as a request shows it. The model "
+        "uses it to tell a line that speaks of another work from a line "
+        "of this publication."),
+    ("works", "fields"): (
+        "What is asked at the line of a new work: each entry is a field "
+        "and the question that asks it, such as the title or the "
+        "organisation of the work."),
+}
+# What the form says above the two lists that are not fields.
+ABOUT = {
+    "plan_field": (
+        "Fields of the whole document hold for all its values, such as its "
+        "settings, its base year and its target year. Each is asked once "
+        "per document, not once per value. Add one here to have the run "
+        "read another such fact."),
+    "works": (
+        "The other works a document presents, compares, reviews or cites. "
+        "A value can belong to one of them instead of to this publication. "
+        "What counts as a work and what is asked about a new one is set "
+        "here."),
 }
 
-# kind -> (key, widget, the dataclass field its comment stands at, extras)
+# kind -> (key, widget, extras)
 _FORM = {
-    "spec": [("_comment", "lines", None, {}),
-             ("parameter_question", "text", "parameter_question", {}),
-             ("unit_question", "text", "unit_question", {})],
-    "group": [("coordinates", "strings", "coordinates", {}),
-              ("where", "text", "where", {}),
-              ("read_in", "choice", "read_in",
-               {"choices": list(spec_module.READ_IN)}),
-              ("definition", "choice", "full_definition",
+    "spec": [("_comment", "lines", {}),
+             ("parameter_question", "text", {}),
+             ("unit_question", "text", {})],
+    "group": [("coordinates", "strings", {}),
+              ("where", "text", {}),
+              ("read_in", "choice", {"choices": list(spec_module.READ_IN)}),
+              ("definition", "choice",
                {"choices": list(spec_module.DEFINITIONS),
                 "default": "brief"}),
-              ("own_passage", "strings", "own_passage", {}),
-              ("own_value", "strings", "own_value", {}),
-              ("pair", "strings", "pair", {})],
-    "parameter": [("uri", "line", "uri", {}),
-                  ("label", "line", "label", {}),
-                  ("description", "text", "description", {}),
-                  ("brief", "text", "brief", {}),
-                  ("value_type", "choice", "value_type",
+              ("own_passage", "strings", {}),
+              ("own_value", "strings", {}),
+              ("pair", "strings", {})],
+    "parameter": [("uri", "line", {}),
+                  ("label", "line", {}),
+                  ("description", "text", {}),
+                  ("brief", "text", {}),
+                  ("value_type", "choice",
                    {"choices": list(spec_module.VALUE_TYPES),
                     "default": "float"}),
-                  ("once_per_document", "bool", "once_per_document",
-                   {"default": False}),
-                  ("takes_group", "bool", "takes_group",
+                  ("once_per_document", "bool", {"default": False}),
+                  ("takes_group", "bool",
                    {"default_rule": "default_takes_group"}),
-                  ("merged", "line", "merged", {}),
-                  ("vocabulary_dynamic", "bool", "vocabulary_dynamic",
-                   {"default": False}),
-                  ("unit_target", "line", "unit_target", {}),
-                  ("integrated", "bool", "integrated", {"default": True}),
-                  ("units_accepted", "units", "units_accepted", {}),
-                  ("example", "example", "example", {}),
-                  ("kg", "kg", "kg", {"of": "field"})],
-    "axis": [("question", "text", "question", {}),
-             ("required", "bool", "required", {"default": False}),
-             ("several", "bool", "several", {"default": False}),
-             ("merged", "line", "merged", {}),
-             ("keep", "line", "keep", {}),
-             ("derive", "derive", "derive", {}),
-             ("kg", "kg", "kg", {"of": "axis"})],
-    "entry": [("label", "line", None, {}),
-              ("spellings", "strings", None, {}),
-              ("definition", "text", "definitions", {}),
-              ("gloss", "text", "glosses", {}),
-              ("group", "line", "groups", {})],
-    "unit": [("factor", "number", None, {}),
-             ("names_period", "bool", "unit_names_period", {}),
-             ("target", "line", "unit_targets", {})],
-    "plan_field": [("name", "line", None, {}),
-                   ("means", "text", None, {}),
-                   ("sentence", "text", None, {}),
-                   ("of", "entry_of", None,
+                  ("merged", "line", {}),
+                  ("vocabulary_dynamic", "bool", {"default": False}),
+                  ("unit_target", "line", {}),
+                  ("integrated", "bool", {"default": True}),
+                  ("units_accepted", "units", {}),
+                  ("example", "example", {}),
+                  ("kg", "kg", {"of": "field"})],
+    "axis": [("question", "text", {}),
+             ("required", "bool", {"default": False}),
+             ("several", "bool", {"default": False}),
+             ("merged", "line", {}),
+             ("keep", "line", {}),
+             ("derive", "derive", {}),
+             ("kg", "kg", {"of": "axis"})],
+    "entry": [("label", "line", {}),
+              ("spellings", "strings", {}),
+              ("definition", "text", {}),
+              ("gloss", "text", {}),
+              ("group", "line", {})],
+    "unit": [("factor", "number", {}),
+             ("names_period", "bool", {}),
+             ("target", "line", {})],
+    "plan_field": [("name", "line", {}),
+                   ("means", "text", {}),
+                   ("sentence", "text", {}),
+                   ("of", "entry_of",
                     {"only": list(spec_module.YEAR_FIELDS)})],
-    "works": [("name", "line", None, {}),
-              ("means", "text", None, {}),
-              ("fields", "questions", None, {})],
+    "works": [("name", "line", {}),
+              ("means", "text", {}),
+              ("fields", "questions", {})],
 }
-
-# Where the comment of a form's keys stands in `spec.py`.
-_SOURCE = {"spec": spec_module.Spec, "group": spec_module.Group,
-           "parameter": spec_module.Parameter, "axis": spec_module.Axis,
-           "entry": spec_module.Axis, "unit": spec_module.Parameter,
-           "plan_field": spec_module.Spec, "works": spec_module.Spec}
 
 
 def kg_keys(profile=None) -> dict:
@@ -910,23 +1065,20 @@ def kg_keys(profile=None) -> dict:
 
 def form(profile=None) -> dict:
     """The form of each kind of node, {kind: [{"key", "widget", "help",
-    ...}]}: the keys `spec.py` reads, each with the comment the code writes
-    at its field. A key that is not here is one the form does not know; the
+    ...}]}: the keys `spec.py` reads, each with what the page says of it
+    (`HELP`). A key that is not here is one the form does not know; the
     page leaves it in the file as it is."""
     out: dict = {}
     for kind, fields in _FORM.items():
-        comments = _comments(_SOURCE[kind])
         out[kind] = []
-        for key, widget, attribute, extras in fields:
-            said = _OWN_HELP.get((kind, key)) or comments.get(attribute, "")
+        for key, widget, extras in fields:
             extras = dict(extras)
             if "default_rule" in extras:
                 # The default a run takes is a rule's, as the rules say it.
                 extras["default"] = rules.get(extras.pop("default_rule"))
-            out[kind].append({"key": key, "widget": widget, "help": said,
-                              **extras})
-    for kind, attribute in (("plan_field", "plan_fields"),
-                            ("works", "works")):
-        out[kind][0]["about"] = _comments(spec_module.Spec).get(attribute, "")
+            out[kind].append({"key": key, "widget": widget,
+                              "help": HELP.get((kind, key), ""), **extras})
+    for kind, said in ABOUT.items():
+        out[kind][0]["about"] = said
     out["kg_keys"] = kg_keys(profile)
     return out
