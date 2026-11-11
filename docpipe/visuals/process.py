@@ -73,6 +73,11 @@ def _assess_table(markdown: str, source_text: str,
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _table_text(reply: dict) -> str:
+    """The Markdown of a table reply, whose `rows` are its lines in order."""
+    return "\n".join(str(row) for row in reply["rows"])
+
+
 def _truncate(text: str, max_len: int = SHOWN_CHARS) -> str:
     """Truncates text with an ellipsis if it exceeds max_len."""
     if len(text) <= max_len:
@@ -175,7 +180,7 @@ def process_table(
                   response.cause)
         return result
 
-    raw_md = response["markdown"]
+    raw_md = _table_text(response)
     passed, metrics = _assess_table(raw_md, source_text, known_words)
 
     if not passed:
@@ -187,7 +192,7 @@ def process_table(
         )
         # A retry that is a hole keeps the first attempt, which was read.
         if not isinstance(retry, Hole):
-            retry_md = retry["markdown"]
+            retry_md = _table_text(retry)
             passed2, metrics2 = _assess_table(retry_md, source_text,
                                               known_words)
             # Keep the better attempt: prefer one that passes, else higher

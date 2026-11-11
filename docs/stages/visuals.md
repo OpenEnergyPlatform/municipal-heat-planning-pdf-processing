@@ -166,6 +166,14 @@ the prompt's own rule. In a header spread over several rows the model writes
 empty filler cells before it has written the row below, and loses that row's
 end until the reply is cut off.
 
+The model answers a table with `rows`, one string per line of the table in
+order (`replies.TABLE`, built from `replies.LINES`), and a `caption`; it writes
+no line break of its own. `_table_text` joins the rows with line breaks into the
+table's Markdown, and everything after it (the check, the `markdown` key of the
+output, the merge) works on that text. A reply whose rows come as one string
+instead of a list is in the wrong shape and is asked again with that cause named
+(see below).
+
 ### A table that continues the table before it
 
 A table the layout cut in parts, over a page break or within a page, used to
@@ -180,7 +188,9 @@ reading takes the same tables by the same rule (see
 it with prompt `visuals/table_continued`: that table's caption and head and
 the text between the two (`BETWEEN_CHARS`), and the reply says whether it
 `continues` it; where it does, its rows are written under that head and it
-gets no caption (`table_continued_reply`). The item keeps `after` (the id of
+gets no caption (`table_continued_reply`). Its reply is `{rows, caption,
+continues}` (`replies.TABLE_CONTINUED`), and the prompt tells the model that the
+head lines shown above are the first rows of the table. The item keeps `after` (the id of
 the table before it) and `continues`. A cached table not asked against its
 current predecessor is asked again. The count of such tables is
 `continued_tables`; the merge in [chunking](chunking.md) joins them.
@@ -228,8 +238,10 @@ reasoning settings (`request_extras`; thinking is off unless
 `LLM_ENABLE_THINKING` is set) so a `<think>` block cannot spend the answer's
 budget, and `tool_choice` none so an agent endpoint does not hand the image to
 a tool of its own. The reply is read as
-exactly one JSON object whose one required key (`markdown`, `description`) is
-text (`reading.read`; see [core](core.md)). Nothing is stripped, cut out,
+exactly one JSON object whose first required key (`rows` for a table, a list
+of strings; `description` for a figure, text) is of the type `reply_type` names
+for the item's schema: a list where the schema holds an array, else text
+(`reading.read`; see [core](core.md)). Nothing is stripped, cut out,
 closed or salvaged, and no second request without a schema fills in for a
 reply that could not be read.
 
@@ -528,8 +540,8 @@ replies.py: The reply each vision request asks for, as a JSON schema.
 The grammar of every request of this stage and of page transcription, on
 every provider (see `docpipe.providers.grammar`). The prompts state the same
 shapes in words; nothing here is a check beyond the required keys, the first
-of which `vision.call_vision` reads as text. The first entry of `required` in
-each schema is that key.
+of which `vision.call_vision` reads as text, or as a list where its schema is
+an array. The first entry of `required` in each schema is that key.
 
 Author: Felix Vossel
 

@@ -269,7 +269,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.visuals.process](docpipe.visuals.process.md): Core processing logic for table and figure enrichment. (2 functions)
 - [docpipe.visuals.qa](docpipe.visuals.qa.md): Quality checks for vision model table extraction. (7 functions)
 - [docpipe.visuals.replies](docpipe.visuals.replies.md): The reply each vision request asks for, as a JSON schema.
-- [docpipe.visuals.vision](docpipe.visuals.vision.md): Vision model interaction layer over an OpenAI compatible API. (3 functions)
+- [docpipe.visuals.vision](docpipe.visuals.vision.md): Vision model interaction layer over an OpenAI compatible API. (4 functions)
 
 ## profiles
 

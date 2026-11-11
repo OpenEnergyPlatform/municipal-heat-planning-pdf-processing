@@ -102,6 +102,16 @@ def _image_data_url(image_path: Path) -> str:
 # Vision chat call
 # ---------------------------------------------------------------------------
 
+_TYPES = {"array": list, "string": str}
+
+
+def reply_type(reply: tuple) -> type:
+    """What the first required key of *reply* (a `replies` entry) has to be
+    in the reply: a list where its schema is an array, else text."""
+    _name, schema = reply
+    return _TYPES[schema["properties"][schema["required"][0]]["type"]]
+
+
 def call_vision(
     client: openai.OpenAI,
     system_prompt: str,
@@ -123,8 +133,8 @@ def call_vision(
     The wall-clock bound per request is the client timeout set by
     create_client(), not *max_retries*. *reply* is the (name, schema) of the
     object asked for (see `replies`): the grammar of every request, and its
-    first required key (the item's `markdown`, `description`) has to be in
-    the reply as text.
+    first required key (a table's `rows`, a figure's `description`) has to be
+    in the reply as what its schema says, a list or text (`reply_type`).
 
     A reply that is not that object is asked again with its cause named, the
     answer echoed back. A reply that was cut off at its token limit is not
@@ -156,6 +166,7 @@ def call_vision(
 
     name, schema = reply
     key = schema["required"][0]
+    of = reply_type(reply)
     shape = providers.grammar(name, schema)
     current_penalty = repetition_penalty
     room = max_tokens
@@ -234,7 +245,7 @@ def call_vision(
             try:
                 usage.reply(response, model)
                 choice = reading.first(response)
-                found, cause, said = reading.read(choice, key=key, of=str)
+                found, cause, said = reading.read(choice, key=key, of=of)
                 if not cause:
                     return found
             except Exception as e:

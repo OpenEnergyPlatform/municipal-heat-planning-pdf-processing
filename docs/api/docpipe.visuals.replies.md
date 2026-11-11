@@ -7,8 +7,8 @@ replies.py: The reply each vision request asks for, as a JSON schema.
 The grammar of every request of this stage and of page transcription, on
 every provider (see `docpipe.providers.grammar`). The prompts state the same
 shapes in words; nothing here is a check beyond the required keys, the first
-of which `vision.call_vision` reads as text. The first entry of `required` in
-each schema is that key.
+of which `vision.call_vision` reads as text, or as a list where its schema is
+an array. The first entry of `required` in each schema is that key.
 
 Author: Felix Vossel
 
