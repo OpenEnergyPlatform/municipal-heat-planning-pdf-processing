@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 from openai.types.chat import ChatCompletion
 
+from docpipe import rules
 from docpipe.extraction import scheduler, stats, trace
 from docpipe.extraction.throttle import AdaptiveLimit
 
@@ -93,6 +94,22 @@ def test_a_request_sent_again_in_its_document_is_answered_and_not_sent():
     asked(client, 7, "the year of 4.367 MWh", temperature=0.3)
     asked(client, 8, "the year of 4.367 MWh")            # another document
     assert len(server.sent) == 4
+
+
+# Promise: with the rule `same_request_once` off, every request is sent,
+# also one word for word the same in its document; by construction, the
+# standard sends it once.
+def test_with_the_rule_off_a_request_sent_again_is_sent_again():
+    assert rules.default()["same_request_once"] is True
+    server = Server()
+    client = client_of(server)
+    with rules.overlaid(same_request_once=False):
+        asked(client, 7, "the year of 4.367 MWh")
+        asked(client, 7, "the year of 4.367 MWh")
+    assert len(server.sent) == 2
+    asked(client, 9, "the year of 4.367 MWh")
+    asked(client, 9, "the year of 4.367 MWh")
+    assert len(server.sent) == 3
 
 
 # Promise: a document's answers are kept while it is read, however many
@@ -221,7 +238,8 @@ def test_a_waiting_twin_whose_first_fails_is_sent_itself():
 
 @pytest.fixture
 def traced(tmp_path, monkeypatch):
-    monkeypatch.setattr(trace, "ENABLED", True)
+    monkeypatch.setenv("EXTRACT_TRACE", "1")
+    rules.reset()
     monkeypatch.setattr(trace, "_root", None)
     monkeypatch.setattr(trace, "_name_of", None)
     trace.open_trace(tmp_path, lambda document_id: f"plan{document_id}")

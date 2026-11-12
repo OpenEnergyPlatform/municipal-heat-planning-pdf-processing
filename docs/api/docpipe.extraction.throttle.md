@@ -15,15 +15,18 @@ each prompt the server already holds in its prefix cache.
 So the limit is steered while the run goes (additive increase, multiplicative
 decrease). Every few seconds the controller reads the server's /metrics:
 
-  up    nothing waiting, the KV cache below KV_GROW, and the client actually
-        using the limit it has
-  down  requests waiting (twice in a row), the KV cache at KV_HIGH, or a
-        preemption
+  up    nothing waiting, the KV cache below `limit_kv_grow`, and the client
+        actually using the limit it has
+  down  requests waiting (twice in a row), the KV cache at `limit_kv_high`,
+        or a preemption
 
 The time per output token is not a reason to step down: it grows with every
 sequence in the batch while the tokens per second of the whole batch still
-rise, and those are what the harvest waits for. EXTRACT_LIMIT_TPOT_MAX makes
-it one for a server shared with interactive users.
+rise, and those are what the harvest waits for. The rule `limit_token_time_s`
+makes it one for a server shared with interactive users.
+
+Every number here is a rule (`limit_*`), read where it is used and not once
+when the module is loaded.
 
 After a step down it holds for a few samples, so the server can drain before
 it is pushed again. A server without /metrics gets no limit at all, and one
@@ -44,13 +47,16 @@ API asks to wait.
 class AdaptiveLimit
 ```
 
-A semaphore whose size can change while requests hold it.
+A semaphore whose size can change while requests hold it. Each bound
+that is not given is the rule's (`limit_start`, `limit_least`,
+`limit_most`).
 
 #### AdaptiveLimit.\_\_init\_\_
 
 ```python
-def __init__(self, start: int = START, minimum: int = MINIMUM,
-             maximum: int = MAXIMUM)
+def __init__(self, start: Optional[int] = None,
+             minimum: Optional[int] = None,
+             maximum: Optional[int] = None)
 ```
 
 #### AdaptiveLimit.limit
@@ -144,7 +150,7 @@ Samples the server's /metrics, turning counters into differences.
 #### Reader.\_\_init\_\_
 
 ```python
-def __init__(self, base_url: str, timeout: float = 3.0)
+def __init__(self, base_url: str, timeout: Optional[float] = None)
 ```
 
 #### Reader.fetch
@@ -170,10 +176,11 @@ Decides the next limit from one sample; no threads, no I/O.
 #### Controller.\_\_init\_\_
 
 ```python
-def __init__(self, limit: AdaptiveLimit, *, step: int = STEP,
-             backoff: float = BACKOFF, kv_grow: float = KV_GROW,
-             kv_high: float = KV_HIGH,
-             tpot_max: Optional[float] = TPOT_MAX)
+def __init__(self, limit: AdaptiveLimit, *, step: Optional[int] = None,
+             backoff: Optional[float] = None,
+             kv_grow: Optional[float] = None,
+             kv_high: Optional[float] = None,
+             tpot_max: Optional[float] = None)
 ```
 
 #### Controller.decide
@@ -195,8 +202,8 @@ Decides the next limit from whether the API asked to wait.
 #### RateController.\_\_init\_\_
 
 ```python
-def __init__(self, limit: AdaptiveLimit, *, step: int = STEP,
-             backoff: float = BACKOFF)
+def __init__(self, limit: AdaptiveLimit, *, step: Optional[int] = None,
+             backoff: Optional[float] = None)
 ```
 
 #### RateController.limited
@@ -233,23 +240,26 @@ def parse_metrics(text: str) -> dict
 
 ```python
 def start_hosted(gate, *, limit: Optional[AdaptiveLimit] = None,
-                 poll: float = POLL) -> AdaptiveLimit
+                 poll: Optional[float] = None) -> AdaptiveLimit
 ```
 
-An adaptive limit for a hosted API, steered by its gate.
+An adaptive limit for a hosted API, steered by its gate. It starts at
+the rule `limit_start_hosted`, the fewest requests (`limit_least`) where
+that says 0.
 
 ### start
 
 ```python
 def start(base_url: str, *, limit: Optional[AdaptiveLimit] = None,
           reader: Optional[Reader] = None,
-          poll: float = POLL) -> Optional[AdaptiveLimit]
+          poll: Optional[float] = None) -> Optional[AdaptiveLimit]
 ```
 
 An adaptive limit and the daemon thread that steers it.
 
 None when the server does not serve vLLM's /metrics: without a queue to
 read there is nothing to steer by, and the thread pools bound the
-requests as they did before.
+requests as they did before (rule `limit_without_metrics` none). With
+the rule at fixed the limit stays where `limit_start` puts it.
 
 [Back to the index](../README.md)

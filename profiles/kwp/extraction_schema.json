@@ -848,7 +848,6 @@
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_link_source": {
@@ -884,7 +883,6 @@
      },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_raw": {
@@ -1807,7 +1805,6 @@
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_link_source": {
@@ -1843,7 +1840,6 @@
      },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_raw": {
@@ -1951,7 +1947,6 @@
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_link_source": {
@@ -1987,7 +1982,6 @@
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_raw": {
@@ -2124,7 +2118,6 @@
      },
      "qualifier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_link_source": {
@@ -2160,7 +2153,6 @@
      },
      "qualifier_quote": {
       "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_raw": {
@@ -2251,7 +2243,6 @@
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_link_source": {
@@ -2287,7 +2278,6 @@
      },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_raw": {
@@ -2355,7 +2345,6 @@
      },
      "quote": {
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
-      "minLength": 8,
       "type": "string"
      },
      "range": {
@@ -2434,7 +2423,6 @@
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_link_source": {
@@ -2470,7 +2458,6 @@
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_raw": {
@@ -2683,7 +2670,6 @@
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_link_source": {
@@ -2719,7 +2705,6 @@
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_raw": {
@@ -2832,7 +2817,6 @@
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_link_source": {
@@ -2868,7 +2852,6 @@
      },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_raw": {
@@ -2944,7 +2927,6 @@
      },
      "subject_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_link_source": {
@@ -2980,7 +2962,6 @@
      },
      "subject_quote": {
       "description": "The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_raw": {
@@ -3176,7 +3157,6 @@
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_link_source": {
@@ -3212,7 +3192,6 @@
      },
      "technology_quote": {
       "description": "The verbatim passage carrying 'technology'. Present exactly when technology_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_raw": {
@@ -3305,7 +3284,6 @@
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_link_source": {
@@ -3341,7 +3319,6 @@
      },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_raw": {
@@ -3425,7 +3402,6 @@
      },
      "what_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "what_link_source": {
@@ -3461,7 +3437,6 @@
      },
      "what_quote": {
       "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "what_raw": {
@@ -3544,7 +3519,6 @@
      },
      "year_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "year_link_source": {
@@ -3580,7 +3554,6 @@
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "year_raw": {
@@ -4183,7 +4156,6 @@
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_link_source": {
@@ -4219,7 +4191,6 @@
      },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_raw": {
@@ -5142,7 +5113,6 @@
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_link_source": {
@@ -5178,7 +5148,6 @@
      },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_raw": {
@@ -5286,7 +5255,6 @@
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_link_source": {
@@ -5322,7 +5290,6 @@
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_raw": {
@@ -5459,7 +5426,6 @@
      },
      "qualifier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_link_source": {
@@ -5495,7 +5461,6 @@
      },
      "qualifier_quote": {
       "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_raw": {
@@ -5665,7 +5630,6 @@
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_link_source": {
@@ -5701,7 +5665,6 @@
      },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_raw": {
@@ -5769,7 +5732,6 @@
      },
      "quote": {
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
-      "minLength": 8,
       "type": "string"
      },
      "range": {
@@ -5848,7 +5810,6 @@
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_link_source": {
@@ -5884,7 +5845,6 @@
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_raw": {
@@ -6097,7 +6057,6 @@
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_link_source": {
@@ -6133,7 +6092,6 @@
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_raw": {
@@ -6246,7 +6204,6 @@
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_link_source": {
@@ -6282,7 +6239,6 @@
      },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_raw": {
@@ -6358,7 +6314,6 @@
      },
      "subject_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_link_source": {
@@ -6394,7 +6349,6 @@
      },
      "subject_quote": {
       "description": "The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_raw": {
@@ -6590,7 +6544,6 @@
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_link_source": {
@@ -6626,7 +6579,6 @@
      },
      "technology_quote": {
       "description": "The verbatim passage carrying 'technology'. Present exactly when technology_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_raw": {
@@ -7054,7 +7006,6 @@
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_link_source": {
@@ -7090,7 +7041,6 @@
      },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_raw": {
@@ -7174,7 +7124,6 @@
      },
      "what_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "what_link_source": {
@@ -7210,7 +7159,6 @@
      },
      "what_quote": {
       "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "what_raw": {
@@ -7293,7 +7241,6 @@
      },
      "year_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "year_link_source": {
@@ -7329,7 +7276,6 @@
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "year_raw": {
@@ -7932,7 +7878,6 @@
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_link_source": {
@@ -7968,7 +7913,6 @@
      },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_raw": {
@@ -8891,7 +8835,6 @@
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_link_source": {
@@ -8927,7 +8870,6 @@
      },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_raw": {
@@ -9035,7 +8977,6 @@
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_link_source": {
@@ -9071,7 +9012,6 @@
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_raw": {
@@ -9208,7 +9148,6 @@
      },
      "qualifier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_link_source": {
@@ -9244,7 +9183,6 @@
      },
      "qualifier_quote": {
       "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_raw": {
@@ -9512,7 +9450,6 @@
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_link_source": {
@@ -9548,7 +9485,6 @@
      },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_raw": {
@@ -9616,7 +9552,6 @@
      },
      "quote": {
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
-      "minLength": 8,
       "type": "string"
      },
      "range": {
@@ -9695,7 +9630,6 @@
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_link_source": {
@@ -9731,7 +9665,6 @@
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_raw": {
@@ -9944,7 +9877,6 @@
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_link_source": {
@@ -9980,7 +9912,6 @@
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_raw": {
@@ -10093,7 +10024,6 @@
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_link_source": {
@@ -10129,7 +10059,6 @@
      },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_raw": {
@@ -10205,7 +10134,6 @@
      },
      "subject_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_link_source": {
@@ -10241,7 +10169,6 @@
      },
      "subject_quote": {
       "description": "The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_raw": {
@@ -10437,7 +10364,6 @@
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_link_source": {
@@ -10473,7 +10399,6 @@
      },
      "technology_quote": {
       "description": "The verbatim passage carrying 'technology'. Present exactly when technology_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_raw": {
@@ -10671,7 +10596,6 @@
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_link_source": {
@@ -10707,7 +10631,6 @@
      },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_raw": {
@@ -10791,7 +10714,6 @@
      },
      "what_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "what_link_source": {
@@ -10827,7 +10749,6 @@
      },
      "what_quote": {
       "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "what_raw": {
@@ -10910,7 +10831,6 @@
      },
      "year_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "year_link_source": {
@@ -10946,7 +10866,6 @@
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "year_raw": {
@@ -11549,7 +11468,6 @@
      },
      "aggregation_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('aggregation_raw'). 'aggregation_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_link_source": {
@@ -11585,7 +11503,6 @@
      },
      "aggregation_quote": {
       "description": "The verbatim passage carrying 'aggregation'. Present exactly when aggregation_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "aggregation_raw": {
@@ -12508,7 +12425,6 @@
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_link_source": {
@@ -12544,7 +12460,6 @@
      },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_raw": {
@@ -12652,7 +12567,6 @@
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_link_source": {
@@ -12688,7 +12602,6 @@
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_raw": {
@@ -12825,7 +12738,6 @@
      },
      "qualifier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_link_source": {
@@ -12861,7 +12773,6 @@
      },
      "qualifier_quote": {
       "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_raw": {
@@ -13094,7 +13005,6 @@
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_link_source": {
@@ -13130,7 +13040,6 @@
      },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_raw": {
@@ -13198,7 +13107,6 @@
      },
      "quote": {
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
-      "minLength": 8,
       "type": "string"
      },
      "range": {
@@ -13277,7 +13185,6 @@
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_link_source": {
@@ -13313,7 +13220,6 @@
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_raw": {
@@ -13526,7 +13432,6 @@
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_link_source": {
@@ -13562,7 +13467,6 @@
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_raw": {
@@ -13675,7 +13579,6 @@
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_link_source": {
@@ -13711,7 +13614,6 @@
      },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_raw": {
@@ -13787,7 +13689,6 @@
      },
      "subject_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_link_source": {
@@ -13823,7 +13724,6 @@
      },
      "subject_quote": {
       "description": "The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_raw": {
@@ -14019,7 +13919,6 @@
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_link_source": {
@@ -14055,7 +13954,6 @@
      },
      "technology_quote": {
       "description": "The verbatim passage carrying 'technology'. Present exactly when technology_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_raw": {
@@ -14188,7 +14086,6 @@
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_link_source": {
@@ -14224,7 +14121,6 @@
      },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_raw": {
@@ -14308,7 +14204,6 @@
      },
      "what_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "what_link_source": {
@@ -14344,7 +14239,6 @@
      },
      "what_quote": {
       "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "what_raw": {
@@ -14427,7 +14321,6 @@
      },
      "year_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "year_link_source": {
@@ -14463,7 +14356,6 @@
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "year_raw": {
@@ -14713,7 +14605,6 @@
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_link_source": {
@@ -14749,7 +14640,6 @@
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_raw": {
@@ -14820,7 +14710,6 @@
      },
      "quote": {
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
-      "minLength": 8,
       "type": "string"
      },
      "range": {
@@ -14866,7 +14755,6 @@
      },
      "role_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('role_raw'). 'role_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "role_link_source": {
@@ -14902,7 +14790,6 @@
      },
      "role_quote": {
       "description": "The verbatim passage carrying 'role'. Present exactly when role_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "role_raw": {
@@ -16306,7 +16193,6 @@
      },
      "carrier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('carrier_raw'). 'carrier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_link_source": {
@@ -16342,7 +16228,6 @@
      },
      "carrier_quote": {
       "description": "The verbatim passage carrying 'carrier'. Present exactly when carrier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "carrier_raw": {
@@ -16450,7 +16335,6 @@
      },
      "parameter_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('parameter_raw'). 'parameter_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_link_source": {
@@ -16486,7 +16370,6 @@
      },
      "parameter_quote": {
       "description": "The verbatim passage carrying 'parameter'. Present exactly when parameter_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "parameter_raw": {
@@ -16623,7 +16506,6 @@
      },
      "qualifier_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('qualifier_raw'). 'qualifier_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_link_source": {
@@ -16659,7 +16541,6 @@
      },
      "qualifier_quote": {
       "description": "The verbatim passage carrying 'qualifier'. Present exactly when qualifier_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "qualifier_raw": {
@@ -16826,7 +16707,6 @@
      },
      "quantity_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('quantity_raw'). 'quantity_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_link_source": {
@@ -16862,7 +16742,6 @@
      },
      "quantity_quote": {
       "description": "The verbatim passage carrying 'quantity'. Present exactly when quantity_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "quantity_raw": {
@@ -16930,7 +16809,6 @@
      },
      "quote": {
       "description": "The passage of the owner source that contains the value, checked by whitespace-collapsed containment.",
-      "minLength": 8,
       "type": "string"
      },
      "range": {
@@ -17009,7 +16887,6 @@
      },
      "scenario_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('scenario_raw'). 'scenario_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_link_source": {
@@ -17045,7 +16922,6 @@
      },
      "scenario_quote": {
       "description": "The verbatim passage carrying 'scenario'. Present exactly when scenario_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "scenario_raw": {
@@ -17258,7 +17134,6 @@
      },
      "sector_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('sector_raw'). 'sector_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_link_source": {
@@ -17294,7 +17169,6 @@
      },
      "sector_quote": {
       "description": "The verbatim passage carrying 'sector'. Present exactly when sector_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "sector_raw": {
@@ -17407,7 +17281,6 @@
      },
      "spatial_scope_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('spatial_scope_raw'). 'spatial_scope_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_link_source": {
@@ -17443,7 +17316,6 @@
      },
      "spatial_scope_quote": {
       "description": "The verbatim passage carrying 'spatial_scope'. Present exactly when spatial_scope_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "spatial_scope_raw": {
@@ -17519,7 +17391,6 @@
      },
      "subject_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('subject_raw'). 'subject_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_link_source": {
@@ -17555,7 +17426,6 @@
      },
      "subject_quote": {
       "description": "The verbatim passage carrying 'subject'. Present exactly when subject_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "subject_raw": {
@@ -17751,7 +17621,6 @@
      },
      "technology_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('technology_raw'). 'technology_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_link_source": {
@@ -17787,7 +17656,6 @@
      },
      "technology_quote": {
       "description": "The verbatim passage carrying 'technology'. Present exactly when technology_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "technology_raw": {
@@ -17885,7 +17753,6 @@
      },
      "unit_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('unit_raw'). 'unit_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_link_source": {
@@ -17921,7 +17788,6 @@
      },
      "unit_quote": {
       "description": "The verbatim passage carrying 'unit'. Present exactly when unit_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "unit_raw": {
@@ -18005,7 +17871,6 @@
      },
      "what_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('what_raw'). 'what_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "what_link_source": {
@@ -18041,7 +17906,6 @@
      },
      "what_quote": {
       "description": "The verbatim passage carrying 'what'. Present exactly when what_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "what_raw": {
@@ -18117,7 +17981,6 @@
      },
      "whole_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('whole_raw'). 'whole_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "whole_link_source": {
@@ -18153,7 +18016,6 @@
      },
      "whole_quote": {
       "description": "The verbatim passage carrying 'whole'. Present exactly when whole_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "whole_raw": {
@@ -18236,7 +18098,6 @@
      },
      "year_link_quote": {
       "description": "Only with window `base_year` or `target_year`: the passage where the row names that state ('year_raw'). 'year_quote' is then the frame's passage that prints the number.",
-      "minLength": 8,
       "type": "string"
      },
      "year_link_source": {
@@ -18272,7 +18133,6 @@
      },
      "year_quote": {
       "description": "The verbatim passage carrying 'year'. Present exactly when year_state is 'read'.",
-      "minLength": 8,
       "type": "string"
      },
      "year_raw": {

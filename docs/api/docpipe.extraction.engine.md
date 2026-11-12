@@ -138,6 +138,8 @@ Fields:
 - `by_find: dict = field(default_factory=dict)`: (uri, owner) -> Read
 - `valued: dict = field(default_factory=dict)`: id(read) -> frame
 - `seen_of: dict = field(default_factory=dict)`: coordinate -> seen
+- `started: float = field(default_factory=time.monotonic)`
+- `about: dict = field(default_factory=dict)`: facts made once
 
 #### Doc.whole
 
@@ -166,8 +168,8 @@ A field of the document asked once, or a thing it settles.
 Fields:
 
 - `key: str`: the field's uri or the settled key
-- `shown: dict`: the field as a request shows it
-- `sentences: list`
+- `shown: Optional[dict]`: as a request shows it; None for a
+- `sentences: list`: parameter: built by the box that asks
 - `numbers: bool = False`
 - `listed: Optional[tuple] = None`
 - `parameter: object = None`
@@ -176,6 +178,7 @@ Fields:
 - `lost: Optional[str] = None`
 - `asked_by: Optional[str] = None`: the id of the box that asked it
 - `reads: Optional[list] = None`
+- `first_source: Optional[Source] = None`: of the first request's chunks
 
 ### ValueItem
 
@@ -216,6 +219,7 @@ Fields:
 - `chunk: object = None`
 - `located: bool = False`
 - `seen_of: Optional[dict] = None`
+- `ways: list = field(default_factory=list)`: The rules whose second way the requests of this coordinate went through (`second_ways`), noted on them.
 
 ### ListSupply
 
@@ -257,12 +261,17 @@ The pieces a coordinate's search shows: the pieces it was given
 (*first*, shown together in the first request), then the pieces of its
 order a few at a time (*ranked*, made the first time it is needed), the
 pieces a reply fetched itself first in the next request; no piece twice
-(`seen`, the coordinate's).
+(`seen`, the coordinate's) unless the rule `show_twice` says it may be
+shown a second time. *limit* is the most pieces the search shows (the
+flow's number of chunks), *reorder* puts the pieces left in order again
+with the sentence of the round (the rule `rerank_when`).
 
 #### SearchSupply.\_\_init\_\_
 
 ```python
-def __init__(self, first: list, ranked: Optional[Callable], label: str)
+def __init__(self, first: list, ranked: Optional[Callable], label: str,
+             limit: Optional[int] = None,
+             reorder: Optional[Callable] = None)
 ```
 
 #### SearchSupply.take
@@ -272,7 +281,10 @@ def take(self, size: int, seen: set) -> tuple
 ```
 
 (pieces, what they are: the supply's label or "fetched") of the
-next request; ([], None) where nothing is left.
+next request; ([], None) where nothing is left. The kinds of pieces
+come in the order of the rule `supply_order`: those before the
+ranked ones are shown together, the ranked ones only where none of
+them is left.
 
 #### SearchSupply.left
 
@@ -297,6 +309,8 @@ Fields:
 - `other_passage: bool = False`
 - `words: str = ""`
 - `quote: str = ""`
+- `follow_ups: int = 0`: follow-up questions it took
+- `refusal: str = "none"`: why a find of it was refused
 
 ### Engine
 
@@ -313,15 +327,35 @@ The drawing *tree* of a flow done for documents with the reading
 def __init__(self, reader, tree: Optional[list] = None)
 ```
 
+#### Engine.own_values
+
+```python
+@staticmethod
+def own_values(node: dict) -> dict
+```
+
+What *node* sets for itself while it runs: its "rules", and a
+box's own numbers ("own") under the names of the flow's numbers.
+
+#### Engine.step
+
+```python
+def step(self, node: dict) -> rules.in_step
+```
+
+Read with *node*'s own values laid over those of the frames it
+stands in, while it runs (`rules.STEP`); work it hands to other
+threads takes them along (`runner.run_each` copies the context).
+
 #### Engine.number
 
 ```python
 def number(self, node: dict, key: str) -> int
 ```
 
-A number setting of a box: its own value, else the named number
-of the flow as the run reads it (a setting of the run won over the
-file already, `flow.in_effect`).
+A number setting of a box: its own value, else that of a frame
+around it, else the named number of the flow as the run reads it (a
+setting of the run won over the file already, `flow.in_effect`).
 
 #### Engine.setting
 
@@ -329,6 +363,27 @@ file already, `flow.in_effect`).
 @staticmethod
 def setting(node: dict, key: str)
 ```
+
+#### Engine.counted
+
+```python
+@contextlib.contextmanager
+def counted(self, doc)
+```
+
+The counts of one question, apart from the counts of the other
+questions asked side by side, so that what it came to (the
+follow-ups it took, why its finds were refused) is its own; they
+are added to the document's when it is through.
+
+#### Engine.came_to
+
+```python
+@staticmethod
+def came_to(part: Counts) -> dict
+```
+
+What a question's own counts say of its answer (`Answer`).
 
 #### Engine.shares_of
 
@@ -346,11 +401,46 @@ def facts(self, scope: Scope, got: Optional[Found] = None
 What a condition can know at *scope*; *got* is the find an own
 check is looking at.
 
+#### Engine.rows_read
+
+```python
+def rows_read(self, doc, parameter) -> int
+```
+
+How many values of the field the document's reads hold so far.
+
+#### Engine.about_document
+
+```python
+def about_document(self, doc, plan: Plan) -> dict
+```
+
+What the document says of itself, made once per reading: its
+language, its pages and its title.
+
 #### Engine.holds
 
 ```python
 def holds(self, condition, scope: Scope) -> bool
 ```
+
+#### Engine.figure_facts
+
+```python
+@staticmethod
+def figure_facts(source: Source) -> conditions.Facts
+```
+
+What a condition of the transcribe box knows of a figure.
+
+#### Engine.included
+
+```python
+def included(self, sources: list) -> list
+```
+
+The sources the document step reads: the kinds of passages of
+the rule `include_kinds`, on the pages of the rule `pages`.
 
 #### Engine.cut
 
@@ -453,6 +543,16 @@ def after_items(self, node: dict, done: list, scope: Scope) -> None
 What a frame does once its items are through: the finds of each
 piece become the reads of their field and passage, a field of the
 document its reads, what the document settles its trace.
+
+#### Engine.hole_source
+
+```python
+@staticmethod
+def hole_source(plan: Plan, item: FieldItem) -> Source
+```
+
+The passage the hole of a field read nothing of names (rule
+`hole_passage`).
 
 #### Engine.field_reads
 
@@ -628,6 +728,16 @@ def box_last_year(self, node: dict, scope: Scope) -> None
 def box_state(self, node: dict, scope: Scope) -> None
 ```
 
+#### Engine.step_of
+
+```python
+def step_of(self, kind: str)
+```
+
+The values of the top box of *kind* (one of `AFTER`), for
+the run that does it outside the engine (`runner`); no values where
+the drawing has none.
+
 #### Engine.box_document
 
 ```python
@@ -635,6 +745,24 @@ def box_document(self, node, scope)
 ```
 
 ## Functions
+
+### language_of
+
+```python
+def language_of(texts) -> str
+```
+
+"de", "en" or "other": which of two languages the *texts* are
+written in, by the words each has more of.
+
+### refusal_of
+
+```python
+def refusal_of(failed) -> str
+```
+
+The reason most of the refusals of a question came to, as a
+condition names it (`conditions.REFUSALS`).
 
 ### compute_on
 

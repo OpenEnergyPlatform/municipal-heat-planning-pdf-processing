@@ -14,12 +14,17 @@ the rules of the graph file it reads:
   2026-11-05);
 - one reading where the shapes allow one (`pick_one`): the one the most
   sources agree on, a tie to the one located on its page, then to the
-  longer, and a reading contained in another never wins;
+  longer, and a reading contained in another never wins (rule
+  `pick_one_order`);
 - the numbers of one address (`settle`): one number several times is one
   node, different numbers are told apart by the plan's wording, a rounded
   statement loses to the precise one (rule `rounding_tolerance`), a lower
   trust level to the higher, and what is left is either kept as nodes
-  marked contested (rule `contested_in_full`, the full graph) or left out.
+  marked contested (rule `contested_in_full`, the full graph) or left out
+  (the order of these decisions is the rule `settle_order`).
+
+Every choice stands in a rule of the graph file, handed in by `graph.py` and
+by the profile's front page code where it is used (`RULES`).
 
 Author: Felix Vossel
 
@@ -36,12 +41,13 @@ The page a row was read on, None where it names none.
 ### front_pages
 
 ```python
-def front_pages(titles: list) -> set
+def front_pages(titles: list, *, which: str, extra: int) -> set
 ```
 
-Page 1 and the first page the document's title was read on (*titles*,
-its rows of the title): its title page, where a cover stands before
-it.
+The front pages: page 1 and the first page the document's title was
+read on (*titles*, its rows of the title), its title page, where a cover
+stands before it, as *which* says (rule `front_pages_rule`), and the
+*extra* pages after each of them (rule `front_pages_extra`).
 
 ### looked_up
 
@@ -64,26 +70,32 @@ The rows of *rows* read on one of the *front* pages.
 ### in_order
 
 ```python
-def in_order(rows: list, front: set) -> list
+def in_order(rows: list, front: set, order: list) -> list
 ```
 
-The readings of a front field that count: those read on a *front*
-page where there are any, else those looked up in the catalogue, else
+The readings of a front field that count: the first of the ways in
+*order* (rule `front_order`) that has any. "front": those read on a
+*front* page, "catalogue": those looked up in the catalogue, "any":
 every one of *rows*.
 
 ### pick_one
 
 ```python
-def pick_one(rows: list) -> tuple
+def pick_one(rows: list, order: list) -> tuple
 ```
 
 (value, how many other readings were offered) for a field the shapes
-allow once.
+allow once, decided by the checks of *order* (rule `pick_one_order`).
 
-The reading the most sources agree on wins. A tie goes to the one that
-could be located on its PDF page, then to the longer text: a truncated
-title is a common failure and the full one is never the shorter reading
-of the same passage.
+"not_contained": a reading contained in another never wins. A running
+header is a prefix of the title and is harvested from every page it
+stands on, so it outvotes the one reading that was located on the title
+page, and the truncation then becomes the document's IRI, stably, on
+every re-run. "most_sources": the reading the most sources agree on
+wins. "located": a tie goes to the one that could be located on its PDF
+page. "longer": then to the longer text, because a truncated title is a
+common failure and the full one is never the shorter reading of the same
+passage. What is left stays in the order the readings came in.
 
 ### place
 
@@ -115,7 +127,8 @@ Gebäude" and "Öffentliche Gebäude" are one class and not one number.
 
 ```python
 def settle(iri: str, rows: list, address: Callable, *, fold: Callable,
-           wording: tuple, tolerance: float, transcribed: bool = False,
+           wording: tuple, tolerance: float, order: list,
+           corroborate: bool, transcribed: bool = False,
            keep_open: bool = False) -> tuple
 ```
 
@@ -123,17 +136,20 @@ def settle(iri: str, rows: list, address: Callable, *, fold: Callable,
 
 *address(row, label)* names a node split off by its wording or kept as
 contested, *fold* is the graph's folding of a name. One number several
-times is one node, marked as confirmed where a second passage prints it:
-one passage read twice is one statement, whatever its quotes (owner
-decision 2026-11-05). Different numbers are settled in this order (owner
-decision 2026-09-23): the document's different wording splits them into
-a node each, named by that wording; a rounded statement of the other
-loses to the more precise one; a lower trust grade loses to the higher;
-and what is left is a question for a human. With *keep_open* each of
-those stays as a node of its own, marked as contested (owner decision
-2026-11-02); without it, as for the strict graph, nothing stays. The
-counts are per tuple that left the graph: a repeat of the winner is a
-`duplicate`, a repeat of a loser is one too, and the losers are
-`conflict:<rule>`. `conflict:open` counts nodes kept, not tuples lost.
+times is one node, marked as confirmed where a second passage prints it
+(only with *corroborate*, rule `corroborated_by_place`): one passage
+read twice is one statement, whatever its quotes (owner decision
+2026-11-05). Different numbers are settled in the order of *order* (rule
+`settle_order`, standard from owner decision 2026-09-23): "wording", the
+document's different wording splits them into a node each, named by that
+wording; "rounding", a rounded statement of the other loses to the more
+precise one; "trust", a lower trust grade loses to the higher; and
+"contested", what is left is a question for a human. With *keep_open*
+each of those stays as a node of its own, marked as contested (owner
+decision 2026-11-02); without it, as for the strict graph, nothing
+stays. A decision not in *order* is not made. The counts are per tuple
+that left the graph: a repeat of the winner is a `duplicate`, a repeat
+of a loser is one too, and the losers are `conflict:<rule>`.
+`conflict:open` counts nodes kept, not tuples lost.
 
 [Back to the index](../README.md)

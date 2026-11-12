@@ -423,6 +423,14 @@ REFUSED_ROWS = ({"id": "no_kind|x", "action": "add"},
                  "action": "replace"},
                 {"id": "not_asked|no_shape|path", "action": "merge"})
 RULE_TABS = ("spec", "prompts", "flow", "sources", "graph")
+# What the server explains of one flow of a follow-up pass.
+PASS_ANSWER = ("library.boxes[].label", "library.boxes[].says",
+               "library.boxes[].fixed", "library.boxes[].marks",
+               "library.boxes[].settings[].label",
+               "library.boxes[].settings[].help",
+               "library.boxes[].settings[].words.*", "library.each.*",
+               "library.each_titles.*", "problems[].message",
+               "not_started")
 
 
 def server_texts() -> dict:
@@ -443,6 +451,15 @@ def server_texts() -> dict:
             assert status == 200, (name, url, shown)
             for text in _texts_of(shown, paths):
                 out.setdefault(text, f"{name} {url}")
+        # Every flow of a follow-up pass, as the server sends it by name.
+        status, passes = app.call("GET", "/api/flow/passes", {}, None)
+        assert status == 200, (name, passes)
+        for one in passes["passes"]:
+            status, shown = app.call("GET", "/api/flow/pass",
+                                     {"name": one["name"]}, None)
+            assert status == 200, (name, one["name"], shown)
+            for text in _texts_of(shown, PASS_ANSWER):
+                out.setdefault(text, f"{name} pass {one['name']}")
         for tab in RULE_TABS:
             status, shown = app.call("GET", "/api/rules", {"tab": tab},
                                      None)

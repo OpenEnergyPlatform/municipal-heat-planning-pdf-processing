@@ -8,7 +8,7 @@ import {
 } from '@xyflow/react';
 import {
   Accordion, ActionIcon, Alert, Anchor, Badge, Box, Button, Center, Code, Group, List, Loader, Menu, ScrollArea,
-  SegmentedControl, Stack, Text, Tooltip,
+  SegmentedControl, Select, Stack, Text, Tooltip,
 } from '@mantine/core';
 import {
   IconArrowBackUp, IconArrowDown, IconArrowForwardUp, IconArrowUp, IconCheck, IconCopy, IconDeviceFloppy,
@@ -17,7 +17,7 @@ import {
 import { api, apiR } from '../lib/api';
 import { rich, t, tr, useLang } from '../lib/i18n';
 import { askConfirm, showError, showInfo } from '../lib/dialogs';
-import { loadState, setDirty, tabStore, useTabActions } from '../lib/nav';
+import { loadState, setDirty, tabStore, useRequests, useTabActions } from '../lib/nav';
 import { clone, wrote } from '../lib/util';
 import { Diff } from '../components/Bits';
 import { layout, type Decor } from './layout';
@@ -52,12 +52,35 @@ const READABLE = 0.8;    // below this zoom the words of a step are too small to
 
 interface Report { source: 'check' | 'save'; r?: any; error?: string }
 
+/* a flow of a follow-up pass the run can start (/api/flow/passes), and one of them as the server draws it
+   (/api/flow/pass) */
+interface PassRef { name: string; file: string; own: boolean; starts_from: string | null }
+interface PassView {
+  name: string; file: string; exists: boolean; base: string | null; tree: Step[]; inherited_tree: Step[] | null;
+  library: FlowData['library']; problems: FlowData['problems']; not_started: string | null;
+}
+/* the flows of the follow-up passes in the order the plan of a run takes them */
+const PASS_ORDER = ['top_up', 'top_up_open', 'top_up_parameters', 'remap', 'recheck', 'review', 'start_at', 'example'];
+/* the name of each flow of a follow-up pass, with the switch of the call that starts it */
+const passWord = (name: string): string => ({
+  top_up: t('Read changed questions again (--top-up)'),
+  top_up_open: t('Read the open places again (--top-up-open)'),
+  top_up_parameters: t('Read further parameters (--top-up-parameters)'),
+  remap: t('Map the lists again (--remap)'),
+  recheck: t('Check the quotes again (--recheck)'),
+  review: t('Second reading (--review)'),
+  start_at: t('Start at the places found (--start-at)'),
+  example: t('Example for a field (while a spec is compiled)'),
+} as Record<string, string>)[name] || name;
+
 interface State {
   loaded: boolean; loading: boolean; data: FlowData | null; tree: Step[]; cur: Record<string, number | string>;
   sel: string | null; multi: Set<string>; open: Set<string>; report: Report | null; busy: boolean;
   meas: any; trial: any; trying: boolean; docs: { id: number | string; title: string }[] | null;
   tryst: { doc: string; pages: string; mode: string }; side: 'numbers' | 'try';
-  undo: string[]; redo: string[]; snap: string; fit: number;
+  undo: string[]; redo: string[]; snap: string; fit: number; epoch: number;
+  /* the flow shown: '' the main flow, else the name of a flow of a follow-up pass */
+  which: string; passes: PassRef[] | null; main: FlowData | null; notStarted: string | null;
 }
 
 export function FlowTab() {
@@ -69,7 +92,8 @@ function FlowInner() {
   const F = useRef<State>({
     loaded: false, loading: false, data: null, tree: [], cur: {}, sel: null, multi: new Set(), open: new Set(),
     report: null, busy: false, meas: null, trial: null, trying: false, docs: null,
-    tryst: { doc: '', pages: '', mode: 'nothing' }, side: 'numbers', undo: [], redo: [], snap: '', fit: 0,
+    tryst: { doc: '', pages: '', mode: 'nothing' }, side: 'numbers', undo: [], redo: [], snap: '', fit: 0, epoch: 0,
+    which: '', passes: null, main: null, notStarted: null,
   }).current;
   const [version, touch] = useReducer((x: number) => x + 1, 0);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -122,7 +146,7 @@ function FlowInner() {
     pin(...around(F.sel));
     const o = JSON.parse(s);
     const numbersMoved = JSON.stringify(o.cur) !== JSON.stringify(F.cur);
-    F.tree = o.tree; F.cur = o.cur; F.snap = s; F.report = null; F.trial = null;
+    F.tree = o.tree; F.cur = o.cur; F.snap = s; F.report = null; F.trial = null; F.epoch++;
     if (F.sel && !find(F.tree, F.sel)) F.sel = null;
     F.multi = new Set([...F.multi].filter(id => find(F.tree, id)));
     touch();
@@ -132,17 +156,36 @@ function FlowInner() {
   const redo = () => { if (!F.redo.length) return; F.undo.push(F.snap); restore(F.redo.pop()!); };
 
   const measured = useCallback(async () => {
-    if (!F.data) return;
+    if (!F.data || F.which) return;     // a follow-up pass has no numbers of its own
     try { F.meas = await apiR('/api/flow/measured', { numbers: numbers(), trace: null }); }
     catch { F.meas = null; }
     touch();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* the main flow as the server sends it, or a flow of a follow-up pass drawn on it: its own boxes and loops, no
+     numbers, the conditions and words of the main flow */
+  const fetchFlow = async (): Promise<FlowData> => {
+    if (F.passes === null) {
+      try { F.passes = (await api<{ passes: PassRef[] }>('GET', '/api/flow/passes')).passes || []; }
+      catch { F.passes = []; }
+    }
+    if (!F.which) { F.notStarted = null; return F.main = await api<FlowData>('GET', '/api/flow'); }
+    const main = F.main || (F.main = await api<FlowData>('GET', '/api/flow'));
+    const p = await api<PassView>('GET', '/api/flow/pass?name=' + encodeURIComponent(F.which));
+    const ref = (F.passes || []).find(x => x.name === F.which);
+    F.notStarted = p.not_started;
+    return {
+      ...main, file: p.file, exists: p.exists, base: p.base, whole: true, starts_from: (ref && ref.starts_from) || '',
+      drawn_by: (ref && ref.starts_from) || '', inherited_tree: p.inherited_tree, numbers: [], tree: p.tree,
+      library: p.library, problems: p.problems || [], notes: [], switches: {},
+    };
+  };
+
   const load = async (keep: boolean) => {
     if (F.loading) return;
     F.loading = true; touch();
     try {
-      const d = await api<FlowData>('GET', '/api/flow');
+      const d = await fetchFlow();
       const prevCur = F.cur, prevTree = F.loaded ? F.tree : null;
       F.data = d; F.cur = {};
       for (const n of d.numbers) F.cur[n.name] = keep && Object.prototype.hasOwnProperty.call(prevCur, n.name) ? prevCur[n.name] : n.value;
@@ -166,7 +209,10 @@ function FlowInner() {
   const check = async () => {
     if (!F.data || F.busy) return;
     F.busy = true; touch();
-    try { F.report = { source: 'check', r: await apiR('/api/flow/check', { numbers: numbers(), tree: F.tree }) }; }
+    try {
+      F.report = { source: 'check', r: F.which ? await apiR('/api/flow/pass/check', { name: F.which, tree: F.tree })
+        : await apiR('/api/flow/check', { numbers: numbers(), tree: F.tree }) };
+    }
     catch (e) { F.report = { source: 'check', error: (e as Error).message }; }
     F.busy = false; touch();
   };
@@ -175,7 +221,9 @@ function FlowInner() {
     F.busy = true; touch();
     let saved: any = null;
     try {
-      const r = await apiR('/api/flow/save', { numbers: numbers(), tree: F.tree, base: F.data.base == null ? null : F.data.base });
+      const base = F.data.base == null ? null : F.data.base;
+      const r = F.which ? await apiR('/api/flow/pass/save', { name: F.which, tree: F.tree, base })
+        : await apiR('/api/flow/save', { numbers: numbers(), tree: F.tree, base });
       if (r.saved) saved = r; else F.report = { source: 'save', r };
     } catch (e) { F.report = { source: 'save', error: (e as Error).message }; }
     F.busy = false;
@@ -189,7 +237,7 @@ function FlowInner() {
     if (!F.data || !dirty() || F.busy) return;
     if (!await askConfirm(t('Discard changes'), t('Discard the edited flow and numbers? Ctrl+Z brings them back.'), t('Discard'))) return;
     const numbersMoved = numDirty();
-    F.tree = clone(F.data.tree); for (const n of F.data.numbers) F.cur[n.name] = n.value;
+    F.tree = clone(F.data.tree); for (const n of F.data.numbers) F.cur[n.name] = n.value; F.epoch++;
     edited();
     if (numbersMoved) measured();   // what the last runs measured is shown at the numbers in the fields
   };
@@ -290,6 +338,7 @@ function FlowInner() {
     F.sel = id; F.multi = new Set([id]); touch();
     setTimeout(() => flow.fitView({ nodes: [{ id }], maxZoom: 1.1, duration: 400, padding: 0.6 }), 60);
   };
+  useRequests('flow', F.loaded, p => { if (p && p.id && find(F.tree, p.id)) reveal(p.id); });
   const toggle = (id: string) => { pin(...around(id)); if (F.open.has(id)) F.open.delete(id); else F.open.add(id); touch(); };
   const openAll = (open: boolean) => {
     F.open = new Set(open ? [...walk(F.tree)].filter(([n]) => kindOf(n) !== 'box').map(([n]) => n.id) : []);
@@ -347,7 +396,7 @@ function FlowInner() {
   };
 
   const ctx: FlowCtx | null = F.data ? {
-    lib: F.data.library, never: F.data.never || {}, toggle,
+    lib: F.data.library, never: F.data.never || {}, toggle, loopsOnly: !!F.which,
     add: (list, at) => setLib({ list, at, after: null }),
   } : null;
 
@@ -370,15 +419,29 @@ function FlowInner() {
     return <Center h="100%">{F.report && F.report.error ? <Alert color="red">{F.report.error}</Alert> : <Loader />}</Center>;
   }
   const d = F.data;
-  const status = !d.exists ? t('not written yet: the flow and every number come from {name}', { name: d.starts_from })
+  const status = F.which ? (d.exists ? t('its own flow') : t('not written yet: the flow comes from {name}', { name: d.starts_from || t('the program') }))
+    : !d.exists ? t('not written yet: the flow and every number come from {name}', { name: d.starts_from })
     : d.whole ? t('the whole flow of this profile') : (d.drawn_by === d.starts_from ? t('numbers of its own, the flow of {name}', { name: d.drawn_by }) : t('its own flow'));
+  /* another flow is shown: edits not saved are given up first, as on a reload */
+  const choose = async (name: string) => {
+    if (name === F.which || F.busy) return;
+    if (dirty() && !await askConfirm(t('Show another flow'), t('The flow shown has changes that are not saved. Showing another flow drops them.'), t('Drop my edits'))) return;
+    F.which = name; F.sel = null; F.multi = new Set(); F.open = new Set(); F.trial = null; F.meas = null;
+    F.side = 'numbers';
+    await load(false);
+  };
+  const rank = (name: string) => { const i = PASS_ORDER.indexOf(name); return i < 0 ? PASS_ORDER.length : i; };
+  const flows = [{ value: '', label: t('Main flow') }, ...[...(F.passes || [])]
+    .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
+    .map(p => ({ value: p.name, label: passWord(p.name) }))];
   const sel = F.sel ? find(F.tree, F.sel) : null;
   const panel: Panel = {
-    data: d, cur: F.cur, meas: F.meas, trial: F.trial,
+    data: d, tree: F.tree, epoch: F.epoch, cur: F.cur, meas: F.meas, trial: F.trial,
     problemsOf: id => (problems.get(id) || []).map(message => ({ message })),
     edited,
     numberSet: (name, v) => { F.cur[name] = v; F.report = null; remember(); touch(); measured(); },
     select: id => { F.sel = id; F.multi = new Set(id ? [id] : []); touch(); },
+    focusNumber, reload: () => { load(true); }, pass: !!F.which,
   };
   const isDirty = dirty();
   const menuStep = menu ? find(F.tree, menu.id) : null;
@@ -388,6 +451,9 @@ function FlowInner() {
       <Stack gap={0} h="100%">
         <Group px="md" py={8} gap="sm" justify="space-between" className="fl-bar" wrap="nowrap">
           <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+            <Select aria-label={t('Flow shown')} data={flows} value={F.which} allowDeselect={false} w={280}
+              style={{ flex: '0 0 auto' }} comboboxProps={{ withinPortal: true, width: 360 }}
+              onChange={v => { if (v !== null) choose(v); }} />
             <Code>{d.file}</Code>
             <Text size="sm" c="dimmed" lineClamp={1}>{status}</Text>
           </Group>
@@ -400,8 +466,8 @@ function FlowInner() {
             <Button variant="default" leftSection={<IconCheck size={16} />} loading={F.busy} onClick={check} title={t('Ctrl+Enter')}>{t('Check')}</Button>
             <Button leftSection={<IconDeviceFloppy size={16} />} disabled={F.busy || !isDirty} onClick={save} title={t('Ctrl+S')}>{t('Save')}</Button>
             <Button variant="default" leftSection={<IconX size={16} />} disabled={F.busy || !isDirty} onClick={discard}>{t('Discard')}</Button>
-            <Button variant="light" color="orange" leftSection={<IconPlayerPlay size={16} />} loading={F.trying}
-              onClick={() => { F.sel = null; F.multi = new Set(); F.side = 'try'; touch(); }}>{t('Dry run')}</Button>
+            {!F.which && <Button variant="light" color="orange" leftSection={<IconPlayerPlay size={16} />} loading={F.trying}
+              onClick={() => { F.sel = null; F.multi = new Set(); F.side = 'try'; touch(); }}>{t('Dry run')}</Button>}
           </Group>
         </Group>
         <Box px="md" pb={8}><HowTo /></Box>
@@ -421,7 +487,13 @@ function FlowInner() {
           </Box>
           <ScrollArea w={380} className="fl-side" type="auto">
             <Box p="md">
-              {sel ? <StepSettings key={sel.n.id} P={panel} n={sel.n} /> : (
+              {sel ? <StepSettings key={sel.n.id} P={panel} n={sel.n} /> : F.which ? (
+                <Stack gap="sm">
+                  <Text fw={650}>{passWord(F.which)}</Text>
+                  <Text size="sm">{t('A follow-up pass runs on a stored harvest, its steps one after the other in the order shown. The switch of the call in brackets starts it, and so does --flow with its name. To change it: put steps in or take them out, switch them off, or choose a step to set what it does and the values it reads. Where a step needs what another one gives, the check says so.')}</Text>
+                  {F.notStarted && <Alert color="gray">{rich(tr(F.notStarted))}</Alert>}
+                </Stack>
+              ) : (
                 <Stack gap="md">
                   <SegmentedControl fullWidth value={F.side} onChange={v => { F.side = v as 'numbers' | 'try'; touch(); }}
                     data={[{ value: 'numbers', label: t('Numbers') }, { value: 'try', label: t('Dry run') }]} />
@@ -435,7 +507,7 @@ function FlowInner() {
           </ScrollArea>
         </Group>
       </Stack>
-      <LibraryModal lib={d.library} opened={!!lib} after={lib ? lib.after : null} onClose={() => setLib(null)}
+      <LibraryModal lib={d.library} opened={!!lib} after={lib ? lib.after : null} onClose={() => setLib(null)} loopsOnly={!!F.which}
         onPick={p => { const l = lib; setLib(null); if (l) put(l.list, l.at, p); }} />
       <Menu opened={!!menu} onChange={o => { if (!o) setMenu(null); }} position="bottom-start" withinPortal shadow="md" width={240}>
         <Menu.Target><Box style={{ position: 'fixed', left: menu ? menu.x : 0, top: menu ? menu.y : 0, width: 1, height: 1 }} /></Menu.Target>
@@ -445,11 +517,11 @@ function FlowInner() {
             <Menu.Item leftSection={<IconArrowUp size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === 0} onClick={() => act('up', menuStep.n.id)}>{t('Move up')}</Menu.Item>
             <Menu.Item leftSection={<IconArrowDown size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === menuStep.steps.length - 1} onClick={() => act('down', menuStep.n.id)}>{t('Move down')}</Menu.Item>
             <Menu.Item leftSection={<IconCopy size={16} />} onClick={() => act('duplicate', menuStep.n.id)}>{t('Duplicate')}</Menu.Item>
-            <Menu.Item leftSection={<IconFrame size={16} />} onClick={() => { const at = listKeyOf(menuStep.n.id); if (at) setLib({ ...at, after: labelOf(d.library, menuStep.n) }); }}>{t('Put a step, loop, round or branching after it…')}</Menu.Item>
+            <Menu.Item leftSection={<IconFrame size={16} />} onClick={() => { const at = listKeyOf(menuStep.n.id); if (at) setLib({ ...at, after: labelOf(d.library, menuStep.n) }); }}>{F.which ? t('Put a step or loop after it…') : t('Put a step, loop, round or branching after it…')}</Menu.Item>
             <Menu.Divider />
             <Menu.Label>{F.multi.size > 1 && F.multi.has(menuStep.n.id) ? t('Wrap the {n} chosen in', { n: F.multi.size }) : t('Wrap it in')}</Menu.Label>
-            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>{frameWord('round')}</Menu.Item>
-            <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>{frameWord('if')}</Menu.Item>
+            {!F.which && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>{frameWord('round')}</Menu.Item>}
+            {!F.which && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>{frameWord('if')}</Menu.Item>}
             {Object.keys(d.library.each).map(e => <Menu.Item key={e} onClick={() => act('wrap', menuStep.n.id, 'each:' + e)}>{rich(tr((d.library.each_titles || {})[e]) || t('For each {name}', { name: e }))}</Menu.Item>)}
             <Menu.Divider />
             {removable(menuStep.n) && <Menu.Item leftSection={<IconPower size={16} />} onClick={() => act('off', menuStep.n.id)}>{menuStep.n.off ? t('Switch on') : t('Switch off')}</Menu.Item>}
@@ -471,7 +543,7 @@ function ReportStrip({ R, problems, onStep, onNumber, onReload }: {
     <List.Item key={i}>
       {e.id ? <><Anchor component="button" type="button" onClick={() => onStep(e.id!)}>{e.id}</Anchor>: </> : null}
       {e.name ? <><Anchor component="button" type="button" onClick={() => onNumber(e.name!)}>{e.name}</Anchor>: </> : null}
-      {e.message}
+      {rich(tr(e.message))}
     </List.Item>
   );
   if (!R) {

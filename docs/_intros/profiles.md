@@ -196,7 +196,7 @@ say "described with older prompts" for stored documents. A prompt of the
 extraction stage that is a parts file is inherited with its parts, and is read
 in the language of the profile that holds the file (see The extraction prompts,
 below).
-`extraction.PROMPT_CHECKS` is not laid over entry by entry: a profile that declares it holds the whole
+`extraction.PROMPT_CHECKS` (the rule `prompt_checks`, like `CONTRACT_LANGUAGE`, `ALT_LABEL_LANGUAGE` and `FRAME`, which a profile's `extraction.py` hands out from its rules) is not laid over entry by entry: a profile that declares it holds the whole
 list, and one that declares none keeps the list of the profile it extends.
 Nothing is taken from a
 profile that was not named. A profile without `extends` stands alone, and a
@@ -210,10 +210,11 @@ constants. `docpipe edit` shows and sets each of them.
 
 | File | What it holds | Laid over the default's |
 |---|---|---|
-| `rules.json` | every value a run follows (`docpipe/rules.py`): quote minimum length, decimal mark, year range, span words, request letters, retry waits, image size, country groups, `not_extracted`, compute parts; an `EXTRACT_*` setting wins over it | rule by rule |
+| `rules.json` | every value a run follows (`docpipe/rules.py`): quote minimum length, decimal mark, year range, span words, request letters, retry waits, image size, country groups, `not_extracted`, compute parts); a setting from the environment or the project file is laid over it, and a step of the flow may set its own value for a rule it reads (the rule's `steps`). Values of the machine (a model's address, slots per model, connections) are not set here but in the project file `docpipe.toml` | rule by rule |
 | `sources.json` | the ontology, shapes and graph queries the profile is written against, the lists drawn from them and which coordinate answers from which list (`docpipe/sources.py`); read by the profile's `vocabulary.py` through `sources()`, `sets()` and `axis_sets()` | not inherited |
-| `graph.json` | the classes not written, address rules, the effect of each constraint and the writer rules (`docpipe/graphfile.py`, applied by `serialize.apply_graph_file`) | not inherited |
-| `flow.json` | the drawing of the reading (boxes and frames) and the numbers that bound it | number by number; a drawing of its own is the whole drawing |
+| `graph.json` | the drawing of the graph (`map`: boxes, arrows and bricks), the classes not written, address rules, the effect of each constraint and the rules the one writer, `docpipe/extraction/graph.py`, follows: which reading wins, how front pages are found, how different numbers on one place are settled, whether a value two passages print is marked as confirmed, the base IRI (`docpipe/graphfile.py`, applied by `serialize.apply_graph_file`) | not inherited |
+| `flow.json` | the drawing of the reading (boxes and frames), the numbers that bound it and the values a step or frame sets for the rules it reads | number by number; a drawing of its own is the whole drawing |
+| `flows/<name>.json` | a follow-up pass as a flow of its own (`top_up`, `top_up_open`, `top_up_parameters`, `remap`, `recheck`, `review`, `start_at`, `example`); the default profile ships all of them, and a profile may write a file of the same name | the nearest file of the profile's line is the flow |
 | `rules.py` | `RULES`, the rules the profile's own code follows, and `GRAPH`, the rules of its graph writer; the code knows name, kind, bounds and help, never the value | not inherited |
 
 ## The profile interface, stage by stage

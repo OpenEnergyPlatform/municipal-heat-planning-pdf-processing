@@ -9,7 +9,10 @@ may belong to another work. For these fields a reading on a front page goes
 first; where there is none, the record the catalogue holds for the
 publication (`completion.py`); only then a reading anywhere else. The
 completion looks a field up wherever no front page gave it, and the graph
-takes its value in this order (`kg.py`).
+takes its value in this order (`kg.py`). The fields, which pages are front
+pages and the order are graph rules (`front_first_fields`,
+`front_pages_rule`, `front_pages_extra`, `front_order`), read when a
+reading is placed.
 
 Author: Felix Vossel
 """
@@ -18,46 +21,49 @@ from __future__ import annotations
 from typing import Optional
 
 from docpipe import graphfile
-from docpipe.extraction.trust import CATALOGUE
+from docpipe.extraction import readings
 
-# The fields a publication states about itself on its front pages: the rule
-# `front_first_fields` of graph.json beside this file.
-FRONT_FIELDS = tuple(graphfile.get("front_first_fields", "scenarios"))
+
+def front_fields() -> tuple:
+    """The fields a publication states about itself on its front pages: the
+    rule `front_first_fields` of graph.json beside this file, as it stands
+    now."""
+    return tuple(graphfile.get("front_first_fields", "scenarios"))
+
+
+def __getattr__(name: str):
+    """`FRONT_FIELDS`, which this module had as a constant, as the rule says
+    it now."""
+    if name == "FRONT_FIELDS":
+        return front_fields()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def page_of(row: dict) -> Optional[int]:
     """The page a row was read on, None where it names none."""
-    try:
-        return int((row.get("provenance") or {}).get("page"))
-    except (TypeError, ValueError):
-        return None
+    return readings.page_of(row)
 
 
 def front_pages(titles: list) -> set:
-    """Page 1 and the first page the document's title was read on (*titles*,
-    its rows of the title): its title page, where a cover stands before
-    it."""
-    pages = [page for page in map(page_of, titles) if page is not None]
-    return {1, min(pages)} if pages else {1}
+    """The front pages, as the graph rules `front_pages_rule` and
+    `front_pages_extra` say (`readings.front_pages`)."""
+    return readings.front_pages(
+        titles, which=graphfile.get("front_pages_rule", "scenarios"),
+        extra=graphfile.get("front_pages_extra", "scenarios"))
 
 
 def looked_up(row: dict) -> bool:
-    """Whether *row* holds a value looked up outside the document
-    (`completion.row_of`). Such a row keeps the page of the reading it was
-    found with, so its page says nothing of where its value stands."""
-    return CATALOGUE in (row.get("flags") or ()) \
-        or isinstance(row.get("catalogue"), dict)
+    """Whether *row* holds a value looked up outside the document."""
+    return readings.looked_up(row)
 
 
 def read_in_front(rows: list, front: set) -> list:
     """The rows of *rows* read on one of the *front* pages."""
-    return [row for row in rows
-            if not looked_up(row) and page_of(row) in front]
+    return readings.read_in_front(rows, front)
 
 
 def in_order(rows: list, front: set) -> list:
-    """The readings of a front field that count: those read on a *front*
-    page where there are any, else those looked up in the catalogue, else
-    every one of *rows*."""
-    return (read_in_front(rows, front)
-            or [row for row in rows if looked_up(row)] or list(rows))
+    """The readings of a front field that count, in the order the graph
+    rule `front_order` says (`readings.in_order`)."""
+    return readings.in_order(
+        rows, front, graphfile.get("front_order", "scenarios"))

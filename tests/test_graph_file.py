@@ -280,15 +280,16 @@ def test_the_oekg_body_leaves_out_what_the_graph_file_leaves_out():
     pytest.importorskip("pyshacl")
     from rdflib import Graph as RdfGraph
     from profiles.scenarios import kg, oekg_api
+    terms = kg.terms()
     shapes = RdfGraph().parse(data=f"""
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix oeo: <{kg.OEO_BASE}> .
 @prefix dc: <http://purl.org/dc/terms/> .
 oeo:ScenarioShape a sh:NodeShape ;
-    sh:targetClass oeo:{kg.CLS_SCENARIO} ;
+    sh:targetClass oeo:{terms.CLS_SCENARIO} ;
     sh:property [ sh:path dc:abstract ; sh:minCount 1 ] .
 oeo:BundleShape a sh:NodeShape ;
-    sh:targetClass oeo:{kg.CLS_BUNDLE} ;
+    sh:targetClass oeo:{terms.CLS_BUNDLE} ;
     sh:property [ sh:path dc:abstract ; sh:minCount 1 ] .
 """, format="turtle")
     payload = {"label": "Study", "acronym": "ST", "abstract": "What it is.",
@@ -297,11 +298,11 @@ oeo:BundleShape a sh:NodeShape ;
                "scenarios": [{"label": "One", "acronym": "S1",
                               "abstract": "The first."},
                              {"label": "Two", "acronym": "S2"}]}
-    at_fault = f"MinCount abstract {kg.CLS_SCENARIO}"
+    at_fault = f"MinCount abstract {terms.CLS_SCENARIO}"
     body, done = oekg_api.graph_file_on(payload, made(classes={
-        kg.CLS_AUTHOR: {"written": False}}), shapes, {})
+        terms.CLS_AUTHOR: {"written": False}}), shapes, {})
     assert "authors" not in body["study_reports"][0]
-    assert done["classes_left_out"] == {kg.CLS_AUTHOR: 2}
+    assert done["classes_left_out"] == {terms.CLS_AUTHOR: 2}
     body, done = oekg_api.graph_file_on(payload, made(constraints={
         at_fault: "leave_out_value"}), shapes, {})
     assert [one["acronym"] for one in body["scenarios"]] == ["S1"]
@@ -309,7 +310,8 @@ oeo:BundleShape a sh:NodeShape ;
     without = {key: value for key, value in payload.items()
                if key != "abstract"}
     body, done = oekg_api.graph_file_on(without, made(constraints={
-        f"MinCount abstract {kg.CLS_BUNDLE}": "leave_out_value"}), shapes, {})
+        f"MinCount abstract {terms.CLS_BUNDLE}": "leave_out_value"}),
+        shapes, {})
     assert body is None
     body, done = oekg_api.graph_file_on(payload, made(constraints={
         at_fault: "stop"}), shapes, {})

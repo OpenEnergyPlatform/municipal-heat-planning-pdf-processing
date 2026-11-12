@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 1024
----
 Beantworte die Frage unter "question" für den Wert unter "value" mit der Adresse der gezeigten Zeile, die die Antwort für diesen Wert sagt, und ihren Worten; sagt keine gezeigte Zeile sie, ist "at" 0.
 
 * "value" nennt die Worte des Werts und seine Adresse unter "passage". "passage" zeigt seine Zeile, bei einer Tabelle mit ihrem Titel und Kopf, sonst mit dem Satz davor und danach.

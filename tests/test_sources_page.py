@@ -277,7 +277,9 @@ def written_text(drawing: dict) -> str:
                     "tuples": [{"value": "Wärmeplan Nord",
                                 "quote": "heißt Wärmeplan Nord"}]}}]})
     writer = graph.Writer(graph.Drawing(drawing), spec=spec,
-                          rules={"base": "https://example.org/id/"},
+                          rules={"base": "https://example.org/id/",
+                                 "pick_one_order": ["not_contained",
+                                                    "most_sources"]},
                           bricks=registry())
     row = {"kind": "tuple", "parameter": "energy", "value": "Wärmeplan Nord",
            "value_raw": "Wärmeplan Nord", "unit": None, "state": "read",

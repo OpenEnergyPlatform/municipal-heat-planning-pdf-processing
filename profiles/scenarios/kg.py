@@ -23,6 +23,7 @@ import logging
 import re
 import sqlite3
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 from docpipe import graphfile
@@ -334,14 +335,27 @@ def study_of(written) -> dict:
 # -- the drawing's names, for the OEKG API body --------------------------------
 #
 # The body of a create speaks the platform's paths and classes. They are the
-# drawing's: what the Turtle writes for a field is what a body sends.
+# drawing's: what the Turtle writes for a field is what a body sends. Each is
+# read when a body is made, from the drawing as the graph file has it then.
 
-DRAWING = graphfile.get_map("scenarios")
-PREFIXES = "".join(f"@prefix {(name + ':').ljust(5)} <{iri}> .\n"
-                   for name, iri in (DRAWING.get("prefixes") or {}).items())
-ALWAYS_TYPES = tuple(graphfile.get("scenario_types_always", "scenarios"))
 _SPEC = json.loads(Path(__file__).with_name("extraction_spec.json")
                    .read_text(encoding="utf-8"))
+
+
+def drawing() -> dict:
+    """The drawing, as the graph file of this profile has it now."""
+    return graphfile.get_map("scenarios")
+
+
+def prefix_iri() -> dict:
+    """{prefix: IRI} of the header the drawing writes now."""
+    return dict(drawing().get("prefixes") or {})
+
+
+def always_types() -> tuple:
+    """The scenario types every factsheet carries (graph rule
+    `scenario_types_always`), as it stands now."""
+    return tuple(graphfile.get("scenario_types_always", "scenarios"))
 
 
 def _bare(name: str) -> str:
@@ -350,13 +364,13 @@ def _bare(name: str) -> str:
 
 def box_class(box_id: str) -> str:
     """The bare class of a box of the drawing."""
-    return _bare(next(box for box in DRAWING["boxes"]
+    return _bare(next(box for box in drawing()["boxes"]
                       if box["id"] == box_id).get("class") or "")
 
 
 def property_of(source: str, to: str, brick: Optional[str] = None) -> str:
     """The property of the drawing's arrow from *source* to *to*."""
-    return next(arrow["property"] for arrow in DRAWING["arrows"]
+    return next(arrow["property"] for arrow in drawing()["arrows"]
                 if arrow["from"] == source and arrow["to"] == to
                 and (brick is None or arrow.get("brick") == brick))
 
@@ -364,31 +378,36 @@ def property_of(source: str, to: str, brick: Optional[str] = None) -> str:
 def normalise(name: str) -> str:
     """One spelling for a name, as the drawing folds it."""
     from docpipe.extraction import graphkit
-    return graphkit.normalise(str(name), DRAWING.get("legal_forms") or "")
+    return graphkit.normalise(str(name), drawing().get("legal_forms") or "")
 
 
-CLS_REPORT = box_class("report")
-CLS_BUNDLE = box_class("bundle")
-CLS_SCENARIO = box_class("scenario")
-CLS_AUTHOR = box_class("author")
-CLS_ORGANISATION = box_class("organisation")
-CLS_FUNDER = box_class("funder")
-P_LABEL = property_of("publication_title", "report")
-P_ACRONYM = property_of("study_acronym", "bundle")
-P_ABSTRACT = property_of("publication_abstract", "bundle")
-P_AUTHOR = property_of("report", "author")
-P_PUBDATE = property_of("publication_date", "report")
-P_DOI = property_of("publication_doi", "report")
-P_ORGANISATION = property_of("bundle", "organisation")
-P_FUNDER = property_of("bundle", "funder")
-P_HAS_PART = property_of("bundle", "report")
-P_SCENARIO_TYPE = property_of("scenario_type", "scenario")
-P_STUDY_REGION = property_of("scenario_region", "scenario")
-P_SCENARIO_YEAR = property_of("scenario_year", "scenario")
-P_SCENARIO_ACRONYM = property_of("scenario_label", "scenario", "short_name")
-P_SCENARIO_ABSTRACT = property_of("scenario_abstract", "scenario")
-P_UUID = next(box.get("uuid") for box in DRAWING["boxes"]
-              if box["id"] == "report")
+def terms() -> SimpleNamespace:
+    """The classes and properties a body names its nodes and edges with,
+    as the drawing has them now."""
+    return SimpleNamespace(
+        CLS_REPORT=box_class("report"),
+        CLS_BUNDLE=box_class("bundle"),
+        CLS_SCENARIO=box_class("scenario"),
+        CLS_AUTHOR=box_class("author"),
+        CLS_ORGANISATION=box_class("organisation"),
+        CLS_FUNDER=box_class("funder"),
+        P_LABEL=property_of("publication_title", "report"),
+        P_ACRONYM=property_of("study_acronym", "bundle"),
+        P_ABSTRACT=property_of("publication_abstract", "bundle"),
+        P_AUTHOR=property_of("report", "author"),
+        P_PUBDATE=property_of("publication_date", "report"),
+        P_DOI=property_of("publication_doi", "report"),
+        P_ORGANISATION=property_of("bundle", "organisation"),
+        P_FUNDER=property_of("bundle", "funder"),
+        P_HAS_PART=property_of("bundle", "report"),
+        P_SCENARIO_TYPE=property_of("scenario_type", "scenario"),
+        P_STUDY_REGION=property_of("scenario_region", "scenario"),
+        P_SCENARIO_YEAR=property_of("scenario_year", "scenario"),
+        P_SCENARIO_ACRONYM=property_of("scenario_label", "scenario",
+                                       "short_name"),
+        P_SCENARIO_ABSTRACT=property_of("scenario_abstract", "scenario"),
+        P_UUID=next(box.get("uuid") for box in drawing()["boxes"]
+                    if box["id"] == "report"))
 
 
 def tag_property(key: str) -> str:

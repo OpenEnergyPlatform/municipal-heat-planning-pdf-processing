@@ -30,9 +30,8 @@ FALLBACK_MODELS = ("claude-fable-5-1", "claude-opus-5-5", "claude-opus-5",
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 STOPS = {"end_turn": base.STOP, "stop_sequence": base.STOP,
          "max_tokens": base.LENGTH, "refusal": base.REFUSED}
-# What the API compiles of a schema: optional properties, and properties
-# with alternatives.
-BUDGET = (24, 16)
+# What the API compiles of a schema is a rule of the step that sends the
+# request (`schema_optional_fields`, `schema_optional_alternatives`).
 # An error that arrives inside a stream comes after the status line said
 # 200. What kind it is, is in its body.
 STREAMED = {"overloaded_error": 529, "rate_limit_error": 429,
@@ -120,7 +119,8 @@ class AnthropicChat:
         system, turns = base.split_messages(messages)
         body: dict = {
             "model": model,
-            "max_tokens": int(max_tokens or 0) + self.endpoint.thinking_room,
+            "max_tokens": (int(max_tokens or 0)
+                           + base.thinking_room(self.endpoint)),
             "messages": [{"role": role, "content": _content(parts)}
                          for role, parts in turns],
         }
@@ -137,7 +137,7 @@ class AnthropicChat:
             output["effort"] = effort
         if output:
             body["output_config"] = output
-        return base.merge(body, self.endpoint.options)
+        return base.merge(body, base.options_of(self.endpoint))
 
     def _send(self, body: dict, timeout):
         sdk = self._sdk_client.with_options(timeout=timeout) if timeout \
@@ -153,8 +153,9 @@ class AnthropicChat:
 
     def create(self, *, model, messages, max_tokens=None, temperature=None,
                response_format=None, extra_body=None, timeout=None):
-        _, schema, decode = base.enforced(response_format,
-                                          base.schemas.OPTIONAL, BUDGET)
+        _, schema, decode = base.enforced(
+            response_format, base.schema_dialect(base.schemas.OPTIONAL),
+            base.optional_budget())
         if temperature is not None and not base.sends_temperature(NAME,
                                                                   model):
             temperature = None

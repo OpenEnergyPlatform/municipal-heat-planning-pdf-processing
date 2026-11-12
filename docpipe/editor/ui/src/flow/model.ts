@@ -23,7 +23,20 @@ export interface Prop { name: string; kind: string; label: string; ops: string[]
 export interface Subject { name: string; label: string; props: Prop[] }
 export interface FlowNumber {
   name: string; help: string; least: number; value: number; own: boolean; inherited: number | null; owner: string;
-  setting: string | null; in_effect: number; origin: string;
+  setting: string | null; in_effect: number; origin: string; own_at?: StepRef[];
+}
+/* a step of the saved flow that gives a rule or number a value of its own */
+export interface StepRef { id: string; kind: string }
+/* a rule or number a step can read (editor/flow.py step_rules); a key has no value here */
+export interface StepRule {
+  name: string; source: 'rule' | 'number'; tab: string; group: string; kind: string; help: string;
+  least: number | null; most: number | null; choices: string[]; columns: string[]; of: string; empty: boolean;
+  decided: string; setting: string | null; machine: boolean; secret: boolean; steps: string[];
+  standard: unknown; standard_from: string; in_effect: unknown; origin: string;
+}
+/* a value of the machine, written into the project file only */
+export interface MachineRule extends Omit<StepRule, 'steps' | 'standard' | 'standard_from' | 'source' | 'machine' | 'secret'> {
+  key: string | null; value: unknown;
 }
 export interface FlowData {
   file: string; exists: boolean; base: string | null; whole: boolean; starts_from: string; drawn_by: string;
@@ -33,7 +46,15 @@ export interface FlowData {
   problems: { id?: string; name?: string; message: string }[];
   notes: { says: string; to: unknown }[];
   settings: { key: string; env: string; value: string | null; origin: string; help: string; secret: boolean; set: boolean }[];
+  step_rules: { rules: StepRule[]; kinds: Record<string, string[]>; tabs: Record<string, string> };
+  run: { machine: MachineRule[]; project: { file: string; exists: boolean; refused: string | null } | null };
 }
+
+/* how a rule names the kind of a step (rules.step_kind): a box by its kind, a frame as "each <what>", "round" or "if" */
+export const stepKind = (n: Step): string => {
+  const k = kindOf(n);
+  return k === 'box' ? n.box : k === 'each' ? 'each ' + n.each : k;
+};
 
 export type Kind = 'box' | 'each' | 'round' | 'if' | '';
 export const kindOf = (n: unknown): Kind =>

@@ -8,14 +8,16 @@ Graphen aufgenommen wird und welche constraints erfüllt sein müssen").
 
     <profile folder>/graph.json
 
-    {"classes": {class: {"written": false} |
+    {"map": {"boxes": [...], "arrows": [...]},
+     "classes": {class: {"written": false} |
                         {"address": {"folder": ..., "key": [property, ...],
                                      "base": ...}}},
      "constraints": {"<constraint> <property> <class>": effect},
      "rules": {name: value}}
 
-What a writer does stays code (`profiles/<name>/kg.py`); the file says what
-the writer is to do with it:
+What the writer does stays code (`docpipe/extraction/graph.py` and the
+bricks of `profiles/<name>/kg.py`); the drawing (`map`) says which node
+each field becomes, and the rest of the file what the writer is to do:
 
 - a class that is not written: its nodes, and every triple that names them,
   leave the written graph;
@@ -28,7 +30,7 @@ the writer is to do with it:
   `leave_out_paper` (every node of its document does) or `stop` (the gate,
   `docpipe.extraction.gate`, shuts before a job starts its model);
 - the rules a profile's writer declares (`rules.py: GRAPH`), each read by the
-  writer where it applies it.
+  writer where it applies it (`get`, the value of a step of the flow first).
 
 A class is named by its identifier (`OEO_00030022`), a property by its
 identifier or `prefix:name`, a constraint by the words the validation
@@ -171,9 +173,10 @@ out: what it inherits.
 def get(name: str, owner: str)
 ```
 
-The value of the graph rule *name* of the profile called *owner*,
-as its files, `DOCPIPE_GRAPH_FILE` and the settings of its rules say it
-now.
+The value of the graph rule *name* of the profile called *owner*:
+the own value of the step that runs or of a frame around it, as
+`rules.get` reads a rule of the line, else as its files,
+`DOCPIPE_GRAPH_FILE` and the settings of its rules say it now.
 
 ### get_map
 

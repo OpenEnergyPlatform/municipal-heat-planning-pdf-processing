@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 2048
----
 Name every value of the field under "field" that the lines under "passage" print, each with the address of its line or cell and its words.
 
 * Each line starts with its address. A line that "|" divides has cells, counted from 1, wherever it stands: in "12 | IRENA | Reference | 2050 |" the cell 12.2 is "Reference". A table's title and head stand in every piece of it under the same addresses, and so does a figure's caption.

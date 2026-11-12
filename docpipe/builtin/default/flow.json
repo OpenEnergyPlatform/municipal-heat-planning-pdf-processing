@@ -20,7 +20,11 @@
     },
     {
       "id": "figures",
-      "box": "transcribe"
+      "box": "transcribe",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 4096
+      }
     },
     {
       "id": "pieces",
@@ -60,7 +64,13 @@
           "steps": [
             {
               "id": "settled",
-              "box": "docfield"
+              "box": "docfield",
+              "rules": {
+                "show_title_page": "first",
+                "field_text": "whole",
+                "temperature": 0,
+                "max_tokens": 2048
+              }
             }
           ]
         },
@@ -72,7 +82,11 @@
     },
     {
       "id": "sentences",
-      "box": "sentences"
+      "box": "sentences",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 300
+      }
     },
     {
       "id": "works",
@@ -84,6 +98,10 @@
             "is": "whole"
           }
         ]
+      },
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 1024
       }
     },
     {
@@ -107,7 +125,13 @@
           "steps": [
             {
               "id": "document_fields",
-              "box": "docfield"
+              "box": "docfield",
+              "rules": {
+                "show_title_page": "first",
+                "field_text": "whole",
+                "temperature": 0,
+                "max_tokens": 2048
+              }
             }
           ]
         },
@@ -175,7 +199,11 @@
                       "steps": [
                         {
                           "id": "document_quantity",
-                          "box": "quantity"
+                          "box": "quantity",
+                          "rules": {
+                            "temperature": 0,
+                            "max_tokens": 512
+                          }
                         }
                       ]
                     },
@@ -199,7 +227,11 @@
                       "steps": [
                         {
                           "id": "document_work",
-                          "box": "work_coordinate"
+                          "box": "work_coordinate",
+                          "rules": {
+                            "temperature": 0,
+                            "max_tokens": 1024
+                          }
                         }
                       ]
                     }
@@ -207,7 +239,11 @@
                   "else": [
                     {
                       "id": "document_own_place",
-                      "box": "coord"
+                      "box": "coord",
+                      "rules": {
+                        "temperature": 0,
+                        "max_tokens": 1024
+                      }
                     },
                     {
                       "id": "document_after_own_place",
@@ -275,7 +311,11 @@
                           "else": [
                             {
                               "id": "document_search_sentence",
-                              "box": "phrase"
+                              "box": "phrase",
+                              "rules": {
+                                "temperature": 0,
+                                "max_tokens": 300
+                              }
                             },
                             {
                               "id": "document_near",
@@ -309,11 +349,19 @@
                               "steps": [
                                 {
                                   "id": "document_beside",
-                                  "box": "search"
+                                  "box": "search",
+                                  "rules": {
+                                    "temperature": 0,
+                                    "max_tokens": 1536
+                                  }
                                 },
                                 {
                                   "id": "document_beside_about",
-                                  "box": "about"
+                                  "box": "about",
+                                  "rules": {
+                                    "temperature": 0,
+                                    "max_tokens": 256
+                                  }
                                 }
                               ]
                             },
@@ -368,11 +416,19 @@
                                       "steps": [
                                         {
                                           "id": "document_search",
-                                          "box": "search"
+                                          "box": "search",
+                                          "rules": {
+                                            "temperature": 0,
+                                            "max_tokens": 1536
+                                          }
                                         },
                                         {
                                           "id": "document_about",
-                                          "box": "about"
+                                          "box": "about",
+                                          "rules": {
+                                            "temperature": 0,
+                                            "max_tokens": 256
+                                          }
                                         }
                                       ]
                                     },
@@ -431,7 +487,11 @@
                               "steps": [
                                 {
                                   "id": "document_plan_years",
-                                  "box": "last_year"
+                                  "box": "last_year",
+                                  "rules": {
+                                    "temperature": 0,
+                                    "max_tokens": 512
+                                  }
                                 }
                               ]
                             }
@@ -445,7 +505,11 @@
             },
             {
               "id": "document_name",
-              "box": "names"
+              "box": "names",
+              "rules": {
+                "temperature": 0,
+                "max_tokens": 512
+              }
             }
           ]
         }
@@ -466,7 +530,12 @@
           "steps": [
             {
               "id": "finds",
-              "box": "find"
+              "box": "find",
+              "rules": {
+                "show_title_page": "never",
+                "temperature": 0,
+                "max_tokens": 2048
+              }
             }
           ]
         }
@@ -536,7 +605,11 @@
                   "steps": [
                     {
                       "id": "quantity",
-                      "box": "quantity"
+                      "box": "quantity",
+                      "rules": {
+                        "temperature": 0,
+                        "max_tokens": 512
+                      }
                     }
                   ]
                 },
@@ -560,7 +633,11 @@
                   "steps": [
                     {
                       "id": "work",
-                      "box": "work_coordinate"
+                      "box": "work_coordinate",
+                      "rules": {
+                        "temperature": 0,
+                        "max_tokens": 1024
+                      }
                     }
                   ]
                 }
@@ -568,7 +645,11 @@
               "else": [
                 {
                   "id": "own_place",
-                  "box": "coord"
+                  "box": "coord",
+                  "rules": {
+                    "temperature": 0,
+                    "max_tokens": 1024
+                  }
                 },
                 {
                   "id": "after_own_place",
@@ -636,7 +717,11 @@
                       "else": [
                         {
                           "id": "search_sentence",
-                          "box": "phrase"
+                          "box": "phrase",
+                          "rules": {
+                            "temperature": 0,
+                            "max_tokens": 300
+                          }
                         },
                         {
                           "id": "near",
@@ -670,11 +755,19 @@
                           "steps": [
                             {
                               "id": "beside",
-                              "box": "search"
+                              "box": "search",
+                              "rules": {
+                                "temperature": 0,
+                                "max_tokens": 1536
+                              }
                             },
                             {
                               "id": "beside_about",
-                              "box": "about"
+                              "box": "about",
+                              "rules": {
+                                "temperature": 0,
+                                "max_tokens": 256
+                              }
                             }
                           ]
                         },
@@ -729,11 +822,19 @@
                                   "steps": [
                                     {
                                       "id": "search",
-                                      "box": "search"
+                                      "box": "search",
+                                      "rules": {
+                                        "temperature": 0,
+                                        "max_tokens": 1536
+                                      }
                                     },
                                     {
                                       "id": "about",
-                                      "box": "about"
+                                      "box": "about",
+                                      "rules": {
+                                        "temperature": 0,
+                                        "max_tokens": 256
+                                      }
                                     }
                                   ]
                                 },
@@ -792,7 +893,11 @@
                           "steps": [
                             {
                               "id": "plan_years",
-                              "box": "last_year"
+                              "box": "last_year",
+                              "rules": {
+                                "temperature": 0,
+                                "max_tokens": 512
+                              }
                             }
                           ]
                         }
@@ -806,7 +911,11 @@
         },
         {
           "id": "name",
-          "box": "names"
+          "box": "names",
+          "rules": {
+            "temperature": 0,
+            "max_tokens": 512
+          }
         }
       ]
     },
@@ -816,7 +925,15 @@
     },
     {
       "id": "compute",
-      "box": "compute"
+      "box": "compute",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 2048
+      }
+    },
+    {
+      "id": "catalogue",
+      "box": "catalogue"
     }
   ]
 }

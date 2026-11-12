@@ -12,7 +12,27 @@
       "publication_author",
       "publication_date",
       "publication_doi"
-    ]
+    ],
+    "front_pages_rule": "first page and title page",
+    "front_pages_extra": 0,
+    "front_order": [
+      "front",
+      "catalogue",
+      "any"
+    ],
+    "pick_one_order": [
+      "not_contained",
+      "most_sources",
+      "located",
+      "longer"
+    ],
+    "settle_order": [
+      "wording",
+      "rounding",
+      "trust",
+      "contested"
+    ],
+    "corroborated_by_place": true
   },
   "map": {
     "prefixes": {

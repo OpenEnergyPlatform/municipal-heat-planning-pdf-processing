@@ -1112,12 +1112,15 @@ wait.
 While the limit is on, the requests open at once are bounded by it, up to
 `EXTRACT_LIMIT_MAX`, and not by the pools: the finds and the
 coordinates of a document run side by side on a pool the size of the limit's maximum
-(`runner.AHEAD`), `EXTRACT_FIELD_PARALLEL` bounds the questions of the compute
-step at once and is warned about where it is lower than the limit's maximum, and
-`EXTRACT_LLM_PARALLEL` is the size of the run's pool of documents' tasks. A
+(`runner.AHEAD`), the rule `compute_parallel` (`EXTRACT_FIELD_PARALLEL`) bounds
+the questions of the compute step at once and is warned about where it is lower
+than the limit's maximum, and the rule `documents_in_flight`
+(`EXTRACT_BATCH_DOCS`) bounds the documents read at once. A
 server of one's own with no `/metrics` gets no adaptive limit at all, the pools
-alone deciding. `EXTRACT_LIMIT_ADAPTIVE=0` turns it off (`runner.start_limit`,
-`runner.py`).
+alone deciding. The rule `limit_adaptive` (`EXTRACT_LIMIT_ADAPTIVE=0`) turns it
+off (`runner.start_limit`, `runner.py`); `docpipe benchmark` holds both of its
+runs to one request at a time through `limit_adaptive`, `documents_in_flight` and
+`compute_parallel` (`docpipe/extraction/benchmark.py`).
 
 While the limit is on, every model request of the run goes through one
 dispatcher thread and one queue (`scheduler.py`), served oldest document first,
@@ -1547,6 +1550,15 @@ that file into the profile's directory, from the spec the profile names
 (`extraction.SPEC_PATH`), wherever it lies.
 
 ### The passes that revisit a harvest
+
+Each of these passes is a flow of its own, `top_up`, `top_up_open`,
+`top_up_parameters`, `remap`, `recheck`, `review` or `start_at` (and `example`,
+which runs a field's example), a file under `flows/` of the default profile
+(`docpipe/extraction/passflow.py`, `passboxes.py`) that a profile may replace by
+a file of the same name. Each switch of the call (`--top-up`, `--top-up-open`,
+`--top-up-parameters`, `--remap`, `--recheck`, `--review`, `--start-at`) runs
+its flow, and `--flow NAME` runs any flow by name, `main` being the harvest. The
+Flow tab of [the editor](editor.md) draws and edits them.
 
 Six passes act on a harvest already written, without starting a
 document over from its first passage, and they differ in what they cost
@@ -2103,8 +2115,8 @@ and `docpipe edit` share.
 
 Two lines read more than the keys. `every shape property is asked or left out
 on purpose` holds the shapes of the profile's graph against its spec, the way
-`docpipe compile diff` does: the properties no parameter asks, and no `kg`
-block or link names, are warned about unless the profile has recorded them in
+`docpipe compile diff` does: the properties no parameter asks, and no arrow
+of the graph file's drawing writes, are warned about unless the profile has recorded them in
 the rule `not_extracted`, a table from `(shape, property)` to a sentence of
 reason (scenarios declares 21; kwp none). Where the shapes are is the profile's
 own too, `extraction.shapes_files`, a callable that returns the files of its
@@ -2228,6 +2240,26 @@ item asked, nothing came back. An own check is a box that refuses an answer wher
 its condition holds; the answer is asked again with its sentence, and its
 refusals are counted as `check:<name>`.
 
+A step or a frame may also carry `rules`: a value of its own for each rule it
+reads (the rule's `steps` say which steps read it; the rules of the graph file
+count too, `flow.known_rules`). While the step runs, its value lies over the
+run's, the innermost frame's over the outer ones'. Read in order, a rule's
+value is the step's, then a setting of the start (the environment or the
+project file), then the profile's `rules.json`, then the default profile's.
+Every value of the reading is such a rule: the core's are declared in
+`docpipe/ruleset/*.py` (what a rule is: `ruleset/kit.py`) and gathered by
+`docpipe/rules.py`, a profile's own in `profiles/<name>/rules.py` and its
+values in its `rules.json`. `rules.get` reads a value where it is used, never
+while a module loads. A rule that has no `steps` is the run's only and is read
+as the run's whatever step asks. Values of the machine (a model's address, key,
+slots per model, connections; `Rule.machine`, `Rule.secret`) are set only in
+the project file `docpipe.toml`, which git ignores, never in a rules file and
+never at a step. Several rules choose a second way of reading and stand off by
+default (for example `conversation`, `answer_with`, `repair_replies`,
+`outside_list`); the help of each in its module says what it does. The
+catalogue search is the box `catalogue`, after `compute` at the end, with
+settings of its own; switched off, nothing is looked up.
+
 The default profile's file is the whole flow, `numbers` and `flow`. A profile that
 extends it may have a `flow.json` of its own that holds the `numbers` it sets
 differently, laid over the inherited file number by number (`flow.load`), and a
@@ -2291,7 +2323,7 @@ harvest read with.
 | `RERANK_BASE_URL` / `RERANK_MODEL` / `RERANK_POOL` / `RERANK_API_KEY` | env var | empty / `Qwen/Qwen3-VL-Reranker-8B` / `100` / `EMPTY` | The vLLM server whose `/rerank` orders the pieces of a plan for each field and every passage search (empty: the vector search's order, the plan's order without the search), the model it serves, and how many of the best passages of each kind a passage search hands it (the order of the pieces scores every piece) | `rerank.py`, `runner.make_more_sources`, `runner.make_chunk_reranker` |
 | `LLM_TOOL_CHOICE` | env var | `none` | The `tool_choice` every request of the pipeline sends; `none` keeps an agent endpoint from calling a tool of its own, empty or `off` sends none | `llm_preflight.request_extras` |
 | `CODE_EXEC_PARALLEL` | env var | `1` | Code runs one run has out at the sandbox at a time; match the service's `KWP_SANDBOX_PARALLEL` | `runner.SANDBOX_SLOTS` |
-| `EXTRACT_LLM_PARALLEL` / `EXTRACT_PLAN_PARALLEL` / `EXTRACT_FIELD_PARALLEL` | env var | `128` / `8` / `192` | Pool sizes: the run's pool of documents' tasks, planning threads (retrieval, SQL and the document's phrase requests), and the questions of the compute step at once. With the adaptive limit on, the limit (`EXTRACT_LIMIT_MAX` at most) bounds the requests, and the finds and coordinates of a survey run on a pool sized to the limit's maximum (see The adaptive request limit) | `runner.main`, `runner.make_computer`, `runner.start_limit` |
+| `EXTRACT_FIELD_PARALLEL` | env var | `192` | The rule `compute_parallel`: the questions of the compute step at once. With the adaptive limit on, the limit (`EXTRACT_LIMIT_MAX` at most) bounds the requests, and the finds and coordinates of a survey run on a pool sized to the limit's maximum (see The adaptive request limit); the documents at once are bounded by `EXTRACT_BATCH_DOCS` (`documents_in_flight`) | `runner.make_computer`, `runner.start_limit` |
 | `EXTRACT_ATTACH_IMAGES` / `EXTRACT_LOCATE` | env var | `1` / `1` | Off, respectively: no crop attaches to a transcription or review request (no `images/` dir needed), and a figure stands as its description, or `make_locate` returns `None`, no quote placed on the page | `runner.py` askers, `runner.make_locate` |
 | `EXTRACT_IMAGE_MAX_SIDE` | env var | `1280` | Longest side, in pixels, of a crop that rides along with a request; a larger one is shrunk to it, and the tokens counted for a crop follow from it | `runner._image_data_url`, `runner.IMAGE_TOKENS` |
 | `EXTRACT_LOCATE_MAX_PAGES` | env var | `3` | Pages of the PDF tried, the section's first page first, to place a quote's highlight rectangles before the quote gets the flag `not_located` | `runner.make_locate` |

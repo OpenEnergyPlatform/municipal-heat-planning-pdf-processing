@@ -24,6 +24,13 @@ prompts, so the profile says which passages its prompts have to hold
 well: it says where they are (`extraction.shapes_files`) and which of their
 properties it leaves out on purpose (the rule `not_extracted`).
 
+What it checks it derives from the flow and the rules in effect, and holds
+no list of its own: the prompts it loads are those of the steps of the
+profile's flow (a run writes no anchors, so none is checked), and more can
+be named by the rule `preflight_prompts`. What a check does when it finds a
+problem is the rule `preflight_severity` (fail, warn or off); the entries
+that mean "I do not know" are `shrug_words`.
+
 Two lines only say what they find and never fail: the properties of the
 shapes that nobody asks and the definitions of the spec that are not the
 pin's.
@@ -45,9 +52,15 @@ from docpipe.profile import (ENV_VAR, add_profile_argument,
                              resolve_profile)
 
 # A value that means "I do not know" is not a reading and must not sit in a
-# vocabulary: a coordinate nobody read is a state, not a class. In the
-# languages specs are written in here; a word that is not listed passes.
-SHRUGS = {"unknown", "unbekannt", "n/a", "keine angabe", "out:unstated"}
+# vocabulary: a coordinate nobody read is a state, not a class. The words
+# are the rule `shrug_words`: a word that is not listed passes.
+
+
+def shrugs() -> set:
+    """The entries that mean "I do not know" (rule `shrug_words`), folded."""
+    from docpipe import rules
+    return {word.strip().casefold() for word in rules.get("shrug_words")}
+
 
 # The shape of one entry of a profile's `extraction.PROMPT_CHECKS`.
 PROMPT_CHECK_SHAPE = "(what is checked, prompt id, passage, has to be there)"
@@ -69,6 +82,33 @@ def prompt_checks(declared) -> tuple:
         else:
             bad.append(repr(entry))
     return good, bad
+
+
+def prompts_in_effect(profile) -> list:
+    """[(prompt id, whether the profile may leave it unwritten)] of the
+    requests the steps of *profile*'s flow that are on ask with, in the
+    order the flow asks them, then those the rule `preflight_prompts` names
+    besides."""
+    from docpipe import rules
+
+    from . import addressed, blocks, compute, flow
+    out: list = []
+    seen: set = set()
+    for node, _frames in flow.on(flow.tree_of(profile)):
+        if flow.kind_of(node) != "box":
+            continue
+        kind = blocks.LIBRARY.get(node.get("box"))
+        if kind is None or not kind.asks or kind.asks in seen:
+            continue
+        seen.add(kind.asks)
+        prompt_id = compute.COMPUTE_PROMPT_ID if kind.asks == "compute" \
+            else f"extraction/{kind.asks}"
+        out.append((prompt_id, kind.asks in addressed.OPTIONAL
+                    or kind.asks == "compute"))
+    for prompt_id in rules.get("preflight_prompts"):
+        if prompt_id not in {one for one, _opt in out}:
+            out.append((prompt_id, False))
+    return out
 
 
 def silent_parameters(raw: dict, drawing=None) -> list:
@@ -157,21 +197,25 @@ def shapes_verdict(profile, raw: dict) -> tuple:
     file is not there, or rdflib is not, the line says it is skipped: a
     check that was not run is not a gap found.
     """
+    from docpipe import rules
     left_out, unreadable = not_extracted(left_out_of(profile))
+    # A check that cannot run counts as passed or as a warning, as the rule
+    # `preflight_skip_counts_ok` says.
+    skipped = bool(rules.get("preflight_skip_counts_ok"))
     hook = profile.component("extraction", "shapes_files")
     if hook is None:
-        return True, "skipped: the profile names no shapes file"
+        return skipped, "skipped: the profile names no shapes file"
     try:
         files = [Path(one) for one in hook()]
     except Exception as exc:              # a hook that does not run names none
         return False, f"shapes_files: {type(exc).__name__}: {exc}"
     files = [one for one in files if one.is_file()]
     if not files:
-        return True, "skipped: no shapes file of the last refresh"
+        return skipped, "skipped: no shapes file of the last refresh"
     try:
         import rdflib                                          # noqa: F401
     except ImportError:
-        return True, "skipped: rdflib is not installed"
+        return skipped, "skipped: rdflib is not installed"
     try:
         unasked, every = shape_properties(files, raw, profile)
     except Exception as exc:              # a file that does not parse
@@ -197,11 +241,18 @@ def audit(name: str) -> list:
     rows: list = []
 
     def check(what: str, ok: bool, detail: str = "", fatal: bool = True):
+        # What a check does where it finds a problem is the rule
+        # `preflight_severity`; a check it does not name keeps the severity
+        # its call gives it (a check a profile words itself, a prompt).
+        said = rules.get("preflight_severity").get(what)
+        if said == "off":
+            return ok
+        hard = fatal if said not in ("fail", "warn") else said == "fail"
         rows.append((name, what,
-                     "ok" if ok else ("FAIL" if fatal else "warn"), detail))
+                     "ok" if ok else ("FAIL" if hard else "warn"), detail))
         return ok
 
-    from docpipe import prompts
+    from docpipe import prompts, rules
     from docpipe.profile import load_profile
 
     from . import fields
@@ -278,37 +329,20 @@ def audit(name: str) -> list:
           bool((spec.parameter_question or "").strip()),
           (spec.parameter_question or "")[:60])
 
-    # One anchor set per question the field sweep asks, and none for the
-    # value: the plan searches with the one sentence written per document.
-    # Six sentences about a parameter say nothing about where its reference
-    # year is printed, and the sweep searched with the raw question until
-    # this was measured.
-    from .runner import anchor_targets, fill_dynamic_axes
-    targets = anchor_targets(spec)
-    keys = [t[0] for t in targets]
-    wanted = (1 + (1 if fields.unit_slot(spec) is not None else 0)
-              + sum(len(fields.asked_slots(p)) for p in spec.parameters))
-    check("one anchor per question",
-          len(keys) == len(set(keys)) == wanted, f"{len(keys)} target(s)")
-    with_question = [t for t in targets if t[3]]
-    check("every axis target carries its question",
-          len(with_question) >= wanted - 1,
-          f"{len(with_question)} with question")
-    check("no anchor for the value itself",
-          not {p.uri for p in spec.parameters} & set(keys),
-          "the plan searches with one sentence per document")
-
     # No entry that means "I do not know". Those are states now.
-    shrugs = []
+    from .runner import fill_dynamic_axes
+    words = shrugs()
+    shrugging = []
     for p in spec.parameters:
         for axis_name, axis in p.axes.items():
             for uri in (axis.vocabulary or {}):
-                if uri.strip().casefold() in SHRUGS:
-                    shrugs.append(f"{p.uri.split('/')[-1]}.{axis_name}={uri}")
+                if uri.strip().casefold() in words:
+                    shrugging.append(
+                        f"{p.uri.split('/')[-1]}.{axis_name}={uri}")
         for uri in (p.vocabulary or {}):
-            if uri.strip().casefold() in SHRUGS:
-                shrugs.append(f"{p.uri.split('/')[-1]}.value={uri}")
-    check("no shrug in the vocabulary", not shrugs, ", ".join(shrugs))
+            if uri.strip().casefold() in words:
+                shrugging.append(f"{p.uri.split('/')[-1]}.value={uri}")
+    check("no shrug in the vocabulary", not shrugging, ", ".join(shrugging))
 
     # And the way to say it is absent exists, as an entry and not as prose.
     # A dynamic axis carries no list until the profile fills it per document,
@@ -348,19 +382,19 @@ def audit(name: str) -> list:
                   (f"not in {prompt_id}: {passage!r}" if has_to_be_there
                    else f"still in {prompt_id}: {passage!r}"))
 
-    texts: dict = {}
-    for prompt_id in ("extraction/anchors",):
+    # The prompts the run reads: those of the steps of the profile's flow
+    # that ask, and those the rule `preflight_prompts` adds.
+    for prompt_id, optional in prompts_in_effect(profile):
         try:
             prompt = prompts.load(prompt_id)
         except Exception as exc:
+            if optional and isinstance(exc, (FileNotFoundError, LookupError)):
+                continue        # a request the profile may leave unwritten
             check(f"prompt {prompt_id}", False, str(exc))
             continue
-        texts[prompt_id] = prompt.text
         ok = bool(prompt.text.strip())
         check(f"prompt {prompt_id}", ok, f"{len(prompt.text)} char(s)")
-    anchors_text = texts.get("extraction/anchors", "")
-    check("anchors prompt knows the question", '"question"' in anchors_text)
-    as_the_profile_words_it("extraction/anchors", anchors_text)
+        as_the_profile_words_it(prompt_id, prompt.text)
     for what, where, passage, has_to_be_there in worded:
         if (what, where, passage, has_to_be_there) in run:
             continue

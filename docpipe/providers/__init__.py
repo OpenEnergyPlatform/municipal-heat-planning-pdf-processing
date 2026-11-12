@@ -50,9 +50,56 @@ ROLES = {
 NO_KEY = ("", "EMPTY")
 
 
+def _llm(name: str):
+    """The rule *name* as the step that sends the request reads it."""
+    from docpipe import rules
+    return rules.get(name)
+
+
+def _run(name: str):
+    """The rule *name* of the run: a value of the machine, which no step
+    has a value of its own for, is read as the run's wherever it is asked."""
+    from docpipe import rules
+    with rules.in_step(None):
+        return rules.get(name)
+
+
+def _default(env: str) -> str:
+    """What the setting *env* is where nothing sets it."""
+    from docpipe import settings
+    return settings.BY_ENV[env].default or ""
+
+
+def llm_base_url() -> str:
+    """The address of the text model server (rule `llm_base_url`, the
+    setting LLM_BASE_URL); a server on this machine where nothing says."""
+    return (_run("llm_base_url") or "").strip() or _default("LLM_BASE_URL")
+
+
+def llm_api_key() -> str:
+    """The key of the text model server (rule `llm_api_key`, set at the
+    start only); the placeholder that servers without a check take."""
+    return (_run("llm_api_key") or "").strip() or _default("LLM_API_KEY")
+
+
+def llm_model() -> str:
+    """The model the request that is sent now asks: the rule `model` of its
+    step, else the run's (the setting LLM_MODEL), else the default one."""
+    return (_llm("model") or "").strip() or _default("LLM_MODEL")
+
+
+def llm_timeout() -> float:
+    """The seconds the first attempt of the request sent now waits (rule
+    `llm_timeout_s`)."""
+    return _llm("llm_timeout_s")
+
+
 def provider(role: str) -> str:
     """The provider a role is set to."""
-    name = (os.environ.get(ROLES[role]["provider"]) or "").strip().lower()
+    if role == "llm":
+        name = (_run("llm_provider") or "").strip().lower()
+    else:
+        name = (os.environ.get(ROLES[role]["provider"]) or "").strip().lower()
     name = name or OPENAI_COMPATIBLE
     if name not in PROVIDERS:
         raise ValueError(
@@ -69,7 +116,7 @@ def enforces_schema(role: str) -> bool:
     """Whether every JSON request of this role goes out with its schema."""
     if hosted(role):
         return True
-    return os.environ.get("LLM_SCHEMA", "auto").strip().lower() == "all"
+    return _llm("schema_grammar") == "all"
 
 
 def grammar(name: str, schema: dict) -> dict:
@@ -105,7 +152,10 @@ def formatted(role: str, name: str, schema: dict, otherwise=None) -> dict:
 def request_options(role: str) -> dict:
     """What an installation adds to every request body of this role."""
     name = ROLES[role]["options"]
-    text = (os.environ.get(name) or "").strip() if name else ""
+    if role == "llm":
+        text = (_llm("request_options") or "").strip()
+    else:
+        text = (os.environ.get(name) or "").strip() if name else ""
     if not text:
         return {}
     try:
@@ -127,13 +177,14 @@ def endpoint(role: str, *, base_url: Optional[str] = None,
     the installation set it; otherwise the provider's own applies. A
     placeholder key means "use the key the provider's own variable holds".
     """
-    said = (os.environ.get(ROLES[role]["base_url"]) or "").strip()
+    said = ((_run("llm_base_url") if role == "llm"
+             else os.environ.get(ROLES[role]["base_url"])) or "").strip()
     return Endpoint(
         role=role, provider=provider(role),
         base_url=(base_url or said) if said else None,
         api_key=None if (api_key or "") in NO_KEY else api_key,
         timeout=timeout,
-        thinking_room=int(os.environ.get("LLM_THINKING_ROOM", "8192")),
+        thinking_room=int(_llm("thinking_room_tokens")),
         options=request_options(role))
 
 
@@ -208,5 +259,6 @@ def timed_out(exc: BaseException) -> bool:
 __all__ = ["HOSTED", "OPENAI_COMPATIBLE", "PROVIDERS", "ROLES", "Endpoint",
            "ProviderError", "ProviderTimeout", "client", "endpoint",
            "enforces_schema", "formatted", "gate", "grammar", "hosted",
+           "llm_api_key", "llm_base_url", "llm_model", "llm_timeout",
            "provider", "replaying", "reply_format", "request_options",
            "timed_out"]

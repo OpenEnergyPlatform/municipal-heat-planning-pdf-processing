@@ -264,7 +264,8 @@ def run(profile, spec, tree: list, numbers, sources: list,
     made-up answers of *mode*, nothing sent (see the module's head)."""
     if mode not in MODES:
         raise Refused(f"mode is one of {', '.join(MODES)}, not {mode!r}")
-    said = flow_map.problems(tree)
+    from .. import rules
+    said = flow_map.problems(tree, flow_map.known_rules(profile))
     if said:
         raise Refused("the drawing cannot run: " + "; ".join(
             (f"{p['id']}: " if p["id"] else "") + p["message"]
@@ -280,7 +281,7 @@ def run(profile, spec, tree: list, numbers, sources: list,
         return []
     reader = addressed.Reader(
         spec, recorder.asks(), in_order, probes=sentence,
-        known=runner.row_context, span_marks=runner.span_marks_of(),
+        known=runner.row_context,
         plan_fields=spec.plan_fields, works=spec.works,
         frame_slots=runner.frame_slots_of(spec), numbers=numbers,
         flow=tree)

@@ -500,10 +500,10 @@ graph-route hooks at start-up (`docpipe/inference/kg_route.py:52` to `57`,
 
 `kg.py` supplies the other half of what the route needs
 (`docpipe/inference/kg_route.py:66` to `78`, the `Hooks` dataclass): a
-SPARQL template (`VALUE_QUERY`), the five axes a question may fix, in
+SPARQL template (`value_query()`, read where it is used), the five axes a question may fix, in
 order, `(scenario, quantity, carrier, sector, year)`
 (`COORDINATE_AXES`, `profiles/kwp/kg.py`), `heatplan_iri`,
-`value_bindings`, `label_of`, and the same `TRUST_PROSE` the serializer
+`value_bindings`, `label_of`, and the same trust words (`trust_prose()`) the serializer
 writes with. `spatial_scope` is left out because the graph has no edge
 yet from a value to its area; `aggregation` is left out because the route
 returns it rather than constraining on it, so a peak load and an annual

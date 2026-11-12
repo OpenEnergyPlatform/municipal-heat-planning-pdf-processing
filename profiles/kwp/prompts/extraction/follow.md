@@ -1,4 +1,1 @@
----
-temperature: 0
----
 Deine Antwort unter "answer" hielt nicht: was nicht hielt und was zu tun ist, steht unter "what". Antworte noch einmal in derselben Form und behebe jeden Punkt; was keine gezeigte Zeile belegt, lass weg.

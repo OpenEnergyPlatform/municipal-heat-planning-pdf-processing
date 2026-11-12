@@ -32,11 +32,11 @@ project file say when it is imported, so the command settles both first.
 | `refine` | stage 4: repair the text of each section |
 | `visuals` | stage 5: transcribe tables, describe figures |
 | `chunk` | stage 6: merge, database, embeddings |
-| `extract` | stages 7 and 8: harvest, top up, review, serialize; `--spec FILE` harvests a column of one's own instead of the profile's spec |
+| `extract` | stages 7 and 8: harvest, the follow-up passes (`--top-up`, `--top-up-open`, `--top-up-parameters`, `--remap`, `--recheck`, `--review`, `--start-at`, each the run of a flow of its own; `--flow NAME` runs any flow by name), serialize; `--spec FILE` harvests a column of one's own instead of the profile's spec |
 | `reanchor` | after a rebuilt database: find each harvested row's passage again |
 | `compile` | draft an extraction spec from shapes (see [the spec compiler](compile.md)) |
 | `column` | the spec of one question of one's own, for a trial harvest over a few documents (see [a column of one's own](extraction.md)) |
-| `edit` | a profile's extraction spec, prompts and sentences in the browser, on a local page, with what each spec edit costs the next run and what a prompt edit does to recorded requests (see [editing a profile](editor.md)) |
+| `edit` | a profile's extraction spec, prompts, sentences, flow, rules, sources and graph drawing in the browser, on a local page, with what each spec edit costs the next run and what a prompt edit does to recorded requests (see [editing a profile](editor.md)) |
 | `preflight` | before a corpus run: check a profile's spec, prompts, schema and graph writer (see [the extraction stage](extraction.md)) |
 | `evaluate`, `benchmark` | measure a harvest; `evaluate NEW --diff OLD` compares two harvests without decisions (see [measuring a harvest](evaluation.md)) |
 | `export`, `serve` | hand the harvested values on, with the states and refusals beside them and a search over the corpus passages (see [handing the values on](serve.md)) |
@@ -59,7 +59,11 @@ values are put into the environment before a stage is imported, for the
 names the environment does not set. So the environment still wins, and a
 stage reads what it always read. A key that names no setting is refused
 with the nearest ones; so is a key or a token, which belongs in `.env` or
-the environment. A `.env` beside the project file is read too.
+the environment. A `.env` beside the project file is read too. The values of
+the machine among the rules of the reading (a model's address, the slots per
+model, the connections) are set only here, never in a rules file and never at a
+step of the flow; the Run section of the Flow tab of `docpipe edit` writes them
+(see [editing a profile](editor.md)).
 
 `docpipe config` prints every setting with its value and where the value
 comes from (the default, the project file, a `.env`, the environment);

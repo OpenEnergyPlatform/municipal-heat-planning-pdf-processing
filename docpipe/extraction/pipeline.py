@@ -31,17 +31,13 @@ from .. import rules
 from . import archive
 from .wording import say
 from .spec import Spec, fold_label
-from .fields import (CHOICE, DERIVED, NUMBER, READ, SAID_UNSTATED, TEXT,
-                     UNANSWERED, UNBACKED, UNSTATED, beside_names,
-                     wording_asked)
+from .fields import (CHOICE, COORDINATE_KEYS, DERIVED, NUMBER, READ, TEXT,
+                     UNSTATED, beside_names, state_for, wording_asked)
 from .verify import (Refusal, canonical_number, flat, min_quote_chars,
-                     numbers_in, quote_in, verify_tuple)
+                     compared, numbers_in, quote_in, verify_tuple)
 from .trust import document_summary
 
 log = logging.getLogger(__name__)
-
-BATCH_SOURCES = 6
-BATCH_CHARS = 14000
 
 
 @dataclass
@@ -157,8 +153,8 @@ class DocumentReport:
     sources_of: dict = field(default_factory=dict)
 
 
-def group_items(items: list, *, max_sources: int = BATCH_SOURCES,
-                max_chars: int = BATCH_CHARS) -> list:
+def group_items(items: list, *, max_sources: Optional[int] = None,
+                max_chars: Optional[int] = None) -> list:
     """Work items grouped into batches — one request reads several sources.
 
     Grouping is per document AND per parameter, in the order the plan built
@@ -170,6 +166,12 @@ def group_items(items: list, *, max_sources: int = BATCH_SOURCES,
     still holds and the grouping is simply per document. Which parameter each
     value belongs to is asked for afterwards, per row, with its own evidence.
     """
+    # How many sources share a request and how much text they bring (rules
+    # `batch_sources`, `batch_chars`).
+    if max_sources is None:
+        max_sources = rules.get("batch_sources")
+    if max_chars is None:
+        max_chars = rules.get("batch_chars")
     batches: list = []
     current: Optional[Batch] = None
     size = 0
@@ -199,7 +201,8 @@ def route_claims(batch: Batch, tuples: Optional[list]) -> tuple:
     thing in a batch to get wrong, and a mislabelled tuple would be refused
     for a quote that is verbatim in the document. So the quote settles it:
     the claim goes to the source whose text actually carries it, and the
-    label only breaks the tie when several do.
+    label only breaks the tie when several do (rule `route_claims_by`: with
+    "label_first" a real label settles it).
 
     A claim that neither carries a findable quote nor names a real label is
     NOT filed under the first source. It used to be, and that was a way to
@@ -229,7 +232,9 @@ def route_claims(batch: Batch, tuples: Optional[list]) -> tuple:
         holders = ([i for i, item in enumerate(batch.items)
                     if quote_in(item.source.text or "", quote)]
                    if isinstance(quote, str) else [])
-        if named is not None and named in holders:
+        if named is not None and (
+                named in holders
+                or rules.get("route_claims_by") == "label_first"):
             index = named
         elif holders:
             index = holders[0]
@@ -285,7 +290,8 @@ def printed_lines(text) -> list:
 
 def lines_of_number(quote, value) -> list:
     """The table rows of this quote that print this number."""
-    wanted = None if isinstance(value, bool) else canonical_number(value)
+    wanted = None if isinstance(value, bool) \
+        else compared(canonical_number(value))
     if wanted is None:
         return []
     return [line for line in printed_lines(quote)
@@ -311,7 +317,7 @@ def cell_index(quote: str, value) -> Optional[tuple]:
     if len(lines) != 1:
         return None
     cells = [c.strip() for c in lines[0].strip().strip("|").split("|")]
-    wanted = canonical_number(value)
+    wanted = compared(canonical_number(value))
     hits = [i for i, cell in enumerate(cells, start=1)
             if wanted in numbers_in(cell)]
     return (hits[0], len(cells)) if len(hits) == 1 else None
@@ -373,7 +379,8 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
         wanted = canonical_number(given)
         if wanted is None:
             return False
-        if wanted.isdigit():
+        wanted = compared(wanted)
+        if wanted.isdigit() and rules.get("year_as_digit_run"):
             # Its digits in one run. `numbers_in` reads "2.022 MWh" as the
             # grouped 2022, right for a magnitude and wrong for a year: an
             # energy figure backed the year it happened to spell. A dated
@@ -391,7 +398,9 @@ def answer_in_quote(slot, given, wording: Optional[str], quote: str) -> bool:
     # it vouches for nothing but itself (owner decision 2026-11-04).
     if wording and (slot.kind == CHOICE or option is not None):
         return stands_in(slot, option, flat(wording).casefold(), said)
-    spellings = ((option.label, *option.synonyms) if option is not None
+    spellings = (((option.label, *option.synonyms)
+                  if rules.get("answer_in_quote_spellings")
+                  else (option.label,)) if option is not None
                  else (str(given),))
     return any(stands_in(slot, option, flat(s).casefold(), said)
                for s in spellings if s.strip())
@@ -411,7 +420,8 @@ def stands_in(slot, option, spelling: str, said: str) -> bool:
     if not spelling:
         return False
     longer = []
-    if option is not None and slot.options:
+    if (option is not None and slot.options
+            and rules.get("longest_entry_wins")):
         for other in slot.options:
             if other is option:
                 continue
@@ -514,8 +524,9 @@ def _wrong_type(slot, given) -> Optional[str]:
         whole = say("kind_whole_number")
         if isinstance(given, bool):
             return whole
+        whole_only = rules.get("number_axis_whole_only")
         if isinstance(given, float):
-            if not given.is_integer():
+            if whole_only and not given.is_integer():
                 return whole
             return None if year_in_range(given) else say("kind_year")
         if isinstance(given, int):
@@ -528,7 +539,7 @@ def _wrong_type(slot, given) -> Optional[str]:
             number = float(str(given).strip().replace(",", "."))
         except (TypeError, ValueError):
             return whole
-        if not number.is_integer():
+        if whole_only and not number.is_integer():
             return whole
         return None if year_in_range(number) else say("kind_year")
     if slot.kind == TEXT and not isinstance(given, str):
@@ -537,9 +548,10 @@ def _wrong_type(slot, given) -> Optional[str]:
 
 
 # The states of a plan whose year a row may name by a word instead of a
-# number, in the order their years are offered and matched, each with the key
-# a field request offers them under. Which frame pairs are which state is the
-# spec's to say: `plan_fields`, key `of`, at the state's year.
+# number, each with the key a field request offers them under. Which of them
+# are offered, and in which order, is the rule `plan_year_states`. Which
+# frame pairs are which state is the spec's to say: `plan_fields`, key `of`,
+# at the state's year.
 YEAR_STATES = {"base": "base_years", "target": "target_years"}
 
 
@@ -603,7 +615,7 @@ def named_years(pairs, frame_axes, states: Optional[dict]) -> list:
     year the frame found for both states stands once under each.
     """
     found: list = []
-    for state in YEAR_STATES:
+    for state in rules.get("plan_year_states"):
         found.extend(state_years(pairs, frame_axes,
                                  (states or {}).get(state), state))
     return found
@@ -651,9 +663,22 @@ def printed_only(slot, answer: dict) -> Optional[str]:
     wording = wording.strip() if isinstance(wording, str) else ""
     if given is None or (isinstance(given, str) and not given.strip()):
         return wording or None
-    if not isinstance(given, str) or given.strip() == UNSTATED             or option_named(slot, given) is not None:
+    if not isinstance(given, str) or given.strip() == UNSTATED \
+        or option_named(slot, given) is not None:
         return None
     return wording or given.strip()
+
+
+def _shown_in(sources: list, quote) -> Optional[Source]:
+    """The source of *sources* whose text holds *quote*; where it stands in
+    none and the rule `check_quote_shown` is off, the first of them. None
+    where the quote is no text."""
+    if not isinstance(quote, str) or not quote.strip():
+        return None
+    found = next((s for s in sources if quote_in(s.text or "", quote)), None)
+    if found is None and not rules.get("check_quote_shown") and sources:
+        found = sources[0]
+    return found
 
 
 def _print_read(row, slot, printed: str, answer: dict, sources: list,
@@ -664,17 +689,19 @@ def _print_read(row, slot, printed: str, answer: dict, sources: list,
     source, long enough, and holds the print): None when read, else the
     failure, as `merge_field` records one."""
     quote = answer.get("quote")
-    found = next((s for s in sources if isinstance(quote, str)
-                  and quote_in(s.text or "", quote)), None)
+    found = _shown_in(sources, quote)
     base = {"row": row.label, "given": answer.get("value"), "raw": printed,
             "quote": quote}
-    row.claim[f"{slot.name}_state"] = UNBACKED
+    row.claim[f"{slot.name}_state"] = state_for("refused")
     if found is None:
+        _keep_refused(row, slot, quote, None)
         return {**base, "why": "quote_not_in_source", "reason": say(not_shown)}
+    _keep_refused(row, slot, quote, found)
     if len(quote.strip()) < min_quote_chars():
         return {**base, "why": "quote_too_short",
                 "reason": say("quote_too_short", minimum=min_quote_chars())}
-    if flat(printed).casefold() not in flat(quote).casefold():
+    if rules.get("check_answer_in_quote") \
+            and flat(printed).casefold() not in flat(quote).casefold():
         return {**base, "why": "answer_not_in_quote",
                 "reason": say("answer_not_in_quote", answer=printed)
                 + say(not_in_quote, unstated=UNSTATED)}
@@ -686,6 +713,28 @@ def _print_read(row, slot, printed: str, answer: dict, sources: list,
     if window is not None:
         row.claim[f"{slot.name}_window"] = list(window)
     return None
+
+
+def _says_unstated(sources: list, answer: dict) -> bool:
+    """Does the answer "not stated" cite a shown line long enough to name a
+    place? Where the rule `unstated_needs_no_quote` is off it must, like
+    every other answer."""
+    quote = answer.get("quote")
+    return (_shown_in(sources, quote) is not None
+            and len(quote.strip()) >= min_quote_chars())
+
+
+def _keep_refused(row, slot, quote, found) -> None:
+    """Where the rule `refused_keeps_quote` is kept: a coordinate refused
+    for its quote still carries that quote, and the source it stands in
+    where it was found. Its state says it is not read."""
+    if rules.get("refused_keeps_quote") != "kept":
+        return
+    if isinstance(quote, str) and quote.strip():
+        row.claim[f"{slot.name}_quote"] = quote
+    if found is not None:
+        row.claim[f"{slot.name}_source"] = [found.owner_kind,
+                                            found.owner_id]
 
 
 def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
@@ -772,7 +821,30 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # appendix: 7 value nodes carried what a second window had put
             # there, 10 more collided with the first reading and took their
             # whole identity down with them. The state belongs to the
-            # coordinate, not to whoever answered most recently.
+            # coordinate, not to whoever answered most recently. The rule
+            # `reading_wins` lets a later answer take its place where it is
+            # backed itself.
+            if rules.get("reading_wins") == "later_backed":
+                kept = Row(row.label, row.item_index, {
+                    key: value for key, value in row.claim.items()
+                    if key not in {f"{slot.name}{suffix}"
+                                   for suffix in COORDINATE_KEYS}})
+                got = merge_field(
+                    [kept], sources, slot, {"answers": {label: answer}},
+                    window=window, bases=bases, not_shown=not_shown,
+                    not_in_quote=not_in_quote)
+                if kept.claim.get(f"{slot.name}_state") == READ:
+                    for suffix in COORDINATE_KEYS:
+                        row.claim.pop(f"{slot.name}{suffix}", None)
+                    row.claim.update(
+                        {key: value for key, value in kept.claim.items()
+                         if key.startswith(slot.name)
+                         and key[len(slot.name):] in COORDINATE_KEYS})
+                    filled += got["filled"]
+                    raw_missing += got["raw_missing"]
+                    raw_foreign += got["raw_foreign"]
+                    via["base"] += got["via_base"]
+                    via["target"] += got["via_target"]
             continue
         given = answer.get("value")
         printed = printed_only(slot, answer)
@@ -798,10 +870,30 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 # vocabulary needs to hear about was the one that left no
                 # trace. Kept as what it is, a wording nobody could map.
                 row.claim[f"{slot.name}_seen"] = noticed.strip()
-                row.claim[f"{slot.name}_state"] = SAID_UNSTATED
+                row.claim[f"{slot.name}_state"] = state_for(
+                    "answered_not_stated")
                 unstated += 1
             continue
         if str(given).strip() == UNSTATED:
+            if not rules.get("unstated_needs_no_quote") and \
+                    not _says_unstated(sources, answer):
+                # The rule asks "not stated" for a shown line like any
+                # other answer, and it cited none that serves.
+                quote = answer.get("quote")
+                shown = _shown_in(sources, quote) is not None
+                row.claim[f"{slot.name}_state"] = state_for("refused")
+                _keep_refused(row, slot, quote, _shown_in(sources, quote))
+                failed.append({
+                    "row": row.label, "given": given, "quote": quote,
+                    "raw": answer.get("value_raw"),
+                    "why": "quote_too_short" if shown
+                    else "quote_not_in_source",
+                    "reason": say("quote_too_short",
+                                  minimum=min_quote_chars()) if shown
+                    else say(not_shown)})
+                unbacked += shown
+                unquoted += not shown
+                continue
             # "Not stated" needs no passage, and the model sometimes supplies
             # one anyway — usually the row's own label. That is not evidence
             # and is not treated as any, but it is not noise either: it is the
@@ -815,7 +907,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # sentence in a document that says a thing is not in it. This is
             # the one answer that carries no evidence, and it is why the row
             # can still be required to answer.
-            row.claim[f"{slot.name}_state"] = SAID_UNSTATED
+            row.claim[f"{slot.name}_state"] = state_for(
+                "answered_not_stated")
             unstated += 1
             continue
         option = (option_named(slot, given)
@@ -836,7 +929,20 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 noticed = given if isinstance(given, str) else None
             if noticed and noticed.strip():
                 row.claim[f"{slot.name}_seen"] = noticed.strip()
-            row.claim[f"{slot.name}_state"] = UNBACKED
+                if rules.get("outside_list") == "keep":
+                    # The wording is kept and the entry stays empty (rule
+                    # `outside_list`): read where its quote is shown and
+                    # holds it, as a unit the list has no entry for is.
+                    got = _print_read(row, slot, noticed.strip(), answer,
+                                      sources, window, not_shown,
+                                      not_in_quote)
+                    if got is None:
+                        filled += 1
+                    else:
+                        failed.append(got)
+                        unbacked += 1
+                    continue
+            row.claim[f"{slot.name}_state"] = state_for("refused")
             failed.append({"row": row.label, "why": "not_an_option",
                            "given": given, "reason": say(
                                "not_an_option", given=given)})
@@ -848,7 +954,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # "2030-2045", a wording as a list. It used to be coerced --
             # int() truncated, str() stringified a dict -- and what reached
             # the graph was a value nobody had read anywhere.
-            row.claim[f"{slot.name}_state"] = UNBACKED
+            row.claim[f"{slot.name}_state"] = state_for("refused")
             failed.append({"row": row.label, "why": "wrong_type",
                            "given": given, "reason": say(
                                "wrong_type", given=given, wrong=wrong)})
@@ -857,19 +963,18 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         quote = answer.get("quote")
         # WHICH source, not whether any: it is written next to the
         # coordinate, and a boolean cannot be turned back into a source.
-        found = None
-        if isinstance(quote, str):
-            found = next((s for s in sources if quote_in(s.text or "", quote)),
-                         None)
+        found = _shown_in(sources, quote)
         if found is None:
-            row.claim[f"{slot.name}_state"] = UNBACKED
+            row.claim[f"{slot.name}_state"] = state_for("refused")
+            _keep_refused(row, slot, quote, None)
             failed.append({"row": row.label, "why": "quote_not_in_source",
                            "given": given, "raw": answer.get("value_raw"),
                            "quote": quote, "reason": say(not_shown)})
             unquoted += 1
             continue
+        _keep_refused(row, slot, quote, found)
         if len(quote.strip()) < min_quote_chars():
-            row.claim[f"{slot.name}_state"] = UNBACKED
+            row.claim[f"{slot.name}_state"] = state_for("refused")
             failed.append({"row": row.label, "why": "quote_too_short",
                            "given": given, "raw": answer.get("value_raw"),
                            "quote": quote, "reason": say(
@@ -879,11 +984,13 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         wording = answer.get("value_raw")
         wording = wording.strip() if isinstance(wording, str) and wording.strip() \
             else None
-        backed = answer_in_quote(slot, given, wording, quote)
+        backed = (not rules.get("check_answer_in_quote")
+                  or answer_in_quote(slot, given, wording, quote))
         named = None if backed else named_year(slot, given, wording, quote,
                                                bases)
         if not backed and named is None:
-            row.claim[f"{slot.name}_state"] = UNBACKED
+            row.claim[f"{slot.name}_state"] = state_for("refused")
+            _keep_refused(row, slot, quote, found)
             # A name is told as itself: the wording beside it is not what
             # its quote has to print.
             shown_answer = given if name_only else (wording or given)
@@ -905,7 +1012,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             if beside_names(slot) and option is not None else given
         if wording and not name_only:
             row.claim[f"{slot.name}_raw"] = wording
-            if not wording_names_option(slot, given, wording):
+            if rules.get("mark_foreign_wording") \
+                    and not wording_names_option(slot, given, wording):
                 # The wording does not say the option that was chosen. Kept,
                 # counted and marked, because a mapping the spec did not
                 # foresee is the model doing its job and a mapping onto the
@@ -973,7 +1081,7 @@ def mark_unanswered(rows: list, slots: list) -> int:
         for slot in slots:
             if row.claim.get(f"{slot.name}_state"):
                 continue
-            row.claim[f"{slot.name}_state"] = UNANSWERED
+            row.claim[f"{slot.name}_state"] = state_for("skipped")
             unanswered += 1
     return unanswered
 
@@ -1116,7 +1224,8 @@ def fold_batch(batch: Batch, reply: Optional[dict], report: DocumentReport, *,
 def repeat_key(row: dict) -> str:
     """What makes one row another row written twice: everything but its
     provenance, which is about the writing and not about the reading."""
-    return json.dumps({k: v for k, v in row.items() if k != "provenance"},
+    left_out = rules.get("repeat_key")
+    return json.dumps({k: v for k, v in row.items() if k not in left_out},
                       sort_keys=True, ensure_ascii=False, default=str)
 
 
@@ -1133,6 +1242,8 @@ def drop_repeats(report: DocumentReport) -> int:
     repeated pair is the one kept, so the file stays in the order the harvest
     produced.
     """
+    if not rules.get("drop_repeats"):
+        return 0
     seen: set = set()
     kept: list = []
     for row in report.tuples:

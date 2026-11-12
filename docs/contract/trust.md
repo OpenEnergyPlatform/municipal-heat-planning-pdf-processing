@@ -61,7 +61,7 @@ too, is added by the graph writer resolving two competing
 readings of one coordinate: kwp's drawing settles them first (`readings.settle`: by the plan's
 wording, by rounding, by trust), drops every claimant of what stays tied and
 never marks `conflict`, scenarios keeps a chosen reading and marks it
-`conflict` (`profiles/kwp/kg.py:514-580`, `profiles/scenarios/kg.py:701-702`;
+`conflict` (`docpipe/extraction/readings.py`, `docpipe/extraction/graph.py`;
 see [graph](../stages/graph.md)). The store that serves a harvest adds it
 too, for two rows of one document that state the same parameter under the
 same, fully read coordinates with different numbers (`docpipe/serve/values.py`;
@@ -84,8 +84,9 @@ None of the three raises the level, and an agreement marks nothing: the
 second reading checks self-consistency at the same place, not that it is
 right, and one place counts once (owner decision 2026-11-05). `corroborated`
 comes only from the graph, where a second passage prints the same number on
-one node (`profiles/kwp/kg.py`, `settle`) or the same value of one triple
-(`profiles/scenarios/kg.py`, `evidence_for`). A disagreement becomes a
+one node (`docpipe/extraction/readings.py`, `settle`) or the same value of
+one triple (`docpipe/extraction/graph.py`, the evidence above it); the graph
+rule `corroborated_by_place` switches both marks. A disagreement becomes a
 `review:disagree` reason instead, a fact a curator can count, and it makes the
 value a `D`.
 
@@ -218,7 +219,7 @@ A closed list, because a reason nobody can enumerate is a reason nobody can coun
 
 ## The marks of a trust line
 
-The line the serializer writes above a value node is made of these marks, in this order, each worded by the profile in its own language (`TRUST_PROSE`) and only where it applies:
+The line the serializer writes above a value node is made of these marks, in this order, each worded by the profile in its own language (`kg.trust_prose`) and only where it applies:
 
 1. `level`
 2. `image_origin`

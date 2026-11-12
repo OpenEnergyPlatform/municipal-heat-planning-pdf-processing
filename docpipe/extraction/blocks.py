@@ -53,6 +53,9 @@ class Setting:
     help: str = ""
     where: tuple = ()           # the frames it applies in, () = everywhere
     words: tuple = ()           # what the page shows for each choice
+    rule: str = ""              # the rule that gives its value where the
+                                # box has none of its own (`set`): the
+                                # step's, its frames', the run's
 
 
 @dataclass(frozen=True)
@@ -76,6 +79,17 @@ class Box:
     spec: Optional[str] = None      # the switch of the spec it needs
     top: bool = False               # stands at the top of the drawing only
     marks: tuple = ()               # fixed checks shown at the box
+    # A box of a follow-up pass (`passflow`) says "pass" here: the main
+    # flow does not take it, and a pass does not take the others. Its
+    # *scope* is "files" or "documents" where it starts what runs for each
+    # document (a harvest file, or a document of the run), "chain" where it
+    # runs for that document after the start, "run" where it runs once. Its
+    # *after* are the boxes one of which stands before it, and *inside* the
+    # frame it stands in.
+    flow: str = ""
+    scope: str = ""
+    after: tuple = ()
+    inside: str = ""
 
 
 FOLLOW = Setting("follow_ups", NUMBER, "follow-up questions",
@@ -84,21 +98,24 @@ FOLLOW = Setting("follow_ups", NUMBER, "follow-up questions",
                  "again. Each time the request shows the answer and what "
                  "failed, so the model can correct it. With 0 an answer "
                  "that fails a check is not asked again.")
-REPLIES = Setting("replies", RULE, "answers in the wrong form, at most",
+REPLIES = Setting("replies", NUMBER, "answers in the wrong form, at most",
                   number="replies",
                   help="An answer that does not come back in the expected "
                   "form is asked again with the reason. This is how many "
                   "such answers a request accepts before it is left "
-                  "without an answer. The run setting EXTRACT_MAX_RETRIES "
-                  "overrides this number.")
+                  "without an answer. A value of its own set here wins "
+                  "over the number of the flow and over the setting of "
+                  "the run.")
 PER_REQUEST = Setting("per_request", NUMBER, "chunks per request",
                       number="search_per_request")
-MEANINGS = Setting("list_meanings", RULE, "show what each list entry "
+MEANINGS = Setting("list_meanings", NUMBER, "show what each list entry "
                    "means, up to", number="list_meanings",
                    help="A list with at most this many entries is shown "
                    "with what each entry means. A longer list shows only "
                    "the names of its entries, and a list with groups is "
                    "asked in two steps, first the group, then the entry.")
+# What every step that asks the model takes (plan 2026-11-11, 5.2).
+NUMBERS = (FOLLOW, REPLIES, MEANINGS)
 CHECKS = ("the quote is a line the request showed",
           "the answer is in its quote",
           "a quote is long enough to point to one place (quote_min_chars)",
@@ -133,14 +150,15 @@ LIBRARY = {box.type: box for box in (
         "Each figure that has an image is written out once per run as "
         "lines: its caption (title, axes and legend) and its numbers. No "
         "other request is sent the image, they all read these lines. To "
-        "change it: the step itself has no setting, but the prompt "
-        "`transcribe` in the Prompts tab sets how the model is asked to "
-        "write a figure out, and the step Cut into chunks sets how the "
-        "lines are cut.",
-        "addressed.Transcripts", asks="transcribe",
-        fixed="Every request shows a figure as these lines and never as "
-              "the image, so this step cannot be removed or switched off.",
-        switch=False, decided="2026-11-09", prepares=True, top=True),
+        "change it: switch the step off, and no figure is written out, so "
+        "a request shows a figure as its description; set, with a "
+        "condition on the figure, which figures are written out; or set "
+        "the follow-up questions and the answers in the wrong form. The "
+        "prompt `transcribe` in the Prompts tab sets how the model is "
+        "asked to write a figure out, and the step Cut into chunks sets "
+        "how the lines are cut.",
+        "addressed.Transcripts", asks="transcribe", settings=NUMBERS,
+        decided="2026-11-09", prepares=True, top=True),
     Box("split", "Cut into chunks", "prepare", "document", "pieces",
         "The document's lines are cut into chunks, the units that every "
         "request shows. A new chunk begins where a section, table or "
@@ -163,27 +181,31 @@ LIBRARY = {box.type: box for box in (
                           help="On: a chunk is filled up across the end of "
                           "a section, table or figure, so it may hold "
                           "lines of several of them. Off: every section, "
-                          "table and figure begins a new chunk."),
+                          "table and figure begins a new chunk.",
+                          rule="split_across"),
                   Setting("table_head", SWITCH, "a table's title and head "
                           "go with each of its chunks", True,
                           help="On: every chunk of a table starts with the "
                           "table's title and head, so a row is always read "
                           "under its column headings. Off: only the first "
                           "chunk of the table has them. Decided on "
-                          "2026-11-02."),
+                          "2026-11-02.",
+                          rule="split_table_head"),
                   Setting("caption", SWITCH, "a figure's caption goes with "
                           "each of its chunks", True,
                           help="On: every chunk of a figure starts with the "
                           "figure's caption, so its numbers are read with "
                           "title, axes and legend. Off: only the first "
-                          "chunk of the figure has the caption."),
+                          "chunk of the figure has the caption.",
+                          rule="split_caption"),
                   Setting("figure_numbers", SWITCH, "a figure's numbers in "
                           "chunks of their own, its caption in one", True,
                           help="On: the caption of a figure is a chunk of "
                           "its own and its numbers are chunks of their "
                           "own, each shown with the caption. Off: the "
                           "lines of a figure are cut like any other lines. "
-                          "Decided on 2026-11-09."),
+                          "Decided on 2026-11-09.",
+                          rule="split_figure_numbers"),
                   Setting("headings", NUMBER, "headings shown above a line",
                           number="headings")),
         fixed="Every request shows chunks, so this step cannot be removed "
@@ -215,7 +237,7 @@ LIBRARY = {box.type: box for box in (
         "and every field reads its chunks in the document's order, or "
         "change the prompt `phrase` in the Prompts tab, which sets how "
         "the sentence is written.",
-        "addressed.Orders", asks="phrase", top=True),
+        "addressed.Orders", asks="phrase", settings=NUMBERS, top=True),
     Box("order", "Search the chunks", "order", "pieces", "supply",
         "The search finds the chunks that best match the search sentence. "
         "The best chunks of each kind are taken first, up to the share of "
@@ -241,7 +263,8 @@ LIBRARY = {box.type: box for box in (
                           "list gets the number of chunks multiplied by "
                           "the next setting, because it has to choose "
                           "among many entries. Off: it gets as many "
-                          "chunks as any other field."),
+                          "chunks as any other field.",
+                          rule="search_list_factor_on"),
                   Setting("factor", NUMBER, "times as many for a field with "
                           "a list", number="listed_field_factor",
                           where=("field",)),
@@ -250,7 +273,8 @@ LIBRARY = {box.type: box for box in (
                           help="On: after the best chunks the remaining "
                           "chunks of the document follow in the order of "
                           "the search, so every chunk can still be shown. "
-                          "Off: only the best chunks are offered."),
+                          "Off: only the best chunks are offered.",
+                          rule="search_rest_after"),
                   Setting("rerank", RULE, "ordered by the reranker",
                           help="On: the reranker orders the chosen chunks "
                           "once, by the search sentence. Off: they keep "
@@ -285,7 +309,8 @@ LIBRARY = {box.type: box for box in (
                           help="On: the first request of a field shows the "
                           "title page besides the search hits, which "
                           "suits what a title page states. Off: it shows "
-                          "only the search hits."), FOLLOW, REPLIES,
+                          "only the search hits.",
+                          rule="docfield_title_page"), FOLLOW, REPLIES,
                   MEANINGS),
         decided="2026-11-08", marks=CHECKS),
     Box("works", "Ask the works of each chunk", "ask", "pieces", "values",
@@ -298,7 +323,7 @@ LIBRARY = {box.type: box for box in (
         "wrong form. What is asked about a new work is set under the "
         "works in the Spec tab, which this step needs.",
         "addressed.Reader.works", asks="work",
-        settings=(FOLLOW, REPLIES), decided="2026-11-09", spec="works",
+        settings=NUMBERS, decided="2026-11-09", spec="works",
         top=True),
     Box("find", "Ask the values in a chunk", "ask", "pieces", "answers",
         "For one chunk and one field, the model reads the values: for "
@@ -342,7 +367,7 @@ LIBRARY = {box.type: box for box in (
         "shows what they mean, and edit the entries of the list in the "
         "Spec tab. The prompt `list` shapes the question.",
         "addressed.Reader.quantity", asks="list", needs=("coordinate",),
-        settings=(MEANINGS,), decided="2026-11-08"),
+        settings=NUMBERS, decided="2026-11-08"),
     Box("work_coordinate", "Ask a value's work", "ask", "coordinates",
         "answers",
         "This step decides which work a value belongs to. If the line of "
@@ -353,7 +378,7 @@ LIBRARY = {box.type: box for box in (
         "needs the works in the Spec tab, and the prompt `coord` shapes "
         "the question.",
         "addressed.Reader.work_coordinate", asks="coord",
-        needs=("coordinate",), settings=(FOLLOW,), decided="2026-11-09",
+        needs=("coordinate",), settings=NUMBERS, decided="2026-11-09",
         spec="works"),
     Box("phrase", "Write the search sentence", "ask", "coordinates",
         "coordinates",
@@ -371,14 +396,15 @@ LIBRARY = {box.type: box for box in (
                           "writes a new sentence and sees the sentences "
                           "of the earlier rounds, so it can try another "
                           "wording. Off: the first sentence is used in "
-                          "every round."),
+                          "every round.",
+                          rule="phrase_anew"),
                   Setting("question_as_sentence", RULE,
                           "a question may stand in for the sentence",
                           help="On: if the model writes a question "
                           "instead of a sentence, the search uses the "
                           "question, and the run counts it. Off: the "
-                          "search then uses the field's own sentence.")),
-        decided="2026-11-09"),
+                          "search then uses the field's own sentence."))
+        + NUMBERS, decided="2026-11-09"),
     Box("search", "Ask over the search hits", "ask", "supply", "answers",
         "This step asks about one dimension of a value over the search "
         "hits. A request shows the value's own place and a few search "
@@ -389,7 +415,7 @@ LIBRARY = {box.type: box for box in (
         "prompt `search` shapes the question.",
         "addressed.Reader.search_round, addressed.Reader.fetch",
         asks="search", needs=("round", "coordinate"),
-        settings=(PER_REQUEST, FOLLOW, REPLIES,
+        settings=(PER_REQUEST, FOLLOW, REPLIES, MEANINGS,
                   Setting("fetches", RULE, "what the model may ask to "
                           "see",
                           help="The ways in which an answer may ask for "
@@ -408,7 +434,7 @@ LIBRARY = {box.type: box for box in (
         "it: switch the step off. The years come from the fields of the "
         "whole document, and the prompt `list` shapes the question.",
         "addressed.Reader.last_year", asks="list", needs=("coordinate",),
-        decided="2026-11-07"),
+        settings=NUMBERS, decided="2026-11-07"),
     Box("names", "Ask the list entry of a name", "ask", "values", "values",
         "This step looks up a value that names a scenario in the "
         "document's list: either the entry it is, or a new entry where "
@@ -419,7 +445,7 @@ LIBRARY = {box.type: box for box in (
         "`takes_group` of the field in the Spec tab, which this step "
         "needs.",
         "addressed.Reader.named_value", asks="names", needs=("value",),
-        decided="2026-11-08", spec="names"),
+        settings=NUMBERS, decided="2026-11-08", spec="names"),
     # -- check ---------------------------------------------------------------
     Box("about", "Is the find about this value?", "check",
         "answers", "answers",
@@ -430,7 +456,7 @@ LIBRARY = {box.type: box for box in (
         "checked by this question. The prompt `check` shapes the "
         "question.",
         "addressed.Reader.about", asks="check", needs=("coordinate",),
-        attached=("search",), decided="2026-11-07"),
+        attached=("search",), settings=NUMBERS, decided="2026-11-07"),
     Box("check", "Own check", "check", "answers", "answers",
         "This is a check of your own for the answers of the asking step "
         "before it. An answer is refused where your condition holds, and "
@@ -481,7 +507,8 @@ LIBRARY = {box.type: box for box in (
                           "else not stated in the document. Not stated "
                           "in the document: it is marked so at once. Not "
                           "asked: it is marked as excluded by another "
-                          "dimension, unless it already has a state."),)),
+                          "dimension, unless it already has a state.",
+                          rule="state_mode"),)),
     # -- end -----------------------------------------------------------------
     Box("write", "Write the harvest", "end", "rows", "rows",
         "The run writes the harvest: every row with the states of its "
@@ -504,9 +531,263 @@ LIBRARY = {box.type: box for box in (
         "kwp does); which shares and sums those are is set in the "
         "profile's code, not on this page. The prompt `compute` shapes "
         "the question.",
-        "compute.py", asks="compute", decided="2026-11-02", spec="compute",
-        top=True),
+        "compute.py", asks="compute", settings=NUMBERS,
+        decided="2026-11-02", spec="compute", top=True),
+    Box("catalogue", "Look the publication up in a catalogue", "end",
+        "rows", "rows",
+        "Once a document is read and computed, what its front pages leave "
+        "open of the publication's DOI, year and authors is looked up in "
+        "an open catalogue of publications: by the DOI the corpus index "
+        "holds for the file, by the DOI read in the document or by its "
+        "title, in the order this step sets, and a hit by its title counts "
+        "only where enough of its authors agree with the authors read. A "
+        "value found there is written with the catalogue's record as its "
+        "proof. To change it: switch the step off, then nothing is looked "
+        "up; what is looked up and how is set at this step. The step takes "
+        "part only where the profile says how its publications are looked "
+        "up (the profile scenarios does).",
+        "profiles/<name>/completion.py", decided="2026-11-04", top=True),
 )}
+
+# -- the boxes of the follow-up passes (`passflow`) ---------------------------
+
+_TRACE = Setting("trace", TEXT, "folder of the record",
+                 help="The folder beside the harvest that the record of "
+                 "this pass is written into. A pass never writes into the "
+                 "record of the harvest, and two passes that write into "
+                 "one folder do not run together. Empty: no record is "
+                 "opened here.")
+_ARCHIVE = Setting("archive", TEXT, "name of the archive",
+                   help="What this pass replaces is kept in the archive "
+                   "under this name, and a run of it is told apart by "
+                   "it. Empty: the run keeps its name.")
+_LABEL = Setting("label", TEXT, "name in the log",
+                 help="The name the log of this pass gives its counts.")
+
+
+def _pass(type_: str, label: str, takes: str, gives: str, says: str,
+          code: str, scope: str, **more) -> Box:
+    return Box(type_, label, "pass", takes, gives, says, code, flow="pass",
+               scope=scope, **more)
+
+
+LIBRARY.update({box.type: box for box in (
+    _pass("stored", "Stored harvest", "", "rows",
+          "The pass takes each harvest file of the folder in turn: its "
+          "rows, its refusals and the lines it keeps as they are, and the "
+          "document's own lists, which are closed from the corpus. A file "
+          "whose lists cannot be closed is left alone and counted. To "
+          "change it: choose which files are taken (all, those of the "
+          "documents the run names, those the run would harvest), whether "
+          "documents are read side by side as far as the server has room, "
+          "and the names of the record, the archive and the log.",
+          "passboxes.box_stored", "files",
+          settings=(Setting("files", CHOICE, "files taken", "all",
+                            choices=("all", "documents", "to_harvest"),
+                            words=("every file of the folder",
+                                   "the files of the documents the run "
+                                   "names, all where it names none",
+                                   "the files of the documents the run "
+                                   "would harvest"),
+                            help="Which harvest files of the folder the "
+                            "pass takes."),
+                    Setting("parallel", SWITCH, "documents side by side",
+                            False,
+                            help="On: documents are read side by side, as "
+                            "many as the server has room for. Off: one "
+                            "after the other."),
+                    _TRACE, _ARCHIVE, _LABEL)),
+    _pass("changed", "Changed questions", "rows", "rows",
+          "The stamp of the file says which of the questions of the spec "
+          "moved since the file was written. The questions that only a "
+          "parameter the spec has gained moved are left to the pass that "
+          "appends it. A file with no question moved is left as it is. To "
+          "change it: switch the step off, then no question is taken as "
+          "moved and the file is left alone.",
+          "passboxes.box_changed", "chain", after=("stored",)),
+    _pass("movable", "Questions that may be read again", "rows", "rows",
+          "Of the questions that moved, those that name one dimension of "
+          "one field are read again. A question that decides which rows "
+          "exist, which passages were read or which model read them, "
+          "blocks the file: it stays as it is and is counted. To change "
+          "it: the rules `reread_blocks_frame` and "
+          "`reread_blocks_dynamic_list` say which of the questions block.",
+          "topup.actionable", "chain", after=("changed",)),
+    _pass("open", "Open dimensions", "rows", "rows",
+          "Every dimension that is still open in some row (budget ended, "
+          "no answer, or the answer not carried by its passage) is read "
+          "again, each with a search to the end of the plan. The "
+          "dimensions are taken in the order of the spec. To change it: "
+          "the rule `open_states` says which states are open.",
+          "topup.open_coordinates", "chain", after=("stored",)),
+    _pass("take_back", "Take the dimension back", "rows", "answers",
+          "For one dimension, the rows' answer is taken off and the "
+          "dimension is asked again as a harvest asks it, over the "
+          "passages its rows were read in. The old answer is kept aside "
+          "for the next step. To change it: switch the step off, then no "
+          "dimension is read again.",
+          "topup.sweep_ask", "chain", inside="dimension",
+          after=("movable", "open")),
+    _pass("better", "Better than before", "answers", "rows",
+          "The new answer replaces the old one only where it is better: "
+          "where its state is one the rules `reread_keep_states` and "
+          "`reread_improves_states` name. Otherwise the old answer "
+          "returns. A row that no longer passes the checks becomes a "
+          "refusal, or keeps its old answer, as the rule "
+          "`reread_refused_becomes_refusal` says.",
+          "topup.sweep_decide", "chain", inside="dimension",
+          after=("take_back",)),
+    _pass("derive", "Derive from the unit", "rows", "rows",
+          "Where the spec decides a dimension from the unit of a number, "
+          "the answer is taken from the unit unless the new reading "
+          "found one. To change it: switch the step off, then such a "
+          "dimension keeps what the reading found.",
+          "fields.apply_derived", "chain", inside="dimension",
+          after=("better",)),
+    _pass("reopen_closed", "Open closed rows", "rows", "rows",
+          "Rows that the gate of the slice had closed and that may now "
+          "stay were never asked their other dimensions. They are asked "
+          "now, like a dimension that moved. To change it: the rule "
+          "`reread_reopen_closed_rows` switches it, and the step can be "
+          "switched off.",
+          "topup.reopened_by_gate", "chain", after=("stored",)),
+    _pass("demote", "Demote the refused", "rows", "rows",
+          "A row that does not pass the checks after a dimension was read "
+          "again is a refusal now, in the file and in the summary. To "
+          "change it: switch the step off, then such a row stays among "
+          "the rows.",
+          "passboxes.box_demote", "chain", after=("stored",)),
+    _pass("summary", "Summary", "rows", "rows",
+          "The summary line of the file is made again from the rows as "
+          "they stand now. The old summary is left out. To change it: "
+          "switch the step off, then the file is written without one.",
+          "trust.document_summary", "chain", after=("stored",)),
+    _pass("replace", "Replace or append the harvest", "rows", "rows",
+          "The harvest file is replaced, after a copy of it is kept in the "
+          "archive, or the new rows are appended after the stored lines, "
+          "which stay as they are. The pass enters itself into the list "
+          "of the stamp, so that each dimension it read can say who read "
+          "it. To change it: choose whether the file is replaced or "
+          "appended to, and the name the pass enters.",
+          "passboxes.box_replace", "chain",
+          after=("summary", "read_parameters", "unread"),
+          settings=(Setting("how", CHOICE, "the file is", "replace",
+                            choices=("replace", "append"),
+                            words=("replaced", "appended to"),
+                            help="Replace: the file is written anew from "
+                            "its lines. Append: the stored lines stay as "
+                            "they are and the new rows follow."),
+                    Setting("producer", TEXT, "name entered in the stamp",
+                            help="The name this pass enters into the list "
+                            "of who wrote into the harvest. Empty: none "
+                            "is entered."))),
+    _pass("carry_stamp", "Carry the stamp on", "rows", "rows",
+          "The stamp keys that the pass could account for are written "
+          "forward and every other key stays as it was, so that a later "
+          "run still sees what it has to redo. The stamp goes on only "
+          "where no request of the pass ended on a 429 or a 5xx. To "
+          "change it: switch the step off, then no key is carried "
+          "forward and the next run reads the file again.",
+          "remap.stamp_forward", "chain", after=("replace",),
+          settings=(Setting("producer", TEXT, "name entered in the stamp",
+                            help="The name this step enters into the "
+                            "stamp's list where it carries keys forward. "
+                            "Empty: none is entered here."),)),
+    _pass("remap", "Map the lists again", "rows", "rows",
+          "No model is asked. Each row's recorded wording is mapped onto "
+          "the lists as the spec reads them today, first the value, then "
+          "each dimension that is a choice. A refusal that a grown list "
+          "could turn into a row holds the stamp key of its dimension "
+          "back. To change it: the rules `remap_unlisted`, "
+          "`remap_overwrite_class` and `remap_refusals_block_stamp` say "
+          "what happens to a wording no list holds, to a class that is "
+          "already there and to the refusals.",
+          "remap.remap_row", "chain", after=("stored",)),
+    _pass("recheck", "Check the quotes again", "rows", "rows",
+          "No model is asked. Every dimension of every row is held to "
+          "the rule that its answer stands in its quote. An empty "
+          "dimension is unanswered, a derived one stays, one without a "
+          "quote or whose answer is not in its quote falls, the others "
+          "are read. To change it: the rules `recheck_keeps_derived`, "
+          "`recheck_drop_without_quote` and `recheck_dropped_state` "
+          "say how.",
+          "recheck.recheck_row", "chain", after=("stored",)),
+    _pass("review", "Second reading", "rows", "answers",
+          "Each row of the trust levels C and D is read a second time, "
+          "over its own passage and the section above it, with the "
+          "picture where there is one: one request for each row. The "
+          "row only gets a mark, agree, disagree or unbacked, and what "
+          "the second reading said goes into the working list. To "
+          "change it: the rules `review_levels`, `review_once_per_row`, "
+          "`review_shown_passages` and `review_limit` say which rows are "
+          "read and how many; the prompt `review` shapes the question.",
+          "review.review_row", "chain", after=("stored",), asks="review",
+          decided="2026-09-13"),
+    _pass("worklist", "Working list", "rows", "rows",
+          "What the second reading said, one line for each field it "
+          "asked, is written into the working list `review.csv` beside "
+          "the harvest, after a copy of the old one is kept. To change "
+          "it: the rule `review_cell_chars` sets how much of a passage "
+          "a cell holds.",
+          "review.run", "run", after=("review",)),
+    _pass("clear_stamps", "Clear the stamps", "rows", "rows",
+          "A harvest that a rule it never saw has rewritten is not the "
+          "output its stamp names. The stamps are deleted, after a copy "
+          "of each is kept, so that the next run reads the documents "
+          "again. A file left alone keeps its stamp. To change it: the "
+          "rule `recheck_clear_stamps` switches it.",
+          "recheck.run", "run", after=("recheck",)),
+    _pass("classify", "Classify the new parameter", "", "rows",
+          "The stamp of each document says whether a parameter was added "
+          "to the spec and nothing else moved that the addition does not "
+          "explain. A document whose stamp cannot be read, that has no "
+          "new parameter, whose spec cannot be closed, where another "
+          "question moved, or whose stored rows were decided under "
+          "another derivation of their parameter, stays as it is and is "
+          "counted. A file that already holds the new parameter and "
+          "lacks only its stamp gets the stamp. To change it: the rule "
+          "`parameter_pass_blocks_on_derivation` switches the last "
+          "check.",
+          "topup_parameter.classify", "documents",
+          settings=(_TRACE, _ARCHIVE, _LABEL)),
+    _pass("read_parameters", "Read the plan for the new parameters", "rows",
+          "rows",
+          "The whole plan is read for the new parameters alone, as a "
+          "harvest reads it, and the rows are folded and checked. Where "
+          "the reading was not complete, nothing is written and the "
+          "document counts as failed (the rule "
+          "`parameter_pass_all_or_nothing`).",
+          "passboxes.box_read_parameters", "chain", after=("classify",)),
+    _pass("unread", "Unread passages", "", "rows",
+          "The passages that no reading of the harvest answered, and the "
+          "passages where a parameter's reading came to nothing, are "
+          "read, and their rows are appended after the stored lines. A "
+          "document that this pass has read to its end is not read "
+          "again. To change it: the rules `rest_once_per_document` and "
+          "`rest_without_trace` say what happens to a document read "
+          "before and to one that has no trace.",
+          "surveyed.append_unread", "documents",
+          settings=(_TRACE, _LABEL)),
+    _pass("places", "Places of an earlier harvest", "", "",
+          "Each document starts at the passages that stored harvests "
+          "found something in, and not at a search: no anchors, no "
+          "ranking, no rest of the plan. Only the places are taken, the "
+          "model reads them again. A field that no stored harvest was "
+          "asked is read over the whole plan.",
+          "found.Found", "run", settings=(_ARCHIVE,)),
+    _pass("main_flow", "Read the documents", "", "rows",
+          "Each document is read with the flow of the profile and its "
+          "harvest is written. Where the step Places of an earlier "
+          "harvest stands before it, a document starts at those places.",
+          "runner.harvest_documents", "documents",
+          settings=(_TRACE, _LABEL)),
+    _pass("example", "Example for a field", "", "answers",
+          "This is the request that proposes an example for a field "
+          "while a spec is compiled. No run starts it. It stands here so "
+          "that its answer room and its temperature are set like those "
+          "of any request.",
+          "compile.cli.ask_for_example", "run", asks="example"),
+)})
 
 # What each kind of frame iterates and what it takes.
 EACH = {
@@ -554,7 +835,8 @@ def box(type_: str) -> Box:
 
 
 def catalogue() -> dict:
-    """The library as the page shows it."""
+    """The library as the page shows it: the boxes of the main flow, and
+    apart from them the boxes of the follow-up passes."""
     def setting(s: Setting) -> dict:
         return {"key": s.key, "kind": s.kind, "label": s.label,
                 **({"default": s.default} if s.default is not None else {}),
@@ -563,17 +845,24 @@ def catalogue() -> dict:
                 **({"words": dict(zip(s.choices, s.words))}
                    if s.words else {}),
                 **({"help": s.help} if s.help else {}),
-                **({"where": list(s.where)} if s.where else {})}
+                **({"where": list(s.where)} if s.where else {}),
+                **({"rule": s.rule} if s.rule else {})}
+
+    def entry(b: Box) -> dict:
+        return {"type": b.type, "label": b.label, "group": b.group,
+                "takes": b.takes, "gives": b.gives, "says": b.says,
+                "code": b.code, "asks": b.asks, "needs": list(b.needs),
+                "settings": [setting(s) for s in b.settings],
+                "fixed": b.fixed, "switch": b.switch,
+                "decided": b.decided, "attached": list(b.attached),
+                "prepares": b.prepares, "spec": b.spec, "top": b.top,
+                "marks": list(b.marks)}
+
     return {
-        "boxes": [{"type": b.type, "label": b.label, "group": b.group,
-                   "takes": b.takes, "gives": b.gives, "says": b.says,
-                   "code": b.code, "asks": b.asks, "needs": list(b.needs),
-                   "settings": [setting(s) for s in b.settings],
-                   "fixed": b.fixed, "switch": b.switch,
-                   "decided": b.decided, "attached": list(b.attached),
-                   "prepares": b.prepares, "spec": b.spec, "top": b.top,
-                   "marks": list(b.marks)}
-                  for b in LIBRARY.values()],
+        "boxes": [entry(b) for b in LIBRARY.values() if not b.flow],
+        "pass_boxes": [{**entry(b), "scope": b.scope,
+                        "after": list(b.after), "inside": b.inside}
+                       for b in LIBRARY.values() if b.flow],
         "each": EACH, "each_titles": EACH_TITLES, "which": WHICH,
         "orders": {k: list(v) for k, v in ORDERS.items()},
         "order_words": ORDER_WORDS, "arrows": ARROWS,

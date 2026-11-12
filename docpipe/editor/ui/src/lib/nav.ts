@@ -81,3 +81,9 @@ export function useRequests(tab: string, ready: boolean, handle: (payload: any) 
 /* the node of the Spec tab a link opens (see lib/spec.ts SpecNode) */
 export function openSpec(node?: unknown, flag?: unknown) { setTab('spec'); if (node) request('spec', { node, flag: flag ?? null }); }
 export function openPrompt(id: string) { setTab('prompts'); request('prompts', { id }); }
+
+/* A link to a rule opens the tab the rule stands in: the rules drawer of that tab, or the tab itself where its rules
+   are not in the drawer (the Graph tab shows its own). The numbers of the flow stand in the Flow tab, not in its drawer. */
+export function openRule(tab: string) { if (RULE_TABS.includes(tab)) openRules(tab); else setTab(tab as TabName); }
+/* the step of the Flow tab a rule's count points at */
+export function openStep(id: string) { closeRules(); setTab('flow'); request('flow', { id }); }

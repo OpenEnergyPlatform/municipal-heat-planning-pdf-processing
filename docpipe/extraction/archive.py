@@ -12,6 +12,11 @@ harvest directory (`*.jsonl`, `*.stamp.json`) never see it.
 A pass that went wrong is then undone by copying its archive back; the
 read-to-the-end pass of 2026-10-22 rewrote five plans in place and their
 earlier state had to be fetched from another machine.
+
+Every file a run replaces or deletes goes through `keep` first (owner
+decision 2026-10-22: "kein Ueberschreiben"); a test finds each place in the
+passes that does not. The rule `archive_before_replace` says whether the run
+keeps them.
 """
 from __future__ import annotations
 
@@ -20,6 +25,8 @@ import threading
 import time
 from pathlib import Path
 from typing import Optional
+
+from ..ruleset.passes import run_value
 
 ARCHIVE = "archive"
 
@@ -40,10 +47,11 @@ def folder(directory: Path) -> Path:
 
 def keep(path) -> Optional[Path]:
     """Copy *path* into this run's archive before it is replaced. Returns the
-    copy, or None when there is nothing yet to keep. A file this run already
-    kept is left as it was kept."""
+    copy, or None when there is nothing yet to keep or the rule
+    `archive_before_replace` is off. A file this run already kept is left as
+    it was kept."""
     path = Path(path)
-    if not path.is_file():
+    if not path.is_file() or not run_value("archive_before_replace"):
         return None
     target = folder(path.parent) / path.name
     with _LOCK:

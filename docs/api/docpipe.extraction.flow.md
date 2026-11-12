@@ -22,12 +22,20 @@ settings, where it has to stand. What a box does with an answer stays code.
               {"id": "write", "box": "write"}]}
 
 A box: {"id", "box": kind, "set": {setting: value}, "own": {setting: whole
-number}, "when": condition, "off": true}. "own" gives a number setting a
-value of its own ("only here") instead of the named number. A frame:
-{"id", "each": what, "which", "when", "together", "order", "steps"},
-{"id", "round": {"most": n} or {"supply": true}, "stop": condition,
-"steps"}, {"id", "if": [{"when": condition, "steps"}], "else": steps}.
-Conditions are `conditions.py`'s.
+number}, "rules": {name: value}, "when": condition, "off": true}. "own"
+gives a number setting a value of its own ("only here") instead of the
+named number. A frame: {"id", "each": what, "which", "when", "together",
+"order", "rules", "steps"}, {"id", "round": {"most": n} or {"supply":
+true}, "stop": condition, "rules", "steps"}, {"id", "if": [{"when":
+condition, "steps"}], "else": steps, "rules"}. Conditions are
+`conditions.py`'s.
+
+"rules" gives a rule (`docpipe.rules`) or a number of the flow a value of
+its own while the box runs, or while anything in the frame runs (owner
+2026-11-11: "alles soll anpassbar sein"): the step's own value, then the
+frames' from the inside out, then the setting of the start, then the file.
+Only a rule the step reads may be set at it (`Rule.steps`,
+`Number.steps`).
 
 The default profile writes the whole file: every number (`NUMBERS`) and the
 drawing. A profile that extends it writes the numbers it sets differently,
@@ -77,6 +85,7 @@ Fields:
 - `help: str`
 - `env: Optional[str] = None`: the setting that wins over the file
 - `part: Optional[int] = None`: its place where the setting lists several
+- `steps: tuple = ()`: the kinds of steps that read it
 
 ### Numbers
 
@@ -140,6 +149,16 @@ Fields:
 
 ## Functions
 
+### number
+
+```python
+def number(numbers: Numbers, name: str) -> int
+```
+
+The number *name* of the flow as the step that runs reads it: its
+own value or that of a frame around it (`rules.STEP`), else the run's
+(*numbers*). The one way a number of the flow is read.
+
 ### kind_of
 
 ```python
@@ -165,6 +184,16 @@ def walk(tree: list, frames: tuple = ())
 (node, its frames outermost first) of every node of *tree*, in
 order.
 
+### on
+
+```python
+def on(tree: list)
+```
+
+(node, its frames outermost first) of every node of *tree* that
+takes part in a run, in order: one that is off, or stands in a frame
+that is off, is not asked, checked or counted anywhere.
+
 ### boxes
 
 ```python
@@ -178,6 +207,15 @@ def asked(tree: list) -> set
 ```
 
 The requests the boxes of *tree* ask, of the boxes that are on.
+
+### box_on
+
+```python
+def box_on(tree: list, kind: str) -> bool
+```
+
+Does the top box of *kind* stand in *tree* and is it on? The boxes
+the runner does after the reading (compute, catalogue) run only so.
 
 ### compute_on
 
@@ -206,14 +244,27 @@ def checked(where, name: str, value) -> int
 *value* as the number *name* of the flow, FlowError where it is
 none (`problem`). *where* names the file in what is said about it.
 
+### known_rules
+
+```python
+def known_rules(profile) -> dict
+```
+
+{name: Rule} of every rule a box or frame of *profile*'s flow may
+set for itself: the rules of its line (`rules.registry`) and those its
+graph file declares (`graphfile.declared`), which steps read too (the
+rounding a compute box checks a computed number with).
+
 ### problems
 
 ```python
-def problems(tree) -> list
+def problems(tree, known: Optional[dict] = None) -> list
 ```
 
 Everything the run could not do with the drawing *tree*: [{"id": the
-box or frame or None, "message"}], [] where it can run.
+box or frame or None, "message"}], [] where it can run. *known* are the
+rules a step may set (`known_rules`), the active profile's where not
+given.
 
 ### prompt_problems
 

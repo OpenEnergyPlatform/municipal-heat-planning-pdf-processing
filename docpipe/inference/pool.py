@@ -1,10 +1,11 @@
 """
 pool.py: The places the chat's model requests take, shared by everyone asking.
 
-Several model names on one endpoint (LLM_MODELS) each take a few requests at
-once (LLM_SLOTS_PER_MODEL). Everything one Streamlit process asks shares those
-places: the documents of a comparison, the harvest beside the search, the
-closed questions of a turn, and all of this for two users at the same time.
+Several model names on one endpoint (rule `llm_models`) each take a few
+requests at once (rule `llm_slots_per_model`). Everything one Streamlit
+process asks shares those places: the documents of a comparison, the
+harvest beside the search, the closed questions of a turn, and all of this
+for two users at the same time.
 
 The queue is the harvest's (`docpipe/extraction/scheduler.py`): oldest turn
 first, and a request sent ahead of knowing it is needed only ever takes a place
@@ -32,13 +33,10 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from types import SimpleNamespace
 from typing import Callable, Iterator, Optional
 
+from .. import providers, rules
 from ..extraction import scheduler
 from ..extraction.scheduler import Ticket, Withdrawn  # noqa: F401
 from ..providers import governor
-from . import config
-
-# How often a batch under way looks whether a place came free for the next one.
-LOOK_AHEAD_SECONDS = 0.05
 
 _TURN: contextvars.ContextVar = contextvars.ContextVar("chat_turn",
                                                        default=None)
@@ -127,9 +125,23 @@ _pool: Optional[Pool] = None
 _pool_lock = threading.Lock()
 
 
+def models() -> tuple:
+    """The model names the requests are spread over (rule `llm_models`, the
+    names separated by commas); the one model where it is empty."""
+    named = tuple(name.strip()
+                  for name in (rules.get("llm_models") or "").split(",")
+                  if name.strip())
+    return named or (providers.llm_model(),)
+
+
+def slots() -> int:
+    """The requests each model takes at once (rule `llm_slots_per_model`)."""
+    return int(rules.get("llm_slots_per_model"))
+
+
 def wide() -> bool:
     """Whether there is more than one place to send a request to."""
-    return len(config.LLM_MODELS) * config.LLM_SLOTS_PER_MODEL > 1
+    return len(models()) * slots() > 1
 
 
 def over(client):
@@ -140,7 +152,7 @@ def over(client):
         return client
     with _pool_lock:
         if _pool is None:
-            _pool = Pool(client, config.LLM_MODELS, config.LLM_SLOTS_PER_MODEL)
+            _pool = Pool(client, models(), slots())
         return _pool
 
 
@@ -218,7 +230,7 @@ def in_order(count: int, prepare: Callable, ask: Callable) -> Iterator:
                 start(i, False)
             elif tickets[i].ahead and _pool is not None:
                 _pool.queue.promote(tickets[i])
-            while not wait([futures[i]], LOOK_AHEAD_SECONDS).done:
+            while not wait([futures[i]], rules.get("chat_look_ahead_s")).done:
                 # One per look: what was just started has not taken its
                 # place yet, and `room` would count that place again.
                 if len(futures) < count and room() > 0:

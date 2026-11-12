@@ -21,6 +21,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from docpipe import rules
 from docpipe.editor import flow as flow_view
 from docpipe.editor import measured, requests, server
 from docpipe.extraction import blocks, flow, trace
@@ -563,7 +564,8 @@ def reply(content: str):
 def harvest(tmp_path, monkeypatch):
     """A harvest folder with one trace, written by the run's own writer."""
     folder = tmp_path / "harvest"
-    monkeypatch.setattr(trace, "ENABLED", True)
+    monkeypatch.setenv("EXTRACT_TRACE", "1")
+    rules.reset()
     monkeypatch.setattr(trace, "_root", None)
     monkeypatch.setattr(trace, "_name_of", None)
     trace.open_trace(folder, lambda document_id: f"doc{document_id}")

@@ -156,8 +156,8 @@ Fields:
 ### group_items
 
 ```python
-def group_items(items: list, *, max_sources: int = BATCH_SOURCES,
-                max_chars: int = BATCH_CHARS) -> list
+def group_items(items: list, *, max_sources: Optional[int] = None,
+                max_chars: Optional[int] = None) -> list
 ```
 
 Work items grouped into batches — one request reads several sources.
@@ -183,7 +183,8 @@ The model names the source a value came from, but a label is the easiest
 thing in a batch to get wrong, and a mislabelled tuple would be refused
 for a quote that is verbatim in the document. So the quote settles it:
 the claim goes to the source whose text actually carries it, and the
-label only breaks the tie when several do.
+label only breaks the tie when several do (rule `route_claims_by`: with
+"label_first" a real label settles it).
 
 A claim that neither carries a findable quote nor names a real label is
 NOT filed under the first source. It used to be, and that was a way to

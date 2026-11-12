@@ -42,7 +42,9 @@ def settled(rows, keep_open=True):
     return readings.settle(
         address(rows[0]), rows, address, fold=DOC.fold,
         wording=tuple(VALUE["settle"]["wording"]),
-        tolerance=float(RULES["rounding_tolerance"]), keep_open=keep_open)
+        tolerance=float(RULES["rounding_tolerance"]),
+        order=RULES["settle_order"],
+        corroborate=RULES["corroborated_by_place"], keep_open=keep_open)
 
 
 def test_the_subject_of_a_number_splits_two_rows_into_two_nodes():

@@ -257,106 +257,114 @@ SETTINGS = (
       "The one .env-style file to load before anything else; default: .env "
       "in the working folder.",
       bootstrap=True, stages=ALL),
-    S("EXTRACT_ATTACH_IMAGES", "extract.attach_images", "flag", "1",
+    S("EXTRACT_ATTACH_IMAGES", "extract.attach_images", "flag", None,
       "Send table and figure crops along with extraction requests; 0 sends "
       "text only.",
-      stages=("extract",)),
-    S("EXTRACT_BATCH_CHARS", "extract.batch_chars", "int", "14000",
+      stages=("extract",),
+      rule="attach_images"),
+    S("EXTRACT_BATCH_CHARS", "extract.batch_chars", "int", None,
       "Characters of passage text one value request may carry in total.",
-      stages=("extract",)),
-    S("EXTRACT_BATCH_DOCS", "extract.batch_docs", "int", "256",
+      stages=("extract",),
+      rule="batch_chars"),
+    S("EXTRACT_BATCH_DOCS", "extract.batch_docs", "int", None,
       "Most documents in flight at once during extraction; within it a "
       "document starts while the model requests stay below the adaptive "
       "limit.",
-      stages=("extract",)),
-    S("EXTRACT_BATCH_SOURCES", "extract.batch_sources", "int", "6",
+      stages=("extract",),
+      rule="documents_in_flight"),
+    S("EXTRACT_BATCH_SOURCES", "extract.batch_sources", "int", None,
       "Passages sharing one value request; lowered at start if the context "
       "window is small.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="batch_sources"),
     S("EXTRACT_CODE_ROUNDS", "extract.code_rounds", "int", None,
       "Sandbox calculation rounds one value request may use. "
       "Unset: the profile's rules file says it (code_rounds).",
       stages=("extract",), rule="code_rounds"),
     S("EXTRACT_CONTENT_CACHE_OWNERS", "extract.content_cache_owners", "int",
-      "300000",
+      None,
       "Passages (sections, tables, figures) whose text one run keeps, shared "
       "by every thread; 0 keeps all.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_PARALLEL", "extract.field_parallel", "int", "192",
+      stages=("extract",),
+      rule="content_cache_owners"),
+    S("EXTRACT_FIELD_PARALLEL", "extract.field_parallel", "int", None,
       "Field-sweep threads under the row requests; a ceiling for the "
       "adaptive request limit.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="compute_parallel"),
     S("EXTRACT_IMAGE_MAX_SIDE", "extract.image_max_side", "int", None,
       "Longest side in pixels of a crop attached to an extraction request. "
       "Unset: the profile's rules file says it (image_max_side).",
       stages=("extract",), rule="image_max_side"),
-    S("EXTRACT_LIMIT_ADAPTIVE", "extract.limit_adaptive", "flag", "1",
+    S("EXTRACT_LIMIT_ADAPTIVE", "extract.limit_adaptive", "flag", None,
       "Steer the open requests by the server's queue; 0 turns the adaptive "
       "limit off.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_BACKOFF", "extract.limit_backoff", "float", "0.8",
+      stages=("extract",),
+      rule="limit_adaptive"),
+    S("EXTRACT_LIMIT_BACKOFF", "extract.limit_backoff", "float", None,
       "Factor the request limit is multiplied by on a step down.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_KV_GROW", "extract.limit_kv_grow", "float", "0.80",
+      stages=("extract",),
+      rule="limit_backoff"),
+    S("EXTRACT_LIMIT_KV_GROW", "extract.limit_kv_grow", "float", None,
       "Server cache fraction below which the request limit may grow.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_KV_HIGH", "extract.limit_kv_high", "float", "0.92",
+      stages=("extract",),
+      rule="limit_kv_grow"),
+    S("EXTRACT_LIMIT_KV_HIGH", "extract.limit_kv_high", "float", None,
       "Server cache fraction at or above which the request limit steps "
       "down.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_MAX", "extract.limit_max", "int", "512",
+      stages=("extract",),
+      rule="limit_kv_high"),
+    S("EXTRACT_LIMIT_MAX", "extract.limit_max", "int", None,
       "Most requests the adaptive limit may open at once.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_MIN", "extract.limit_min", "int", "16",
+      stages=("extract",),
+      rule="limit_most"),
+    S("EXTRACT_LIMIT_MIN", "extract.limit_min", "int", None,
       "Fewest requests the adaptive limit backs off to.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_POLL", "extract.limit_poll", "float", "5",
+      stages=("extract",),
+      rule="limit_least"),
+    S("EXTRACT_LIMIT_POLL", "extract.limit_poll", "float", None,
       "Seconds between samples of the server's queue.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_START", "extract.limit_start", "int", "128",
+      stages=("extract",),
+      rule="limit_poll_s"),
+    S("EXTRACT_LIMIT_START", "extract.limit_start", "int", None,
       "Requests the adaptive limit opens with.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_STEP", "extract.limit_step", "int", "8",
+      stages=("extract",),
+      rule="limit_start"),
+    S("EXTRACT_LIMIT_STEP", "extract.limit_step", "int", None,
       "Requests added on each growth step of the adaptive limit.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="limit_step"),
     S("EXTRACT_LIMIT_TPOT_MAX", "extract.limit_tpot_max", "float", None,
       "Seconds per output token above which the limit steps down; unset: "
       "never.",
-      stages=("extract",)),
-    S("EXTRACT_LLM_PARALLEL", "extract.llm_parallel", "int", "128",
-      "Model requests in flight at once over the whole extraction run.",
-      stages=("extract",)),
-    S("EXTRACT_LOCATE", "extract.locate", "flag", "1",
+      stages=("extract",),
+      rule="limit_token_time_s"),
+    S("EXTRACT_LOCATE", "extract.locate", "flag", None,
       "Place each quote on its PDF page for highlighting; 0 skips it and "
       "needs no PDFs.",
-      stages=("extract",)),
-    S("EXTRACT_LOCATE_CACHE_PAGES", "extract.locate_cache_pages", "int", "512",
+      stages=("extract",),
+      rule="locate_quotes"),
+    S("EXTRACT_LOCATE_CACHE_PAGES", "extract.locate_cache_pages", "int", None,
       "Pages of words kept in memory for placing quotes, across documents.",
-      stages=("extract",)),
-    S("EXTRACT_LOCATE_MAX_PAGES", "extract.locate_max_pages", "int", "3",
+      stages=("extract",),
+      rule="locate_cache_pages"),
+    S("EXTRACT_LOCATE_MAX_PAGES", "extract.locate_max_pages", "int", None,
       "Pages of a section tried when placing a quote before giving up.",
-      stages=("extract",)),
-    S("EXTRACT_MAX_MODEL_LEN", "extract.max_model_len", "int", "32768",
+      stages=("extract",),
+      rule="locate_max_pages"),
+    S("EXTRACT_MAX_MODEL_LEN", "extract.max_model_len", "int", None,
       "Context window assumed when the server does not report one.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="model_window_tokens"),
     S("EXTRACT_MAX_RETRIES", "extract.max_retries", "int", None,
       "Replies out of their form an extraction request takes before it is "
       "left unanswered; a server's failure is asked again until the run "
       "halts. Unset: the profile's flow file says it (replies).",
       stages=("extract",), flow=("replies",)),
-    S("EXTRACT_MAX_SOURCE_CHARS", "extract.max_source_chars", "int", "16000",
-      "Longest passage one request carries; longer sections are split into "
-      "windows.",
-      stages=("extract",)),
-    S("EXTRACT_PARENT_CHARS", "extract.parent_chars", "int", "4000",
+    S("EXTRACT_PARENT_CHARS", "extract.parent_chars", "int", None,
       "Characters of a table's parent section sent along with the table.",
-      stages=("extract",)),
-    S("EXTRACT_PLAN_PARALLEL", "extract.plan_parallel", "int", "8",
-      "Threads for retrieval planning and quote verification.",
-      stages=("extract",)),
-    S("EXTRACT_PRIOR_MAX", "extract.prior_max", "int", "24",
-      "Earlier values listed to the model so that it does not repeat them.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="review_parent_chars"),
     S("EXTRACT_PROVENANCE", "extract.provenance", "flag", "1",
       "Write the provenance of every value beside the graph "
       "(<graph>.prov.ttl); 0 writes the graph only.",
@@ -400,16 +408,17 @@ SETTINGS = (
       "Seconds without any reply from the server before the run ends. "
       "Unset: the profile's rules file says it (server_dead_after_s).",
       stages=("extract",), rule="server_dead_after_s"),
-    S("EXTRACT_SHOW_UNPARSABLE", "extract.show_unparsable", "int", "20",
+    S("EXTRACT_SHOW_UNPARSABLE", "extract.show_unparsable", "int", None,
       "How many unreadable model replies are shown in the log.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="show_unparsable"),
     S("EXTRACT_SPLIT_DEPTH", "extract.split_depth", "int", "3",
       "Times a request that keeps failing may be halved.",
       stages=("extract",)),
-    S("EXTRACT_TRACE", "extract.trace", "flag", "1",
-      "Write a per-document event trace beside the harvest; 0 turns tracing "
-      "off.",
-      stages=("extract",)),
+    S("EXTRACT_TRACE", "extract.trace", "flag", None,
+      "Write a per-document event trace beside the harvest; 0 turns "
+      "tracing off. Unset: the rule trace_on says it.",
+      stages=("extract",), rule="trace_on"),
     S("EXTRACT_TRANSPORT_WAIT", "extract.transport_wait", "float", None,
       "Seconds before retrying a request that never reached the server; "
       "doubles each time. Unset: the profile's rules file says it (transport_wait_s).",
@@ -557,33 +566,34 @@ SETTINGS = (
       "Sections per refinement request; default: the profile's setting, "
       "else 3.",
       stages=("refine",)),
-    S("RERANK_API_KEY", "rerank.api_key", "str", "EMPTY",
+    S("RERANK_API_KEY", "rerank.api_key", "str", None,
       "API key of the reranker's server.",
-      secret=True, stages=("extract",)),
-    S("RERANK_BASE_URL", "rerank.base_url", "str", "",
+      secret=True, stages=("extract",), rule="rerank_api_key"),
+    S("RERANK_BASE_URL", "rerank.base_url", "str", None,
       "The vLLM server whose /rerank orders every passage search of a "
       "harvest; empty leaves the vector search's order.",
-      stages=("extract",)),
-    S("RERANK_MODEL", "rerank.model", "str", "Qwen/Qwen3-VL-Reranker-8B",
+      stages=("extract",), rule="rerank_base_url"),
+    S("RERANK_MODEL", "rerank.model", "str", None,
       "The model the reranker's server serves.",
-      stages=("extract",)),
-    S("RERANK_POOL", "rerank.pool", "int", "100",
+      stages=("extract",), rule="rerank_model"),
+    S("RERANK_POOL", "rerank.pool", "int", None,
       "Passages of each kind (section, table, figure) a search hands the "
       "reranker, the best of the vector search; the rest follow in its "
       "order.",
-      stages=("extract",)),
+      stages=("extract",), rule="rerank_pool"),
     S("DOC_PARALLEL", "run.doc_parallel", "int", "8",
       "Documents processed at once in batch mode of refinement and visuals.",
       stages=("refine", "visuals")),
     S("CODE_EXEC_MAX_ROUNDS", "sandbox.code_exec_max_rounds", "int", "2",
       "Chat: code runs the model may request while answering one batch.",
       stages=("chat",)),
-    S("CODE_EXEC_PARALLEL", "sandbox.code_exec_parallel", "int", "1",
+    S("CODE_EXEC_PARALLEL", "sandbox.code_exec_parallel", "int", None,
       "Code runs one extraction run has out at the sandbox at a time.",
-      stages=("sandbox", "extract")),
-    S("CODE_EXEC_TIMEOUT", "sandbox.code_exec_timeout", "float", "45",
+      stages=("sandbox", "extract"),
+      rule="code_slots"),
+    S("CODE_EXEC_TIMEOUT", "sandbox.code_exec_timeout", "float", None,
       "Seconds the client waits for one sandbox run.",
-      stages=("extract", "chat")),
+      stages=("extract", "chat"), rule="code_timeout_s"),
     S("CODE_EXEC_TOKEN", "sandbox.code_exec_token", "str", None,
       "Token sent to the sandbox service; default: the sandbox token "
       "(KWP_SANDBOX_TOKEN).",
@@ -943,3 +953,129 @@ def rows(stage: Optional[str] = None) -> list:
             value, where = said
         out.append((setting, value, where, shadowed))
     return out
+
+
+# -- writing the project file (the machine values of `docpipe edit`) -------
+
+def git_refusal(path) -> Optional[str]:
+    """Why *path* may not be written, or None: a file inside a git
+    repository has to be ignored by it and not tracked, so that the values
+    of a machine (a server's address, a folder) never reach a commit. A
+    file outside every repository is free."""
+    import subprocess
+    path = Path(path).resolve()
+    folder = path.parent
+    while not folder.is_dir() and folder != folder.parent:
+        folder = folder.parent
+
+    def git(*args) -> int:
+        return subprocess.run(["git", "-C", str(folder), *args],
+                              capture_output=True).returncode
+    try:
+        if git("rev-parse", "--show-toplevel") != 0:
+            return None
+        if git("ls-files", "--error-unmatch", "--", str(path)) == 0:
+            return (f"{path.name} is tracked by git, so a value of the "
+                    f"machine written there would be committed. To change "
+                    f"it: untrack the file (git rm --cached) and list it "
+                    f"in .gitignore.")
+        if git("check-ignore", "-q", "--", str(path)) == 0:
+            return None
+    except OSError:
+        return (f"git cannot be run here, so it is not known whether "
+                f"{path.name} is ignored by it. To change it: install git.")
+    return (f"{path.name} lies inside a git repository and is not ignored "
+            f"by it, so a value of the machine written there could be "
+            f"committed. To change it: list the file in .gitignore.")
+
+
+def _literal(value) -> str:
+    import json
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, (list, tuple)) and all(
+            isinstance(one, str) for one in value):
+        return "[" + ", ".join(_literal(one) for one in value) + "]"
+    raise ConfigError(f"{value!r} cannot be written to the project file")
+
+
+def _put(lines: list, key: str, value, eol: str) -> list:
+    """*lines* of a project file with `section.name = value` set (or a
+    top-level name), the rest as it stands."""
+    section, _dot, name = key.rpartition(".")
+    head = re.compile(r"^\s*\[([^\[\]]+)\]\s*(#.*)?$")
+    mine = re.compile(rf"^\s*{re.escape(name)}\s*=")
+    new = f"{name} = {_literal(value)}{eol}"
+    start, end = (-1 if section == "" else None), len(lines)
+    for at, line in enumerate(lines):
+        found = head.match(line.rstrip("\r\n"))
+        if found:
+            if start is not None:
+                end = at
+                break
+            if found.group(1).strip() == section:
+                start = at
+        elif start is not None and mine.match(line):
+            lines[at] = new
+            return lines
+    if start is None:                       # no such table yet
+        if lines and not lines[-1].endswith(("\n", "\r")):
+            lines[-1] += eol
+        return lines + ([eol] if lines else []) + [f"[{section}]{eol}", new]
+    last = start                            # after the table's last line
+    for at in range(start + 1, end):
+        if lines[at].strip():
+            last = at
+    if last >= 0 and not lines[last].endswith(("\n", "\r")):
+        lines[last] += eol
+    lines.insert(last + 1, new)
+    return lines
+
+
+def write_project(path, values: dict) -> str:
+    """Set {key of a setting ("llm.base_url"): value} in the project file
+    *path*, created where it is missing, every other line as it stands:
+    "created" or "changed". A key is never written (`Setting.secret`); a
+    file that does not read back as the values is not written."""
+    path = Path(path)
+    for key in values:
+        setting = BY_KEY.get(key)
+        if setting is None:
+            raise ConfigError(f"{key} is no setting{_nearest(key)}")
+        if setting.secret or setting.bootstrap:
+            raise ConfigError(f"{key} is not written to the project file: "
+                              f"set {setting.env} in .env or in the "
+                              f"environment")
+    existed = path.is_file()
+    text = path.read_bytes().decode("utf-8-sig") if existed else ""
+    eol = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines(keepends=True)
+    for key, value in values.items():
+        lines = _put(lines, key, value, eol)
+    new = "".join(lines)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".editing")
+    try:
+        with open(temporary, "wb") as handle:
+            handle.write(new.encode("utf-8"))
+        read(temporary)         # a line that does not parse is refused
+        said = _parse(temporary)
+        for key, value in values.items():
+            section, _dot, name = key.rpartition(".")
+            got = said.get(section, {}).get(name) if section \
+                else said.get(name)
+            if got != (list(value) if isinstance(value, tuple) else value):
+                raise ConfigError(f"{path.name}: {key} did not read back "
+                                  f"as {value!r}")
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
+    return "changed" if existed else "created"

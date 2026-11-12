@@ -574,7 +574,7 @@ def _graph_route(profile) -> list:
     hooks = kg_route.hooks(profile)
     if hooks is None:
         raise Unconfigured("the profile has no graph route to answer from "
-                           "(no kg.VALUE_QUERY)")
+                           "(no kg.value_query)")
     return [Check("wording", "graph route", OK,
                   f"{len(hooks.notes)} reason(s) worded, and its coordinate "
                   f"prompt found")]

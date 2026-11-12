@@ -106,6 +106,31 @@ What the drawing decided for one document, as plain data: the bundle,
 its one study report and its scenarios, each value as the graph carries
 it (`oekg_api.py` builds the platform's request body from it).
 
+### drawing
+
+```python
+def drawing() -> dict
+```
+
+The drawing, as the graph file of this profile has it now.
+
+### prefix_iri
+
+```python
+def prefix_iri() -> dict
+```
+
+{prefix: IRI} of the header the drawing writes now.
+
+### always_types
+
+```python
+def always_types() -> tuple
+```
+
+The scenario types every factsheet carries (graph rule
+`scenario_types_always`), as it stands now.
+
 ### box_class
 
 ```python
@@ -129,6 +154,15 @@ def normalise(name: str) -> str
 ```
 
 One spelling for a name, as the drawing folds it.
+
+### terms
+
+```python
+def terms() -> SimpleNamespace
+```
+
+The classes and properties a body names its nodes and edges with,
+as the drawing has them now.
 
 ### tag_property
 

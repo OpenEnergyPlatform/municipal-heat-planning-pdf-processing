@@ -23,6 +23,10 @@ what the page draws and decides what a save does to the profile's own file:
   inherits and the drawing where it differs, so a number set back leaves
   the file, and a file that would hold nothing is removed.
 - `save`: `judge`, and the bytes to write where it holds.
+- `pass_names`, `pass_view`, `pass_judge`, `pass_save`: the same for the
+  flow of a follow-up pass (`extraction.passflow`), one file for each, by
+  name: the flow of `--top-up`, `--remap` and the others, which a profile
+  overrides by its own `flows/<name>.json`.
 
 No file is read here but through the run's loader; the server checks every
 path first and hands in the bytes of the profile's own file.
@@ -35,15 +39,16 @@ import difflib
 import hashlib
 import json
 import os
-import re
+from pathlib import Path
 from typing import Callable, Optional
-from urllib.parse import urlsplit, urlunsplit
 
-from .. import rules, settings
+from .. import graphfile, rules, settings
 from ..extraction import blocks, conditions
 from ..extraction import flow as flow_map
+from ..extraction import passflow
 from ..extraction.spec import YEAR_FIELDS
 from . import prompts as prompt_files
+from . import rulespage as rule_page
 
 STAGE = "extraction"
 # The passes that take a document's own years from its stored values.
@@ -58,7 +63,7 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-# -- the switches of a spec a step shows ---------------------------------------
+# -- the switches of a spec a step shows --------------------------------------
 
 def _fields(data: dict) -> list:
     return [p for p in data.get("parameters") or ()
@@ -177,6 +182,8 @@ def _prompts(profile) -> dict:
               for row in prompt_files.listing(profile)}
     out = {}
     for box in blocks.LIBRARY.values():
+        if box.flow:
+            continue
         if box.asks and box.asks not in out:
             prompt_id = f"{STAGE}/{box.asks}"
             owner = owners.get(prompt_id)
@@ -190,6 +197,8 @@ def _never(prompts: dict, data: Optional[dict], computes: bool) -> dict:
     line writes its prompt, or its switch of the spec is off."""
     out = {}
     for box in blocks.LIBRARY.values():
+        if box.flow:
+            continue
         why = None
         if box.asks and not prompts[box.asks]["written"]:
             why = (f"Neither this profile nor the profiles it builds on "
@@ -241,13 +250,7 @@ def _safe(setting, value: Optional[str]) -> tuple:
     secret = setting.secret or bool(settings.SECRET_NAME.search(setting.env))
     if secret:
         return None, bool(value)
-    if value and re.match(r"^[a-z][a-z0-9+.-]*://[^/]*@", value, re.I):
-        parts = urlsplit(value)
-        host = parts.hostname or ""
-        if parts.port:
-            host += f":{parts.port}"
-        value = urlunsplit(parts._replace(netloc=f"***@{host}"))
-    return value, bool(value)
+    return rule_page.masked(value), bool(value)
 
 
 def _settings() -> list:
@@ -264,18 +267,139 @@ def _settings() -> list:
     return out
 
 
-# -- what the page draws ---------------------------------------------------------
+# -- what a step can set for itself -------------------------------------------
+
+def step_rules(profile) -> dict:
+    """What a box or frame can set for itself (`"rules"` in flow.json,
+    owner 2026-11-11: "alles soll anpassbar sein"): every rule and number of
+    the flow a step reads, with its standard (the files of the profile), the
+    run's value and where that comes from, and per kind of step
+    (`rules.step_kind`) the names it reads. A key's value is never sent."""
+    known = flow_map.known_rules(profile)
+    files = rules.load(profile, environ={})
+    taken = rules.load(profile)
+    try:
+        drawn = graphfile.load(profile, environ={})
+        graph = graphfile.load(profile)
+    except graphfile.GraphError:
+        # A graph file the run cannot read offers none of its rules at a
+        # step; the Graph tab says what is wrong with it.
+        drawn = graph = None
+
+    def standard(name: str) -> tuple:
+        if name in files.values:
+            return files.values[name], files.owners.get(name, "")
+        return drawn.rules[name], drawn.owners.get(f"rules/{name}", "")
+
+    def taken_of(name: str) -> tuple:
+        if name in taken.values:
+            return taken.values[name], taken.owners.get(name, "")
+        return graph.rules[name], graph.owners.get(f"rules/{name}", "")
+    flow = flow_map.load(profile)
+    in_effect = flow_map.in_effect(profile)
+    out, kinds = [], {}
+    for one in known.values():
+        if not one.steps or (one.name not in files.values
+                             and (drawn is None
+                                  or one.name not in drawn.rules)):
+            continue
+        hidden = one.secret
+        out.append({
+            "name": one.name, "source": "rule", "tab": one.tab,
+            "group": one.group, "kind": one.kind, "help": one.help,
+            "least": one.least, "most": one.most,
+            "choices": list(one.choices), "columns": list(one.columns),
+            "of": one.of, "empty": one.empty, "decided": one.decided,
+            "setting": one.env, "machine": one.machine, "secret": hidden,
+            "steps": list(one.steps),
+            "standard": rule_page.value_shown(one, standard(one.name)[0]),
+            "standard_from": standard(one.name)[1],
+            "in_effect": rule_page.value_shown(one, taken_of(one.name)[0]),
+            "origin": taken_of(one.name)[1]})
+    for number in flow_map.NUMBERS:
+        out.append({
+            "name": number.name, "source": "number", "tab": "flow",
+            "group": "Numbers of the flow", "kind": "whole",
+            "help": number.help, "least": number.least, "most": None,
+            "choices": [], "columns": [], "of": "text", "empty": False,
+            "decided": "", "setting": number.env, "machine": False,
+            "secret": False, "steps": list(number.steps),
+            "standard": flow.numbers[number.name],
+            "standard_from": f"{flow_map.FILE} of "
+                             f"{flow.owners[number.name]}",
+            "in_effect": getattr(in_effect, number.name),
+            "origin": in_effect.origin[number.name]})
+    for row in out:
+        for kind in row["steps"]:
+            kinds.setdefault(kind, []).append(row["name"])
+    # the tab each rule stands in, for a link to it from any step
+    return {"rules": out, "kinds": kinds,
+            "tabs": {name: one.tab for name, one in known.items()}}
+
+
+def own_at(tree: list) -> dict:
+    """{rule or number: [{"id", "kind"} of the steps of *tree* that give it
+    a value of their own]}: what a box or frame writes under "rules", and
+    what a box writes under "own" for a number setting (named by its
+    number)."""
+    out: dict = {}
+
+    def note(name: str, node: dict) -> None:
+        out.setdefault(name, []).append(
+            {"id": str(node.get("id") or ""),
+             "kind": rules.step_kind(node)})
+    for node, _frames in flow_map.walk(tree):
+        if not isinstance(node, dict):
+            continue
+        given = node.get("rules")
+        for name in (given if isinstance(given, dict) else {}):
+            note(name, node)
+        box = blocks.LIBRARY.get(node.get("box"))
+        mine = node.get("own")
+        for setting in (box.settings if box is not None else ()):
+            if (setting.number and isinstance(mine, dict)
+                    and setting.key in mine
+                    and setting.number not in (given or {})):
+                note(setting.number, node)
+    return out
+
+
+def _refused_at_steps(tree: list, known: dict) -> list:
+    """[{"id", "message"}]: a key or a value of the machine set at a step.
+    A key is set at the start and a value of the machine in the project
+    file, so neither is a value of a step."""
+    out = []
+    for node, _frames in flow_map.walk(tree):
+        given = node.get("rules") if isinstance(node, dict) else None
+        for name in (given if isinstance(given, dict) else {}):
+            one = known.get(name)
+            if one is not None and one.secret:
+                out.append({"id": node.get("id"), "message":
+                            f"{name} is a key: it is set in .env or in the "
+                            f"environment, never at a step"})
+            elif one is not None and one.machine:
+                out.append({"id": node.get("id"), "message":
+                            f"{name} is a value of this machine: it is set "
+                            f"in the project file docpipe.toml, never at "
+                            f"a step"})
+    return out
+
+
+# -- what the page draws ------------------------------------------------------
 
 def view(profile, own_raw: Optional[bytes], data: Optional[dict],
-         shown: Callable, computes: bool = False) -> dict:
+         shown: Callable, computes: bool = False,
+         project: Optional[Path] = None) -> dict:
     """The flow of *profile* as the page draws it (see the module's head).
     *own_raw* are the bytes of the profile's own flow file, None where it
     has none; *data* its spec as written, None where it has none;
     *shown(path)* a path as the user sees it; *computes* whether the
-    profile computes."""
+    profile computes. *project* is the project file the machine's values
+    are written to, None where the page cannot say."""
     flow = flow_map.load(profile)
     below = flow_map.inherited(profile)
     in_effect = flow_map.in_effect(profile)
+    owned = own_at(flow.tree)
     numbers = []
     for number in flow_map.NUMBERS:
         name = number.name
@@ -286,7 +410,8 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
             "inherited": below.numbers[name] if below is not None else None,
             "owner": flow.owners[name], "setting": number.env,
             "in_effect": getattr(in_effect, name),
-            "origin": in_effect.origin[name]})
+            "origin": in_effect.origin[name],
+            "own_at": owned.get(name, [])})
     prompts = _prompts(profile)
     return {"file": shown(flow_map.path_of(profile)),
             "exists": own_raw is not None,
@@ -300,12 +425,17 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
             "prompts": prompts,
             "never": _never(prompts, data, computes),
             "switches": {name: _switch(name, data) for name in SWITCHES},
-            "problems": flow_map.problems(flow.tree)
+            "problems": flow_map.problems(flow.tree,
+                                          flow_map.known_rules(profile))
             + flow_map.prompt_problems(flow.tree, profile),
-            "notes": _notes(data), "settings": _settings()}
+            "notes": _notes(data), "settings": _settings(),
+            "step_rules": step_rules(profile),
+            "run": {"machine": rule_page.machine_rows(profile),
+                    "project": rule_page.project_state(project, shown)
+                    if project is not None else None}}
 
 
-# -- check and save ----------------------------------------------------------------
+# -- check and save -----------------------------------------------------------
 
 def _text(raw: Optional[bytes]) -> Optional[str]:
     return None if raw is None else raw.decode("utf-8").replace(CR + LF, LF)
@@ -356,11 +486,15 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
     values = dict(flow.numbers)
     drawing = flow.tree if tree is None else tree
     if tree is not None:
-        said = flow_map.problems(drawing) if isinstance(drawing, list) \
+        said = flow_map.problems(drawing, flow_map.known_rules(profile)) \
+            if isinstance(drawing, list) \
             else [{"id": None, "message": "the flow is a list of boxes and "
                    "frames"}]
         if not said:
             said = flow_map.prompt_problems(drawing, profile)
+        if not said:
+            said = _refused_at_steps(drawing,
+                                     flow_map.known_rules(profile))
         errors += [{"name": None, "id": one["id"],
                     "message": one["message"]} for one in said]
     if not isinstance(numbers, dict):
@@ -448,6 +582,148 @@ def save(profile, own_raw: Optional[bytes], numbers, base: Optional[str],
                 "message": "the file changed on disk since the page loaded "
                            "it; reload it before saving"}, None, False
     told = {"saved": True, "writes": report["writes"], "file": name}
+    if report["writes"] == "unchanged":
+        return {**told, "base": base}, None, False
+    if text is None:
+        return {**told, "base": None}, None, True
+    written = text.encode("utf-8")
+    return {**told, "base": sha256(written)}, written, False
+
+
+# -- the flows of the follow-up passes ----------------------------------------
+
+def pass_names(profile) -> list:
+    """[{"name", "path" (where the profile writes its own file of it),
+    "own" (the profile writes one), "starts_from" (the profile whose file
+    is the farthest of the line)}] of every flow of a follow-up pass that a
+    run of *profile* can start. The main flow is the page's own tab and not
+    among them."""
+    out = []
+    for name in passflow.names(profile):
+        if name == passflow.MAIN:
+            continue
+        written = [owner for owner, path in passflow.line(profile, name)
+                   if path.is_file()]
+        out.append({"name": name, "path": passflow.path_of(profile, name),
+                    "own": bool(written) and written[0] == profile.name,
+                    "starts_from": written[-1] if written else None})
+    return out
+
+
+def _pass_below(profile, name: str) -> Optional[list]:
+    """The drawing of the flow *name* that *profile* would have without a
+    file of its own: that of the nearest profile of its line below it that
+    writes one, None where none does."""
+    for _owner, path in passflow.line(profile, name)[1:]:
+        if path.is_file():
+            return passflow.parse(path.read_text(encoding="utf-8"), path)
+    return None
+
+
+def _pass_unknown(name: str, profile) -> Optional[str]:
+    """Why *name* is no flow of a follow-up pass of *profile*, or None."""
+    if name == passflow.MAIN or name not in passflow.names(profile):
+        names = ", ".join(one["name"] for one in pass_names(profile))
+        return (f"there is no flow of a follow-up pass named {name!r}; "
+                f"there are {names}")
+    return None
+
+
+def _pass_drawn(profile, own_raw: Optional[bytes], name: str) -> list:
+    if own_raw is not None:
+        return passflow.parse(own_raw.decode("utf-8"), name)
+    for _owner, path in passflow.line(profile, name):
+        if path.is_file():
+            return passflow.parse(path.read_text(encoding="utf-8"), path)
+    raise LookupError(f"no profile of the line writes the flow {name!r}")
+
+
+def pass_library() -> dict:
+    """The library a flow of a follow-up pass is drawn with, in the form of
+    the main flow's: its boxes, and the one frame a pass knows, which goes
+    through the dimensions a box before it chose."""
+    whole = blocks.catalogue()
+    return {"boxes": whole["pass_boxes"], "each": dict(passflow.EACH),
+            "each_titles": dict(passflow.EACH_TITLES), "which": {},
+            "orders": {}, "order_words": {}, "arrows": whole["arrows"]}
+
+
+def pass_view(profile, own_raw: Optional[bytes], name: str,
+              shown: Callable) -> dict:
+    """The flow *name* as the page draws it: its drawing (the profile's own
+    file where it has one, else the nearest below), the boxes of the
+    library a pass takes, what the run could not do with the drawing, and
+    why no run starts it. *own_raw* are the bytes of the profile's own file
+    of it, None where it has none."""
+    said = _pass_unknown(name, profile)
+    if said:
+        raise LookupError(said)
+    tree = _pass_drawn(profile, own_raw, name)
+    return {"name": name, "file": shown(passflow.path_of(profile, name)),
+            "exists": own_raw is not None,
+            "base": sha256(own_raw) if own_raw is not None else None,
+            "tree": tree, "inherited_tree": _pass_below(profile, name),
+            "library": pass_library(),
+            "problems": passflow.problems(
+                tree, flow_map.known_rules(profile)),
+            "not_started": passflow.startable(tree)}
+
+
+def pass_judge(profile, own_raw: Optional[bytes], name: str,
+               shown_name: str, tree=None) -> dict:
+    """What a save of the drawing *tree* of the flow *name* would do, as
+    `judge` says it for the main flow: {"ok", "errors": [{"id",
+    "message"}], "file", "writes", "diff", "text"}. A drawing the run
+    cannot do is refused with every reason, each at its box. A profile
+    that extends another writes the file only where the drawing differs
+    from what it inherits."""
+    said = _pass_unknown(name, profile)
+    if said:
+        return {"ok": False, "errors": [{"name": None, "id": None,
+                                         "message": said}],
+                "file": shown_name, "writes": "unchanged", "diff": [],
+                "text": None}
+    old = _text(own_raw)
+    drawing = _pass_drawn(profile, own_raw, name) if tree is None else tree
+    errors = [{"name": None, "id": one["id"], "message": one["message"]}
+              for one in passflow.problems(
+                  drawing, flow_map.known_rules(profile))]
+    below = _pass_below(profile, name)
+    newline = CR + LF if (CR + LF).encode() in (own_raw or b"") else LF
+    if errors:
+        new = old
+    elif below is not None and drawing == below:
+        new = None
+    else:
+        new = passflow.dump(drawing)
+    writes = ("unchanged" if new == old else "created" if old is None
+              else "removed" if new is None else "changed")
+    diff = [] if writes == "unchanged" else list(difflib.unified_diff(
+        (old or "").splitlines(), (new or "").splitlines(), shown_name,
+        shown_name, lineterm=""))
+    return {"ok": not errors, "errors": errors, "file": shown_name,
+            "writes": writes, "diff": diff,
+            "text": None if new is None else new.replace(LF, newline)}
+
+
+def pass_save(profile, own_raw: Optional[bytes], name: str,
+              base: Optional[str], shown_name: str, tree=None) -> tuple:
+    """(what the page is told, the bytes to write or None, whether the file
+    is to be removed), as `save` for the main flow: bytes come back only for
+    a drawing the run can do, and only where the file is as the page loaded
+    it (*base*, the sha256 of its bytes, None where it had none)."""
+    report = pass_judge(profile, own_raw, name, shown_name, tree)
+    text = report.pop("text")
+    if not report["ok"]:
+        return {"saved": False, "reason": "invalid",
+                "errors": report["errors"],
+                "message": "; ".join(e["message"]
+                                     for e in report["errors"])}, None, False
+    if base != (sha256(own_raw) if own_raw is not None else None):
+        return {"saved": False, "reason": "moved",
+                "message": "the file changed on disk since the page loaded "
+                           "it; reload it before saving"}, None, False
+    told = {"saved": True, "writes": report["writes"], "file": shown_name}
     if report["writes"] == "unchanged":
         return {**told, "base": base}, None, False
     if text is None:

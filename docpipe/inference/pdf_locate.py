@@ -12,7 +12,9 @@ The match is fuzzy on purpose. The corpus text has passed through
 extraction and refinement, so it is never byte-identical to what
 PyMuPDF reads off the page: ligatures, hyphenation, running heads and
 column order all differ. Alignment finds the passage anyway; the
-score floor keeps it from pointing at something else.
+score floor keeps it from pointing at something else (rules
+`locate_min_score`, `locate_max_lines` and `locate_match`, read when a quote
+is placed).
 
 Author: Felix Vossel
 """
@@ -22,10 +24,9 @@ import logging
 import threading
 from typing import Optional
 
-log = logging.getLogger(__name__)
+from docpipe import rules
 
-MIN_SCORE = 55.0
-MAX_LINES = 10
+log = logging.getLogger(__name__)
 
 # PyMuPDF is not thread-safe, and the chat runs every browser session on a
 # thread of its own: a rerun starts while the script it replaced is still
@@ -65,8 +66,8 @@ def _have_deps() -> bool:
 
 
 def quote_rects(pdf_path, page_number: int, quote: str,
-                min_score: float = MIN_SCORE,
-                max_lines: int = MAX_LINES) -> Optional[list]:
+                min_score: Optional[float] = None,
+                max_lines: Optional[int] = None) -> Optional[list]:
     """
     Highlight rects for *quote* on a (1-based) PDF page, one box per text LINE
     the matched span touches, capped at *max_lines*.
@@ -74,7 +75,7 @@ def quote_rects(pdf_path, page_number: int, quote: str,
     Rects are [x0, y0, x1, y1] in PDF points, top-left origin (fitz) — the
     convention `pdfjs_overlay.js` draws. Returns None if PyMuPDF/rapidfuzz are
     missing, the file or page is unavailable, or the best match scores under
-    *min_score*.
+    *min_score* (the rule `locate_min_score` where not given).
     """
     words = page_words(pdf_path, page_number)
     if not words:
@@ -110,11 +111,17 @@ def page_words(pdf_path, page_number: int) -> Optional[list]:
 
 
 def rects_from_words(words: list, quote: str,
-                     min_score: float = MIN_SCORE,
-                     max_lines: int = MAX_LINES) -> Optional[list]:
-    """The matching itself: no file access, only the page's words and a quote."""
+                     min_score: Optional[float] = None,
+                     max_lines: Optional[int] = None) -> Optional[list]:
+    """The matching itself: no file access, only the page's words and a quote.
+    *min_score* and *max_lines* are the rules `locate_min_score` and
+    `locate_max_lines` where not given."""
     if not _have_deps():
         return None
+    if min_score is None:
+        min_score = float(rules.get("locate_min_score"))
+    if max_lines is None:
+        max_lines = int(rules.get("locate_max_lines"))
     from rapidfuzz import fuzz
     if not (quote or "").strip() or not words:
         return None
@@ -138,6 +145,10 @@ def rects_from_words(words: list, quote: str,
     if not text.strip():
         return None
 
+    match = rules.get("locate_match")
+    if match != "partial_ratio":
+        raise ValueError(f"locate_match {match!r} is not a way this "
+                         f"module matches")
     al = fuzz.partial_ratio_alignment(quote, text)
     if al is None or al.score < min_score:
         return None

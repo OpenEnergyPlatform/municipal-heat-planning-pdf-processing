@@ -150,7 +150,9 @@ and from nothing else: no setting of the shell, no project file and no `.env`
 reaches the harvest. The one exception is how a model is reached (provider,
 address and key, `REACHED`), which a recording takes from where it is run and
 a replay does not need. Both runs ask one request at a time
-(`ONE_AT_A_TIME`), because a request shows the model what earlier requests of
+(`ONE_AT_A_TIME`: the rules `limit_adaptive` off, `documents_in_flight` 1 and
+`compute_parallel` 1, named by their rules so that a renamed rule fails here),
+because a request shows the model what earlier requests of
 the same sweep found, and with several in flight its words would depend on
 which thread was faster. The harvest runs the package the benchmark command
 runs, wherever it is started. A replay counts the trust levels as `docpipe

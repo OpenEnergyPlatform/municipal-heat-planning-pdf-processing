@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 2048
----
 Nenne jede gezeigte Zeile, die einen Wert des Felds unter "field" sagt, mit ihrer Adresse und den Worten des Werts.
 
 * Ein Wert ist, was das Feld nach seiner Bedeutung ("means") ist.

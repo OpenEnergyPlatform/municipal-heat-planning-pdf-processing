@@ -36,8 +36,11 @@ returns each message character for character. The file is compressed
 uncompressed (`<name>.trace.jsonl`), and ends quietly where a killed run left
 it.
 
-Setting `EXTRACT_TRACE=0` turns tracing off, and every call to record an event
-then returns immediately.
+The rule `trace_on` (setting `EXTRACT_TRACE=0` turns it off) decides whether
+a run traces at all: off, every call to record an event returns immediately.
+`trace_requests` says whether an event carries its request and reply;
+`trace_compress`, `trace_time_places` and `trace_piece_min_chars` the file's
+form (owner decision 2026-11-11). Each is read where it is used.
 
 Author: Felix Vossel
 """
@@ -47,15 +50,22 @@ import gzip
 import hashlib
 import json
 import logging
-import os
 import threading
 import zlib
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Optional
 
+from .. import rules
+from ..ruleset.passes import run_value
+
 log = logging.getLogger(__name__)
 
-ENABLED = os.environ.get("EXTRACT_TRACE", "1") != "0"
+
+def enabled() -> bool:
+    """Whether the run traces (rule `trace_on`), read when asked: a run's
+    value, whatever step is writing."""
+    return bool(run_value("trace_on"))
+
 
 # A trace file, and the name traces had before they carried their requests,
 # which is still read.
@@ -79,7 +89,7 @@ _thread = threading.local()
 def open_trace(directory, name_of: Callable) -> None:
     """Start writing traces under `directory`, naming files via `name_of(id)`."""
     global _root, _name_of
-    if not ENABLED:
+    if not enabled():
         return
     # A file opened under an earlier directory would go on taking the events
     # of its document, and this directory would never see them.
@@ -101,20 +111,28 @@ def _handle(document_id: int):
     if handle is not None:
         return handle
     name = (_name_of(document_id) if _name_of else None) or f"doc{document_id}"
-    path = _root / f"{name}{SUFFIX}"
+    path = _root / f"{name}{SUFFIX if compressed() else PLAIN}"
     # What an earlier run traced is kept, not truncated (archive.py); one it
-    # wrote under the earlier name is kept the same way and then replaced,
-    # as a trace of this name always was.
+    # wrote under the other name (plain or compressed) is kept the same way
+    # and then replaced, as a trace of this name always was.
     from . import archive
     archive.keep(path)
-    earlier = _root / f"{name}{PLAIN}"
+    earlier = _root / f"{name}{PLAIN if compressed() else SUFFIX}"
     if earlier.is_file():
         archive.keep(earlier)
         earlier.unlink()
-    handle = gzip.open(path, "wt", encoding="utf-8")
+    if compressed():
+        handle = gzip.open(path, "wt", encoding="utf-8")
+    else:
+        handle = open(path, "wt", encoding="utf-8", newline="\n")
     _files[document_id] = handle
     _written[document_id] = set()
     return handle
+
+
+def compressed() -> bool:
+    """Whether a trace is written compressed (rule `trace_compress`)."""
+    return bool(run_value("trace_compress"))
 
 
 def exchanged(request: dict, response=None, error=None, *,
@@ -126,7 +144,12 @@ def exchanged(request: dict, response=None, error=None, *,
     None where no queue held the request; *once* says the answer is that of
     the same request sent before and nothing was sent
     (`scheduler.Once`)."""
-    if not ENABLED or _root is None:
+    if not enabled() or _root is None:
+        return
+    if not rules.get("trace_requests"):
+        # The step that sent it does not record its requests: whatever
+        # request the thread held for an event is gone with it.
+        _thread.exchange = None
         return
     _thread.exchange = (request, response, error, times, once)
 
@@ -136,10 +159,11 @@ def _times(times: Optional[tuple]) -> dict:
     if not times:
         return {}
     asked, sent, answered = times
-    out = {"asked_at": round(asked, 3)}
+    places = run_value("trace_time_places")
+    out = {"asked_at": round(asked, places)}
     if sent is not None:
-        out["sent_at"] = round(sent, 3)
-    out["answered_at"] = round(answered, 3)
+        out["sent_at"] = round(sent, places)
+    out["answered_at"] = round(answered, places)
     return out
 
 
@@ -161,7 +185,7 @@ def event(kind: str, document_id: Optional[int] = None, /, **fields) -> None:
     if _reports(kind, fields):
         pending = getattr(_thread, "exchange", None)
         _thread.exchange = None
-    if not ENABLED or _root is None or document_id is None:
+    if not enabled() or _root is None or document_id is None:
         return
     try:
         record = {"t": kind, "doc": document_id}
@@ -191,7 +215,7 @@ def event(kind: str, document_id: Optional[int] = None, /, **fields) -> None:
 
 def flush(document_id: Optional[int] = None) -> None:
     """Push what is buffered to disk, for one document or for all of them."""
-    if not ENABLED or _root is None:
+    if not enabled() or _root is None:
         return
     with _lock:
         targets = ([_files[document_id]] if document_id in _files
@@ -219,9 +243,10 @@ def close() -> None:
 
 def _ref(text: str, pieces: dict) -> Optional[str]:
     """The reference *text* is written under, or None where the text is no
-    longer than its reference."""
+    longer than `trace_piece_min_chars` (by default the length of a
+    reference)."""
     key = hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
-    if len(text) <= len(key):
+    if len(text) <= run_value("trace_piece_min_chars"):
         return None
     pieces[key] = text
     return key

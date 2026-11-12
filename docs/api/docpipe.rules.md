@@ -26,10 +26,17 @@ a setting (`Rule.env`) is set by it where it is set: the environment, then
 the project file, then the file.
 
 A run reads with the rules of its profile (`use`; `current` takes the
-ambient profile's where no run said which). Nothing here decides whether a
-harvest is current: a pass names the sha256 of its rules in its entry of the
-stamp for a reader, as it names its prompts and its flow (owner decision
-2026-09-10: a stamp rests on the questions of the spec alone).
+ambient profile's where no run said which). A step of the flow and the
+frames around it may set a rule for themselves (`"rules"` of a box or frame
+in `flow.json`, owner 2026-11-11: "alles soll anpassbar sein"): while the
+step runs, its values lie over the run's (`STEP`, set by
+`engine.Engine.step`), the innermost frame's over the outer ones', so a
+value is read in this order: the step, its frames from the inside out, the
+setting of the start, the file. `get` is the one way a rule is read.
+Nothing here decides whether a harvest is current: a pass names the sha256
+of its rules in its entry of the stamp for a reader, as it names its
+prompts and its flow (owner decision 2026-09-10: a stamp rests on the
+questions of the spec alone).
 
 Author: Felix Vossel
 
@@ -43,33 +50,6 @@ class RuleError(ValueError)
 
 A rules file or a value a run cannot read. It names the file or the
 rule.
-
-### Rule
-
-```python
-@dataclass(frozen=True)
-class Rule
-```
-
-One rule a run follows: what the code knows of it.
-
-Fields:
-
-- `name: str`
-- `tab: str`
-- `group: str`
-- `kind: str`
-- `help: str`
-- `least: Optional[float] = None`
-- `most: Optional[float] = None`
-- `choices: tuple = ()`
-- `columns: tuple = ()`: a table's columns
-- `of: str = "text"`: a map's values: text, texts or whole
-- `empty: bool = False`: an empty text, list or map; no range
-- `env: Optional[str] = None`: the setting that wins over the file
-- `env_flag: tuple = ()`: (the value where that setting is off,
-- `decided: str = ""`: the owner's decisions that set it
-- `where: str = ""`: where the code applies it
 
 ### Rules
 
@@ -94,6 +74,47 @@ Fields:
 def get(self, name: str, default=None)
 ```
 
+### Step
+
+```python
+@dataclass(frozen=True)
+class Step
+```
+
+The values a step of the flow and its frames set for themselves,
+laid over each other (the innermost wins), while it runs.
+
+Fields:
+
+- `kind: str`: of the innermost node (`step_kind`)
+- `ident: str`: its id in the drawing
+- `values: dict`: name -> value: rules and numbers of
+- `owners: dict`: name -> "step \<id>" or "frame \<id>"
+- `state: str = ""`: of the values, "" where there are none
+
+### in_step
+
+```python
+class in_step
+```
+
+Read with *step*'s values while the block runs (`STEP`).
+
+#### in_step.\_\_init\_\_
+
+```python
+def __init__(self, step: Step)
+```
+
+### recording
+
+```python
+class recording
+```
+
+Note every read of a rule or a number of the flow while the block
+runs, in every thread: {(step kind, name)}.
+
 ### overlaid
 
 ```python
@@ -113,12 +134,6 @@ def __init__(self, **values)
 ```
 
 ## Functions
-
-### rule
-
-```python
-def rule(name, tab, group, kind, help, **more) -> Rule
-```
 
 ### problem
 
@@ -248,16 +263,53 @@ The rules a run reads with: those a run took (`use`) for the
 ambient profile, else the ambient profile's (`DOCPIPE_PROFILE`), else
 the default's.
 
+### step_kind
+
+```python
+def step_kind(node: dict) -> str
+```
+
+How a node of a flow is named where a rule says which steps read it:
+a box by its kind ("find"), a frame as "each \<what>", "round" or
+"if".
+
+### stepped
+
+```python
+def stepped(node: dict, values: dict) -> "Step"
+```
+
+The step of *node* with its own *values* laid over the step it
+stands in.
+
+### noted
+
+```python
+def noted(name: str) -> None
+```
+
+Note a read of *name* where `recording` asks for it.
+
+### stepped_value
+
+```python
+def stepped_value(name: str)
+```
+
+(True, the step's own value of *name*) where the step that runs or
+a frame around it sets one, else (False, None). Noted as a read.
+
 ### get
 
 ```python
 def get(name: str, owner: Optional[str] = None)
 ```
 
-The value of the rule *name* in the rules a run reads with. A
-profile's own code names itself as *owner*: where the ambient profile's
-line does not declare the rule, it is *owner*'s (a test of the scenario
-profile's regions run under another ambient profile).
+The value of the rule *name* in the rules a run reads with: the own
+value of the step that runs or of a frame around it (`STEP`), else the
+run's. A profile's own code names itself as *owner*: where the ambient
+profile's line does not declare the rule, it is *owner*'s (a test of
+the scenario profile's regions run under another ambient profile).
 
 ### derived
 
@@ -266,7 +318,8 @@ def derived(key: str, build: Callable)
 ```
 
 What *build* makes of the rules in effect, made once per state of
-the rules: a pattern compiled from a list of words.
+the rules and of the step's own values: a pattern compiled from a list
+of words.
 
 ### of_tab
 

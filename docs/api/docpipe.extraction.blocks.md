@@ -52,6 +52,7 @@ Fields:
 - `help: str = ""`
 - `where: tuple = ()`: the frames it applies in, () = everywhere
 - `words: tuple = ()`: what the page shows for each choice
+- `rule: str = ""`: the rule that gives its value where the
 
 ### Box
 
@@ -82,6 +83,10 @@ Fields:
 - `spec: Optional[str] = None`: the switch of the spec it needs
 - `top: bool = False`: stands at the top of the drawing only
 - `marks: tuple = ()`: fixed checks shown at the box
+- `flow: str = ""`: A box of a follow-up pass (`passflow`) says "pass" here: the main flow does not take it, and a pass does not take the others. Its *scope* is "files" or "documents" where it starts what runs for each document (a harvest file, or a document of the run), "chain" where it runs for that document after the start, "run" where it runs once. Its *after* are the boxes one of which stands before it, and *inside* the frame it stands in.
+- `scope: str = ""`
+- `after: tuple = ()`
+- `inside: str = ""`
 
 ## Functions
 
@@ -97,6 +102,7 @@ def box(type_: str) -> Box
 def catalogue() -> dict
 ```
 
-The library as the page shows it.
+The library as the page shows it: the boxes of the main flow, and
+apart from them the boxes of the follow-up passes.
 
 [Back to the index](../README.md)

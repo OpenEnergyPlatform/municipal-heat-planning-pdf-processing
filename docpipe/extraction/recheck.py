@@ -30,14 +30,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
-from .. import jsonl
-from . import archive
-from .fields import (DERIVED, LISTS_UNREADABLE, NUMBER, READ, UNANSWERED,
-                     asked_slots)
+from .. import jsonl, rules
+from .fields import DERIVED, READ, UNANSWERED
 from .pipeline import answer_in_quote
 from .spec import Spec
-from .trust import document_summary
-from .verify import quote_in
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +48,8 @@ def recheck_row(row: dict, slots: list) -> Counter:
         if given in (None, ""):
             row.setdefault(f"{name}_state", UNANSWERED)
             continue
-        if row.get(f"{name}_state") == DERIVED:
+        if row.get(f"{name}_state") == DERIVED \
+                and rules.get("recheck_keeps_derived"):
             # The spec decided this one, so no passage was ever claimed to
             # carry it and the answer-in-quote rule has nothing to say about it.
             # Holding it to the rule would strip a correct coordinate for
@@ -61,7 +58,11 @@ def recheck_row(row: dict, slots: list) -> Counter:
             continue
         if not quote:
             # A harvest from before each coordinate carried a quote has none.
-            # It is not evidence and was never checked, so it does not stay.
+            # It is not evidence and was never checked, so it does not stay
+            # (rule `recheck_drop_without_quote`).
+            if not rules.get("recheck_drop_without_quote"):
+                dropped["no evidence kept"] += 1
+                continue
             dropped["no evidence at all"] += 1
         elif not answer_in_quote(slot, given,
                                  row.get(f"{name}_raw"), quote):
@@ -72,7 +73,7 @@ def recheck_row(row: dict, slots: list) -> Counter:
             continue
         for key in (name, f"{name}_raw", f"{name}_quote"):
             row.pop(key, None)
-        row[f"{name}_state"] = UNANSWERED
+        row[f"{name}_state"] = rules.get("recheck_dropped_state")
     return dropped
 
 
@@ -92,7 +93,8 @@ def _document_of(text: str):
 
 def recheck_file(path: Path, spec: Spec,
                  spec_for: Optional[Callable] = None) -> Counter:
-    """Rewrite one harvest file in place. Returns what it dropped and why.
+    """Rewrite one harvest file in place, as the flow `recheck` does for a
+    file. Returns what it dropped and why.
 
     The summary line is recomputed rather than carried over: it counts the
     trust levels of the tuples above it, and this pass is in the business of
@@ -103,86 +105,34 @@ def recheck_file(path: Path, spec: Spec,
     backed as an entry of the document's list is held to the same list here:
     against the run's spec the entry is a bare identifier no quote prints.
     """
-    stats: Counter = Counter()
-    lines = []
-    tuples, refusals, document_id = [], [], None
-    text = Path(path).read_text(encoding="utf-8")
-    if spec_for is not None:
-        spec = spec_for(_document_of(text))
-        if spec is None:
-            stats[LISTS_UNREADABLE] += 1
-            return stats
-    for line in jsonl.lines(text):
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            stats["unreadable line kept"] += 1
-            lines.append(line)
-            continue
-        if row.get("kind") == "summary":
-            document_id = row.get("document_id")
-            stats["summaries rewritten"] += 1
-            continue
-        if row.get("kind") != "tuple":
-            # Kept verbatim, and only a refusal counted as one: the rebuilt
-            # summary's refusal count is read as a model-error rate, and a
-            # parameter_state line is a fact about the run.
-            if row.get("kind") == "refusal":
-                refusals.append(row)
-            lines.append(line)
-            continue
-        parameter = spec.by_uri.get(row.get("parameter"))
-        if parameter is None:
-            stats["unknown parameter kept"] += 1
-            tuples.append(row)
-            lines.append(line)
-            continue
-        slots = asked_slots(parameter)
-        stats["tuples"] += 1
-        stats["coordinates"] += len(slots)
-        stats.update(recheck_row(row, slots))
-        tuples.append(row)
-        lines.append(json.dumps(row, ensure_ascii=False))
-    if document_id is not None:
-        lines.append(json.dumps(
-            {"kind": "summary",
-             **document_summary(document_id, tuples, refusals)},
-            ensure_ascii=False))
-    tmp = Path(path).with_suffix(".jsonl.tmp")
-    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    archive.keep(path)
-    tmp.replace(path)
-    return stats
+    from . import passflow
+    from ..profile import active_profile
+    from .remap import _spec_of
+    run = passflow.Run(out=Path(path).parent, spec=spec,
+                       document_spec=_spec_of(spec, spec_for))
+    tree = [node for node in passflow.load("recheck", active_profile())
+            if node.get("box") != "clear_stamps"]
+    return passflow.one(tree, run, None, Path(path).name).stats
 
 
-def run(harvest_dir: Path, spec: Spec, *, drop_stamps: bool = True,
+def run(harvest_dir: Path, spec: Spec, *,
+        drop_stamps: Optional[bool] = None,
         spec_for: Optional[Callable] = None) -> Counter:
-    """Recheck a whole harvest directory.
+    """Recheck a whole harvest directory: the flow `recheck`
+    (`passflow`).
 
     The stamps go with it. A file rewritten by a rule the harvest did not
     apply is not the output of the run its stamp names, and leaving the stamp
-    would make the next run skip the document — which is exactly how 205 plans
+    would make the next run skip the document -- which is exactly how 205 plans
     kept an old harvest through a corpus run meant to redo them. A file left
-    alone keeps its stamp: it still is that run's output.
+    alone keeps its stamp: it still is that run's output. *drop_stamps* None
+    leaves it to the rule `recheck_clear_stamps`.
     """
-    stats: Counter = Counter()
-    harvest_dir = Path(harvest_dir)
-    untouched = set()
-    for path in sorted(harvest_dir.glob("*.jsonl")):
-        got = recheck_file(path, spec, spec_for)
-        stats.update(got)
-        if got[LISTS_UNREADABLE]:
-            untouched.add(path.stem)
-            continue
-        stats["documents"] += 1
-    if drop_stamps:
-        for stamp in harvest_dir.glob("*.stamp.json"):
-            if stamp.name[:-len(".stamp.json")] in untouched:
-                continue
-            stamp.unlink()
-            stats["stamps cleared"] += 1
-    for key, value in sorted(stats.items()):
-        log.info("recheck: %-32s %d", key, value)
-    return stats
+    from . import passflow
+    from .remap import _spec_of
+    made = passflow.Run(out=Path(harvest_dir), spec=spec,
+                        document_spec=_spec_of(spec, spec_for))
+    if drop_stamps is None:
+        return passflow.run_named("recheck", made)
+    with rules.overlaid(recheck_clear_stamps=bool(drop_stamps)):
+        return passflow.run_named("recheck", made)

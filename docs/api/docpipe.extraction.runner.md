@@ -50,7 +50,7 @@ class Unserved
 ```
 
 Documents one of whose requests ended on a 429, a 5xx or a timeout,
-or on a refusal asked `MAX_RETRIES` times (`refused`).
+or on a refusal asked `refusal_retry_most` times (`refused`).
 
 Such a request was never answered, so its document is not finished,
 whichever request it was: a passage's rows, one coordinate, the frame, a
@@ -96,13 +96,15 @@ document stamped as finished when no attempt of it was served.
 A failure that is the server's (`server_side`) is asked again, after the
 long wait (`retry_wait`), without a limit until the run halts (`halted`,
 owner decision 2026-11-09: "Wenn es aber Codefehler etc. sind, dann
-immer wiederholen. Es wird nichts abgebrochen"); a reply that could not
-be read is asked again `MAX_RETRIES` times at most (`attempts`), and so
-is a request the server refuses (`refused`, owner decision 2026-11-09),
-after the short wait. Any other failure is not asked again. A request
-given up on whose last attempt the server did not serve (`unserved`) or
-refused leaves its document unfinished (`UNSERVED`): the stamp is
-withheld and a resume reads it again.
+immer wiederholen. Es wird nichts abgebrochen"), or as often as the rule
+`server_retry_most` says where it is above 0; a reply that could not be
+read is asked again as often as the number `replies` says at most
+(`attempts`, read for the request, in its step), and a request the
+server refuses (`refused`, owner decision 2026-11-09) as often as
+`refusal_retry_most` says, after the short wait. Any other failure is
+not asked again. A request given up on whose last attempt the server
+did not serve (`unserved`) or refused leaves its document unfinished
+(`UNSERVED`): the stamp is withheld and a resume reads it again.
 
 *document_id* is the document the request reads, None for a request of
 the run itself. *noted* is False for a request whose end is told another
@@ -125,10 +127,11 @@ def attempts(self, replies: int = 0)
 The attempts of one request, 1, 2, ...: after a failure that is
 the server's (`failed` True) the next one after the long wait, until
 the run halts; after a reply that could not be read (`fault`) the
-next one after the short wait, *replies* (`MAX_RETRIES`) such
-replies at most; after a refusal the next one after the short wait,
-as long as `failed` says so. The caller ends the loop on an answer
-and where `failed` says no more.
+next one after the short wait, *replies* such replies at most (the
+number `replies` of the flow, read for this request, where none is
+given); after a refusal the next one after the short wait, as long
+as `failed` says so. The caller ends the loop on an answer and where
+`failed` says no more.
 
 #### Failures.failed
 
@@ -137,8 +140,9 @@ def failed(self, exc: BaseException) -> bool
 ```
 
 Whether the request that raised *exc* is asked again: after the
-server's failure until the run halts (`attempts`), after a refusal
-until it is the `MAX_RETRIES`th, after any other failure never.
+server's failure until the run halts or the rule `server_retry_most`
+is reached (`attempts`), after a refusal until it is the
+`refusal_retry_most`th, after any other failure never.
 
 #### Failures.answered
 
@@ -240,6 +244,65 @@ def __init__(self, reranker)
 
 ## Functions
 
+### in_home
+
+```python
+def in_home(kind: Optional[str])
+```
+
+Read with the values of the box that is the home of requests of this
+kind (the first box of the flow that asks it) while the block runs,
+unless the step that runs asks this kind itself. Requests of a kind are
+asked from other steps too: the entry of a list from the step of a find,
+the check that a find speaks about the value from the step that searches
+(it is attached to it, and the engine does not enter its box), the name
+of a scenario from a search. Such a request is asked as the step that
+asks that kind says (its model, its answer room, its extras), so that
+every request of a kind is asked alike, wherever it comes from.
+
+### llm_base_url
+
+```python
+def llm_base_url() -> str
+```
+
+Where the requests go (rule `llm_base_url`, set at the start).
+
+### llm_api_key
+
+```python
+def llm_api_key() -> str
+```
+
+The key of the model server (rule `llm_api_key`, set at the start).
+
+### llm_model
+
+```python
+def llm_model() -> str
+```
+
+The model the request sent now asks (rule `model`: the step's, else
+the run's).
+
+### llm_timeout
+
+```python
+def llm_timeout() -> float
+```
+
+What the first attempt of a request waits (rule `llm_timeout_s`).
+
+### reply_limit
+
+```python
+def reply_limit() -> int
+```
+
+Replies out of their form the request sent now takes before it is
+left unanswered: the number `replies` of the flow as the step that sends
+it reads it, which the setting EXTRACT_MAX_RETRIES wins over.
+
 ### retry_timeout
 
 ```python
@@ -247,9 +310,9 @@ def retry_timeout() -> float
 ```
 
 What a retry may take after a request timed out (rule
-`repeat_timeout_s`). The first attempt keeps LLM_TIMEOUT, which is sized
-for a slow but working generation; a request the server did not answer
-in that time is unlikely to differ on its repeat, and three full
+`repeat_timeout_s`). The first attempt keeps `llm_timeout_s`, which is
+sized for a slow but working generation; a request the server did not
+answer in that time is unlikely to differ on its repeat, and three full
 timeouts held one field thread for 91 minutes.
 
 ### retry_temperature
@@ -302,13 +365,24 @@ vLLM 225 seconds over five attempts, which is what a model server needs
 to come back; the model's own mistakes keep the short curve, because
 waiting longer for those buys nothing.
 
+### failure_statuses
+
+```python
+def failure_statuses() -> tuple
+```
+
+((first, last) of each status range, whether a timeout counts) of the
+rule `server_failure_statuses`: the answers that mean the server did not
+do the work. Refused where an entry is none of 429, 500-599, timeout.
+
 ### unserved
 
 ```python
 def unserved(exc: BaseException) -> bool
 ```
 
-A 429, a 5xx or a timeout: the server was asked and did not do the work.
+A 429, a 5xx or a timeout: the server was asked and did not do the work
+(the statuses of the rule `server_failure_statuses`).
 
 None says anything about the request. A rate limit lifts and a server
 recovers, and the same request is answered then. A request that timed out
@@ -336,12 +410,12 @@ These wait on the long curve and count towards the dead-server streak. A
 def refused(exc: BaseException) -> bool
 ```
 
-A 4xx other than 429: the server refused the request itself, such as
-one too long for the model or one our code built wrong ("System message
-must be at the beginning."). It is asked again `MAX_RETRIES` times at
-most, and a request refused to the end leaves its document unfinished
-(owner decision 2026-11-09): a later run reads it again, and nothing is
-lost without a word.
+A 4xx that is not the server's failure (429): the server refused the
+request itself, such as one too long for the model or one our code built
+wrong ("System message must be at the beginning."). It is asked again
+`refusal_retry_most` times at most, and a request refused to the end
+leaves its document unfinished (owner decision 2026-11-09): a later run
+reads it again, and nothing is lost without a word.
 
 ### halted
 
@@ -364,9 +438,10 @@ Werte"): a search, an embedding or a reranker that failed is never
 replaced by another order or by nothing. Each failure is logged and
 waited for on the long curve (`retry_wait`); a run that halts raises
 the last one. A request the server refuses (`refused`) is asked
-`MAX_RETRIES` times at most and then raised: its document fails and
-stays unfinished, and a later run reads it again (owner decision
-2026-11-09).
+`refusal_retry_most` times at most and then raised: its document fails
+and stays unfinished, and a later run reads it again (owner decision
+2026-11-09). With the rule `search_retry_most` above 0, any other
+failure is asked that many times as well and then raised.
 
 ### code_rounds
 
@@ -378,6 +453,25 @@ Sandbox rounds per calculation question (rule `code_rounds`). A
 computed value carries its code and the code's output as evidence;
 without the sandbox the model would have to work the number out itself,
 and that number would have no evidence at all.
+
+### sandbox_slots
+
+```python
+def sandbox_slots() -> threading.BoundedSemaphore
+```
+
+The semaphore of the code runs the sandbox takes at once, as the rule
+`code_slots` says it now.
+
+### attach_images
+
+```python
+def attach_images() -> bool
+```
+
+Tables and figures go to the model as pictures as well as text (rule
+`attach_images`): the transcription IS a reading of that picture, and a
+model that can see both can notice when they disagree.
 
 ### image_max_side
 
@@ -408,6 +502,16 @@ every request from here on and returned. They are logged whenever they
 differ from those logged before, each with where it comes from, so that
 the log of a job says what it read with.
 
+### numbers
+
+```python
+def numbers() -> flow_map.Numbers
+```
+
+The numbers of the flow the run reads with: those `take_flow` took
+for the run's profile, else what the default profile's flow file and
+the settings over it say now.
+
 ### embedder
 
 ```python
@@ -417,8 +521,8 @@ def embedder()
 The one resident embedding model this run uses.
 
 `get_embedder()` CONSTRUCTS a backend, it does not return a shared one, and
-this call used to sit inside the per-probe `embed()`. With
-EXTRACT_PLAN_PARALLEL threads each asking for its own probes, every probe
+this call used to sit inside the per-probe `embed()`. With several
+planning threads each asking for its own probes, every probe
 loaded another copy of the 8B model onto the same card: five fit into 80 GB,
 the sixth died of CUDA OOM, and with it all sixteen documents.
 
@@ -572,9 +676,9 @@ def make_search_reranker(image_root: Optional[Path] = None
 ```
 
 () -> one thread's reranker of every search (`rerank.Reranker`), or
-None where the run is given no RERANK_BASE_URL (owner decisions
-2026-11-06 and 2026-11-08). A figure is scored with its picture, as the
-reading shows it.
+None where the run is given no reranker server (rule
+`rerank_base_url`; owner decisions 2026-11-06 and 2026-11-08). A figure
+is scored with its picture, as the reading shows it.
 
 ### make_more_sources
 
@@ -838,6 +942,14 @@ the ticket of the thread that asked (`_for`), although a thread of the
 pool below sends it: such a thread belongs to no document, and a request
 of none goes before every document (owner decision 2026-11-07).
 
+### model_window
+
+```python
+def model_window() -> int
+```
+
+The window every request is sized against.
+
 ### image_tokens
 
 ```python
@@ -845,7 +957,7 @@ def image_tokens() -> int
 ```
 
 One crop at its longest side on both sides, one visual token per
-28 px square.
+square of `image_token_side_px` pixels.
 
 ### least_answer_tokens
 
@@ -870,7 +982,8 @@ The window the server reports, when it reports one.
 def start_limit() -> None
 ```
 
-Steer the requests by the server's queue unless EXTRACT_LIMIT_ADAPTIVE=0.
+Steer the requests by the server's queue unless the rule
+`limit_adaptive` is off.
 
 ### start_fixed_limit
 
@@ -921,6 +1034,64 @@ def answer_room(system: str, conversation: list, wanted: int) -> int
 
 max_tokens for this request: *wanted*, or what the window leaves.
 
+### request_room
+
+```python
+def request_room(system: str, conversation: list, wanted: int,
+                 whole: bool = False) -> Optional[int]
+```
+
+max_tokens a request may ask, None where the room is less than
+`least_answer_tokens`: such a request is not sent and counts as an
+answer that was cut off. The room is the answer that is asked for, or,
+with *whole*, what the window leaves, however short the answer asked for
+is (a search sentence of 300 tokens is sent where the window holds 512
+more).
+
+### request_wanted
+
+```python
+def request_wanted(kind: str) -> int
+```
+
+The longest answer, in tokens, a request may ask for (rule
+`max_tokens` of the step that asks its kind).
+
+### asked_values
+
+```python
+def asked_values(kind: Optional[str], profile=None) -> dict
+```
+
+The `max_tokens` and `temperature` a request of *kind* is asked with
+where no run is going (the editor's try, the compile step): the values
+of the box that is the kind's home in the flow of *profile*, else the
+run's. A request of no kind the flow has asks with the run's.
+
+### reply_grammar
+
+```python
+def reply_grammar(name: str, schema: dict, always: bool = False)
+```
+
+The `response_format` of a request whose reply is *schema*: always
+for a request that never goes without its grammar, else as the rule
+`schema_grammar` and the provider say (`providers.reply_format`).
+
+### send_request
+
+```python
+def send_request(client, system: str, conversation: list, limit: int,
+                 faults: int, response_format=None)
+```
+
+The one place a request of the harvest goes out: the model, the
+temperature after *faults* unreadable replies (rules `temperature`,
+`retry_temperature_step`, `retry_temperature_most`), the answer room
+*limit*, the system prompt and *conversation*, the reply grammar where
+one is asked for and the settings every request carries
+(`request_extras`), each read for the step that sends it.
+
 ### make_page_count
 
 ```python
@@ -954,25 +1125,8 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                    example: Optional[dict] = None, **noted)
 ```
 
-One request of the harvest: the reply as a dict, "cut_off" when it
-did not fit its room, or None when it could not be read. The prompt
-shows *example*, the reply this request asks for (`system_text`); the
-request is its prompt and *conversation*, one message (owner decisions
-2026-11-08: no request is a conversation).
-
-Asked again with the cause when the reply is no JSON object, or one
-without a key its schema requires (`_lacking`), `MAX_RETRIES` such
-replies at most, as every request of the stage is; a reply cut off at
-its limit is not rescued. Each answer is traced
-as `<where>_ask` with *noted*.
-
-A 429, a 5xx or a timeout is asked again until the server answers or
-the run halts (`Failures.attempts`, owner decision 2026-11-09), a
-refusal `MAX_RETRIES` times at most; a request whose last attempt ended
-on one was never answered, so its document is noted (`UNSERVED`) and
-goes unstamped, as for every request of the run. One that timed out is asked again with the time a repeat
-gets (`_repeating`), whatever client it was handed, as every request of
-the harvest is.
+One request of the harvest, in the step that asks its kind
+(`in_home`); see `_ask_in_grammar`.
 
 ### worded
 
@@ -1012,7 +1166,8 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]
 
 The requests of the harvest (`addressed.Asks`), each with a prompt of
 its own and its payload as one message, no conversation (owner decisions
-2026-11-08); None where the profile writes one of their prompts not,
+2026-11-08) where the rule `conversation` keeps none (`messages`); None
+where the profile writes one of their prompts not,
 those of `addressed.OPTIONAL` aside. A request asked again
 (`follow`) goes under the prompt of the request it follows, its words
 after the payload. The sentence a search goes with is a request of its
@@ -1079,8 +1234,9 @@ def make_chunk_reranker() -> Optional[Callable]
 
 () -> one thread's reranker of the pieces of a plan, which scores
 every piece it is given (`rerank.Reranker`), asked again until it
-answers (`Persistent`), or None where the run is given no
-RERANK_BASE_URL.
+answers (`Persistent`), or None where the run is given no reranker
+server (rule `rerank_base_url`). How many pieces it scores is the rule
+`rerank_chunk_pool`, read when it orders.
 
 ### make_harvest
 
@@ -1126,12 +1282,14 @@ year?
 ### probe_server
 
 ```python
-def probe_server(base_url: str = None, timeout: float = 10.0) -> bool
+def probe_server(base_url: str = None,
+                 timeout: Optional[float] = None) -> bool
 ```
 
 Whether the server answers `GET {base_url}/models` at all.
 
 Any reply below 500 counts: a server that refuses the key is still there.
+The time it waits is the rule `server_probe_timeout_s`.
 
 ### watch_server
 
@@ -1242,7 +1400,18 @@ after its fold and its computing (`profiles/\<name>/completion.py:
 complete(report, spec, db=)`, *db* the run's database, for what the
 profile looks up there): `completed(report, spec)`, which adds what it
 found to the report and returns what it came to, traced as `completion`,
-or None where nothing was open. None where the profile has no such step.
+or None where nothing was open. None where the profile has no such step
+or the flow has its box (`catalogue`) off or not at all.
+
+### compute_pool
+
+```python
+def compute_pool() -> ThreadPoolExecutor
+```
+
+The threads the calculation questions of the whole run take turns on,
+as many as the rule `compute_parallel` says now (one pool for each size
+it has had).
 
 ### make_computer
 
@@ -1273,6 +1442,47 @@ passage, its title, a hit's line or title (owner decision 2026-11-05).
 *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
 which "similar" lists (`make_more_sources` in a run); without it that
 search finds nothing.
+
+### step_models
+
+```python
+def step_models(profile=None) -> dict
+```
+
+{step id: model} of the steps of the flow that name a model of their
+own (rule `model`), for the check before the run
+(`llm_preflight.assert_step_models`). A step that is off asks
+nothing, so the model it names is not needed.
+
+### preflight
+
+```python
+def preflight(required: int, *, what: str, profile=None) -> bool
+```
+
+The check before the run (rule `preflight_on`): the server offers
+the model, its window holds *required* tokens, and, where a *profile*
+is given, the models its steps name are offered too. True where the
+check ran, False where the rule has the run ask nothing.
+
+### documents_at_once
+
+```python
+def documents_at_once() -> int
+```
+
+The most documents read at the same time (rule
+`documents_in_flight`), at least one.
+
+### dead_server_ends_run
+
+```python
+def dead_server_ends_run(seconds: float) -> bool
+```
+
+Does a server that has not answered for *seconds* end the run (rule
+`dead_server_ends_run`)? Where it does not, the run says so and goes
+on.
 
 ### document_room
 
@@ -1554,7 +1764,7 @@ reached the server, of the sources the plan held; "no_reply" is the
 sources planned, when not one batch came back (`answered` is how many did;
 None means the caller does not track it and the count is not checked);
 "unserved" is the requests that ended on a 429, a 5xx, a timeout or a
-refusal asked `MAX_RETRIES` times, `lost` of them
+refusal asked `refusal_retry_most` times, `lost` of them
 noted beside the report and the rest in its sentinels. None when the
 reading happened. `finish_document` withholds the stamp on any of them
 and the pass for a new parameter writes nothing.
@@ -1666,11 +1876,31 @@ parameter asked again carries its whole list: 63,230 characters for 154
 sectors whose parameter payload counts 9,627. Unmeasured, that request
 did not fit the window and was never sent.
 
-A request carries several sources now, so the text term is the batch's
-ceiling rather than one window's — and one source too long to share a
-request rides alone, which is why the larger of the two is what counts.
-Every source in a batch may bring a crop, and the prior block rides along
-on top.
+A request shows the pieces of a search: as many as the flow says
+(`search_per_request`), each of its lines (`piece_lines`) and headings
+(`headings`) at the tokens the longest line takes (`window_line_tokens`);
+each piece may bring a crop. Each number counts at its largest in the
+flow, wherever a box sets one for itself.
+
+### most_of_number
+
+```python
+def most_of_number(name: str) -> int
+```
+
+The largest value the number *name* of the flow takes in any box or
+frame of it that is on (the run's number, and what each node sets for
+itself).
+
+### answer_tokens_of
+
+```python
+def answer_tokens_of(prompt) -> int
+```
+
+The longest answer a request of *prompt*'s kind may ask for: the
+longest of those the steps of the flow that ask this kind set for
+themselves (rule `max_tokens`), else the run's.
 
 ### request_budget
 
@@ -1698,16 +1928,6 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple
 means superseded rather than absent: `_documents` lists current versions
 only. A pilot has to hear about that instead of quietly being smaller than
 it was meant to be.
-
-### span_marks_of
-
-```python
-def span_marks_of() -> dict
-```
-
-{coordinate: entry} a value stated for a span of years takes on each
-of its rows (rule `span_marks`, `reading.span_rows`); {} where the rules
-say nothing.
 
 ### year_states_of
 
@@ -1747,11 +1967,56 @@ profile's own, None where the profile names none. The stamps are written
 from this file, so a column of one's own has stamps of its own; the
 folder it writes into is kept apart by `scratch.folder_problem`.
 
+### chosen_flow
+
+```python
+def chosen_flow(args) -> tuple
+```
+
+(the flow this run starts, why it cannot): `--flow NAME` or the flow
+the switch chooses, the main flow where there is neither. A switch that
+chooses another flow than `--flow` names is refused.
+
+### follow_up_problem
+
+```python
+def follow_up_problem(name: str, profile) -> Optional[str]
+```
+
+Why the flow *name* cannot be started for *profile*, or None.
+
+### follow_up_run
+
+```python
+def follow_up_run(args, spec, current, documents, document_name, whole,
+                  every, locate, document_axes, frame_axes, year_states,
+                  sweep, owner_sources, in_flight, room, harvest_document,
+                  make_found, harvest_documents_of) -> passflow.Run
+```
+
+What a flow of a follow-up pass runs with (`passflow.Run`): where the
+harvest is, the stamp this run would write, and the means to read a
+document again as the harvest reads it (`whole`: the survey of the
+plan, asked for the new parameters alone or for the passages nobody
+read).
+
+### log_follow_up
+
+```python
+def log_follow_up(name: str, stats) -> None
+```
+
+The line that says what a pass over a stored harvest did.
+
 ### main
 
 ```python
 def main(argv: Optional[list] = None) -> int
 ```
+
+The call line of the run. What a call switch sets for the run alone
+(`--document`, `--force`) is a rule laid over the rules for as long as
+the run goes (`rules.overlaid`), and gone after it.
 
 ### write_stats
 

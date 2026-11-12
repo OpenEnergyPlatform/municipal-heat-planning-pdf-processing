@@ -1,8 +1,6 @@
 ---
-template: review
-without: [corpus_language]
-temperature: 0
-max_tokens: 1024
+template: review
+without: [corpus_language]
 ---
 <!-- part: role -->
 Du liest deutsche kommunale Wärmepläne ("Kommunale Wärmeplanung").

@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from .. import rules
 from .verify import quote_in
 
 COMPUTE_PROMPT_ID = "extraction/compute"
@@ -170,11 +171,14 @@ def unquoted(question: Question, answer: dict, used: list,
 
 
 def used_numbers(question: Question, answer: dict) -> list:
-    """The numbers the answer says it used, all of them if it names none."""
+    """The numbers the answer says it used; where it names none, the rule
+    `compute_used_if_none` says: all of them, or none."""
     named = answer.get("used")
     by_label = dict(zip(labels(question), question.numbers))
     chosen = [by_label[name] for name in named or () if name in by_label]
-    return chosen or list(question.numbers)
+    if chosen or rules.get("compute_used_if_none") == "none":
+        return chosen
+    return list(question.numbers)
 
 
 def claim_of(question: Question, value, used: list, runs: list,

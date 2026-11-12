@@ -74,7 +74,9 @@ that asks whether a find of another passage speaks about the value
 (`about`), None where none follows the question; *refused(Found)* ->
 (reason, sentence) of the first own check that refuses a find, None
 where every check lets it be; how often an answer that did not hold is
-asked again, None for the flow's number.
+asked again, None for the flow's number. *about_step()* is the context
+the box that checks a find of another passage reads its own values in
+(`engine.Engine.step`), None where it reads the asking box's.
 
 Fields:
 
@@ -82,6 +84,7 @@ Fields:
 - `about: Optional[str] = None`
 - `refused: Optional[Callable] = None`
 - `follow_ups: Optional[int] = None`
+- `about_step: Optional[Callable] = None`
 
 ### Found
 
@@ -103,6 +106,7 @@ Fields:
 - `why: Optional[str] = None`
 - `quoted: list = field(default_factory=list)`: The lines its quote is: the named ones, and where they are too short to name a place, the shown lines around them (`Shown.around`).
 - `entry: Optional[int] = None`: The number of the entry of the request's list a find names, where the field has a list (owner decision 2026-11-09), 0 for none.
+- `outside: bool = False`: The entry it named is none of the list's and the rule `outside_list` keeps its wording (entry 0).
 
 #### Found.quote
 
@@ -131,15 +135,24 @@ image and prompt are those of the kept transcription is not asked again
 decision 2026-11-09: caption and numbers apart).
 
 *ask(source, document_id)* is the transcription request, the reply as
-a dict or None; *fingerprint* says which prompt and model wrote it,
-*image_key(source)* which image (None where the figure has none: then
-nothing is asked and its description stands for it).
+a dict or None; *fingerprint* says which prompt and model wrote it (a
+text, or a function that tells it where it is read, in the step that
+transcribes, whose model it names), *image_key(source)* which image
+(None where the figure has none: then nothing is asked and its
+description stands for it).
 
 #### Transcripts.\_\_init\_\_
 
 ```python
 def __init__(self, ask: Optional[Callable], store: Optional[Path],
-             fingerprint: str, image_key: Callable)
+             fingerprint, image_key: Callable)
+```
+
+#### Transcripts.fingerprint
+
+```python
+@property
+def fingerprint(self) -> str
 ```
 
 ### Entry
@@ -235,8 +248,20 @@ entries its wordings were read as, and its lists of names.
 ```python
 def __init__(self, document_id: int, sources: list, transcripts: dict,
              chunk_units: Optional[int] = None, *, numbers=None,
-             cut: Optional[Cut] = None)
+             cut: Optional[Cut] = None,
+             cutting: Optional[Callable] = None)
 ```
+
+#### Plan.part
+
+```python
+@staticmethod
+def part(numbers: bool) -> bool
+```
+
+Does a field read a figure in the pieces of its numbers? A
+field of numbers does, any other field reads its caption, as the
+rule `figure_part` says (by the kind of field, or always one).
 
 #### Plan.pieces
 
@@ -245,6 +270,23 @@ def pieces(self, numbers: bool) -> list
 ```
 
 The pieces a field reads, of numbers or not (`pieces_for`).
+
+#### Plan.places_of
+
+```python
+def places_of(self, numbers: bool) -> dict
+```
+
+{piece key: its place} among `pieces`.
+
+#### Plan.first_request
+
+```python
+def first_request(self) -> bool
+```
+
+Is this the first request the step that runs makes in this
+document? Told once per step (rule `show_title_page`, "first").
 
 #### Plan.key_lock
 
@@ -279,7 +321,8 @@ def beside(self, chunk: Chunk, numbers: bool = False) -> list
 ```
 
 The pieces right before and after *chunk* among those a field of
-numbers or another field reads.
+numbers or another field reads, as many on each side as the rule
+`beside_pieces` says.
 
 ### Asks
 
@@ -402,6 +445,46 @@ def __init__(self, spec, asks: Asks, order: Callable, *,
              flow: Optional[list] = None)
 ```
 
+#### Reader.span_marks
+
+```python
+@property
+def span_marks(self) -> dict
+```
+
+What a value stated for a span of years marks its rows with
+(rule `span_marks`), as the step that runs reads it.
+
+#### Reader.budget
+
+```python
+@property
+def budget(self) -> int
+```
+
+The chunks a search shows (`search_pieces`), as the step that
+runs reads it; every chunk where the rule `search_to_end` is on.
+
+#### Reader.shares
+
+```python
+@property
+def shares(self) -> dict
+```
+
+{kind of passage: its share of a search's chunks}, as the step
+that runs reads them.
+
+#### Reader.per_request
+
+```python
+@property
+def per_request(self) -> int
+```
+
+The chunks of a search one request shows (`search_per_request`),
+as the step that runs reads it.
+
 #### Reader.engine
 
 ```python
@@ -446,10 +529,24 @@ passage shows, until a single line is a hole of its own (owner
 decision 2026-09-12: a request is split, never its answer
 rescued).
 
+#### Reader.halves
+
+```python
+@staticmethod
+def halves(piece: list, depth: int) -> Optional[list]
+```
+
+The two halves a request whose answer did not fit its room is
+asked in instead (owner decision 2026-09-12: a request is split,
+never its answer rescued), None where it stays a hole: the rules
+`split_cut_off` (on), `split_by` (first by passages, then by lines,
+or by lines only) and `split_most` (how often one request is
+split, 0 until a single line is left).
+
 #### Reader.list_of
 
 ```python
-def list_of(self, options) -> tuple
+def list_of(self, options, two_step: bool = True) -> tuple
 ```
 
 A list as every request of this reading shows it (`listing`):
@@ -496,6 +593,16 @@ the vector search finds best, the *budget* best by kind
 (`budgeted`), ordered once by the reranker with the same
 sentences.
 
+#### Reader.rerank_left
+
+```python
+def rerank_left(self, plan: Plan, sentences: list, pieces: list) -> list
+```
+
+*pieces* ordered by the reranker with *sentences* again, for
+the rule `rerank_when` (each round), where the rule `rerank` is on
+and there are enough of them.
+
 #### Reader.ask_window
 
 ```python
@@ -510,7 +617,9 @@ the title page where *title_page*, the pieces *batch* each under a
 letter of its own; what does not hold is asked again with its
 reason (as often as the flow says). *listed* is the field's list
 (`listing`), whose entry a find names. *lost* is CUT or NO_ANSWER
-where the request came to nothing, else None.
+where the request came to nothing, else None. A request whose
+answer did not fit its room is asked in halves as a request about
+a piece is (`halves`, owner decision 2026-09-12).
 
 #### Reader.settled
 
@@ -534,6 +643,18 @@ document, field, coordinate, wording and group (`list`, owner
 decision 2026-11-08): its label, a list of labels where several may
 be meant, "" where none fits (0). With *group* (a find named it,
 owner decision 2026-11-09) the entries of that group are asked.
+
+#### Reader.earlier_entries
+
+```python
+@staticmethod
+def earlier_entries(plan: Plan, uri: str, name: str,
+                    group: Optional[str]) -> list
+```
+
+[{"words", "entry"}] the document's list of this coordinate has
+already settled for other wordings, for the rule
+`list_shows_earlier`.
 
 #### Reader.name_of
 
@@ -709,7 +830,9 @@ The sentence a search goes with (`sentence`); a question where
 the rule `question_as_sentence` takes none is the field's own
 sentence instead, and a question taken is counted. *before* are the
 sentences of the rounds before, shown where a new one is asked
-(`phrase` with `before`).
+(`phrase` with `before`). The rule `search_with` may take the
+field's question or the coordinate's name instead, with no request
+for a sentence.
 
 #### Reader.field_sentence
 
@@ -717,8 +840,15 @@ sentences of the rounds before, shown where a new one is asked
 def field_sentence(self, plan: Plan, read: Read, slot) -> str
 ```
 
-The field's own search sentence, else its question or name: what
-a search goes with where no sentence was written for it.
+What a search goes with where no sentence was written for it
+(rule `search_fallback`): the field's own search sentence, else its
+question or name; or its question, or its name, or none.
+
+#### Reader.fallback
+
+```python
+def fallback(self, plan: Plan, parameter, slot) -> str
+```
 
 #### Reader.sentence
 
@@ -753,7 +883,8 @@ def about(self, plan: Plan, row: Row, slot, got: Found, counts: Counts,
 ```
 
 Does the place a find of another passage stands in speak about
-this value (`check`, owner decision 2026-11-07)?
+this value (`check`, owner decision 2026-11-07)? The box that
+checks reads its own values (`about_shows`, `about_no_reply`).
 
 #### Reader.fetch
 
@@ -766,6 +897,18 @@ The pieces a reply asks for itself (`more`), those not shown
 yet, of the pieces its field reads: the piece before or after a
 shown one, a table or figure by its placeholder, the pieces a
 pattern stands in, the pieces best for a sentence of its own.
+
+#### Reader.matching
+
+```python
+def matching(self, wanted, pieces: list, seen: set) -> list
+```
+
+The pieces a pattern the model wrote stands in, not shown yet,
+as many as a request shows. The pattern runs for the rule
+`pattern_timeout_s` seconds at most over all the pieces; one that
+does not finish stands in none (it is a pattern of the model's,
+which can backtrack without end).
 
 #### Reader.named_value
 
@@ -899,6 +1042,17 @@ quote: a find of the line itself before one of the whole piece,
 the line of this publication's own after both; a line two works
 are named for, or none, is the value's own to ask.
 
+#### Reader.work_by_piece
+
+```python
+def work_by_piece(self, plan: Plan, row: Row, slot) -> bool
+```
+
+Does the value take the work its piece names, or this
+publication where it names none, with no line that names it (rule
+`work_without_line`)? The value's own line is its quote. A piece
+that names two works leaves the value to ask.
+
 #### Reader.piece_work
 
 ```python
@@ -1004,8 +1158,8 @@ was given, and why in the profile's words.
 def joined(held: list, more: list) -> list
 ```
 
-*held* and those finds of *more* that are not among them: a line,
-its cell and its words once.
+*held* and those finds of *more* that are not among them: what the
+rule `same_find_by` names (a line, its cell, its words) once.
 
 ### work_read
 
@@ -1027,7 +1181,8 @@ The number the words of a find print, with its sign (owner decision
 where they are a number, else the one number they print ("750.940
 kWh", "ca. 8,8 GWh"); None where they print none or more than one
 ("800 / 750", "2019 bis 2021"). A signed number and its magnitude are
-one number ("-1.155").
+one number ("-1.155"). Where the rule `sign_belongs` is off the sign
+stays outside the number: its magnitude.
 
 ### is_question
 
@@ -1037,6 +1192,15 @@ def is_question(sentence: str) -> bool
 
 Is a search sentence a question rather than a sentence of the
 plan?
+
+### address_key
+
+```python
+def address_key() -> str
+```
+
+How an answer names its line: "at", the number of the line, or
+"quote", the words of the line (rule `answer_with`).
 
 ### fetches
 
@@ -1137,11 +1301,12 @@ def about_format() -> dict
 ### field_shown
 
 ```python
-def field_shown(parameter, full: bool = False) -> dict
+def field_shown(parameter, full: Optional[bool] = None) -> dict
 ```
 
 A field as a request shows it: its name and what a value of it is,
-in short where the spec writes that (`brief`).
+in short where the spec writes that (`brief`) or whole as the rule
+`field_text` says (*full* says it for the caller).
 
 ### block_payload
 
@@ -1162,6 +1327,28 @@ def first_address(shown: Shown, cells: bool, letter: str = "") -> str
 An address for a request's example: the first of its own lines that
 is no title or head, with *cells* a cell of it where it has cells.
 
+### shown_example
+
+```python
+def shown_example(example)
+```
+
+The reply a request shows as its example, as the rules say
+(`show_example`: none at all, `show_empty_example`: of the two a request
+that finds values shows, only the one with a find); None stays None,
+and no example at all is the empty tuple.
+
+### point
+
+```python
+def point(shown: Shown, cells: bool = False, letter: str = "",
+          at: Optional[str] = None) -> dict
+```
+
+What an example answer names its line with: the address of the
+request's first line of its own (or *at*), or, where the rule
+`answer_with` has the answer quote, the words of that line.
+
 ### find_example
 
 ```python
@@ -1175,10 +1362,28 @@ the request's own first line, and where the field has a list with the
 number of its entry; and the empty one, where no shown line prints a
 value.
 
+### second_ways
+
+```python
+def second_ways(ways: list) -> dict
+```
+
+The note a request carries that went through the second way of the
+rules *ways* (owner decision 2026-11-11): their names, so that
+a run shows what it used. Nothing where it went through none.
+
+### said_none
+
+```python
+def said_none(reply) -> bool
+```
+
+Does the answer of a names request name 0, none of its list?
+
 ### listing
 
 ```python
-def listing(options, meanings: int) -> tuple
+def listing(options, meanings: int, two_step: bool = True) -> tuple
 ```
 
 (lines, choices, grouped) of a list as a request shows it (owner
@@ -1186,7 +1391,9 @@ decisions 2026-11-08): a list longer than *meanings* entries
 (`flow.Numbers.list_meanings`) whose entries name groups is shown by
 its groups, each a choice; a shorter one with what each entry means, a
 longer one by its names. *choices* are what a number picks, labels or
-group names.
+group names. The rule `two_step_list` says whether a long list of groups
+is asked in two steps, *two_step* that this list is the first of them:
+the entries of the groups chosen are never shown as groups.
 
 ### picked_entry
 
@@ -1206,6 +1413,17 @@ def share_of(chunk: Chunk) -> str
 The kind of passage a piece counts under in a search's shares: a
 table, a figure, else text ("section").
 
+### shares_problem
+
+```python
+def shares_problem(shares: dict) -> Optional[str]
+```
+
+Why *shares* (the shares of tables, figures and text of a search)
+cannot be scaled, None where they can: for the check of the values of
+the flow. Three shares of 0 are honoured by `budgeted` (no kind first),
+never counted as 1.
+
 ### budgeted
 
 ```python
@@ -1217,6 +1435,26 @@ The pieces a search shows of *ranked*, best first (owner decisions
 up): the best of each kind of passage up to its share, the shares
 scaled to *budget*, then the best of the rest up to *budget*; in the
 order of *ranked*.
+
+### quoted_address
+
+```python
+def quoted_address(shown: Shown, quote: str) -> Optional[str]
+```
+
+The address of the shown lines that hold *quote*, characters that
+count as the same compared as the same (rule `same_characters`): the
+lines of the request's own passage first, one line or a stretch of
+consecutive ones; None where no shown line holds it.
+
+### has_address
+
+```python
+def has_address(reply) -> bool
+```
+
+Does the answer name a line: an address, or, where the rule
+`answer_with` has it quote, a quote?
 
 ### resolve
 
@@ -1238,16 +1476,41 @@ def image_key(path: Optional[str]) -> Optional[str]
 
 What names an image for its kept transcription: its bytes' hash.
 
+### title_page_shown
+
+```python
+def title_page_shown(plan: Plan) -> bool
+```
+
+Does the request that is built now show the title page (rule
+`show_title_page`)? "first" shows it in the first request the step
+makes in the document only.
+
+### blocks_in_order
+
+```python
+def blocks_in_order(parts: dict) -> dict
+```
+
+*parts* (block name -> payload) as the rule `shown_block_order`
+orders them; those it does not name come last in the usual order.
+
 ### show_value
 
 ```python
-def show_value(plan: Plan, claim: dict, headings: bool = True) -> tuple
+def show_value(plan: Plan, claim: dict, headings: Optional[bool] = None,
+               plain: bool = False) -> tuple
 ```
 
 (Shown, payload) of what every request about a value's coordinates
 shows: its line with its table's title and head, or the sentences
 before and after it; the headings up to it, the title page and the
-plan's settings; the value as its words and its address.
+plan's settings, as the step that asks says (rules `show_headings`,
+`show_title_page`, `show_settled`); the value as its words and its
+address. *headings* False shows none whatever the rules say, *plain*
+asks only for the lines of the place: the title page and the settings
+stand in what a quote may cite, as the rules `show_*` do not touch
+them.
 
 ### about_box
 
@@ -1268,6 +1531,16 @@ def own_check(got: Found) -> Optional[tuple]
 (reason, sentence) of the own check of the box asking now that
 refuses *got*, None where none does (owner decision 2026-11-10: an own
 check only refuses; its reason is check:\<name>).
+
+### years_listed
+
+```python
+def years_listed(listed: list) -> list
+```
+
+The plan's years as a request lists them, each with the state it is
+the year of and, where the rule `year_list_quote` says so, the line that
+says it.
 
 ### settings_of
 

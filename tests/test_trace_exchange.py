@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import jsonschema
 import pytest
 
+from docpipe import rules
 from docpipe.extraction import scheduler, schema, trace
 
 PASSAGE = "| Endenergieverbrauch Wärme | 4.367.575 kWh |\n" * 20
@@ -53,7 +54,8 @@ def request(payload, **extra):
 
 @pytest.fixture
 def traced(tmp_path, monkeypatch):
-    monkeypatch.setattr(trace, "ENABLED", True)
+    monkeypatch.setenv("EXTRACT_TRACE", "1")
+    rules.reset()
     monkeypatch.setattr(trace, "_root", None)
     monkeypatch.setattr(trace, "_name_of", None)
     trace.open_trace(tmp_path, lambda document_id: f"plan{document_id}")

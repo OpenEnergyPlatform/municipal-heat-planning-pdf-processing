@@ -21,11 +21,12 @@ export const GROUPS: Record<string, { color: string; icon: (p: { size?: number }
   remember: { color: 'violet', icon: p => <IconBookmark {...p} /> },
   state: { color: 'orange', icon: p => <IconFlag {...p} /> },
   end: { color: 'green', icon: p => <IconFlagCheck {...p} /> },
+  pass: { color: 'pink', icon: p => <IconRefresh {...p} /> },
 };
 /* the word of a group of the library; a group the page does not know is shown by its key */
 export const groupWord = (key: string): string => ({
   start: t('Start'), prepare: t('Prepare'), order: t('Search'), ask: t('Ask the model'), check: t('Check'),
-  remember: t('Remember'), state: t('State'), end: t('End'),
+  remember: t('Remember'), state: t('State'), end: t('End'), pass: t('Follow-up pass'),
 } as Record<string, string>)[key] || key;
 /* loops, rounds and branchings: their colour and sign (their word is frameWord) */
 export const FRAMES: Record<string, { color: string; icon: (p: { size?: number }) => ReactNode }> = {
@@ -40,6 +41,8 @@ export interface FlowCtx {
   never: Record<string, string>;
   toggle(id: string): void;
   add(list: string, at: number): void;
+  /* a flow of a follow-up pass: steps and its loops go in, no rounds and no branchings */
+  loopsOnly?: boolean;
 }
 export const Ctx = createContext<FlowCtx | null>(null);
 const useCtx = () => useContext(Ctx)!;
@@ -168,8 +171,8 @@ export function StepEdge({ id, sourceX, sourceY, targetX, targetY, data, markerE
       <EdgeLabelRenderer>
         <Group gap={6} wrap="nowrap" className="fl-edge-label nodrag nopan" data-edge={id}
           style={{ transform: `translate(-11px, -50%) translate(${lx}px, ${ly}px)` }}>
-          <Tooltip label={t('Put a step, loop, round or branching here')}>
-            <ActionIcon size="sm" radius="xl" variant="default" aria-label={t('Put a step, loop, round or branching here')} onClick={() => c.add(d.list, d.at)}>
+          <Tooltip label={c.loopsOnly ? t('Put a step or loop here') : t('Put a step, loop, round or branching here')}>
+            <ActionIcon size="sm" radius="xl" variant="default" aria-label={c.loopsOnly ? t('Put a step or loop here') : t('Put a step, loop, round or branching here')} onClick={() => c.add(d.list, d.at)}>
               <IconPlus size={14} />
             </ActionIcon>
           </Tooltip>

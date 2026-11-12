@@ -49,12 +49,12 @@
       {
         "shape": "publication",
         "property": "OEO_00390095",
-        "reason": "has uuid: the serializer writes it on every node it mints (kg.P_UUID), behind no parameter"
+        "reason": "has uuid: the serializer writes it on every node it mints (the uuid of the boxes in graph.json), behind no parameter"
       },
       {
         "shape": "scenario",
         "property": "OEO_00390095",
-        "reason": "has uuid: the serializer writes it on every node it mints (kg.P_UUID), behind no parameter"
+        "reason": "has uuid: the serializer writes it on every node it mints (the uuid of the boxes in graph.json), behind no parameter"
       },
       {
         "shape": "common",
@@ -109,6 +109,25 @@
     ],
     "catalogue_address": "https://api.openalex.org/works",
     "catalogue_family_names": 2,
+    "catalogue_fewer_authors_suffice": true,
+    "catalogue_user_agent": "",
+    "catalogue_key_order": [
+      "index_doi",
+      "doi",
+      "title"
+    ],
+    "catalogue_fills": [
+      "publication_doi",
+      "publication_date",
+      "publication_author"
+    ],
+    "catalogue_inherited_flags": [
+      "not_located"
+    ],
+    "catalogue_stop_when_offline": true,
+    "catalogue_hits_taken": 1,
+    "catalogue_title_hit_needs_authors": true,
+    "name_word_least_letters": 2,
     "catalogue_timeout_s": 30,
     "country_groups": [
       {
@@ -143,6 +162,17 @@
       "global — the whole world, not a single country"
     ],
     "acronym_most_chars": 4,
-    "model_region_needs_model": true
+    "region_whole_words": true,
+    "region_search_texts": [
+      "sections",
+      "tables",
+      "table captions",
+      "image descriptions",
+      "image captions"
+    ],
+    "model_region_needs_model": true,
+    "alt_label_language": "en",
+    "contract_language": "en",
+    "prompt_checks": []
   }
 }

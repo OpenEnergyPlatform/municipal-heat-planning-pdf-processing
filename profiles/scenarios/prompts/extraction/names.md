@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 512
----
 Say which entry of "list" the name under "name" is: its number, "new" where the list holds no entry for it yet, or 0 where the words name no such thing at all.
 
 * "list" is this publication's list so far, each entry under its number; the scenarios of a work stand under that work ("work: name"). An entry with "means" says what it stands for: take it where the name means that, such as words that a value is measured for a past year, or words for several scenarios the list does not hold one by one.

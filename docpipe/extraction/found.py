@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from .. import rules
 from . import fields
 from .remap import stamp_path_of
 from .topup import read_harvest
@@ -118,6 +119,11 @@ class Found:
                 places_of([*stored.tuples, *stored.refusals], kept)
         gone = kept.passages - self._keys(document_id)
         if gone:
+            if rules.get("found_stale_fallback") == "stop":
+                raise RuntimeError(
+                    f"found: {name} no longer holds {len(gone)} of its "
+                    f"{len(kept.passages)} place(s), and the rule "
+                    f"found_stale_fallback stops the run")
             log.info("found: %s no longer holds %d of its %d place(s), planned "
                      "in full", name, len(gone), len(kept.passages))
             return Kept()

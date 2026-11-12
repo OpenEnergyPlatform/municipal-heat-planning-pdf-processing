@@ -11,9 +11,10 @@ edit costs the next run before it is written. The Prompts tab edits the prompt
 files and the sentence files of the profile; with a harvest folder it also shows
 what an edit does to the requests recorded there, and it can send a few of them
 once more. The Flow tab draws how a document is read, as steps, loops, rounds
-and branchings, edits that flow and the numbers that bound it, which stand in
-the profile's `flow.json`, and runs it on a document as a dry run with
-placeholder answers. What a box does is code and is not in the page. The Sources
+and branchings, edits that flow, the numbers that bound it and the rules each
+step reads, which stand in the profile's `flow.json`, and runs it on a
+document as a dry run with placeholder answers. It also draws the flows of the
+follow-up passes. What a box does is code and is not in the page. The Sources
 tab edits `sources.json`, the Graph tab `graph.json`, and the Rules drawer,
 which the Rules button of a tab opens, the rules of that tab.
 
@@ -477,7 +478,8 @@ A document is read by a drawing: boxes in the order they stand, frames that
 repeat boxes for each thing of the document, rounds, and ways chosen by a
 condition. The run does exactly this drawing (`extraction.engine`); there is no
 second order in the code. The drawing and the numbers that bound it stand in
-one file, `flow.json` (`extraction.flow`):
+one file, `flow.json` (`extraction.flow`); a step or a frame may also carry
+`rules`, values of its own for the rules it reads (see "Rules at a step"):
 
 ```
 {"numbers": {"piece_lines": 8, ...},
@@ -513,13 +515,36 @@ place, an answer to a list is one of its entries) and cannot lose them.
 What a box does with an answer stays code; a kind of box that is new comes as
 code and appears in the library.
 
-A box keeps its settings under `set`. A setting that takes a number of the flow
+The catalogue search is a box of its own (`catalogue`) with settings of its
+own; it stands after the calculation, at the end, and where it is switched off
+nothing is looked up. A box keeps its settings under `set`. A setting that takes a number of the flow
 takes the named number, unless the box has an own value for it, "only here"
 (`own`): the own value wins in that box only, and a setting of the run wins over
 the named number, never over an own value. A box that asks has a prompt, and the
 card shows the switches of the spec that belong to it, each entry a link into
 the Spec tab. A box that no run of the profile takes is drawn as such, with the
 reason: the profile writes no prompt for it, or the spec has nothing for it.
+
+### Rules at a step
+
+Every value of the reading is a rule (see [the parts every stage uses](core.md)),
+and a step or a frame may set its own value for each rule it reads, under
+`rules` in `flow.json`; the rules of the graph file count too. The card of a
+step offers every rule the step reads, each with its value, a switch "only
+here" that gives the step a value of its own, where the value in effect comes
+from (the step, a frame around it, the setting of the start, or the rules file
+and which profile's) and a link to the rule's own tab. The value of the step
+wins over the rules file, which wins over the default profile's; a setting
+from the environment or the project file is laid over the rules files. A rule
+that has no `steps` is the run's only and is read as the run's whatever step
+asks; the Run section of the tab shows these, folded. The Rules drawer shows,
+per rule, at which steps it has a value of its own.
+
+Values of the machine (a model's address, its key, the slots per model, the
+connections) are set in the project file `docpipe.toml`, which git ignores:
+never in a rules file and never at a step, and a key only in `.env` or the
+environment. The Run section writes the others into `docpipe.toml`
+(`/api/machine/save`) and refuses the rest.
 
 ### Frames
 
@@ -632,6 +657,18 @@ inherited value leaves the file, and a file that would hold neither is removed
 own file is the whole flow, so a save there writes every number and the drawing.
 The file keeps its line endings; a new file is written with plain ones.
 
+### Flows of the follow-up passes
+
+A follow-up pass over a stored harvest is a flow of its own, `top_up`,
+`top_up_open`, `top_up_parameters`, `remap`, `recheck`, `review`, `start_at` or
+`example`, each a file under `flows/` of the default profile that a profile may
+replace by a file of the same name. The tab chooses which flow it shows: the
+main flow, or one of these in the order a run takes them, each named with the
+switch that starts it. A pass flow is loaded, checked and saved through
+`/api/flow/pass`. It has a library of its own, its boxes and one frame, "for
+each dimension"; it offers no rounds, no branchings, no conditions and no
+numbers, and the page says where no run starts it. Rules at a step work in it as in the main flow.
+
 ### Dry run
 
 The Flow tab's **Dry run** reads one document by the drawing on the page, with
@@ -701,11 +738,10 @@ says that and counts nothing.
 
 Below the drawing the tab lists the year rules of the spec as notes (the key
 `of` of a plan field that is a year; see [the extraction stage](extraction.md)),
-each a link to the field of the whole document in the Spec tab, and the other
-settings of an extraction run, read only, each with its value and where it comes
-from as `docpipe config` lists them. The value of a secret setting (a key, a
-token) is never sent to the page, which shows only whether one is set, and what
-an address carries before its host (a user, a password) is replaced by `***@`.
+each a link to the field of the whole document in the Spec tab, and the folded
+Run section (see Rules at a step). The value of a secret setting (a key, a
+token) is never sent to the page, and what an address carries before its host
+(a user, a password) is replaced by `***@`.
 
 The Spec tab's form of a plan field that is a year has the key `of`: a coordinate
 of a group's pair and an entry of its list.
@@ -717,7 +753,10 @@ kind and its bounds, taken from the profile's `rules.json` (the default
 profile's file names all of them, a profile's file only what it sets
 differently). A value is checked against the bounds before it is saved
 (`/api/rules`, `/check`, `/save` in `rulespage.py`). An `EXTRACT_*` setting
-wins over the file and the drawer says so. No rule makes a harvest stale.
+wins over the file and the drawer says so. A rule that steps may set shows at
+which steps of the flow it has a value of its own. A value of the machine is
+not written here but in the Run section of the Flow tab. No rule makes a
+harvest stale.
 A rule of kind map is a table of names and values with + and -, one of kind
 table a table with its columns and a row to add, one of kind range two number
 fields, from and to, an empty one meaning no bound; no value is typed as JSON
@@ -783,9 +822,12 @@ effect the next time the graph is written from the stored harvest.
 ## What the editor does not touch
 
 The editor writes these kinds of file through its own code: the spec, the
-prompt files, the sentence files and the profile's `flow.json`, `rules.json`,
-`sources.json` and `graph.json`, and the write guard (`server.Files`) lets that
-code write, and remove the flow file, only inside the profile's folder. A second
+prompt files, the sentence files and the profile's `flow.json`, its
+`flows/<name>.json`, `rules.json`, `sources.json` and `graph.json`, and the write
+guard (`server.Files`) lets that code write, and remove the flow file, only
+inside the profile's folder. The one other file it writes is the project file
+`docpipe.toml`, from the Run section of the Flow tab, and only values of the
+machine. A second
 guard may write only the upstream cache, for Apply in the Sources tab. It reads only inside the
 folders of the profiles in effect, the harvest it was given, its own page, the
 generated documentation and the folder the before and after comparison of the

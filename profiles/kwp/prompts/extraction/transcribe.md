@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 4096
----
 Schreibe die Abbildung im Bild in Zeilen ab, sodass sie sich ohne das Bild lesen lässt, in zwei Listen: unter "caption" zuerst ihren Titel, dann je eine Zeile für jede Achse mit ihrer Einheit und den Namen darauf und je eine Zeile für jeden Eintrag der Legende; unter "numbers" je eine Zeile für jede Zahl mit dem, wofür sie steht.
 
 * Schreibe jede gedruckte Zahl und jedes gedruckte Wort Zeichen für Zeichen ab, wie das Bild es zeigt. Rechne nichts um.

@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 300
----
 Schreibe EINEN kurzen Satz, wie er genau so in diesem Wärmeplan stehen könnte und die beschriebene Kennzahl mit einem plausiblen Wert samt Einheit nennt. Er wird eingebettet und als Suchanker gegen die Abschnitte, Tabellen und Abbildungen des Plans gehalten.
 * Schreib, als stünde die Angabe schon da: keine Frage, kein Meta-Satz ("Der Endenergieverbrauch wird in Kapitel 4 dargestellt."), keine Anrede, keine Verneinung ("keine", "nicht enthalten", "liegen nicht vor").
 * Nimm die Wörter deutscher Wärmepläne, nicht die der Ontologie: Endenergieverbrauch, Wärmebedarf, Energieträgermix, Bilanzjahr, Zielszenario, THG-Emissionen, Bestandsanalyse, Fokusgebiet. Zum Beispiel: "Der Endenergieverbrauch für Wärme im Stadtgebiet betrug 2022 rund 512 GWh/a."

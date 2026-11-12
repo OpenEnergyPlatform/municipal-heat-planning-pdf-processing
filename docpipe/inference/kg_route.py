@@ -39,10 +39,10 @@ from .. import prompts
 from ..extraction import fields
 from ..extraction.spec import fold_label
 from . import llm_client
-from ..extraction.trust import LEVEL_B, LEVELS, REVIEW_LEVELS
+from ..extraction.trust import LEVEL_B, LEVELS, review_levels
 
 # The profile's prompt for one closed question. Optional the way the
-# extraction prompts are: a profile without kg.VALUE_QUERY has no route and
+# extraction prompts are: a profile without kg.value_query has no route and
 # is asked for no prompt.
 COORDINATE_PROMPT_ID = "kg/coordinate"
 
@@ -72,7 +72,7 @@ class Hooks:
     plan_iri: Callable    # (db_path, document name) -> str | None
     bindings: Callable    # ({axis: uri | int}) -> (constraint text, {var: (kind, value)})
     label: Callable       # (IRI or bare id) -> what a reader calls it
-    prose: dict           # the profile's trust wording, kg.TRUST_PROSE
+    prose: dict           # the profile's trust wording, kg.trust_prose
     notes: dict           # reason token -> sentence, inference.ROUTE_NOTES
     prompt: Any           # the coordinate prompt, a docpipe.prompts.Prompt
 
@@ -101,21 +101,23 @@ def hooks(profile) -> Optional[Hooks]:
     """
     if profile is None:
         return None
-    query = profile.component("kg", "VALUE_QUERY")
+    query = profile.component("kg", "value_query")
     if query is None:
         return None
     pieces = {name: profile.component("kg", name)
-              for name in ("COORDINATE_AXES", "SPEC", "heatplan_iri",
-                           "value_bindings", "label_of", "TRUST_PROSE")}
+              for name in ("COORDINATE_AXES", "spec", "heatplan_iri",
+                           "value_bindings", "label_of", "trust_prose")}
     pieces["ROUTE_NOTES"] = profile.component("inference", "ROUTE_NOTES")
     missing = sorted(name for name, value in pieces.items() if value is None)
     if missing:
-        raise LookupError(f"profile {profile.name!r} has kg.VALUE_QUERY and "
+        raise LookupError(f"profile {profile.name!r} has kg.value_query and "
                           f"lacks {missing}")
-    return Hooks(query=query, axes=tuple(pieces["COORDINATE_AXES"]),
-                 spec=pieces["SPEC"], plan_iri=pieces["heatplan_iri"],
+    # The query, the spec and the trust words are read now, from the
+    # drawing and the rules as they stand when the app builds its route.
+    return Hooks(query=query(), axes=tuple(pieces["COORDINATE_AXES"]),
+                 spec=pieces["spec"](), plan_iri=pieces["heatplan_iri"],
                  bindings=pieces["value_bindings"], label=pieces["label_of"],
-                 prose=pieces["TRUST_PROSE"],
+                 prose=pieces["trust_prose"](),
                  notes=check_notes(pieces["ROUTE_NOTES"],
                                    f"profiles/{profile.name}/inference.py "
                                    f"ROUTE_NOTES"),

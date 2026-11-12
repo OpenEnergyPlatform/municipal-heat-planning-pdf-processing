@@ -29,43 +29,38 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import csv
-import json
 import logging
 from collections import Counter
 from pathlib import Path
 from typing import Callable, Optional
 
-from .. import jsonl
-from . import archive, trace
+from .. import rules
 from . import fields
 from .pipeline import answer_in_quote
-from .remap import enter_producer, stamp_path_of
 from .spec import Spec, fold_label
-from .trust import (REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_LEVELS, REVIEW_UNBACKED,
-                    document_summary, trust)
+from .trust import (REVIEW_AGREE, REVIEW_DISAGREE, REVIEW_UNBACKED,
+                    trust)
 from .verify import min_quote_chars, quote_in, value_in_quote
 
 log = logging.getLogger(__name__)
 
-# Which reason names a coordinate. A whitelist and not a split on ":", because
-# three of the reasons carry a colon and name nothing a question could be
-# asked about -- `review:disagree` most of all, which would otherwise ask for
-# a coordinate called "disagree" on every row this pass has already seen.
-NAMES_AN_AXIS = ("exhausted", "unbacked")
+# Which reason names a coordinate is the rule `review_axis_reasons`. A
+# whitelist and not a split on ":", because three of the reasons carry a
+# colon and name nothing a question could be asked about -- `review:disagree`
+# most of all, which would otherwise ask for a coordinate called "disagree"
+# on every row this pass has already seen.
 
 # What the second reading said, beside what a curator needs to find the value.
 # Its own file: the harvest is evidence and this is a working list.
 COLUMNS = ("document", "parameter", "value", "unit", "page", "owner",
            "quote", "field", "first", "second", "second_quote", "verdict")
 
-# How much of a passage a working list carries.
-CELL = 300
-
-
 def _cell(text) -> str:
+    """A passage as the working list carries it: at most
+    `review_cell_chars` characters."""
     flat = " ".join(str(text if text is not None else "").split())
-    return flat if len(flat) <= CELL else flat[:CELL].rstrip() + " …"
+    cell = rules.get("review_cell_chars")
+    return flat if len(flat) <= cell else flat[:cell].rstrip() + " …"
 
 
 def rows_to_review(tuples: list, *, force: bool = False) -> list:
@@ -75,11 +70,14 @@ def rows_to_review(tuples: list, *, force: bool = False) -> list:
     coordinates were all read and whose quote needed no repair has nothing for
     a narrower window to find. And each row once -- a row already carrying a review flag
     is not asked again, because the second answer would be the second answer
-    to the same question and no more.
+    to the same question and no more. The levels are the rule
+    `review_levels`, the once the rule `review_once_per_row`.
     """
     out = []
+    levels = rules.get("review_levels")
+    force = force or not rules.get("review_once_per_row")
     for row in tuples:
-        if trust(row)["level"] not in REVIEW_LEVELS:
+        if trust(row)["level"] not in levels:
             continue
         if not force and any(f.startswith("review:")
                              for f in row.get("flags") or ()):
@@ -99,14 +97,19 @@ def disputed(verdict: dict) -> list:
     out: list = []
     for reason in verdict.get("reasons") or ():
         prefix, _, axis = str(reason).partition(":")
-        if prefix in NAMES_AN_AXIS and axis and axis not in out:
+        if prefix in rules.get("review_axis_reasons") and axis \
+                and axis not in out:
             out.append(axis)
     return out
 
 
 def review_fields(parameter, names) -> list:
-    """The value slot plus the named coordinates, in spec order."""
+    """The value slot plus the named coordinates, in spec order. Where the
+    reasons name none, the rule `review_fields_when_no_axis` says whether
+    that is all, or every coordinate besides."""
     wanted = set(names or ())
+    if not wanted and rules.get("review_fields_when_no_axis") == "all_fields":
+        wanted = {slot.name for slot in fields.axis_slots(parameter)}
     return [fields.value_slot(parameter)] + [
         slot for slot in fields.axis_slots(parameter) if slot.name in wanted]
 
@@ -152,7 +155,8 @@ def _value_agrees(row: dict, parameter, reply: dict, shown: list) -> Optional[bo
         return fold_label(given) == fold_label(row.get("value"))
     factor = parameter.unit_factor(reply.get("unit"))
     try:
-        target = round(float(given) * float(factor), 6)
+        target = round(float(given) * float(factor),
+                       rules.get("review_compare_places"))
     except (TypeError, ValueError):
         # A unit the spec does not accept has no factor and a value that is
         # not a number has no product. Neither is a disagreement about the
@@ -255,10 +259,11 @@ def _working_lines(document: str, row: dict, parameter, slots: list,
 
 
 def review_file(path: Path, spec: Spec, *, ask: Callable,
-                sources_for: Callable, limit: int = 0,
+                sources_for: Callable, limit: Optional[int] = None,
                 working: Optional[list] = None,
                 spec_for: Optional[Callable] = None) -> Counter:
-    """Review one harvest file in place. Returns what the reading came to.
+    """Review one harvest file in place, as the flow `review` does for a
+    file. Returns what the reading came to.
 
     The summary is recomputed rather than carried over: a disagreement is a
     reason, and the summary counts reasons. A carried summary would report the
@@ -270,76 +275,31 @@ def review_file(path: Path, spec: Spec, *, ask: Callable,
     run's spec, where the list is empty and the second reading would be a
     wording.
     """
-    stats: Counter = Counter()
-    lines: list = []
-    tuples, refusals, document_id = [], [], None
-    document = Path(path).stem
-    for line in jsonl.read(path):
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            stats["unreadable line kept"] += 1
-            lines.append(line)
-            continue
-        if row.get("kind") == "summary":
-            document_id = row.get("document_id")
-            continue
-        if row.get("kind") != "tuple":
-            if row.get("kind") == "refusal":
-                refusals.append(row)
-            lines.append(line)
-            continue
-        tuples.append(row)
-        lines.append(row)
-    if spec_for is not None:
-        spec = spec_for(document_id)
-        if spec is None:
-            stats[fields.LISTS_UNREADABLE] += 1
-            return stats
-    for row in rows_to_review(tuples):
-        if limit and stats["reviewed"] >= limit:
-            break
-        parameter = spec.by_uri.get(row.get("parameter"))
-        if parameter is None:
-            stats["unknown parameter kept"] += 1
-            continue
-        slots = review_fields(parameter, disputed(trust(row)))
-        shown = sources_for(row) or []
-        if not shown:
-            stats["no passage"] += 1
-            continue
-        captured: dict = {}
-        flag = review_row(row, parameter, slots, shown, ask, captured)
-        if not flag:
-            stats["no reply"] += 1
-            continue
-        stats["reviewed"] += 1
-        stats[flag.split(":", 1)[1]] += 1
-        if working is not None:
-            working.extend(_working_lines(document, row, parameter, slots,
-                                          captured, flag))
-    out = [json.dumps(row, ensure_ascii=False) if isinstance(row, dict)
-           else row for row in lines]
-    if document_id is not None:
-        out.append(json.dumps(
-            {"kind": "summary",
-             **document_summary(document_id, tuples, refusals)},
-            ensure_ascii=False))
-    tmp = Path(path).with_suffix(".jsonl.tmp")
-    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
-    archive.keep(path)
-    tmp.replace(path)
-    return stats
+    from . import passflow
+    from ..profile import active_profile
+    from .remap import _spec_of
+    run = passflow.Run(out=Path(path).parent, spec=spec, ask=ask,
+                       sources_for=sources_for,
+                       document_spec=_spec_of(spec, spec_for))
+    tree = [node for node in passflow.load("review", active_profile())
+            if node.get("box") not in ("worklist", "carry_stamp")]
+    if limit is None:
+        doc = passflow.one(tree, run, None, Path(path).name)
+    else:
+        with rules.overlaid(review_limit=limit):
+            doc = passflow.one(tree, run, None, Path(path).name)
+    if working is not None:
+        working.extend(run.working)
+    return doc.stats
 
 
 def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
-        sources_for: Callable, documents=None, limit: int = 0,
+        sources_for: Callable, documents=None, limit: Optional[int] = None,
         prompt_sha: str = "", model: str = "",
         spec_for: Optional[Callable] = None,
         producer: Optional[dict] = None) -> Counter:
-    """Review a whole harvest directory, or the documents named by stem.
+    """Review a whole harvest directory, or the documents named by stem:
+    the flow `review` (`passflow`).
 
     The stamps stay, and none is created. The review changes nothing a resume
     decides on -- values, coordinates and states are byte-identical, only
@@ -356,55 +316,14 @@ def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
     coordinate points at it: the review flags a value and reads no coordinate
     in its place.
     """
-    stats: Counter = Counter()
-    harvest_dir = Path(harvest_dir)
-    working: list = []
-    left = limit
+    from . import passflow
+    from .remap import _spec_of
     wanted = None if documents is None else set(documents)
-    read: list = []
-    changed: list = []
-    for path in sorted(harvest_dir.glob("*.jsonl")):
-        if trace.is_trace(path):
-            continue
-        if wanted is not None and path.stem not in wanted:
-            continue
-        got = review_file(path, spec, ask=ask, sources_for=sources_for,
-                          limit=left, working=working, spec_for=spec_for)
-        stats.update(got)
-        if got[fields.LISTS_UNREADABLE]:
-            # Not read, so not stamped as read: a later run can still tell.
-            continue
-        stats["documents"] += 1
-        read.append(path)
-        if got["reviewed"]:
-            changed.append(path)
-        if limit:
-            left = limit - stats["reviewed"]
-            if left <= 0:
-                break
-    for name, value in (("review/prompt", prompt_sha), ("review/model", model)):
-        if not value:
-            continue
-        for path in read:
-            stamp = stamp_path_of(path)
-            try:
-                stored = json.loads(stamp.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            stored[name] = value
-            archive.keep(stamp)
-            stamp.write_text(json.dumps(stored, ensure_ascii=False, indent=2),
-                             encoding="utf-8")
-    if producer is not None:
-        for path in changed:
-            if enter_producer(stamp_path_of(path), producer) is not None:
-                stats["documents given a producers entry"] += 1
-    if working:
-        out_path = harvest_dir / "review.csv"
-        with out_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=COLUMNS)
-            writer.writeheader()
-            writer.writerows(working)
-        stats["working list lines"] = len(working)
-        log.info("review: %d line(s) -> %s", len(working), out_path)
-    return stats
+    made = passflow.Run(
+        out=Path(harvest_dir), spec=spec, ask=ask, sources_for=sources_for,
+        named=lambda: wanted, prompt_sha=prompt_sha, model=model,
+        review_producer=producer, document_spec=_spec_of(spec, spec_for))
+    if limit is None:
+        return passflow.run_named("review", made)
+    with rules.overlaid(review_limit=limit):
+        return passflow.run_named("review", made)

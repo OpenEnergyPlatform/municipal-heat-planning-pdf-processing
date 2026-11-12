@@ -88,13 +88,16 @@ twice.
 def thinking_enabled() -> bool
 ```
 
+Rule `thinking` of the step that sends the request.
+
 ### reasoning_effort
 
 ```python
 def reasoning_effort() -> str
 ```
 
-"" when the server is not to be told one at all.
+"" when the server is not to be told one at all (rule
+`reasoning_effort` of the step that sends the request).
 
 ### tool_choice
 
@@ -112,11 +115,21 @@ def request_extras() -> dict
 
 The `extra_body` of every chat request this pipeline sends.
 
+### refused
+
+```python
+def refused(exc: BaseException) -> bool
+```
+
+Whether *exc* is the server refusing what a probe sent: a status 400
+to 499 but 429, which says not now and no more (rule
+`preflight_refusal_stops`). Any other failure gives no verdict.
+
 ### serving_limits
 
 ```python
-def serving_limits(base_url: str, api_key: str, timeout: float = 30.0,
-                   role: str = "llm")
+def serving_limits(base_url: str, api_key: str,
+                   timeout: Optional[float] = None, role: str = "llm")
 ```
 
 (served model ids, max_model_len or None) as the server reports them.
@@ -179,6 +192,21 @@ asked the request fields all the same. The window is kept for the run
 *shapes* ({name: schema}) are the reply schemas the stage is about to send
 as the grammar of its requests: the server is asked each one before the
 first document (`assert_reply_schemas`).
+
+### assert_step_models
+
+```python
+def assert_step_models(base_url: str, api_key: str, models: dict, *,
+                       role: str = "llm") -> None
+```
+
+Raise PreflightError unless the server offers every model a step
+names (rule `model`): *models* is {step id: model name}, the steps that
+name a model of their own. Asked of the server's list of models, once,
+before the first document: a model it does not offer would be refused
+at every request of that step, hours into the run. Nothing is asked
+where no step names a model, or where the run takes its answers from a
+cassette.
 
 ### assert_request_extras
 

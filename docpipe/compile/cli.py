@@ -276,20 +276,20 @@ def ask_for_example(client, prompt, parameter: dict, passage: str):
     from ..extraction import runner
     from ..llm_preflight import request_extras
 
-    meta = prompt.meta or {}
+    asked = runner.asked_values("example")
     numeric = parameter.get("value_type") in ("float", "int")
     name, shape = proposing.reply_shape(numeric)
-    limit = int(meta.get("max_tokens", 1024))
+    limit = asked["max_tokens"]
     conversation = [{"role": "user", "content": json.dumps(
         proposing.payload(parameter, passage), ensure_ascii=False)}]
     cause = "not_served"
     for attempt in range(1, ASK_ATTEMPTS + 1):
         try:
             answer = client.chat.completions.create(
-                model=runner.LLM_MODEL,
+                model=runner.llm_model(),
                 messages=[{"role": "system", "content": prompt.text},
                           *conversation],
-                temperature=float(meta.get("temperature", 0)),
+                temperature=asked["temperature"],
                 max_tokens=limit,
                 extra_body=request_extras(),
                 **providers.formatted("llm", name, shape))
@@ -298,7 +298,7 @@ def ask_for_example(client, prompt, parameter: dict, passage: str):
                         parameter.get("uri"), exc)
             cause = "not_served"
             continue
-        token_usage.reply(answer, runner.LLM_MODEL)
+        token_usage.reply(answer, runner.llm_model())
         reply = answer.choices[0]
         found = runner._loads_object(reply.message.content)
         if isinstance(found, dict) and isinstance(found.get("tuples"), list):

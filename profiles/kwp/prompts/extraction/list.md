@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 512
----
 Nenne die Nummer des Eintrags unter "list", den die Worte unter "words" als Antwort auf die Frage unter "question" bedeuten.
 
 * Entscheide nach der Bedeutung, nicht nach der Schreibweise: was ein Eintrag bedeutet, steht hinter "means". „Gigawattstunden“ meint GWh, „Wärmebedarf“ einen Verbrauch.

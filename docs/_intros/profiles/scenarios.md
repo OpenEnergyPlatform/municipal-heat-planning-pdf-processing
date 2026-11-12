@@ -743,14 +743,14 @@ none and stays refused.
 The third is the missing IAM annotation. The Turtle types every factsheet
 an IAM scenario (`OEO_00020517`, above). The platform's list of scenario
 types does not hold that class yet and refuses a create for it, so the
-body leaves it out (`NOT_YET_LISTED`); so is every type of the graph rule
+body leaves it out (`not_yet_listed` in `oekg_api.py`); so is every type of the graph rule
 `scenario_types_always`, the IAM scenario being the only one today. A
 factsheet with no other type then has none and is refused for that instead.
 
 The study region is no longer one of them: the Turtle and the body both
 write `has study region` (`OEO_00020220`), the path the closed scenario
 shape names, the body onto a node of class study region (`oekg_api.py`,
-the comment above `API_STUDY_REGION`).
+the comment above `API_CLS_STUDY_REGION`).
 
 ## What is refused
 

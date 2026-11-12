@@ -102,15 +102,16 @@ TAG_KEYS = {"study_descriptor": "descriptors",
 # create is refused for one entry off that list; every type of that rule is
 # left out of a body, so a type added to it is one the platform's list must
 # not need either.
-NOT_YET_LISTED = tuple(kg.OEO_BASE + always for always in kg.ALWAYS_TYPES)
+def not_yet_listed() -> tuple:
+    """The scenario types of the graph rule as it stands now, as IRIs."""
+    return tuple(kg.OEO_BASE + always for always in kg.always_types())
+
 
 # What `study_regions` becomes over there: the path the closed scenario
-# shape names, as the Turtle writes it (kg.P_STUDY_REGION), onto nodes of the
-# class that shape requires.
-API_STUDY_REGION = kg.P_STUDY_REGION.split(":")[-1]   # has study region
+# shape names, as the Turtle writes it (the drawing's arrow from
+# scenario_region), onto nodes of the class that shape requires.
 API_CLS_STUDY_REGION = "OEO_00020032"                 # study region
 
-_PREFIX = dict(re.findall(r"@prefix (\w+):\s*<([^>]+)>", kg.PREFIXES))
 SH = "http://www.w3.org/ns/shacl#"
 
 
@@ -317,12 +318,13 @@ def body(study: dict, known: dict) -> dict:
             paper["authors"] = _references(report["authors"])
         out["study_reports"].append(paper)
     scenarios = []
+    left_out = not_yet_listed()
     for scenario in study["scenarios"]:
         item: dict = {"label": scenario["label"], "acronym": scenario["acronym"]}
         if scenario.get("abstract"):
             item["abstract"] = scenario["abstract"]
         types = [kind for kind in scenario.get("types") or ()
-                 if kind not in NOT_YET_LISTED]
+                 if kind not in left_out]
         if types:
             item["scenario_types"] = types
         if scenario.get("regions"):
@@ -430,7 +432,7 @@ def _iri(name: str):
     """`oeo:OEO_00000506` -> the IRI, against the Turtle's own prefixes."""
     from rdflib import URIRef
     prefix, _, local = name.partition(":")
-    return URIRef(_PREFIX[prefix] + local)
+    return URIRef(kg.prefix_iri()[prefix] + local)
 
 
 def list_problems(shapes) -> list:
@@ -450,7 +452,7 @@ def list_problems(shapes) -> list:
             continue
         # The properties the drawing writes the field's answer under.
         for predicate in dict.fromkeys(
-                arrow["property"] for arrow in kg.DRAWING["arrows"]
+                arrow["property"] for arrow in kg.drawing()["arrows"]
                 if arrow["from"] == parameter["uri"]):
             allowed: set = set()
             for shape in shapes.subjects(URIRef(SH + "path"),
@@ -510,6 +512,8 @@ def graph(payload: dict, known: dict, origin: Optional[dict] = None):
         _modelled(item, "scenarios[]")
     out = Graph()
     counter = collections.Counter()
+    t = kg.terms()
+    api_study_region = t.P_STUDY_REGION.split(":")[-1]   # has study region
 
     def oeo(local: str):
         return URIRef(kg.OEO_BASE + local)
@@ -551,13 +555,13 @@ def graph(payload: dict, known: dict, origin: Optional[dict] = None):
 
     bundle = node("bundle")
     mark(bundle, ("bundle",))
-    out.add((bundle, RDF.type, oeo(kg.CLS_BUNDLE)))
-    text(bundle, kg.P_LABEL, payload.get("label"))
-    text(bundle, kg.P_ACRONYM, payload.get("acronym"))
-    text(bundle, kg.P_ABSTRACT, payload.get("abstract"))
-    named(bundle, kg.P_ORGANISATION, payload.get("organisations"),
-          kg.CLS_ORGANISATION, "organisation", ("organisations",))
-    named(bundle, kg.P_FUNDER, payload.get("funders"), kg.CLS_FUNDER, "funder",
+    out.add((bundle, RDF.type, oeo(t.CLS_BUNDLE)))
+    text(bundle, t.P_LABEL, payload.get("label"))
+    text(bundle, t.P_ACRONYM, payload.get("acronym"))
+    text(bundle, t.P_ABSTRACT, payload.get("abstract"))
+    named(bundle, t.P_ORGANISATION, payload.get("organisations"),
+          t.CLS_ORGANISATION, "organisation", ("organisations",))
+    named(bundle, t.P_FUNDER, payload.get("funders"), t.CLS_FUNDER, "funder",
           ("funders",))
     for key, api_key in TAG_KEYS.items():
         listed(bundle, kg.tag_property(key), payload.get(api_key))
@@ -565,37 +569,37 @@ def graph(payload: dict, known: dict, origin: Optional[dict] = None):
     for place, paper in enumerate(payload.get("study_reports") or ()):
         report = node("report")
         mark(report, ("study_reports", place))
-        out.add((bundle, _iri(kg.P_HAS_PART), report))
-        out.add((report, RDF.type, oeo(kg.CLS_REPORT)))
-        text(report, kg.P_UUID, "minted by the server")
-        text(report, kg.P_LABEL, paper.get("label"))
-        text(report, kg.P_DOI, paper.get("doi"))
+        out.add((bundle, _iri(t.P_HAS_PART), report))
+        out.add((report, RDF.type, oeo(t.CLS_REPORT)))
+        text(report, t.P_UUID, "minted by the server")
+        text(report, t.P_LABEL, paper.get("label"))
+        text(report, t.P_DOI, paper.get("doi"))
         if paper.get("publication_date"):
-            stamp(report, kg.P_PUBDATE, paper["publication_date"])
-        named(report, kg.P_AUTHOR, paper.get("authors"), kg.CLS_AUTHOR,
+            stamp(report, t.P_PUBDATE, paper["publication_date"])
+        named(report, t.P_AUTHOR, paper.get("authors"), t.CLS_AUTHOR,
               "author", ("study_reports", place, "authors"))
 
     for place, item in enumerate(payload.get("scenarios") or ()):
         scenario = node("scenario")
         mark(scenario, ("scenarios", place))
-        out.add((bundle, _iri(kg.P_HAS_PART), scenario))
-        out.add((scenario, RDF.type, oeo(kg.CLS_SCENARIO)))
-        text(scenario, kg.P_UUID, "minted by the server")
-        text(scenario, kg.P_LABEL, item.get("label"))
-        text(scenario, kg.P_SCENARIO_ACRONYM, item.get("acronym"))
-        text(scenario, kg.P_SCENARIO_ABSTRACT, item.get("abstract"))
-        listed(scenario, kg.P_SCENARIO_TYPE, item.get("scenario_types"))
+        out.add((bundle, _iri(t.P_HAS_PART), scenario))
+        out.add((scenario, RDF.type, oeo(t.CLS_SCENARIO)))
+        text(scenario, t.P_UUID, "minted by the server")
+        text(scenario, t.P_LABEL, item.get("label"))
+        text(scenario, t.P_SCENARIO_ACRONYM, item.get("acronym"))
+        text(scenario, t.P_SCENARIO_ABSTRACT, item.get("abstract"))
+        listed(scenario, t.P_SCENARIO_TYPE, item.get("scenario_types"))
         for number, region in enumerate(item.get("study_regions") or ()):
             # A region sent by its name alone is a node the server makes.
             target = (URIRef(region["iri"]) if region.get("iri")
                       else node("region"))
             mark(target, ("scenarios", place, "study_regions", number))
-            out.add((scenario, oeo(API_STUDY_REGION), target))
+            out.add((scenario, oeo(api_study_region), target))
             out.add((target, RDF.type, oeo(API_CLS_STUDY_REGION)))
             out.add((target, RDFS.label, Literal(known.get(
                 region.get("iri"), region["label"]))))
         for year in item.get("years") or ():
-            stamp(scenario, kg.P_SCENARIO_YEAR, year)
+            stamp(scenario, t.P_SCENARIO_YEAR, year)
     return out
 
 

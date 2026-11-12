@@ -155,9 +155,9 @@ def explained_keys(stamp_path: Path, current: dict, spec: Spec) -> set
 
 The keys of *current* that only the parameters the spec gained moved.
 
-What a pass for coordinates (`topup.top_up_file`) takes out of its list
-before it asks what blocks it: these are this pass's to answer, and it
-writes none of them.
+What a pass for coordinates (the step `changed` of the flow `top_up`)
+takes out of its list before it asks what blocks it: these are this
+pass's to answer, and it writes none of them.
 
 ### derivation_moved
 
@@ -235,6 +235,15 @@ then the new tuples, refusals and parameter states, the summary last.
 The stored tuples are not dumped again, they are the strings they were,
 so no key moves, no number is spelled another way and no character is
 escaped. Only the old summary is replaced.
+
+### refuses_incomplete
+
+```python
+def refuses_incomplete() -> bool
+```
+
+Whether a pass that did not read what it set out to writes neither
+file nor stamp (rule `parameter_pass_all_or_nothing`).
 
 ### not_read
 

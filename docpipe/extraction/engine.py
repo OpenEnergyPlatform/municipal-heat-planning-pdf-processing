@@ -38,19 +38,23 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import collections
+import contextlib
 import copy
+import re
+import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+from .. import rules
 from . import addressed, blocks, conditions, fields
 from . import flow as flow_map
 from .addressed import (Asking, Counts, Found, Plan, Read, field_shown,
                         field_shown_of, joined, years_in)
-from .fields import (EXHAUSTED, NUMBER, OUT_OF_SLICE, READ, SAID_UNSTATED,
-                     UNBACKED)
+from .fields import NUMBER, READ, UNBACKED, state_for
 from .pipeline import (Batch, Row, Source, WorkItem, mark_unanswered,
                        row_label)
 from .reading import groups_of, in_group_order, link_ranges, slots_of
+from .spec import group_taken
 
 
 class Stop(Exception):
@@ -58,7 +62,7 @@ class Stop(Exception):
     (`flow.problems`) refuses it before a run."""
 
 
-# -- what a frame holds -----------------------------------------------------------
+# -- what a frame holds -------------------------------------------------------
 
 class Scope:
     """What the run knows at one place of the drawing: the document, the
@@ -133,6 +137,8 @@ class Doc:
     by_find: dict = field(default_factory=dict)     # (uri, owner) -> Read
     valued: dict = field(default_factory=dict)      # id(read) -> frame
     seen_of: dict = field(default_factory=dict)     # coordinate -> seen
+    started: float = field(default_factory=time.monotonic)
+    about: dict = field(default_factory=dict)       # facts made once
 
     @property
     def whole(self) -> bool:
@@ -150,7 +156,8 @@ class Doc:
 class FieldItem:
     """A field of the document asked once, or a thing it settles."""
     key: str                        # the field's uri or the settled key
-    shown: dict                     # the field as a request shows it
+    shown: Optional[dict]           # as a request shows it; None for a
+    #                                 parameter: built by the box that asks
     sentences: list
     numbers: bool = False
     listed: Optional[tuple] = None
@@ -160,6 +167,7 @@ class FieldItem:
     lost: Optional[str] = None
     asked_by: Optional[str] = None  # the id of the box that asked it
     reads: Optional[list] = None
+    first_source: Optional[Source] = None   # of the first request's chunks
 
 
 @dataclass
@@ -188,6 +196,9 @@ class CoordItem:
     chunk: object = None
     located: bool = False
     seen_of: Optional[dict] = None
+    # The rules whose second way the requests of this coordinate went
+    # through (`second_ways`), noted on them.
+    ways: list = field(default_factory=list)
 
 
 class ListSupply:
@@ -221,15 +232,29 @@ class SearchSupply:
     (*first*, shown together in the first request), then the pieces of its
     order a few at a time (*ranked*, made the first time it is needed), the
     pieces a reply fetched itself first in the next request; no piece twice
-    (`seen`, the coordinate's)."""
+    (`seen`, the coordinate's) unless the rule `show_twice` says it may be
+    shown a second time. *limit* is the most pieces the search shows (the
+    flow's number of chunks), *reorder* puts the pieces left in order again
+    with the sentence of the round (the rule `rerank_when`)."""
 
-    def __init__(self, first: list, ranked: Optional[Callable], label: str):
+    def __init__(self, first: list, ranked: Optional[Callable], label: str,
+                 limit: Optional[int] = None,
+                 reorder: Optional[Callable] = None):
         self.first = list(first)
         self.ranked = ranked
         self.order: Optional[list] = None
         self.label = label
         self.fetched: list = []
         self.started = False
+        self.limit = limit
+        self.reorder = reorder
+        # How often each piece was shown by this supply, the pieces of its
+        # order taken, the pieces a reply fetched that were shown, and the
+        # rules whose second way a request went through.
+        self.shown: dict = {}
+        self.walked: set = set()
+        self.fetched_shown = 0
+        self.ways: set = set()
 
     def _ranked(self) -> list:
         if self.ranked is None:
@@ -238,29 +263,84 @@ class SearchSupply:
             self.order = list(self.ranked() or [None])
         return [c for c in self.order if c is not None]
 
+    def _open(self, piece, seen: set, twice: bool) -> bool:
+        """May *piece* be shown now? Not if it was shown, or twice where
+        the rule `show_twice` allows a second time."""
+        if not twice:
+            return piece.key not in seen
+        times = self.shown.get(piece.key, 0) or (
+            1 if piece.key in seen else 0)
+        return times < 2
+
     def take(self, size: int, seen: set) -> tuple:
         """(pieces, what they are: the supply's label or "fetched") of the
-        next request; ([], None) where nothing is left."""
-        if not self.started:
-            self.started = True
-            batch = [c for c in dict.fromkeys(self.fetched + self.first)
-                     if c.key not in seen]
-            label = self.label
-        else:
-            batch = [c for c in dict.fromkeys(self.fetched)
-                     if c.key not in seen]
-            label = "fetched"
-        self.fetched = []
+        next request; ([], None) where nothing is left. The kinds of pieces
+        come in the order of the rule `supply_order`: those before the
+        ranked ones are shown together, the ranked ones only where none of
+        them is left."""
+        first = not self.started
+        self.started = True
+        twice = rules.get("show_twice")
+        counted = rules.get("fetched_count")
+        batch: list = []
+        label = "fetched"
+        used = False
+        for kind in rules.get("supply_order"):
+            if kind == "fetched":
+                batch += self.fetched
+                used = True
+            elif kind == "beside" and first:
+                batch += self.first
+                label = self.label
+            elif kind == "ranked":
+                batch = [c for c in dict.fromkeys(batch)
+                         if self._open(c, seen, twice)]
+                if batch:
+                    break
+                left = [c for c in self._ranked()
+                        if self._open(c, seen, twice)
+                        and not (twice and c.key in self.walked)]
+                if left and rules.get("rerank_when") == "each_round" \
+                        and self.reorder is not None:
+                    left = self.reorder(left)
+                    self.ways.add("rerank_when")
+                if left and counted and self.limit is not None:
+                    left = left[:max(0, self.limit - len(self.walked)
+                                     - self.fetched_shown)]
+                    self.ways.add("fetched_count")
+                if left:
+                    if used:
+                        self.fetched = []
+                    left = left[:size]
+                    self.walked.update(c.key for c in left)
+                    if twice and any(self.shown.get(c.key) or c.key in seen
+                                     for c in left):
+                        self.ways.add("show_twice")
+                    for c in left:
+                        self.shown[c.key] = self.shown.get(c.key, 0) + 1
+                    return left, self.label
+        fetched = {c.key for c in self.fetched}
+        if used:
+            self.fetched = []
+        batch = [c for c in dict.fromkeys(batch)
+                 if self._open(c, seen, twice)]
         if not batch:
-            left = [c for c in self._ranked() if c.key not in seen]
-            if not left:
-                return [], None
-            batch, label = left[:size], self.label
+            return [], None
+        if twice and any(self.shown.get(c.key) or c.key in seen
+                         for c in batch):
+            self.ways.add("show_twice")
+        if counted:
+            self.fetched_shown += len([c for c in batch
+                                       if c.key in fetched])
+        for c in batch:
+            self.shown[c.key] = self.shown.get(c.key, 0) + 1
         return batch, label
 
     def left(self, seen: set) -> int:
-        return len([c for c in self._ranked() if c.key not in seen]) \
-            + len([c for c in self.first if c.key not in seen])
+        twice = rules.get("show_twice")
+        return len([c for c in self._ranked()
+                    if self._open(c, seen, twice)]) \
+            + len([c for c in self.first if self._open(c, seen, twice)])
 
 
 @dataclass
@@ -272,9 +352,45 @@ class Answer:
     other_passage: bool = False
     words: str = ""
     quote: str = ""
+    follow_ups: int = 0             # follow-up questions it took
+    refusal: str = "none"           # why a find of it was refused
 
 
-# -- the engine --------------------------------------------------------------------
+# Where the language of a document is told from: words that stand in one
+# language and hardly in the other.
+GERMAN = frozenset("der die das und nicht mit von für ist auf den im zu "
+                   "werden wird eine sich auch dem des als bei".split())
+ENGLISH = frozenset("the and of to is in for with that are on as by this "
+                    "be from or an at which".split())
+
+
+def language_of(texts) -> str:
+    """"de", "en" or "other": which of two languages the *texts* are
+    written in, by the words each has more of."""
+    words = re.findall(r"[^\W\d_]+", " ".join(texts).casefold())
+    german = sum(1 for word in words if word in GERMAN)
+    english = sum(1 for word in words if word in ENGLISH)
+    if german == english:
+        return "other"
+    return "de" if german > english else "en"
+
+
+def refusal_of(failed) -> str:
+    """The reason most of the refusals of a question came to, as a
+    condition names it (`conditions.REFUSALS`)."""
+    if not failed:
+        return "none"
+    why = max(failed, key=lambda one: failed[one])
+    if str(why).startswith("check:"):
+        return "own_check"
+    return why if why in conditions.REFUSALS else "other"
+
+
+# -- the engine ---------------------------------------------------------------
+
+# The top boxes the runner does once a document is read, each in its own
+# step (`Engine.step_of`).
+AFTER = ("write", "compute", "catalogue")
 
 class Engine:
     """The drawing *tree* of a flow done for documents with the reading
@@ -290,11 +406,12 @@ class Engine:
         top = [node for node in self.tree if isinstance(node, dict)]
         prepares = [n for n in top if n.get("box") in flow_map.PREPARES]
         self.split_node = next(n for n in prepares if n["box"] == "split")
+        self.prepares = {n["box"]: n for n in prepares}
         self.transcribe_id = next(n["id"] for n in prepares
                                   if n["box"] == "transcribe")
         self.settled_frames = [n for n in top if n.get("each") == "settled"]
         self.reading = [n for n in top if n.get("box") not in
-                        flow_map.PREPARES + ("write", "compute")
+                        flow_map.PREPARES + AFTER
                         and n.get("each") != "settled"]
         values = [n for n in top if n.get("each") == "value"]
         self.sweep_frame = next(
@@ -304,19 +421,46 @@ class Engine:
             self.sweep_frame = next((n for n, _ in flow_map.walk(self.tree)
                                      if n.get("each") == "coordinate"), None)
 
-    # -- numbers and settings of a box -------------------------------------------
+    # -- the values a step sets for itself ------------------------------------
+
+    @staticmethod
+    def own_values(node: dict) -> dict:
+        """What *node* sets for itself while it runs: its "rules", and a
+        box's own numbers ("own") under the names of the flow's numbers."""
+        values = dict(node.get("rules") or {})
+        if "box" in node:
+            kind = blocks.LIBRARY.get(node["box"])
+            by_key = {s.key: s for s in kind.settings} if kind else {}
+            for key, value in (node.get("own") or {}).items():
+                setting = by_key.get(key)
+                if setting is not None and setting.number:
+                    values[setting.number] = value
+        return values
+
+    def step(self, node: dict) -> rules.in_step:
+        """Read with *node*'s own values laid over those of the frames it
+        stands in, while it runs (`rules.STEP`); work it hands to other
+        threads takes them along (`runner.run_each` copies the context)."""
+        return rules.in_step(rules.stepped(node, self.own_values(node)))
+
+    # -- numbers and settings of a box ----------------------------------------
 
     def number(self, node: dict, key: str) -> int:
-        """A number setting of a box: its own value, else the named number
-        of the flow as the run reads it (a setting of the run won over the
-        file already, `flow.in_effect`)."""
+        """A number setting of a box: its own value, else that of a frame
+        around it, else the named number of the flow as the run reads it (a
+        setting of the run won over the file already, `flow.in_effect`)."""
         own = node.get("own") or {}
         if key in own:
+            rules.noted(next(s for s in blocks.LIBRARY[node["box"]].settings
+                             if s.key == key).number)
             return int(own[key])
         setting = next(s for s in blocks.LIBRARY[node["box"]].settings
                        if s.key == key)
         reader = self.reader
         name = setting.number
+        stepped, value = rules.stepped_value(name)
+        if stepped:
+            return int(value)
         if name == "search_pieces":
             return reader.budget
         if name in ("search_tables", "search_figures", "search_text"):
@@ -334,14 +478,37 @@ class Engine:
             return sets[key]
         setting = next(s for s in blocks.LIBRARY[node["box"]].settings
                        if s.key == key)
+        if setting.rule:
+            return rules.get(setting.rule)
         return setting.default
+
+    @contextlib.contextmanager
+    def counted(self, doc):
+        """The counts of one question, apart from the counts of the other
+        questions asked side by side, so that what it came to (the
+        follow-ups it took, why its finds were refused) is its own; they
+        are added to the document's when it is through."""
+        part = Counts()
+        try:
+            yield part
+        finally:
+            with doc.counts.lock:
+                doc.counts.asked.update(part.asked)
+                doc.counts.failed.update(part.failed)
+                doc.counts.questions += part.questions
+
+    @staticmethod
+    def came_to(part: Counts) -> dict:
+        """What a question's own counts say of its answer (`Answer`)."""
+        return {"follow_ups": part.asked.get("follow", 0),
+                "refusal": refusal_of(part.failed)}
 
     def shares_of(self, node: dict) -> dict:
         return {"table": self.number(node, "tables"),
                 "figure": self.number(node, "figures"),
                 "section": self.number(node, "text")}
 
-    # -- facts for conditions ----------------------------------------------------
+    # -- facts for conditions -------------------------------------------------
 
     def facts(self, scope: Scope, got: Optional[Found] = None
               ) -> conditions.Facts:
@@ -362,6 +529,14 @@ class Engine:
                     return bool(plan.bases)
                 if prop == "pieces":
                     return len(plan.chunks)
+                if prop in ("language", "pages", "title"):
+                    return self.about_document(doc, plan)[prop]
+                if prop == "requests":
+                    return sum(doc.counts.asked.values()) \
+                        if doc is not None else 0
+                if prop == "seconds":
+                    return time.monotonic() - doc.started \
+                        if doc is not None else 0
             if subject == "run":
                 return doc.whole if doc is not None else True
             if subject == "round":
@@ -373,8 +548,11 @@ class Engine:
                         "numbers": parameter.is_numeric,
                         "once": bool(getattr(parameter, "once_per_document",
                                              False)),
-                        "takes_group": bool(getattr(parameter,
-                                                    "takes_group", False)),
+                        "takes_group": group_taken(parameter),
+                        "unit": parameter.unit_target or "",
+                        "kind": parameter.value_type,
+                        "rows": self.rows_read(doc, parameter)
+                        if prop == "rows" else 0,
                         "name": parameter.uri}[prop]
             if subject == "value":
                 row = coord.row if coord is not None else (
@@ -387,11 +565,30 @@ class Engine:
                 read = coord.read if coord is not None else value.read
                 at = claim.get("at") or {}
                 owner = tuple(at.get("owner") or ())
+                number = claim.get("value")
                 return {"field": read.batch.parameter.uri, "words": words,
                         "length": len(words),
                         "scenario_name": bool(getattr(
                             read.batch.parameter, "merged", None)),
-                        "passage": owner[0] if owner else ""}[prop]
+                        "passage": owner[0] if owner else "",
+                        "in_table": bool(owner) and owner[0] == "table",
+                        "in_text": bool(owner) and owner[0] == "section",
+                        "number": number if isinstance(number, (int, float))
+                        and not isinstance(number, bool) else 0,
+                        "quote": str(claim.get("quote") or "")}[prop]
+            if subject == "chunk":
+                chunk = scope.get("chunk")
+                if isinstance(chunk, list):
+                    chunk = chunk[0] if chunk else None
+                if chunk is None and coord is not None:
+                    at = coord.row.claim.get("at") or {}
+                    chunk = plan.chunk_of(
+                        tuple(at.get("owner") or ()),
+                        int(at.get("line") or 1),
+                        coord.read.batch.parameter.is_numeric)
+                if chunk is None:
+                    raise LookupError("no chunk here")
+                return chunk.passage.kind
             if subject == "coordinate":
                 if coord is None:
                     raise LookupError("no coordinate here")
@@ -412,9 +609,13 @@ class Engine:
                     return "list" if slot.is_closed else "text"
                 if prop == "own_only":
                     group = coord.group
-                    return slot.name in tuple(
+                    own = slot.name in tuple(
                         getattr(group, "own_passage", ()) or ()) + tuple(
                         getattr(group, "own_value", ()) or ())
+                    # An open unit is searched like an open dimension where
+                    # the rule `unit_searched` is on.
+                    return own and not (slot.name == fields.UNIT
+                                        and rules.get("unit_searched"))
                 if prop == "required":
                     return bool(getattr(slot, "keep", False))
                 if prop == "year":
@@ -462,7 +663,9 @@ class Engine:
                     return {"answered": answer.answered,
                             "zero": answer.zero, "finds": answer.finds,
                             "other_passage": answer.other_passage,
-                            "words_empty": not answer.words.strip()}[prop]
+                            "words_empty": not answer.words.strip(),
+                            "follow_ups_used": answer.follow_ups,
+                            "refusal": answer.refusal}[prop]
                 quote = answer.quote or ""
                 return {"length": len(quote),
                         "lines": len([q for q in quote.split("\n")
@@ -472,12 +675,78 @@ class Engine:
             raise LookupError(f"{subject} {prop} is not known here")
         return conditions.Facts(get)
 
+    def rows_read(self, doc, parameter) -> int:
+        """How many values of the field the document's reads hold so far."""
+        if doc is None:
+            return 0
+        return sum(len(read.claims) for read in doc.field_reads
+                   + doc.find_reads
+                   if read.batch.parameter.uri == parameter.uri)
+
+    def about_document(self, doc, plan: Plan) -> dict:
+        """What the document says of itself, made once per reading: its
+        language, its pages and its title."""
+        made = doc.about if doc is not None else {}
+        if "language" not in made:
+            texts = [source.text or "" for source in plan.sources][:200]
+            pages = [(source.provenance or {}).get("page")
+                     for source in plan.sources]
+            context = self.reader.context(plan.document_id) or {}
+            made.update(
+                language=language_of(texts),
+                pages=max([p for p in pages if isinstance(p, int)] or [0]),
+                title=str(context.get("name") or ""))
+        return made
+
     def holds(self, condition, scope: Scope) -> bool:
         if condition is None:
             return True
         return conditions.holds(condition, self.facts(scope))
 
-    # -- the document --------------------------------------------------------------
+    @staticmethod
+    def figure_facts(source: Source) -> conditions.Facts:
+        """What a condition of the transcribe box knows of a figure."""
+        def size() -> tuple:
+            try:
+                from PIL import Image
+                with Image.open(source.image_path) as image:
+                    return image.size
+            except Exception:
+                return (0, 0)
+
+        def get(subject: str, prop: str):
+            if subject != "figure":
+                raise LookupError(f"{subject} {prop} is not known here")
+            if prop == "description":
+                return source.text or ""
+            if prop == "has_image":
+                return bool(source.image_path)
+            if prop == "page":
+                page = (source.provenance or {}).get("page")
+                return page if isinstance(page, int) else 0
+            return size()[0 if prop == "image_width" else 1]
+        return conditions.Facts(get)
+
+    def included(self, sources: list) -> list:
+        """The sources the document step reads: the kinds of passages of
+        the rule `include_kinds`, on the pages of the rule `pages`."""
+        kinds = set(rules.get("include_kinds"))
+        pages = rules.get("pages")
+        if len(kinds) == 3 and pages is None:
+            return sources
+        out = []
+        for source in sources:
+            if source.owner_kind not in kinds:
+                continue
+            if pages is not None:
+                page = (source.provenance or {}).get("page")
+                if not isinstance(page, int) \
+                        or not pages[0] <= page <= pages[1]:
+                    continue
+            out.append(source)
+        return out
+
+    # -- the document ---------------------------------------------------------
 
     def cut(self) -> addressed.Cut:
         """How the drawing cuts a document into pieces (its split box)."""
@@ -494,10 +763,11 @@ class Engine:
     def number_of_split(self, key: str) -> int:
         node = self.split_node
         own = node.get("own") or {}
-        if key in own:
-            return int(own[key])
         name = {"lines": "piece_lines", "headings": "headings"}[key]
-        return int(getattr(self.reader.numbers, name))
+        if key in own:
+            rules.noted(name)
+            return int(own[key])
+        return flow_map.number(self.reader.numbers, name)
 
     def plan(self, document_id: int, sources: list, transcripts=None,
              each=None, numbers=None) -> tuple:
@@ -505,13 +775,25 @@ class Engine:
         (*transcripts*), its pieces cut as the split box says, then the
         lists and what it settles (`prepare`)."""
         counts = Counts()
-        figures = [s for s in sources if s.owner_kind == "figure"]
+        with self.step(self.prepares["document"]):
+            sources = self.included(sources)
+        node = self.prepares["transcribe"]
+        figures = [] if node.get("off") else \
+            [s for s in sources if s.owner_kind == "figure"]
+        if figures and "when" in node:
+            figures = [s for s in figures if conditions.holds(
+                node["when"], self.figure_facts(s))]
         lines, asked = {}, 0
         if transcripts is not None and figures:
-            with addressed.asking(Asking(self.transcribe_id)):
+            with self.step(node), addressed.asking(
+                    Asking(node["id"], follow_ups=self.follow_ups_of(node))):
                 lines, asked = transcripts(document_id, figures, each)
-        plan = Plan(document_id, sources, lines,
-                    numbers=numbers or self.reader.numbers, cut=self.cut())
+        with self.step(self.split_node):
+            cut = self.cut()
+        with self.step(self.prepares["document"]):
+            plan = Plan(document_id, sources, lines,
+                        numbers=numbers or self.reader.numbers, cut=cut,
+                        cutting=lambda: self.step(self.split_node))
         if asked:
             counts.ask("transcribe", asked)
         self.prepare(plan, counts)
@@ -520,7 +802,8 @@ class Engine:
     def prepare(self, plan: Plan, counts: Counts) -> None:
         """The lists of the document and what it settles, as the drawing
         says."""
-        self.reader.lists_of(plan)
+        with self.step(self.prepares["lists"]):
+            self.reader.lists_of(plan)
         doc = Doc(plan, counts, [])
         scope = Scope(None, True, doc=doc, plan=plan)
         for frame in self.settled_frames:
@@ -537,7 +820,8 @@ class Engine:
         key]} the order each field reads them in, or *order_fields(located
         fields)* makes it where the drawing orders them (`sentences`)."""
         counts = counts or Counts()
-        self.reader.lists_of(plan)
+        with self.step(self.prepares["lists"]):
+            self.reader.lists_of(plan)
         doc = Doc(plan, counts, list(parameters), chunks,
                   dict(order_of or {}), order_fields)
         scope = Scope(None, True, doc=doc, plan=plan)
@@ -578,7 +862,7 @@ class Engine:
             self.run_steps(self.sweep_frame.get("steps") or [], cscope)
         return item.made
 
-    # -- running the drawing ---------------------------------------------------------
+    # -- running the drawing --------------------------------------------------
 
     def run_steps(self, steps: list, scope: Scope) -> None:
         for node in steps:
@@ -590,23 +874,32 @@ class Engine:
         if kind == "box":
             if blocks.LIBRARY[node["box"]].attached:
                 return          # applied by the question before it
-            if "when" in node and not self.holds(node["when"], scope):
-                return
-            getattr(self, f"box_{node['box']}")(node, scope)
-        elif kind == "each":
-            self.each(node, scope)
-        elif kind == "round":
-            self.round(node, scope)
-        elif kind == "if":
-            for way in node.get("if") or []:
-                if self.holds(way.get("when"), scope):
-                    self.run_steps(way.get("steps") or [], scope)
+            with self.step(node):
+                if "when" in node and not self.holds(node["when"], scope):
                     return
-            self.run_steps(node.get("else") or [], scope)
+                getattr(self, f"box_{node['box']}")(node, scope)
+        elif kind == "each":
+            with self.step(node):
+                self.each(node, scope)
+        elif kind == "round":
+            with self.step(node):
+                self.round(node, scope)
+        elif kind == "if":
+            with self.step(node):
+                for way in node.get("if") or []:
+                    if self.holds(way.get("when"), scope):
+                        self.run_steps(way.get("steps") or [], scope)
+                        return
+                self.run_steps(node.get("else") or [], scope)
 
     def round(self, node: dict, scope: Scope) -> None:
         spec = node.get("round") or {}
         most = spec.get("most")
+        # Where a round that has a most of its own may go on after a turn
+        # that reached no question; one without a most always ends there,
+        # so that it cannot run for ever.
+        goes_on = rules.get("round_ends") == "supply_used_up" \
+            and most is not None
         number = 0
         while most is None or number < most:
             number += 1
@@ -619,10 +912,11 @@ class Engine:
                 return
             # A turn that showed nothing of the supply (its question was
             # passed by its condition) cannot use it up: the round ends.
-            if spec.get("supply") and not turn.values.get("drew"):
+            if spec.get("supply") and not turn.values.get("drew") \
+                    and not goes_on:
                 return
 
-    # -- each -------------------------------------------------------------------------
+    # -- each -----------------------------------------------------------------
 
     def items(self, node: dict, scope: Scope) -> list:
         """[(child scope values)] of the items *node* iterates at *scope*."""
@@ -632,22 +926,35 @@ class Engine:
         reader = self.reader
         if what == "settled":
             out = []
-            field_ = reader.plan_fields.get("settings")
-            if field_:
-                out.append(FieldItem("settings", field_shown_of(field_),
-                                     [field_.get("sentence")
-                                      or field_["name"]], settled=field_))
             year = next((slot for slot in reader.frame_slots
                          if slot.kind == NUMBER), None)
-            for state in ("base", "target"):
-                field_ = reader.plan_fields.get(f"{state}_year")
-                if field_ and year is not None:
-                    out.append(FieldItem(f"{state}_year",
-                                         field_shown_of(field_),
-                                         [field_.get("sentence")
-                                          or field_["name"]],
-                                         settled={**field_, "_year": year,
-                                                  "_state": state}))
+            for name in rules.get("settled_fields"):
+                field_ = reader.plan_fields.get(name)
+                if name == "settings":
+                    if field_:
+                        out.append(FieldItem(
+                            "settings", field_shown_of(field_),
+                            [field_.get("sentence") or field_["name"]],
+                            settled=field_))
+                elif name in ("base_year", "target_year"):
+                    if field_ and year is not None:
+                        out.append(FieldItem(
+                            name, field_shown_of(field_),
+                            [field_.get("sentence") or field_["name"]],
+                            settled={**field_, "_year": year,
+                                     "_state": name.split("_")[0]}))
+                else:
+                    parameter = next((p for p in reader.spec.parameters
+                                      if p.uri == name), None)
+                    if parameter is None:
+                        raise Stop(f"settled_fields names {name!r}, which "
+                                   f"is neither settings, base_year, "
+                                   f"target_year nor a field of the spec")
+                    out.append(FieldItem(
+                        parameter.uri, None,
+                        None, parameter.is_numeric,
+                        reader.listed(parameter), parameter,
+                        settled={"_field": True}))
             return [{"field_item": item} for item in out]
         if what == "field":
             which = node.get("which", "all")
@@ -661,7 +968,7 @@ class Engine:
                 if once:
                     listed = reader.listed(parameter)
                     values["field_item"] = FieldItem(
-                        parameter.uri, field_shown(parameter, full=True),
+                        parameter.uri, None,
                         None, parameter.is_numeric, listed, parameter)
                 out.append(values)
             return out
@@ -714,15 +1021,28 @@ class Engine:
         if node.get("together") and inner is not None \
                 and inner.get("each") and inner.get("together") \
                 and not inner.get("off"):
-            # One pool: each item of this frame with each of its own.
-            pooled = []
-            for _node, child in jobs:
-                for values in self.items(inner, child):
-                    grand = child.child(True, **values)
-                    if self.holds(inner.get("when"), grand):
-                        pooled.append(grand)
-            self.reader.each(pooled, lambda grand: self.run_steps(
-                inner.get("steps") or [], grand))
+            # One pool: each item of this frame with each of its own; or,
+            # where the rule says so, the items of this frame side by side
+            # and each one's own items one after the other.
+            by_child, pooled = [], []
+            with self.step(inner):
+                for _node, child in jobs:
+                    own = []
+                    for values in self.items(inner, child):
+                        grand = child.child(True, **values)
+                        if self.holds(inner.get("when"), grand):
+                            own.append(grand)
+                    by_child.append(own)
+                    pooled += own
+
+            def run_inner(grand) -> None:
+                with self.step(inner):
+                    self.run_steps(inner.get("steps") or [], grand)
+            if rules.get("together_pooled"):
+                self.reader.each(pooled, run_inner)
+            else:
+                self.reader.each(
+                    by_child, lambda own: [run_inner(g) for g in own])
             self.after_items(inner, pooled, scope)
             self.after_items(node, [child for _n, child in jobs], scope)
             return
@@ -780,8 +1100,7 @@ class Engine:
                 out = self.field_reads(item, child)
                 lost = None if item.found else item.lost
                 if not out and lost:
-                    source = plan.sources[0] if plan.sources \
-                        else Source("section", 0, "")
+                    source = self.hole_source(plan, item)
                     out.append(Read(Batch(plan.document_id, item.parameter,
                                           [WorkItem(plan.document_id,
                                                     item.parameter, source)],
@@ -799,6 +1118,18 @@ class Engine:
                 base=[b["year"] for b in plan.bases if b["state"] == "base"],
                 target=[b["year"] for b in plan.bases
                         if b["state"] == "target"])
+
+    @staticmethod
+    def hole_source(plan: Plan, item: FieldItem) -> Source:
+        """The passage the hole of a field read nothing of names (rule
+        `hole_passage`)."""
+        sources = plan.sources
+        where = rules.get("hole_passage")
+        if where == "first_asked" and item.first_source is not None:
+            return item.first_source
+        if where == "last_passage" and sources:
+            return sources[-1]
+        return sources[0] if sources else Source("section", 0, "")
 
     def field_reads(self, item: FieldItem, scope: Scope) -> list:
         """The reads of a field of the document: one per passage a value of
@@ -847,7 +1178,9 @@ class Engine:
             reads = [r for r in doc.field_reads
                      if doc.valued.get(id(r)) != "field"] + doc.find_reads
         inside_field = scope.get("field_item") is not None
-        if node.get("order", "names_first") == "names_first":
+        order = node.get("order")
+        if (order == "names_first") if order is not None \
+                else rules.get("names_first"):
             parts = [[r for r in reads
                       if bool(getattr(r.batch.parameter, "merged", None))
                       == first] for first in (True, False)]
@@ -897,27 +1230,37 @@ class Engine:
         slots = slots_of(self.reader.spec, parameter)
         before: list = []
         steps = node.get("steps") or []
-        for group, group_slots in groups_of(self.reader.spec, slots):
-            for slot in in_group_order(group, group_slots):
-                for one in list(value.rows):
-                    item = CoordItem(value.read, one, slot, group,
-                                     list(before), value.clone,
-                                     seen_of=scope.get("doc").seen_of)
-                    child = scope.child(True, coord=item)
-                    if self.holds(node.get("when"), child):
-                        self.run_steps(steps, child)
-                    value.rows += item.made
-                before.append(slot)
+        sequence = [(group, slot)
+                    for group, group_slots in groups_of(self.reader.spec,
+                                                        slots)
+                    for slot in in_group_order(group, group_slots)]
+        named = {name: i for i, name in
+                 enumerate(rules.get("coordinate_order"))}
+        if named:
+            sequence = sorted(
+                (one for one in sequence if one[1].name in named),
+                key=lambda one: named[one[1].name]) + [
+                one for one in sequence if one[1].name not in named]
+        for group, slot in sequence:
+            for one in list(value.rows):
+                item = CoordItem(value.read, one, slot, group,
+                                 list(before), value.clone,
+                                 seen_of=scope.get("doc").seen_of)
+                child = scope.child(True, coord=item)
+                if self.holds(node.get("when"), child):
+                    self.run_steps(steps, child)
+                value.rows += item.made
+            before.append(slot)
 
-    # -- the boxes ----------------------------------------------------------------------
+    # -- the boxes ------------------------------------------------------------
 
     def box_settle(self, node: dict, scope: Scope) -> None:
         """What a thing the document settles came to, kept for every
         request after it."""
         item: FieldItem = scope.get("field_item")
         plan = scope.get("doc").plan
-        if item.key == "settings":
-            lines: list = []
+        if item.key == "settings" or item.settled.get("_field"):
+            lines: list = list(plan.settings)
             for got in item.found:
                 for line, source in got.lines:
                     if all(line is not one for one, _ in lines):
@@ -926,7 +1269,10 @@ class Engine:
             return
         year, state = item.settled["_year"], item.settled["_state"]
         for got in item.found:
-            for number in years_in(got.words):
+            numbers = years_in(got.words)
+            if rules.get("settled_years_taken") == "first":
+                numbers = numbers[:1]
+            for number in numbers:
                 value = int(number)
                 if any(b["state"] == state and b["year"] == value
                        for b in plan.bases):
@@ -964,7 +1310,12 @@ class Engine:
             def ranked() -> list:
                 return reader.shown_order(plan, [sentence], pieces, budget,
                                           shares)
-            scope.put("supply", SearchSupply([], ranked, "found"))
+            def reordered(left: list) -> list:
+                again = coord.sentence if coord.sentence is not None \
+                    else sentence
+                return reader.rerank_left(plan, [again], left)
+            scope.put("supply", SearchSupply([], ranked, "found", budget,
+                                             reordered))
             return
         item: FieldItem = scope.get("field_item")
         if item.sentences is None:
@@ -1003,7 +1354,8 @@ class Engine:
         at = coord.row.claim.get("at") or {}
         coord.chunk = plan.chunk_of(tuple(at.get("owner") or ()),
                                     int(at.get("line") or 1), numbers)
-        coord.seen = {coord.chunk.key} if coord.chunk is not None else set()
+        coord.seen = {coord.chunk.key} if coord.chunk is not None \
+            and rules.get("search_skips_own_piece") else set()
         if coord.seen_of is not None:
             # The pieces shown for this coordinate in an earlier pass of a
             # round around it are not shown again.
@@ -1015,7 +1367,7 @@ class Engine:
                   ) -> Asking:
         """What a question asks with: its box, the boxes after it that check
         its answers (the place of a find, own checks)."""
-        about, checks = None, []
+        about, about_node, checks = None, None, []
         for after in steps_after:
             if flow_map.kind_of(after) != "box":
                 break
@@ -1025,7 +1377,7 @@ class Engine:
             if after.get("off"):
                 continue
             if kind.type == "about":
-                about = after["id"]
+                about, about_node = after["id"], after
             else:
                 checks.append((self.setting(after, "name"),
                                self.setting(after, "refuse"),
@@ -1038,7 +1390,9 @@ class Engine:
                     return f"check:{name}", sentence
             return None
         return Asking(node["id"], about, refused if checks else None,
-                      self.follow_ups_of(node))
+                      self.follow_ups_of(node),
+                      about_step=(lambda n=about_node: engine.step(n))
+                      if about_node is not None else None)
 
     def follow_ups_of(self, node: dict) -> Optional[int]:
         """The box's own number of follow-ups, None for the flow's."""
@@ -1061,21 +1415,30 @@ class Engine:
         first, batch = taken
         scope.drew()
         item.asked_by = node["id"]
+        if item.shown is None:
+            # Built here, in the step of the box that asks, so that the
+            # rule `field_text` is the box's own.
+            item.shown = field_shown(item.parameter)
+        if item.first_source is None and batch:
+            item.first_source = batch[0].passage.source
         with addressed.asking(self.asking_of(node, scope,
-                                             self.after(node))):
+                                             self.after(node))), \
+                self.counted(doc) as part:
             got = reader.ask_window(
-                plan, item.shown, batch, doc.counts, item.key,
+                plan, item.shown, batch, part, item.key,
                 numbers=item.numbers, listed=item.listed,
                 title_page=first and bool(self.setting(node, "title_page")))
         held, lost = got
         if lost is not None:
             item.lost = item.lost or lost
-            scope.put("answer", Answer(False))
-            return
+        # The finds of the parts that were read count even where another
+        # part of the window was a hole (as a `find` does).
         item.found = joined(item.found, held)
-        scope.put("answer", Answer(True, len(held), not held, False,
+        scope.put("answer", Answer(lost is None or bool(held), len(held),
+                                   not held, False,
                                    held[0].words if held else "",
-                                   held[0].quote if held else ""))
+                                   held[0].quote if held else "",
+                                   **self.came_to(part)))
 
     def after(self, node: dict) -> list:
         """The steps after *node* in its list of steps."""
@@ -1101,8 +1464,10 @@ class Engine:
         doc: Doc = scope.get("doc")
         parameter = scope.get("parameter")
         chunk = scope.get("chunk")
-        with addressed.asking(self.asking_of(node, scope, self.after(node))):
-            got = self.reader.find(doc.plan, parameter, chunk, doc.counts)
+        with addressed.asking(self.asking_of(node, scope,
+                                             self.after(node))), \
+                self.counted(doc) as part:
+            got = self.reader.find(doc.plan, parameter, chunk, part)
         owner = scope.owner()
         owner.values.setdefault("finds", []).append(got)
         owner.values["answer"] = Answer(
@@ -1111,7 +1476,8 @@ class Engine:
             str((got["claims"][0].get("value_raw")
                  or got["claims"][0].get("value") or "")
                 if got["claims"] else ""),
-            got["claims"][0].get("quote", "") if got["claims"] else "")
+            got["claims"][0].get("quote", "") if got["claims"] else "",
+            **self.came_to(part))
 
     def box_sentences(self, node: dict, scope: Scope) -> None:
         doc: Doc = scope.get("doc")
@@ -1120,7 +1486,8 @@ class Engine:
         located = [p for p in doc.parameters
                    if not getattr(p, "once_per_document", False)]
         if located:
-            with addressed.asking(Asking(node["id"])):
+            with addressed.asking(Asking(
+                    node["id"], follow_ups=self.follow_ups_of(node))):
                 doc.order_of = dict(doc.order_fields(located) or {})
 
     def box_works(self, node: dict, scope: Scope) -> None:
@@ -1142,11 +1509,12 @@ class Engine:
         merged = getattr(parameter, "merged", None)
         if not merged or merged not in plan.names:
             return
-        with addressed.asking(Asking(node["id"])):
+        with addressed.asking(Asking(
+                node["id"], follow_ups=self.follow_ups_of(node))):
             for one in value.rows:
                 self.reader.named_value(plan, parameter, one, doc.counts)
 
-    # -- the boxes of a coordinate ---------------------------------------------------
+    # -- the boxes of a coordinate --------------------------------------------
 
     def coord_base(self, coord: CoordItem, plan: Plan) -> None:
         """What every request about the coordinate shows, made once."""
@@ -1157,21 +1525,25 @@ class Engine:
     def box_coord(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")
         doc: Doc = scope.get("doc")
-        with addressed.asking(self.asking_of(node, scope, self.after(node))):
+        with addressed.asking(self.asking_of(node, scope,
+                                             self.after(node))), \
+                self.counted(doc) as part:
             answered, made, payload, noted = self.reader.ask_own_place(
-                doc.plan, coord.read, coord.row, coord.slot, doc.counts,
+                doc.plan, coord.read, coord.row, coord.slot, part,
                 coord.clone)
         if payload is not None:
             coord.payload, coord.noted = payload, noted
         coord.made += made
         state = coord.row.claim.get(f"{coord.slot.name}_state")
         scope.put("answer", Answer(answered, 1 if state == READ else 0,
-                                   state != READ, False))
+                                   state != READ, False,
+                                   **self.came_to(part)))
 
     def box_quantity(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")
         doc: Doc = scope.get("doc")
-        with addressed.asking(Asking(node["id"])):
+        with addressed.asking(Asking(
+                node["id"], follow_ups=self.follow_ups_of(node))):
             self.reader.quantity(doc.plan, coord.read.batch.parameter,
                                  coord.row, coord.slot, doc.counts)
         scope.put("answer", Answer(True))
@@ -1191,13 +1563,17 @@ class Engine:
         coord: CoordItem = scope.get("coord")
         doc: Doc = scope.get("doc")
         anew = bool(self.setting(node, "anew")) \
-            and scope.get("round", 1) >= 2 and coord.sentences
-        with addressed.asking(Asking(node["id"])):
+            and scope.get("round", 1) >= rules.get("phrase_new_from_round") \
+            and coord.sentences
+        with addressed.asking(Asking(
+                node["id"], follow_ups=self.follow_ups_of(node))):
             sentence = self.reader.search_sentence(
                 doc.plan, coord.read, coord.row, coord.slot, doc.counts,
                 before=list(coord.sentences) if anew else None)
         coord.sentence = sentence
         coord.sentences.append(sentence)
+        if rules.get("search_with") != "phrase":
+            coord.ways.append("search_with")
 
     def box_search(self, node: dict, scope: Scope) -> None:
         reader = self.reader
@@ -1220,25 +1596,35 @@ class Engine:
         if label == supply.label and supply.ranked is not None:
             coord.ordered.update(c.key for c in batch)
         numbers = coord.read.batch.parameter.is_numeric
-        with addressed.asking(self.asking_of(node, scope, self.after(node))):
+        ways = sorted(set(coord.ways) | supply.ways)
+        with addressed.asking(self.asking_of(node, scope,
+                                             self.after(node))), \
+                self.counted(doc) as part:
             made, held, more = reader.search_round(
                 plan, coord.read, coord.row, coord.slot, coord.payload,
-                batch, doc.counts, coord.clone, (supply.label, 1),
-                {**coord.noted, "shows": label})
+                batch, part, coord.clone, (supply.label, 1),
+                {**coord.noted, "shows": label,
+                 **addressed.second_ways(ways)})
         state = coord.row.claim.get(f"{coord.slot.name}_state")
-        if held or state == UNBACKED:
+        found = bool(held) or state == UNBACKED
+        if found:
             coord.made += made
+        if found and not rules.get("fetch_after_found"):
             supply.fetched = []
         else:
-            supply.fetched = reader.fetch(plan, more, batch, coord.seen,
-                                          numbers)
-        scope.put("answer", Answer(True, 1 if held else 0, not held, False))
+            supply.fetched = reader.fetch(
+                plan, more, batch,
+                {c.key for c in batch} if rules.get("show_twice")
+                else coord.seen, numbers)
+        scope.put("answer", Answer(True, 1 if held else 0, not held, False,
+                                   **self.came_to(part)))
 
     def box_last_year(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")
         doc: Doc = scope.get("doc")
         self.coord_base(coord, doc.plan)
-        with addressed.asking(Asking(node["id"])):
+        with addressed.asking(Asking(
+                node["id"], follow_ups=self.follow_ups_of(node))):
             self.reader.last_year(doc.plan, coord.read.batch.parameter,
                                   coord.row, coord.slot, doc.counts,
                                   coord.noted or {})
@@ -1249,15 +1635,25 @@ class Engine:
         key = f"{coord.slot.name}_state"
         mode = self.setting(node, "mode")
         if mode == "out_of_slice":
-            coord.row.claim.setdefault(key, OUT_OF_SLICE)
+            coord.row.claim.setdefault(key, state_for("out_of_slice"))
         elif mode == "unstated":
-            coord.row.claim[key] = SAID_UNSTATED
+            coord.row.claim[key] = state_for("unstated_after_combing")
         else:
             self.locate(coord, plan)
             numbers = coord.read.batch.parameter.is_numeric
             rest = any(c.key not in coord.seen
                        for c in plan.pieces(numbers))
-            coord.row.claim[key] = EXHAUSTED if rest else SAID_UNSTATED
+            coord.row.claim[key] = state_for(
+                "exhausted" if rest else "unstated_after_combing")
+
+    def step_of(self, kind: str):
+        """The values of the top box of *kind* (one of `AFTER`), for
+        the run that does it outside the engine (`runner`); no values where
+        the drawing has none."""
+        node = next((n for n in self.tree if isinstance(n, dict)
+                     and n.get("box") == kind), None)
+        return self.step(node) if node is not None \
+            else contextlib.nullcontext()
 
     # Boxes the run does elsewhere: the preparation (`plan`, `prepare`) and
     # writing and computing (`runner`).
@@ -1265,7 +1661,7 @@ class Engine:
         return None
 
     box_transcribe = box_split = box_lists = box_write = box_compute = \
-        box_document
+        box_catalogue = box_document
 
 
 def compute_on(profile=None) -> bool:

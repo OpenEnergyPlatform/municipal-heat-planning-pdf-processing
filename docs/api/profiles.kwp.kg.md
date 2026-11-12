@@ -21,6 +21,32 @@ Author: Felix Vossel
 
 ## Functions
 
+### spec
+
+```python
+def spec()
+```
+
+The spec as the extraction stage loads it with the rules in effect
+now. The answer app's graph route reads its lists off it
+(`docpipe.inference.kg_route`).
+
+### drawing
+
+```python
+def drawing() -> dict
+```
+
+The drawing, as the graph file of this profile has it now.
+
+### prefix_iri
+
+```python
+def prefix_iri() -> dict
+```
+
+{prefix: IRI} of the header the drawing writes now.
+
 ### expand
 
 ```python
@@ -147,6 +173,33 @@ def evidence_comment(row: dict, document: str, prose: dict, join: str, *,
 Where this value was read, as comment lines above its node: the
 coordinates in English, the passage, the page, how it was aggregated,
 what was computed, and how far the run stands behind it.
+
+### trust_prose
+
+```python
+def trust_prose() -> dict
+```
+
+The trust words of the comment above a number, for the answer app,
+as the drawing's value box has them now.
+
+### parts
+
+```python
+def parts() -> dict
+```
+
+{scenario: (class, folder, label)} of the plan parts the drawing's
+part box lists now.
+
+### value_query
+
+```python
+def value_query() -> str
+```
+
+The query, over the drawing the graph is written from now, so the
+two cannot drift.
 
 ### value_bindings
 

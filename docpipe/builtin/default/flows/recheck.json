@@ -1,0 +1,28 @@
+{
+  "flow": [
+    {
+      "id": "recheck_stored",
+      "box": "stored",
+      "set": {
+        "files": "all",
+        "label": "recheck"
+      }
+    },
+    {
+      "id": "recheck_recheck",
+      "box": "recheck"
+    },
+    {
+      "id": "recheck_summary",
+      "box": "summary"
+    },
+    {
+      "id": "recheck_replace",
+      "box": "replace"
+    },
+    {
+      "id": "recheck_clear_stamps",
+      "box": "clear_stamps"
+    }
+  ]
+}

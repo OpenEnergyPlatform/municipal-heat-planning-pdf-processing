@@ -56,6 +56,7 @@ def passages_of(self, parameter: str) -> list
 ```
 
 The owners *parameter* is read in: best first where they were
-ranked, else in document order.
+ranked, else in the order of the document or the reverse (rule
+`survey_fallback_order`).
 
 [Back to the index](../README.md)

@@ -151,7 +151,8 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
                   per_probe_top: int = 0) -> list[dict]
 ```
 
-ONE ranking over all probes, best score per owner. Not one list per probe.
+ONE ranking over all probes, one score per owner, not one list per
+probe.
 
 `rank_prepared` answers a different question: it gives each probe its own
 top_k and lets each take what the next one may no longer have. Read as a
@@ -161,17 +162,23 @@ values, the source a value was actually read from sat at median rank 77
 that way and at median 26 under this one, with the same index and the same
 probes.
 
-Max over probes, not sum and not mean: a passage is relevant because ONE
-question matches it well, and averaging that against fifteen questions it
-has nothing to do with is how a good hit gets buried. It also means adding
-a probe can only move an owner up, so a probe list is safe to grow — but
-only with probes that say something. A vague probe raises everything it
-half-matches, which is how the query templates pushed the median from 26
-to 84 when they were merged in beside the anchors.
+By default the best score any probe gave an owner decides (rule
+`sentence_fusion` "max", put together by `rerank.fused`, which the
+reranker uses too), not the sum and not the mean: a passage is relevant
+because ONE question matches it well, and averaging that against fifteen
+questions it has nothing to do with is how a good hit gets buried. It also
+means adding a probe can only move an owner up, so a probe list is safe to
+grow, but only with probes that say something. A vague probe raises
+everything it half-matches, which is how the query templates pushed the
+median from 26 to 84 when they were merged in beside the anchors.
 
 Each hit carries the score AND the probe that won it, because "which
 wording found this" is the question the next round of anchors is written
 from.
+
+What is read when the search runs (`docpipe.rules`): `sentence_fusion`,
+`sentence_top` (used where *per_probe_top* is not given), `search_kinds`
+(the kinds of passage that are hits at all) and `search_full_ranking`.
 
 ### retrieve
 

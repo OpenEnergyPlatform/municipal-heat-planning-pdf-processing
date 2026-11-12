@@ -1,0 +1,29 @@
+{
+  "flow": [
+    {
+      "id": "top_up_parameters_classify",
+      "box": "classify",
+      "set": {
+        "trace": "trace-topup",
+        "archive": "top-up-parameters",
+        "label": "top-up-parameters"
+      }
+    },
+    {
+      "id": "top_up_parameters_read_parameters",
+      "box": "read_parameters"
+    },
+    {
+      "id": "top_up_parameters_replace",
+      "box": "replace",
+      "set": {
+        "how": "append",
+        "producer": "top-up-parameter"
+      }
+    },
+    {
+      "id": "top_up_parameters_carry_stamp",
+      "box": "carry_stamp"
+    }
+  ]
+}

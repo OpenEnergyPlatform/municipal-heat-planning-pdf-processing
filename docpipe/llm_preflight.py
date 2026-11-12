@@ -38,10 +38,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Optional
 
-from docpipe import providers
+from docpipe import providers, rules
 from docpipe.providers.governor import status_of
 
 log = logging.getLogger(__name__)
@@ -105,13 +104,14 @@ def further_room(asked: int, *, reply: int, budget: Optional[int],
 # a setting the server refuses refuses EVERY request of a run, and the fix
 # then has to be a variable rather than a release.
 def thinking_enabled() -> bool:
-    return os.environ.get("LLM_ENABLE_THINKING", "0").strip().lower() in (
-        "1", "true", "yes", "on")
+    """Rule `thinking` of the step that sends the request."""
+    return bool(rules.get("thinking"))
 
 
 def reasoning_effort() -> str:
-    """"" when the server is not to be told one at all."""
-    effort = os.environ.get("LLM_REASONING_EFFORT", "low").strip()
+    """"" when the server is not to be told one at all (rule
+    `reasoning_effort` of the step that sends the request)."""
+    effort = (rules.get("reasoning_effort") or "").strip()
     return "" if effort.lower() in ("", "off", "none") else effort
 
 
@@ -122,7 +122,7 @@ def reasoning_effort() -> str:
 # request says tool_choice none). Read at call time like the two above.
 def tool_choice() -> str:
     """"" when the server is not to be told one at all."""
-    choice = os.environ.get("LLM_TOOL_CHOICE", "none").strip()
+    choice = (rules.get("tool_choice") or "").strip()
     return "" if choice.lower() in ("", "off") else choice
 
 
@@ -149,9 +149,21 @@ def _max_model_len(card) -> Optional[int]:
     return None
 
 
-def serving_limits(base_url: str, api_key: str, timeout: float = 30.0,
-                   role: str = "llm"):
+def refused(exc: BaseException) -> bool:
+    """Whether *exc* is the server refusing what a probe sent: a status 400
+    to 499 but 429, which says not now and no more (rule
+    `preflight_refusal_stops`). Any other failure gives no verdict."""
+    status = status_of(exc)
+    return (bool(rules.get("preflight_refusal_stops"))
+            and isinstance(status, int) and 400 <= status < 500
+            and status != 429)
+
+
+def serving_limits(base_url: str, api_key: str,
+                   timeout: Optional[float] = None, role: str = "llm"):
     """(served model ids, max_model_len or None) as the server reports them."""
+    if timeout is None:
+        timeout = rules.get("preflight_timeout_s")
     try:
         client = providers.client(role, base_url=base_url, api_key=api_key,
                                   timeout=timeout, max_retries=1)
@@ -177,7 +189,8 @@ def _hosted_serving(base_url: str, api_key: str, model: str,
     """`assert_serving` for a hosted API."""
     name = providers.provider(role)
     client = providers.client(role, base_url=base_url, api_key=api_key,
-                              timeout=30.0, max_retries=1)
+                              timeout=rules.get("preflight_timeout_s"),
+                              max_retries=1)
     try:
         cards = {card.id: _max_model_len(card)
                  for card in client.models.list().data}
@@ -231,10 +244,12 @@ def assert_reply_schema(base_url: str, api_key: str, model: str, *,
     """
     name = providers.provider(role)
     client = providers.client(role, base_url=base_url, api_key=api_key,
-                              timeout=60.0, max_retries=0)
+                              timeout=rules.get("preflight_probe_timeout_s"),
+                              max_retries=0)
     try:
         answer = client.chat.completions.create(
-            model=model, max_tokens=32, temperature=0,
+            model=model, max_tokens=rules.get("preflight_probe_tokens"),
+            temperature=0,
             messages=[{"role": "user",
                        "content": 'Answer with the JSON object {"ok": true}.'}],
             response_format={"type": "json_schema",
@@ -242,9 +257,7 @@ def assert_reply_schema(base_url: str, api_key: str, model: str, *,
                                              "schema": PROBE_SCHEMA}},
             extra_body=request_extras())
     except Exception as exc:
-        status = status_of(exc)
-        if not (isinstance(status, int) and 400 <= status < 500
-                and status != 429):
+        if not refused(exc):
             log.warning("%s: could not probe the reply schema (%s); asking "
                         "anyway", name, exc)
             return f"the probe request was not answered: {exc}"
@@ -285,20 +298,21 @@ def assert_reply_schemas(base_url: str, api_key: str, model: str,
     None when every shape was taken; else why one could not be asked.
     """
     client = providers.client(role, base_url=base_url, api_key=api_key,
-                              timeout=60.0, max_retries=0)
+                              timeout=rules.get("preflight_probe_timeout_s"),
+                              max_retries=0)
     unasked = []
     for name, schema in shapes.items():
         try:
             client.chat.completions.create(
-                model=model, max_tokens=32, temperature=0,
+                model=model, max_tokens=rules.get("preflight_probe_tokens"),
+                temperature=0,
                 messages=[{"role": "user",
                            "content": "Answer with a JSON object."}],
                 response_format=providers.grammar(name, schema),
                 extra_body=request_extras())
         except Exception as exc:
             status = status_of(exc)
-            if not (isinstance(status, int) and 400 <= status < 500
-                    and status != 429):
+            if not refused(exc):
                 log.warning("%s: could not probe the reply schema %s (%s); "
                             "asking anyway", base_url, name, exc)
                 unasked.append(f"{name}: {exc}")
@@ -379,6 +393,30 @@ def assert_serving(base_url: str, api_key: str, model: str,
     return _keep_window(role, max_len)
 
 
+def assert_step_models(base_url: str, api_key: str, models: dict, *,
+                       role: str = "llm") -> None:
+    """Raise PreflightError unless the server offers every model a step
+    names (rule `model`): *models* is {step id: model name}, the steps that
+    name a model of their own. Asked of the server's list of models, once,
+    before the first document: a model it does not offer would be refused
+    at every request of that step, hours into the run. Nothing is asked
+    where no step names a model, or where the run takes its answers from a
+    cassette."""
+    if not models or providers.replaying():
+        return
+    served, _window = serving_limits(base_url, api_key, role=role)
+    missing = {step: name for step, name in models.items()
+               if name not in served}
+    if missing:
+        wanted = ", ".join(f"{step} asks {name!r}"
+                           for step, name in missing.items())
+        raise PreflightError(
+            f"{base_url} does not offer every model the steps ask for: "
+            f"{wanted}.\n  it offers: {', '.join(served)}\n  name one of "
+            f"those in the rule `model` of the step, or leave it empty for "
+            f"the model the run was started with")
+
+
 def assert_request_extras(base_url: str, api_key: str, model: str, *,
                           what: str = "this stage",
                           role: str = "llm") -> Optional[str]:
@@ -396,16 +434,15 @@ def assert_request_extras(base_url: str, api_key: str, model: str, *,
     """
     extras = request_extras()
     client = providers.client(role, base_url=base_url, api_key=api_key,
-                              timeout=60.0, max_retries=0)
+                              timeout=rules.get("preflight_probe_timeout_s"),
+                              max_retries=0)
     try:
         client.chat.completions.create(
             model=model, max_tokens=1, temperature=0,
             messages=[{"role": "user", "content": "ok"}], extra_body=extras)
     except Exception as exc:
-        status = getattr(exc, "status_code", None)
         # 429 says not now, which is no answer about the fields.
-        if not (isinstance(status, int) and 400 <= status < 500
-                and status != 429):
+        if not refused(exc):
             log.warning("%s: could not probe the reasoning settings (%s); "
                         "sending them anyway", base_url, exc)
             return f"the one-token request was not answered: {exc}"

@@ -59,6 +59,16 @@ Fields:
 
 ## Functions
 
+### tier_of
+
+```python
+def tier_of(owner_kind: str) -> str
+```
+
+How well a place of this kind backs a value (rule `evidence_tiers`):
+the document's own prose, or a model's reading of a picture, which is
+what a kind the rule does not list is.
+
 ### read_off
 
 ```python
@@ -107,6 +117,17 @@ def numbers_in(text: str, decimal: Optional[str] = None) -> set
 The numbers *text* prints, each in `canonical_number`'s spelling.
 *decimal* is the mark the text writes the decimal with: the documents'
 by default.
+
+### compared
+
+```python
+def compared(wanted: Optional[str]) -> Optional[str]
+```
+
+The spelling of a wanted number to look for among `numbers_in`: with
+its sign where the rule `sign_belongs` is on, else its magnitude, so
+that the sign stays outside the number and either sign is backed by
+the printed magnitude.
 
 ### flat
 
@@ -163,7 +184,8 @@ def printed_rounding(value: float) -> float
 ```
 
 Half a unit of the last digit a number is written with: 116.1 stands
-for anything from 116.05 to 116.15, and 38892.0 for 38891.5 to 38892.5.
+for anything from 116.05 to 116.15, and 38892.0 for 38891.5 to 38892.5
+(the share of the unit is the rule `computed_rounding_half_units`).
 
 ### computed_from_inputs
 

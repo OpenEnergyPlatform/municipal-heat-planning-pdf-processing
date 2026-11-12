@@ -40,6 +40,42 @@ What `__all__` names, and where each name is defined:
 
 ## Functions
 
+### llm_base_url
+
+```python
+def llm_base_url() -> str
+```
+
+The address of the text model server (rule `llm_base_url`, the
+setting LLM_BASE_URL); a server on this machine where nothing says.
+
+### llm_api_key
+
+```python
+def llm_api_key() -> str
+```
+
+The key of the text model server (rule `llm_api_key`, set at the
+start only); the placeholder that servers without a check take.
+
+### llm_model
+
+```python
+def llm_model() -> str
+```
+
+The model the request that is sent now asks: the rule `model` of its
+step, else the run's (the setting LLM_MODEL), else the default one.
+
+### llm_timeout
+
+```python
+def llm_timeout() -> float
+```
+
+The seconds the first attempt of the request sent now waits (rule
+`llm_timeout_s`).
+
 ### provider
 
 ```python

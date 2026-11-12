@@ -86,6 +86,15 @@ def __init__(self, spec, make_reader: Callable, passages_of: Callable,
              each: Optional[Callable] = None, trace=None)
 ```
 
+#### SurveyedHarvest.chunk_units
+
+```python
+@property
+def chunk_units(self) -> int
+```
+
+The lines a chunk has, as the step that runs reads them.
+
 #### SurveyedHarvest.reader_of
 
 ```python
@@ -119,35 +128,6 @@ What a pass over a stored harvest asks a coordinate again with
 in, each coordinate of *slots* asked as the harvest asks it
 (`addressed.Reader.coordinate`); what it leaves open is restored by
 the pass as it restores any sweep's.
-
-### ParameterPass
-
-```python
-class ParameterPass(_counted("top-up-parameters"))
-```
-
---top-up-parameters in a run that harvests from the survey.
-
-#### ParameterPass.\_\_init\_\_
-
-```python
-def __init__(self, out_dir: Path, spec, current: dict, deps: dict)
-```
-
-### UnreadPass
-
-```python
-class UnreadPass(_counted("top-up-rest"))
-```
-
-The second half of --top-up-open in a run that harvests from the
-survey.
-
-#### UnreadPass.\_\_init\_\_
-
-```python
-def __init__(self, out_dir: Path, deps: dict)
-```
 
 ## Functions
 
@@ -213,7 +193,8 @@ def append_parameters(document_id: int, filename: str, out_dir: Path,
 ```
 
 (written, failures, stats) of --top-up-parameters for one stored
-document, in a run that harvests from the survey.
+document, in a run that harvests from the survey: the first chain of
+the flow `top_up_parameters` (`passflow`, `passboxes`).
 
 The rules of `topup_parameter.append_document`, which this is for such a
 run: only the addition may have moved, the stored lines stay as they
@@ -257,7 +238,9 @@ def append_unread(document_id: int, filename: str, out_dir: Path,
 
 (written, failures, stats) of the second half of --top-up-open for
 one stored document, in a run that harvests from the survey: what
-nothing has read yet, read now and appended after the stored lines.
+nothing has read yet, read now and appended after the stored lines
+(the chain of the flow `top_up_open` that starts at the unread
+passages).
 
 Unread is a passage no survey of the harvest answered (one it left
 unanswered, or one outside the found places of a harvest read in part),

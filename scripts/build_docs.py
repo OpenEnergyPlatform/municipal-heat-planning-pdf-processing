@@ -833,7 +833,7 @@ def render_trust_page(levels, reasons, flag_reasons, marks, join,
     out += ["", "## The marks of a trust line", "",
             "The line the serializer writes above a value node is made of "
             "these marks, in this order, each worded by the profile in its "
-            "own language (`TRUST_PROSE`) and only where it applies:", ""]
+            "own language (`kg.trust_prose`) and only where it applies:", ""]
     out += [f"{n}. `{mark}`" for n, mark in enumerate(marks, 1)]
     out += ["", f"Inside the `reasons` mark the reasons are joined with "
             f"`{join}`; the reason tokens themselves are never translated.",

@@ -39,12 +39,24 @@ returns each message character for character. The file is compressed
 uncompressed (`<name>.trace.jsonl`), and ends quietly where a killed run left
 it.
 
-Setting `EXTRACT_TRACE=0` turns tracing off, and every call to record an event
-then returns immediately.
+The rule `trace_on` (setting `EXTRACT_TRACE=0` turns it off) decides whether
+a run traces at all: off, every call to record an event returns immediately.
+`trace_requests` says whether an event carries its request and reply;
+`trace_compress`, `trace_time_places` and `trace_piece_min_chars` the file's
+form (owner decision 2026-11-11). Each is read where it is used.
 
 Author: Felix Vossel
 
 ## Functions
+
+### enabled
+
+```python
+def enabled() -> bool
+```
+
+Whether the run traces (rule `trace_on`), read when asked: a run's
+value, whatever step is writing.
 
 ### open_trace
 
@@ -53,6 +65,14 @@ def open_trace(directory, name_of: Callable) -> None
 ```
 
 Start writing traces under `directory`, naming files via `name_of(id)`.
+
+### compressed
+
+```python
+def compressed() -> bool
+```
+
+Whether a trace is written compressed (rule `trace_compress`).
 
 ### exchanged
 

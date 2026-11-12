@@ -226,7 +226,7 @@ def test_a_value_whose_area_the_plan_does_not_say_reaches_the_full_graph(
 def test_a_class_outside_the_schema_is_full_graph_only(tmp_path):
     diesel = value(carrier="OEO_00010242")
     why = kg.strict_refusal(diesel, kg._box("part").get("table") or {},
-                            kg.totals(kg.DRAWING, "value"))
+                            kg.totals(kg.drawing(), "value"))
     assert why == "off_list:refers_to_energy_carrier"
     assert "OEO_00010242" in graph(tmp_path, [diesel])
     assert "OEO_00010242" not in graph(tmp_path, [diesel, value()],

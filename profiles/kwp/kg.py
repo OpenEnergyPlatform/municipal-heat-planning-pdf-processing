@@ -25,7 +25,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from docpipe import graphfile
+from docpipe import graphfile, rules
 from docpipe.extraction.bricks import Brick, Call, Setting
 from docpipe.extraction.fields import DERIVED
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment
@@ -44,29 +44,41 @@ SHAPE = mhpkg.load()
 _SPEC = json.loads(
     Path(__file__).with_name("extraction_spec.json").read_text(
         encoding="utf-8"))
-# The spec as the extraction stage loads it. The answer app's graph route
-# reads its lists off it (`docpipe.inference.kg_route`).
-SPEC = load_spec(_SPEC)
 
-# The drawing, as the graph file of this profile has it now.
-DRAWING = graphfile.get_map("kwp")
-PREFIX_IRI = dict(DRAWING.get("prefixes") or {})
 
-# Where the provenance of this graph's values is written under, and the
-# vocabulary that says it (docpipe/extraction/provenance.py). The terms are
-# the ones proposed to the ontology; until they are published there they
-# resolve nowhere, which is why the provenance is a file of its own.
-PROVENANCE = {"base": graphfile.get("base", "kwp"), "prefix": "mhpx",
-              "iri": "https://purl.org/mhpo/prov/"}
+def spec():
+    """The spec as the extraction stage loads it with the rules in effect
+    now. The answer app's graph route reads its lists off it
+    (`docpipe.inference.kg_route`)."""
+    return rules.derived("kwp.kg.spec", lambda: load_spec(_SPEC))
+
+
+def drawing() -> dict:
+    """The drawing, as the graph file of this profile has it now."""
+    return graphfile.get_map("kwp")
+
+
+def prefix_iri() -> dict:
+    """{prefix: IRI} of the header the drawing writes now."""
+    return dict(drawing().get("prefixes") or {})
+
+
+# The vocabulary the provenance of this graph's values is written in
+# (docpipe/extraction/provenance.py), under the graph rule `base`, which the
+# run reads where it writes. The terms are the ones proposed to the
+# ontology; until they are published there they resolve nowhere, which is
+# why the provenance is a file of its own.
+PROVENANCE = {"prefix": "mhpx", "iri": "https://purl.org/mhpo/prov/"}
 
 
 def expand(name: str) -> str:
     """`mhpo:MHPO_00020007` -> the full IRI, from the header this graph
     writes. An unbound prefix raises rather than defaults."""
     prefix, _, local = str(name).partition(":")
-    if not local or prefix not in PREFIX_IRI:
+    bound = prefix_iri()
+    if not local or prefix not in bound:
         raise KeyError(f"{name!r} is bound to no prefix of the drawing")
-    return PREFIX_IRI[prefix] + local
+    return bound[prefix] + local
 
 
 _OEO_CLASS = re.compile(r"OEO_\d+")
@@ -149,13 +161,18 @@ CONTAINER_SLOT = "covers_parameter"
 
 
 def _box(box_id: str) -> dict:
-    return next(box for box in DRAWING.get("boxes") or ()
+    return next(box for box in drawing().get("boxes") or ()
                 if box.get("id") == box_id)
 
 
 def _arrow(source: str, to: str) -> dict:
-    return next(arrow for arrow in DRAWING.get("arrows") or ()
+    return next(arrow for arrow in drawing().get("arrows") or ()
                 if arrow.get("from") == source and arrow.get("to") == to)
+
+
+def _property(source: str, to: str) -> str:
+    """The property of the drawing's arrow from *source* to *to*."""
+    return _arrow(source, to)["property"]
 
 
 def totals(drawing: dict, box_id: str) -> dict:
@@ -621,42 +638,49 @@ BRICKS = (
 # rather than constrained.
 COORDINATE_AXES = ("scenario", "quantity", "carrier", "sector", "year")
 
-_VALUE = _box("value")
-# The trust words of the comment above a number, for the answer app.
-TRUST_PROSE = check_prose(dict((_VALUE.get("evidence") or {}).get(
-    "settings", {}).get("prose") or {}), "graph.json map, value evidence")
-TRUST_JOIN = (_VALUE.get("evidence") or {}).get("settings", {}).get(
-    "join") or " · "
-PARTS = {key: (entry.get("class"), entry.get("folder"), entry.get("label"))
-         for key, entry in (_box("part").get("table") or {}).items()}
-P_HAS_PART = _arrow("plan", "part")["property"]
-P_HAS_QUANTITY_VALUE = _arrow("part", "value")["property"]
-P_NUMBER = _arrow("value_target", "value")["property"]
-P_UNIT = _arrow("unit_target", "value")["property"]
-P_CARRIER = _arrow("carrier", "value")["property"]
-P_SECTOR = _arrow("sector", "value")["property"]
-P_TECHNOLOGY = _arrow("technology", "value")["property"]
-P_YEAR = _arrow("year", "value")["property"]
-P_AGGREGATION = _arrow("aggregation", "value")["property"]
+def trust_prose() -> dict:
+    """The trust words of the comment above a number, for the answer app,
+    as the drawing's value box has them now."""
+    value = _box("value")
+    return check_prose(dict((value.get("evidence") or {}).get(
+        "settings", {}).get("prose") or {}), "graph.json map, value evidence")
 
-# The query, over the same drawing the graph is written from, so the two
-# cannot drift.
-VALUE_QUERY = "\n".join(
-    [f"PREFIX {prefix}: <{iri}>" for prefix, iri in PREFIX_IRI.items()]
-    + [f"""
+
+def parts() -> dict:
+    """{scenario: (class, folder, label)} of the plan parts the drawing's
+    part box lists now."""
+    return {key: (entry.get("class"), entry.get("folder"), entry.get("label"))
+            for key, entry in (_box("part").get("table") or {}).items()}
+
+
+def value_query() -> str:
+    """The query, over the drawing the graph is written from now, so the
+    two cannot drift."""
+    has_part = _property("plan", "part")
+    has_quantity_value = _property("part", "value")
+    number = _property("value_target", "value")
+    unit = _property("unit_target", "value")
+    carrier = _property("carrier", "value")
+    sector = _property("sector", "value")
+    technology = _property("technology", "value")
+    year = _property("year", "value")
+    aggregation = _property("aggregation", "value")
+    return "\n".join(
+        [f"PREFIX {prefix}: <{iri}>" for prefix, iri in prefix_iri().items()]
+        + [f"""
 SELECT ?value ?quantity ?number ?unit ?year ?aggregation ?part ?partLabel
        (GROUP_CONCAT(DISTINCT STR(?about); separator=" ") AS ?abouts)
 WHERE {{
-  ?plan  {P_HAS_PART} ?part .
+  ?plan  {has_part} ?part .
   ?part  a ?partClass ;
          rdfs:label ?partLabel ;
-         {P_HAS_QUANTITY_VALUE} ?value .
+         {has_quantity_value} ?value .
   ?value a ?quantity ;
-         {P_NUMBER} ?number ;
-         {P_UNIT} ?unit ;
-         {P_YEAR} ?year .
-  OPTIONAL {{ ?value {P_AGGREGATION} ?aggregation }}
-  OPTIONAL {{ ?value {P_CARRIER}|{P_SECTOR}|{P_TECHNOLOGY} ?about }}
+         {number} ?number ;
+         {unit} ?unit ;
+         {year} ?year .
+  OPTIONAL {{ ?value {aggregation} ?aggregation }}
+  OPTIONAL {{ ?value {carrier}|{sector}|{technology} ?about }}
   FILTER (?plan = ?PLAN)
 ##CONSTRAINTS##
 }}
@@ -673,9 +697,10 @@ def value_bindings(coordinates: dict) -> tuple:
     """
     lines, bindings = [], {}
     scenario = coordinates.get("scenario")
-    if scenario in PARTS:
+    table = parts()
+    if scenario in table:
         lines.append("  FILTER (?partClass = ?PART)")
-        bindings["PART"] = ("iri", expand(PARTS[scenario][0]))
+        bindings["PART"] = ("iri", expand(table[scenario][0]))
     quantity = coordinates.get("quantity")
     if quantity in QUANTITIES:
         lines.append("  FILTER (?quantity = ?QUANTITY)")
@@ -684,8 +709,9 @@ def value_bindings(coordinates: dict) -> tuple:
     if isinstance(year, int):
         lines.append("  FILTER (STR(?year) = ?YEAR)")
         bindings["YEAR"] = ("literal", str(year))
-    for axis, variable, predicate in (("carrier", "CARRIER", P_CARRIER),
-                                      ("sector", "SECTOR", P_SECTOR)):
+    for axis, variable, predicate in (
+            ("carrier", "CARRIER", _property("carrier", "value")),
+            ("sector", "SECTOR", _property("sector", "value"))):
         uri = coordinates.get(axis)
         if uri and is_class(uri):
             lines.append(f"  ?value {predicate} ?{variable} .")

@@ -79,6 +79,14 @@ def problems(self, payload: dict) -> list
 
 ## Functions
 
+### not_yet_listed
+
+```python
+def not_yet_listed() -> tuple
+```
+
+The scenario types of the graph rule as it stands now, as IRIs.
+
 ### refresh
 
 ```python

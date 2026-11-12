@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 1536
----
 Beantworte die Frage unter "question" für den Wert unter "value" mit der Adresse einer Zeile unter "passages", die die Antwort für diesen Wert sagt, und ihren Worten; sagt keine sie, ist "at" 0.
 
 * "value" nennt die Worte des Werts und seine Adresse unter "passage", seiner eigenen Stelle; dort steht die Antwort nicht. "passages" sind weitere Stücke des Plans, jedes unter seinem Buchstaben, mit Art, Seite und Titel.

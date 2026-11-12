@@ -109,7 +109,7 @@ Fields:
 - `vocabulary_dynamic: bool = False`: A category whose closed list is real but per document, filled in by the profile before the harvest. Same rule as a dynamic axis, one level up.
 - `merged: Optional[str] = None`: A free-text value that is the name the document gives a thing, merged with the document's other names for it as on an axis.
 - `once_per_document: bool = False`: Asked once per document, with its title page and the pieces a search finds best, never in every piece (owner decision 2026-11-08): a field the document has once, its title, its authors, its organisation.
-- `takes_group: bool = True`: Whether a value whose scenario is the words of a group of scenarios ("all scenarios") takes the members the document names, one row each (owner decision 2026-11-08, i): years, regions, types do, a description does not.
+- `takes_group: Optional[bool] = None`: Whether a value whose scenario is the words of a group of scenarios ("all scenarios") takes the members the document names, one row each (owner decision 2026-11-08, i): years, regions, types do, a description does not. None where the spec says nothing: the rule `default_takes_group` decides, as the step that reads it has it (`group_taken`).
 - `groups: dict = field(default_factory=dict)`: uri -> the group an entry of the value's list belongs to, as on an axis.
 - `beside: Optional[dict] = None`: The entries a list closed per document always has beside the document's own, uri -> labels like a vocabulary, each an out: entry (spec: "beside", for a parameter with vocabulary_dynamic): "several regions" and "other region" beside the regions one publication names, so the list exists where a document names none. In no fingerprint.
 
@@ -252,6 +252,16 @@ Word order, hyphens and plurals stay distinct. Those are real differences
 between two labels, and folding them would map "CO2-Emissionen je Kopf"
 onto "CO2-Emissionen".
 
+### group_taken
+
+```python
+def group_taken(parameter) -> bool
+```
+
+Does a value of *parameter* take the members of a group of entries
+("all scenarios")? The spec's `takes_group` of the field, else the
+rule `default_takes_group` as the step that asks has it.
+
 ### load
 
 ```python
@@ -364,7 +374,8 @@ def fingerprints(spec: "Spec") -> dict
 Flat, and the keys read as what they are: the stamp is compared key by
 key, and "parameter/\<uri>" or "axis/\<uri>/\<name>" is what a run should be
 able to say changed. One nested block would only ever report that
-something inside it moved.
+something inside it moved. The rule `stale_keys` says which kinds of
+keys there are.
 
 Together they have to cover everything a document is asked through, or
 `runner.stale` -- which ignores the whole-file sha once these are present

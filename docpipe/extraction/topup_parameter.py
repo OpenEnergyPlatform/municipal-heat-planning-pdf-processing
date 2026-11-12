@@ -47,6 +47,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Optional
 
+from .. import rules
 from . import archive
 from . import fields
 from .pipeline import repeat_key
@@ -160,9 +161,9 @@ def gained(stamp_path: Path, spec: Spec) -> list:
 def explained_keys(stamp_path: Path, current: dict, spec: Spec) -> set:
     """The keys of *current* that only the parameters the spec gained moved.
 
-    What a pass for coordinates (`topup.top_up_file`) takes out of its list
-    before it asks what blocks it: these are this pass's to answer, and it
-    writes none of them.
+    What a pass for coordinates (the step `changed` of the flow `top_up`)
+    takes out of its list before it asks what blocks it: these are this
+    pass's to answer, and it writes none of them.
     """
     found, _why = addition(stamp_path, current, spec)
     return set() if found is None else found.explained
@@ -252,7 +253,8 @@ def classify(stamp_path: Path, current: dict, spec: Spec, harvest_path: Path,
     if present:
         return Verdict("applied", "", found.new, found.owned, found.shared,
                        stored)
-    if derivation_moved(doc_spec, found.new, stored.tuples):
+    if rules.get("parameter_pass_blocks_on_derivation") \
+            and derivation_moved(doc_spec, found.new, stored.tuples):
         return Verdict("blocked", "stored rows were decided under another "
                                   "derivation of their parameter")
     return Verdict("new", "", found.new, found.owned, found.shared, stored)
@@ -273,6 +275,8 @@ def drop_stored_repeats(rows: list, stored: list) -> tuple:
         return repeat_key({k: v for k, v in row.items()
                            if k != "kind" and not k.endswith(fields.PRODUCER)})
 
+    if not rules.get("append_drop_repeats"):
+        return list(rows), 0
     held = {key(row) for row in stored}
     kept = [row for row in rows if key(row) not in held]
     return kept, len(rows) - len(kept)
@@ -308,6 +312,12 @@ def appended_lines(stored, document_id, rows: list, refusals: list,
                                stored.refusals + refusals)
     lines.append(dump({"kind": "summary", **summary}))
     return lines
+
+
+def refuses_incomplete() -> bool:
+    """Whether a pass that did not read what it set out to writes neither
+    file nor stamp (rule `parameter_pass_all_or_nothing`)."""
+    return bool(rules.get("parameter_pass_all_or_nothing"))
 
 
 def not_read(cause: str, found: int, of: int) -> str:

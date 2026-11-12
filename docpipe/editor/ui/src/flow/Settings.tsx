@@ -7,14 +7,19 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconPlus, IconTrash } from '@tabler/icons-react';
 import { NumberBox, TextBox } from '../components/Inputs';
-import { openPrompt, openRules, openSpec } from '../lib/nav';
+import { openPrompt, openRule, openSpec } from '../lib/nav';
 import { own, type Obj } from '../lib/util';
 import { rich, t, tr, useLang } from '../lib/i18n';
 import { CondEditor } from './Conditions';
+import { StepRules } from './StepRules';
+import { OwnAt } from '../rules/OwnAt';
+import { RunSection } from './Run';
 import { kindOf, labelOf, libBox, normRow, type Cond, type FlowData, type LibSetting, type Step } from './model';
 
 export interface Panel {
   data: FlowData;
+  tree: Step[];
+  epoch: number;
   cur: Record<string, number | string>;
   meas: any;
   trial: any;
@@ -22,6 +27,10 @@ export interface Panel {
   edited(): void;
   numberSet(name: string, v: number | string): void;
   select(id: string | null): void;
+  focusNumber(name: string): void;
+  reload(): void;
+  /* a flow of a follow-up pass: its boxes take no conditions and its loops only go on or off */
+  pass?: boolean;
 }
 
 const Field = ({ label, children, help }: { label: string; children: ReactNode; help?: string }) => (
@@ -62,7 +71,7 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
     }
     for (const s of b.settings) out.push(<SettingField key={'s:' + s.key} P={P} n={n} s={s} />);
   }
-  if (k === 'each') {
+  if (k === 'each' && !P.pass) {
     if (n.each === 'field') {
       out.push(<Field key="which" label={t('which')}><NativeSelect value={n.which || 'all'}
         data={Object.entries(lib.which).map(([v, words]) => ({ value: v, label: tr(words) }))}
@@ -104,7 +113,7 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
     out.push(<Field key="else" label={t('else branch')}><Switch checked={own(n, 'else')}
       onChange={e => { if (e.currentTarget.checked) n.else = n.else || []; else delete n.else; P.edited(); }} /></Field>);
   }
-  if (k !== 'if' && !(b && b.type === 'check')) {
+  if (k !== 'if' && !(b && b.type === 'check') && !P.pass) {
     out.push(<Field key="when" label={t('only when')}><CondEditor subjects={subjects} get={() => (n.when as Cond) || null}
       set={c => { if (c) n.when = c; else delete n.when; P.edited(); }} /></Field>);
   }
@@ -122,11 +131,12 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
           <Title order={4}>{labelOf(lib, n)}</Title>
           <Text size="xs" c="dimmed" className="dp-mono">{n.id}</Text>
         </Box>
-        <Button size="xs" variant="subtle" leftSection={<IconArrowLeft size={14} />} onClick={() => P.select(null)}>{t('numbers')}</Button>
+        <Button size="xs" variant="subtle" leftSection={<IconArrowLeft size={14} />} onClick={() => P.select(null)}>{P.pass ? t('overview') : t('numbers')}</Button>
       </Group>
       {never && <Alert color="gray" p="xs">{t('Never taken by this profile: {reason}', { reason: tr(never) })}</Alert>}
       {bad.map((p, i) => <Alert key={i} color="red" p="xs">{p.message}</Alert>)}
       {out}
+      <StepRules P={P} n={n} />
       {tried && tried.first && (
         <Accordion variant="contained">
           <Accordion.Item value="first">
@@ -181,7 +191,7 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
   if (s.kind === 'rule') {
     return (
       <Field label={tr(s.label)} help={tr(s.help)}>
-        <Anchor component="button" type="button" size="sm" onClick={() => (s.number ? P.select(null) : openRules('flow'))}>
+        <Anchor component="button" type="button" size="sm" onClick={() => (s.number ? P.select(null) : openRule(P.data.step_rules.tabs[s.key] || 'flow'))}>
           {s.number ? t('{name} = {value} →', { name: s.number, value: String(P.cur[s.number]) }) : t('rule {key} →', { key: s.key })}
         </Anchor>
       </Field>
@@ -234,6 +244,7 @@ export function NumbersPane({ P }: { P: Panel }) {
               {wins && <Badge size="sm" color="orange" variant="light">{t('{setting} = {value} overrides it ({origin})', { setting: n.setting!, value: n.in_effect, origin: tr(n.origin) })}</Badge>}
             </Group>
             <Text size="xs" c="dimmed" mt={2}>{rich(tr(n.help))}</Text>
+            {n.own_at && n.own_at.length ? <OwnAt steps={n.own_at} /> : null}
             {said.map((s, i) => <Text key={i} size="xs" c="indigo" mt={2} title={t('what the last run measured, at the value in the field')}>{rich(tr(s))}</Text>)}
           </Box>
         );
@@ -244,6 +255,8 @@ export function NumbersPane({ P }: { P: Panel }) {
       {(P.data.notes || []).map((note, i) => (
         <Text key={'n' + i} size="sm" c="dimmed">{rich(tr(note.says))}{note.to ? <> <Anchor component="button" type="button" size="sm" onClick={() => openSpec(note.to)}>{t('open in Spec')}</Anchor></> : null}</Text>
       ))}
+      <Divider />
+      <RunSection P={P} />
     </Stack>
   );
 }

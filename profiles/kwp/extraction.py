@@ -2,6 +2,8 @@
 about itself."""
 from pathlib import Path
 
+from docpipe import rules
+
 SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 
 # No coordinate closes a row of this profile: every value is asked all its
@@ -61,7 +63,7 @@ def document_context(conn, document_id: int) -> dict:
 # Measured on M3, this is what it replaces: the year axis produced 1,849
 # refusals against 0 readings, because every window after the first excluded
 # the row's own source and only that one could carry the year.
-FRAME = ("scenario", "year")
+# `FRAME`, the two coordinates, is the rule `frame_axes` (see `__getattr__`).
 
 
 # Which frame pairs are the plan's own state and which its target stands in
@@ -85,21 +87,19 @@ FRAME = ("scenario", "year")
 # file (`year_range`, `span_marks`, `decimal_mark`).
 
 # The language tag of the ontology's alternative labels that the vocabulary
-# snapshot keeps for this profile, the words its spec is held against.
-ALT_LABEL_LANGUAGE = "de"
-
+# snapshot keeps for this profile, the words its spec is held against: the
+# rule `alt_label_language` (`ALT_LABEL_LANGUAGE`, German here).
+#
 # The language of the core's contract text in this profile's prompts: the
 # parts files of its own that name a template (`template: rows`) are put
-# together with the template of this language. Not inherited by a profile that
-# extends this one with parts files of its own.
-CONTRACT_LANGUAGE = "de"
-
-
+# together with the template of this language. The rule `contract_language`
+# (`CONTRACT_LANGUAGE`, German here). Not inherited by a profile that extends
+# this one with parts files of its own.
+#
 # What the preflight (`docpipe preflight`) holds this profile's prompts to,
-# beyond the keys the stage reads by name: a wording the run depends on. The
-# prompts are in the profile's language, so the passage is too.
-# (what is checked, prompt, passage, True: has to be there, False: must not)
-PROMPT_CHECKS = ()
+# beyond the keys the stage reads by name: a wording the run depends on, the
+# rule `prompt_checks` (`PROMPT_CHECKS`; what is checked, prompt, passage, and
+# whether it has to be there). None for this profile.
 
 
 # What the stage says to the model outside its prompts (why an answer was not
@@ -113,3 +113,24 @@ def shapes_files() -> list:
     the Sources tab of `docpipe edit`)."""
     from profiles.kwp import vocabulary   # lazy: it reads the spec
     return [path for path in vocabulary.shapes() if path.is_file()]
+
+
+def __getattr__(name: str):
+    """The values this module had as constants, as the rules say them now
+    (`frame_axes`, `alt_label_language`, `contract_language`,
+    `prompt_checks`): read when a caller asks for them, not at import."""
+    if name == "FRAME":
+        return tuple(rules.get("frame_axes", "kwp"))
+    if name == "ALT_LABEL_LANGUAGE":
+        return rules.get("alt_label_language", "kwp")
+    if name == "CONTRACT_LANGUAGE":
+        # The language of the profile's own prompts: the run's, whatever
+        # step composes a prompt.
+        with rules.in_step(None):
+            return rules.get("contract_language", "kwp")
+    if name == "PROMPT_CHECKS":
+        return tuple((row["what"], row["prompt"], row["passage"],
+                      {"yes": True, "no": False}.get(row["required"],
+                                                      row["required"]))
+                     for row in rules.get("prompt_checks", "kwp"))
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

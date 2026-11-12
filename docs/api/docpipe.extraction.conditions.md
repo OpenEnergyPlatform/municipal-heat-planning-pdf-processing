@@ -30,8 +30,8 @@ knows at that place (`Facts`), and `sentence` says it as the page shows it
 at its box ("when the quote is shorter than 20 characters").
 
 "open" as a state of a coordinate means what `--top-up-open` reads again:
-exhausted, unanswered, unbacked (`topup.OPEN`); "none" that it has no state
-yet.
+the states of the rule `open_states` (exhausted, unanswered, unbacked
+unless a step says otherwise); "none" that it has no state yet.
 
 Author: Felix Vossel
 
@@ -99,6 +99,15 @@ def __init__(self, get: Callable)
 ```
 
 ## Functions
+
+### open_states
+
+```python
+def open_states() -> tuple
+```
+
+The states "open" stands for (rule `open_states`), as the step that
+runs reads it.
 
 ### row_problem
 

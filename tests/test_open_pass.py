@@ -40,7 +40,7 @@ def test_an_open_coordinate_is_replaced_only_by_an_answer():
         taken = topup.reopen(claim, slot)
         assert claim == {}
         claim["carrier_state"] = new
-        restored = topup.restore(claim, slot, taken, keep=topup.KEEP_ASKED)
+        restored = topup.restore(claim, slot, taken, keep=topup.keep_asked())
         assert restored is not kept
         assert claim["carrier_state"] == (new if kept else fields.EXHAUSTED)
 

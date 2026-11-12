@@ -45,14 +45,20 @@ REGIONS_PATH = Path(__file__).with_name("regions.json")
 AGGREGATES_PATH = Path(__file__).with_name("region_aggregates.json")
 WORLD = "aggregate:World"
 
-# Every label is matched on word boundaries, short or long. "US" hides inside
-# "thus" and "UK" inside "Ukraine", but so does Niger inside Nigeria, India
-# inside Indiana and Chile inside Chilean — and those are the expensive ones,
-# because they put a wrong country in front of the model as a valid choice.
-# The cost is the other direction: a paper that only ever writes "Chilean" no
-# longer offers Chile. That is the cheaper mistake, and it is a visible one —
-# the model then has to choose the out: entry, which is counted.
-_WORD = r"(?<!\w){}(?!\w)"
+# Every label is matched on word boundaries, short or long (rule
+# `region_whole_words`). "US" hides inside "thus" and "UK" inside "Ukraine",
+# but so does Niger inside Nigeria, India inside Indiana and Chile inside
+# Chilean — and those are the expensive ones, because they put a wrong
+# country in front of the model as a valid choice. The cost is the other
+# direction: a paper that only ever writes "Chilean" no longer offers Chile.
+# That is the cheaper mistake, and it is a visible one — the model then has
+# to choose the out: entry, which is counted.
+def _word(escaped: str) -> str:
+    """The pattern that finds *escaped*: as a whole word, or, where the rule
+    `region_whole_words` is off, wherever it stands."""
+    if rules.get("region_whole_words", "scenarios"):
+        return r"(?<!\w)" + escaped + r"(?!\w)"
+    return escaped
 
 
 # The entries that are not a thing in the graph. `kg.py` refuses to mint an IRI
@@ -91,6 +97,23 @@ def aggregates() -> dict:
     return json.loads(AGGREGATES_PATH.read_text(encoding="utf-8"))
 
 
+# The texts of a document a region can be named in, by the names the rule
+# `region_search_texts` gives them: one query each, with the document as its
+# one parameter.
+_TEXTS_OF = {
+    "sections": "SELECT s.content FROM Sections s WHERE s.document = ?",
+    "tables": ("SELECT t.markdown FROM Tables t JOIN Sections s "
+               "ON t.section = s.id WHERE s.document = ?"),
+    "table captions": ("SELECT t.caption FROM Tables t JOIN Sections s "
+                       "ON t.section = s.id WHERE s.document = ?"),
+    "image descriptions": ("SELECT i.description FROM Images i JOIN "
+                           "Sections s ON i.section = s.id "
+                           "WHERE s.document = ?"),
+    "image captions": ("SELECT i.caption FROM Images i JOIN Sections s "
+                       "ON i.section = s.id WHERE s.document = ?"),
+}
+
+
 def _document_text(conn: sqlite3.Connection, document_id: int) -> str:
     """Everything a harvest of this document could ever quote from."""
     # The captions belong in here as much as the bodies do: a harvest quotes
@@ -98,21 +121,14 @@ def _document_text(conn: sqlite3.Connection, document_id: int) -> str:
     # in "Figure 3: Emissions in India" is quotable — and if the narrowing has
     # not seen it, the model is offered no class for it and answers with a
     # wording nobody can resolve.
+    parts = _TEXTS_OF
+    chosen = [name for name in rules.get("region_search_texts", "scenarios")
+              if name in parts]
+    if not chosen:
+        return ""
     rows = conn.execute(
-        "SELECT s.content FROM Sections s WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT t.markdown FROM Tables t JOIN Sections s ON t.section = s.id "
-        "WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT t.caption FROM Tables t JOIN Sections s ON t.section = s.id "
-        "WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT i.description FROM Images i JOIN Sections s ON i.section = s.id "
-        "WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT i.caption FROM Images i JOIN Sections s ON i.section = s.id "
-        "WHERE s.document = ?",
-        (document_id,) * 5,
+        " UNION ALL ".join(parts[name] for name in chosen),
+        (document_id,) * len(chosen),
     ).fetchall()
     return "\n".join(str(r[0]) for r in rows if r[0])
 
@@ -162,13 +178,13 @@ def _mentioned(text: str, labels: list) -> bool:
         # those entries exist to remove. An all-caps acronym is matched with
         # its capitals; everything else is matched casefolded.
         if _acronym(label):
-            if re.search(_WORD.format(re.escape(label)), text):
+            if re.search(_word(re.escape(label)), text):
                 return True
             continue
         needle = label.casefold()
         if needle not in lowered:
             continue
-        if re.search(_WORD.format(re.escape(needle)), lowered):
+        if re.search(_word(re.escape(needle)), lowered):
             return True
     return False
 
@@ -177,7 +193,7 @@ def _named(text: str, names) -> bool:
     """Does the text name one of these models, with its capitals? A model's
     name is a proper name: "IMAGE" is a model, "image" is a word of every
     paper with a figure."""
-    return any(re.search(_WORD.format(re.escape(name)), text)
+    return any(re.search(_word(re.escape(name)), text)
                for name in names)
 
 
@@ -271,20 +287,12 @@ def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
 # 2026-11-10).
 
 # The language tag of the ontology's alternative labels that the vocabulary
-# snapshot keeps for this profile, the words its spec is held against. The
-# publications are English, and so are the words offered for them.
-ALT_LABEL_LANGUAGE = "en"
-
-# The language of the core's contract text in this profile's prompts (see the
-# same constant of the kwp profile).
-CONTRACT_LANGUAGE = "en"
-
-
-# What the preflight (`docpipe preflight`) holds this profile's prompts to,
-# beyond the keys the stage reads by name: a wording the run depends on. The
-# prompts are in the profile's language, so the passage is too.
-# (what is checked, prompt, passage, True: has to be there, False: must not)
-PROMPT_CHECKS = ()
+# snapshot keeps for this profile, the words its spec is held against: the
+# rule `alt_label_language` (`ALT_LABEL_LANGUAGE`). The publications are
+# English, and so are the words offered for them. The language of the core's
+# contract text in this profile's prompts is the rule `contract_language`
+# (`CONTRACT_LANGUAGE`), what the preflight holds the prompts to the rule
+# `prompt_checks` (`PROMPT_CHECKS`); see `__getattr__`.
 
 
 def shapes_files() -> list:
@@ -322,3 +330,22 @@ def document_context(conn, document_id: int) -> dict:
         return {}
     title = (row[0] or "").strip() if row else ""
     return {"name": title} if title else {}
+
+
+def __getattr__(name: str):
+    """The values this module had as constants, as the rules say them now
+    (`alt_label_language`, `contract_language`,
+    `prompt_checks`): read when a caller asks for them, not at import."""
+    if name == "ALT_LABEL_LANGUAGE":
+        return rules.get("alt_label_language", "scenarios")
+    if name == "CONTRACT_LANGUAGE":
+        # The language of the profile's own prompts: the run's, whatever
+        # step composes a prompt.
+        with rules.in_step(None):
+            return rules.get("contract_language", "scenarios")
+    if name == "PROMPT_CHECKS":
+        return tuple((row["what"], row["prompt"], row["passage"],
+                      {"yes": True, "no": False}.get(row["required"],
+                                                      row["required"]))
+                     for row in rules.get("prompt_checks", "scenarios"))
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

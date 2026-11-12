@@ -68,9 +68,12 @@ import json
 import logging
 import re
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
+
+import regex
 
 from .. import rules
 from . import archive, fields, lookup
@@ -79,14 +82,15 @@ from .fields import (EXHAUSTED, NUMBER, OUT_OF_SLICE, READ, SAID_UNSTATED,
                      UNBACKED)
 from .pipeline import (Batch, Row, Source, WorkItem, mark_unanswered,
                        merge_field, row_label)
-from .reading import (CUT, NO_ANSWER, Read, groups_of, in_group_order,
-                      link_ranges, slots_of, span_rows)
+from .reading import (CUT, GETS, NO_ANSWER, Read, groups_of,
+                      in_group_order, link_ranges, slots_of, span_rows)
 from .units import (Chunk, Cut, Line, cut_pieces, letter_headings,
                     letter_settings, letter_title_page, letters_others,
                     Passage, Shown, address_of, chunks_of, own_lines,
                     passage_lines, passage_of, pieces_for, short_quote,
                     title_page_of)
 from .verify import canonical_number, flat, min_quote_chars, numbers_in
+from .spec import group_taken
 from .wording import say
 
 log = logging.getLogger(__name__)
@@ -128,11 +132,14 @@ class Asking:
     (`about`), None where none follows the question; *refused(Found)* ->
     (reason, sentence) of the first own check that refuses a find, None
     where every check lets it be; how often an answer that did not hold is
-    asked again, None for the flow's number."""
+    asked again, None for the flow's number. *about_step()* is the context
+    the box that checks a find of another passage reads its own values in
+    (`engine.Engine.step`), None where it reads the asking box's."""
     box: Optional[str] = None
     about: Optional[str] = None
     refused: Optional[Callable] = None
     follow_ups: Optional[int] = None
+    about_step: Optional[Callable] = None
 
 
 # The box asking now, in this thread and the jobs it runs side by side
@@ -182,10 +189,16 @@ def span():
     return rules.derived("addressed.span", made)
 
 
-# A search sentence that is a question, which a search takes and the run
-# counts (owner decision 2026-11-08: "So pingelig wäre ich da nicht").
-QUESTION = re.compile(r"\?\s*$|^\s*(wer|was|wann|wo|wie|welche[rsmn]?|warum|"
-                      r"wieso|who|what|when|where|which|how|why)\b", re.I)
+def _question():
+    """A search sentence that is a question, which a search takes and the
+    run counts (owner decision 2026-11-08: "So pingelig wäre ich da
+    nicht"): it ends in a question mark or begins with one of the rule
+    `question_words`."""
+    def made():
+        words = "|".join(re.escape(w) for w in rules.get("question_words"))
+        parts = [r"\?\s*$"] + ([rf"^\s*({words})\b"] if words else [])
+        return re.compile("|".join(parts), re.I)
+    return rules.derived("addressed.question", made)
 
 
 def told(why: str, entry) -> str:
@@ -212,10 +225,14 @@ def refusals(refused: list) -> list:
 
 
 def joined(held: list, more: list) -> list:
-    """*held* and those finds of *more* that are not among them: a line,
-    its cell and its words once."""
+    """*held* and those finds of *more* that are not among them: what the
+    rule `same_find_by` names (a line, its cell, its words) once."""
+    by = rules.get("same_find_by")
+
     def key(got) -> tuple:
-        return (id(got.lines[0][0]), got.cell, flat(got.words).casefold())
+        return tuple(part for name, part in (
+            ("line", id(got.lines[0][0])), ("cell", got.cell),
+            ("words", flat(got.words).casefold())) if name in by)
     taken = {key(got) for got in held}
     return held + [got for got in more if key(got) not in taken]
 
@@ -229,25 +246,45 @@ def work_read(claim: dict) -> Optional[dict]:
             if key == "work" or key.startswith("work_")}
 
 
+# A number as the words of a find print it, with its sign.
+_FIRST_NUMBER = re.compile(r"[-−–]?\d(?:[\d.,]*\d)?")
+
+
 def number_of(words: str) -> Optional[str]:
     """The number the words of a find print, with its sign (owner decision
     2026-11-01), in `canonical_number`'s spelling: the words themselves
     where they are a number, else the one number they print ("750.940
     kWh", "ca. 8,8 GWh"); None where they print none or more than one
     ("800 / 750", "2019 bis 2021"). A signed number and its magnitude are
-    one number ("-1.155")."""
+    one number ("-1.155"). Where the rule `sign_belongs` is off the sign
+    stays outside the number: its magnitude."""
+    one = _number_of(words)
+    if one and one.startswith("-") and rules.get("sign_belongs") != "on":
+        return one[1:]
+    return one
+
+
+def _number_of(words: str) -> Optional[str]:
     whole = canonical_number(words)
     if whole is not None:
         return whole
     found = numbers_in(words or "")
     found = {n for n in found if "-" + n not in found}
-    return next(iter(found)) if len(found) == 1 else None
+    if len(found) == 1:
+        return next(iter(found))
+    if found and not rules.get("first_number_only"):
+        # The first number the words print, in reading order.
+        for found_at in _FIRST_NUMBER.finditer(words or ""):
+            one = canonical_number(found_at.group(0))
+            if one is not None:
+                return one
+    return None
 
 
 def is_question(sentence: str) -> bool:
     """Is a search sentence a question rather than a sentence of the
     plan?"""
-    return bool(QUESTION.search(sentence or ""))
+    return bool(_question().search(sentence or ""))
 
 
 # -- grammars ----------------------------------------------------------------
@@ -257,16 +294,24 @@ def _format(name: str, schema: dict) -> dict:
             "json_schema": {"name": name, "schema": schema}}
 
 
-_FOUND = {"type": "object",
-          "properties": {"at": {"type": "string"},
-                         "words": {"type": "string"}},
-          "required": ["at", "words"], "additionalProperties": False}
+def address_key() -> str:
+    """How an answer names its line: "at", the number of the line, or
+    "quote", the words of the line (rule `answer_with`)."""
+    return "quote" if rules.get("answer_with") == "quote" else "at"
+
+
+def _found() -> dict:
+    key = address_key()
+    return {"type": "object",
+            "properties": {key: {"type": "string"},
+                           "words": {"type": "string"}},
+            "required": [key, "words"], "additionalProperties": False}
 
 # What a search may fetch itself (owner decision 2026-11-07, kept by the
 # plan of 2026-11-09): the piece before or after a shown one, a table or
 # figure by its placeholder, the pieces a pattern stands in, the pieces
-# best for a sentence of its own.
-GETS = ("next", "previous", "item", "search", "similar")
+# best for a sentence of its own. The kinds stand in `reading.GETS`, the one
+# list; the rule `fetches` allows some of them.
 
 
 def fetches() -> list:
@@ -289,12 +334,14 @@ def more_schema() -> dict:
 
 # A find of a field with a list: the number of its entry beside its address
 # and words (owner decision 2026-11-09).
-_ENTRY_FOUND = {"type": "object",
-                "properties": {"entry": {"type": "integer"},
-                               "at": {"type": "string"},
-                               "words": {"type": "string"}},
-                "required": ["entry", "at", "words"],
-                "additionalProperties": False}
+def _entry_found() -> dict:
+    key = address_key()
+    return {"type": "object",
+            "properties": {"entry": {"type": "integer"},
+                           key: {"type": "string"},
+                           "words": {"type": "string"}},
+            "required": ["entry", key, "words"],
+            "additionalProperties": False}
 
 
 def found_format(closed: bool = False) -> dict:
@@ -304,7 +351,8 @@ def found_format(closed: bool = False) -> dict:
     return _format("found_reply", {
         "type": "object",
         "properties": {"found": {"type": "array", "items":
-                                 _ENTRY_FOUND if closed else _FOUND}},
+                                 _entry_found() if closed
+                                 else _found()}},
         "required": ["found"], "additionalProperties": False})
 
 
@@ -312,14 +360,15 @@ def work_format() -> dict:
     """The answer of a piece's work request: the lines of other works, each
     an address and the name as a line prints it, and the line that shows
     the rest are this publication's own (`own`), 0 where none does."""
+    key = address_key()
     return _format("work_reply", {
         "type": "object",
-        "properties": {"found": {"type": "array", "items": _FOUND},
+        "properties": {"found": {"type": "array", "items": _found()},
                        "own": {"type": "object",
                                "properties": {
-                                   "at": {"type": ["string", "integer"]},
+                                   key: {"type": ["string", "integer"]},
                                    "words": {"type": "string"}},
-                               "required": ["at"],
+                               "required": [key],
                                "additionalProperties": False}},
         "required": ["found", "own"], "additionalProperties": False})
 
@@ -330,7 +379,7 @@ def work_choice_format() -> dict:
     return _format("work_choice_reply", {
         "type": "object",
         "properties": {"entry": {"type": "integer"},
-                       "at": {"type": ["string", "integer"]},
+                       address_key(): {"type": ["string", "integer"]},
                        "words": {"type": "string"}},
         "required": ["entry"], "additionalProperties": False})
 
@@ -348,12 +397,12 @@ def coord_format(several: bool, more: bool = False) -> dict:
     its own, `phrase`); one that may name several entries lists its
     finds."""
     if several:
-        properties = {"found": {"type": "array", "items": _FOUND}}
+        properties = {"found": {"type": "array", "items": _found()}}
         required = ["found"]
     else:
-        properties = {"at": {"type": ["string", "integer"]},
+        properties = {address_key(): {"type": ["string", "integer"]},
                       "words": {"type": "string"}}
-        required = ["at"]
+        required = [address_key()]
     if more:
         properties["more"] = more_schema()
     return _format("coordinate_reply", {
@@ -378,7 +427,7 @@ def year_format() -> dict:
     its words and the entry of the plan's years it means, 0 for none."""
     return _format("plan_year_reply", {
         "type": "object",
-        "properties": {"at": {"type": ["string", "integer"]},
+        "properties": {address_key(): {"type": ["string", "integer"]},
                        "words": {"type": "string"},
                        "entry": {"type": "integer"}},
         "required": ["entry"], "additionalProperties": False})
@@ -403,9 +452,12 @@ def about_format() -> dict:
 
 # -- what a request shows ----------------------------------------------------
 
-def field_shown(parameter, full: bool = False) -> dict:
+def field_shown(parameter, full: Optional[bool] = None) -> dict:
     """A field as a request shows it: its name and what a value of it is,
-    in short where the spec writes that (`brief`)."""
+    in short where the spec writes that (`brief`) or whole as the rule
+    `field_text` says (*full* says it for the caller)."""
+    if full is None:
+        full = rules.get("field_text") == "whole"
     means = parameter.description if full \
         else (getattr(parameter, "brief", None) or parameter.description)
     return {"name": parameter.label, "means": means}
@@ -418,9 +470,10 @@ def block_payload(passage: Optional[Passage], shown: Shown,
     out: dict = {}
     if passage is not None:
         out["kind"] = passage.kind
-        if passage.page is not None:
+        if passage.page is not None and rules.get("show_passage_page"):
             out["page"] = passage.page
-        if passage.kind != "section" and passage.title:
+        if passage.kind != "section" and passage.title \
+                and rules.get("show_passage_title"):
             out["title"] = passage.title
     out["lines"] = shown.rendered(letter)
     return out
@@ -444,6 +497,34 @@ def first_address(shown: Shown, cells: bool, letter: str = "") -> str:
     return f"{block.letter}{number}{cell}"
 
 
+def shown_example(example):
+    """The reply a request shows as its example, as the rules say
+    (`show_example`: none at all, `show_empty_example`: of the two a request
+    that finds values shows, only the one with a find); None stays None,
+    and no example at all is the empty tuple."""
+    if example is None:
+        return None
+    if not rules.get("show_example"):
+        return ()
+    if isinstance(example, (tuple, list)) and len(example) > 1 \
+            and not rules.get("show_empty_example"):
+        return (example[0],)
+    return example
+
+
+def point(shown: Shown, cells: bool = False, letter: str = "",
+          at: Optional[str] = None) -> dict:
+    """What an example answer names its line with: the address of the
+    request's first line of its own (or *at*), or, where the rule
+    `answer_with` has the answer quote, the words of that line."""
+    at = first_address(shown, cells, letter) if at is None else at
+    if address_key() == "at":
+        return {"at": at}
+    address = address_of(at)
+    found = shown.find(address) if address is not None else None
+    return {"quote": found[0].text if found is not None else ""}
+
+
 def find_example(shown: Shown, closed: bool = False,
                  letter: str = "") -> tuple:
     """The two replies a request that finds values shows (owner decision
@@ -451,7 +532,7 @@ def find_example(shown: Shown, closed: bool = False,
     the request's own first line, and where the field has a list with the
     number of its entry; and the empty one, where no shown line prints a
     value."""
-    one = {"at": first_address(shown, True, letter), "words": fields.said()}
+    one = {**point(shown, True, letter), "words": fields.said()}
     if closed:
         one = {"entry": 1, **one}
     return {"found": [one]}, {"found": []}
@@ -473,6 +554,9 @@ class Found:
     # The number of the entry of the request's list a find names, where the
     # field has a list (owner decision 2026-11-09), 0 for none.
     entry: Optional[int] = None
+    # The entry it named is none of the list's and the rule `outside_list`
+    # keeps its wording (entry 0).
+    outside: bool = False
 
     @property
     def quote(self) -> str:
@@ -483,25 +567,42 @@ class Found:
         return self.lines[0][1] if self.lines else None
 
 
+def second_ways(ways: list) -> dict:
+    """The note a request carries that went through the second way of the
+    rules *ways* (owner decision 2026-11-11): their names, so that
+    a run shows what it used. Nothing where it went through none."""
+    return {"second_way": ",".join(ways)} if ways else {}
+
+
+def said_none(reply) -> bool:
+    """Does the answer of a names request name 0, none of its list?"""
+    given = reply.get("entry") if isinstance(reply, dict) else None
+    return any(not isinstance(pick, bool) and str(pick).strip() == "0"
+               for pick in (given if isinstance(given, list) else [given]))
+
+
 # A find's entry that is no number of its request's list (`not_an_option`,
 # owner decision 2026-09-11).
 NOT_AN_OPTION = "not_an_option"
 
 
-def listing(options, meanings: int) -> tuple:
+def listing(options, meanings: int, two_step: bool = True) -> tuple:
     """(lines, choices, grouped) of a list as a request shows it (owner
     decisions 2026-11-08): a list longer than *meanings* entries
     (`flow.Numbers.list_meanings`) whose entries name groups is shown by
     its groups, each a choice; a shorter one with what each entry means, a
     longer one by its names. *choices* are what a number picks, labels or
-    group names."""
+    group names. The rule `two_step_list` says whether a long list of groups
+    is asked in two steps, *two_step* that this list is the first of them:
+    the entries of the groups chosen are never shown as groups."""
     options = list(options)
     groups: list = []
     for option in options:
         group = getattr(option, "group", "") or ""
         if group and group not in groups:
             groups.append(group)
-    if len(options) > meanings and len(groups) > 1:
+    if len(options) > meanings and len(groups) > 1 \
+            and two_step and rules.get("two_step_list"):
         return ([f"{i} {group}" for i, group in enumerate(groups, start=1)],
                 groups, True)
     lines = []
@@ -532,6 +633,18 @@ def share_of(chunk: Chunk) -> str:
     return kind if kind in ("table", "figure") else "section"
 
 
+def shares_problem(shares: dict) -> Optional[str]:
+    """Why *shares* (the shares of tables, figures and text of a search)
+    cannot be scaled, None where they can: for the check of the values of
+    the flow. Three shares of 0 are honoured by `budgeted` (no kind first),
+    never counted as 1."""
+    if shares and not any(max(0, int(n)) for n in shares.values()):
+        return ("the three shares of a search are 0, so that no kind of "
+                "chunk is taken first; give one of them a share or accept "
+                "the order of the ranking")
+    return None
+
+
 def budgeted(ranked: list, budget: int, shares: dict) -> list:
     """The pieces a search shows of *ranked*, best first (owner decisions
     2026-11-09: 50 pieces, 20 of tables, 15 of figures, 15 of text, filled
@@ -539,8 +652,10 @@ def budgeted(ranked: list, budget: int, shares: dict) -> list:
     scaled to *budget*, then the best of the rest up to *budget*; in the
     order of *ranked*."""
     budget = max(0, int(budget))
-    total = sum(max(0, int(n)) for n in shares.values()) or 1
-    room = {kind: max(0, int(n)) * budget // total
+    # Three shares of 0 take no kind first: the pieces are the best of all,
+    # in order (they never count as 1 each).
+    total = sum(max(0, int(n)) for n in shares.values())
+    room = {kind: (max(0, int(n)) * budget // total if total else 0)
             for kind, n in shares.items()}
     picked: set = set()
     for chunk in ranked:
@@ -555,6 +670,54 @@ def budgeted(ranked: list, budget: int, shares: dict) -> list:
     return [chunk for chunk in ranked if chunk.key in picked]
 
 
+def _fold(text: str) -> str:
+    """*text* as the check that words stand in a line compares it: its
+    spaces flattened, and its case folded unless the rule `match_case`
+    says it counts."""
+    text = flat(text)
+    return text if rules.get("match_case") else text.casefold()
+
+
+def quoted_address(shown: Shown, quote: str) -> Optional[str]:
+    """The address of the shown lines that hold *quote*, characters that
+    count as the same compared as the same (rule `same_characters`): the
+    lines of the request's own passage first, one line or a stretch of
+    consecutive ones; None where no shown line holds it."""
+    wanted = _fold(quote)
+    if not wanted:
+        return None
+    for letter in sorted(shown.blocks, key=lambda one: one != ""):
+        entries = shown.blocks[letter].entries
+        folded = [_fold(line.text) for _, line, _ in entries]
+        text = " ".join(folded)
+        at = text.find(wanted)
+        if at < 0:
+            continue
+        end, start, first, last = at + len(wanted), 0, None, None
+        for i, part in enumerate(folded):
+            if first is None and start + len(part) > at:
+                first = i
+            if start < end:
+                last = i
+            start += len(part) + 1
+        if first is None or last is None:
+            continue
+        one, other = entries[first][0], entries[last][0]
+        return f"{letter}{one}" if one == other else f"{letter}{one}-{other}"
+    return None
+
+
+def has_address(reply) -> bool:
+    """Does the answer name a line: an address, or, where the rule
+    `answer_with` has it quote, a quote?"""
+    if not isinstance(reply, dict):
+        return False
+    quote = reply.get("quote")
+    return address_of(reply.get("at")) is not None or (
+        rules.get("answer_with") == "quote" and isinstance(quote, str)
+        and bool(quote.strip()))
+
+
 def resolve(shown: Shown, entry, passages: dict) -> Found:
     """The lines an answer's address names in what *shown* showed, its
     words checked against them: `NOT_AN_ADDRESS` where it names no shown
@@ -564,6 +727,14 @@ def resolve(shown: Shown, entry, passages: dict) -> Found:
     at = entry.get("at") if isinstance(entry, dict) else None
     words = entry.get("words") if isinstance(entry, dict) else None
     words = words.strip() if isinstance(words, str) else ""
+    if isinstance(entry, dict) and rules.get("answer_with") == "quote":
+        # The answer names its line by its words: the code finds the line
+        # among the shown ones (rule `answer_with`).
+        quote = entry.get("quote")
+        if isinstance(quote, str) and quote.strip():
+            at = quoted_address(shown, quote)
+            if at is None:
+                return Found(words=words, why="quote_not_in_source")
     address = address_of(at)
     if address is None:
         return Found(words=words, why=NOT_AN_ADDRESS)
@@ -586,15 +757,17 @@ def resolve(shown: Shown, entry, passages: dict) -> Found:
         else:
             found.why = WORDS_NOT_IN_LINE
             return found
-    if not found.words or \
-            flat(found.words).casefold() not in flat(text).casefold():
+    # Empty words are always refused; words that do not stand in the lines
+    # only where the rule `check_answer_in_quote` is on.
+    if not found.words or (rules.get("check_answer_in_quote")
+                           and _fold(found.words) not in _fold(text)):
         found.why = WORDS_NOT_IN_LINE
         return found
-    if line.cells:
+    if line.cells and rules.get("move_to_cell"):
         # The cell the words stand in, where the address names another one
         # and only one cell holds them.
         holding = [i for i, one in enumerate(line.cells, start=1)
-                   if flat(found.words).casefold() in flat(one).casefold()]
+                   if _fold(found.words) in _fold(one)]
         if (cell is None or cell not in holding) and len(holding) == 1:
             found.cell = holding[0]
     return found
@@ -610,17 +783,24 @@ class Transcripts:
     decision 2026-11-09: caption and numbers apart).
 
     *ask(source, document_id)* is the transcription request, the reply as
-    a dict or None; *fingerprint* says which prompt and model wrote it,
-    *image_key(source)* which image (None where the figure has none: then
-    nothing is asked and its description stands for it)."""
+    a dict or None; *fingerprint* says which prompt and model wrote it (a
+    text, or a function that tells it where it is read, in the step that
+    transcribes, whose model it names), *image_key(source)* which image
+    (None where the figure has none: then nothing is asked and its
+    description stands for it)."""
 
     def __init__(self, ask: Optional[Callable], store: Optional[Path],
-                 fingerprint: str, image_key: Callable):
+                 fingerprint, image_key: Callable):
         self.ask = ask
         self.store = Path(store) if store else None
-        self.fingerprint = fingerprint
+        self._fingerprint = fingerprint
         self.image_key = image_key
         self._lock = threading.Lock()
+
+    @property
+    def fingerprint(self) -> str:
+        made = self._fingerprint
+        return made() if callable(made) else made
 
     def _path(self, document_id: int) -> Optional[Path]:
         return self.store / f"{document_id}.json" if self.store else None
@@ -747,12 +927,13 @@ class Names:
         beside this one added for the same name of the same work; a label
         another entry has already is told apart by its work."""
         name = name.strip()
+        two = rules.get("same_name_two_entries")
         with self.lock:
             for i, entry in enumerate(self.entries, start=1):
-                if entry.name == name and entry.work == work:
+                if entry.name == name and (entry.work == work or not two):
                     return i
             label = name
-            if any(e.label == label for e in self.entries):
+            if two and any(e.label == label for e in self.entries):
                 label = f"{name} ({work})"
             self.entries.append(Entry(label, name, work, quote, work_read))
             return len(self.entries)
@@ -762,7 +943,7 @@ class Names:
         its work where the entries have works, ordered by work."""
         with self.lock:
             entries = list(enumerate(self.entries, start=1))
-        if works is not None:
+        if works is not None and rules.get("names_list_order") == "by_work":
             entries.sort(key=lambda pair: (pair[1].work, pair[0]))
         out = []
         for number, entry in entries:
@@ -781,16 +962,19 @@ class Plan:
 
     def __init__(self, document_id: int, sources: list, transcripts: dict,
                  chunk_units: Optional[int] = None, *, numbers=None,
-                 cut: Optional[Cut] = None):
+                 cut: Optional[Cut] = None,
+                 cutting: Optional[Callable] = None):
         # How many lines a piece and the title page hold and how many
         # headings are shown up to a place are the flow's (`flow.Numbers`);
         # *chunk_units* says another size of the pieces, *cut* how the
-        # flow's split box cuts them (`units.Cut`).
+        # flow's split box cuts them (`units.Cut`); *cutting()* is the
+        # context the pieces are cut in (the split box's own values,
+        # `engine.Engine.step`).
         self.numbers = numbers or flow_map.default()
         if cut is None:
-            cut = Cut(lines=self.numbers.piece_lines
+            cut = Cut(lines=flow_map.number(self.numbers, "piece_lines")
                       if chunk_units is None else chunk_units,
-                      headings=self.numbers.headings)
+                      headings=flow_map.number(self.numbers, "headings"))
         elif chunk_units is not None:
             cut = dataclasses.replace(cut, lines=chunk_units)
         self.cut = cut
@@ -799,17 +983,22 @@ class Plan:
         self.by_owner = {(s.owner_kind, s.owner_id): s for s in sources}
         self.passages: dict = {}
         self.chunks: list = []
-        for source in sources:
-            passage = passage_of(source, transcripts.get(source.owner_id)
-                                 if source.owner_kind == "figure" else None)
-            if not passage.lines:
-                continue
-            self.passages[passage.owner] = passage
+        cutting = cutting or contextlib.nullcontext
+        with cutting():
+            for source in sources:
+                passage = passage_of(source,
+                                     transcripts.get(source.owner_id)
+                                     if source.owner_kind == "figure"
+                                     else None)
+                if not passage.lines:
+                    continue
+                self.passages[passage.owner] = passage
         # The pieces as the split box cuts them: each a piece of one
         # passage (`Chunk`); a piece over several passages is a group of
         # them (`groups`), asked together.
-        self.chunks, self.groups = cut_pieces(list(self.passages.values()),
-                                              cut)
+        with cutting():
+            self.chunks, self.groups = cut_pieces(
+                list(self.passages.values()), cut)
         self.group_of = {chunk.key: group for group in self.groups
                          for chunk in group}
         self.by_key = {chunk.key: chunk for chunk in self.chunks}
@@ -821,8 +1010,9 @@ class Plan:
         self.places = {numbers: {chunk.key: i for i, chunk in
                                  enumerate(view)}
                        for numbers, view in self.views.items()}
-        self.title_page = title_page_of(list(self.passages.values()),
-                                        self.numbers.title_page_lines)
+        self.title_page = title_page_of(
+            list(self.passages.values()),
+            flow_map.number(self.numbers, "title_page_lines"))
         self.settings: list = []          # [(Line, Source)]
         self.bases: list = []             # `pipeline.named_years` entries
         self.lists: dict = {}
@@ -831,10 +1021,34 @@ class Plan:
         self.lock = threading.Lock()
         self._locks: dict = {}
         self._headings: dict = {}
+        self._first: set = set()
+
+    @staticmethod
+    def part(numbers: bool) -> bool:
+        """Does a field read a figure in the pieces of its numbers? A
+        field of numbers does, any other field reads its caption, as the
+        rule `figure_part` says (by the kind of field, or always one)."""
+        return {"caption": False, "numbers": True}.get(
+            rules.get("figure_part"), bool(numbers))
 
     def pieces(self, numbers: bool) -> list:
         """The pieces a field reads, of numbers or not (`pieces_for`)."""
-        return self.views[bool(numbers)]
+        return self.views[self.part(numbers)]
+
+    def places_of(self, numbers: bool) -> dict:
+        """{piece key: its place} among `pieces`."""
+        return self.places[self.part(numbers)]
+
+    def first_request(self) -> bool:
+        """Is this the first request the step that runs makes in this
+        document? Told once per step (rule `show_title_page`, "first")."""
+        step = rules.STEP.get()
+        key = step.ident if step is not None else ""
+        with self.lock:
+            if key in self._first:
+                return False
+            self._first.add(key)
+            return True
 
     def key_lock(self, key) -> threading.Lock:
         with self.lock:
@@ -843,19 +1057,23 @@ class Plan:
     def headings(self, owner: tuple) -> list:
         """[(Line, Source)] of the titles of the sections up to a passage,
         its own last (`lookup.sections_up_to`)."""
+        # As many as the step that runs says (`headings`), else as the
+        # split box cut the document with.
+        own, value = rules.stepped_value("headings")
+        count = int(value) if own else self.cut.headings
         with self.lock:
-            if owner in self._headings:
-                return self._headings[owner]
+            if (owner, count) in self._headings:
+                return self._headings[(owner, count)]
         got: list = []
         for section in lookup.sections_up_to(self.sources, tuple(owner),
-                                             self.cut.headings):
+                                             count):
             title = lookup.title_of(section)
             if title:
                 got.append((Line(len(got) + 1, title, (), "heading"),
                             Source(section.owner_kind, section.owner_id,
                                    title, section.provenance)))
         with self.lock:
-            self._headings[owner] = got
+            self._headings[(owner, count)] = got
         return got
 
     def chunk_of(self, owner: tuple, number: int,
@@ -870,19 +1088,49 @@ class Plan:
 
     def beside(self, chunk: Chunk, numbers: bool = False) -> list:
         """The pieces right before and after *chunk* among those a field of
-        numbers or another field reads."""
+        numbers or another field reads, as many on each side as the rule
+        `beside_pieces` says."""
         view = self.pieces(numbers)
-        at = self.places[bool(numbers)].get(chunk.key)
+        at = self.places_of(numbers).get(chunk.key)
         if at is None:
             return []
-        return [view[i] for i in (at - 1, at + 1) if 0 <= i < len(view)]
+        near = rules.get("beside_pieces")
+        around = [at + d for d in range(-near, 0)] \
+            + [at + d for d in range(1, near + 1)]
+        return [view[i] for i in around if 0 <= i < len(view)]
 
 
-def show_value(plan: Plan, claim: dict, headings: bool = True) -> tuple:
+def title_page_shown(plan: Plan) -> bool:
+    """Does the request that is built now show the title page (rule
+    `show_title_page`)? "first" shows it in the first request the step
+    makes in the document only."""
+    mode = rules.get("show_title_page")
+    if mode == "never":
+        return False
+    return plan.first_request() if mode == "first" else True
+
+
+def blocks_in_order(parts: dict) -> dict:
+    """*parts* (block name -> payload) as the rule `shown_block_order`
+    orders them; those it does not name come last in the usual order."""
+    order = list(rules.get("shown_block_order"))
+    usual = ["passage", "headings", "title_page", "settings"]
+    names = [n for n in order if n in parts] \
+        + [n for n in usual if n not in order and n in parts]
+    return {name: parts[name] for name in names}
+
+
+def show_value(plan: Plan, claim: dict, headings: Optional[bool] = None,
+               plain: bool = False) -> tuple:
     """(Shown, payload) of what every request about a value's coordinates
     shows: its line with its table's title and head, or the sentences
     before and after it; the headings up to it, the title page and the
-    plan's settings; the value as its words and its address."""
+    plan's settings, as the step that asks says (rules `show_headings`,
+    `show_title_page`, `show_settled`); the value as its words and its
+    address. *headings* False shows none whatever the rules say, *plain*
+    asks only for the lines of the place: the title page and the settings
+    stand in what a quote may cite, as the rules `show_*` do not touch
+    them."""
     at = claim.get("at") or {}
     owner = tuple(at.get("owner") or ())
     passage = plan.passages.get(owner)
@@ -892,23 +1140,34 @@ def show_value(plan: Plan, claim: dict, headings: bool = True) -> tuple:
     first = int(at.get("line") or 1)
     last = int(at.get("last") or first)
     around = rules.get("lines_around")
-    numbers = (list(range(first, last + 1)) if passage.kind == "table"
+    rows = rules.get("rows_around")
+    numbers = (list(range(max(1, first - rows), last + 1 + rows))
+               if passage.kind == "table"
                else list(range(max(1, first - around), last + 1 + around)))
     shown.add("", "passage", passage_lines(passage, numbers))
-    heads = plan.headings(owner) if headings else []
+    if plain:
+        heads = []
+        title_page, settings = plan.title_page, plan.settings
+    else:
+        heads = plan.headings(owner) if headings is not False \
+            and rules.get("show_headings") else []
+        title_page = plan.title_page if title_page_shown(plan) else []
+        settings = plan.settings if rules.get("show_settled") else []
     shown.add(letter_headings(), "headings", heads, renumber=True)
-    shown.add(letter_title_page(), "title_page", plan.title_page, renumber=True)
-    shown.add(letter_settings(), "settings", plan.settings, renumber=True)
+    shown.add(letter_title_page(), "title_page", title_page, renumber=True)
+    shown.add(letter_settings(), "settings", settings, renumber=True)
     value_at = f"{first}" + (f".{at['cell']}" if at.get("cell") else "") \
         + (f"-{last}" if last != first else "")
     words = claim.get("value_raw") or claim.get("value")
+    parts = {} if plain else {"passage": block_payload(passage, shown)}
+    if heads:
+        parts["headings"] = shown.rendered(letter_headings())
+    if title_page and not plain:
+        parts["title_page"] = shown.rendered(letter_title_page())
+    if settings and not plain:
+        parts["settings"] = shown.rendered(letter_settings())
     payload = {"value": {"words": words, "at": value_at},
-               "passage": block_payload(passage, shown),
-               **({"headings": shown.rendered(letter_headings())} if heads else {}),
-               **({"title_page": shown.rendered(letter_title_page())}
-                  if plan.title_page else {}),
-               **({"settings": shown.rendered(letter_settings())}
-                  if plan.settings else {})}
+               **(parts if plain else blocks_in_order(parts))}
     return shown, payload
 
 
@@ -1014,26 +1273,72 @@ class Reader:
                                  list(chunks))
         self.probes = probes or (lambda parameter, document_id: [])
         self.known = known or (lambda claim, asked: {})
-        self.span_marks = dict(span_marks or {})
+        # The conversations of the values of a document, by value
+        # (`_talk`, the rule `conversation`).
+        self._talks: dict = {}
+        self._talk_lock = threading.Lock()
+        # None: the rule `span_marks` as the step that runs reads it.
+        self._span_marks = span_marks
         self.plan_fields = dict(plan_fields or {})
         self.works_field = works
         self.frame_slots = list(frame_slots or ())
         self.each = each or (lambda jobs, run: [run(job) for job in jobs])
         self.trace = trace
         self.numbers = numbers or flow_map.default()
-        self.budget = max(1, int(self.numbers.search_pieces
-                                 if budget is None else budget))
-        self.shares = dict(self.numbers.shares() if shares is None
-                           else shares)
-        self.per_request = max(1, int(self.numbers.search_per_request
-                                      if per_request is None
-                                      else per_request))
+        # What the run was given for the search instead of its numbers; the
+        # numbers themselves are read at use, where a step may set its own.
+        self._budget, self._per_request = budget, per_request
+        self._shares = None if shares is None else dict(shares)
         self.context = context or (lambda document_id: {})
         # The drawing of the flow the document is read by (`engine.Engine`),
         # the default profile's where none is given.
         self.flow = flow
         self._engine = None
         self._engine_lock = threading.Lock()
+
+    @property
+    def span_marks(self) -> dict:
+        """What a value stated for a span of years marks its rows with
+        (rule `span_marks`), as the step that runs reads it."""
+        return dict(rules.get("span_marks") or {}
+                    if self._span_marks is None else self._span_marks)
+
+    @property
+    def budget(self) -> int:
+        """The chunks a search shows (`search_pieces`), as the step that
+        runs reads it; every chunk where the rule `search_to_end` is on."""
+        if rules.get("search_to_end"):
+            from .runner import REST_TO_END
+            return REST_TO_END
+        own, value = rules.stepped_value("search_pieces")
+        return max(1, int(value if own else self._budget
+                          if self._budget is not None
+                          else flow_map.number(self.numbers,
+                                               "search_pieces")))
+
+    @property
+    def shares(self) -> dict:
+        """{kind of passage: its share of a search's chunks}, as the step
+        that runs reads them."""
+        out = {}
+        for kind, name in (("table", "search_tables"),
+                           ("figure", "search_figures"),
+                           ("section", "search_text")):
+            own, value = rules.stepped_value(name)
+            out[kind] = int(value) if own else (
+                self._shares[kind] if self._shares is not None
+                else flow_map.number(self.numbers, name))
+        return out
+
+    @property
+    def per_request(self) -> int:
+        """The chunks of a search one request shows (`search_per_request`),
+        as the step that runs reads it."""
+        own, value = rules.stepped_value("search_per_request")
+        return max(1, int(value if own else self._per_request
+                          if self._per_request is not None
+                          else flow_map.number(self.numbers,
+                                               "search_per_request")))
 
     @property
     def engine(self):
@@ -1050,18 +1355,58 @@ class Reader:
         what = ASKING.get()
         if what is not None and what.follow_ups is not None:
             return what.follow_ups
-        return self.numbers.follow_ups
+        return flow_map.number(self.numbers, "follow_ups")
 
     def _traced(self, event: str, document_id: int, /,
                 **values) -> None:
         if self.trace is not None:
             self.trace(event, document_id, **values)
 
+    def _talk(self, kind: str, noted: dict, document_id: int):
+        """The conversation of the value a coordinate request is about
+        ([] when it has begun), None where the rule `conversation` has
+        none or the request is no coordinate's."""
+        if kind not in ("coord", "search") \
+                or rules.get("conversation") != "per_value" \
+                or not noted.get("value") or not noted.get("coordinate"):
+            return None
+        key = (document_id, noted.get("parameter"), noted["value"])
+        with self._talk_lock:
+            if len(self._talks) > 20000:
+                self._talks.clear()
+            return self._talks.setdefault(key, [])
+
+    @staticmethod
+    def _ways(kind: str, noted: dict, talk) -> dict:
+        """*noted* with the rules whose second way this request goes
+        through (`second_ways`)."""
+        ways = [w for w in (noted.get("second_way") or "").split(",") if w]
+        if kind in ("find", "docfield", "coord", "search", "work") \
+                and rules.get("answer_with") == "quote":
+            ways.append("answer_with")
+        if talk:
+            ways.append("conversation")
+        return {**noted, **second_ways(sorted(set(ways)))}
+
     def _ask(self, kind: str, payload: dict, document_id: int, shape: dict,
              example: dict, counts: Counts, /, **noted):
         counts.ask(kind)
-        return getattr(self.asks, kind)(payload, document_id, shape=shape,
-                                        example=example, **noted)
+        talk = self._talk(kind, noted, document_id)
+        noted = self._ways(kind, noted, talk)
+        sent = payload
+        if talk:
+            # The questions about the value so far and what they were
+            # answered go before this one, each a message of its own (the
+            # runner's `make_asks`).
+            payload = {**payload, "conversation": list(talk)}
+        reply = getattr(self.asks, kind)(payload, document_id, shape=shape,
+                                         example=shown_example(example),
+                                         **noted)
+        if talk is not None and isinstance(reply, dict):
+            with self._talk_lock:
+                talk.append({"asked": noted["coordinate"], "sent": sent,
+                             "answer": reply})
+        return reply
 
     def _follow(self, kind: str, payload: dict, document_id: int,
                 shape: dict, example: dict, answer, what: list,
@@ -1072,9 +1417,20 @@ class Reader:
         as often as the flow says (`flow.Numbers.follow_ups`), each time
         with the answer before it."""
         counts.ask("follow")
-        return self.asks.follow(kind, {**payload, "answer": answer,
-                                       "what": what}, document_id,
-                                shape=shape, example=example, **noted)
+        talk = self._talk(kind, noted, document_id)
+        noted = self._ways(kind, noted, talk)
+        payload = {**payload, "answer": answer, "what": what}
+        sent = payload
+        if talk:
+            # The follow-up hangs on the conversation of its value.
+            payload = {**payload, "conversation": list(talk)}
+        reply = self.asks.follow(kind, payload, document_id, shape=shape,
+                                 example=shown_example(example), **noted)
+        if talk is not None and isinstance(reply, dict):
+            with self._talk_lock:
+                talk.append({"asked": noted["coordinate"], "follow_up": what,
+                             "sent": sent, "answer": reply})
+        return reply
 
     def lists_of(self, plan: Plan) -> None:
         """The lists of names a document builds while it is read: its
@@ -1092,9 +1448,11 @@ class Reader:
             plan.names.setdefault(kind, Names(kind))
         if self.works_field is not None:
             title = plan.title_page[0][0].text if plan.title_page else ""
+            plain = rules.get("publication_description") == "plain"
             plan.names.setdefault("work", Names("work", Entry(
                 "this publication", "this publication" + (
-                    f": {title}" if title else ""), 0, title)))
+                    f": {title}" if title and not plain else ""), 0, title)
+                if rules.get("this_publication_first") else None))
 
     # -- the document ------------------------------------------------------------
 
@@ -1123,31 +1481,54 @@ class Reader:
                "lost": []}
         # A piece of several passages (`Plan.groups`) is asked as one, each
         # passage under its letter; it is halved by its passages first.
-        pending = [list(chunk) if isinstance(chunk, (list, tuple))
-                   else [chunk]]
+        pending = [(list(chunk) if isinstance(chunk, (list, tuple))
+                    else [chunk], 0)]
         while pending:
-            piece = pending.pop(0)
+            piece, depth = pending.pop(0)
             got = self._find_once(plan, parameter,
                                   piece[0] if len(piece) == 1 else piece,
                                   counts)
             out["asked"] += got["asked"]
             out["claims"] += got["claims"]
             out["failed"].update(got["failed"])
-            if got["lost"] == CUT and len(piece) > 1:
-                half = len(piece) // 2
-                pending[:0] = [piece[:half], piece[half:]]
-                continue
-            if got["lost"] == CUT and len(piece[0].numbers) > 1:
-                one = piece[0]
-                half = len(one.numbers) // 2
-                pending[:0] = [[Chunk(one.passage, one.index,
-                                      one.numbers[:half], one.carried)],
-                               [Chunk(one.passage, one.index,
-                                      one.numbers[half:], one.carried)]]
-                continue
+            if got["lost"] == CUT:
+                halves = self.halves(piece, depth)
+                if halves:
+                    pending[:0] = [(half, depth + 1) for half in halves]
+                    continue
             if got["lost"]:
                 out["lost"].append(got["lost"])
         return out
+
+    @staticmethod
+    def halves(piece: list, depth: int) -> Optional[list]:
+        """The two halves a request whose answer did not fit its room is
+        asked in instead (owner decision 2026-09-12: a request is split,
+        never its answer rescued), None where it stays a hole: the rules
+        `split_cut_off` (on), `split_by` (first by passages, then by lines,
+        or by lines only) and `split_most` (how often one request is
+        split, 0 until a single line is left)."""
+        if not rules.get("split_cut_off"):
+            return None
+        most = rules.get("split_most")
+        if most and depth >= most:
+            return None
+        if len(piece) > 1 and rules.get("split_by") == "chunks_then_lines":
+            half = len(piece) // 2
+            return [piece[:half], piece[half:]]
+        if not any(len(one.numbers) > 1 for one in piece):
+            return None
+        first, second = [], []
+        for one in piece:
+            half = len(one.numbers) // 2
+            if len(one.numbers) > 1:
+                first.append(Chunk(one.passage, one.index,
+                                   one.numbers[:half], one.carried))
+                second.append(Chunk(one.passage, one.index,
+                                    one.numbers[half:], one.carried))
+            else:
+                first.append(one)
+        return [first, second] if second else None
 
     def _find_once(self, plan: Plan, parameter, chunk: Chunk,
                    counts: Counts) -> dict:
@@ -1157,8 +1538,11 @@ class Reader:
         shown = Shown()
         members = list(chunk) if isinstance(chunk, (list, tuple)) else None
         first = members[0] if members else chunk
-        heads = plan.headings(first.owner)
+        heads = plan.headings(first.owner) \
+            if rules.get("show_headings") else []
         shown.add(letter_headings(), "headings", heads, renumber=True)
+        title = plan.title_page if title_page_shown(plan) else []
+        shown.add(letter_title_page(), "title_page", title, renumber=True)
         listed = self.listed(parameter)
         if members is None:
             shown.add("", "passage", own_lines(chunk))
@@ -1183,6 +1567,8 @@ class Reader:
                    **({"list": listed[0]} if listed else {}),
                    **({"headings": shown.rendered(letter_headings())}
                       if heads else {}),
+                   **({"title_page": shown.rendered(letter_title_page())}
+                      if title else {}),
                    **shown_lines}
         example = find_example(shown, listed is not None, at)
         shape = found_format(listed is not None)
@@ -1219,13 +1605,15 @@ class Reader:
                 out["claims"].append(claim)
         return out
 
-    def list_of(self, options) -> tuple:
+    def list_of(self, options, two_step: bool = True) -> tuple:
         """A list as every request of this reading shows it (`listing`):
         with what each entry means up to the flow's number of entries
         (`flow.Numbers.list_meanings`). Every place that shows a list or
         reads a number of one goes through here, so that a number is read
         against the list it was given for."""
-        return listing(options, self.numbers.list_meanings)
+        return listing(options,
+                       flow_map.number(self.numbers, "list_meanings"),
+                       two_step)
 
     def listed(self, parameter) -> Optional[tuple]:
         """The list a field's finds name their entry in (`list_of`), None
@@ -1248,6 +1636,7 @@ class Reader:
                 continue
             got = resolve(shown, entry, plan.passages)
             if got.why is None and numeric \
+                    and rules.get("words_need_number") \
                     and number_of(got.words) is None:
                 got.why = WORDS_NOT_IN_LINE
             if got.why is None and got.passage is None:
@@ -1255,7 +1644,10 @@ class Reader:
             if got.why is None and listed is not None:
                 got.entry = picked_entry(entry.get("entry"), len(listed[1]))
                 if got.entry is None:
-                    got.why = NOT_AN_OPTION
+                    if rules.get("outside_list") == "keep":
+                        got.entry, got.outside = 0, True
+                    else:
+                        got.why = NOT_AN_OPTION
             checked = own_check(got) if got.why is None else None
             if checked is not None:
                 got.why = checked[0]
@@ -1263,7 +1655,7 @@ class Reader:
                 held.append(got)
             else:
                 given = {key: entry.get(key) for key in
-                         ("entry", "at", "words") if key in entry}
+                         ("entry", "at", "quote", "words") if key in entry}
                 if checked is not None:
                     given["told"] = checked[1]
                 refused.append((given, got.why))
@@ -1305,6 +1697,13 @@ class Reader:
                                    got.words, got, counts)
             claim["value"] = entry or ""
             claim["value_raw"] = got.words
+            if got.outside:
+                # An entry outside the list, its wording kept (rule
+                # `outside_list`): the wording is the note, as everywhere
+                # an answer is none of a closed list's.
+                claim[f"{slot.name}_seen"] = got.words
+                self._traced("second_way", plan.document_id,
+                             rule="outside_list", parameter=parameter.uri)
         else:
             claim["value"] = got.words
         claim["quote"] = short_quote(passage, numbers, min_quote_chars())
@@ -1333,9 +1732,19 @@ class Reader:
         ranked = self.search_order(plan.document_id, sentences, pieces)
         picked = budgeted(ranked, budget or self.budget,
                           self.shares if shares is None else shares)
-        if not sentences or len(picked) < 2 or not rules.get("rerank"):
+        if not sentences or not rules.get("rerank") \
+                or len(picked) < rules.get("rerank_least_pieces"):
             return picked
         return self.rerank(plan.document_id, sentences, picked)
+
+    def rerank_left(self, plan: Plan, sentences: list, pieces: list) -> list:
+        """*pieces* ordered by the reranker with *sentences* again, for
+        the rule `rerank_when` (each round), where the rule `rerank` is on
+        and there are enough of them."""
+        if not rules.get("rerank") \
+                or len(pieces) < rules.get("rerank_least_pieces"):
+            return pieces
+        return self.rerank(plan.document_id, sentences, pieces)
 
     def ask_window(self, plan: Plan, field_: dict, batch: list,
                    counts: Counts, uri: str, *, numbers: bool = False,
@@ -1346,7 +1755,34 @@ class Reader:
         letter of its own; what does not hold is asked again with its
         reason (as often as the flow says). *listed* is the field's list
         (`listing`), whose entry a find names. *lost* is CUT or NO_ANSWER
-        where the request came to nothing, else None."""
+        where the request came to nothing, else None. A request whose
+        answer did not fit its room is asked in halves as a request about
+        a piece is (`halves`, owner decision 2026-09-12)."""
+        mode = rules.get("show_title_page")
+        title_page = {"always": True, "never": False}.get(mode, title_page)
+        held_all: list = []
+        lost_all = None
+        pending = [(list(batch), 0)]
+        while pending:
+            piece, depth = pending.pop(0)
+            held, lost = self._window_once(
+                plan, field_, piece, counts, uri, numbers=numbers,
+                listed=listed, title_page=title_page)
+            if lost == CUT:
+                halves = self.halves(piece, depth)
+                if halves:
+                    pending[:0] = [(half, depth + 1) for half in halves]
+                    continue
+            if lost:
+                lost_all = lost_all or lost
+            held_all = joined(held_all, held)
+        return held_all, lost_all
+
+    def _window_once(self, plan: Plan, field_: dict, batch: list,
+                     counts: Counts, uri: str, *, numbers: bool = False,
+                     listed=None, title_page: bool = False) -> tuple:
+        """([Found] that hold, lost) of one request of a window, asked
+        once (`ask_window`)."""
         shape = found_format(listed is not None)
         shown = Shown()
         if title_page:
@@ -1415,11 +1851,31 @@ class Reader:
         be meant, "" where none fits (0). With *group* (a find named it,
         owner decision 2026-11-09) the entries of that group are asked."""
         key = ("list", uri, name, flat(words).casefold(), group or "")
+        if not rules.get("entry_once_per_wording"):
+            # Once for every place the wording stands in (rule
+            # `entry_once_per_wording`), not once for the wording.
+            source = got.source if got is not None else None
+            key += ((source.owner_kind, source.owner_id,
+                     got.lines[0][0].number, got.cell) if source is not None
+                    else len(plan.lists),)
         with plan.key_lock(key):
             if key not in plan.lists:
                 plan.lists[key] = self._entry(plan, uri, name, slot, words,
                                               got, counts, several, group)
             return copy.copy(plan.lists[key])
+
+    @staticmethod
+    def earlier_entries(plan: Plan, uri: str, name: str,
+                        group: Optional[str]) -> list:
+        """[{"words", "entry"}] the document's list of this coordinate has
+        already settled for other wordings, for the rule
+        `list_shows_earlier`."""
+        out = []
+        for key, entry in list(plan.lists.items()):
+            if key[:3] == ("list", uri, name) and key[4] == (group or "") \
+                    and entry:
+                out.append({"words": key[3], "entry": entry})
+        return out
 
     def _entry(self, plan: Plan, uri: str, name: str, slot, words: str,
                got: Optional[Found], counts: Counts, several: bool,
@@ -1440,26 +1896,45 @@ class Reader:
         chosen = options
         if group is not None:
             chosen = [o for o in options
-                      if (getattr(o, "group", "") or "") == group] or options
+                      if (getattr(o, "group", "") or "") == group]
+            if not chosen:
+                # The group the find named has no entry: the whole list, or
+                # none (rule `group_without_entries`).
+                if rules.get("group_without_entries") == "none":
+                    return [] if several else ""
+                chosen = options
         else:
             lines, choices, grouped = self.list_of(options)
             if grouped:
                 # A long list in two steps: its groups, then the entries of
-                # the group chosen, with what each means.
+                # the group chosen (the first group named, or every one the
+                # rule `group_picks_taken` says), with what each means.
+                every = rules.get("group_picks_taken") == "all"
                 payload = {"words": words,
                            "question": slot.question or name,
                            **shown_line, **settings_of(plan), "list": lines}
                 reply = self._ask("list", payload, plan.document_id,
-                                  entry_format(), {"entry": 1}, counts,
+                                  entry_format(several=every),
+                                  {"entry": [1] if every else 1}, counts,
                                   **noted, step="group")
-                picks = self._picks(reply, len(choices), False) or []
+                picks = self._picks(reply, len(choices), every) or []
                 if picks:
+                    named = {choices[i - 1] for i in
+                             (picks if every else picks[:1])}
                     chosen = [o for o in options
-                              if (getattr(o, "group", "") or "")
-                              == choices[picks[0] - 1]]
-        listed, labels, _grouped = self.list_of(chosen)
+                              if (getattr(o, "group", "") or "") in named]
+        # What is chosen among now are entries, never the groups again.
+        listed, labels, _grouped = self.list_of(chosen, two_step=False)
         payload = {"words": words, "question": slot.question or name,
                    **shown_line, **settings_of(plan), "list": listed}
+        ways = [] if rules.get("entry_once_per_wording") \
+            else ["entry_once_per_wording"]
+        if rules.get("list_shows_earlier"):
+            earlier = self.earlier_entries(plan, uri, name, group)
+            if earlier:
+                payload["earlier"] = earlier
+                ways.append("list_shows_earlier")
+        noted = {**noted, **second_ways(ways)}
         example = {"entry": [1]} if several else {"entry": 1}
         shape = entry_format(several)
         reply = self._ask("list", payload, plan.document_id, shape, example,
@@ -1526,7 +2001,9 @@ class Reader:
             with names.lock:
                 if key in names.asked:
                     return list(names.asked[key])
-            listed = [f"{i} {label} (means: {means})"
+            meant = rules.get("names_meanings")
+            listed = [f"{i} {label} (means: {means})" if meant
+                      else f"{i} {label}"
                       for i, (label, means) in enumerate(besides, start=1)]
             offset = len(listed)
             numbers = {}
@@ -1551,6 +2028,8 @@ class Reader:
             picks = self._name_picks(reply, len(listed))
             if picks is None:
                 counts.fail("name_not_listed")
+                if said_none(reply) and not rules.get("name_may_be_none"):
+                    noted = {**noted, **second_ways(["name_may_be_none"])}
             for _ in range(self.follow_ups()):
                 if picks is not None:
                     break
@@ -1602,6 +2081,10 @@ class Reader:
                 return None
             if pick < 0 or pick > size:
                 return None
+            if not pick and not rules.get("name_may_be_none"):
+                # 0 is an answer outside the list where the rule
+                # `name_may_be_none` is off.
+                return None
             if pick and pick not in out:
                 out.append(pick)
         return out
@@ -1629,7 +2112,8 @@ class Reader:
                            or [None, None])[1], "value": row.label}
         if not shown.blocks:
             return shown, None, noted
-        known = self.known(row.claim, [slot.name])
+        known = self.known(row.claim, [slot.name]) \
+            if rules.get("show_known") else {}
         payload = {**payload, "field": field_shown(parameter),
                    "question": slot.question or slot.name,
                    **({"known": known} if known else {})}
@@ -1666,10 +2150,10 @@ class Reader:
 
     @staticmethod
     def coord_example(shown: Shown, several: bool) -> dict:
-        at = first_address(shown, False)
+        at = point(shown, False)
         if several:
-            return {"found": [{"at": at, "words": fields.said()}]}
-        return {"at": at, "words": fields.said()}
+            return {"found": [{**at, "words": fields.said()}]}
+        return {**at, "words": fields.said()}
 
     @staticmethod
     def coord_finds(reply) -> list:
@@ -1677,8 +2161,10 @@ class Reader:
             return []
         if isinstance(reply.get("found"), list):
             return [e for e in reply["found"] if isinstance(e, dict)]
-        if address_of(reply.get("at")) is not None:
-            return [{"at": reply.get("at"), "words": reply.get("words")}]
+        if has_address(reply):
+            return [{**({"at": reply["at"]} if "at" in reply else {}),
+                     **({"quote": reply["quote"]} if "quote" in reply
+                        else {}), "words": reply.get("words")}]
         return []
 
     def take(self, plan: Plan, read: Read, row: Row, slot, shown: Shown,
@@ -1710,7 +2196,7 @@ class Reader:
                 made += more
                 if held or not failed:
                     break
-            if not held:
+            if not held and rules.get("after_follow_ups") == "unbacked":
                 row.claim[f"{slot.name}_state"] = UNBACKED
         return made, held
 
@@ -1775,15 +2261,14 @@ class Reader:
                 return [(self.plan_year(plan, parameter, slot, got, counts),
                          None)]
             answer = {"value": years[0], **base}
-            if len(years) > 1 and span().search(words) \
-                    and years[-1] > years[0]:
+            if len(years) > 1 and rules.get("years_in_words") == "span_ends" \
+                    and span().search(words) and years[-1] > years[0]:
                 answer["until"] = years[-1]
             return [(answer, None)]
         merged = getattr(slot, "merged", None)
         if merged and merged in plan.names:
             besides = tuple((o.label, o.definition) for o in slot.options)
-            group = bool(getattr(parameter, "takes_group",
-                                 rules.get("default_takes_group")))
+            group = group_taken(parameter)
             picked = self.name_of(plan, merged, words, got, counts,
                                   work=self.work_of(plan, row),
                                   besides=besides, group=group,
@@ -1838,11 +2323,13 @@ class Reader:
         claim = row.claim
         what = claim.get("what_raw") or claim.get("what") \
             if claim.get("what_state") == READ else None
-        said = [what, claim.get("head"),
-                claim.get("unit_raw") or claim.get("unit")]
-        words = " / ".join(str(s) for s in said if s) \
+        parts = {"what": what, "head": claim.get("head"),
+                 "unit": claim.get("unit_raw") or claim.get("unit")}
+        said = [parts[name] for name in rules.get("quantity_words")
+                if name in parts]
+        words = rules.get("quantity_joiner").join(str(s) for s in said if s) \
             or str(claim.get("value_raw") or claim.get("value"))
-        shown, _payload = show_value(plan, claim, headings=False)
+        shown, _payload = show_value(plan, claim, plain=True)
         own = shown.blocks.get("")
         if what:
             quote = claim.get("what_quote") or claim.get("quote")
@@ -1878,8 +2365,7 @@ class Reader:
         payload = {"words": got.words,
                    "lines": [line.text for line, _ in got.lines],
                    "question": slot.question or slot.name,
-                   "list": [f"{i} {b['year']} ({b['state']}: {b['quote']})"
-                            for i, b in enumerate(listed, start=1)]}
+                   "list": years_listed(listed)}
         reply = self._ask("list", payload, plan.document_id, entry_format(),
                           {"entry": 1}, counts, parameter=parameter.uri,
                           coordinate=slot.name, step="plan_years")
@@ -1899,9 +2385,8 @@ class Reader:
         listed = [b for b in plan.bases if b.get("axis") == slot.name]
         shown, payload = show_value(plan, row.claim)
         payload = {**payload, "question": slot.question or slot.name,
-                   "list": [f"{i} {b['year']} ({b['state']}: {b['quote']})"
-                            for i, b in enumerate(listed, start=1)]}
-        example = {"at": first_address(shown, False), "words": fields.said(),
+                   "list": years_listed(listed)}
+        example = {**point(shown, False), "words": fields.said(),
                    "entry": 1}
         reply = self._ask("list", payload, plan.document_id, year_format(),
                           example, counts, **{**noted, "step": "plan_years"})
@@ -1928,7 +2413,14 @@ class Reader:
         the rule `question_as_sentence` takes none is the field's own
         sentence instead, and a question taken is counted. *before* are the
         sentences of the rounds before, shown where a new one is asked
-        (`phrase` with `before`)."""
+        (`phrase` with `before`). The rule `search_with` may take the
+        field's question or the coordinate's name instead, with no request
+        for a sentence."""
+        how = rules.get("search_with")
+        if how == "question":
+            return slot.question or slot.name
+        if how == "name":
+            return slot.name
         sentence = self.sentence(plan, read, row, slot, counts, before)
         if is_question(sentence) and not rules.get("question_as_sentence"):
             sentence = self.field_sentence(plan, read, slot)
@@ -1940,10 +2432,21 @@ class Reader:
         return sentence
 
     def field_sentence(self, plan: Plan, read: Read, slot) -> str:
-        """The field's own search sentence, else its question or name: what
-        a search goes with where no sentence was written for it."""
-        return next(iter(self.probes(read.batch.parameter, plan.document_id)
-                         or ()), "") or slot.question or slot.name
+        """What a search goes with where no sentence was written for it
+        (rule `search_fallback`): the field's own search sentence, else its
+        question or name; or its question, or its name, or none."""
+        return self.fallback(plan, read.batch.parameter, slot)
+
+    def fallback(self, plan: Plan, parameter, slot) -> str:
+        how = rules.get("search_fallback")
+        if how == "none":
+            return ""
+        if how == "name":
+            return slot.name
+        if how == "question":
+            return slot.question or slot.name
+        return next(iter(self.probes(parameter, plan.document_id) or ()),
+                    "") or slot.question or slot.name
 
     def sentence(self, plan: Plan, read: Read, row: Row, slot,
                  counts: Counts, before: Optional[list] = None) -> str:
@@ -1966,8 +2469,7 @@ class Reader:
             sentence = plan.lists[key]
         if sentence:
             return sentence
-        return next(iter(self.probes(parameter, plan.document_id) or ()),
-                    "") or slot.question or slot.name
+        return self.fallback(plan, parameter, slot)
 
     def _sentence(self, plan: Plan, parameter, slot, row: Row, words: str,
                   counts: Counts, before: Optional[list] = None) -> str:
@@ -1975,23 +2477,31 @@ class Reader:
             return ""
         at = row.claim.get("at") or {}
         owner = tuple(at.get("owner") or ())
-        shown, _payload = show_value(plan, row.claim, headings=False)
+        shown, _payload = show_value(plan, row.claim, plain=True)
         own = shown.blocks.get("")
         lines = [line.text for line, _ in own.lines] if own else []
         context = {key: value for key, value
                    in (self.context(plan.document_id) or {}).items()
                    if isinstance(value, str) and value.strip()}
-        if not context and plan.title_page:
+        if not context and plan.title_page \
+                and rules.get("document_name_fallback"):
             context = {"name": plan.title_page[0][0].text}
         heads = [line.text for line, _ in plan.headings(owner)] \
-            if owner else []
-        payload = {"label": parameter.label,
-                   "description": parameter.description,
-                   **({"document": context} if context else {}),
-                   "question": slot.question or slot.name,
-                   "value": {"words": words, "lines": lines},
-                   **({"headings": heads} if heads else {}),
-                   **({"before": list(before)} if before else {})}
+            if owner and rules.get("show_headings") else []
+        shows = rules.get("phrase_shows")
+        payload = {
+            **({"label": parameter.label} if "label" in shows else {}),
+            **({"description": parameter.description}
+               if "description" in shows else {}),
+            **({"document": context} if context and "document" in shows
+               else {}),
+            **({"question": slot.question or slot.name}
+               if "question" in shows else {}),
+            **({"value": {"words": words, "lines": lines}}
+               if "value" in shows else {}),
+            **({"headings": heads} if heads and "headings" in shows else {}),
+            **({"before": list(before)} if before and "before" in shows
+               else {})}
         reply = self._ask("phrase", payload, plan.document_id,
                           phrase_format(), None, counts,
                           parameter=parameter.uri, coordinate=slot.name)
@@ -2004,7 +2514,8 @@ class Reader:
         """(rows made, held, what it asks to fetch) of one request of a
         search: the value's place and the pieces *batch* under letters of
         their own."""
-        shown, _ = show_value(plan, row.claim, headings=slot.name != "work")
+        shown, base = show_value(
+            plan, row.claim, headings=False if slot.name == "work" else None)
         letters: list = []
         for chunk in batch:
             letter = shown.letter_for(chunk.owner)
@@ -2016,7 +2527,14 @@ class Reader:
              shown.blocks[letter].entries[0][2].owner_id)), shown, letter)
             for letter in letters}
         several = self.several(slot)
-        ask_payload = {**payload, "passages": blocks}
+        # What the value's place shows is what this step says (its own
+        # values of the rules `show_*`), not what the step before it showed.
+        known = self.known(row.claim, [slot.name]) \
+            if rules.get("show_known") else {}
+        ask_payload = {**base, "field": field_shown(read.batch.parameter),
+                       "question": slot.question or slot.name,
+                       **({"known": known} if known else {}),
+                       "passages": blocks}
         example = self.coord_example(shown, several)
         reply = self._ask("search", ask_payload, plan.document_id,
                           coord_format(several, more=True), example, counts,
@@ -2029,7 +2547,9 @@ class Reader:
             got = resolve(shown, entry, plan.passages)
             if got.why is None and got.letter in letters_others() \
                     and got.source is not None \
-                    and (got.source.owner_kind, got.source.owner_id) != own \
+                    and (rules.get("about_other") == "any"
+                         or (got.source.owner_kind, got.source.owner_id)
+                         != own) \
                     and self.asks.check is not None \
                     and about_box() is not None \
                     and not self.about(plan, row, slot, got, counts, noted):
@@ -2039,8 +2559,12 @@ class Reader:
             else []
         if not kept:
             return [], False, more
-        answer = {**reply, "found": kept} if several \
-            else {**reply, **kept[0]}
+        # The first find alone is the answer where the rule says so: the
+        # list of finds a reply may still carry is not read besides it.
+        answer = {**reply, "found": kept} \
+            if several or rules.get("search_finds_taken") == "all" \
+            else {**{key: value for key, value in reply.items()
+                     if key != "found"}, **kept[0]}
         made, held = self.take(plan, read, row, slot, shown, answer,
                                   ask_payload, "search", example, counts,
                                   clone, window, noted)
@@ -2049,20 +2573,39 @@ class Reader:
     def about(self, plan: Plan, row: Row, slot, got: Found, counts: Counts,
               noted: dict) -> bool:
         """Does the place a find of another passage stands in speak about
-        this value (`check`, owner decision 2026-11-07)?"""
-        _shown, payload = show_value(plan, row.claim, headings=False)
-        ask_payload = {"value": payload.get("value"),
-                       "passage": payload.get("passage"),
-                       "question": slot.question or slot.name,
-                       "answer": got.words,
-                       "place": [line.text for line, _ in got.lines]}
+        this value (`check`, owner decision 2026-11-07)? The box that
+        checks reads its own values (`about_shows`, `about_no_reply`)."""
         what = ASKING.get()
-        with asking(Asking(about_box(), None, None,
-                           what.follow_ups if what is not None else None)):
-            reply = self._ask("check", ask_payload, plan.document_id,
-                              about_format(), {"about": "yes"}, counts,
-                              **noted)
-        return isinstance(reply, dict) and reply.get("about") == "yes"
+        step = what.about_step() if what is not None \
+            and what.about_step is not None else contextlib.nullcontext()
+        with step:
+            shows = rules.get("about_shows")
+            shown, payload = show_value(plan, row.claim, plain=True)
+            owner = tuple(((row.claim.get("at") or {}).get("owner")) or ())
+            heads = [line.text for line, _ in plan.headings(owner)] \
+                if owner and "headings" in shows \
+                and rules.get("show_headings") else []
+            ask_payload = {
+                **({"value": payload.get("value")} if "value" in shows
+                   else {}),
+                **({"passage": block_payload(plan.passages.get(owner), shown)
+                    if owner in plan.passages else None}
+                   if "passage" in shows else {}),
+                **({"headings": heads} if heads else {}),
+                **({"question": slot.question or slot.name}
+                   if "question" in shows else {}),
+                **({"answer": got.words} if "answer" in shows else {}),
+                **({"place": [line.text for line, _ in got.lines]}
+                   if "place" in shows else {})}
+            with asking(Asking(about_box(), None, None,
+                               what.follow_ups if what is not None
+                               else None)):
+                reply = self._ask("check", ask_payload, plan.document_id,
+                                  about_format(), {"about": "yes"}, counts,
+                                  **noted)
+            if not isinstance(reply, dict):
+                return rules.get("about_no_reply") == "keep"
+            return reply.get("about") == "yes"
 
     def fetch(self, plan: Plan, more, batch: list, seen: set,
               numbers: bool = False) -> list:
@@ -2071,7 +2614,7 @@ class Reader:
         shown one, a table or figure by its placeholder, the pieces a
         pattern stands in, the pieces best for a sentence of its own."""
         pieces = plan.pieces(numbers)
-        places = plan.places[bool(numbers)]
+        places = plan.places_of(numbers)
         out: list = []
         for ask in more if isinstance(more, list) else ():
             if not isinstance(ask, dict) or not batch:
@@ -2094,13 +2637,12 @@ class Reader:
                                            found.owner_id)][:1]
             elif get == "search":
                 try:
-                    wanted = re.compile(ask.get("pattern") or "", re.I)
-                except re.error:
+                    wanted = regex.compile(ask.get("pattern") or "",
+                                           regex.I)
+                except (regex.error, TypeError, ValueError):
                     continue
                 if wanted.pattern:
-                    out += [c for c in pieces
-                            if c.key not in seen
-                            and wanted.search(c.text())][:self.per_request]
+                    out += self.matching(wanted, pieces, seen)
             elif get == "similar":
                 text = ask.get("text") or ""
                 if text.strip():
@@ -2108,6 +2650,30 @@ class Reader:
                         plan.document_id, [text], pieces)
                         if c.key not in seen][:self.per_request]
         return [c for c in dict.fromkeys(out) if c.key not in seen]
+
+    def matching(self, wanted, pieces: list, seen: set) -> list:
+        """The pieces a pattern the model wrote stands in, not shown yet,
+        as many as a request shows. The pattern runs for the rule
+        `pattern_timeout_s` seconds at most over all the pieces; one that
+        does not finish stands in none (it is a pattern of the model's,
+        which can backtrack without end)."""
+        limit = float(rules.get("pattern_timeout_s"))
+        deadline = time.monotonic() + limit
+        found: list = []
+        try:
+            for piece in pieces:
+                if piece.key in seen:
+                    continue
+                left = deadline - time.monotonic()
+                if left <= 0:
+                    raise TimeoutError
+                if wanted.search(piece.text(), timeout=left):
+                    found.append(piece)
+        except TimeoutError:
+            log.warning("a pattern of the model did not finish within %s s: "
+                        "%s", limit, wanted.pattern)
+            return []
+        return found[:self.per_request]
 
     # -- names -----------------------------------------------------------------------
 
@@ -2123,9 +2689,8 @@ class Reader:
         at = claim.get("at") or {}
         passage = plan.passages.get(tuple(at.get("owner") or ()))
         number = int(at.get("line") or 1)
-        lines = [(line, source) for line, source
-                 in (passage_lines(passage, [number]) if passage else [])
-                 if line.number == number]
+        lines = [(passage.line(number), passage.source)] \
+            if passage is not None and passage.line(number) else []
         got = Found(lines=lines, passage=passage, words=claim["value"])
         picked = self.name_of(plan, parameter.merged, claim["value"], got,
                               counts, work=self.work_of(plan, row),
@@ -2217,21 +2782,23 @@ class Reader:
         not hold is asked again with its reason (as often as the flow
         says). None where no answer came."""
         shown = Shown()
-        heads = plan.headings(chunk.owner)
+        heads = plan.headings(chunk.owner) \
+            if rules.get("show_headings") else []
+        title = plan.title_page if title_page_shown(plan) else []
         shown.add(letter_headings(), "headings", heads, renumber=True)
-        shown.add(letter_title_page(), "title_page", plan.title_page, renumber=True)
+        shown.add(letter_title_page(), "title_page", title, renumber=True)
         shown.add("", "passage", own_lines(chunk))
         payload = {"field": shown_field,
                    **({"headings": shown.rendered(letter_headings())}
                       if heads else {}),
                    **({"title_page": shown.rendered(letter_title_page())}
-                      if plan.title_page else {}),
+                      if title else {}),
                    "passage": block_payload(chunk.passage, shown)}
         other, _ = find_example(shown)
         own_at = f"{letter_headings()}{len(heads)}" if heads \
             else first_address(shown, False)
-        example = ({**other, "own": {"at": 0, "words": ""}},
-                   {"found": [], "own": {"at": own_at,
+        example = ({**other, "own": {address_key(): 0, "words": ""}},
+                   {"found": [], "own": {**point(shown, False, at=own_at),
                                          "words": fields.said()}})
         noted = {"parameter": "work", "kind": chunk.passage.kind,
                  "owner": chunk.passage.source.owner_id, "chunk": chunk.index}
@@ -2268,7 +2835,7 @@ class Reader:
         names as showing the rest of the piece is this publication's own:
         it counts where it stands among the piece's lines or headings, or
         on the title page in the piece itself; 0 names none."""
-        if not isinstance(raw, dict) or address_of(raw.get("at")) is None:
+        if not has_address(raw):
             return None, None
         got = resolve(shown, raw, plan.passages)
         if got.why is not None:
@@ -2286,12 +2853,13 @@ class Reader:
         speaks for: the whole piece (None) where it stands in a heading or
         in what every piece of its passage shows (a table's title and head,
         a figure's caption), else its own lines."""
-        if found.letter == letter_headings():
-            return None
-        if found.letter == "" and found.lines and all(
-                line.number in chunk.passage.fixed
-                for line, _ in found.lines):
-            return None
+        if rules.get("work_find_covers_piece"):
+            if found.letter == letter_headings():
+                return None
+            if found.letter == "" and found.lines and all(
+                    line.number in chunk.passage.fixed
+                    for line, _ in found.lines):
+                return None
         return {((source.owner_kind, source.owner_id), line.number)
                 for line, source in found.lines}
 
@@ -2305,7 +2873,7 @@ class Reader:
         checked against itself."""
         ask_payload = {**payload, "work": label,
                        "field": field_shown(parameter), "question": question}
-        example = {"at": first_address(shown, False), "words": fields.said()}
+        example = {**point(shown, False), "words": fields.said()}
         reply = self._ask("coord", ask_payload, plan.document_id,
                           coord_format(False), example, counts,
                           parameter=parameter.uri, coordinate="work")
@@ -2356,7 +2924,7 @@ class Reader:
         listed = [f"{number} {text}" for number, text in works.shown()]
         payload = {**payload, "field": field_shown(parameter),
                    "question": slot.question or slot.name, "list": listed}
-        example = {"entry": 1, "at": first_address(shown, False),
+        example = {"entry": 1, **point(shown, False),
                    "words": fields.said()}
         noted = {"parameter": parameter.uri, "coordinate": slot.name,
                  "owner": ((row.claim.get("at") or {}).get("owner")
@@ -2387,7 +2955,7 @@ class Reader:
         pick = picked_entry(reply.get("entry"), len(works.entries))
         if pick is None:
             return [say(NOT_AN_OPTION, given=reply.get("entry"))]
-        if pick == 0 or address_of(reply.get("at")) is None:
+        if pick == 0 or not has_address(reply):
             row.claim[f"{slot.name}_state"] = SAID_UNSTATED
             return []
         got = resolve(shown, reply, plan.passages)
@@ -2403,7 +2971,8 @@ class Reader:
         """The work *number* of the document's list read onto a value with
         the line *got* names as its quote (`merge_field`): [] where it holds,
         [what did not hold] else."""
-        uri = THIS_PUBLICATION if number == 1 else ANOTHER_WORK
+        first = number == 1 and rules.get("this_publication_first")
+        uri = THIS_PUBLICATION if first else ANOTHER_WORK
         option = next((o.label for o in slot.options if o.uri == uri), uri)
         row.claim.pop(f"{slot.name}_state", None)
         result = merge_field([row], evidence, slot, {"answers": {row.label: {
@@ -2426,13 +2995,50 @@ class Reader:
         are named for, or none, is the value's own to ask."""
         got = self.piece_work(plan, row.claim)
         if got is None:
-            return False
+            return bool(rules.get("work_without_line")
+                        and self.work_by_piece(plan, row, slot))
         number, found, evidence = got
         works = plan.names["work"]
         if not 0 < number <= len(works.entries):
             return False
         return not self.take_work(row, slot, number, found, evidence,
                                   ("piece", 1), works)
+
+    def work_by_piece(self, plan: Plan, row: Row, slot) -> bool:
+        """Does the value take the work its piece names, or this
+        publication where it names none, with no line that names it (rule
+        `work_without_line`)? The value's own line is its quote. A piece
+        that names two works leaves the value to ask."""
+        claim = row.claim
+        at = claim.get("at") or {}
+        owner = tuple(at.get("owner") or ())
+        line = int(at.get("line") or 0)
+        works = plan.names["work"]
+        if len(owner) != 2 or line <= 0:
+            return False
+        chunk = plan.chunk_of(owner, line, False)
+        info = plan.works_of.get(chunk.key) if chunk is not None else None
+        named = {number for _, number, _ in info.finds} if info else set()
+        if len(named) == 1:
+            number = next(iter(named))
+        elif not named and rules.get("this_publication_first"):
+            number = 1
+        else:
+            return False
+        if not 0 < number <= len(works.entries):
+            return False
+        shown, _payload = show_value(plan, claim)
+        words = str(claim.get("value_raw") or claim.get("value") or "")
+        place = f"{line}.{at['cell']}" if at.get("cell") else str(line)
+        got = resolve(shown, {"at": place, "words": words}, plan.passages)
+        if got.why is not None:
+            return False
+        if self.take_work(row, slot, number, got, shown.evidence(),
+                          ("piece", 1), works):
+            return False
+        self._traced("second_way", plan.document_id,
+                     rule="work_without_line", work=number)
+        return True
 
     @staticmethod
     def piece_work(plan: Plan, claim: dict) -> Optional[tuple]:
@@ -2482,12 +3088,22 @@ def own_check(got: Found) -> Optional[tuple]:
     return what.refused(got)
 
 
+def years_listed(listed: list) -> list:
+    """The plan's years as a request lists them, each with the state it is
+    the year of and, where the rule `year_list_quote` says so, the line that
+    says it."""
+    quote = rules.get("year_list_quote")
+    return [f"{i} {b['year']} ({b['state']}: {b['quote']})" if quote
+            else f"{i} {b['year']} ({b['state']})"
+            for i, b in enumerate(listed, start=1)]
+
+
 def settings_of(plan: Plan) -> dict:
     """{"settings": lines} of what the plan settles for all its values,
     shown beside a list's entries, {} where it settles nothing: they hold
     for every value, also where the entry of a wording depends on them
     (emissions given in CO2 equivalents)."""
-    if not plan.settings:
+    if not plan.settings or not rules.get("show_settled"):
         return {}
     return {"settings": [line.text for line, _ in plan.settings]}
 
@@ -2529,7 +3145,8 @@ def make_order(reranker: Optional[Callable], rank: Optional[Callable]
 
     def rerank(document_id: int, sentences: list, chunks: list) -> list:
         sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
-        if reranker is None or not sentences or len(chunks) < 2:
+        if reranker is None or not sentences \
+                or len(chunks) < rules.get("rerank_least_pieces"):
             return list(chunks)
         if getattr(local, "reranker", None) is None:
             local.reranker = reranker()
@@ -2612,7 +3229,8 @@ class Orders:
                     kept = json.loads(path.read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     kept = None
-            if kept and kept.get("key") == key:
+            if kept and kept.get("key") == key \
+                    and rules.get("reuse_stored_order"):
                 order = kept.get("order") or {}
                 if set(order) == set(pieces) and all(
                         {tuple(k) for k in keys}

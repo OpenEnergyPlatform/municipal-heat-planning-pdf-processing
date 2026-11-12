@@ -1,0 +1,12 @@
+{
+  "flow": [
+    {
+      "id": "example_example",
+      "box": "example",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 1024
+      }
+    }
+  ]
+}

@@ -19,9 +19,45 @@ from __future__ import annotations
 import difflib
 import hashlib
 import os
-from typing import Optional
+import re
+from pathlib import Path
+from typing import Callable, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from docpipe import rules as rule_files
+from docpipe import settings
+
+
+ADDRESS_WITH_USER = re.compile(r"^[a-z][a-z0-9+.-]*://[^/]*@", re.I)
+
+
+def masked(value):
+    """What the page is sent of a value: an address keeps its host, port
+    and path but not the user and password before its host, in a list or
+    a map as well."""
+    if isinstance(value, list):
+        return [masked(one) for one in value]
+    if isinstance(value, dict):
+        return {key: masked(one) for key, one in value.items()}
+    if isinstance(value, str) and ADDRESS_WITH_USER.match(value):
+        parts = urlsplit(value)
+        host = parts.hostname or ""
+        if parts.port:
+            host += f":{parts.port}"
+        return urlunsplit(parts._replace(netloc=f"***@{host}"))
+    return value
+
+
+def value_shown(rule, value):
+    """What the page is sent of *rule*'s value: nothing for a key
+    (`secret`), else the value `masked`."""
+    return None if rule.secret else masked(value)
+
+
+def unmasked(value, real):
+    """The value the page sends back for one it was sent `masked`: the real
+    one while it is still the mask, else what the page says."""
+    return real if real != value and masked(real) == value else value
 
 CR, LF = "\r", "\n"
 
@@ -58,8 +94,11 @@ def _own_names(profile) -> set:
             if owner == profile.name for one in own}
 
 
-def view(profile, tab: str, own_raw: Optional[bytes], shown) -> dict:
-    """The rules of *tab* of *profile* as the page shows them."""
+def view(profile, tab: str, own_raw: Optional[bytes], shown,
+         own_at: Optional[dict] = None) -> dict:
+    """The rules of *tab* of *profile* as the page shows them. *own_at* is
+    {rule: [{"id", "kind"} of the steps of the saved flow that give it a
+    value of their own]}; a key's value is never sent."""
     known = rule_files.registry(profile)
     taken = rule_files.load(profile)
     files = rule_files.load(profile, environ={})
@@ -69,15 +108,20 @@ def view(profile, tab: str, own_raw: Optional[bytes], shown) -> dict:
     for one in rule_files.of_tab(tab, profile):
         name = one.name
         owner = files.owners.get(name, "")
+        hidden = one.secret
         out.append({
             "name": name, "group": one.group, "kind": one.kind,
             "help": one.help, "least": one.least, "most": one.most,
             "choices": list(one.choices), "columns": list(one.columns),
             "of": one.of, "empty": one.empty, "decided": one.decided,
             "where": one.where, "setting": one.env,
-            "value": files.values[name],
-            "inherited": (below.values.get(name) if below is not None
-                          and name not in mine else None),
+            "value": value_shown(one, files.values[name]),
+            "steps": list(one.steps), "machine": one.machine,
+            "secret": hidden,
+            "own_at": (own_at or {}).get(name, []),
+            "inherited": (value_shown(one, below.values.get(name))
+                          if below is not None
+                          and name not in mine and not hidden else None),
             "has_inherited": below is not None and name not in mine
             and name in below.values,
             "owner": owner, "own": owner == f"{rule_files.FILE} of "
@@ -85,7 +129,7 @@ def view(profile, tab: str, own_raw: Optional[bytes], shown) -> dict:
             # the profile whose file sets it, for "set in profile ..."
             "set_in": owner.rpartition(" of ")[2] or None,
             "declared_here": name in mine,
-            "in_effect": taken.values[name],
+            "in_effect": value_shown(one, taken.values[name]),
             "origin": taken.owners.get(name, owner)})
     return {"tab": tab, "file": shown(rule_files.path_of(profile)),
             "exists": own_raw is not None,
@@ -115,7 +159,16 @@ def judge(profile, own_raw: Optional[bytes], values, name: str) -> dict:
                                                 "value"})
         values = {}
     for key, value in values.items():
+        value = unmasked(value, files.values.get(key))
         said = rule_files.problem(key, value, known)
+        if said is None and key in known and known[key].secret:
+            said = (f"{key} is a key: it is set in .env or in the "
+                    f"environment, never on this page")
+        elif said is None and key in known and known[key].machine \
+                and value != files.values[key]:
+            said = (f"{key} is a value of this machine: it is set in the "
+                    f"project file docpipe.toml (the Run section of the "
+                    f"Flow tab), never in the rules file of the repository")
         if said is not None:
             errors.append({"name": key if key in known else None,
                            "message": said})
@@ -175,3 +228,90 @@ def save(profile, own_raw: Optional[bytes], values, base: Optional[str],
         return {**told, "base": None}, None, True
     written = text.encode("utf-8")
     return {**told, "base": sha256(written)}, written, False
+
+
+# -- the values of the machine, in the project file ---------------------------
+
+def machine_rows(profile) -> list:
+    """The rules that are values of this machine, each with its value, where
+    it comes from and the key of the project file it is written under. A key
+    (`secret`) is left out: it is never shown and never written here."""
+    taken = rule_files.load(profile)
+    files = rule_files.load(profile, environ={})
+    out = []
+    for one in rule_files.registry(profile).values():
+        if not one.machine or one.secret:
+            continue
+        setting = settings.BY_ENV.get(one.env) if one.env else None
+        out.append({
+            "name": one.name, "tab": one.tab, "group": one.group,
+            "kind": one.kind, "help": one.help, "least": one.least,
+            "most": one.most, "choices": list(one.choices),
+            "columns": list(one.columns), "of": one.of,
+            "empty": one.empty, "decided": one.decided,
+            "setting": one.env, "key": setting.key if setting else None,
+            "value": value_shown(one, files.values[one.name]),
+            "in_effect": value_shown(one, taken.values[one.name]),
+            "origin": taken.owners.get(one.name, "")})
+    return out
+
+
+def project_state(path, shown: Callable) -> dict:
+    """What the page is told of the project file: where it is, whether it
+    exists, and why a value may not be written there (None where it may)."""
+    path = Path(path)
+    return {"file": shown(path), "exists": path.is_file(),
+            "refused": settings.git_refusal(path)}
+
+
+def machine_save(profile, values, path, shown: Callable) -> dict:
+    """Write {rule: value} of the machine's rules into the project file
+    *path* (never a rule that is no value of the machine, never a key; never
+    a file git would commit). What the page is told: {"saved", "reason",
+    "errors", "message", "file", "writes", "changed"}."""
+    known = rule_files.registry(profile)
+    errors = []
+    if not isinstance(values, dict):
+        errors.append({"name": None, "message": "values must be an object, "
+                       "the name of a rule -> its value"})
+        values = {}
+    keyed = {}
+    in_effect = rule_files.load(profile).values
+    for name, value in values.items():
+        one = known.get(name)
+        value = unmasked(value, in_effect.get(name))
+        said = rule_files.problem(name, value, known)
+        if one is not None and one.secret:
+            said = (f"{name} is a key: it is set in .env or in the "
+                    f"environment, never on this page")
+        elif said is None and not one.machine:
+            said = (f"{name} is not a value of this machine: it is set in "
+                    f"the rules file or at a step")
+        elif said is None:
+            setting = settings.BY_ENV.get(one.env) if one.env else None
+            if setting is None or setting.secret or setting.bootstrap:
+                said = (f"{name} has no key in the project file: set it "
+                        f"at the start")
+            elif one.kind not in ("switch", "whole", "number", "text",
+                                  "chars", "texts"):
+                said = f"{name} cannot be written to the project file"
+            else:
+                keyed[setting.key] = value
+        if said is not None:
+            errors.append({"name": name if one is not None else None,
+                           "message": said})
+    if errors:
+        return {"saved": False, "reason": "invalid", "errors": errors,
+                "message": "; ".join(e["message"] for e in errors)}
+    path = Path(path)
+    refused = settings.git_refusal(path)
+    if refused:
+        return {"saved": False, "reason": "git", "message": refused}
+    try:
+        writes = settings.write_project(path, keyed)
+    except settings.ConfigError as exc:
+        return {"saved": False, "reason": "invalid",
+                "message": str(exc)}
+    return {"saved": True, "file": shown(path), "writes": writes,
+            "changed": [{"name": name, "to": value}
+                        for name, value in values.items()]}

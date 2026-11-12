@@ -16,6 +16,11 @@ A pass that went wrong is then undone by copying its archive back; the
 read-to-the-end pass of 2026-10-22 rewrote five plans in place and their
 earlier state had to be fetched from another machine.
 
+Every file a run replaces or deletes goes through `keep` first (owner
+decision 2026-10-22: "kein Ueberschreiben"); a test finds each place in the
+passes that does not. The rule `archive_before_replace` says whether the run
+keeps them.
+
 ## Functions
 
 ### begin
@@ -41,7 +46,8 @@ def keep(path) -> Optional[Path]
 ```
 
 Copy *path* into this run's archive before it is replaced. Returns the
-copy, or None when there is nothing yet to keep. A file this run already
-kept is left as it was kept.
+copy, or None when there is nothing yet to keep or the rule
+`archive_before_replace` is off. A file this run already kept is left as
+it was kept.
 
 [Back to the index](../README.md)

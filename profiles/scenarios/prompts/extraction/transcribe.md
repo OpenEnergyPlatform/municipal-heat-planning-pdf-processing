@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 4096
----
 Write the figure in the image as lines that can be read without the image, in two lists: under "caption" its title first, then one line for each axis with its unit and the names on it, and one line for each legend entry; under "numbers" one line for each number with what it stands for.
 
 * Copy every printed number and every printed word character for character, as the image shows it. Convert nothing.

@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Optional
 
+from docpipe import rules
+
 from . import schema as schemas
 
 # How a provider's own word for "why it stopped" reads to a stage.
@@ -176,6 +178,44 @@ def decoded(text: str, decode) -> str:
     return text if decode is None else schemas.decoder_text(decode, text)
 
 
+def thinking_room(endpoint: Endpoint) -> int:
+    """The tokens a hosted model may think in beyond the answer room of a
+    request, as the step that sends it says (rule `thinking_room_tokens`):
+    read where the request is sent, not when the client was built."""
+    from docpipe import rules
+    return int(rules.get("thinking_room_tokens"))
+
+
+def options_of(endpoint: Endpoint) -> dict:
+    """What an installation adds to the request body of this endpoint's
+    role: for the text model the rule `request_options` of the step that
+    sends the request, for any other role what its client was built with."""
+    if endpoint.role != "llm":
+        return endpoint.options
+    from . import request_options
+    return request_options("llm")
+
+
+def schema_dialect(natural: str) -> str:
+    """The dialect a hosted API's reply schema is written in: *natural*, the
+    API's own, or the one the step's rule `schema_dialect` names."""
+    from docpipe import rules
+    chosen = rules.get("schema_dialect")
+    if chosen == "by_provider":
+        return natural
+    return (schemas.ALL_REQUIRED if chosen == "all_required"
+            else schemas.OPTIONAL)
+
+
+def optional_budget() -> tuple:
+    """(optional properties, properties with alternatives) a hosted API
+    that counts them compiles (rules `schema_optional_fields`,
+    `schema_optional_alternatives`)."""
+    from docpipe import rules
+    return (rules.get("schema_optional_fields"),
+            rules.get("schema_optional_alternatives"))
+
+
 def merge(into: dict, extra: dict) -> dict:
     """`extra` laid over `into`, table by table."""
     for key, value in (extra or {}).items():
@@ -189,11 +229,15 @@ def merge(into: dict, extra: dict) -> dict:
 # A sampling parameter some models refuse outright. Which ones is the
 # API's to say and changes with every release, so it is learned: the first
 # request a model refuses over it is sent again without, and no later one
-# carries it.
+# carries it. The rule `learn_no_temperature` switches that off: a refused
+# temperature then raises like any other refusal.
 _NO_TEMPERATURE: set = set()
 
 
 def sends_temperature(provider: str, model: str) -> bool:
+    from docpipe import rules
+    if not rules.get("learn_no_temperature"):
+        return True
     return (provider, model) not in _NO_TEMPERATURE
 
 
@@ -204,6 +248,9 @@ def refused_temperature(provider: str, model: str, exc: BaseException) -> bool:
     requests that were under way when the first refusal came are refused
     the same way, and each is sent again without.
     """
+    from docpipe import rules
+    if not rules.get("learn_no_temperature"):
+        return False
     status = getattr(exc, "status_code", None)
     if status != 400 or "temperature" not in str(exc).lower():
         return False

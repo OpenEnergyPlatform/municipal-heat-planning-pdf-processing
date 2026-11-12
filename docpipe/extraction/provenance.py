@@ -160,8 +160,8 @@ SCHEMES = {
     "OutsideVocabulary": ("total", "other"),
     "ReadingNote": ("period_unstated",),
     "TrustLevel": trust.LEVELS,
-    "TrustReason": ("page_transcribed", fields.EXHAUSTED, fields.UNBACKED,
-                    fields.UNANSWERED, "computed", trust.CATALOGUE,
+    "TrustReason": ("page_transcribed", *trust.STATE_REASONS,
+                    "computed", trust.CATALOGUE,
                     "not_located", "disagree", "conflict"),
     "ReviewOutcome": ("agree", "disagree", fields.UNBACKED),
 }
@@ -196,7 +196,7 @@ def _reason_term(reason: str) -> Optional[str]:
     if reason in _REASON:
         return _REASON[reason]
     state = reason.split(":", 1)[0]
-    if state in (fields.EXHAUSTED, fields.UNBACKED, fields.UNANSWERED):
+    if state in trust.STATE_REASONS:
         return state
     return None
 

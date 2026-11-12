@@ -435,3 +435,57 @@ def test_a_record_the_title_finds_is_matched_against_the_front_page_authors():
     outcome = completion.complete(report, SPEC, fetch=looked(found)[0],
                                   fetch_doi=lambda doi: None)
     assert outcome["outcome"] == "authors" and looked_up(report) == {}
+
+
+# -- the catalogue is a step of the flow (owner decision 2026-11-11) --
+
+def test_the_catalogue_runs_where_its_box_is_on_and_not_otherwise(
+        monkeypatch):
+    from docpipe.extraction import flow as flow_map
+    from docpipe.profile import load_profile
+    scenarios = load_profile("scenarios")
+    shipped = flow_map.tree_of(scenarios)
+    assert runner.make_completer(scenarios) is not None
+    off = [dict(node, off=True) if node.get("box") == "catalogue" else node
+           for node in shipped]
+    monkeypatch.setattr(flow_map, "tree_of", lambda profile=None: off)
+    assert runner.make_completer(scenarios) is None
+    gone = [node for node in shipped if node.get("box") != "catalogue"]
+    monkeypatch.setattr(flow_map, "tree_of", lambda profile=None: gone)
+    assert runner.make_completer(scenarios) is None
+    # a profile with no completion has none, whatever the flow says
+    monkeypatch.setattr(flow_map, "tree_of", lambda profile=None: shipped)
+    assert runner.make_completer(load_profile("kwp")) is None
+
+
+def test_a_value_set_at_the_catalogue_box_is_the_one_the_lookup_reads():
+    from docpipe import rules
+    title = read("publication_title", TITLE)
+    report = report_of(title, *AUTHORS)
+    completion.complete(report, SPEC, fetch=looked(RECORD)[0])
+    assert set(looked_up(report)) == {"publication_doi", "publication_date"}
+    report = report_of(title, *AUTHORS)
+    box = {"id": "catalogue", "box": "catalogue"}
+    with rules.in_step(rules.stepped(
+            box, {"catalogue_fills": ["publication_doi"]})):
+        completion.complete(report, SPEC, fetch=looked(RECORD)[0])
+    assert set(looked_up(report)) == {"publication_doi"}
+
+
+def test_the_catalogue_stands_once_after_compute_at_the_end():
+    from docpipe.extraction import flow as flow_map
+    from docpipe.profile import load_profile
+    scenarios = load_profile("scenarios")
+    shipped = flow_map.tree_of(scenarios)
+    known = flow_map.known_rules(scenarios)
+    assert flow_map.problems(shipped, known) == []
+    box = next(node for node in shipped if node.get("box") == "catalogue")
+    twice = shipped + [dict(box, id="catalogue_2")]
+    assert any("catalogue stands once" in one["message"]
+               for one in flow_map.problems(twice, known))
+    first = [node for node in shipped if node is not box]
+    at = next(i for i, node in enumerate(first)
+              if node.get("box") == "compute")
+    before = first[:at] + [box] + first[at:]
+    assert any("stand in this order" in one["message"]
+               for one in flow_map.problems(before, known))

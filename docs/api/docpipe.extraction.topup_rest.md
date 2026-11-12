@@ -45,6 +45,25 @@ def read_owners(directory: Path, name: str) -> set
 `owners_in` over the trace of *name* in *directory*, read for its rows
 requests alone; empty when there is none.
 
+### skips_unknown_reading
+
+```python
+def skips_unknown_reading() -> bool
+```
+
+Whether a document whose earlier readings cannot be told (no record,
+no survey) is skipped and not read whole (rule
+`rest_without_trace`).
+
+### done_to_end
+
+```python
+def done_to_end(stamp_path: Path) -> bool
+```
+
+Whether the pass for the rest of the plan reads the document no more
+because it has read it to its end (rule `rest_once_per_document`).
+
 ### read_to_end
 
 ```python

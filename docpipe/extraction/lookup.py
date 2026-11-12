@@ -17,14 +17,8 @@ from typing import Optional
 
 import regex
 
+from .. import rules
 from .pipeline import Source
-
-# A pattern is written by the model and can backtrack without end; the search
-# gives up after this many seconds and reports it instead of hanging the run.
-PATTERN_TIMEOUT_S = 1.0
-
-# Characters kept on each side of the match in a hit's line.
-NEIGHBOURHOOD = 60
 
 _ITEM_KINDS = ("table", "figure")
 
@@ -51,6 +45,23 @@ def following(passages: list[Source], owner: tuple[str, int],
                 return passages[i]
         i += direction
     return None
+
+
+def fetch_run(passages: list[Source], owner: tuple[str, int],
+              forward: bool) -> list[Source]:
+    """The sections an ask for "next" (*forward*) or "previous" brings in
+    one go: as many as the rule `fetch_next` says, each the one after the
+    one before it (`following`), fewer where the plan ends first. The
+    nearest to *owner* first."""
+    out: list[Source] = []
+    here = tuple(owner)
+    for _ in range(rules.get("fetch_next")):
+        found = following(passages, here, 1 if forward else -1)
+        if found is None:
+            break
+        out.append(found)
+        here = (found.owner_kind, found.owner_id)
+    return out
 
 
 def sections_up_to(passages: list[Source], owner: tuple[str, int],
@@ -95,7 +106,8 @@ def continued(passages: list[Source]) -> list[Source]:
     break or within a page, loses its title, head and unit in its later
     parts, and whether it is the same table is the model's reading. A table
     may continue the table right before it when that table stands on its
-    page or the page before and has a transcribed head; what stands between
+    page or up to the rule `table_continues_pages` pages before and has a
+    transcribed head; what stands between
     them, a heading included, does not part them. The transcription asks
     and joins by the same rule (`docpipe.visuals.continuation`)."""
     out: list = []
@@ -104,8 +116,10 @@ def continued(passages: list[Source]) -> list[Source]:
         if passage.owner_kind == "table":
             page = page_of(passage)
             head = head_of(previous.text) if previous is not None else ""
-            if (head and page is not None
-                    and page_of(previous) in (page - 1, page)):
+            before = page_of(previous) if previous is not None else None
+            if (head and page is not None and before is not None
+                    and page - rules.get("table_continues_pages")
+                    <= before <= page):
                 passage = Source(
                     passage.owner_kind, passage.owner_id, passage.text,
                     {**(passage.provenance or {}), "table_before": {
@@ -157,13 +171,16 @@ def title_of(p: Source) -> str:
 
 
 def _neighbourhood(text: str, found) -> str:
+    """The hit's line with the characters of the rule `pattern_hit_chars` on
+    each side of the match."""
+    around = rules.get("pattern_hit_chars")
     start, end = found.span()
-    end = min(end, start + 2 * NEIGHBOURHOOD)
+    end = min(end, start + 2 * around)
     line_start = text.rfind("\n", 0, start) + 1
     line_end = text.find("\n", end)
     line_end = len(text) if line_end < 0 else line_end
-    lo = max(line_start, start - NEIGHBOURHOOD)
-    hi = min(line_end, end + NEIGHBOURHOOD)
+    lo = max(line_start, start - around)
+    hi = min(line_end, end + around)
     return text[lo:hi].strip()
 
 
@@ -180,12 +197,16 @@ def matching(passages: list[Source], pattern: str, room: int) -> Matches:
     hits: list[dict] = []
     total = used = 0
     full = False
+    # A pattern is written by the model and can backtrack without end: the
+    # search gives up after the rule `pattern_timeout_s` seconds on one
+    # passage and reports it instead of hanging the run.
+    limit = rules.get("pattern_timeout_s")
     for p in passages:
         try:
-            found = compiled.search(p.text or "", timeout=PATTERN_TIMEOUT_S)
+            found = compiled.search(p.text or "", timeout=limit)
         except TimeoutError:
             return Matches([], 0, "timeout",
-                           f"no result within {PATTERN_TIMEOUT_S} s")
+                           f"no result within {limit} s")
         if not found:
             continue
         total += 1
@@ -201,11 +222,16 @@ def matching(passages: list[Source], pattern: str, room: int) -> Matches:
         hits.append(hit)
     return Matches(hits, total)
 
-def two_pages(passages: list, pages: Optional[int], span: int = 2) -> int:
+
+def two_pages(passages: list, pages: Optional[int],
+              span: Optional[float] = None) -> int:
     """The text of *span* pages of this plan, in characters: *span* times
-    its mean; two pages unless said otherwise. What the compute step cuts a
-    passage it fetches to. A figure's description is not counted: a figure
-    is never cut, whatever its description's length."""
+    its mean; the rule `compute_fetch_pages` pages unless said otherwise.
+    What the compute step cuts a passage it fetches to. A figure's
+    description is not counted: a figure is never cut, whatever its
+    description's length."""
+    if span is None:
+        span = rules.get("compute_fetch_pages")
     chars = sum(len(p.text or "") for p in passages
                 if p.owner_kind != "figure")
     if not pages:

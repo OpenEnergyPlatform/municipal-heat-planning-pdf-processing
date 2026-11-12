@@ -24,7 +24,7 @@ plans and answers in German; its accepted values go into MHPKG on the Open
 Energy Platform. `scenarios` covers publications on climate and energy scenarios and
 answers in English; its accepted values go into OEKG, whose identifiers
 are minted under the Open Energy Platform's own domain by default
-(`profiles/scenarios/kg.py`). The three share every module under `docpipe/`;
+(the graph rule `base` of its `graph.json`). The three share every module under `docpipe/`;
 what differs is confined to their own directory: where the documents come
 from, what a document's metadata looks like, and the questions their
 extraction stage asks.

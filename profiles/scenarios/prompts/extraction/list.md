@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 512
----
 Give the number of the entry under "list" that the words under "words" mean as the answer to the question under "question".
 
 * Decide by meaning, not by spelling: what an entry means stands after "means".

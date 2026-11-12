@@ -299,10 +299,10 @@ class Document:
             return self._chosen[field_]
         offered = self.by_field.get(field_) or []
         value = None
+        if offered and field_ in (self.rule("front_first_fields") or ()):
+            offered = in_order(offered, self.front, self.rule("front_order"))
         if offered:
-            if field_ in (self.rule("front_first_fields") or ()):
-                offered = in_order(offered, self.front)
-            value, others = pick_one(offered)
+            value, others = pick_one(offered, self.rule("pick_one_order"))
             if others:
                 self.contested[field_] = others
         self._chosen[field_] = value
@@ -475,7 +475,10 @@ class Writer:
             doc.by_field.setdefault(row.get("parameter"), []).append(row)
         front = drawing.document.get("front_pages")
         if front:
-            doc.front = front_pages(doc.by_field.get(front, ()))
+            doc.front = front_pages(
+                doc.by_field.get(front, ()),
+                which=self.rules.get("front_pages_rule"),
+                extra=self.rules.get("front_pages_extra"))
         # 2. the rows of a box of numbers
         for box in drawing.boxes:
             if box["count"] != "per_value":
@@ -701,6 +704,8 @@ class Writer:
                 iri, group, address, fold=doc.fold,
                 wording=tuple(settings.get("wording") or ()),
                 tolerance=float(self.rules.get("rounding_tolerance") or 0),
+                order=self.rules.get("settle_order"),
+                corroborate=bool(self.rules.get("corroborated_by_place")),
                 transcribed=doc.transcribed,
                 keep_open=(not self.strict
                            and bool(self.rules.get("contested_in_full"))))
@@ -768,7 +773,8 @@ class Writer:
                  if self.condition(box.get("when"), doc, row) is None]
         taken = every
         if box.get("of") in (self.rules.get("front_first_fields") or ()):
-            taken = in_order(every, doc.front)
+            taken = in_order(every, doc.front,
+                             self.rules.get("front_order"))
         keys = {doc.fold(row[reads]) for row in taken}
         groups: dict = {}
         for row in taken + [row for row in every
@@ -909,7 +915,8 @@ class Writer:
             if box["count"] == "per_document":
                 value = doc.chosen(source)
             else:
-                value = pick_one(rows)[0] if rows else None
+                value = (pick_one(rows, self.rules.get("pick_one_order"))[0]
+                         if rows else None)
             if value is None:
                 return []
             backing = [row for row in rows if row.get("value") == value]
@@ -953,7 +960,9 @@ class Writer:
         as_node = self.rules.get("evidence_as") == "node"
         prose, join = said.get("prose") or {}, said.get("join") or ", "
         lines = []
-        confirmed = len({_owner(row) for row in sources}) > 1
+        # The same decision as the node's mark (rule corroborated_by_place).
+        confirmed = bool(self.rules.get("corroborated_by_place")) and len(
+            {_owner(row) for row in sources}) > 1
         for row in sources:
             if as_node:
                 link, block = self._evidence_node(doc, node.iri, predicate,

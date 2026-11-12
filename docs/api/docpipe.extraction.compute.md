@@ -154,7 +154,8 @@ asks no quote. *passage_of(number)* is the text the number stands in.
 def used_numbers(question: Question, answer: dict) -> list
 ```
 
-The numbers the answer says it used, all of them if it names none.
+The numbers the answer says it used; where it names none, the rule
+`compute_used_if_none` says: all of them, or none.
 
 ### claim_of
 

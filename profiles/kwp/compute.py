@@ -45,15 +45,25 @@ from docpipe.extraction.readings import precision as _precision
 SHARE = "share"
 AREA = "spatial_scope"
 SUBJECT = "subject"
+
+
 # The axes a number can be split over, each with the entry that says it is
 # not (rule `compute_parts`).
 def parts_of() -> dict:
     return rules.get("compute_parts", "kwp")
-SPLIT = ("carrier", "sector", "technology")
+
+
+def split_axes() -> tuple:
+    """The axes a share looks for its whole over: those of `compute_parts`
+    but the area, so that an axis added to the rule is asked for shares as
+    well as for sums (the same rule, read twice)."""
+    return tuple(axis for axis in parts_of() if axis != AREA)
+
+
 # How precisely a number holds, the word the plan prints with it ("ca.", "bis
-# zu"), and the entry a worked-out number takes from parts that differ in it.
+# zu"), and the entry a worked-out number takes from parts that differ in it
+# (rule `compute_mixed_qualifier`).
 QUALIFIER = "qualifier"
-APPROXIMATE = "out:approximate"
 
 
 def qualified(row: dict, used: list) -> dict:
@@ -75,7 +85,7 @@ def qualified(row: dict, used: list) -> dict:
                      if one.get(f"{QUALIFIER}_state") == fields.READ)
         out.update(keys_of(first, QUALIFIER))
     else:
-        out[QUALIFIER] = APPROXIMATE
+        out[QUALIFIER] = rules.get("compute_mixed_qualifier", "kwp")
         out[f"{QUALIFIER}_state"] = fields.DERIVED
     return out
 
@@ -108,21 +118,33 @@ def additive(row: dict, spec) -> bool:
     factors, converted onto a unit of their own (g CO2/kWh) and not onto
     their parameter's. An `out:` quantity has no class the graph takes: a
     specific value, a saving, a useful energy. Zero is a part of nothing and
-    the whole of nothing, and rows of it fill plans' tables."""
+    the whole of nothing, and rows of it fill plans' tables. Three rules
+    loosen this: `compute_zero_counts`, `compute_needs_frame` and
+    `compute_out_quantity_counts`."""
     parameter = spec.by_uri.get(str(row.get("parameter") or ""))
     return (parameter is not None and parameter.is_numeric
-            and parameter.integrated and framed(row)
+            and parameter.integrated
+            and (framed(row) or not rules.get("compute_needs_frame", "kwp"))
             and parameter.target_of(row.get("unit")) == parameter.unit_target
-            and bool(row.get("value_target"))
+            and (bool(row.get("value_target"))
+                 or (rules.get("compute_zero_counts", "kwp")
+                     and row.get("value_target") is not None))
             and row.get("quantity_state") in (fields.READ, fields.DERIVED)
-            and not str(row.get("quantity") or "").startswith("out:"))
+            and (rules.get("compute_out_quantity_counts", "kwp")
+                 or not str(row.get("quantity") or "").startswith("out:")))
+
+
+def tolerance() -> float:
+    """How far apart two numbers may lie and still be one (graph rule
+    `rounding_tolerance`): the step's own value where the step that runs
+    sets one, else the graph's."""
+    return graphfile.get("rounding_tolerance", "kwp")
 
 
 def same_number(a: dict, b: dict) -> bool:
     low, high = sorted((a["value_target"], b["value_target"]))
     return low == high or (bool(high)
-                           and (high - low) / abs(high)
-                           <= graphfile.get("rounding_tolerance", "kwp"))
+                           and (high - low) / abs(high) <= tolerance())
 
 
 def one_statement(a: dict, b: dict, part) -> bool:
@@ -143,12 +165,12 @@ def distinct(rows: list, part) -> list:
 
 
 def holds_its_sum(parts: list) -> bool:
-    """Is the largest of three or more numbers the sum of the others?"""
+    """Is the largest of three or more numbers (rule
+    `sum_printed_least_numbers`) the sum of the others?"""
     values = sorted(abs(part["value_target"]) for part in parts)
-    if len(values) < 3:
+    if len(values) < rules.get("sum_printed_least_numbers", "kwp"):
         return False
-    return (abs(values[-1] - sum(values[:-1]))
-            <= graphfile.get("rounding_tolerance", "kwp") * values[-1])
+    return abs(values[-1] - sum(values[:-1])) <= tolerance() * values[-1]
 
 
 def known(row: dict, spec) -> dict:
@@ -170,7 +192,8 @@ def number(row: dict, spec, unit: Optional[str] = None) -> Number:
     """The row as a question shows it, in *unit* if it names one."""
     parameter = spec.by_uri[str(row.get("parameter"))]
     factor = parameter.unit_factor(unit) if unit else None
-    value = (round(row["value_target"] / float(factor), 6) if factor
+    value = (round(row["value_target"] / float(factor),
+                   rules.get("shown_number_places", "kwp")) if factor
              else row.get("value"))
     return Number(row, value, unit or row.get("unit"), known(row, spec))
 
@@ -269,8 +292,8 @@ def share_question(share: dict, bases: list, spec) -> Question:
         totals = [other for other in used if other is not share]
         if len(totals) != 1:
             return None         # no total named, or the answer is no share
-        return qualified({**inherited(totals[0], *SPLIT, SUBJECT), **keys_of(
-            share, *SPLIT, SUBJECT)}, used)
+        return qualified({**inherited(totals[0], *split_axes(), SUBJECT),
+                          **keys_of(share, *split_axes(), SUBJECT)}, used)
 
     def makes(used: list) -> Optional[float]:
         """The share of its one total, in the total's unit."""
@@ -292,7 +315,7 @@ def share_question(share: dict, bases: list, spec) -> Question:
 
 
 def split_of(row: dict) -> tuple:
-    return tuple(whole_on(row, axis) for axis in SPLIT)
+    return tuple(whole_on(row, axis) for axis in split_axes())
 
 
 def open_shares(rows: list, spec) -> list:
@@ -312,9 +335,12 @@ def open_shares(rows: list, spec) -> list:
             continue            # its absolute number stands in the plan
         bases = [row for row in near
                  if all(said in (part, parts_of()[axis]) for axis, said, part
-                        in zip(SPLIT, split_of(row), own))]
+                        in zip(split_axes(), split_of(row), own))]
         # Asked with no total offered, too: the request may find its whole
-        # in the plan and take it (owner decision 2026-11-05).
+        # in the plan and take it (owner decision 2026-11-05, rule
+        # `share_ask_without_whole`).
+        if not bases and not rules.get("share_ask_without_whole", "kwp"):
+            continue
         questions.append(share_question(share, distinct(bases, split_of),
                                         spec))
     return questions
@@ -376,7 +402,9 @@ def same(a: dict, b: dict, spec) -> bool:
     plan's wording and tells only different numbers apart, as in the graph;
     the number is compared in its target unit, within the graph's rounding."""
     parameter = spec.by_uri.get(str(a.get("parameter") or ""))
-    return (parameter is not None and a.get("parameter") == b.get("parameter")
+    return (rules.get("computed_same_once", "kwp") == "on"
+            and parameter is not None
+            and a.get("parameter") == b.get("parameter")
             and all(entry(a, slot.name) == entry(b, slot.name)
                     for slot in fields.axis_slots(parameter)
                     if slot.name != SUBJECT)

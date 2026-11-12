@@ -65,7 +65,7 @@ def settings() -> dict:
         return {"configured": False, "why": NO_MODEL, "limit": LIMIT}
     if not model:
         from ..extraction import runner
-        model = runner.LLM_MODEL
+        model = runner.llm_model()
     return {"configured": True, "why": None, "limit": LIMIT,
             "base_url": base, "api_key": key or "EMPTY", "model": model,
             "host": urlsplit(base).hostname or base}
@@ -173,12 +173,12 @@ def once(client, model: str, request: dict, sent: dict, view: dict) -> dict:
             if request["kind"] == prompts.FOLLOW \
                     and isinstance(message.get("content"), str):
                 message["content"] = view["edit"]["user"]
-    meta = view.get("meta") or {}
+    asked = runner.asked_values(kind)
     if kind == "phrase":
-        limit = int(meta.get("max_tokens", 300))
+        limit = asked["max_tokens"]
     else:
         limit = runner.answer_room(view["edit"]["system"], messages[1:],
-                                   int(meta.get("max_tokens", 4096)))
+                                   asked["max_tokens"])
     extra = {key: sent[key] for key in ("response_format", "extra_body")
              if sent.get(key) is not None}
     out = {"answer": None, "answer_json": None, "finish": None,
@@ -187,7 +187,7 @@ def once(client, model: str, request: dict, sent: dict, view: dict) -> dict:
     started = time.time()
     try:
         response = client.chat.completions.create(
-            model=model, temperature=float(meta.get("temperature", 0)),
+            model=model, temperature=asked["temperature"],
             max_tokens=limit, messages=messages, **extra)
         choice = response.choices[0]
     except Exception as exc:        # whatever the server or the wire says

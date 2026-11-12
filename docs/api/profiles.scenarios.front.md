@@ -12,11 +12,24 @@ may belong to another work. For these fields a reading on a front page goes
 first; where there is none, the record the catalogue holds for the
 publication (`completion.py`); only then a reading anywhere else. The
 completion looks a field up wherever no front page gave it, and the graph
-takes its value in this order (`kg.py`).
+takes its value in this order (`kg.py`). The fields, which pages are front
+pages and the order are graph rules (`front_first_fields`,
+`front_pages_rule`, `front_pages_extra`, `front_order`), read when a
+reading is placed.
 
 Author: Felix Vossel
 
 ## Functions
+
+### front_fields
+
+```python
+def front_fields() -> tuple
+```
+
+The fields a publication states about itself on its front pages: the
+rule `front_first_fields` of graph.json beside this file, as it stands
+now.
 
 ### page_of
 
@@ -32,9 +45,8 @@ The page a row was read on, None where it names none.
 def front_pages(titles: list) -> set
 ```
 
-Page 1 and the first page the document's title was read on (*titles*,
-its rows of the title): its title page, where a cover stands before
-it.
+The front pages, as the graph rules `front_pages_rule` and
+`front_pages_extra` say (`readings.front_pages`).
 
 ### looked_up
 
@@ -42,9 +54,7 @@ it.
 def looked_up(row: dict) -> bool
 ```
 
-Whether *row* holds a value looked up outside the document
-(`completion.row_of`). Such a row keeps the page of the reading it was
-found with, so its page says nothing of where its value stands.
+Whether *row* holds a value looked up outside the document.
 
 ### read_in_front
 
@@ -60,8 +70,7 @@ The rows of *rows* read on one of the *front* pages.
 def in_order(rows: list, front: set) -> list
 ```
 
-The readings of a front field that count: those read on a *front*
-page where there are any, else those looked up in the catalogue, else
-every one of *rows*.
+The readings of a front field that count, in the order the graph
+rule `front_order` says (`readings.in_order`).
 
 [Back to the index](../README.md)

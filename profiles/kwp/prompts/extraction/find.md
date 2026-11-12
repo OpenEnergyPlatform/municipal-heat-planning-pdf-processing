@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 2048
----
 Nenne jeden Wert des Felds unter "field", der in den Zeilen unter "passage" steht, je Wert mit der Adresse seiner Zeile oder Zelle und seinen Worten.
 
 * Vor jeder Zeile steht ihre Adresse. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: in „19 | Rathaus | 1912 | 750.940 |“ ist 19.3 die Zelle „750.940“. Titel und Kopf einer Tabelle stehen in jedem ihrer Stücke unter denselben Adressen, ebenso Titel, Achsen und Legende einer Abbildung.

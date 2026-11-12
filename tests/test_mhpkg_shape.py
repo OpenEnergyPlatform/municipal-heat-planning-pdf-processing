@@ -67,7 +67,7 @@ from types import SimpleNamespace   # noqa: E402
 
 from docpipe.extraction.bricks import Call   # noqa: E402
 
-TOTAL = kg.totals(kg.DRAWING, "value")
+TOTAL = kg.totals(kg.drawing(), "value")
 TABLE = kg._box("part").get("table") or {}
 
 
@@ -100,7 +100,7 @@ def identity(one: dict) -> str:
     """The coordinates a value's address is minted from (`_identity`),
     with a document that mints the coordinates themselves."""
     doc = SimpleNamespace(
-        writer=SimpleNamespace(drawing=SimpleNamespace(raw=kg.DRAWING)),
+        writer=SimpleNamespace(drawing=SimpleNamespace(raw=kg.drawing())),
         address_of_answer=lambda box, answer: "plan",
         fold=str, mint=lambda folder, key, name: name)
     return kg._identity(Call(doc=doc, row=one,

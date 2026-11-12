@@ -1,10 +1,12 @@
 /* The input of one rule of the profile's rules file, its row and the rules grouped; the rules drawer and the Graph tab
    both draw them. Every keystroke goes on through onChange as the value the rules file holds. */
+import type { ReactNode } from 'react';
 import { Accordion, Badge, Box, Button, Code, Group, NativeSelect, Paper, Stack, Switch, Text, Tooltip } from '@mantine/core';
 import { DF, type Kind } from '../lib/forms';
 import { FormNode, useFormState } from '../components/FormNode';
 import { AreaBox, NumberBox, TextBox } from '../components/Inputs';
 import { Help } from '../components/Bits';
+import { OwnAt } from './OwnAt';
 import { clone, same } from '../lib/util';
 import { rich, t, tr } from '../lib/i18n';
 
@@ -50,7 +52,7 @@ export function RuleInput({ r, cur, onChange, epoch }: { r: Rule; cur: any; onCh
   return <RuleForm r={r} spec={spec} cur={cur} onChange={onChange} epoch={epoch} />;
 }
 
-export function RuleRow({ r, cur, onChange, epoch }: { r: Rule; cur: any; onChange: RuleChange; epoch: number }) {
+export function RuleRow({ r, cur, onChange, epoch, extra }: { r: Rule; cur: any; onChange: RuleChange; epoch: number; extra?: (r: Rule) => ReactNode }) {
   const changed = ruleChanged(r, cur);
   const wins = r.setting_set || (r.in_effect !== undefined && !same(r.in_effect, r.value));
   return (
@@ -67,22 +69,30 @@ export function RuleRow({ r, cur, onChange, epoch }: { r: Rule; cur: any; onChan
           {changed ? <Badge color="orange" variant="filled">{t('edited')}</Badge> : null}
         </Group>
         <Help text={tr(r.help || '')} />
-        <Group align="flex-start" gap="sm" wrap="nowrap">
+        {r.own_at && r.own_at.length ? <OwnAt steps={r.own_at} /> : null}
+        {r.secret ? <Text size="sm" c="dimmed">{t('A key: it is never shown and never set on this page. Set it in .env or in the environment.')}</Text>
+          : r.machine ? <Box>
+              <Text size="sm" className="dp-mono">{JSON.stringify(r.in_effect === undefined ? r.value : r.in_effect)}</Text>
+              <Text size="xs" c="dimmed">{t('A value of this machine: it is set in the project file docpipe.toml, in the Run section of the Flow tab.')}</Text>
+            </Box> : null}
+        {r.secret || r.machine ? null : <Group align="flex-start" gap="sm" wrap="nowrap">
           <Box style={{ flex: 1, minWidth: 0 }}><RuleInput r={r} cur={cur} onChange={onChange} epoch={epoch} /></Box>
           {r.has_inherited && !same(cur, r.inherited)
             ? <Tooltip label={JSON.stringify(r.inherited)} multiline maw={420}>
                 <Button size="xs" variant="default" onClick={() => onChange(clone(r.inherited), true)}>{t('use default')}</Button>
               </Tooltip>
             : null}
-        </Group>
+        </Group>}
+        {extra ? extra(r) : null}
         {r.where ? <Text size="xs" c="dimmed" className="dp-mono">{t('used in {where}', { where: r.where })}</Text> : null}
       </Stack>
     </Paper>
   );
 }
 
-export function GroupedRules({ rules, curOf, onChange, epoch }: {
+export function GroupedRules({ rules, curOf, onChange, epoch, extra }: {
   rules: Rule[]; curOf: (name: string) => any; onChange: (name: string, v: any, reset?: boolean) => void; epoch: number;
+  extra?: (r: Rule) => ReactNode;
 }) {
   const groups = new Map<string, Rule[]>();
   for (const r of rules) { if (!groups.has(r.group)) groups.set(r.group, []); groups.get(r.group)!.push(r); }
@@ -94,7 +104,7 @@ export function GroupedRules({ rules, curOf, onChange, epoch }: {
           <Accordion.Control>{rich(tr(g))} ({rs.length})</Accordion.Control>
           <Accordion.Panel>
             <Stack gap="sm">
-              {rs.map(r => <RuleRow key={r.name} r={r} cur={curOf(r.name)} epoch={epoch}
+              {rs.map(r => <RuleRow key={r.name} r={r} cur={curOf(r.name)} epoch={epoch} extra={extra}
                 onChange={(v, reset) => onChange(r.name, v, reset)} />)}
             </Stack>
           </Accordion.Panel>

@@ -37,15 +37,16 @@ class OpenAIChat:
 
     def create(self, *, model, messages, max_tokens=None, temperature=None,
                response_format=None, extra_body=None, timeout=None):
-        name, schema, decode = base.enforced(response_format)
+        name, schema, decode = base.enforced(
+            response_format, base.schema_dialect(base.schemas.ALL_REQUIRED))
         extras: dict = {}
         if max_tokens is not None:
-            extras["max_completion_tokens"] = (int(max_tokens)
-                                               + self.endpoint.thinking_room)
+            room = base.thinking_room(self.endpoint)
+            extras["max_completion_tokens"] = int(max_tokens) + room
         effort = (extra_body or {}).get("reasoning_effort")
         if effort:
             extras["reasoning_effort"] = effort
-        base.merge(extras, self.endpoint.options)
+        base.merge(extras, base.options_of(self.endpoint))
         body: dict = {"model": model, "messages": messages}
         if schema is not None:
             body["response_format"] = {

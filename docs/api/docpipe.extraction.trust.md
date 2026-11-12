@@ -54,6 +54,34 @@ Author: Felix Vossel
 
 ## Functions
 
+### review_levels
+
+```python
+def review_levels() -> tuple
+```
+
+The levels a curator should examine (rule `review_levels`).
+
+### unread_states
+
+```python
+def unread_states() -> tuple
+```
+
+The states the rule `trust_reason_levels` puts at the level C: a
+coordinate nobody read. Worked out when asked, so a changed rule
+changes it.
+
+### level_of
+
+```python
+def level_of(reason: str) -> str
+```
+
+The level the rule `trust_reason_levels` gives a reason: by the
+reason itself ("review:disagree"), else by the part before its colon
+("exhausted" for "exhausted:carrier").
+
 ### reasons
 
 ```python

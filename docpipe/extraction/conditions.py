@@ -27,8 +27,8 @@ knows at that place (`Facts`), and `sentence` says it as the page shows it
 at its box ("when the quote is shorter than 20 characters").
 
 "open" as a state of a coordinate means what `--top-up-open` reads again:
-exhausted, unanswered, unbacked (`topup.OPEN`); "none" that it has no state
-yet.
+the states of the rule `open_states` (exhausted, unanswered, unbacked
+unless a step says otherwise); "none" that it has no state yet.
 
 Author: Felix Vossel
 """
@@ -37,6 +37,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Optional
 
+from .. import rules
 from .fields import (DERIVED, EXHAUSTED, OUT_OF_SLICE, READ, SAID_UNSTATED,
                      UNANSWERED, UNBACKED)
 
@@ -51,8 +52,9 @@ OP_WORDS = {"is": "is", "is_not": "is not", "less": "is less than",
             "at_most": "is at most", "contains": "contains",
             "empty": "is empty", "one_of": "is one of"}
 # A coordinate's state as a condition names it; "open" and "none" are not
-# states a run writes but kinds of them.
-OPEN = (EXHAUSTED, UNANSWERED, UNBACKED)
+# states a run writes but kinds of them ("open": the rule `open_states`,
+# one collection with fields, topup and stats).
+from .fields import OPEN  # noqa: E402,F401  (rule `open_states`)
 STATES = (READ, SAID_UNSTATED, UNBACKED, EXHAUSTED, UNANSWERED, DERIVED,
           OUT_OF_SLICE, "open", "none")
 ROLES = ("text", "title", "head", "body", "foot", "figure", "number",
@@ -77,6 +79,35 @@ KIND_WORDS = {"number": "number", "list": "entry of a list", "text": "text",
               "name": "name", "work": "work",
               "quantity": "what a number is"}
 PASSAGE_WORDS = {"section": "text", "table": "table", "figure": "figure"}
+FIELD_KINDS = ("float", "int", "text", "category")
+FIELD_WORDS = {"float": "number with decimals", "int": "whole number",
+               "text": "text", "category": "entry of a list"}
+LANGUAGES = ("de", "en", "other")
+LANGUAGE_WORDS = {"de": "German", "en": "English", "other": "another "
+                  "language"}
+# Why an answer was refused, as `Counts.failed` says it; "own_check" is any
+# check of the flow's own, "other" any reason not listed here.
+REFUSALS = ("none", "not_an_address", "words_not_in_line", "not_an_option",
+            "name_not_listed", "quote_not_in_source", "quote_too_short",
+            "answer_not_in_quote", "wrong_type", "unbacked", "own_check",
+            "other")
+REFUSAL_WORDS = {
+    "none": "none", "not_an_address": "names no line that was shown",
+    "words_not_in_line": "words not in the line it names",
+    "not_an_option": "not an entry of the list",
+    "name_not_listed": "name not on the list",
+    "quote_not_in_source": "quote not in the source",
+    "quote_too_short": "quote too short",
+    "answer_not_in_quote": "answer not in its quote",
+    "wrong_type": "wrong kind of value", "unbacked": "not backed",
+    "own_check": "refused by a check of the flow", "other": "another reason"}
+
+
+def open_states() -> tuple:
+    """The states "open" stands for (rule `open_states`), as the step that
+    runs reads it."""
+    from .fields import open_states as states
+    return states()
 
 
 class ConditionError(ValueError):
@@ -121,6 +152,9 @@ SUBJECTS = {s.name: s for s in (
         Prop("takes_group", YES, "splits a group of entries into its "
              "members"),
         Prop("name", TEXT, "name"),
+        Prop("unit", TEXT, "unit of its values"),
+        Prop("kind", CHOICE, "kind of value", FIELD_KINDS, FIELD_WORDS),
+        Prop("rows", NUMBER, "values read of it so far"),
     )),
     Subject("value", "the value", (
         Prop("field", TEXT, "field"),
@@ -129,6 +163,20 @@ SUBJECTS = {s.name: s for s in (
         Prop("scenario_name", YES, "names a scenario of the document's "
              "list"),
         Prop("passage", CHOICE, "stands in", PASSAGE_KINDS, PASSAGE_WORDS),
+        Prop("in_table", YES, "was read in a table"),
+        Prop("in_text", YES, "was read in running text"),
+        Prop("number", NUMBER, "the number read"),
+        Prop("quote", TEXT, "quote"),
+    )),
+    Subject("chunk", "the chunk", (
+        Prop("kind", CHOICE, "kind", PASSAGE_KINDS, PASSAGE_WORDS),
+    )),
+    Subject("figure", "the figure", (
+        Prop("description", TEXT, "description from the intake"),
+        Prop("has_image", YES, "has an image"),
+        Prop("page", NUMBER, "page"),
+        Prop("image_width", NUMBER, "width of its image in pixels"),
+        Prop("image_height", NUMBER, "height of its image in pixels"),
     )),
     Subject("coordinate", "the dimension", (
         Prop("name", TEXT, "name"),
@@ -149,6 +197,9 @@ SUBJECTS = {s.name: s for s in (
         Prop("other_passage", YES, "comes from another section, table or "
              "figure than the value"),
         Prop("words_empty", YES, "has no wording"),
+        Prop("follow_ups_used", NUMBER, "follow-up questions used"),
+        Prop("refusal", CHOICE, "the reason it was refused", REFUSALS,
+             REFUSAL_WORDS),
     )),
     Subject("quote", "the quote", (
         Prop("length", NUMBER, "length in characters"),
@@ -168,6 +219,11 @@ SUBJECTS = {s.name: s for s in (
         Prop("works", YES, "keeps a list of works"),
         Prop("plan_years", YES, "has base or target years"),
         Prop("pieces", NUMBER, "number of chunks"),
+        Prop("language", CHOICE, "language", LANGUAGES, LANGUAGE_WORDS),
+        Prop("pages", NUMBER, "number of pages"),
+        Prop("title", TEXT, "title"),
+        Prop("requests", NUMBER, "requests asked so far"),
+        Prop("seconds", NUMBER, "seconds spent on it so far"),
     )),
     Subject("run", "the run", (
         Prop("whole", YES, "reads the whole document (not only the places "
@@ -294,7 +350,7 @@ def _row_holds(row: dict, facts: Facts) -> bool:
         wanted = set(want)
         if prop.name == "state" and subject.name == "coordinate":
             got = (have in wanted
-                   or ("open" in wanted and have in OPEN)
+                   or ("open" in wanted and have in open_states())
                    or ("none" in wanted and not have))
         else:
             got = have in wanted

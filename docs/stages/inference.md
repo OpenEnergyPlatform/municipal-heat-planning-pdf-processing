@@ -974,7 +974,9 @@ The match is fuzzy on purpose. The corpus text has passed through
 extraction and refinement, so it is never byte-identical to what
 PyMuPDF reads off the page: ligatures, hyphenation, running heads and
 column order all differ. Alignment finds the passage anyway; the
-score floor keeps it from pointing at something else.
+score floor keeps it from pointing at something else (rules
+`locate_min_score`, `locate_max_lines` and `locate_match`, read when a quote
+is placed).
 
 Author: Felix Vossel
 

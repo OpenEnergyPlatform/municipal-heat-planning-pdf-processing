@@ -14,6 +14,11 @@ came first whenever the limit has room. The request's own timeout starts when
 it is sent, not while it waits: waiting is the harvest's queue, not the
 server's slowness.
 
+A step that has a value of its own for the rule `parallel` has a lane of its
+own: its requests wait in a queue of their own and are sent while fewer than
+that many of them are open, whatever the limit above says, up or down from
+it. The other steps keep sharing the limit (`Lane`).
+
 A request may be withdrawn while it waits (`Ticket.withdraw`): the sweep
 that asked several windows ahead has its answer, and the windows behind it
 are not sent. A withdrawn request raises `Withdrawn` in its caller. A request
@@ -31,7 +36,9 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import contextvars
 import copy
+import functools
 import hashlib
 import heapq
 import itertools
@@ -94,16 +101,55 @@ def current() -> tuple:
             getattr(_local, "ticket", None))
 
 
+class Lane:
+    """The requests of one step that has its own value of the rule
+    `parallel`: how many may be open at once, and how many are."""
+
+    def __init__(self, key: str, limit: int):
+        self.key = key
+        self.limit = limit
+        self.open = 0
+        self.heap: list = []
+        self.pool: Optional[ThreadPoolExecutor] = None
+        self.workers = 0
+
+    def sender(self) -> ThreadPoolExecutor:
+        """The threads that send this lane's requests, as many as the lane
+        has places, so that no other lane or the shared limit starves it."""
+        if self.pool is None or self.workers < self.limit:
+            self.workers = max(1, self.limit)
+            self.pool = ThreadPoolExecutor(
+                max_workers=self.workers,
+                thread_name_prefix=f"llm-lane-{self.key}"[:40])
+        return self.pool
+
+
+def lane_of() -> Optional[tuple]:
+    """(key, limit) of the lane the calling step sends its requests in, None
+    where it shares the limit: the rule `parallel` of the step that runs, 0
+    for the shared one. The key names whose value it is (the step or the
+    frame that set it), so that the requests of every step a frame covers
+    are one lane."""
+    limit = int(rules.get("parallel"))
+    if limit < 1:
+        return None
+    step = rules.STEP.get()
+    key = (step.owners.get("parallel") if step is not None else None) or "run"
+    return key, limit
+
+
 class Scheduler:
     """Requests in, sent in the order of their document, as the limit allows.
 
     *limit* is an `AdaptiveLimit`. A request without a document (anchors,
     the search sentence a run shares, the frame's warm-up) goes before every
-    document: everything waits on it.
+    document: everything waits on it. A request of a step with a lane of its
+    own (`lane_of`) is not counted by the limit.
     """
 
     def __init__(self, limit, workers: Optional[int] = None):
         self.limit = limit
+        self._lanes: dict = {}
         self._heap: list = []
         self._seq = itertools.count()
         self._rank: dict = {}
@@ -118,13 +164,18 @@ class Scheduler:
                          daemon=True).start()
 
     def rank(self, document: Optional[int]) -> int:
-        """The document's place: the order it first asked in."""
+        """The document's place by the rule `queue_order`: the order it first
+        asked in, the reverse of it, or none at all. A request of no
+        document goes before every document in any order."""
         if document is None:
-            return -1
+            return -(1 << 60)
         with self._cond:
             if document not in self._rank:
                 self._rank[document] = next(self._ranks)
-            return self._rank[document]
+            place = self._rank[document]
+        order = rules.get("queue_order")
+        return (place if order == "oldest_document"
+                else -place if order == "newest_document" else 0)
 
     def forget(self, document: Optional[int]) -> None:
         """A document written out leaves the ranking."""
@@ -134,7 +185,8 @@ class Scheduler:
     @property
     def waiting(self) -> int:
         with self._cond:
-            return len(self._heap)
+            return len(self._heap) + sum(len(lane.heap)
+                                         for lane in self._lanes.values())
 
     def room(self) -> int:
         """Places the limit has that no request holds or waits for."""
@@ -142,7 +194,13 @@ class Scheduler:
             return self.limit.limit - self.limit.in_flight - len(self._heap)
 
     def submit(self, send: Callable, document: Optional[int] = None,
-               ticket: Optional[Ticket] = None) -> Future:
+               ticket: Optional[Ticket] = None,
+               lane: Optional[tuple] = None) -> Future:
+        """*send* for *document*, in the lane (key, limit) a step with its
+        own `parallel` sends in (`lane_of`), else with the shared limit."""
+        # Sent in the context of the caller, so that what the sending reads
+        # is what the step that asks reads (`rules.STEP`).
+        send = functools.partial(contextvars.copy_context().run, send)
         future: Future = Future()
         ahead = int(ticket is not None and ticket.ahead)
         entry = (ahead, self.rank(document), next(self._seq), send, future,
@@ -151,7 +209,14 @@ class Scheduler:
             if self._broken is not None:
                 future.set_exception(self._broken)
                 return future
-            heapq.heappush(self._heap, entry)
+            if lane is None:
+                heapq.heappush(self._heap, entry)
+            else:
+                held = self._lanes.get(lane[0])
+                if held is None:
+                    held = self._lanes[lane[0]] = Lane(*lane)
+                held.limit = lane[1]
+                heapq.heappush(held.heap, entry)
             self._cond.notify_all()
         return future
 
@@ -160,33 +225,62 @@ class Scheduler:
         the others, and so do the ones it sends from here on."""
         ticket.ahead = False
         with self._cond:
-            self._heap = [(0, *entry[1:]) if entry[-1] is ticket else entry
-                          for entry in self._heap]
-            heapq.heapify(self._heap)
+            for held in (self._heap, *(lane.heap
+                                       for lane in self._lanes.values())):
+                held[:] = [(0, *entry[1:]) if entry[-1] is ticket else entry
+                           for entry in held]
+                heapq.heapify(held)
             self._cond.notify_all()
+
+    def _take(self) -> Optional[tuple]:
+        """(entry, the lane it goes in or None) of the next request that has
+        a place, None where none has. Called with the lock held. A lane has a
+        place while fewer of its requests are open than it allows; the shared
+        queue has one while the limit has room."""
+        for lane in self._lanes.values():
+            if lane.heap and lane.open < lane.limit:
+                return heapq.heappop(lane.heap), lane
+        if self._heap and self.limit.in_flight < self.limit.limit:
+            return heapq.heappop(self._heap), None
+        return None
 
     def _dispatch(self) -> None:
         try:
             while True:
                 with self._cond:
-                    while not self._heap or (self.limit.in_flight
-                                             >= self.limit.limit):
+                    while True:
+                        taken = self._take()
+                        if taken is not None:
+                            break
                         self._cond.wait(timeout=1.0)
-                    *_order, send, future, ticket = heapq.heappop(self._heap)
+                *_order, send, future, ticket = taken[0]
+                lane = taken[1]
                 if ticket is not None and ticket.withdrawn:
                     future.set_exception(Withdrawn())
                     continue
                 if not future.set_running_or_notify_cancel():
                     continue
-                self.limit.acquire()
+                if lane is None:
+                    self.limit.acquire()
+                else:
+                    with self._cond:
+                        lane.open += 1
                 try:
-                    self._pool.submit(self._send, send, future)
+                    (self._pool if lane is None else lane.sender()).submit(
+                        self._send, send, future, lane)
                 except BaseException as exc:
-                    self.limit.release()
+                    self._release(lane)
                     future.set_exception(exc)
                     raise
         except BaseException as exc:     # the dispatcher sends no more
             self._close(exc)
+
+    def _release(self, lane: Optional[Lane]) -> None:
+        if lane is None:
+            self.limit.release()
+        else:
+            with self._cond:
+                lane.open -= 1
 
     def _close(self, exc: BaseException) -> None:
         """Every waiting request, and every later one, ends with *exc*. A
@@ -196,11 +290,15 @@ class Scheduler:
         with self._cond:
             self._broken = exc
             waiting, self._heap = self._heap, []
+            for lane in self._lanes.values():
+                waiting += lane.heap
+                lane.heap = []
         for *_order, _send, future, _ticket in waiting:
             if not future.done():
                 future.set_exception(exc)
 
-    def _send(self, send: Callable, future: Future) -> None:
+    def _send(self, send: Callable, future: Future,
+              lane: Optional[Lane] = None) -> None:
         try:
             # When the request leaves the queue for the server, for its trace
             # (`Scheduled.create`, owner decision 2026-11-07).
@@ -209,7 +307,7 @@ class Scheduler:
         except BaseException as exc:            # handed to the caller
             future.set_exception(exc)
         finally:
-            self.limit.release()
+            self._release(lane)
             with self._cond:
                 self._cond.notify_all()
 
@@ -230,7 +328,7 @@ class Scheduled:
             raise Withdrawn()
         future = self._scheduler.submit(
             lambda: self._client.chat.completions.create(*args, **kwargs),
-            document, ticket)
+            document, ticket, lane_of())
         try:
             return future.result()
         finally:
@@ -357,8 +455,11 @@ class Repeats:
     2026-11-07).
     """
 
-    def __init__(self, client, repeat: float, usual: float):
+    def __init__(self, client, repeat: Optional[float] = None,
+                 usual: Optional[float] = None):
         self._client = client
+        # None: the rules `repeat_timeout_s` and `llm_timeout_s` of the step
+        # that sends the request, read when it is sent.
         self._repeat = repeat
         self._usual = usual
         self._local = threading.local()
@@ -368,13 +469,22 @@ class Repeats:
 
     def create(self, *args, **kwargs):
         messages = kwargs.get("messages")
+        # A step with a time of its own for the first attempt sends it with
+        # the request; the others keep the one the client was made with.
+        own, waits = rules.stepped_value("llm_timeout_s")
+        if own and kwargs.get("timeout") is None:
+            kwargs["timeout"] = waits
         if messages is not None and messages == getattr(self._local,
                                                         "timed_out", None):
-            kwargs["timeout"] = max(kwargs.get("timeout") or self._usual,
-                                    self._repeat)
+            usual = (self._usual if self._usual is not None
+                     else rules.get("llm_timeout_s"))
+            repeat = (self._repeat if self._repeat is not None
+                      else rules.get("repeat_timeout_s"))
+            kwargs["timeout"] = max(kwargs.get("timeout") or usual, repeat)
         self._local.timed_out = None
         asked = time.time()
-        document = current()[0]
+        here = current()
+        document = here[0]
         # Word for word in the same document: a request of no document
         # (anchors, a run's own questions) is sent every time, and every
         # request is where the rule `same_request_once` is off.
@@ -409,7 +519,8 @@ class Repeats:
         return response
 
 
-def repeating(client, repeat: float, usual: float):
+def repeating(client, repeat: Optional[float] = None,
+              usual: Optional[float] = None):
     """*client* as `Repeats`, once."""
     if isinstance(client, Repeats):
         return client

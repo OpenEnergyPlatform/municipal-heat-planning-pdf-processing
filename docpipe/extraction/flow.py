@@ -19,12 +19,20 @@ settings, where it has to stand. What a box does with an answer stays code.
               {"id": "write", "box": "write"}]}
 
 A box: {"id", "box": kind, "set": {setting: value}, "own": {setting: whole
-number}, "when": condition, "off": true}. "own" gives a number setting a
-value of its own ("only here") instead of the named number. A frame:
-{"id", "each": what, "which", "when", "together", "order", "steps"},
-{"id", "round": {"most": n} or {"supply": true}, "stop": condition,
-"steps"}, {"id", "if": [{"when": condition, "steps"}], "else": steps}.
-Conditions are `conditions.py`'s.
+number}, "rules": {name: value}, "when": condition, "off": true}. "own"
+gives a number setting a value of its own ("only here") instead of the
+named number. A frame: {"id", "each": what, "which", "when", "together",
+"order", "rules", "steps"}, {"id", "round": {"most": n} or {"supply":
+true}, "stop": condition, "rules", "steps"}, {"id", "if": [{"when":
+condition, "steps"}], "else": steps, "rules"}. Conditions are
+`conditions.py`'s.
+
+"rules" gives a rule (`docpipe.rules`) or a number of the flow a value of
+its own while the box runs, or while anything in the frame runs (owner
+2026-11-11: "alles soll anpassbar sein"): the step's own value, then the
+frames' from the inside out, then the setting of the start, then the file.
+Only a rule the step reads may be set at it (`Rule.steps`,
+`Number.steps`).
 
 The default profile writes the whole file: every number (`NUMBERS`) and the
 drawing. A profile that extends it writes the numbers it sets differently,
@@ -80,6 +88,7 @@ class Number:
     help: str
     env: Optional[str] = None       # the setting that wins over the file
     part: Optional[int] = None      # its place where the setting lists several
+    steps: tuple = ()               # the kinds of steps that read it
 
 
 # Every number the reading takes from the flow, in the order a file writes
@@ -156,12 +165,38 @@ NUMBERS = (
            "answers badly, at the price of more requests.",
            "EXTRACT_MAX_RETRIES"),
 )
+# Which steps read each number (`rules.step_kind`), as for the rules
+# (`rules.STEPS`).
+# The steps that send a request the model answers: each has its own value of
+# the numbers that bound how it is asked again (plan 2026-11-11, 5.2).
+ASKING = ("transcribe", "sentences", "docfield", "works", "find", "coord",
+          "quantity", "work_coordinate", "phrase", "search", "last_year",
+          "names", "about", "compute")
+STEPS = {
+    "piece_lines": ("split",),
+    "title_page_lines": ("document",),
+    "headings": ("split", "find", "coord", "phrase", "search",
+                 "work_coordinate", "works", "last_year", "about"),
+    "list_meanings": ASKING + ("order", "each field", "each value"),
+    "search_pieces": ("order",),
+    "search_tables": ("order",),
+    "search_figures": ("order",),
+    "search_text": ("order",),
+    "search_per_request": ("docfield", "search", "round"),
+    "listed_field_factor": ("order",),
+    "follow_ups": ASKING + ("each value",),
+    "replies": ASKING + ("order",),
+}
+NUMBERS = tuple(dataclasses.replace(number,
+                                    steps=STEPS.get(number.name, ()))
+                for number in NUMBERS)
 BY_NAME = {number.name: number for number in NUMBERS}
 FRAME_KEYS = {"each": ("id", "each", "which", "when", "together", "order",
-                       "steps", "off", "note"),
-              "round": ("id", "round", "stop", "steps", "off", "note"),
-              "if": ("id", "if", "else", "off", "note")}
-BOX_KEYS = ("id", "box", "set", "own", "when", "off", "note")
+                       "rules", "steps", "off", "note"),
+              "round": ("id", "round", "stop", "rules", "steps", "off",
+                        "note"),
+              "if": ("id", "if", "else", "rules", "off", "note")}
+BOX_KEYS = ("id", "box", "set", "own", "rules", "when", "off", "note")
 
 
 @dataclass(frozen=True)
@@ -217,7 +252,16 @@ class Flow:
     tree_from: str = ""             # the profile whose file draws it
 
 
-# -- walking a drawing -----------------------------------------------------------
+def number(numbers: Numbers, name: str) -> int:
+    """The number *name* of the flow as the step that runs reads it: its
+    own value or that of a frame around it (`rules.STEP`), else the run's
+    (*numbers*). The one way a number of the flow is read."""
+    from .. import rules
+    own, value = rules.stepped_value(name)
+    return int(value) if own else int(getattr(numbers, name))
+
+
+# -- walking a drawing --------------------------------------------------------
 
 def kind_of(node: dict) -> str:
     """"box", "each", "round" or "if"."""
@@ -253,6 +297,15 @@ def walk(tree: list, frames: tuple = ()):
             yield from walk(steps, frames + (node,))
 
 
+def on(tree: list):
+    """(node, its frames outermost first) of every node of *tree* that
+    takes part in a run, in order: one that is off, or stands in a frame
+    that is off, is not asked, checked or counted anywhere."""
+    for node, frames in walk(tree):
+        if not node.get("off") and not any(f.get("off") for f in frames):
+            yield node, frames
+
+
 def boxes(tree: list) -> list:
     return [node for node, _ in walk(tree) if kind_of(node) == "box"]
 
@@ -260,9 +313,8 @@ def boxes(tree: list) -> list:
 def asked(tree: list) -> set:
     """The requests the boxes of *tree* ask, of the boxes that are on."""
     out = set()
-    for node, frames in walk(tree):
-        if kind_of(node) != "box" or node.get("off") \
-                or any(f.get("off") for f in frames):
+    for node, _frames in on(tree):
+        if kind_of(node) != "box":
             continue
         kind = blocks.LIBRARY.get(node.get("box"))
         if kind is not None and kind.asks:
@@ -270,13 +322,19 @@ def asked(tree: list) -> set:
     return out
 
 
-def compute_on(tree: list) -> bool:
-    """Is the calculation after the reading on in *tree*?"""
-    return any(node.get("box") == "compute" and not node.get("off")
+def box_on(tree: list, kind: str) -> bool:
+    """Does the top box of *kind* stand in *tree* and is it on? The boxes
+    the runner does after the reading (compute, catalogue) run only so."""
+    return any(node.get("box") == kind and not node.get("off")
                for node in tree if isinstance(node, dict))
 
 
-# -- what a drawing may say ------------------------------------------------------
+def compute_on(tree: list) -> bool:
+    """Is the calculation after the reading on in *tree*?"""
+    return box_on(tree, "compute")
+
+
+# -- what a drawing may say ---------------------------------------------------
 
 def _nearest(name, known) -> str:
     close = difflib.get_close_matches(str(name), list(known), n=3, cutoff=0.6)
@@ -310,9 +368,10 @@ def checked(where, name: str, value) -> int:
 class _Check:
     """The problems of one drawing, each with the id of its node."""
 
-    def __init__(self):
+    def __init__(self, known: Optional[dict] = None):
         self.out: list = []
         self.ids: dict = {}
+        self.known = known          # the rules of the profile's line
 
     def say(self, node, message: str) -> None:
         ident = node.get("id") if isinstance(node, dict) else None
@@ -337,8 +396,10 @@ def _known(frames: tuple, before: list) -> set:
         out.add("field")
     if any(e in ("value", "coordinate") for e in eaches):
         out.add("value")
+    if "piece" in eaches:
+        out.add("chunk")
     if "coordinate" in eaches:
-        out |= {"coordinate", "pieces"}
+        out |= {"coordinate", "pieces", "chunk"}
     if any(kind_of(f) == "round" for f in frames):
         out.add("round")
     for node in before:
@@ -371,6 +432,69 @@ def _value_problem(box: blocks.Box, setting: blocks.Setting, value,
     return None
 
 
+def _kinds_in(node: dict) -> set:
+    """The kinds of steps (`rules.step_kind`) *node* is or holds."""
+    from .. import rules
+    found = {rules.step_kind(node)}
+    for _label, steps in children(node):
+        for child, _frames in walk(steps):
+            found.add(rules.step_kind(child))
+    return found
+
+
+SHARES = ("search_tables", "search_figures", "search_text")
+
+
+def _search_values(check: _Check, node: dict, given: dict) -> None:
+    """The values *given* at *node* for what a search shows: the three
+    shares, when all three are given, must leave a kind of chunk to take
+    first (`addressed.shares_problem`), and the chunks a request shows must
+    each have a letter to be addressed by (`units.places_problem`)."""
+    from . import addressed, units
+    if all(name in given and isinstance(given[name], int)
+           for name in SHARES):
+        said = addressed.shares_problem({name: given[name]
+                                         for name in SHARES})
+        if said:
+            check.say(node, said)
+    per = given.get("search_per_request")
+    if isinstance(per, int) and not isinstance(per, bool):
+        said = units.places_problem(per)
+        if said:
+            check.say(node, said)
+
+
+def _rules_of(check: _Check, node: dict) -> None:
+    """The values a box or frame sets for itself: each a rule or a number
+    of the flow, read by the step or by a step in the frame, and a value
+    its rule allows."""
+    own = node.get("rules")
+    if own is None:
+        return
+    if not isinstance(own, dict):
+        check.say(node, "rules is an object: rule -> value")
+        return
+    from .. import rules
+    known = check.known if check.known is not None else rules.BY_NAME
+    kinds = _kinds_in(node)
+    for name, value in own.items():
+        one = known.get(name) or BY_NAME.get(name)
+        if one is None:
+            check.say(node, f"{name!r} is no rule and no number of the "
+                      f"flow{_nearest(name, list(known) + list(BY_NAME))}")
+            continue
+        said = (rules.problem(name, value, known) if name in known
+                else problem(name, value))
+        if said:
+            check.say(node, said)
+            continue
+        if not kinds & set(one.steps):
+            readers = ', '.join(one.steps) or 'no step (the run reads it)'
+            check.say(node, f"{name} is not read here: it is read by "
+                      f"{readers}")
+    _search_values(check, node, own)
+
+
 def _box(check: _Check, node: dict, frames: tuple, before: list,
          top: bool) -> None:
     kind = blocks.LIBRARY.get(node.get("box"))
@@ -378,9 +502,16 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
         check.say(node, f"there is no box {node.get('box')!r}"
                   f"{_nearest(node.get('box'), blocks.LIBRARY)}")
         return
+    if kind.flow:
+        check.say(node, f"{kind.label} is a step of a follow-up pass "
+                  f"(`flows/`), and this flow reads documents: it has no "
+                  f"use for the steps that work on a harvest that is "
+                  f"written")
+        return
     for key in node:
         if key not in BOX_KEYS:
             check.say(node, f"a box has no key {key!r}")
+    _rules_of(check, node)
     if node.get("off") and (kind.fixed or not kind.switch):
         check.say(node, f"{kind.label} cannot be off: {kind.fixed}")
     if kind.top and not top:
@@ -407,6 +538,10 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
                 check.say(node, "a field read in pieces is asked by finds, "
                           "not as a field of the document")
     where = _known(frames, before)
+    if kind.type == "transcribe":
+        # Each figure is asked, or not, by this box before any chunk is
+        # cut: only the figure's own properties are known.
+        where = {"figure"}
     sets = node.get("set") or {}
     own = node.get("own") or {}
     if not isinstance(sets, dict) or not isinstance(own, dict):
@@ -436,6 +571,9 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
         said = problem(setting.number, value)
         if said:
             check.say(node, said)
+    _search_values(check, node, {by_key[k].number: v for k, v in own.items()
+                                 if k in by_key
+                                 and by_key[k].kind == blocks.NUMBER})
     if kind.type == "check":
         for key in ("name", "refuse", "sentence"):
             if key not in sets:
@@ -544,6 +682,7 @@ def _frame(check: _Check, node: dict, kind: str, frames: tuple,
     for key in node:
         if key not in FRAME_KEYS[kind]:
             check.say(node, f"a frame {kind} has no key {key!r}")
+    _rules_of(check, node)
     where = _known(frames, before)
     inner = frames + (node,)
     if kind == "each":
@@ -653,10 +792,24 @@ def _frame(check: _Check, node: dict, kind: str, frames: tuple,
 PREPARES = ("document", "transcribe", "split", "lists")
 
 
-def problems(tree) -> list:
+def known_rules(profile) -> dict:
+    """{name: Rule} of every rule a box or frame of *profile*'s flow may
+    set for itself: the rules of its line (`rules.registry`) and those its
+    graph file declares (`graphfile.declared`), which steps read too (the
+    rounding a compute box checks a computed number with)."""
+    from .. import graphfile, rules
+    return {**graphfile.declared(profile), **rules.registry(profile)}
+
+
+def problems(tree, known: Optional[dict] = None) -> list:
     """Everything the run could not do with the drawing *tree*: [{"id": the
-    box or frame or None, "message"}], [] where it can run."""
-    check = _Check()
+    box or frame or None, "message"}], [] where it can run. *known* are the
+    rules a step may set (`known_rules`), the active profile's where not
+    given."""
+    if known is None:
+        from ..profile import active_profile
+        known = known_rules(active_profile())
+    check = _Check(known)
     if not isinstance(tree, list) or not tree:
         return [{"id": None, "message": "the flow is a list of boxes and "
                  "frames, not empty"}]
@@ -671,20 +824,27 @@ def problems(tree) -> list:
     for kind in PREPARES + ("write",):
         if top.count(kind) != 1 or every.count(kind) != 1:
             check.say({}, f"{kind} stands once, at the top")
-    for kind in ("compute", "sentences", "works"):
+    for kind in ("compute", "catalogue", "sentences", "works"):
         if every.count(kind) > 1:
             check.say({}, f"{kind} stands once at most")
+    # What the runner does once a document is read, in its order.
+    later = [kind for kind, box in blocks.LIBRARY.items()
+             if box.group == "end" and kind != "write"]
     if "write" in top:
         after = top[top.index("write") + 1:]
-        if any(kind not in (None, "compute") for kind in after) \
+        if any(kind not in [None] + later for kind in after) \
                 or any(kind_of(node) != "box" for node in tree[
                     top.index("write") + 1:] if isinstance(node, dict)):
-            check.say({}, "write stands at the end; only compute comes "
-                      "after it")
+            check.say({}, f"write stands at the end; only "
+                      f"{' and '.join(later)} come after it")
     if "compute" in top and "write" in top \
             and top.index("compute") < top.index("write"):
         check.say({}, "compute stands after write: it computes from the "
                   "rows the reading wrote")
+    ends = [kind for kind in top if kind in later]
+    if ends != sorted(ends, key=later.index):
+        check.say({}, f"{' and '.join(later)} stand in this order: the run "
+                  f"does them so")
     # The fields read in pieces come before the values of their finds.
     order = [node for node in tree if isinstance(node, dict)]
     pieces_at = [i for i, node in enumerate(order)
@@ -714,9 +874,8 @@ def prompt_problems(tree: list, profile) -> list:
     from .. import prompts
     from . import addressed, compute
     out = []
-    for node, frames in walk(tree):
-        if kind_of(node) != "box" or node.get("off") \
-                or any(f.get("off") for f in frames):
+    for node, _frames in on(tree):
+        if kind_of(node) != "box":
             continue
         kind = blocks.LIBRARY.get(node.get("box"))
         if kind is None or not kind.asks:
@@ -735,7 +894,7 @@ def prompt_problems(tree: list, profile) -> list:
     return out
 
 
-# -- the file ------------------------------------------------------------------
+# -- the file -----------------------------------------------------------------
 
 def path_of(profile) -> Path:
     """Where *profile* writes its flow."""
@@ -888,7 +1047,7 @@ def tree_of(profile=None) -> list:
     return load(profile).tree
 
 
-# -- what a run reads with -----------------------------------------------------
+# -- what a run reads with ----------------------------------------------------
 
 def _setting(number: Number, raw: str) -> int:
     """The value of a number as its setting spells it."""

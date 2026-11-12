@@ -46,6 +46,18 @@ negative step), tables and figures skipped. A table or figure counts from
 its own position. None past either end, for step 0, and when `owner` is
 not in `passages`.
 
+### fetch_run
+
+```python
+def fetch_run(passages: list[Source], owner: tuple[str, int],
+              forward: bool) -> list[Source]
+```
+
+The sections an ask for "next" (*forward*) or "previous" brings in
+one go: as many as the rule `fetch_next` says, each the one after the
+one before it (`following`), fewer where the plan ends first. The
+nearest to *owner* first.
+
 ### sections_up_to
 
 ```python
@@ -88,7 +100,8 @@ head (provenance "table_before": {"owner", "text"}). Owner decisions
 break or within a page, loses its title, head and unit in its later
 parts, and whether it is the same table is the model's reading. A table
 may continue the table right before it when that table stands on its
-page or the page before and has a transcribed head; what stands between
+page or up to the rule `table_continues_pages` pages before and has a
+transcribed head; what stands between
 them, a heading included, does not part them. The transcription asks
 and joins by the same rule (`docpipe.visuals.continuation`).
 
@@ -123,12 +136,14 @@ no hits, never as an exception.
 ### two_pages
 
 ```python
-def two_pages(passages: list, pages: Optional[int], span: int = 2) -> int
+def two_pages(passages: list, pages: Optional[int],
+              span: Optional[float] = None) -> int
 ```
 
 The text of *span* pages of this plan, in characters: *span* times
-its mean; two pages unless said otherwise. What the compute step cuts a
-passage it fetches to. A figure's description is not counted: a figure
-is never cut, whatever its description's length.
+its mean; the rule `compute_fetch_pages` pages unless said otherwise.
+What the compute step cuts a passage it fetches to. A figure's
+description is not counted: a figure is never cut, whatever its
+description's length.
 
 [Back to the index](../README.md)

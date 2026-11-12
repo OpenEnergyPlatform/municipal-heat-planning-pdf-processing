@@ -83,8 +83,11 @@ MEANINGS = {
                   "so nothing is known about what was asked. Values and "
                   "refusals of it are served",
 }
-# A coordinate in one of these was not read.
-UNREAD = trust.OPEN_STATES + (OUT_OF_SLICE,)
+
+
+def unread_states() -> tuple:
+    """The states of a coordinate that was not read, as the rules say now."""
+    return trust.unread_states() + (OUT_OF_SLICE,)
 
 
 class NotFound(LookupError):
@@ -260,10 +263,11 @@ class Values:
         is a number of: 5 GWh and 9,000 MWh disagree.
         """
         claims: dict = {}
+        unread = unread_states()
         for row in rows:
             names = coordinate_names(row)
             if not _is_number(row.get("value")) or any(
-                    row.get(f"{name}_state") in UNREAD for name in names):
+                    row.get(f"{name}_state") in unread for name in names):
                 continue
             key = (row.get("parameter"),
                    tuple((name, _text(row.get(name))) for name in names

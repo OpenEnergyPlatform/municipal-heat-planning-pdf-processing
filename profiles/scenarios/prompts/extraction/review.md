@@ -1,8 +1,6 @@
 ---
-template: review
-without: [field_raw]
-temperature: 0
-max_tokens: 1024
+template: review
+without: [field_raw]
 ---
 <!-- part: role -->
 You read scientific publications on climate and energy scenarios.

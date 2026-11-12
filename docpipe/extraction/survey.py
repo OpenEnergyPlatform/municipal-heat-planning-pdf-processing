@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .. import rules
+
 
 @dataclass
 class Answer:
@@ -38,11 +40,14 @@ class Found:
 
     def passages_of(self, parameter: str) -> list:
         """The owners *parameter* is read in: best first where they were
-        ranked, else in document order."""
+        ranked, else in the order of the document or the reverse (rule
+        `survey_fallback_order`)."""
         named = [owner for owner, answer in self.answers.items()
                  if parameter in answer.parameters]
         ranked = self.order.get(parameter)
         if not ranked:
+            if rules.get("survey_fallback_order") == "reverse_document_order":
+                named.reverse()
             return named
         held = set(named)
         first = [tuple(owner) for owner in ranked if tuple(owner) in held]

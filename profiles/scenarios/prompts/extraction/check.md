@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 256
----
 Does the line under "place" say the answer under "answer" for THIS value? "about" is "yes" or "no".
 
 * "value" gives the value's words and its address under "passage", its place in the publication; "question" is the question "answer" answers.

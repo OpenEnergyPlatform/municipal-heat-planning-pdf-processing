@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 300
----
 Write ONE short sentence as it might stand in exactly this form in this publication, naming the described parameter with a plausible value and unit. It is embedded and held as a search anchor against the publication's sections, tables and figures, so it must sound like the publication, not like the ontology.
 * Write as if the information already stood there: no question, no meta sentence ("The scenario names are listed in Section 2."), no form of address, no negation ("not reported", "not available").
 * Write in English with the words these publications use: scenario, pathway, mitigation, carbon budget, Integrated Assessment Model, funded by, corresponding author. For example: "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway."

@@ -4,10 +4,11 @@
 
 pool.py: The places the chat's model requests take, shared by everyone asking.
 
-Several model names on one endpoint (LLM_MODELS) each take a few requests at
-once (LLM_SLOTS_PER_MODEL). Everything one Streamlit process asks shares those
-places: the documents of a comparison, the harvest beside the search, the
-closed questions of a turn, and all of this for two users at the same time.
+Several model names on one endpoint (rule `llm_models`) each take a few
+requests at once (rule `llm_slots_per_model`). Everything one Streamlit
+process asks shares those places: the documents of a comparison, the
+harvest beside the search, the closed questions of a turn, and all of this
+for two users at the same time.
 
 The queue is the harvest's (`docpipe/extraction/scheduler.py`): oldest turn
 first, and a request sent ahead of knowing it is needed only ever takes a place
@@ -100,6 +101,23 @@ def create(self, **kwargs)
 ```
 
 ## Functions
+
+### models
+
+```python
+def models() -> tuple
+```
+
+The model names the requests are spread over (rule `llm_models`, the
+names separated by commas); the one model where it is empty.
+
+### slots
+
+```python
+def slots() -> int
+```
+
+The requests each model takes at once (rule `llm_slots_per_model`).
 
 ### wide
 

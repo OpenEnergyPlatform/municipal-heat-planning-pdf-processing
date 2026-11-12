@@ -42,13 +42,14 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Iterable, Optional
 
+from .. import rules
 from . import archive, trace
 from .schema import ASK_STAGES
 
 log = logging.getLogger(__name__)
 
 STATS = "stats"
-OPEN = ("exhausted", "unanswered", "unbacked")
+from .fields import OPEN  # noqa: E402,F401  (rule `open_states`)
 # Every request writes `<stage>_ask`; each such kind is counted under its
 # stage, a stage no list names as well, and the known stages count even
 # when they asked nothing (owner decision 2026-11-05).
@@ -154,7 +155,7 @@ def from_harvest(harvest_dir: Path, names: Optional[set] = None) -> dict:
                     continue
                 axis = key[:-len("_state")]
                 states[parameter][axis][state] += 1
-                if state in ("derived", "out_of_slice"):
+                if state in rules.get("stats_not_asked_states"):
                     continue
                 asked += 1
                 if state in OPEN:
@@ -381,15 +382,21 @@ def collect(harvest_dir: Path, trace_dirs: Iterable[Path] = (),
 
 
 def write(harvest_dir: Path, trace_dirs: Iterable[Path] = (),
-          names: Optional[set] = None) -> Path:
-    """Collect and write; returns the file. Logs the lines a report starts
+          names: Optional[set] = None, *,
+          always: bool = False) -> Optional[Path]:
+    """Collect and write; returns the file, None where the rule
+    `write_stats` is off for this run (*always*: the command line asked for
+    the statistics, whatever the run does). Logs the lines a report starts
     with: the open coordinates per axis and the costliest stages."""
+    if not always and not rules.get("write_stats"):
+        return None
     harvest_dir = Path(harvest_dir)
     out = collect(harvest_dir, [Path(d) for d in trace_dirs
                                 if Path(d).is_dir()], names)
     target = (harvest_dir / STATS /
               (archive.folder(harvest_dir).name + ".json"))
     target.parent.mkdir(parents=True, exist_ok=True)
+    archive.keep(target)
     target.write_text(json.dumps(out, ensure_ascii=False, indent=1),
                       encoding="utf-8")
     still: Counter = Counter()
@@ -413,7 +420,7 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     archive.begin("stats")
     traces = [args.harvest / t for t in (args.trace or [Path("trace")])]
-    print(write(args.harvest, traces))
+    print(write(args.harvest, traces, always=True))
     return 0
 
 

@@ -333,6 +333,51 @@ def test_a_request_is_its_prompt_and_one_message(monkeypatch):
     assert '"settings"' in sent[1][0]["content"]
 
 
+def test_the_questions_before_about_a_value_are_messages_of_their_own(
+        monkeypatch):
+    """Where the rule `conversation` keeps the questions about a value
+    (owner decision 2026-11-07), each earlier question and its answer go
+    before the request as messages of their own, a follow-up with its
+    words after it, AND the request's own message is its question alone;
+    a request without them is one message."""
+    sent = []
+
+    def create(**request):
+        sent.append(request["messages"])
+        return SimpleNamespace(usage=None, choices=[SimpleNamespace(
+            finish_reason="stop", message=SimpleNamespace(
+                content='{"at": "3", "words": "2021"}'))])
+    client = SimpleNamespace(chat=SimpleNamespace(
+        completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(runner, "_client", lambda: client)
+    monkeypatch.setattr(runner.trace, "event", lambda *a, **k: None)
+    asks = runner.make_asks(load_profile("kwp"))
+    first = {"value": {"words": "1.200", "at": "3.2"},
+             "passage": {"lines": ["3 | Rathaus | 1.200 |"]},
+             "question": "Für welches Jahr gilt diese Zahl?"}
+    again = {**first, "answer": {"at": "9"}, "what": ["nichts"]}
+    later = {**first, "question": "Welcher Energieträger?",
+             "conversation": [
+                 {"asked": "year", "sent": first, "answer": {"at": "9"}},
+                 {"asked": "year", "follow_up": ["nichts"], "sent": again,
+                  "answer": {"at": "3", "words": "2021"}}]}
+    form, example = addressed.coord_format(False), {"at": "3", "words": "."}
+    asks.coord(later, 7, shape=form, example=example)
+    assert [m["role"] for m in sent[0]] == [
+        "system", "user", "assistant", "user", "assistant", "user"]
+    assert json.loads(sent[0][1]["content"]) == first
+    assert json.loads(sent[0][2]["content"]) == {"at": "9"}
+    shown = json.dumps(again, ensure_ascii=False, indent=1)
+    assert sent[0][3]["content"].startswith(shown + "\n\n")
+    assert json.loads(sent[0][4]["content"]) == {"at": "3", "words": "2021"}
+    own = json.loads(sent[0][5]["content"])
+    assert own == {key: value for key, value in later.items()
+                   if key != "conversation"}
+    asks.coord(first, 7, shape=form, example=example)
+    assert [m["role"] for m in sent[1]] == ["system", "user"]
+    assert json.loads(sent[1][1]["content"]) == first
+
+
 # -- 6. the search -------------------------------------------------------------
 
 def searching(phrase: str, probes=None, second: str = ""):

@@ -28,6 +28,10 @@ def run_code(code: str, context: Optional[dict] = None,
 
 Execute `code` in the sandbox with `context` injected as variables.
 
+The waiting time is *timeout*, else the rule `code_timeout_s`; a run
+that failed is sent again as often as the rule `code_resend` says, each
+time for the same time.
+
 Returns {"ok": bool, "stdout": str, "stderr": str, "exit_code": int|None,
 "error": str|None}. Never raises: a disabled sandbox or any transport/HTTP
 problem comes back as ok=False with an `error`.

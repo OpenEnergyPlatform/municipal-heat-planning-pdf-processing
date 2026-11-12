@@ -15,6 +15,7 @@ import openai
 import pytest
 
 from docpipe import providers
+from docpipe import rules as docpipe_rules
 from docpipe.app import sandbox_service
 from docpipe.extraction import compute, fields, pipeline, replies, runner
 from docpipe.extraction import schema, stats, verify
@@ -22,6 +23,8 @@ from docpipe.extraction.pipeline import Source, WorkItem
 from docpipe.extraction.spec import load as load_spec
 from docpipe.inference import code_exec, pool
 from profiles.kwp import compute as rules
+
+from conftest import in_turn
 
 SPEC = load_spec(json.loads(
     (Path(__file__).resolve().parent.parent / "profiles" / "kwp"
@@ -396,12 +399,12 @@ def computing(monkeypatch, *said, ran=None, plan=None, rank=None):
     prints, or a list of what each prints in turn. *plan* is the plan's
     passages, which give the request its tools, and *rank* how the run ranks
     them for a sentence."""
-    told = iter(said)
+    told = in_turn(said)
     asked, runs, events = [], [], []
 
     def create(**request):
         asked.append(request)
-        said = next(told)
+        said = told()
         if callable(said):
             said = said()
         if isinstance(said, Exception):
@@ -445,7 +448,7 @@ def answered(value, *used, quote=WHOLE) -> str:
 ANSWER = answered(38892.0)
 NOTHING = json.dumps({"value": None, "used": []})
 # Every request one question may make: its code, then the answers.
-TRIES = runner.MAX_RETRIES + runner.code_rounds() + 1
+TRIES = runner.reply_limit() + runner.code_rounds() + 1
 
 
 def insisting(said) -> list:
@@ -656,11 +659,11 @@ def test_a_refused_request_is_asked_again_and_answered(monkeypatch, waits):
 
 def test_a_request_refused_to_the_end_leaves_its_document_unfinished(
         monkeypatch, waits):
-    refusals = [Status(400)] * runner.MAX_RETRIES
+    refusals = [Status(400)] * runner.reply_limit()
     step, asked, _runs, events = computing(monkeypatch, *refusals, CODE,
                                            ANSWER)
     report, _done = run_step(step, share(21), amount(185200))
-    assert len(asked) == runner.MAX_RETRIES
+    assert len(asked) == runner.reply_limit()
     assert waits == [(1, False), (2, False)]
     assert len(report.tuples) == 2
     assert events[-1]["outcome"] == "unanswered"
@@ -1069,7 +1072,8 @@ def test_a_number_follows_to_the_rounding_it_is_written_with(monkeypatch):
 
 def worked_twice(monkeypatch, first, second, values=(38892.0, 38892.0)):
     """Two questions answered in turn, each with its own code."""
-    monkeypatch.setattr(runner, "FIELD_PARALLEL", 1)
+    monkeypatch.setenv("EXTRACT_FIELD_PARALLEL", "1")
+    docpipe_rules.reset()
     said = []
     for index, value in enumerate(values):
         said += [json.dumps({"action": "python",
@@ -1125,7 +1129,7 @@ def test_a_worked_out_number_inherits_the_word_its_inputs_print():
     # the end of no range.
     exact = {"qualifier": fields.UNSTATED,
              "qualifier_state": fields.SAID_UNSTATED}
-    approx = {"qualifier": rules.APPROXIMATE, "qualifier_raw": "ca.",
+    approx = {"qualifier": "out:approximate", "qualifier_raw": "ca.",
               "qualifier_quote": "ca. 300 MWh/a",
               "qualifier_state": fields.READ}
     row = {**amount(500), "range": [100, 500],
@@ -1136,7 +1140,7 @@ def test_a_worked_out_number_inherits_the_word_its_inputs_print():
     assert "qualifier" not in none \
         and none["qualifier_state"] == fields.SAID_UNSTATED
     assert (same["qualifier"], same["qualifier_raw"],
-            same["qualifier_state"]) == (rules.APPROXIMATE, "ca.", fields.READ)
+            same["qualifier_state"]) == ("out:approximate", "ca.", fields.READ)
     assert (mixed["qualifier"], mixed["qualifier_state"]) == (
-        rules.APPROXIMATE, fields.DERIVED)
+        "out:approximate", fields.DERIVED)
     assert not any("range" in out for out in (none, same, mixed))

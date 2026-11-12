@@ -89,6 +89,48 @@ DERIVED = "derived"
 # is an empty cell, and an empty cell is the one thing every state in
 # this module was written to prevent.
 OUT_OF_SLICE = "out_of_slice"
+STATES = (READ, SAID_UNSTATED, UNBACKED, EXHAUSTED, UNANSWERED, DERIVED,
+          OUT_OF_SLICE)
+
+
+def state_for(event: str) -> str:
+    """The state a coordinate or a parameter ends in for *event*, as the
+    rule `state_rules` says (skipped, answered_not_stated, refused,
+    parameter_refused, parameter_cut, parameter_silent)."""
+    table = rules.get("state_rules")
+    state = table.get(event)
+    if state is None:
+        raise rules.RuleError(f"state_rules says nothing for {event!r}")
+    if state not in STATES:
+        raise rules.RuleError(f"state_rules: {event!r} ends in {state!r}, "
+                              f"which is none of {', '.join(STATES)}")
+    return state
+
+
+def open_states() -> tuple:
+    """The states that mean a coordinate is still open (rule
+    `open_states`): what a condition "open" holds for and a top-up of open
+    values reads again."""
+    return tuple(rules.get("open_states"))
+
+
+class _Open:
+    """The open states as a collection read when it is asked: `in` and
+    iteration give the rule's value of that moment. The one place the
+    conditions, the top-up and the statistics take them from."""
+
+    def __contains__(self, state) -> bool:
+        return state in open_states()
+
+    def __iter__(self):
+        return iter(open_states())
+
+    def __len__(self) -> int:
+        return len(open_states())
+
+
+OPEN = _Open()
+
 
 # The key a coordinate carries when a pass after the harvest read it, a top-up
 # that re-read it or a pass that appended its row: `<axis>_producer`, the
@@ -451,6 +493,8 @@ def derive_parameter(spec, claim: dict):
     accepts (the row is refused later, with the unit as the reason), or a unit
     two parameters accept. Then the question is a real question and is asked.
     """
+    if not rules.get("parameter_from_unit"):
+        return None
     if is_wording(spec, claim):
         text = [p for p in spec.parameters if not p.is_numeric]
         return text[0] if len(text) == 1 else None
@@ -480,6 +524,8 @@ def parameter_undecidable(spec, claim: dict) -> bool:
     spelling. They cost 178 of 853 field requests, 20.9 percent, and every
     one of the five answers they produced was refused afterwards anyway.
     """
+    if not rules.get("parameter_from_unit"):
+        return False
     if is_wording(spec, claim):
         # A wording needs a text parameter, and one is a decision.
         return not [p for p in spec.parameters if not p.is_numeric]
@@ -513,7 +559,8 @@ def derives(slot, claim: dict, parameter) -> bool:
     is asked first, and taken from the unit only where nothing read it
     (owner decision 2026-11-07: "Fragen wir trotzdem und nur im Fallback
     machen wir die Zuordnung")."""
-    if not slot.derive or not derived_by_unit(claim, parameter):
+    if (not slot.derive or not derived_by_unit(claim, parameter)
+            or rules.get("derive_from_unit") != "ask_first_then_derive"):
         return False
     return claim.get(f"{slot.name}_state") not in (READ, DERIVED,
                                                    OUT_OF_SLICE)

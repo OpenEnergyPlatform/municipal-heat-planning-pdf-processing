@@ -8,6 +8,7 @@ hit names its owner, title and the matching neighbourhood AND the hits stay in
 fault, not an exception."""
 import json
 
+from docpipe import rules
 from docpipe.extraction import lookup
 from docpipe.extraction.lookup import following, item, matching
 from docpipe.extraction.pipeline import Source
@@ -131,7 +132,7 @@ def test_matching_trims_the_line_to_the_neighbourhood():
     r = matching([sec(1, "H\n" + far)], "needle", 10_000)
     line = r.hits[0]["line"]
     assert "needle" in line
-    assert len(line) < 2 * lookup.NEIGHBOURHOOD + 20
+    assert len(line) < 2 * rules.get("pattern_hit_chars") + 20
 
 
 def test_matching_line_is_one_line_of_the_passage():
@@ -163,10 +164,10 @@ def test_matching_invalid_pattern_is_a_fault_not_an_exception():
     assert r.hits == [] and r.total == 0
 
 
-def test_matching_catastrophic_pattern_times_out_as_a_fault(monkeypatch):
-    monkeypatch.setattr(lookup, "PATTERN_TIMEOUT_S", 0.2)
+def test_matching_catastrophic_pattern_times_out_as_a_fault():
     bomb = [sec(1, "H\n" + "a" * 60 + "b")]
-    r = matching(bomb, "(a|aa)+$", 10_000)
+    with rules.overlaid(pattern_timeout_s=0.2):
+        r = matching(bomb, "(a|aa)+$", 10_000)
     assert r.fault == "timeout" and r.detail
     assert r.hits == []
 

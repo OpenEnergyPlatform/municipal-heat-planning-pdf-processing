@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from docpipe import rules
 from docpipe.extraction import runner
 
 
@@ -18,8 +19,10 @@ def fresh(monkeypatch):
     monkeypatch.setattr(runner, "_SHARED_HTTP", None)
     monkeypatch.setattr(runner, "LIMIT", SimpleNamespace(maximum=18))
     monkeypatch.setattr(runner, "SCHEDULER", None)
-    monkeypatch.setattr(runner, "LLM_BASE_URL", "http://127.0.0.1:9/v1")
+    monkeypatch.setenv("LLM_BASE_URL", "http://127.0.0.1:9/v1")
+    rules.reset()
     yield
+    rules.reset()
     if runner._SHARED_HTTP is not None:
         runner._SHARED_HTTP.close()
 

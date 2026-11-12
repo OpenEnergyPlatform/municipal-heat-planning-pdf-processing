@@ -53,9 +53,11 @@ from urllib.parse import parse_qsl, urlsplit
 from .. import graphfile
 from .. import phrases as phrase_files
 from .. import rules as rule_files
+from .. import settings
 from .. import sources as source_files
 from .. import upstream
 from ..extraction import flow as flow_files
+from ..extraction import passflow
 from ..extraction import trace as trace_files
 from . import flow as flow_view
 from . import flowtry
@@ -333,9 +335,14 @@ class App:
             "/api/flow/measured": ("POST", self._flow_measured),
             "/api/flow/try": ("POST", self._flow_try),
             "/api/flow/documents": ("GET", self._flow_documents),
+            "/api/flow/passes": ("GET", self._pass_list),
+            "/api/flow/pass": ("GET", self._pass),
+            "/api/flow/pass/check": ("POST", self._pass_check),
+            "/api/flow/pass/save": ("POST", self._pass_save),
             "/api/rules": ("GET", self._rules),
             "/api/rules/check": ("POST", self._rules_check),
             "/api/rules/save": ("POST", self._rules_save),
+            "/api/machine/save": ("POST", self._machine_save),
             "/api/sources": ("GET", self._sources),
             "/api/sources/check": ("POST", self._sources_check),
             "/api/sources/save": ("POST", self._sources_save),
@@ -731,7 +738,7 @@ class App:
         data = specs.parse(self.files.read(self.spec_path)) \
             if self.spec_path else None
         return {**flow_view.view(self.profile, raw, data, self.shown,
-                                 self._computes()),
+                                 self._computes(), self._project_path()),
                 "harvest": self.harvest is not None,
                 "traces": self.traces.names()}
 
@@ -747,6 +754,54 @@ class App:
         report, written, remove = flow_view.save(
             self.profile, raw, body.get("numbers"), body.get("base"),
             self.shown(own), body.get("tree"))
+        if written is not None:
+            self.files.write(own, written)
+        elif remove:
+            self.files.remove(own)
+        return report
+
+    # -- the flows of the follow-up passes --
+
+    def _pass_file(self, name) -> tuple:
+        """(the profile's own file of the flow *name*, its bytes or None
+        where it has none). The name is one of the flows of the profile
+        before any path is made of it, so that it cannot name a file."""
+        if not isinstance(name, str) or name not in passflow.names(
+                self.profile) or name == passflow.MAIN:
+            raise _Refusal(404, f"no flow of a follow-up pass named "
+                           f"{name!r}")
+        for _owner, path in passflow.line(self.profile, name):
+            self.files.checked(path)
+        own = passflow.path_of(self.profile, name)
+        return own, (self.files.read(own) if own.is_file() else None)
+
+    def _pass_list(self, query, body) -> dict:
+        """The flows of the follow-up passes a run of the profile can
+        start, each with where the profile writes its own file of it."""
+        return {"passes": [
+            {"name": one["name"], "file": self.shown(one["path"]),
+             "own": one["own"], "starts_from": one["starts_from"]}
+            for one in flow_view.pass_names(self.profile)]}
+
+    def _pass(self, query, body) -> dict:
+        name = query.get("name")
+        own, raw = self._pass_file(name)
+        return flow_view.pass_view(self.profile, raw, name, self.shown)
+
+    def _pass_check(self, query, body) -> dict:
+        name = body.get("name")
+        own, raw = self._pass_file(name)
+        report = flow_view.pass_judge(self.profile, raw, name,
+                                      self.shown(own), body.get("tree"))
+        report.pop("text", None)        # the page gets the diff
+        return report
+
+    def _pass_save(self, query, body) -> dict:
+        name = body.get("name")
+        own, raw = self._pass_file(name)
+        report, written, remove = flow_view.pass_save(
+            self.profile, raw, name, body.get("base"), self.shown(own),
+            body.get("tree"))
         if written is not None:
             self.files.write(own, written)
         elif remove:
@@ -851,7 +906,8 @@ class App:
             raise _Refusal(400, f"tab must be one of "
                                 f"{', '.join(rule_files.TABS)}, not {tab!r}")
         own, raw = self._rules_file()
-        return rulespage.view(self.profile, tab, raw, self.shown)
+        own_at = flow_view.own_at(flow_files.load(self.profile).tree)
+        return rulespage.view(self.profile, tab, raw, self.shown, own_at)
 
     def _rules_check(self, query, body) -> dict:
         own, raw = self._rules_file()
@@ -872,6 +928,19 @@ class App:
         if written is not None or remove:
             rule_files.reset()
         return report
+
+    def _project_path(self) -> Path:
+        """The project file the values of the machine are written to: the
+        one that applies to this process, else a new one beside the
+        repository's root."""
+        return Path(settings.project_file()
+                    or self.root / settings.PROJECT_FILE).resolve()
+
+    def _machine_save(self, query, body) -> dict:
+        """Values of the machine into the project file, never into a file
+        of the repository (`rulespage.machine_save`)."""
+        return rulespage.machine_save(self.profile, body.get("values"),
+                                      self._project_path(), self.shown)
 
     # -- the sources --
 

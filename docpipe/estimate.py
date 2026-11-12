@@ -553,7 +553,8 @@ def extract(where: Where) -> Estimate:
     spec = runner.load_spec(spec_path)
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
     anchors_sha = runner.anchors_key()
-    est = Estimate("extract", "stage 7: harvest values", model=runner.LLM_MODEL)
+    est = Estimate("extract", "stage 7: harvest values",
+                   model=runner.llm_model())
     with _readonly(where.db) as conn:
         documents = runner._documents(conn)
         sections_of = dict(conn.execute(

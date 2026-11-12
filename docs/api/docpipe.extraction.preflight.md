@@ -27,6 +27,13 @@ prompts, so the profile says which passages its prompts have to hold
 well: it says where they are (`extraction.shapes_files`) and which of their
 properties it leaves out on purpose (the rule `not_extracted`).
 
+What it checks it derives from the flow and the rules in effect, and holds
+no list of its own: the prompts it loads are those of the steps of the
+profile's flow (a run writes no anchors, so none is checked), and more can
+be named by the rule `preflight_prompts`. What a check does when it finds a
+problem is the rule `preflight_severity` (fail, warn or off); the entries
+that mean "I do not know" are `shrug_words`.
+
 Two lines only say what they find and never fail: the properties of the
 shapes that nobody asks and the definitions of the spec that are not the
 pin's.
@@ -34,6 +41,14 @@ pin's.
 Author: Felix Vossel
 
 ## Functions
+
+### shrugs
+
+```python
+def shrugs() -> set
+```
+
+The entries that mean "I do not know" (rule `shrug_words`), folded.
 
 ### prompt_checks
 
@@ -46,6 +61,17 @@ A profile's `PROMPT_CHECKS` as (entries, what is wrong with them).
 An entry is (what is checked, prompt id, passage, whether the passage
 has to be there or must not be). One that is anything else is named
 and not run: a check that cannot be read holds nothing.
+
+### prompts_in_effect
+
+```python
+def prompts_in_effect(profile) -> list
+```
+
+[(prompt id, whether the profile may leave it unwritten)] of the
+requests the steps of *profile*'s flow that are on ask with, in the
+order the flow asks them, then those the rule `preflight_prompts` names
+besides.
 
 ### silent_parameters
 

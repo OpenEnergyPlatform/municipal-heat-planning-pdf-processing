@@ -16,6 +16,8 @@ import openai
 import pytest
 
 from docpipe.extraction import runner
+
+from conftest import in_turn
 from docpipe.prompts import Prompt
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -67,8 +69,8 @@ def test_a_reply_after_it_waits_the_short_curve(waits):
 def test_a_refusal_is_asked_again_three_times_at_most_after_the_short_wait(
         waits):
     failures = runner.Failures(7)
-    said = [failures.failed(Status(400)) for _ in range(runner.MAX_RETRIES)]
-    assert runner.MAX_RETRIES == 3
+    said = [failures.failed(Status(400)) for _ in range(runner.reply_limit())]
+    assert runner.reply_limit() == 3
     assert said == [True, True, False]
     failures.wait(1)
     assert waits == [(1, False)]
@@ -181,7 +183,7 @@ def test_a_search_sentence_refused_to_the_end_leaves_its_document_unfinished(
     client, asked = refusing(Status(400))
     out = runner.document_anchor(parameters("a"), client=client,
                                  prompt=PHRASE, document_id=7)
-    assert len(asked) == runner.MAX_RETRIES
+    assert len(asked) == runner.reply_limit()
     assert out == {}
     assert runner.UNSERVED.of(7) == 1
 
@@ -206,7 +208,7 @@ def test_a_request_of_the_harvest_refused_to_the_end_leaves_its_document_unfinis
                                 [{"role": "user", "content": "{}"}],
                                 {"type": "object"}, 7, "find", "found")
     assert out is None
-    assert len(asked) == runner.MAX_RETRIES
+    assert len(asked) == runner.reply_limit()
     assert runner.UNSERVED.of(7) == 1
 
 
@@ -214,11 +216,11 @@ def test_a_request_of_the_harvest_refused_to_the_end_leaves_its_document_unfinis
 
 def calling(*said):
     """A call that answers or raises *said* in turn, and its calls."""
-    told, calls = iter(said), []
+    told, calls = in_turn(said, "the call"), []
 
     def call(*args):
         calls.append(args)
-        out = next(told)
+        out = told()
         if isinstance(out, Exception):
             raise out
         return out
@@ -234,10 +236,10 @@ def test_a_search_the_server_failed_is_asked_again_until_it_answers(waits):
 
 
 def test_a_search_refused_to_the_end_fails_its_document(waits):
-    call, calls = calling(*[Status(400)] * runner.MAX_RETRIES, ["p1"])
+    call, calls = calling(*[Status(400)] * runner.reply_limit(), ["p1"])
     with pytest.raises(Status):
         runner.persistently("search", call)(7)
-    assert len(calls) == runner.MAX_RETRIES
+    assert len(calls) == runner.reply_limit()
     assert waits == [(1, False), (2, False)]
     # the failure by construction: a refusal fewer than three times is
     # asked again and answered
@@ -251,8 +253,12 @@ RULE = {"failed", "answered", "wait", "given_up"}
 
 
 def _request(call: ast.Call) -> bool:
-    """Whether *call* is `<client>.chat.completions.create(...)`."""
+    """Whether *call* sends a request: `<client>.chat.completions.create(...)`
+    or `send_request(...)`, the one function of the harvest that makes the
+    first (`runner.send_request`)."""
     func = call.func
+    if isinstance(func, ast.Name) and func.id == "send_request":
+        return True
     return (isinstance(func, ast.Attribute) and func.attr == "create"
             and isinstance(func.value, ast.Attribute)
             and func.value.attr == "completions"
@@ -291,6 +297,8 @@ def requests_without_the_rule(root: Path = STAGE) -> list:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for top in tree.body:
+            if getattr(top, "name", "") == "send_request":
+                continue            # the callers follow the rule, not it
             if not any(isinstance(node, ast.Call) and _request(node)
                        for node in ast.walk(top)):
                 continue

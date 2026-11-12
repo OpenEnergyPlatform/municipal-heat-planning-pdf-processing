@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 2048
----
 Name every shown line that prints a value of the field under "field" for this publication, with its address and the words of the value.
 
 * A value is what the field means ("means"), of this publication itself, not of a work it cites, presents or compares.

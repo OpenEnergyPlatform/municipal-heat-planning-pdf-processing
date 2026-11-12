@@ -1,0 +1,36 @@
+{
+  "flow": [
+    {
+      "id": "review_stored",
+      "box": "stored",
+      "set": {
+        "files": "documents",
+        "label": "review"
+      }
+    },
+    {
+      "id": "review_review",
+      "box": "review",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 1024
+      }
+    },
+    {
+      "id": "review_summary",
+      "box": "summary"
+    },
+    {
+      "id": "review_replace",
+      "box": "replace"
+    },
+    {
+      "id": "review_carry_stamp",
+      "box": "carry_stamp"
+    },
+    {
+      "id": "review_worklist",
+      "box": "worklist"
+    }
+  ]
+}

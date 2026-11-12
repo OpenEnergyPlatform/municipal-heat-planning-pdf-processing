@@ -995,7 +995,7 @@ def _render_kg(values: list) -> None:
                      hooks.spec, hooks.axes, (value.get("abouts") or "").split())]
         st.caption("🏷 " + " · ".join([value["partLabel"]] + about))
         level = kg_route.trust_level(value["trust"], hooks.prose)
-        if level in kg_route.REVIEW_LEVELS:
+        if level in kg_route.review_levels():
             st.warning(value["trust"])
         elif level == kg_route.LEVEL_B:
             st.caption(value["trust"])

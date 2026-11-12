@@ -183,3 +183,5 @@ cython_debug/
 .vscode
 # pytest moves its temp root here when /tmp has no room (tests/conftest.py)
 .pytest_tmp/
+# the project file of a machine (docpipe edit writes its values there)
+docpipe.toml

@@ -39,6 +39,16 @@ one row of it stays (`same`, owner decision 2026-11-03).
 def parts_of() -> dict
 ```
 
+### split_axes
+
+```python
+def split_axes() -> tuple
+```
+
+The axes a share looks for its whole over: those of `compute_parts`
+but the area, so that an axis added to the rule is asked for shares as
+well as for sums (the same rule, read twice).
+
 ### qualified
 
 ```python
@@ -87,7 +97,19 @@ is no amount: two peaks do not add up, and neither do two emission
 factors, converted onto a unit of their own (g CO2/kWh) and not onto
 their parameter's. An `out:` quantity has no class the graph takes: a
 specific value, a saving, a useful energy. Zero is a part of nothing and
-the whole of nothing, and rows of it fill plans' tables.
+the whole of nothing, and rows of it fill plans' tables. Three rules
+loosen this: `compute_zero_counts`, `compute_needs_frame` and
+`compute_out_quantity_counts`.
+
+### tolerance
+
+```python
+def tolerance() -> float
+```
+
+How far apart two numbers may lie and still be one (graph rule
+`rounding_tolerance`): the step's own value where the step that runs
+sets one, else the graph's.
 
 ### same_number
 
@@ -118,7 +140,8 @@ One row per statement, the most precisely printed of each.
 def holds_its_sum(parts: list) -> bool
 ```
 
-Is the largest of three or more numbers the sum of the others?
+Is the largest of three or more numbers (rule
+`sum_printed_least_numbers`) the sum of the others?
 
 ### known
 

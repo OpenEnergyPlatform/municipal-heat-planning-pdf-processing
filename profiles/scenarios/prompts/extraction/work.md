@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 1024
----
 Say whose results the lines under "passage" state: under "found" each shown line that names another work than this publication whose results lines of the piece state, with the work's name; under "own" the shown line that shows the other lines state this publication's own results.
 
 * "field" says what counts as a work ("means"): a study, report, model run or publication this publication presents, compares, reviews or cites, such as each row of a table that compares studies, or a section about one study.

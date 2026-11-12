@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from .. import rules
 from . import trace
 from .remap import _read_stamp as read_stamp
 
@@ -55,6 +56,20 @@ def read_owners(directory: Path, name: str) -> set:
     requests alone; empty when there is none."""
     path = trace.path_of(directory, name)
     return owners_in(trace.lines(path, kinds=("rows",))) if path else set()
+
+
+def skips_unknown_reading() -> bool:
+    """Whether a document whose earlier readings cannot be told (no record,
+    no survey) is skipped and not read whole (rule
+    `rest_without_trace`)."""
+    return rules.get("rest_without_trace") == "skip"
+
+
+def done_to_end(stamp_path: Path) -> bool:
+    """Whether the pass for the rest of the plan reads the document no more
+    because it has read it to its end (rule `rest_once_per_document`)."""
+    return bool(rules.get("rest_once_per_document")) \
+        and read_to_end(stamp_path)
 
 
 def read_to_end(stamp_path: Path) -> bool:

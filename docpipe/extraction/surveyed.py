@@ -43,12 +43,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
+from .. import rules
 from .lookup import continued
 from . import fields
 from . import flow as flow_map
-from .addressed import Counts, Plan
-from .pipeline import (Batch, DocumentReport, Row, WorkItem, drop_repeats,
-                       row_label)
+from .addressed import Plan
+from .pipeline import Batch, Row, WorkItem, row_label
 from .reading import NO_ANSWER, Read
 from .survey import Answer, Found
 from .verify import canonical_number, flat, quote_in
@@ -60,8 +60,6 @@ log = logging.getLogger(__name__)
 STAGE = "survey"
 # Where the frame of a field appended to a stored harvest came from.
 FRAME_SURVEYED = "the survey of the new parameters"
-# Documents whose pieces a pass over a stored harvest keeps at once.
-PLANS_KEPT = 8
 
 
 def hole(document_id: int, source, why: str,
@@ -195,12 +193,16 @@ class SurveyedHarvest:
         self.transcripts = transcripts
         self.orders = orders
         self.numbers = numbers or flow_map.default()
-        self.chunk_units = int(self.numbers.piece_lines)
         self.each = each
         self.trace = trace
         self._made: dict = {}
         self._plans: collections.OrderedDict = collections.OrderedDict()
         self._lock = threading.Lock()
+
+    @property
+    def chunk_units(self) -> int:
+        """The lines a chunk has, as the step that runs reads them."""
+        return flow_map.number(self.numbers, "piece_lines")
 
     def reader_of(self, spec):
         # The spec is held with what was made of it, so its id is not given
@@ -226,9 +228,13 @@ class SurveyedHarvest:
         # (`engine.Engine.plan`).
         plan, counts = self.reader_of(spec).engine.plan(
             document_id, sources, self.transcripts, self.each, self.numbers)
+        # How many plans the run keeps is the memory of the run, whatever
+        # step asks for a plan.
+        with rules.in_step(None):
+            kept = rules.get("plans_kept")
         with self._lock:
             self._plans[document_id] = (plan, counts)
-            while len(self._plans) > PLANS_KEPT:
+            while len(self._plans) > kept:
                 self._plans.popitem(last=False)
         return plan, counts
 
@@ -287,7 +293,10 @@ class SurveyedHarvest:
             plan, parameters, chunks, counts, None, order_fields)
         if self.halted():
             return None
-        derive_left(reads)
+        # What the unit decides is the writing's, read with the values of
+        # its box (`derive_from_unit`).
+        with self.reader_of(spec).engine.step_of("write"):
+            derive_left(reads)
         if self.trace is not None:
             self.trace("asked", document_id, requests=dict(counts.asked),
                        refused=dict(counts.failed),
@@ -345,37 +354,11 @@ def take_found(whole: SurveyedHarvest, document_id: int, kept: list,
     return whole(document_id, scope="found", passages=kept, also=also)
 
 
-def _counted(log_label: str):
-    """A pass in the run's own loop: harvest_document(document_id, filename)
-    -> (written, failures), with what it counted, logged at the end."""
-
-    class Counted:
-        def __init__(self, step: Callable):
-            self.step = step
-            self.stats: Counter = Counter()
-            self._lock = threading.Lock()
-
-        def __call__(self, document_id: int, filename: str) -> tuple:
-            written, failed, stats = self.step(document_id, filename)
-            from . import trace
-            trace.flush(document_id)
-            with self._lock:
-                self.stats.update(stats)
-                self.stats["documents looked at (documents)"] += 1
-            return written, failed
-
-        def report(self) -> None:
-            with self._lock:
-                for key, value in sorted(self.stats.items()):
-                    log.info("%s: %-64s %d", log_label, key, value)
-
-    return Counted
-
-
 def append_parameters(document_id: int, filename: str, out_dir: Path,
                       spec, current: dict, deps: dict) -> tuple:
     """(written, failures, stats) of --top-up-parameters for one stored
-    document, in a run that harvests from the survey.
+    document, in a run that harvests from the survey: the first chain of
+    the flow `top_up_parameters` (`passflow`, `passboxes`).
 
     The rules of `topup_parameter.append_document`, which this is for such a
     run: only the addition may have moved, the stored lines stay as they
@@ -389,103 +372,22 @@ def append_parameters(document_id: int, filename: str, out_dir: Path,
     lists cannot be closed), "take", "locate", "frame_names" and
     "dynamic_ok".
     """
-    from . import runner
-    from .remap import (enter_producer, next_producer, stamp_forward,
-                        stamp_path_of)
-    from .topup_parameter import (PASS, _write_lines, appended_lines,
-                                  classify, drop_stored_repeats, not_read,
-                                  point)
-    from .trust import parameter_states
-    stats: Counter = Counter()
-    name = Path(filename).stem
-    path = Path(out_dir) / f"{name}.jsonl"
-    stamp_path = stamp_path_of(path)
-    verdict = classify(
-        stamp_path, {**current, **runner.document_current(name)}, spec, path,
-        doc_spec_of=lambda: deps["document_spec"](document_id),
-        frame_names=deps.get("frame_names") or (),
-        dynamic_ok=deps.get("dynamic_ok", True))
-    if verdict.kind == "none":
-        stats["documents without a new parameter (documents)"] += 1
-        return False, 0, stats
-    if verdict.kind == "blocked":
-        log.info("top-up-parameters: %s stays stale as a whole: %s", name,
-                 verdict.why)
-        stats["documents left stale as a whole (documents)"] += 1
-        return False, 0, stats
-    if verdict.kind == "failed":
-        log.error("top-up-parameters: %s not taken: %s", name, verdict.why)
-        stats["documents not taken (documents)"] += 1
-        return False, 1, stats
-    settled = verdict.owned | verdict.shared
-    uris = [p.uri for p in verdict.new]
-    stored = verdict.stored
-    stats["unreadable lines kept (lines)"] += stored.unreadable
-    if verdict.kind == "applied":
-        if stamp_forward(stamp_path, current, settled):
-            stats["stamps completed, the file already held the parameters "
-                  "(documents)"] += 1
-            return True, 0, stats
-        log.error("top-up-parameters: %s holds %s and its stamp could not be "
-                  "completed", name, ", ".join(uris))
-        stats["documents not taken (documents)"] += 1
-        return False, 1, stats
+    from . import passflow
+    from ..profile import active_profile
+    run = passflow.Run(
+        out=Path(out_dir), spec=spec, current=current, deps=deps,
+        take_parameters=deps["take"], locate=deps.get("locate"))
+    doc = passflow.one(passflow.load("top_up_parameters", active_profile()),
+                       run, document_id, filename)
+    return doc.written, doc.failed, _counts(doc.stats)
 
-    doc_spec = deps["document_spec"](document_id) or spec
-    before = runner.UNSERVED.of(document_id)
-    taken = deps["take"](document_id, uris)
-    if taken is None:
-        return False, 0, stats
-    report = DocumentReport(document_id=document_id,
-                            owners_harvested=taken.passages,
-                            planned={STAGE: taken.passages},
-                            sources_of=taken.sources_of)
-    runner.fold_answers(taken.answered, report, locate=deps.get("locate"),
-                        spec=doc_spec)
-    drop_repeats(report)
-    verdict_run = runner.not_happened(
-        report, answered=taken.replies,
-        lost=runner.UNSERVED.of(document_id) - before)
-    if verdict_run is not None:
-        log.error("top-up-parameters: %s: %s was not read completely, %s; "
-                  "nothing is written", name, ", ".join(uris),
-                  not_read(*verdict_run))
-        stats["documents not read completely (documents)"] += 1
-        return False, 1, stats
 
-    only = runner.narrow_spec(doc_spec, uris)
-    states = parameter_states(only, report.tuples, report.refusals,
-                              harvested=report.owners_harvested,
-                              answered=taken.replies,
-                              sources_of=report.sources_of)
-    rows, identical = drop_stored_repeats(report.tuples, stored.tuples)
-    position = next_producer(stamp_path)
-    for row in rows:
-        point(row, position)
-    report.tuples = rows
-    runner.check_against_schema(report, name, spec, states)
-    # Entered before the rows that point at it.
-    enter_producer(stamp_path, {**runner.producer(PASS, runner.LLM_MODEL),
-                                "parameters": uris, "frame": FRAME_SURVEYED})
-    _write_lines(path, appended_lines(stored, document_id, rows,
-                                      report.refusals, states))
-    if not stamp_forward(stamp_path, current, settled):
-        log.error("top-up-parameters: %s was appended to and its stamp could "
-                  "not be written; the next run completes it", name)
-        stats["documents not taken (documents)"] += 1
-        return True, 1, stats
-    stats["documents appended (documents)"] += 1
-    stats["tuples appended (tuples)"] += len(rows)
-    stats["refusals appended (refusals)"] += len(report.refusals)
-    stats["tuples identical to a stored tuple, not appended (tuples)"] += \
-        identical
-    stats["stored refusals not revisited (refusals)"] += len(stored.refusals)
-    for state in states:
-        stats[f"parameters {state['state']} (parameters x documents)"] += 1
-    log.info("top-up-parameters: %s: %s appended, %d tuple(s) and %d "
-             "refusal(s)", name, ", ".join(uris), len(rows),
-             len(report.refusals))
-    return True, 0, stats
+def _counts(stats: Counter) -> Counter:
+    """What a pass over one document counted, as the callers of the single
+    document have it: the document itself is counted by the caller."""
+    stats = Counter(stats)
+    stats.pop("documents", None)
+    return stats
 
 
 def surveyed_owners(out_dir: Path, document_id: int) -> tuple:
@@ -538,7 +440,9 @@ def append_unread(document_id: int, filename: str, out_dir: Path,
                   deps: dict) -> tuple:
     """(written, failures, stats) of the second half of --top-up-open for
     one stored document, in a run that harvests from the survey: what
-    nothing has read yet, read now and appended after the stored lines.
+    nothing has read yet, read now and appended after the stored lines
+    (the chain of the flow `top_up_open` that starts at the unread
+    passages).
 
     Unread is a passage no survey of the harvest answered (one it left
     unanswered, or one outside the found places of a harvest read in part),
@@ -553,104 +457,12 @@ def append_unread(document_id: int, filename: str, out_dir: Path,
     *deps* holds "take" (document_id, passages, also -> Taken), "passages_of"
     (document_id -> every passage), "locate" and "spec".
     """
-    from . import runner
-    from .remap import enter_producer, next_producer, stamp_path_of
-    from .topup import read_harvest
-    from .topup_parameter import (_write_lines, appended_lines,
-                                  drop_stored_repeats, not_read, point)
-    from .topup_rest import (HARVEST_TRACE_DIR, PASS, read_owners,
-                             read_to_end)
-    stats: Counter = Counter()
-    name = Path(filename).stem
-    path = Path(out_dir) / f"{name}.jsonl"
-    stamp_path = stamp_path_of(path)
-    if not path.is_file():
-        stats["documents without a harvest (documents)"] += 1
-        return False, 0, stats
-    if read_to_end(stamp_path):
-        stats["documents already read to their end (documents)"] += 1
-        return False, 0, stats
-    answers, unanswered = surveyed_owners(out_dir, document_id)
-    read = set(answers) | read_owners(Path(out_dir) / HARVEST_TRACE_DIR,
-                                      name)
-    if not read and not unanswered:
-        stats["documents without a trace of what was read (documents)"] += 1
-        return False, 0, stats
-    stored = read_harvest(path)
-    stats["unreadable lines kept (lines)"] += stored.unreadable
-    passage_holes, reading_holes = holes_of(stored.refusals)
-    passages = [s for s in deps["passages_of"](document_id)
-                if (s.owner_kind, s.owner_id) not in read - passage_holes]
-    surveyed_again = {(s.owner_kind, s.owner_id) for s in passages}
-    also = Found(True)
-    for owner, parameters in reading_holes.items():
-        if owner in surveyed_again:
-            continue               # surveyed again whole
-        said = answers.get(owner)
-        also.answers[owner] = Answer(
-            owner, sorted(parameters),
-            {k: list(v) for k, v in (said.tuples if said else {}).items()},
-            [])
-    if not passages and not also.answers:
-        enter_producer(stamp_path, runner.producer(PASS, runner.LLM_MODEL))
-        stats["documents with nothing unread (documents)"] += 1
-        return True, 0, stats
-
-    before = runner.UNSERVED.of(document_id)
-    taken = deps["take"](document_id, passages, also)
-    if taken is None:
-        return False, 0, stats
-    report = DocumentReport(document_id=document_id,
-                            owners_harvested=taken.passages,
-                            planned={STAGE: taken.passages},
-                            sources_of=taken.sources_of)
-    runner.fold_answers(taken.answered, report, locate=deps.get("locate"),
-                        spec=deps["spec"])
-    drop_repeats(report)
-    verdict = runner.not_happened(
-        report, answered=taken.replies,
-        lost=runner.UNSERVED.of(document_id) - before)
-    if verdict is not None:
-        log.error("top-up-rest: %s was not read completely, %s; nothing is "
-                  "written", name, not_read(*verdict))
-        stats["documents not read completely (documents)"] += 1
-        return False, 1, stats
-
-    rows, identical = drop_stored_repeats(report.tuples, stored.tuples)
-    position = next_producer(stamp_path)
-    for row in rows:
-        point(row, position)
-    # Entered before the rows that point at it.
-    enter_producer(stamp_path, runner.producer(PASS, runner.LLM_MODEL))
-    _write_lines(path, appended_lines(stored, document_id, rows,
-                                      report.refusals, []))
-    stats["documents appended (documents)"] += 1
-    stats["passages read (passages)"] += len(passages)
-    stats["readings read again (passages x parameters)"] += sum(
-        len(a.parameters) for a in also.answers.values())
-    stats["tuples appended (tuples)"] += len(rows)
-    stats["refusals appended (refusals)"] += len(report.refusals)
-    stats["tuples identical to a stored tuple, not appended (tuples)"] += \
-        identical
-    log.info("top-up-rest: %s: %d passage(s) surveyed, %d reading(s) read "
-             "again, %d tuple(s) and %d refusal(s) appended", name,
-             len(passages), len(also.answers), len(rows),
-             len(report.refusals))
-    return True, 0, stats
-
-
-class ParameterPass(_counted("top-up-parameters")):
-    """--top-up-parameters in a run that harvests from the survey."""
-
-    def __init__(self, out_dir: Path, spec, current: dict, deps: dict):
-        super().__init__(lambda document_id, filename: append_parameters(
-            document_id, filename, out_dir, spec, current, deps))
-
-
-class UnreadPass(_counted("top-up-rest")):
-    """The second half of --top-up-open in a run that harvests from the
-    survey."""
-
-    def __init__(self, out_dir: Path, deps: dict):
-        super().__init__(lambda document_id, filename: append_unread(
-            document_id, filename, out_dir, deps))
+    from . import passflow
+    from ..profile import active_profile
+    run = passflow.Run(
+        out=Path(out_dir), spec=deps["spec"], deps=deps,
+        take_passages=deps["take"], passages_of=deps["passages_of"],
+        locate=deps.get("locate"))
+    doc = passflow.one(passflow.load("top_up_open", active_profile()), run,
+                       document_id, filename, start="unread")
+    return doc.written, doc.failed, _counts(doc.stats)

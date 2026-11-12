@@ -23,22 +23,30 @@ a setting (`Rule.env`) is set by it where it is set: the environment, then
 the project file, then the file.
 
 A run reads with the rules of its profile (`use`; `current` takes the
-ambient profile's where no run said which). Nothing here decides whether a
-harvest is current: a pass names the sha256 of its rules in its entry of the
-stamp for a reader, as it names its prompts and its flow (owner decision
-2026-09-10: a stamp rests on the questions of the spec alone).
+ambient profile's where no run said which). A step of the flow and the
+frames around it may set a rule for themselves (`"rules"` of a box or frame
+in `flow.json`, owner 2026-11-11: "alles soll anpassbar sein"): while the
+step runs, its values lie over the run's (`STEP`, set by
+`engine.Engine.step`), the innermost frame's over the outer ones', so a
+value is read in this order: the step, its frames from the inside out, the
+setting of the start, the file. `get` is the one way a rule is read.
+Nothing here decides whether a harvest is current: a pass names the sha256
+of its rules in its entry of the stamp for a reader, as it names its
+prompts and its flow (owner decision 2026-09-10: a stamp rests on the
+questions of the spec alone).
 
 Author: Felix Vossel
 """
 from __future__ import annotations
 
+import contextvars
 import difflib
 import hashlib
 import json
 import os
 import threading
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -46,42 +54,16 @@ FILE = "rules.json"
 DEFAULT_NAME = "default"
 DEFAULT = Path(__file__).resolve().parent / "builtin" / DEFAULT_NAME / FILE
 
-# The tabs of `docpipe edit` a rule stands in.
-TABS = ("spec", "prompts", "flow", "sources", "graph")
-# What a rule's value is.
-KINDS = ("whole", "number", "switch", "choice", "text", "chars", "texts",
-         "map", "table", "range")
+# What a rule is, its tabs and kinds and the kinds of steps that read
+# rules stand in ruleset/kit.py, which the ruleset's modules import
+# while this module gathers their rules (below).
+from .ruleset.kit import (ASKING, KINDS, SHOWING, TABS,  # noqa: F401
+                          TAKING, WRITING, Rule, rule)
 
 
 class RuleError(ValueError):
     """A rules file or a value a run cannot read. It names the file or the
     rule."""
-
-
-@dataclass(frozen=True)
-class Rule:
-    """One rule a run follows: what the code knows of it."""
-    name: str
-    tab: str
-    group: str
-    kind: str
-    help: str
-    least: Optional[float] = None
-    most: Optional[float] = None
-    choices: tuple = ()
-    columns: tuple = ()             # a table's columns
-    of: str = "text"                # a map's values: text, texts or whole
-    empty: bool = False             # an empty text, list or map; no range
-    env: Optional[str] = None       # the setting that wins over the file
-    env_flag: tuple = ()            # (the value where that setting is off,
-                                    # where it is on): a setting that is a
-                                    # flag and stands for one of two values
-    decided: str = ""               # the owner's decisions that set it
-    where: str = ""                 # where the code applies it
-
-
-def rule(name, tab, group, kind, help, **more) -> Rule:
-    return Rule(name, tab, group, kind, help, **more)
 
 
 _r = rule
@@ -301,25 +283,6 @@ RULES = (
        "can.",
        least=1,
        where="runner.py"),
-    _r("max_tokens_phrase", "prompts",
-       "Defaults where the prompt says nothing",
-       "whole", "The longest answer, in tokens, of a search sentence whose "
-       "prompt sets none. A search sentence is short, so a small number is "
-       "enough. A larger number allows longer sentences but reserves more "
-       "room in the model's window.", least=1, where="runner.py (phrase)"),
-    _r("max_tokens_review", "prompts",
-       "Defaults where the prompt says nothing",
-       "whole", "The longest answer, in tokens, of a second reading whose "
-       "prompt sets none. A larger number lets longer checks finish and "
-       "reserves more room in the model's window. An answer that is cut off "
-       "at the limit is not read.", least=1, where="runner.py (review)"),
-    _r("max_tokens_compute", "prompts", "Defaults where the prompt says "
-                                        "nothing",
-       "whole", "The longest answer, in tokens, of a calculation whose "
-       "prompt sets none. A calculation answers with code or with a number "
-       "and its evidence. A larger number lets longer code finish and "
-       "reserves more room in the model's window.",
-       least=1, where="runner.py (compute)"),
     _r("retry_temperature_step", "prompts", "Defaults where the prompt says "
                                             "nothing",
        "number", "How much the temperature rises for the next attempt after "
@@ -463,8 +426,7 @@ RULES = (
        "when one of these questions has changed since its stamp. The model, "
        "the prompts, the flow and the rules are never compared. Remove an "
        "entry to stop changes of that kind from causing a new reading.",
-       decided="2026-09-10",
-       where="runner.py (stale)"),
+       decided="2026-09-10", where="runner.py (stale)"),
     # -- flow: calculation ----------------------------------------------------
     _r("code_rounds", "flow", "Calculation", "whole",
        "The most code runs a calculation may use before it must answer. Each "
@@ -497,6 +459,69 @@ RULES = (
        "sent.", decided="2026-11-07",
        where="scheduler.py"),
 )
+# Which steps read each rule: where the proof noted a read (the smoke
+# probes of both profiles) and where the code reads it on ways the probes
+# do not take. A rule no step reads is the run's: it is set at the start or
+# in the file, never at a step.
+STEPS = {
+    "quote_min_chars": TAKING + ("each value", "compute"),
+    "unreachable_share": WRITING,
+    "question_keys": ("changed", "classify"),
+    "word_joiners": TAKING,
+    "minus_signs": TAKING,
+    "dotted_date_year": TAKING,
+    "same_characters": TAKING + ("split", "phrase"),
+    "decimal_mark": TAKING,
+    "year_range": TAKING,
+    "year_words": TAKING,
+    "unit_factor_places": TAKING,
+    "year_by_plan_word": TAKING,
+    "wording_most_chars": TAKING,
+    "span_words": TAKING,
+    "span_dashes": TAKING,
+    "span_marks": TAKING,
+    "default_takes_group": ("docfield", "find", "coord", "quantity",
+                            "search", "names", "classify", "write"),
+    "lines_around": ("coord", "quantity", "work_coordinate", "phrase",
+                     "search", "last_year", "about"),
+    "letter_title_page": SHOWING,
+    "letter_headings": SHOWING,
+    "letter_settings": SHOWING,
+    "letters_others": SHOWING,
+    "head_joiner": SHOWING + ("each value",),
+    "example_words": SHOWING,
+    "example_year": SHOWING,
+    "example_cell": SHOWING,
+    "temperature": ASKING + ("each value",),
+    "max_tokens": ASKING + ("each value",),
+    "retry_temperature_step": ASKING + ("each value",),
+    "retry_temperature_most": ASKING + ("each value",),
+    "image_max_side": ASKING + ("each value",),
+    "heading_in_front_chars": ASKING,
+    "sentence_marks": ("split",),
+    "abbreviations": ("split",),
+    "title_page_also": ("document",),
+    "rerank": ("order", "search"),
+    "fetches": ("search",),
+    "question_as_sentence": ("sentences", "order", "phrase"),
+    "retry_wait_s": ASKING + ("each value",),
+    "retry_wait_most_s": ASKING + ("each value",),
+    "transport_wait_s": ASKING + ("each value",),
+    "transport_wait_most_s": ASKING + ("each value",),
+    "repeat_timeout_s": ASKING + ("each value",),
+    "least_answer_tokens": ASKING + ("each value",),
+    "code_rounds": ("compute",),
+    "code_output_chars": ("compute",),
+    "compute_shown": ("compute",),
+    "same_request_once": ASKING + ("each value",),
+}
+RULES = tuple(replace(one, steps=STEPS.get(one.name, one.steps))
+              for one in RULES)
+# The rules of the reading that stood in its code until 2026-11-11
+# (owner decision 2026-11-11), one module per part of the run.
+from .ruleset import MORE as _MORE  # noqa: E402
+
+RULES = RULES + _MORE
 BY_NAME = {one.name: one for one in RULES}
 if len(BY_NAME) != len(RULES):
     raise AssertionError("rules.RULES names a rule twice")
@@ -527,7 +552,7 @@ class Rules:
         return self.values.get(name, default)
 
 
-# -- one value -------------------------------------------------------------------
+# -- one value ----------------------------------------------------------------
 
 def _nearest(name, known) -> str:
     close = difflib.get_close_matches(str(name), list(known), n=3, cutoff=0.6)
@@ -666,7 +691,7 @@ def _setting(one: Rule, raw: str):
     return value
 
 
-# -- the files ---------------------------------------------------------------------
+# -- the files ----------------------------------------------------------------
 
 def declared(profile) -> list:
     """[(profile name, its own rules, the file beside them)] of *profile*'s
@@ -887,7 +912,7 @@ def default() -> Rules:
     return load(None, environ={})
 
 
-# -- the rules a run reads with ---------------------------------------------------
+# -- the rules a run reads with -----------------------------------------------
 
 _lock = threading.Lock()
 # What a run took (`use`): (ambient profile name, Rules).
@@ -944,11 +969,110 @@ def current() -> Rules:
 _owned: dict = {}
 
 
+# -- the values of a step -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Step:
+    """The values a step of the flow and its frames set for themselves,
+    laid over each other (the innermost wins), while it runs."""
+    kind: str                       # of the innermost node (`step_kind`)
+    ident: str                      # its id in the drawing
+    values: dict                    # name -> value: rules and numbers of
+                                    # the flow
+    owners: dict                    # name -> "step <id>" or "frame <id>"
+    state: str = ""                 # of the values, "" where there are none
+
+
+STEP: contextvars.ContextVar = contextvars.ContextVar("step", default=None)
+
+
+def step_kind(node: dict) -> str:
+    """How a node of a flow is named where a rule says which steps read it:
+    a box by its kind ("find"), a frame as "each <what>", "round" or
+    "if"."""
+    if "box" in node:
+        return str(node["box"])
+    if "each" in node:
+        return f"each {node['each']}"
+    return "round" if "round" in node else "if"
+
+
+def stepped(node: dict, values: dict) -> "Step":
+    """The step of *node* with its own *values* laid over the step it
+    stands in."""
+    outer = STEP.get()
+    ident = str(node.get("id") or "")
+    owner = ("step " if "box" in node else "frame ") + ident
+    merged = dict(outer.values) if outer is not None else {}
+    owners = dict(outer.owners) if outer is not None else {}
+    for name, value in values.items():
+        merged[name], owners[name] = value, owner
+    return Step(step_kind(node), ident, merged, owners,
+                _state(merged) if merged else "")
+
+
+class in_step:
+    """Read with *step*'s values while the block runs (`STEP`)."""
+
+    def __init__(self, step: Step):
+        self.step = step
+
+    def __enter__(self) -> Step:
+        self._token = STEP.set(self.step)
+        return self.step
+
+    def __exit__(self, *exc) -> None:
+        STEP.reset(self._token)
+
+
+# The reads a run made while `recording`: (the kind of
+# step that read, the rule or number), "run" outside every step.
+_reads: Optional[set] = None
+
+
+class recording:
+    """Note every read of a rule or a number of the flow while the block
+    runs, in every thread: {(step kind, name)}."""
+
+    def __enter__(self) -> set:
+        global _reads
+        self._before = _reads
+        _reads = set()
+        return _reads
+
+    def __exit__(self, *exc) -> None:
+        global _reads
+        _reads = self._before
+
+
+def noted(name: str) -> None:
+    """Note a read of *name* where `recording` asks for it."""
+    reads = _reads
+    if reads is not None:
+        step = STEP.get()
+        reads.add((step.kind if step is not None else "run", name))
+
+
+def stepped_value(name: str):
+    """(True, the step's own value of *name*) where the step that runs or
+    a frame around it sets one, else (False, None). Noted as a read."""
+    noted(name)
+    step = STEP.get()
+    if step is not None and name in step.values:
+        return True, step.values[name]
+    return False, None
+
+
 def get(name: str, owner: Optional[str] = None):
-    """The value of the rule *name* in the rules a run reads with. A
-    profile's own code names itself as *owner*: where the ambient profile's
-    line does not declare the rule, it is *owner*'s (a test of the scenario
-    profile's regions run under another ambient profile)."""
+    """The value of the rule *name* in the rules a run reads with: the own
+    value of the step that runs or of a frame around it (`STEP`), else the
+    run's. A profile's own code names itself as *owner*: where the ambient
+    profile's line does not declare the rule, it is *owner*'s (a test of
+    the scenario profile's regions run under another ambient profile)."""
+    own, value = stepped_value(name)
+    if own:
+        return value
     rules = current()
     if owner is None or name in rules.values:
         return rules[name]
@@ -964,8 +1088,10 @@ def get(name: str, owner: Optional[str] = None):
 
 def derived(key: str, build: Callable):
     """What *build* makes of the rules in effect, made once per state of
-    the rules: a pattern compiled from a list of words."""
-    slot = (key, current().state)
+    the rules and of the step's own values: a pattern compiled from a list
+    of words."""
+    step = STEP.get()
+    slot = (key, current().state, step.state if step is not None else "")
     made = _derived.get(slot)
     if made is None:
         made = build()

@@ -168,6 +168,8 @@ def _receiver(call: ast.Call):
     """The client a `<client>.chat.completions.create(...)` goes out on, or
     None for any other call."""
     func = call.func
+    if isinstance(func, ast.Name) and func.id == "send_request":
+        return call.args[0] if call.args else None
     if not (isinstance(func, ast.Attribute) and func.attr == "create"):
         return None
     completions = func.value
@@ -203,6 +205,8 @@ def requests_without_the_rule(root: Path = STAGE) -> list:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for top in tree.body:
+            if getattr(top, "name", "") == "send_request":
+                continue            # the callers made their client repeating
             for node in ast.walk(top):
                 if not isinstance(node, ast.Call):
                     continue

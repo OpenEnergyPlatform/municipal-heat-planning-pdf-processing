@@ -251,15 +251,17 @@ class Gathered:
             get = ask.get("get")
             if get in ("next", "previous"):
                 step = 1 if get == "next" else -1
-                found = lookup.following(order, self.cursor[get], step)
-                if found is None:
+                run = lookup.fetch_run(order, self.cursor[get], step > 0)
+                if not run:
                     self._miss(ask, END)
                     continue
-                self.cursor[get] = (found.owner_kind, found.owner_id)
-                text = found.text or ""
-                if budget and len(text) > budget:
-                    text = text[:budget] if step > 0 else text[-budget:]
-                new = self._show(found, text) or new
+                for found in run:
+                    self.cursor[get] = (found.owner_kind, found.owner_id)
+                    text = found.text or ""
+                    if budget and len(text) > budget:
+                        text = text[:budget] if step > 0 \
+                            else text[-budget:]
+                    new = self._show(found, text) or new
             elif get == "item":
                 found = lookup.item(order, ask.get("id") or "")
                 if found is None:
@@ -321,7 +323,9 @@ def first_line(source: Source) -> str:
     """The first line of a passage under its title: what a hit list shows
     of it."""
     title = lookup.title_of(source)
-    return next((line.strip()[:200] for line in (source.text or "").splitlines()
+    most = rules.get("hit_line_chars")
+    return next((line.strip()[:most]
+                 for line in (source.text or "").splitlines()
                  if line.strip() and line.strip() != title), "")
 
 
@@ -382,6 +386,8 @@ def link_ranges(rows: list, slots: list) -> int:
     every other coordinate, both carry [lower, upper] under `fields.RANGE`.
     Only a list that has both entries marks ends. Returns how many ranges
     were linked."""
+    if not rules.get("link_range_ends"):
+        return 0
     ends = {fields.RANGE_LOW, fields.RANGE_HIGH}
     marked = next((slot for slot in slots if slot.is_closed
                    and ends <= {option.uri for option in slot.options}),

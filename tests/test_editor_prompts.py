@@ -143,14 +143,19 @@ def test_a_prompt_cut_for_editing_is_put_back_character_for_character():
             raw = prompts.on_disk(profile, row["id"], read)["raw"]
             cut = prompts.segments(raw)
             assert prompts.joined(cut) == raw
-    cut = prompts.segments(prompts.on_disk(KWP, "extraction/coord",
-                                           read)["raw"])
+    # the settings of a request are the flow's now: a prompt has a front only
+    # where it writes one (the second reading's)
+    cut = prompts.segments(FRONT + prompts.on_disk(KWP, "extraction/coord",
+                                                   read)["raw"])
     assert cut["front"].startswith("---\n") and len(cut["parts"]) == 5
     assert all(part["mark"].startswith("<!-- with: ")
                and part["mark"].endswith("-->\n") for part in cut["parts"])
 
 
 # -- a text a run would fail on is not written ------------------------------------
+
+FRONT = "---\ntemperature: 0\nmax_tokens: 1024\n---\n"
+
 
 def _twice(raw: str) -> str:
     cut = prompts.segments(raw)
@@ -170,8 +175,8 @@ def _twice(raw: str) -> str:
 ])
 def test_a_text_a_run_would_fail_on_is_not_written(change, said):
     disk = prompts.on_disk(KWP, "extraction/coord", read)
-    raw = change(disk["raw"])
-    assert raw != disk["raw"]
+    raw = change(FRONT + disk["raw"])
+    assert raw != FRONT + disk["raw"]
     report, data, _ = prompts.save(KWP, "extraction/coord", raw, disk)
     assert report["ok"] is False and said in report["error"]
     assert data is None and report["reason"] == "check"

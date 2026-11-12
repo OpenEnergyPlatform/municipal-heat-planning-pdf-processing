@@ -536,7 +536,7 @@ function ProbeModal({ G, opened, onClose, run, touch, d }: { G: State; opened: b
         <Text size="sm" c="dimmed">{t('Writes the graph of the harvest of this page twice into the temp directory, once with the saved file and once with your edits, and compares the two. Nothing in the profile changes.')}</Text>
         <Group gap="xs" wrap="nowrap">
           <TextBox style={{ flex: 1 }} placeholder={t('corpus database (default: the profile\'s)')} mono value={G.db} onText={text => { G.db = text; touch(); }} />
-          <Button loading={G.probing} onClick={run}>{t('Run')}</Button>
+          <Button loading={G.probing} onClick={run}>{t('Write and compare')}</Button>
         </Group>
         {P && (
           <Stack gap="xs">

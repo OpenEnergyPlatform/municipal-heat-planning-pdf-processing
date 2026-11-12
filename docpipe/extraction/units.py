@@ -89,17 +89,39 @@ def _abbreviation_ends() -> tuple:
 
 def _sentence_end():
     """A mark that ends a sentence (rule `sentence_marks`) with what closes
-    it, a space, and what may begin the next one."""
+    it, a space, and what may begin the next one (a list mark of the rule
+    `bullet_marks` may stand before it)."""
     return rules.derived("units.sentence_end", lambda: re.compile(
         r"(?<=[" + re.escape(rules.get("sentence_marks")) + r"])"
-        r"([\"'”“»)\]]*)\s+(?=[\"'„“«(\[•▪●◦\-–]?"
+        r"([\"'”“»)\]]*)\s+(?=[\"'„“«(\["
+        + re.escape(rules.get("bullet_marks")) + r"\-–]?"
         r"[A-ZÄÖÜ0-9])"))
 
 
-# A list item a transcription runs into the text before it.
-_BULLET = re.compile(r"\s+(?=[•▪●◦]\s)")
-# An ordinal or a numbered heading before a point: "3." "12." ends nothing.
-_ORDINAL = re.compile(r"(?:^|\s)\d{1,3}\.$")
+def _bullet():
+    """Where a list item a transcription runs into the text before it
+    begins (rule `bullet_marks`), None where the rule `split_bullets` says
+    a line is not split there."""
+    def made():
+        marks = rules.get("bullet_marks")
+        if not marks or not rules.get("split_bullets"):
+            return None
+        return re.compile(r"\s+(?=[" + re.escape(marks) + r"]\s)")
+    return rules.derived("units.bullet", made)
+
+
+def _ordinal():
+    """An ordinal or a numbered heading before a point: "3." "12." ends
+    nothing (rule `ordinal_max_digits` digits at most), None where the rule
+    `split_ordinals` says such a point ends a sentence like any other."""
+    def made():
+        if rules.get("split_ordinals"):
+            return None
+        return re.compile(r"(?:^|\s)\d{1,%d}\.$"
+                          % rules.get("ordinal_max_digits"))
+    return rules.derived("units.ordinal", made)
+
+
 # A line of a Markdown table and the rule under its head.
 _ROW = re.compile(r"^\s*\|.*\|\s*$")
 _RULE = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$")
@@ -114,7 +136,8 @@ def ends_abbreviated(text: str, after: str = "") -> bool:
     no sentence? *after* is what follows the break, which completes an
     abbreviation of two parts ("z." and "B.")."""
     tail = flat(text)
-    if _ORDINAL.search(tail):
+    ordinal = _ordinal()
+    if ordinal is not None and ordinal.search(tail):
         return True
     word = flat(after).split(" ", 1)[0] if after else ""
     for abbreviation in _abbreviation_ends():
@@ -134,14 +157,17 @@ def sentences_of(text: str) -> list:
     """*text* cut at its line ends, then at its sentence ends and before a
     list item it runs on into: every piece a line, none empty."""
     out: list = []
+    ahead = rules.get("abbreviation_lookahead_chars")
     for line in (text or "").splitlines():
         if not line.strip():
             continue
-        for item in _BULLET.split(line.strip()):
+        bullet = _bullet()
+        for item in (bullet.split(line.strip()) if bullet is not None
+                     else [line.strip()]):
             start = 0
             for match in _sentence_end().finditer(item):
                 if ends_abbreviated(item[start:match.start()],
-                                    item[match.end():match.end() + 12]):
+                                    item[match.end():match.end() + ahead]):
                     continue
                 end = match.start() + len(match.group(1))
                 piece = item[start:end].strip()
@@ -163,7 +189,7 @@ def line_cells(text: str) -> tuple:
     decision 2026-11-09: "26 JRC GECO 1.5C | Other | 11 (read off)" is
     addressed as 26.1 to 26.3 like a table row); () for a line of fewer
     than two."""
-    if "|" not in (text or ""):
+    if "|" not in (text or "") or not rules.get("cells_by_bar"):
         return ()
     cells = cells_of(text)
     return cells if len(cells) > 1 else ()
@@ -177,7 +203,7 @@ class Line:
     number: int
     text: str
     cells: tuple = ()
-    # "text", "title", "head", "body", "foot", "figure", "number"
+    # "text", "title", "head", "rule", "body", "foot", "figure", "number"
     role: str = "text"
 
 
@@ -227,9 +253,11 @@ class Passage:
         the head lines with as many cells as the rows: None where none."""
         widths = {len(line.cells) for line in self.lines
                   if line.role == "body"}
+        full = rules.get("head_only_full_width")
         words: list = []
         for line in self.lines:
-            if line.role != "head" or len(line.cells) not in widths:
+            if line.role != "head" or (full and len(line.cells)
+                                       not in widths):
                 continue
             if 0 < cell <= len(line.cells) and line.cells[cell - 1] \
                     and line.cells[cell - 1] not in words:
@@ -251,14 +279,19 @@ def table_lines(text: str) -> Optional[tuple]:
     head_start = at
     while head_start > 0 and _ROW.match(raw[head_start - 1]):
         head_start -= 1
-    for line in raw[:head_start]:
-        for sentence in sentences_of(line):
-            lines.append(Line(len(lines) + 1, sentence, line_cells(sentence),
-                              "title"))
+    if rules.get("table_title_lines"):
+        for line in raw[:head_start]:
+            for sentence in sentences_of(line):
+                lines.append(Line(len(lines) + 1, sentence,
+                                  line_cells(sentence), "title"))
+                fixed.append(len(lines))
+    if rules.get("table_head_lines"):
+        for line in raw[head_start:at]:
+            lines.append(Line(len(lines) + 1, line.strip(), cells_of(line),
+                              "head"))
             fixed.append(len(lines))
-    for line in raw[head_start:at]:
-        lines.append(Line(len(lines) + 1, line.strip(), cells_of(line),
-                          "head"))
+    if rules.get("table_rule_line"):
+        lines.append(Line(len(lines) + 1, raw[at].strip(), (), "rule"))
         fixed.append(len(lines))
     after = False
     for line in raw[at + 1:]:
@@ -584,6 +617,24 @@ def rendered(line: Line, letter: str = "") -> str:
     return f"{letter}{line.number} {line.text}"
 
 
+def places_problem(per_request: int) -> Optional[str]:
+    """Why a request that shows *per_request* chunks of different passages
+    cannot address them by the letters of the rule `letters_others`, None
+    where it can: for the check of the values of the flow."""
+    free = len(letters_others())
+    if per_request > free:
+        return (f"a request shows up to {per_request} chunks, each under a "
+                f"letter of its own, and the rule letters_others has only "
+                f"{free} letters")
+    return None
+
+
+class TooManyPlaces(ValueError):
+    """A request would show lines of more passages than there are letters
+    to address them by (rule `letters_others`): refused with this reason
+    and not left to a bare `StopIteration`."""
+
+
 @dataclass(frozen=True)
 class Address:
     """What a model's address names: a block's letter ("" for the
@@ -671,8 +722,14 @@ class Shown:
                     and (block.entries[0][2].owner_kind,
                          block.entries[0][2].owner_id) == tuple(owner):
                 return letter
-        return next(letter for letter in letters_others()
-                    if letter not in self.blocks)
+        free = next((letter for letter in letters_others()
+                     if letter not in self.blocks), None)
+        if free is None:
+            raise TooManyPlaces(
+                f"a request shows places from more passages than the rule "
+                f"letters_others has letters ({len(letters_others())}); "
+                f"give it more letters or show fewer chunks in one request")
+        return free
 
     def rendered(self, letter: str) -> list:
         block = self.blocks.get(letter)
@@ -710,12 +767,24 @@ class Shown:
 
         def short() -> bool:
             return len(" ".join(line.text for line, _ in out)) < minimum
-        while short() and first > 0:
-            first -= 1
-            out.insert(0, same[first][1:])
-        while short() and last + 1 < len(numbers):
-            last += 1
-            out.append(same[last][1:])
+
+        def before() -> None:
+            nonlocal first
+            while short() and first > 0:
+                first -= 1
+                out.insert(0, same[first][1:])
+
+        def after() -> None:
+            nonlocal last
+            while short() and last + 1 < len(numbers):
+                last += 1
+                out.append(same[last][1:])
+        if rules.get("quote_extend_order") == "after_then_before":
+            after()
+            before()
+        else:
+            before()
+            after()
         return out
 
     def stretch(self, address: Address) -> list:
@@ -738,7 +807,8 @@ class Shown:
         out = [replace(source, text=line.text, body=None)
                for block in self.blocks.values()
                for _, line, source in block.entries]
-        for block in self.blocks.values():
+        for block in (self.blocks.values()
+                      if rules.get("quote_may_span_lines") else ()):
             runs: dict = {}
             for _, line, source in block.entries:
                 runs.setdefault((source.owner_kind, source.owner_id),
@@ -748,16 +818,32 @@ class Shown:
         return out
 
 
+def _requested(passage: Passage, lines: list) -> list:
+    """*lines* of a passage as a request shows them: a table's title and
+    head lines only where the rules `show_table_title` and
+    `show_table_head` say so."""
+    if passage.kind != "table":
+        return lines
+    title, head = rules.get("show_table_title"), rules.get("show_table_head")
+    if title and head:
+        return lines
+    return [line for line in lines
+            if not (line.role == "title" and not title)
+            and not (line.role == "head" and not head)]
+
+
 def own_lines(chunk: Chunk) -> list:
     """[(Line, Source)] of a piece's shown lines."""
-    return [(line, chunk.passage.source) for line in chunk.lines()]
+    return [(line, chunk.passage.source)
+            for line in _requested(chunk.passage, chunk.lines())]
 
 
 def passage_lines(passage: Passage, numbers) -> list:
     """[(Line, Source)] of *numbers* of a passage, its fixed lines first."""
     wanted = sorted(set(passage.fixed) | {n for n in numbers
                                          if passage.line(n) is not None})
-    return [(passage.line(n), passage.source) for n in wanted]
+    return [(line, passage.source) for line in _requested(
+        passage, [passage.line(n) for n in wanted])]
 
 
 def title_page_of(passages: list, count: int) -> list:
@@ -765,10 +851,13 @@ def title_page_of(passages: list, count: int) -> list:
     of its first page, else of the page the rule `title_page_also` names,
     each the line of its passage (`Passage`), in the plan's order; [] for a
     plan with no page."""
-    for page in dict.fromkeys((1, rules.get("title_page_also"))):
+    figures = rules.get("title_page_with_figures")
+    for page in dict.fromkeys((rules.get("title_page_first"),
+                               rules.get("title_page_also"))):
         lines: list = []
         for passage in passages:
-            if passage.page != page or passage.kind == "figure":
+            if passage.page != page or (passage.kind == "figure"
+                                        and not figures):
                 continue
             for line in passage.lines:
                 lines.append((line, passage.source))
@@ -786,11 +875,22 @@ def short_quote(passage: Passage, numbers: list, minimum: int) -> str:
     texts = [passage.line(n).text for n in numbers if passage.line(n)]
     first = min(numbers) if numbers else 1
     last = max(numbers) if numbers else 0
-    while len(" ".join(texts)) < minimum and first > 1:
-        first -= 1
-        texts.insert(0, passage.line(first).text)
-    while len(" ".join(texts)) < minimum and passage.line(last + 1):
-        last += 1
-        texts.append(passage.line(last).text)
+    def before() -> None:
+        nonlocal first
+        while len(" ".join(texts)) < minimum and first > 1:
+            first -= 1
+            texts.insert(0, passage.line(first).text)
+
+    def after() -> None:
+        nonlocal last
+        while len(" ".join(texts)) < minimum and passage.line(last + 1):
+            last += 1
+            texts.append(passage.line(last).text)
+    if rules.get("quote_extend_order") == "after_then_before":
+        after()
+        before()
+    else:
+        before()
+        after()
     return " ".join(texts) if passage.kind != "table" \
         else "\n".join(texts)

@@ -81,10 +81,13 @@ def collect(harvest_dir: Path, trace_dirs: Iterable[Path] = (),
 
 ```python
 def write(harvest_dir: Path, trace_dirs: Iterable[Path] = (),
-          names: Optional[set] = None) -> Path
+          names: Optional[set] = None, *,
+          always: bool = False) -> Optional[Path]
 ```
 
-Collect and write; returns the file. Logs the lines a report starts
+Collect and write; returns the file, None where the rule
+`write_stats` is off for this run (*always*: the command line asked for
+the statistics, whatever the run does). Logs the lines a report starts
 with: the open coordinates per axis and the costliest stages.
 
 ### main

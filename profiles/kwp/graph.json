@@ -4,7 +4,20 @@
   "rules": {
     "base": "https://openenergyplatform.org/id/mhpkg/",
     "rounding_tolerance": 0.02,
-    "contested_in_full": true
+    "contested_in_full": true,
+    "pick_one_order": [
+      "not_contained",
+      "most_sources",
+      "located",
+      "longer"
+    ],
+    "settle_order": [
+      "wording",
+      "rounding",
+      "trust",
+      "contested"
+    ],
+    "corroborated_by_place": true
   },
   "map": {
     "prefixes": {

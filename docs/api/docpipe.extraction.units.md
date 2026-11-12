@@ -58,7 +58,7 @@ Fields:
 - `number: int`
 - `text: str`
 - `cells: tuple = ()`
-- `role: str = "text"`: "text", "title", "head", "body", "foot", "figure", "number"
+- `role: str = "text"`: "text", "title", "head", "rule", "body", "foot", "figure", "number"
 
 ### Passage
 
@@ -254,6 +254,16 @@ def key(self)
 What an order of the pieces is kept under (`addressed.order_key`):
 the lines of a piece for the plain cut, as before, else every
 setting.
+
+### TooManyPlaces
+
+```python
+class TooManyPlaces(ValueError)
+```
+
+A request would show lines of more passages than there are letters
+to address them by (rule `letters_others`): refused with this reason
+and not left to a bare `StopIteration`.
 
 ### Address
 
@@ -536,6 +546,16 @@ def rendered(line: Line, letter: str = "") -> str
 ```
 
 A line as a request shows it: its address, a space, its text.
+
+### places_problem
+
+```python
+def places_problem(per_request: int) -> Optional[str]
+```
+
+Why a request that shows *per_request* chunks of different passages
+cannot address them by the letters of the rule `letters_others`, None
+where it can: for the check of the values of the flow.
 
 ### address_of
 

@@ -144,7 +144,8 @@ class ApiEmbedder:
                 return self.client().embeddings.create(model=self.model,
                                                        input=batch)
             except Exception as exc:
-                again = (governor.status_of(exc) in governor.LIMITED
+                limited = governor.limited_statuses()
+                again = (governor.status_of(exc) in limited
                          or providers.timed_out(exc))
                 if attempt == attempts or not again:
                     raise

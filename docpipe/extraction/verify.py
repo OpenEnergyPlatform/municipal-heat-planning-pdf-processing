@@ -36,15 +36,23 @@ from decimal import Decimal
 from typing import Callable, Optional
 
 from .. import rules
-from .fields import DERIVED, READ, UNBACKED
+from .fields import DERIVED, READ, state_for
 from .spec import Parameter, fold_label
 
 TIER_TEXT = "text_located"
 TIER_VISUAL = "visual_source"
 
-# The owner kinds whose text is the document's own prose. Everything else is
-# a model's reading of a picture.
-TEXT_KINDS = ("section",)
+
+
+def tier_of(owner_kind: str) -> str:
+    """How well a place of this kind backs a value (rule `evidence_tiers`):
+    the document's own prose, or a model's reading of a picture, which is
+    what a kind the rule does not list is."""
+    tier = rules.get("evidence_tiers").get(owner_kind, TIER_VISUAL)
+    if tier not in (TIER_TEXT, TIER_VISUAL):
+        raise ValueError(f"evidence_tiers: {owner_kind!r} is {tier!r}, "
+                         f"not {TIER_TEXT} or {TIER_VISUAL}")
+    return tier
 
 # A number a figure only draws, as a bar, a segment, an area or a point of a
 # curve, is a value of the plan and an estimate (owner decisions 2026-11-05
@@ -61,7 +69,8 @@ def read_off(raw: dict, owner_kind: str) -> bool:
     what was read (`reading`)? Then that sentence is the evidence of the
     number, and neither quote check applies to it."""
     reading = raw.get("reading") if isinstance(raw, dict) else None
-    return (owner_kind == "figure" and raw.get("read_off") is True
+    return (owner_kind == "figure" and rules.get("read_off_figures")
+            and raw.get("read_off") is True
             and isinstance(reading, str) and bool(reading.strip()))
 
 _WS = re.compile(r"\s+")
@@ -72,7 +81,18 @@ _WS = re.compile(r"\s+")
 _NUMBER = re.compile(r"\d(?:[\d.,]*\d)?")
 # DD.MM.YYYY and MM.YYYY: the year at the end of a German date.
 _DATED_YEAR = re.compile(r"(?<![\d.,])(?:\d{1,2}\.){1,2}((?:19|20)\d{2})(?!\d|[.,]\d)")
-_SPACE_GROUPED = re.compile(r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?")
+
+
+def _space_grouped():
+    """A number grouped by spaces, "45 000" (rule `thousands_spaces`);
+    with no such space, a pattern that matches nothing."""
+    def build():
+        spaces = rules.get("thousands_spaces")
+        if not spaces:
+            return re.compile(r"(?!)")
+        return re.compile(rf"\d{{1,3}}(?:[{re.escape(spaces)}]\d{{3}})+"
+                          rf"(?:[.,]\d+)?")
+    return rules.derived("verify.space_grouped", build)
 
 
 def _minus() -> str:
@@ -87,7 +107,7 @@ def _signed():
     sign."""
     return rules.derived("verify.signed", lambda: re.compile(
         rf"(?<![\w.,])[{re.escape(_minus())}]\s?"
-        rf"({_SPACE_GROUPED.pattern}|{_NUMBER.pattern})"))
+        rf"({_space_grouped().pattern}|{_NUMBER.pattern})"))
 
 
 def _dated_years(text: str) -> list:
@@ -132,7 +152,9 @@ def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
         return str(raw)
     if not isinstance(raw, str):
         return None
-    s = raw.strip().replace(" ", "").replace(" ", "").replace(" ", "")
+    s = raw.strip()
+    for space in rules.get("thousands_spaces"):
+        s = s.replace(space, "")
     if s[:1] and s[:1] in _minus():
         magnitude = canonical_number(s[1:], decimal)
         return ("-" + magnitude
@@ -173,7 +195,7 @@ def numbers_in(text: str, decimal: Optional[str] = None) -> set:
     found = {canonical_number(m.group(0), decimal)
              for m in _NUMBER.finditer(text or "")}
     found.update(canonical_number(m.group(0), decimal)
-                 for m in _SPACE_GROUPED.finditer(text or ""))
+                 for m in _space_grouped().finditer(text or ""))
     # The year of a dotted date. "Stand 09.12.2025" is one token to _NUMBER
     # and reads as the grouped number 09122025, so the 2025 it plainly prints
     # was not in the quote: 12 years on the corpus_m5 canary were dropped so.
@@ -181,9 +203,21 @@ def numbers_in(text: str, decimal: Optional[str] = None) -> set:
     # A printed sign is part of the number: "-1.155" holds -1155, and a table
     # of savings lost all its values while the sign stayed outside this set.
     # The magnitude stays in too: the dash of "2020 - 2030" may be no sign.
-    found.update("-" + canonical_number(m.group(1), decimal)
-                 for m in _signed().finditer(text or ""))
+    if rules.get("sign_belongs") == "on":
+        found.update("-" + canonical_number(m.group(1), decimal)
+                     for m in _signed().finditer(text or ""))
     return found
+
+
+def compared(wanted: Optional[str]) -> Optional[str]:
+    """The spelling of a wanted number to look for among `numbers_in`: with
+    its sign where the rule `sign_belongs` is on, else its magnitude, so
+    that the sign stays outside the number and either sign is backed by
+    the printed magnitude."""
+    if wanted and wanted.startswith("-") \
+        and rules.get("sign_belongs") != "on":
+        return wanted[1:]
+    return wanted
 
 
 # A table transcription breaks a long cell label with <br>: "holzige<br>
@@ -271,12 +305,13 @@ def _times_number(quote: str, value) -> int:
     if wanted is None:
         return 0
     text = flat(quote or "")
+    wanted = compared(wanted)
     if wanted.startswith("-"):
         return sum(1 for m in _signed().finditer(text)
                    if canonical_number(m.group(1)) == wanted[1:])
     count = sum(1 for m in _NUMBER.finditer(text)
                 if canonical_number(m.group(0)) == wanted)
-    count += sum(1 for m in _SPACE_GROUPED.finditer(text)
+    count += sum(1 for m in _space_grouped().finditer(text)
                  if canonical_number(m.group(0)) == wanted)
     count += sum(1 for year in _dated_years(text) if year == wanted)
     return count
@@ -390,7 +425,7 @@ def computed_in_output(raw: dict, parameter: Parameter) -> bool:
     is still required and still checked: it proves the inputs are in the
     document.
     """
-    wanted = canonical_number(raw.get("value"))
+    wanted = compared(canonical_number(raw.get("value")))
     if wanted is None:
         return False
     # The output is read as Python prints, the point the decimal mark and no
@@ -405,10 +440,12 @@ def computed_in_output(raw: dict, parameter: Parameter) -> bool:
 
 def printed_rounding(value: float) -> float:
     """Half a unit of the last digit a number is written with: 116.1 stands
-    for anything from 116.05 to 116.15, and 38892.0 for 38891.5 to 38892.5."""
+    for anything from 116.05 to 116.15, and 38892.0 for 38891.5 to 38892.5
+    (the share of the unit is the rule `computed_rounding_half_units`)."""
     mantissa, _, exponent = repr(float(value)).lower().partition("e")
     decimals = len(mantissa.partition(".")[2].rstrip("0"))
-    return 0.5 * 10.0 ** (int(exponent or 0) - decimals)
+    return (rules.get("computed_rounding_half_units")
+            * 10.0 ** (int(exponent or 0) - decimals))
 
 
 def computed_from_inputs(raw: dict) -> bool:
@@ -431,7 +468,8 @@ def computed_from_inputs(raw: dict) -> bool:
                for number in (value, expected)):
         return False
     # Float noise: the code may add the parts in another order than the check.
-    noise = 1e-9 * max(abs(value), abs(expected))
+    noise = rules.get("computed_float_noise") * max(abs(value),
+                                                    abs(expected))
     return abs(value - expected) <= printed_rounding(value) + noise
 
 
@@ -453,7 +491,8 @@ def wording_of(raw: dict, parameter: Parameter):
 def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
     if parameter.is_numeric:
-        return canonical_number(raw.get("value")) in numbers_in(quote)
+        return compared(canonical_number(raw.get("value"))) \
+            in numbers_in(quote)
     wording = wording_of(raw, parameter)
     return flat(str(wording)).casefold() in flat(quote).casefold()
 
@@ -465,7 +504,7 @@ def number_outside_quote(claim: dict) -> bool:
     if (isinstance(value, bool) or not isinstance(quote, str)
             or claim.get("computed") is True):
         return False
-    wanted = canonical_number(value)
+    wanted = compared(canonical_number(value))
     return wanted is not None and wanted not in numbers_in(quote)
 
 
@@ -612,9 +651,11 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     else:
         if not isinstance(quote, str) or len(quote) < min_quote_chars():
             return Refusal(raw, QUOTE_TOO_SHORT)
-        if not quote_in(source_text, quote):
+        if rules.get("check_quote_shown") \
+                and not quote_in(source_text, quote):
             return Refusal(raw, QUOTE_NOT_FOUND)
-        if not value_in_quote(raw, parameter, quote):
+        if rules.get("check_answer_in_quote") \
+                and not value_in_quote(raw, parameter, quote):
             # `is True`, not truthy: "computed" is a switch that decides
             # WHICH evidence check applies, and the string "nein" would have
             # opened the door it exists to keep shut.
@@ -622,18 +663,21 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                     and computed_in_output(raw, parameter):
                 # The document prints the inputs and the sandbox printed the
                 # result. Both halves of the evidence are on the tuple.
-                if not computed_from_inputs(raw):
+                if rules.get("computed_from_inputs") == "on" \
+                    and not computed_from_inputs(raw):
                     return Refusal(raw, f"value {raw.get('value')!r} does "
                                         f"not follow from its inputs")
                 flags.append("computed")
             else:
                 return Refusal(raw, not_in_quote(raw))
-        if raw.get("drawn") is True and owner_kind == "figure":
+        if (raw.get("drawn") is True and owner_kind == "figure"
+                and rules.get("read_off_figures")):
             # The figure description estimated a number the image only
             # draws, and the quote holds that estimate.
             flags.append(READ_OFF)
 
     if (parameter.is_numeric and parameter.integrated
+            and rules.get("flag_missing_period")
             and value_fields.get("unit") is not None
             and not parameter.names_period(value_fields.get("unit"))):
         # The entry the unit question chose says in the spec that it names no
@@ -650,8 +694,8 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         flags.append("period:unstated")
 
     rects = None
-    if owner_kind in TEXT_KINDS:
-        tier = TIER_TEXT
+    tier = tier_of(owner_kind)
+    if tier == TIER_TEXT:
         if locate is not None:
             rects = locate(quote)
             if not rects:
@@ -659,8 +703,6 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                 # placed on the page — the reader gets the page, not the
                 # highlight. Worth counting, not worth dropping a finding for.
                 flags.append("not_located")
-    else:
-        tier = TIER_VISUAL
 
     out = dict(raw)
     out.update(resolved)
@@ -673,9 +715,12 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         if settled is not None or out.get(f"{name}_state") not in (READ,
                                                                   DERIVED):
             continue
-        out[f"{name}_state"] = UNBACKED
-        for suffix in ("_quote", "_source", "_window", "_link_quote",
-                       "_link_source", "_means"):
+        out[f"{name}_state"] = state_for("refused")
+        # The rule `refused_keeps_quote` leaves the quote and its source.
+        gone = ("_window", "_link_quote", "_link_source", "_means")
+        if rules.get("refused_keeps_quote") != "kept":
+            gone = ("_quote", "_source") + gone
+        for suffix in gone:
             out.pop(f"{name}{suffix}", None)
         flags.append(f"unbacked:{name}")
     out.update(value_fields)
@@ -704,8 +749,10 @@ def value_refused(raw: dict, parameter: Parameter, source_text: str,
     quote = raw.get("quote")
     if not isinstance(quote, str) or len(quote) < min_quote_chars():
         return QUOTE_TOO_SHORT
-    if not quote_in(source_text or "", quote):
+    if rules.get("check_quote_shown") \
+            and not quote_in(source_text or "", quote):
         return QUOTE_NOT_FOUND
-    if not value_in_quote(raw, parameter, quote):
+    if rules.get("check_answer_in_quote") \
+            and not value_in_quote(raw, parameter, quote):
         return not_in_quote(raw)
     return None

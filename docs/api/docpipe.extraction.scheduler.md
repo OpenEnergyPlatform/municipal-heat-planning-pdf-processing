@@ -17,6 +17,11 @@ came first whenever the limit has room. The request's own timeout starts when
 it is sent, not while it waits: waiting is the harvest's queue, not the
 server's slowness.
 
+A step that has a value of its own for the rule `parallel` has a lane of its
+own: its requests wait in a queue of their own and are sent while fewer than
+that many of them are open, whatever the limit above says, up or down from
+it. The other steps keep sharing the limit (`Lane`).
+
 A request may be withdrawn while it waits (`Ticket.withdraw`): the sweep
 that asked several windows ahead has its answer, and the windows behind it
 are not sent. A withdrawn request raises `Withdrawn` in its caller. A request
@@ -84,6 +89,30 @@ belong to this document (their place in the queue) and to this ticket.
 def __init__(self, document: Optional[int], ticket: Optional[Ticket] = None)
 ```
 
+### Lane
+
+```python
+class Lane
+```
+
+The requests of one step that has its own value of the rule
+`parallel`: how many may be open at once, and how many are.
+
+#### Lane.\_\_init\_\_
+
+```python
+def __init__(self, key: str, limit: int)
+```
+
+#### Lane.sender
+
+```python
+def sender(self) -> ThreadPoolExecutor
+```
+
+The threads that send this lane's requests, as many as the lane
+has places, so that no other lane or the shared limit starves it.
+
 ### Scheduler
 
 ```python
@@ -94,7 +123,8 @@ Requests in, sent in the order of their document, as the limit allows.
 
 *limit* is an `AdaptiveLimit`. A request without a document (anchors,
 the search sentence a run shares, the frame's warm-up) goes before every
-document: everything waits on it.
+document: everything waits on it. A request of a step with a lane of its
+own (`lane_of`) is not counted by the limit.
 
 #### Scheduler.\_\_init\_\_
 
@@ -108,7 +138,9 @@ def __init__(self, limit, workers: Optional[int] = None)
 def rank(self, document: Optional[int]) -> int
 ```
 
-The document's place: the order it first asked in.
+The document's place by the rule `queue_order`: the order it first
+asked in, the reverse of it, or none at all. A request of no
+document goes before every document in any order.
 
 #### Scheduler.forget
 
@@ -137,8 +169,12 @@ Places the limit has that no request holds or waits for.
 
 ```python
 def submit(self, send: Callable, document: Optional[int] = None,
-           ticket: Optional[Ticket] = None) -> Future
+           ticket: Optional[Ticket] = None,
+           lane: Optional[tuple] = None) -> Future
 ```
+
+*send* for *document*, in the lane (key, limit) a step with its
+own `parallel` sends in (`lane_of`), else with the shared limit.
 
 #### Scheduler.promote
 
@@ -261,7 +297,8 @@ answered with the first one's answer (`Once`, owner decision
 #### Repeats.\_\_init\_\_
 
 ```python
-def __init__(self, client, repeat: float, usual: float)
+def __init__(self, client, repeat: Optional[float] = None,
+             usual: Optional[float] = None)
 ```
 
 #### Repeats.create
@@ -279,6 +316,18 @@ def current() -> tuple
 ```
 
 (document, ticket) the calling thread is sending for.
+
+### lane_of
+
+```python
+def lane_of() -> Optional[tuple]
+```
+
+(key, limit) of the lane the calling step sends its requests in, None
+where it shares the limit: the rule `parallel` of the step that runs, 0
+for the shared one. The key names whose value it is (the step or the
+frame that set it), so that the requests of every step a frame covers
+are one lane.
 
 ### read_out
 
@@ -311,7 +360,8 @@ since nothing was sent and nothing spent.
 ### repeating
 
 ```python
-def repeating(client, repeat: float, usual: float)
+def repeating(client, repeat: Optional[float] = None,
+              usual: Optional[float] = None)
 ```
 
 *client* as `Repeats`, once.

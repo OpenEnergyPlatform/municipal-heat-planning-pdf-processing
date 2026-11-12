@@ -87,6 +87,26 @@ of reading a row.
 
 ## Functions
 
+### state_for
+
+```python
+def state_for(event: str) -> str
+```
+
+The state a coordinate or a parameter ends in for *event*, as the
+rule `state_rules` says (skipped, answered_not_stated, refused,
+parameter_refused, parameter_cut, parameter_silent).
+
+### open_states
+
+```python
+def open_states() -> tuple
+```
+
+The states that mean a coordinate is still open (rule
+`open_states`): what a condition "open" holds for and a top-up of open
+values reads again.
+
 ### reader_of
 
 ```python

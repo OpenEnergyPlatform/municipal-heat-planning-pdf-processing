@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 2048
----
 Berechne die Zahl aus "wanted", die der Plan nicht druckt, die aber aus gedruckten, schon gelesenen Zahlen folgt, oder stelle fest, dass es nichts zu rechnen gibt; das ist dann die richtige Antwort. Gerechnet wird nur im Code, nie im Kopf.
 
 Anteil ("kind":"share"): "share" ist die id eines Anteils in Prozent, "whole" der Wortlaut, wovon er ein Anteil ist. Gesucht ist Ganzes mal Anteil durch 100.

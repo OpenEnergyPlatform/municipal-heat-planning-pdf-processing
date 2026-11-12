@@ -164,4 +164,26 @@ None)], for the settings one command reads or for all of them. A
 setting that wins over numbers of the flow and is not set shows what
 the flow file says, and that file as its origin (`from_flow`).
 
+### git_refusal
+
+```python
+def git_refusal(path) -> Optional[str]
+```
+
+Why *path* may not be written, or None: a file inside a git
+repository has to be ignored by it and not tracked, so that the values
+of a machine (a server's address, a folder) never reach a commit. A
+file outside every repository is free.
+
+### write_project
+
+```python
+def write_project(path, values: dict) -> str
+```
+
+Set {key of a setting ("llm.base_url"): value} in the project file
+*path*, created where it is missing, every other line as it stands:
+"created" or "changed". A key is never written (`Setting.secret`); a
+file that does not read back as the values is not written.
+
 [Back to the index](../README.md)

@@ -206,6 +206,14 @@ what only a refusal names (a claim for no parameter of the spec).
 
 ## Functions
 
+### unread_states
+
+```python
+def unread_states() -> tuple
+```
+
+The states of a coordinate that was not read, as the rules say now.
+
 ### read_harvest
 
 ```python

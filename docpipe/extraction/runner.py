@@ -53,7 +53,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -64,12 +64,16 @@ from docpipe import providers
 from docpipe import rules
 from docpipe.providers.governor import status_of
 from docpipe import usage as token_usage
-from docpipe.llm_preflight import assert_serving, request_extras
+from docpipe.llm_preflight import (assert_serving, assert_step_models,
+                                   request_extras)
 from docpipe.profile import add_profile_argument, program, require_profile
 from docpipe.store.schema import readonly_uri
 
 from . import addressed as addressed_map
+from . import blocks
 from . import archive
+from . import mend
+from . import passflow
 from . import compute as computing
 from . import fields
 from . import flow as flow_map
@@ -92,27 +96,74 @@ from .spec import Spec, fingerprints, load as load_spec
 
 log = logging.getLogger(__name__)
 
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "EMPTY")
-LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
-LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
-# The numbers of the flow the run reads with (`flow.Numbers`): what the
-# default profile's flow file says and the settings over it, until the
-# run's profile is known (`take_flow`).
-NUMBERS = flow_map.in_effect()
-# Replies out of their form a request takes before it is left unanswered,
-# and how often a request the server refuses is asked: the flow's `replies`,
-# which the setting EXTRACT_MAX_RETRIES wins over.
-MAX_RETRIES = NUMBERS.replies
+# The numbers of the flow the run reads with (`flow.Numbers`), once a run
+# took its profile's flow (`take_flow`); until then `numbers()` reads what
+# the default profile's flow file and the settings over it say at use.
+NUMBERS: Optional[flow_map.Numbers] = None
+# The boxes of the flow the run reads with, by id, and for each kind of
+# request the first box that asks it, its home (`take_flow`, `in_home`).
+_FLOW_NODES: dict = {}
+_HOMES: dict = {}
+
+
+def in_home(kind: Optional[str]):
+    """Read with the values of the box that is the home of requests of this
+    kind (the first box of the flow that asks it) while the block runs,
+    unless the step that runs asks this kind itself. Requests of a kind are
+    asked from other steps too: the entry of a list from the step of a find,
+    the check that a find speaks about the value from the step that searches
+    (it is attached to it, and the engine does not enter its box), the name
+    of a scenario from a search. Such a request is asked as the step that
+    asks that kind says (its model, its answer room, its extras), so that
+    every request of a kind is asked alike, wherever it comes from."""
+    home = _HOMES.get(kind) if kind else None
+    if home is None:
+        return nullcontext()
+    step = rules.STEP.get()
+    here = _FLOW_NODES.get(step.ident) if step is not None else None
+    block = blocks.LIBRARY.get(here["box"]) if here is not None else None
+    if block is not None and block.asks == kind:
+        return nullcontext()
+    from .engine import Engine
+    return rules.in_step(rules.stepped(home, Engine.own_values(home)))
+
+
+def llm_base_url() -> str:
+    """Where the requests go (rule `llm_base_url`, set at the start)."""
+    return providers.llm_base_url()
+
+
+def llm_api_key() -> str:
+    """The key of the model server (rule `llm_api_key`, set at the start)."""
+    return providers.llm_api_key()
+
+
+def llm_model() -> str:
+    """The model the request sent now asks (rule `model`: the step's, else
+    the run's)."""
+    return providers.llm_model()
+
+
+def llm_timeout() -> float:
+    """What the first attempt of a request waits (rule `llm_timeout_s`)."""
+    return providers.llm_timeout()
+
+
+def reply_limit() -> int:
+    """Replies out of their form the request sent now takes before it is
+    left unanswered: the number `replies` of the flow as the step that sends
+    it reads it, which the setting EXTRACT_MAX_RETRIES wins over."""
+    return flow_map.number(numbers(), "replies")
 
 
 def retry_timeout() -> float:
     """What a retry may take after a request timed out (rule
-    `repeat_timeout_s`). The first attempt keeps LLM_TIMEOUT, which is sized
-    for a slow but working generation; a request the server did not answer
-    in that time is unlikely to differ on its repeat, and three full
+    `repeat_timeout_s`). The first attempt keeps `llm_timeout_s`, which is
+    sized for a slow but working generation; a request the server did not
+    answer in that time is unlikely to differ on its repeat, and three full
     timeouts held one field thread for 91 minutes."""
     return rules.get("repeat_timeout_s")
+
 
 # Set by SIGTERM (a time-limit trap or a manual kill). The run stops
 # taking new work, writes the documents whose every batch came back, and
@@ -177,15 +228,38 @@ def retry_wait(attempt: int, transport: bool = False) -> float:
     """
     if providers.replaying():
         return 0.0          # nothing comes back that is waited for
+    growth = rules.get("retry_wait_growth")
+    doubling = growth == "doubling" or (growth == "by_cause" and transport)
+    steps = 2 ** max(0, attempt - 1) if doubling else attempt
     if transport:
-        return min(rules.get("transport_wait_s") * (2 ** max(0, attempt - 1)),
+        return min(rules.get("transport_wait_s") * steps,
                    rules.get("transport_wait_most_s"))
-    return min(rules.get("retry_wait_s") * attempt,
+    return min(rules.get("retry_wait_s") * steps,
                rules.get("retry_wait_most_s"))
 
 
+def failure_statuses() -> tuple:
+    """((first, last) of each status range, whether a timeout counts) of the
+    rule `server_failure_statuses`: the answers that mean the server did not
+    do the work. Refused where an entry is none of 429, 500-599, timeout."""
+    ranges, timeout = [], False
+    for said in rules.get("server_failure_statuses"):
+        if said == "timeout":
+            timeout = True
+            continue
+        low, _, high = said.partition("-")
+        try:
+            ranges.append((int(low), int(high or low)))
+        except ValueError:
+            raise ValueError(
+                f"server_failure_statuses: {said!r} is no status (429), "
+                f"no range (500-599) and not timeout") from None
+    return tuple(ranges), timeout
+
+
 def unserved(exc: BaseException) -> bool:
-    """A 429, a 5xx or a timeout: the server was asked and did not do the work.
+    """A 429, a 5xx or a timeout: the server was asked and did not do the work
+    (the statuses of the rule `server_failure_statuses`).
 
     None says anything about the request. A rate limit lifts and a server
     recovers, and the same request is answered then. A request that timed out
@@ -197,9 +271,10 @@ def unserved(exc: BaseException) -> bool:
     its response, the reranker's.
     """
     status = status_of(exc)
+    ranges, timeout = failure_statuses()
     if status is not None:
-        return status == 429 or status >= 500
-    return providers.timed_out(exc)
+        return any(low <= status <= high for low, high in ranges)
+    return timeout and providers.timed_out(exc)
 
 
 def server_side(exc: BaseException) -> bool:
@@ -212,19 +287,20 @@ def server_side(exc: BaseException) -> bool:
 
 
 def refused(exc: BaseException) -> bool:
-    """A 4xx other than 429: the server refused the request itself, such as
-    one too long for the model or one our code built wrong ("System message
-    must be at the beginning."). It is asked again `MAX_RETRIES` times at
-    most, and a request refused to the end leaves its document unfinished
-    (owner decision 2026-11-09): a later run reads it again, and nothing is
-    lost without a word."""
+    """A 4xx that is not the server's failure (429): the server refused the
+    request itself, such as one too long for the model or one our code built
+    wrong ("System message must be at the beginning."). It is asked again
+    `refusal_retry_most` times at most, and a request refused to the end
+    leaves its document unfinished (owner decision 2026-11-09): a later run
+    reads it again, and nothing is lost without a word."""
     status = status_of(exc)
-    return status is not None and 400 <= status < 500 and status != 429
+    return (status is not None and 400 <= status < 500
+            and not unserved(exc))
 
 
 class Unserved:
     """Documents one of whose requests ended on a 429, a 5xx or a timeout,
-    or on a refusal asked `MAX_RETRIES` times (`refused`).
+    or on a refusal asked `refusal_retry_most` times (`refused`).
 
     Such a request was never answered, so its document is not finished,
     whichever request it was: a passage's rows, one coordinate, the frame, a
@@ -269,11 +345,12 @@ def persistently(what: str, call: Callable) -> Callable:
     replaced by another order or by nothing. Each failure is logged and
     waited for on the long curve (`retry_wait`); a run that halts raises
     the last one. A request the server refuses (`refused`) is asked
-    `MAX_RETRIES` times at most and then raised: its document fails and
-    stays unfinished, and a later run reads it again (owner decision
-    2026-11-09)."""
+    `refusal_retry_most` times at most and then raised: its document fails
+    and stays unfinished, and a later run reads it again (owner decision
+    2026-11-09). With the rule `search_retry_most` above 0, any other
+    failure is asked that many times as well and then raised."""
     def again(*args, **kwargs):
-        attempt = refusals = 0
+        attempt = refusals = failures = 0
         while True:
             attempt += 1
             try:
@@ -283,9 +360,17 @@ def persistently(what: str, call: Callable) -> Callable:
                     raise
                 if refused(exc):
                     refusals += 1
-                    if refusals >= MAX_RETRIES:
+                    if refusals >= rules.get("refusal_retry_most"):
                         log.error("   %s refused %d time(s), its document "
                                   "stays unfinished: %s", what, refusals,
+                                  exc)
+                        raise
+                else:
+                    failures += 1
+                    most = rules.get("search_retry_most")
+                    if most and failures >= most:
+                        log.error("   %s failed %d time(s), its document "
+                                  "stays unfinished: %s", what, failures,
                                   exc)
                         raise
                 log.warning("   %s failed (attempt %d), asked again: %s",
@@ -304,13 +389,15 @@ class Failures:
     A failure that is the server's (`server_side`) is asked again, after the
     long wait (`retry_wait`), without a limit until the run halts (`halted`,
     owner decision 2026-11-09: "Wenn es aber Codefehler etc. sind, dann
-    immer wiederholen. Es wird nichts abgebrochen"); a reply that could not
-    be read is asked again `MAX_RETRIES` times at most (`attempts`), and so
-    is a request the server refuses (`refused`, owner decision 2026-11-09),
-    after the short wait. Any other failure is not asked again. A request
-    given up on whose last attempt the server did not serve (`unserved`) or
-    refused leaves its document unfinished (`UNSERVED`): the stamp is
-    withheld and a resume reads it again.
+    immer wiederholen. Es wird nichts abgebrochen"), or as often as the rule
+    `server_retry_most` says where it is above 0; a reply that could not be
+    read is asked again as often as the number `replies` says at most
+    (`attempts`, read for the request, in its step), and a request the
+    server refuses (`refused`, owner decision 2026-11-09) as often as
+    `refusal_retry_most` says, after the short wait. Any other failure is
+    not asked again. A request given up on whose last attempt the server
+    did not serve (`unserved`) or refused leaves its document unfinished
+    (`UNSERVED`): the stamp is withheld and a resume reads it again.
 
     *document_id* is the document the request reads, None for a request of
     the run itself. *noted* is False for a request whose end is told another
@@ -325,7 +412,10 @@ class Failures:
         self.transport = False
         self.lost = False
         self.faults = 0
-        # The refusals of this request so far, and the last one's words.
+        # The failures of the server this request met, the refusals so far,
+        # and the last refusal's words.
+        self.server_failures = 0
+        self.other_errors = 0
         self.refusals = 0
         self.why = ""
 
@@ -333,11 +423,11 @@ class Failures:
         """The attempts of one request, 1, 2, ...: after a failure that is
         the server's (`failed` True) the next one after the long wait, until
         the run halts; after a reply that could not be read (`fault`) the
-        next one after the short wait, *replies* (`MAX_RETRIES`) such
-        replies at most; after a refusal the next one after the short wait,
-        as long as `failed` says so. The caller ends the loop on an answer
-        and where `failed` says no more."""
-        replies = replies or MAX_RETRIES
+        next one after the short wait, *replies* such replies at most (the
+        number `replies` of the flow, read for this request, where none is
+        given); after a refusal the next one after the short wait, as long
+        as `failed` says so. The caller ends the loop on an answer and where
+        `failed` says no more."""
         attempt = 0
         while True:
             attempt += 1
@@ -345,20 +435,32 @@ class Failures:
             if self.transport:
                 if halted():
                     return
-            elif self.faults >= replies:
+            elif self.faults >= (replies or reply_limit()):
                 return
             self.wait(attempt)
 
     def failed(self, exc: BaseException) -> bool:
         """Whether the request that raised *exc* is asked again: after the
-        server's failure until the run halts (`attempts`), after a refusal
-        until it is the `MAX_RETRIES`th, after any other failure never."""
+        server's failure until the run halts or the rule `server_retry_most`
+        is reached (`attempts`), after a refusal until it is the
+        `refusal_retry_most`th, after any other failure never."""
         self.transport, self.lost = server_side(exc), unserved(exc)
         if refused(exc):
             self.refusals += 1
             self.lost = True
             self.why = str(exc)[:300]
-            return self.refusals < MAX_RETRIES
+            return self.refusals < rules.get("refusal_retry_most")
+        if self.transport:
+            self.server_failures += 1
+            most = rules.get("server_retry_most")
+            if most and self.server_failures >= most:
+                # Given up on the server's failure: never answered, so the
+                # document is not finished.
+                self.lost = True
+                return False
+        if not self.transport:
+            self.other_errors += 1
+            return self.other_errors <= rules.get("other_errors_retry")
         return self.transport
 
     def answered(self) -> None:
@@ -384,13 +486,6 @@ class Failures:
                 log.warning("   document %s stays unfinished: the server "
                             "refused a request %d time(s): %s",
                             self.document_id, self.refusals, self.why)
-# Requests in flight against the server, for the whole run — not per document.
-# vLLM batches continuously: what it can schedule is what it is given, and a
-# handful of requests leaves four GPUs idle between tokens. The first pilot
-# ran eight at a time and did 0.14 requests a second.
-LLM_PARALLEL = int(os.environ.get("EXTRACT_LLM_PARALLEL", "128"))
-
-
 def code_rounds() -> int:
     """Sandbox rounds per calculation question (rule `code_rounds`). A
     computed value carries its code and the code's output as evidence;
@@ -399,34 +494,28 @@ def code_rounds() -> int:
     return rules.get("code_rounds")
 
 
-# How many code runs the sandbox takes at a time, for the whole run. A code
-# run waiting for its turn stands on the sandbox's own timeout otherwise.
-SANDBOX_SLOTS = threading.BoundedSemaphore(
-    int(os.environ.get("CODE_EXEC_PARALLEL", "1")))
-# How many sources share one request, and how much text they may bring. The
-# ceiling is the model's window minus the parameter payload, which
-# context_budget measures: at 17.5k tokens of spec for kwp, six sources of
-# 14k characters together leave the answer room to be written.
-BATCH_SOURCES = int(os.environ.get("EXTRACT_BATCH_SOURCES", "6"))
-BATCH_CHARS = int(os.environ.get("EXTRACT_BATCH_CHARS", "14000"))
-# What the model is told it already has, so it does not hand back the same
-# value from a neighbouring passage.
-PRIOR_MAX = int(os.environ.get("EXTRACT_PRIOR_MAX", "24"))
-# What one prior entry actually costs, measured on real tuples from the pilot
-# corpus: 40 entries came to 11071 characters, about 110 tokens each. The
-# placeholder here was 60, which is the one direction a budget must not err in.
-PRIOR_TOKENS = 110
-# Threads for the two cheap halves: retrieval planning (FAISS + SQL) and
-# verification (PyMuPDF quote location). Neither talks to the LLM server.
-PLAN_PARALLEL = int(os.environ.get("EXTRACT_PLAN_PARALLEL", "8"))
-# The longest stretch of source text one request may carry. A section over
-# this is split into windows and each window asked separately: truncating
-# would drop values silently, which is the one thing this stage may not do.
-MAX_SOURCE_CHARS = int(os.environ.get("EXTRACT_MAX_SOURCE_CHARS", "16000"))
-# Tables and figures go to the model as pictures as well as text: the
-# transcription IS a reading of that picture, and a model that can see both
-# can notice when they disagree.
-ATTACH_IMAGES = os.environ.get("EXTRACT_ATTACH_IMAGES", "1") != "0"
+# How many code runs the sandbox takes at a time, for the whole run (rule
+# `code_slots`). A code run waiting for its turn stands on the sandbox's own
+# timeout otherwise. One semaphore per size the rule has had.
+_SANDBOX: dict = {}
+_SANDBOX_LOCK = threading.Lock()
+
+
+def sandbox_slots() -> threading.BoundedSemaphore:
+    """The semaphore of the code runs the sandbox takes at once, as the rule
+    `code_slots` says it now."""
+    size = int(rules.get("code_slots"))
+    with _SANDBOX_LOCK:
+        if size not in _SANDBOX:
+            _SANDBOX[size] = threading.BoundedSemaphore(size)
+        return _SANDBOX[size]
+
+
+def attach_images() -> bool:
+    """Tables and figures go to the model as pictures as well as text (rule
+    `attach_images`): the transcription IS a reading of that picture, and a
+    model that can see both can notice when they disagree."""
+    return bool(rules.get("attach_images"))
 
 
 def image_max_side() -> int:
@@ -434,11 +523,6 @@ def image_max_side() -> int:
     return rules.get("image_max_side")
 
 
-# A section can run over a page break; how many of its pages to try before
-# giving up on placing the quote.
-LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
-# Pages whose words stay in memory for the locator, across documents.
-LOCATE_CACHE_PAGES = int(os.environ.get("EXTRACT_LOCATE_CACHE_PAGES", "512"))
 
 ANCHORS_PROMPT_ID = "extraction/anchors"
 # The one sentence a document is searched with, written for THAT document.
@@ -467,16 +551,7 @@ REVIEW_PROMPT_ID = "extraction/review"
 PARAMETER_ANCHOR = "#parameter"
 # The same for "which entry of the unit lists is this", asked before it.
 UNIT_ANCHOR = "#unit"
-# Where the run's concurrency actually lives once the values are found. A
-# batch is one row request and then one sweep per axis, and the sweeps are
-# independent, so 128 batches of seven axes are nine hundred sweeps that can
-# all be in flight. Within ONE sweep the windows stay strictly sequential —
-# it exists to stop as soon as the coordinate is read, and asking the next
-# three windows speculatively would buy parallelism with wasted requests.
-#
-# 64 was the bottleneck it looks like: 128 batch threads waiting on a pool of
-# 64 held the server at a quarter of what it schedules.
-FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "192"))
+# How many calculation questions run at once is the rule `compute_parallel`.
 # What a search shows are numbers of the flow (`NUMBERS`, owner decisions
 # 2026-11-09: "Bei 5 bleiben und das mit 50 passt", "Ja als Einstellung"):
 # the pieces of a search for an open coordinate or a field the document has
@@ -505,9 +580,23 @@ def take_flow(profile=None):
     every request from here on and returned. They are logged whenever they
     differ from those logged before, each with where it comes from, so that
     the log of a job says what it read with."""
-    global NUMBERS, MAX_RETRIES, _flow_logged
+    global NUMBERS, _flow_logged, _FLOW_NODES, _HOMES
     NUMBERS = flow_map.in_effect(profile)
-    MAX_RETRIES = NUMBERS.replies
+    _FLOW_NODES = {}
+    _HOMES = {}
+    for node, _frames in flow_map.walk(flow_map.tree_of(profile)):
+        if "box" in node:
+            _FLOW_NODES[str(node.get("id"))] = node
+    # The home of a kind of request is the first box asking it that takes
+    # part in the run: a box that is off asks nothing.
+    for node, _frames in flow_map.on(flow_map.tree_of(profile)):
+        block = blocks.LIBRARY.get(node.get("box"))
+        if block is not None and block.asks:
+            _HOMES.setdefault(block.asks, node)
+    # A request the main flow never asks (the second reading, the example
+    # of a field) has its home in the flow of its pass.
+    for kind, node in passflow.homes(profile).items():
+        _HOMES.setdefault(kind, node)
     taken = rules.use(profile)
     said = (tuple(NUMBERS.as_dict().items()),
             tuple(sorted(NUMBERS.origin.items())))
@@ -532,6 +621,13 @@ def take_flow(profile=None):
     return NUMBERS
 
 
+def numbers() -> flow_map.Numbers:
+    """The numbers of the flow the run reads with: those `take_flow` took
+    for the run's profile, else what the default profile's flow file and
+    the settings over it say now."""
+    return NUMBERS if NUMBERS is not None else flow_map.in_effect()
+
+
 # ---------------------------------------------------------------------------
 # Retrieval: probe text -> ranked unseen owners of one document
 # ---------------------------------------------------------------------------
@@ -544,8 +640,8 @@ def embedder():
     """The one resident embedding model this run uses.
 
     `get_embedder()` CONSTRUCTS a backend, it does not return a shared one, and
-    this call used to sit inside the per-probe `embed()`. With
-    EXTRACT_PLAN_PARALLEL threads each asking for its own probes, every probe
+    this call used to sit inside the per-probe `embed()`. With several
+    planning threads each asking for its own probes, every probe
     loaded another copy of the 8B model onto the same card: five fit into 80 GB,
     the sixth died of CUDA OOM, and with it all sixteen documents.
 
@@ -652,13 +748,6 @@ def _source_of(hit: dict, via: Optional[str] = None) -> Source:
                   body=body if text is not body else None)
 
 
-# Owners (sections, tables, figures) whose content a run keeps. The whole of
-# the largest corpus fits (KWP: 252,909), so a run reads each owner once; past
-# the bound the oldest goes, so a larger corpus cannot grow into it.
-CONTENT_CACHE_OWNERS = int(os.environ.get("EXTRACT_CONTENT_CACHE_OWNERS",
-                                          "300000"))
-
-
 def make_shared_content(limit: Optional[int] = None) -> Callable:
     """fetch_owner_content for every thread of a run, each owner read once.
 
@@ -675,7 +764,11 @@ def make_shared_content(limit: Optional[int] = None) -> Callable:
     """
     from docpipe.inference import db as inference_db
 
-    bound = CONTENT_CACHE_OWNERS if limit is None else limit
+    # Owners (sections, tables, figures) whose content a run keeps (rule
+    # `content_cache_owners`). The whole of the largest corpus fits (KWP:
+    # 252,909), so a run reads each owner once; past the bound the oldest
+    # goes, so a larger corpus cannot grow into it.
+    bound = rules.get("content_cache_owners") if limit is None else limit
     lock = threading.Lock()
     seen: dict = {}
 
@@ -764,14 +857,6 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
     return retrieve
 
 
-# How much of a parent section rides along with its table. Kassel's median
-# section is 894 characters and its longest is 6,038, so most fit whole and
-# the rest are cut around the table's own placeholder rather than dropped:
-# the sentence that dates a table stands next to its placeholder and nowhere
-# else.
-PARENT_CHARS = int(os.environ.get("EXTRACT_PARENT_CHARS", "4000"))
-
-
 def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
     """(sources) -> the section each table or figure stands in, once each.
 
@@ -820,12 +905,19 @@ def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
             if content is None:
                 continue
             parent = _source_of({"score": None, **content}, via="parent")
-            if len(parent.text or "") > PARENT_CHARS:
+            # How much of a parent section rides along with its table (rule
+            # `review_parent_chars`). Kassel's median section is 894
+            # characters and its longest is 6,038, so most fit whole and the
+            # rest are cut around the table's own placeholder rather than
+            # dropped: the sentence that dates a table stands next to its
+            # placeholder and nowhere else.
+            most = rules.get("review_parent_chars")
+            if len(parent.text or "") > most:
                 block = provenance.get("block_id") or ""
                 parent = Source(owner_kind=parent.owner_kind,
                                 owner_id=parent.owner_id,
                                 text=window_around(parent.text, f"[{block}",
-                                             PARENT_CHARS),
+                                             most),
                                 provenance=parent.provenance,
                                 image_path=parent.image_path)
             out.append(parent)
@@ -923,6 +1015,8 @@ def make_review_sources(db_path: Path,
                           "owner_id": int(owner)})
         # A row whose own source IS a section has one passage, not two:
         # `make_parents` skips a parent that is already shown.
+        if rules.get("review_shown_passages") != "own_and_section":
+            return [own]
         return [own] + list(parents([own]))
 
     return sources_for
@@ -985,7 +1079,7 @@ def make_rest_of_document(db_path: Path,
             log.warning("   sections of document %s unreadable: %s",
                         document_id, exc)
             return []
-        if start is not None:
+        if start is not None and rules.get("rest_starts_at_open_rows"):
             at = next((i for i, (_id, number) in enumerate(order)
                        if number is not None and number >= start), 0)
             order = order[at:] + order[:at]
@@ -1009,23 +1103,23 @@ def make_rest_of_document(db_path: Path,
 def make_search_reranker(image_root: Optional[Path] = None
                          ) -> Optional[Callable]:
     """() -> one thread's reranker of every search (`rerank.Reranker`), or
-    None where the run is given no RERANK_BASE_URL (owner decisions
-    2026-11-06 and 2026-11-08). A figure is scored with its picture, as the
-    reading shows it."""
+    None where the run is given no reranker server (rule
+    `rerank_base_url`; owner decisions 2026-11-06 and 2026-11-08). A figure
+    is scored with its picture, as the reading shows it."""
     from docpipe.inference import rerank as rerank_map
-    if not rerank_map.RERANK_BASE_URL:
+    if not rerank_map.base_url():
         return None
 
     def figure_image(source) -> Optional[dict]:
         if (source.owner_kind == "figure" and source.image_path
-                and ATTACH_IMAGES):
+                and attach_images() and rules.get("rerank_with_images")):
             return _image_part(str(image_root / source.image_path)
                                if image_root else source.image_path)
         return None
 
     log.info("extraction: searches reranked by %s at %s, %d per kind",
-             rerank_map.RERANK_MODEL, rerank_map.RERANK_BASE_URL,
-             rerank_map.RERANK_POOL)
+             rerank_map.model_name(), rerank_map.base_url(),
+             rerank_map.pool_size("section"))
     return lambda: rerank_map.make_reranker(image_of=figure_image)
 
 
@@ -1268,7 +1362,7 @@ def anchors_key() -> str:
     so a harvest that never had one keeps its key.
     """
     versions = prompts.versions((ANCHORS_PROMPT_ID,))
-    return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
+    return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{llm_model()}"
                   f"|{ANCHOR_SCHEMA}|")
 
 
@@ -1441,31 +1535,29 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
         system = thread_map.cut(prompt).system(body.keys()).text
         failures = Failures(document_id)
         conversation: list = [{"role": "user", "content": payload}]
-        limit = int(prompt.meta.get("max_tokens",
-                                    rules.get("max_tokens_phrase")))
+        with in_home("phrase"):
+            return written(parameter, failures, conversation, system)
+
+    def written(parameter, failures, conversation, system):
+        wanted = request_wanted("phrase")
         for attempt in failures.attempts():
+            limit = request_room(system, conversation, wanted, whole=True)
+            if limit is None:
+                break
             started = time.time()
             try:
                 with scheduler.on_behalf(*behalf):
-                    response = client.chat.completions.create(
-                        model=LLM_MODEL,
-                        temperature=retry_temperature(
-                            float(prompt.meta.get(
-                                "temperature", rules.get("temperature"))),
-                            failures.faults),
-                        max_tokens=limit,
-                        messages=[{"role": "system", "content": system},
-                                  *conversation],
-                        extra_body=request_extras(),
-                        **providers.formatted("llm", "phrase_reply",
-                                              replies.phrase()),
-                    )
+                    response = send_request(
+                        client, system, conversation, limit,
+                        failures.faults, reply_grammar(
+                            "phrase_reply", replies.phrase()))
                 failures.answered()
-                token_usage.reply(response, LLM_MODEL)
+                token_usage.reply(response, llm_model())
                 _asked("phrase", document_id, response, attempt=attempt,
                        started=started, parameter=parameter.uri)
                 reply = response.choices[0]
-                phrase = ((_loads_object(reply.message.content) or {})
+                phrase = ((_loads_object(reply.message.content, document_id,
+                                         "phrase") or {})
                           .get("phrase") or "")
                 phrase = phrase.strip() if isinstance(phrase, str) else ""
                 if phrase:
@@ -1477,9 +1569,12 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 failures.fault()
                 log.warning("phrase %s attempt %d: %s reply",
                             parameter.uri, attempt, cause)
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
+                if rules.get("retry_shows_reply"):
+                    conversation.append({
+                        "role": "assistant",
+                        "content": reply.message.content or ""})
+                    conversation.append({"role": "user",
+                                         "content": correction})
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
                             parameter.uri, attempt, exc)
@@ -1499,7 +1594,8 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     # with it into the trace (`addressed.ASKING`).
     asked = [(contextvars.copy_context(), parameter)
              for parameter in spec.parameters]
-    with ThreadPoolExecutor(max_workers=max(len(spec.parameters), 1)) as pool:
+    together = rules.get("phrase_parallel") or len(spec.parameters)
+    with ThreadPoolExecutor(max_workers=max(together, 1)) as pool:
         for uri, phrase in pool.map(lambda job: job[0].run(one, job[1]),
                                     asked):
             if phrase:
@@ -1507,21 +1603,24 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     return out
 
 
-# The server's context window. Read from the server at the start of a run
-# (`set_model_len`); the job serves at least `context_budget`.
-MAX_MODEL_LEN = int(os.environ.get("EXTRACT_MAX_MODEL_LEN", "32768"))
-# Prompt characters per token, set low so a prompt is never estimated short.
-PROMPT_CHARS_PER_TOKEN = 2.62
+# The server's context window as it reported it at the start of a run
+# (`set_model_len`), None where it reported none: then the rule
+# `model_window_tokens` says it. The job serves at least `context_budget`.
+_SERVED_WINDOW: Optional[int] = None
+
+
+def model_window() -> int:
+    """The window every request is sized against."""
+    if _SERVED_WINDOW:
+        return _SERVED_WINDOW
+    with rules.in_step(None):        # a value of the machine: the run's
+        return int(rules.get("model_window_tokens"))
 
 
 def image_tokens() -> int:
     """One crop at its longest side on both sides, one visual token per
-    28 px square."""
-    return (image_max_side() // 28 + 1) ** 2 + 2
-
-
-# Room kept free between the estimate and the window.
-ANSWER_MARGIN = 256
+    square of `image_token_side_px` pixels."""
+    return (image_max_side() // rules.get("image_token_side_px") + 1) ** 2 + 2
 
 
 def least_answer_tokens() -> int:
@@ -1532,9 +1631,9 @@ def least_answer_tokens() -> int:
 
 def set_model_len(tokens: Optional[int]) -> None:
     """The window the server reports, when it reports one."""
-    global MAX_MODEL_LEN
+    global _SERVED_WINDOW
     if tokens:
-        MAX_MODEL_LEN = int(tokens)
+        _SERVED_WINDOW = int(tokens)
 
 
 # The adaptive request limit every client waits in, steered by the server's
@@ -1548,27 +1647,27 @@ AHEAD = None
 
 
 def start_limit() -> None:
-    """Steer the requests by the server's queue unless EXTRACT_LIMIT_ADAPTIVE=0."""
+    """Steer the requests by the server's queue unless the rule
+    `limit_adaptive` is off."""
     global LIMIT
-    if LIMIT is not None or os.environ.get("EXTRACT_LIMIT_ADAPTIVE",
-                                           "1") == "0":
+    if LIMIT is not None or not rules.get("limit_adaptive"):
         return
     if providers.replaying():
         return              # no queue to read and nothing to be refused by
     from . import throttle
     gate = providers.gate("llm")
     # A hosted API has no queue to read; what it refuses steers the limit.
-    LIMIT = (throttle.start(LLM_BASE_URL) if gate is None
+    LIMIT = (throttle.start(llm_base_url()) if gate is None
              else throttle.start_hosted(gate))
     if LIMIT is not None:
         global SCHEDULER, AHEAD
         SCHEDULER = scheduler.Scheduler(LIMIT)
         AHEAD = ThreadPoolExecutor(max_workers=LIMIT.maximum,
                                    thread_name_prefix="ahead")
-    if LIMIT is not None and FIELD_PARALLEL < LIMIT.maximum:
-        log.info("llm limit: EXTRACT_FIELD_PARALLEL=%d opens fewer field "
-                 "requests than EXTRACT_LIMIT_MAX=%d allows", FIELD_PARALLEL,
-                 LIMIT.maximum)
+    if LIMIT is not None and rules.get("compute_parallel") < LIMIT.maximum:
+        log.info("llm limit: compute_parallel=%d opens fewer calculation "
+                 "requests than limit_most=%d allows",
+                 rules.get("compute_parallel"), LIMIT.maximum)
 
 
 def start_fixed_limit(requests: int) -> None:
@@ -1579,6 +1678,7 @@ def start_fixed_limit(requests: int) -> None:
     this sends through it (`_client`)."""
     global LIMIT, SCHEDULER
     from . import throttle
+    requests = rules.get("fixed_limit_requests") or requests
     LIMIT = throttle.AdaptiveLimit(start=requests, minimum=requests,
                                    maximum=requests)
     SCHEDULER = scheduler.Scheduler(LIMIT)
@@ -1643,7 +1743,7 @@ def start_counting(model: Optional[str] = None) -> None:
     if PROMPT_COUNTER is not None or providers.replaying() or providers.hosted("llm"):
         return
     from transformers import AutoTokenizer
-    name = model or LLM_MODEL
+    name = model or llm_model()
     try:
         PROMPT_COUNTER = PromptCounter(AutoTokenizer.from_pretrained(name))
     except Exception as exc:
@@ -1678,14 +1778,85 @@ def prompt_tokens(system: str, conversation: list) -> int:
                 images += 1
             else:
                 chars += len(part.get("text") or "")
-    return (int(chars / PROMPT_CHARS_PER_TOKEN) + images * image_tokens()
-            + 16 * (len(conversation) + 1))
+    return (int(chars / rules.get("prompt_chars_per_token"))
+            + images * image_tokens()
+            + rules.get("message_overhead_tokens") * (len(conversation) + 1))
 
 
 def answer_room(system: str, conversation: list, wanted: int) -> int:
     """max_tokens for this request: *wanted*, or what the window leaves."""
-    return min(int(wanted), MAX_MODEL_LEN - ANSWER_MARGIN
+    return min(int(wanted), model_window()
+               - rules.get("answer_margin_tokens")
                - prompt_tokens(system, conversation))
+
+
+def request_room(system: str, conversation: list, wanted: int,
+                 whole: bool = False) -> Optional[int]:
+    """max_tokens a request may ask, None where the room is less than
+    `least_answer_tokens`: such a request is not sent and counts as an
+    answer that was cut off. The room is the answer that is asked for, or,
+    with *whole*, what the window leaves, however short the answer asked for
+    is (a search sentence of 300 tokens is sent where the window holds 512
+    more)."""
+    limit = answer_room(system, conversation, wanted)
+    room = answer_room(system, conversation, 1 << 30) if whole else limit
+    return None if room < least_answer_tokens() else limit
+
+
+def request_wanted(kind: str) -> int:
+    """The longest answer, in tokens, a request may ask for (rule
+    `max_tokens` of the step that asks its kind)."""
+    return int(rules.get("max_tokens"))
+
+
+def asked_values(kind: Optional[str], profile=None) -> dict:
+    """The `max_tokens` and `temperature` a request of *kind* is asked with
+    where no run is going (the editor's try, the compile step): the values
+    of the box that is the kind's home in the flow of *profile*, else the
+    run's. A request of no kind the flow has asks with the run's."""
+    from docpipe.profile import active_profile
+    from .engine import Engine
+    home = None
+    for node, _frames in flow_map.on(flow_map.tree_of(
+            profile or active_profile())):
+        block = blocks.LIBRARY.get(node.get("box")) if kind else None
+        if block is not None and block.asks == kind:
+            home = node
+            break
+    if home is None and kind:
+        home = passflow.homes(profile or active_profile()).get(kind)
+    with (rules.in_step(rules.stepped(home, Engine.own_values(home)))
+          if home is not None else nullcontext()):
+        return {"max_tokens": int(rules.get("max_tokens")),
+                "temperature": float(rules.get("temperature"))}
+
+
+def reply_grammar(name: str, schema: dict, always: bool = False):
+    """The `response_format` of a request whose reply is *schema*: always
+    for a request that never goes without its grammar, else as the rule
+    `schema_grammar` and the provider say (`providers.reply_format`)."""
+    return (providers.grammar(name, schema) if always
+            else providers.reply_format("llm", name, schema))
+
+
+def send_request(client, system: str, conversation: list, limit: int,
+                 faults: int, response_format=None):
+    """The one place a request of the harvest goes out: the model, the
+    temperature after *faults* unreadable replies (rules `temperature`,
+    `retry_temperature_step`, `retry_temperature_most`), the answer room
+    *limit*, the system prompt and *conversation*, the reply grammar where
+    one is asked for and the settings every request carries
+    (`request_extras`), each read for the step that sends it."""
+    kwargs = {"model": llm_model(),
+              "temperature": retry_temperature(
+                  float(rules.get("temperature")), faults),
+              "max_tokens": limit,
+              "messages": [{"role": "system", "content": system},
+                           *conversation],
+              "extra_body": request_extras()}
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    return client.chat.completions.create(**kwargs)
 
 
 def make_page_count(db_path: Optional[Path]) -> Callable:
@@ -1737,13 +1908,26 @@ def system_text(prompt, example) -> str:
     values = {name: json.dumps(one, ensure_ascii=False,
                                separators=(",", ":"))
               for name, one in zip((EXAMPLE_PLACE, NOTHING_PLACE), pair)}
-    return prompt.render(**{name: value for name, value in values.items()
+    # A place the request shows no reply for (the flow's switch for the
+    # empty example is off, or the request has no example) is empty text.
+    return prompt.render(**{name: values.get(name, "")
+                            for name in (EXAMPLE_PLACE, NOTHING_PLACE)
                             if name in places})
 
 
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                    document_id: int, where: str, key: str, /,
                    example: Optional[dict] = None, **noted):
+    """One request of the harvest, in the step that asks its kind
+    (`in_home`); see `_ask_in_grammar`."""
+    with in_home(noted.get("asked") if where == "follow" else where):
+        return _ask_in_grammar(client, prompt, conversation, shape,
+                               document_id, where, key, example, **noted)
+
+
+def _ask_in_grammar(client, prompt, conversation: list, shape: dict,
+                    document_id: int, where: str, key: str,
+                    example: Optional[dict] = None, **noted):
     """One request of the harvest: the reply as a dict, "cut_off" when it
     did not fit its room, or None when it could not be read. The prompt
     shows *example*, the reply this request asks for (`system_text`); the
@@ -1751,41 +1935,35 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
     2026-11-08: no request is a conversation).
 
     Asked again with the cause when the reply is no JSON object, or one
-    without a key its schema requires (`_lacking`), `MAX_RETRIES` such
-    replies at most, as every request of the stage is; a reply cut off at
-    its limit is not rescued. Each answer is traced
+    without a key its schema requires (`_lacking`, rule
+    `missing_key_asks_again`), as many such replies as the number `replies`
+    says at most, as every request of the stage is (the answer shown to the
+    model that wrote it where the rule `retry_shows_reply` is on); a reply
+    cut off at its limit is not rescued. Each answer is traced
     as `<where>_ask` with *noted*.
 
     A 429, a 5xx or a timeout is asked again until the server answers or
     the run halts (`Failures.attempts`, owner decision 2026-11-09), a
-    refusal `MAX_RETRIES` times at most; a request whose last attempt ended
-    on one was never answered, so its document is noted (`UNSERVED`) and
-    goes unstamped, as for every request of the run. One that timed out is asked again with the time a repeat
-    gets (`_repeating`), whatever client it was handed, as every request of
-    the harvest is.
+    refusal `refusal_retry_most` times at most; a request whose last
+    attempt ended on one was never answered, so its document is noted
+    (`UNSERVED`) and goes unstamped, as for every request of the run. One
+    that timed out is asked again with the time a repeat gets
+    (`_repeating`), whatever client it was handed, as every request of the
+    harvest is.
     """
     client = _repeating(client)
-    temperature = float(prompt.meta.get("temperature",
-                                        rules.get("temperature")))
-    max_tokens = int(prompt.meta.get("max_tokens", rules.get("max_tokens")))
+    wanted = request_wanted(where)
     text = system_text(prompt, example)
     failures = Failures(document_id)
     for attempt in failures.attempts():
-        limit = answer_room(text, conversation, max_tokens)
-        if limit < least_answer_tokens():
+        limit = request_room(text, conversation, wanted)
+        if limit is None:
             return "cut_off"
         started = time.time()
         try:
             with _for(document_id):
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature,
-                                                  failures.faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": text},
-                              *conversation],
-                    response_format=shape,
-                    extra_body=request_extras())
+                response = send_request(client, text, conversation, limit,
+                                        failures.faults, shape)
             failures.answered()
             reply = response.choices[0]
             usage = getattr(response, "usage", None)
@@ -1797,8 +1975,11 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
                         completion_tokens=getattr(usage, "completion_tokens",
                                                   None),
                         **({"box": box} if box else {}), **noted)
-            answer = _loads_object(reply.message.content)
-            missing = _lacking(answer, shape)
+            answer = _loads_object(
+                reply.message.content, document_id, where,
+                closes=getattr(reply, "finish_reason", None) != "length")
+            missing = (_lacking(answer, shape)
+                       if rules.get("missing_key_asks_again") else None)
             if isinstance(answer, dict) and missing is None:
                 return answer
             failures.fault()
@@ -1807,10 +1988,21 @@ def ask_in_grammar(client, prompt, conversation: list, shape: dict,
             trace.event("error", document_id, where=where,
                         kind="unreadable", cause=cause, attempt=attempt)
             if cause == "cut_off":
-                return "cut_off"
-            conversation = conversation + [
-                {"role": "assistant", "content": reply.message.content or ""},
-                {"role": "user", "content": correction}]
+                kept = (mend.rescued(reply.message.content, key)
+                        if rules.get("cut_off") == "rescue" else None)
+                if kept is None:
+                    return "cut_off"
+                # The complete entries stay, and the request still counts as
+                # cut off: it is noted as one.
+                trace.event("error", document_id, where=where,
+                            kind="cut_off_rescued", rule="cut_off",
+                            kept=len(next(iter(kept.values()))))
+                return kept
+            if rules.get("retry_shows_reply"):
+                conversation = conversation + [
+                    {"role": "assistant",
+                     "content": reply.message.content or ""},
+                    {"role": "user", "content": correction}]
         except Exception as exc:
             log.warning("   %s %s attempt %d failed: %s", where, document_id,
                         attempt, exc)
@@ -1867,7 +2059,8 @@ def request_prompt(parts, payload: dict):
 def make_asks(profile=None) -> Optional[addressed_map.Asks]:
     """The requests of the harvest (`addressed.Asks`), each with a prompt of
     its own and its payload as one message, no conversation (owner decisions
-    2026-11-08); None where the profile writes one of their prompts not,
+    2026-11-08) where the rule `conversation` keeps none (`messages`); None
+    where the profile writes one of their prompts not,
     those of `addressed.OPTIONAL` aside. A request asked again
     (`follow`) goes under the prompt of the request it follows, its words
     after the payload. The sentence a search goes with is a request of its
@@ -1886,23 +2079,43 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
     follow_words = loaded["follow"].common.strip()
 
     def message(payload: dict) -> str:
-        return json.dumps(payload, ensure_ascii=False, indent=1)
+        return json.dumps(own(payload), ensure_ascii=False, indent=1)
+
+    def own(payload: dict) -> dict:
+        return {key: value for key, value in payload.items()
+                if key != "conversation"}
+
+    def messages(payload: dict, content: str) -> list:
+        """The messages of a request: where the rule `conversation` keeps
+        the questions asked before about the same value
+        (`addressed.Reader._talk`), each of them and its answer as a
+        message of its own, then this request's (owner decision
+        2026-11-07: one question a message, a follow-up after it)."""
+        out = []
+        for one in payload.get("conversation") or ():
+            asked = message(one["sent"])
+            if "follow_up" in one:
+                asked = f"{asked}\n\n{follow_words}"
+            out += [{"role": "user", "content": asked},
+                    {"role": "assistant", "content": json.dumps(
+                        one["answer"], ensure_ascii=False)}]
+        return out + [{"role": "user", "content": content}]
 
     def asker(kind: str) -> Callable:
         parts = loaded[kind]
 
         def ask(payload, document_id, /, shape, example, **noted):
             return ask_in_grammar(
-                client, request_prompt(parts, payload),
-                [{"role": "user", "content": message(payload)}],
+                client, request_prompt(parts, own(payload)),
+                messages(payload, message(payload)),
                 shape, document_id, kind, ASK_KEYS[kind], example, **noted)
         return ask
 
     def follow(kind, payload, document_id, /, shape, example, **noted):
         content = f"{message(payload)}\n\n{follow_words}"
         return ask_in_grammar(
-            client, request_prompt(loaded[kind], payload),
-            [{"role": "user", "content": content}],
+            client, request_prompt(loaded[kind], own(payload)),
+            messages(payload, content),
             shape, document_id, "follow", ASK_KEYS[kind], example,
             **{**noted, "asked": kind})
 
@@ -1919,7 +2132,7 @@ def image_path_of(source, image_root: Optional[Path]) -> Optional[str]:
     """Where a figure's crop is, None where the run sends no image or the
     figure has none."""
     if source.owner_kind != "figure" or not source.image_path \
-            or not ATTACH_IMAGES:
+            or not attach_images():
         return None
     return str(Path(image_root) / source.image_path) if image_root \
         else source.image_path
@@ -1937,8 +2150,13 @@ def make_transcribe(profile, image_root: Optional[Path]) -> tuple:
     except (FileNotFoundError, LookupError):
         return None, ""
     client = _client()
-    fingerprint = hashlib.sha256(
-        f"{prompt.sha256}|{LLM_MODEL}".encode("utf-8")).hexdigest()[:16]
+
+    def fingerprint() -> str:
+        # Told where it is used, in the step that transcribes, so that the
+        # model that step names is the model it names.
+        return hashlib.sha256(
+            f"{prompt.sha256}|{llm_model()}".encode("utf-8")
+        ).hexdigest()[:16]
 
     def ask(source, document_id):
         path = image_path_of(source, image_root)
@@ -1968,8 +2186,9 @@ def search_budget() -> tuple:
     many a request shows (owner decisions 2026-11-09: 50, 20 of tables, 15
     of figures, 15 of text, 5 a request), from the run's flow (`NUMBERS`);
     a pass that reads to the end shows every piece (`read_to_end`)."""
-    pieces = REST_TO_END if TO_END else NUMBERS.search_pieces
-    return pieces, NUMBERS.shares(), NUMBERS.search_per_request
+    taken = numbers()
+    pieces = REST_TO_END if TO_END else taken.search_pieces
+    return pieces, taken.shares(), taken.search_per_request
 
 
 def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
@@ -1991,11 +2210,11 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
     pieces, shares, per_request = search_budget()
     return addressed_map.Reader(
         spec, asks, order, search_order=search_order, rerank=rerank,
-        probes=probes, known=row_context, span_marks=span_marks_of(),
+        probes=probes, known=row_context,
         plan_fields=spec.plan_fields, works=spec.works,
         frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
         budget=pieces, shares=shares, per_request=per_request,
-        context=context, numbers=NUMBERS,
+        context=context, numbers=numbers(),
         flow=flow_map.tree_of(profile))
 
 
@@ -2012,12 +2231,14 @@ class Persistent:
 def make_chunk_reranker() -> Optional[Callable]:
     """() -> one thread's reranker of the pieces of a plan, which scores
     every piece it is given (`rerank.Reranker`), asked again until it
-    answers (`Persistent`), or None where the run is given no
-    RERANK_BASE_URL."""
+    answers (`Persistent`), or None where the run is given no reranker
+    server (rule `rerank_base_url`). How many pieces it scores is the rule
+    `rerank_chunk_pool`, read when it orders."""
     from docpipe.inference import rerank as rerank_map
-    if not rerank_map.RERANK_BASE_URL:
+    if not rerank_map.base_url():
         return None
-    return lambda: Persistent(rerank_map.Reranker(pool=1_000_000))
+    return lambda: Persistent(rerank_map.Reranker(
+        pool_rule="rerank_chunk_pool"))
 
 
 def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
@@ -2095,17 +2316,21 @@ def dates_by_plan(spec: Spec) -> bool:
 # minutes to notice.
 
 
-def probe_server(base_url: str = None, timeout: float = 10.0) -> bool:
+def probe_server(base_url: str = None,
+                 timeout: Optional[float] = None) -> bool:
     """Whether the server answers `GET {base_url}/models` at all.
 
     Any reply below 500 counts: a server that refuses the key is still there.
+    The time it waits is the rule `server_probe_timeout_s`.
     """
     import urllib.error
     import urllib.request
-    request = urllib.request.Request((base_url or LLM_BASE_URL).rstrip("/")
+    if timeout is None:
+        timeout = rules.get("server_probe_timeout_s")
+    request = urllib.request.Request((base_url or llm_base_url()).rstrip("/")
                                      + "/models")
-    if LLM_API_KEY:
-        request.add_header("Authorization", f"Bearer {LLM_API_KEY}")
+    if llm_api_key():
+        request.add_header("Authorization", f"Bearer {llm_api_key()}")
     try:
         with urllib.request.urlopen(request, timeout=timeout):
             return True
@@ -2123,14 +2348,14 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
     """A daemon thread that calls *on_dead(seconds)* once the server has not
     answered for *dead_after* seconds (rule `server_dead_after_s`), probing
     every *every* (rule `server_probe_every_s`), then stops watching."""
-    every = rules.get("server_probe_every_s") if every is None else every
-    dead_after = rules.get("server_dead_after_s") if dead_after is None \
-        else dead_after
-
     def watch() -> None:
         silent_since = None
         while True:
-            sleep(every)
+            # Read at each look: the rules may be changed while the run goes.
+            sleep(rules.get("server_probe_every_s") if every is None
+                  else every)
+            limit = (rules.get("server_dead_after_s") if dead_after is None
+                     else dead_after)
             if probe():
                 silent_since = None
                 continue
@@ -2139,7 +2364,7 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
                 silent_since = now
                 log.warning("extraction: the model server did not answer the "
                             "health probe")
-            elif now - silent_since >= dead_after:
+            elif now - silent_since >= limit:
                 on_dead(now - silent_since)
                 return
 
@@ -2169,12 +2394,12 @@ def shared_http(limit=None):
     with _SHARED_HTTP_LOCK:
         if _SHARED_HTTP is None:
             import httpx
-            most = getattr(limit if limit is not None else LIMIT,
-                           "maximum", None)
+            most = rules.get("http_connections") or getattr(
+                limit if limit is not None else LIMIT, "maximum", None)
             _SHARED_HTTP = httpx.Client(
                 limits=httpx.Limits(max_connections=most,
                                     max_keepalive_connections=most),
-                timeout=LLM_TIMEOUT)
+                timeout=llm_timeout())
         return _SHARED_HTTP
 
 
@@ -2186,8 +2411,8 @@ def _client():
     shared = ({"http_client": shared_http()}
               if providers.provider("llm") == providers.OPENAI_COMPATIBLE
               else {})
-    client = providers.client("llm", base_url=LLM_BASE_URL,
-                              api_key=LLM_API_KEY, timeout=LLM_TIMEOUT,
+    client = providers.client("llm", base_url=llm_base_url(),
+                              api_key=llm_api_key(), timeout=llm_timeout(),
                               max_retries=0, **shared)
     if SCHEDULER is None:
         # Several model names on one endpoint share their places as the chat's
@@ -2199,9 +2424,9 @@ def _client():
 
 def _repeating(client):
     """*client*, whose repeat of a request that timed out gets
-    `retry_timeout` (`scheduler.Repeats`): every request of the stage, made
-    here or handed in."""
-    return scheduler.repeating(client, retry_timeout(), LLM_TIMEOUT)
+    `repeat_timeout_s` (`scheduler.Repeats`, read where the request is
+    sent): every request of the stage, made here or handed in."""
+    return scheduler.repeating(client)
 
 
 def _for(document_id):
@@ -2210,16 +2435,21 @@ def _for(document_id):
     return scheduler.on_behalf(document_id, scheduler.current()[1])
 
 
-def _loads_object(raw_text) -> Optional[dict]:
+def _loads_object(raw_text, document_id=None, where: str = "",
+                  closes: bool = True) -> Optional[dict]:
     """The one JSON object a reply was asked for, or None.
 
-    Strict, and that is the point of it. Every softener this used to carry --
-    closing the brackets a reply stopped short of, reading one object out of
-    a longer text, stripping fences and think blocks -- turned a defective
-    answer into a value that then stood in the harvest saying "read" with
-    nothing under it. A reply that is not exactly the object that was asked
-    for is asked again, and the retry says what was wrong with it
-    (`_reply_fault`).
+    Strict, and that is the point of it (decided on 2026-09-12). Every
+    softener this used to carry -- closing the brackets a reply stopped
+    short of, reading one object out of a longer text, stripping fences and
+    think blocks -- turned a defective answer into a value that then stood
+    in the harvest saying "read" with nothing under it. A reply that is not
+    exactly the object that was asked for is asked again, and the retry says
+    what was wrong with it (`_reply_fault`). Only the rule `repair_replies`
+    brings a repair back, for the step that asks; a reply that was read
+    after one is noted in the request log (`repaired`, with the repairs and
+    the rule), for the document *document_id* and the request *where*.
+    *closes* is False for a reply that was cut off: it is never closed.
     """
     text = (raw_text or "").strip()
     if not text:
@@ -2227,7 +2457,14 @@ def _loads_object(raw_text) -> Optional[dict]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        return None
+        kinds = rules.get("repair_replies")
+        if not kinds:
+            return None
+        data, used = mend.repaired(text, kinds, closes)
+        if data is not None:
+            trace.event("repaired", document_id, where=where, repairs=used,
+                        rule="repair_replies")
+        return data
     return data if isinstance(data, dict) else None
 
 
@@ -2235,7 +2472,6 @@ _DECODER = json.JSONDecoder()
 
 
 _UNPARSABLE_SHOWN = 0
-_UNPARSABLE_LIMIT = int(os.environ.get("EXTRACT_SHOW_UNPARSABLE", "20"))
 
 
 def _unparsable(reply) -> str:
@@ -2247,7 +2483,7 @@ def _unparsable(reply) -> str:
     handful of examples, not a second copy of the run in the log.
     """
     global _UNPARSABLE_SHOWN
-    if _UNPARSABLE_SHOWN >= _UNPARSABLE_LIMIT:
+    if _UNPARSABLE_SHOWN >= rules.get("show_unparsable"):
         return ""
     _UNPARSABLE_SHOWN += 1
     message = getattr(reply, "message", None)
@@ -2293,6 +2529,17 @@ def _lacking(answer, shape: Optional[dict]) -> Optional[str]:
     schema = ((shape or {}).get("json_schema") or {}).get("schema") or {}
     return next((key for key in schema.get("required") or ()
                  if key not in answer), None)
+
+
+def _excerpt() -> tuple:
+    """(characters before, after, of foreign text) of a broken answer the
+    question asked again shows the model (rule `fault_excerpt_chars`)."""
+    said = rules.get("fault_excerpt_chars")
+    try:
+        return said["before"], said["after"], said["foreign"]
+    except KeyError as exc:
+        raise ValueError(f"fault_excerpt_chars names no {exc}: it gives "
+                         f"before, after and foreign") from None
 
 
 def _reply_fault(reply, limit: int, *, key: str = "",
@@ -2347,13 +2594,14 @@ def _reply_fault(reply, limit: int, *, key: str = "",
         try:
             _obj, end = _DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
-            around = text[max(start, exc.pos - 60):exc.pos + 20]
+            before, after, _foreign = _excerpt()
+            around = text[max(start, exc.pos - before):exc.pos + after]
             return "syntax", say(
                 "syntax", position=exc.pos - start, message=exc.msg,
                 around=around) + shape
         extra = (text[:start] + text[end:]).strip()
         return "outside_text", say(
-            "outside_text", extra=extra[:200]) + shape
+            "outside_text", extra=extra[:_excerpt()[2]]) + shape
     if not isinstance(data, dict):
         return "not_an_object", say(
             "not_an_object", kind=type(data).__name__) + shape
@@ -2417,32 +2665,56 @@ def _parameter_payload(parameter) -> dict:
     return payload
 
 
-@functools.lru_cache(maxsize=192)
+_IMAGES: dict = {}
+_IMAGES_LOCK = threading.Lock()
+
+
 def _image_data_url(path: str) -> Optional[str]:
-    """The crop, read, downscaled and base64'd — once per file per run.
+    """The crop, read, downscaled and base64'd — once per file, size and
+    format per run.
 
     Every parameter asks the same table again, so the same PNG used to be
-    reopened, resampled and re-encoded once per parameter. Bounded because a
-    corpus run meets thousands of crops and each one is a megabyte of base64.
+    reopened, resampled and re-encoded once per parameter. Bounded
+    (`image_cache_crops`, the oldest leave first) because a corpus run meets
+    thousands of crops and each one is a megabyte of base64. The key holds
+    what the image depends on, the size (`image_max_side`) and the format
+    (`image_format`) of the step that asks, so that a step with another size
+    gets its own image and not the first one made.
 
-    PNG, not JPEG: these crops are synthetic graphics with thin rules and
-    small axis labels, exactly what JPEG artefacts blur first — and a blurred
-    digit is the failure this whole stage exists to avoid. Deliberately not
-    imported from llm_client, which binds the QA prompts at import time.
+    PNG, not JPEG, unless the rule says so: these crops are synthetic
+    graphics with thin rules and small axis labels, exactly what JPEG
+    artefacts blur first — and a blurred digit is the failure this whole
+    stage exists to avoid. Deliberately not imported from llm_client, which
+    binds the QA prompts at import time.
     """
     import base64
     import io
+    side, kind = image_max_side(), rules.get("image_format")
+    key = (path, side, kind)
+    with _IMAGES_LOCK:
+        if key in _IMAGES:
+            return _IMAGES[key]
     try:
         from PIL import Image
         img = Image.open(path)
-        if max(img.size) > image_max_side():
-            img.thumbnail((image_max_side(), image_max_side()))
+        if max(img.size) > side:
+            img.thumbnail((side, side))
+        if kind == "jpeg" and img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format=kind.upper())
     except Exception as exc:
         log.warning("   crop not attachable (%s): %s", path, exc)
         return None
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    url = (f"data:image/{kind};base64,"
+           + base64.b64encode(buf.getvalue()).decode())
+    with _IMAGES_LOCK:
+        most = rules.get("image_cache_crops")
+        while most and len(_IMAGES) >= most:
+            _IMAGES.pop(next(iter(_IMAGES)))
+        if most:
+            _IMAGES[key] = url
+    return url
 
 
 def _image_part(path: str) -> Optional[dict]:
@@ -2490,7 +2762,7 @@ def _observe_usage(usage) -> None:
     completion = getattr(usage, "completion_tokens", None)
     if not isinstance(prompt, int):
         return
-    token_usage.add(LLM_MODEL, input_tokens=prompt,
+    token_usage.add(llm_model(), input_tokens=prompt,
                     output_tokens=completion if isinstance(completion, int)
                     else 0,
                     cached_tokens=token_usage.cached_of(usage))
@@ -2658,14 +2930,18 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     contradicts itself -- not a reading that is wrong about the picture in the
     same way twice.
     """
-    prompt = prompts.load(REVIEW_PROMPT_ID)
     client = _client()
-    temperature = float(prompt.meta.get("temperature",
-                                        rules.get("temperature")))
-    max_tokens = int(prompt.meta.get("max_tokens",
-                                     rules.get("max_tokens_review")))
 
     def ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
+        # Asked with the values of the box that is the home of the second
+        # reading (`in_home`), whoever calls.
+        with in_home("review"):
+            return _ask(row, shown, parameter, slots)
+
+    def _ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
+        # The prompt is composed where it is used: it names rules (the
+        # least characters of a quote) the box may set for itself.
+        prompt = prompts.load(REVIEW_PROMPT_ID)
         payload = json.dumps(_review_payload(row, shown, parameter, slots),
                              ensure_ascii=False, indent=2)
         # The crops ride along exactly as they do for a field request: a
@@ -2675,7 +2951,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
         parts = [{"type": "text", "text": payload}]
         for index, source in enumerate(shown):
             path = source.image_path
-            if not (path and ATTACH_IMAGES):
+            if not (path and attach_images()):
                 continue
             part = _image_part(str(image_root / path) if image_root else path)
             if part is not None:
@@ -2689,32 +2965,28 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
         failures = Failures(noted=False)
         conversation: list = [{"role": "user", "content": content}]
         for attempt in failures.attempts():
-            limit = answer_room(prompt.text, conversation, max_tokens)
-            if limit < least_answer_tokens():
-                log.warning("   review: the prompt leaves %d answer token(s) "
-                            "in a window of %d -- not sent", limit,
-                            MAX_MODEL_LEN)
+            limit = request_room(prompt.text, conversation,
+                                 request_wanted("review"))
+            if limit is None:
+                log.warning("   review: the prompt leaves less than %d "
+                            "answer token(s) in a window of %d -- not sent",
+                            least_answer_tokens(), model_window())
                 break
             started = time.time()
             try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature,
-                                                  failures.faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    extra_body=request_extras(),
-                    **providers.formatted("llm", "review_reply",
-                                          replies.review(slots)),
-                )
+                response = send_request(
+                    client, prompt.text, conversation, limit,
+                    failures.faults,
+                    reply_grammar("review_reply", replies.review(slots)))
                 failures.answered()
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
                 _asked("review", (row.get("provenance") or {}).get(
                     "document_id"), response, attempt=attempt,
                     started=started, parameter=getattr(parameter, "uri", None))
-                answer = _loads_object(reply.message.content)
+                answer = _loads_object(
+                    reply.message.content, (row.get("provenance") or {}).get(
+                        "document_id"), "review")
                 if isinstance(answer, dict):
                     return answer
                 # One row and two passages: there is nothing here to split, so
@@ -2725,9 +2997,12 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                     reply, limit, shorter=say("shorter_review"))
                 log.warning("   review attempt %d: %s reply%s",
                             attempt, cause, _unparsable(reply))
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
+                if rules.get("retry_shows_reply"):
+                    conversation.append({
+                        "role": "assistant",
+                        "content": reply.message.content or ""})
+                    conversation.append({"role": "user",
+                                         "content": correction})
             except Exception as exc:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
                 if not failures.failed(exc):
@@ -2744,10 +3019,12 @@ def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
     complete(report, spec, db=)`, *db* the run's database, for what the
     profile looks up there): `completed(report, spec)`, which adds what it
     found to the report and returns what it came to, traced as `completion`,
-    or None where nothing was open. None where the profile has no such step.
+    or None where nothing was open. None where the profile has no such step
+    or the flow has its box (`catalogue`) off or not at all.
     """
     complete = profile.component("completion", "complete")
-    if complete is None:
+    if complete is None \
+            or not flow_map.box_on(flow_map.tree_of(profile), "catalogue"):
         return None
 
     def completed(report, spec) -> Optional[dict]:
@@ -2756,6 +3033,22 @@ def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
             trace.event("completion", report.document_id, **outcome)
         return outcome
     return completed
+
+
+_COMPUTE_POOLS: dict = {}
+_COMPUTE_POOLS_LOCK = threading.Lock()
+
+
+def compute_pool() -> ThreadPoolExecutor:
+    """The threads the calculation questions of the whole run take turns on,
+    as many as the rule `compute_parallel` says now (one pool for each size
+    it has had)."""
+    size = int(rules.get("compute_parallel"))
+    with _COMPUTE_POOLS_LOCK:
+        if size not in _COMPUTE_POOLS:
+            _COMPUTE_POOLS[size] = ThreadPoolExecutor(
+                max_workers=size, thread_name_prefix="compute")
+        return _COMPUTE_POOLS[size]
 
 
 def make_computer(profile, passages_of: Optional[Callable] = None,
@@ -2799,12 +3092,6 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     # the step quietly.
     parts = thread_map.cut(prompt, follows=computing.FOLLOWS)
     client = _client()
-    temperature = float(prompt.meta.get("temperature",
-                                        rules.get("temperature")))
-    max_tokens = int(prompt.meta.get("max_tokens",
-                                     rules.get("max_tokens_compute")))
-    pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
-                              thread_name_prefix="compute")
 
     def ask(question, items: dict, document_id: int, stop,
             check: Optional[Callable] = None) -> tuple:
@@ -2822,9 +3109,9 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             cursor={"next": anchor, "previous": anchor},
             rank=(functools.partial(rank, document_id)
                   if rank is not None else None))
-        budget = (lookup_map.two_pages(order, pages_of(document_id)
-                                       if pages_of else None)
-                  if order else None)
+        budget = (lookup_map.two_pages(
+            order, pages_of(document_id) if pages_of else None,
+            rules.get("compute_fetch_pages")) if order else None)
         runs: list = []
         noted = {"taken": 0, "untaken": 0, "misquoted": 0, "rejected": 0,
                  "reason": None}
@@ -2862,12 +3149,14 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         # fetching or of taking is no failure.
         failed = 0
         attempt = 0
-        while attempt < MAX_RETRIES + code_rounds() + 1:
+        while attempt < (reply_limit() + code_rounds()
+                         + rules.get("compute_extra_attempts")):
             attempt += 1
             if stop is not None and stop.is_set():
                 return ended("stopped")
-            limit = answer_room(system, conversation, max_tokens)
-            if limit < least_answer_tokens():
+            limit = request_room(system, conversation,
+                                 request_wanted("compute"))
+            if limit is None:
                 return ended("too_long")
             shape = replies.compute(
                 computing.labels(question),
@@ -2877,15 +3166,9 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             started = time.time()
             try:
                 with _for(document_id):
-                    response = client.chat.completions.create(
-                        model=LLM_MODEL,
-                        temperature=retry_temperature(temperature, faults),
-                        max_tokens=limit,
-                        messages=[{"role": "system", "content": system},
-                                  *conversation],
-                        extra_body=request_extras(),
-                        response_format=providers.grammar("compute_reply",
-                                                          shape))
+                    response = send_request(
+                        client, system, conversation, limit, faults,
+                        reply_grammar("compute_reply", shape, always=True))
             except Exception as exc:
                 log.warning("   compute %s attempt %d failed: %s",
                             document_id, attempt, exc)
@@ -2909,7 +3192,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             said = reply.message.content
             code = _parse_action(said)
             if code and len(runs) < code_rounds():
-                with SANDBOX_SLOTS:
+                with sandbox_slots():
                     out = code_exec.run_code(code, context=computing.context(
                         question, shown, gathered.sources))
                 runs.append({"code": code,
@@ -3035,6 +3318,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             profile) if isinstance(node, dict)
             and node.get("box") == "compute"), None)
         with addressed_map.asking(addressed_map.Asking(computing_box)):
+            pool = compute_pool()
             asked = [(question, pool.submit(
                 contextvars.copy_context().run, ask, question, items,
                 report.document_id, stop, check))
@@ -3064,6 +3348,53 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     return compute
 
 
+def step_models(profile=None) -> dict:
+    """{step id: model} of the steps of the flow that name a model of their
+    own (rule `model`), for the check before the run
+    (`llm_preflight.assert_step_models`). A step that is off asks
+    nothing, so the model it names is not needed."""
+    out: dict = {}
+    for node, _frames in flow_map.on(flow_map.tree_of(profile)):
+        named = (node.get("rules") or {}).get("model")
+        if named:
+            out[str(node.get("id"))] = str(named)
+    return out
+
+
+def preflight(required: int, *, what: str, profile=None) -> bool:
+    """The check before the run (rule `preflight_on`): the server offers
+    the model, its window holds *required* tokens, and, where a *profile*
+    is given, the models its steps name are offered too. True where the
+    check ran, False where the rule has the run ask nothing."""
+    if not rules.get("preflight_on"):
+        return False
+    set_model_len(assert_serving(llm_base_url(), llm_api_key(), llm_model(),
+                                 required, what=what, flag="--max-model-len",
+                                 role="llm"))
+    if profile is not None:
+        assert_step_models(llm_base_url(), llm_api_key(),
+                           step_models(profile), role="llm")
+    return True
+
+
+def documents_at_once() -> int:
+    """The most documents read at the same time (rule
+    `documents_in_flight`), at least one."""
+    return max(1, int(rules.get("documents_in_flight")))
+
+
+def dead_server_ends_run(seconds: float) -> bool:
+    """Does a server that has not answered for *seconds* end the run (rule
+    `dead_server_ends_run`)? Where it does not, the run says so and goes
+    on."""
+    if rules.get("dead_server_ends_run"):
+        return True
+    log.error("extraction: the model server stopped answering — no "
+              "reply for %.0f s; the run goes on (rule "
+              "dead_server_ends_run)", seconds)
+    return False
+
+
 def document_room(limit) -> Optional[Callable]:
     """(documents open) -> how many more may start now, or None without a
     steered limit (the ceiling alone decides then).
@@ -3076,7 +3407,7 @@ def document_room(limit) -> Optional[Callable]:
     ones that start asking fill the limit, and while they hold it no further
     document starts.
     """
-    if limit is None:
+    if limit is None or rules.get("document_admission") == "ceiling_only":
         return None
 
     def room(open_documents: int) -> int:
@@ -3169,7 +3500,7 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
     A section can run over a page break, so the section's other pages are
     tried too - bounded, because this opens the PDF each time.
     """
-    if pdf_root is None or os.environ.get("EXTRACT_LOCATE", "1") == "0":
+    if pdf_root is None or not rules.get("locate_quotes"):
         # The rectangles are display data: they say WHERE on the page a quote
         # sits, never whether the value is accepted. A run that cannot afford
         # to enter MuPDF at all still produces every value, quote and page.
@@ -3202,7 +3533,7 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
             words = pages.get(key)
             if words is None:
                 words = page_words(pdf_path, page)
-                if len(pages) >= LOCATE_CACHE_PAGES:
+                while len(pages) >= rules.get("locate_cache_pages"):
                     pages.pop(next(iter(pages)))
                 pages[key] = words
         return words
@@ -3258,7 +3589,7 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
             return None
         candidates = ([int(first_page)] if first_page else []) + \
                      [p for p in pages if p != first_page]
-        for page in candidates[:LOCATE_MAX_PAGES]:
+        for page in candidates[:rules.get("locate_max_pages")]:
             # MuPDF is entered inside words_of, under the lock. The lock once
             # guarded the two dicts and not the library, so eight verification
             # threads opened and laid out PDFs at once; a corpus run died of
@@ -3306,7 +3637,7 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     over a stored harvest neither carries them forward nor finds them
     changed.
     """
-    return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
+    return {"spec": spec_sha, "model": llm_model(), "anchors": anchors_sha,
             **prompts.versions(survey_prompt_ids()),
             **(fingerprints(spec) if spec is not None else {})}
 
@@ -3385,7 +3716,8 @@ def producer(kind: str, model: Optional[str] = None) -> dict:
         taken = rules.current()
         entry.update(model=model, provider=providers.provider("llm"),
                      prompts=prompts.versions(survey_prompt_ids()), flow=FLOW,
-                     numbers=NUMBERS.as_dict(), flow_file=NUMBERS.sha256,
+                     numbers=numbers().as_dict(),
+                     flow_file=numbers().sha256,
                      rules_file=taken.sha256,
                      **({"rules_set": {
                          name: taken.values[name] for name, owner
@@ -3448,7 +3780,7 @@ def stamp_record(name: str, kind: str = "harvest") -> dict:
     `read_in_part` reads whether the document was read to its end."""
     from docpipe import __version__
     record = {"docpipe": __version__,
-              "producers": [producer(kind, LLM_MODEL)]}
+              "producers": [producer(kind, llm_model())]}
     if name in DOCUMENT_CONTENT:
         record[DOCUMENT_KEY] = DOCUMENT_CONTENT[name]
     return record
@@ -3489,7 +3821,8 @@ def document_moved(stored: dict, current: dict) -> bool:
 # keys it outvotes them: one added byte and all 991 stamped documents report
 # stale together, which is the bill the finer keys exist to avoid. With no
 # finer keys in the stamp it is all there is, and then it decides again.
-COARSE = ("spec",)
+# (the keys that stand for it where nothing finer is: rule
+# `coarse_stamp_keys`).
 
 # What a run really asks a document through, one key per question and per
 # answer space: the ontology keys, and the only ones `stale` compares. Their
@@ -3501,14 +3834,6 @@ def question_keys() -> tuple:
     """The keys of a stamp that decide whether a document is read again
     (rule `question_keys`, owner decision 2026-09-10)."""
     return tuple(rules.get("question_keys"))
-
-
-# Where a top-up writes its trace: beside the harvest's `trace/`, never into
-# it. trace._handle starts its file anew, so the harvest's own would be lost,
-# and scripts/harvest_compare.py reads `trace/` alone, so a top-up's requests
-# are not counted into the harvest's cost.
-TOPUP_TRACE_DIR = "trace-topup"
-OPEN_TRACE_DIR = "trace-open"
 
 
 def recorded_questions(questions: Optional[dict]) -> dict:
@@ -3572,7 +3897,8 @@ def stale(stamp_path: Path, current: dict) -> list:
     detailed = any(k.startswith(keys) for k in current)
 
     def compared(key: str) -> bool:
-        return key.startswith(keys) or (not detailed and key in COARSE)
+        return key.startswith(keys) or (
+            not detailed and key in rules.get("coarse_stamp_keys"))
 
     changed = {k for k in current
                if compared(k) and stored.get(k) != current[k]}
@@ -3625,7 +3951,8 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
     ontology keys — or stale with nobody asking for the redo. A document read
     at its found places alone is no work only for a run that starts at them:
     any other run owes it the rest of the plan."""
-    if force or not (out_dir / f"{name}.jsonl").exists():
+    if force or not rules.get("skip_current") \
+            or not (out_dir / f"{name}.jsonl").exists():
         return False
     stamp_path = out_dir / f"{name}.stamp.json"
     if not stamp_path.is_file():
@@ -3681,7 +4008,7 @@ def not_happened(report, *, answered: Optional[int] = None,
     sources planned, when not one batch came back (`answered` is how many did;
     None means the caller does not track it and the count is not checked);
     "unserved" is the requests that ended on a 429, a 5xx, a timeout or a
-    refusal asked `MAX_RETRIES` times, `lost` of them
+    refusal asked `refusal_retry_most` times, `lost` of them
     noted beside the report and the rest in its sentinels. None when the
     reading happened. `finish_document` withholds the stamp on any of them
     and the pass for a new parameter writes nothing.
@@ -3693,11 +4020,11 @@ def not_happened(report, *, answered: Optional[int] = None,
     sources = max(report.owners_harvested, len(failed))
     if sources and unreachable > sources * rules.get("unreachable_share"):
         return "unreachable", unreachable, sources
-    if sources and answered == 0:
+    if sources and answered == 0 and not rules.get("stamp_without_reply"):
         return "no_reply", sources, sources
     lost += sum(1 for r in failed
                 if r.get("claim", {}).get("_why") == "unserved")
-    if lost:
+    if lost and rules.get("unserved_unstamped"):
         return "unserved", lost, lost
     return None
 
@@ -3842,6 +4169,8 @@ def check_against_schema(report, name: str, spec,
     not do is pass unnoticed, because the schema is what everyone downstream
     reads instead of this file.
     """
+    if not rules.get("write_checks_schema"):
+        return 0
     validators = _harvest_validators(spec)
     if validators is None:
         return 0
@@ -3899,12 +4228,6 @@ def resolve_image_root(pdf_root: Optional[Path],
     return (Path(pdf_root) / "processed") if pdf_root else Path(fallback)
 
 
-# A choice list the profile fills per document is not in the spec file, so it
-# cannot be measured there. This is its ceiling: the widest such list in this
-# corpus is the ~250 OEKG study regions with their groups, well inside it.
-DYNAMIC_LIST_TOKENS = 4000
-
-
 def field_slots(spec) -> list:
     """Every slot a request can ask, one per request: the parameter, the
     unit, each parameter's coordinates and the value of a category parameter
@@ -3940,13 +4263,13 @@ def context_budget(prompt, spec=None) -> int:
     sectors whose parameter payload counts 9,627. Unmeasured, that request
     did not fit the window and was never sent.
 
-    A request carries several sources now, so the text term is the batch's
-    ceiling rather than one window's — and one source too long to share a
-    request rides alone, which is why the larger of the two is what counts.
-    Every source in a batch may bring a crop, and the prior block rides along
-    on top.
+    A request shows the pieces of a search: as many as the flow says
+    (`search_per_request`), each of its lines (`piece_lines`) and headings
+    (`headings`) at the tokens the longest line takes (`window_line_tokens`);
+    each piece may bring a crop. Each number counts at its largest in the
+    flow, wherever a box sets one for itself.
     """
-    payload = 2000
+    payload = rules.get("window_floor_tokens")
     if spec is not None:
         widest = max((len(json.dumps(_parameter_payload(p), ensure_ascii=False))
                       for p in spec.parameters), default=0)
@@ -3958,14 +4281,54 @@ def context_budget(prompt, spec=None) -> int:
         dynamic = any(p.vocabulary_dynamic or
                       any(a.dynamic for a in p.axes.values())
                       for p in spec.parameters)
-        payload = max(payload, max(widest, together, asked) // 3 + 600
-                      + (DYNAMIC_LIST_TOKENS if dynamic else 0))
-    return int(len(prompt.text.split()) * 3
-               + max(BATCH_CHARS, MAX_SOURCE_CHARS) // 3    # the batch's text
-               + (1200 * BATCH_SOURCES if ATTACH_IMAGES else 0)   # its crops
-               + PRIOR_MAX * PRIOR_TOKENS                   # what we have already
+        # A choice list the profile fills per document is not in the spec
+        # file, so it cannot be measured there: its ceiling is the rule
+        # `dynamic_list_tokens`.
+        payload = max(payload, max(widest, together, asked)
+                      // rules.get("window_words_per_token")
+                      + rules.get("window_extra_tokens")
+                      + (rules.get("dynamic_list_tokens") if dynamic else 0))
+    per_request = most_of_number("search_per_request")
+    lines = most_of_number("piece_lines") + most_of_number("headings")
+    return int(len(prompt.text.split()) * rules.get("window_words_per_token")
+               + per_request * lines
+               * rules.get("window_line_tokens")         # the pieces' text
+               + (rules.get("window_tokens_per_image") * per_request
+                  if attach_images() else 0)               # their crops
                + payload                                    # payload + envelope
-               + int(prompt.meta.get("max_tokens", 4096)))
+               + answer_tokens_of(prompt))
+
+
+def most_of_number(name: str) -> int:
+    """The largest value the number *name* of the flow takes in any box or
+    frame of it that is on (the run's number, and what each node sets for
+    itself)."""
+    from docpipe.profile import active_profile
+    from .engine import Engine
+    most = int(flow_map.number(numbers(), name))
+    for node, _frames in flow_map.on(flow_map.tree_of(active_profile())):
+        said = Engine.own_values(node).get(name)
+        if said is not None:
+            most = max(most, int(said))
+    return most
+
+
+def answer_tokens_of(prompt) -> int:
+    """The longest answer a request of *prompt*'s kind may ask for: the
+    longest of those the steps of the flow that ask this kind set for
+    themselves (rule `max_tokens`), else the run's."""
+    from docpipe.profile import active_profile
+    from . import blocks
+    kind = next((name for name, prompt_id in addressed_map.PROMPT_IDS.items()
+                 if prompt_id == getattr(prompt, "id", None)), None)
+    name = "max_tokens"
+    own = []
+    for node in flow_map.boxes(flow_map.tree_of(active_profile())):
+        block = blocks.LIBRARY.get(node.get("box"))
+        said = (node.get("rules") or {}).get(name)
+        if block is not None and block.asks == kind and said is not None:
+            own.append(int(said))
+    return max(own) if own else int(rules.get(name))
 
 
 def request_budget(spec, profile=None) -> int:
@@ -3996,7 +4359,9 @@ def _documents(conn: sqlite3.Connection) -> list:
             for r in conn.execute(
                 "SELECT d.id, d.filename FROM Documents d "
                 "LEFT JOIN Sections s ON s.document = d.id "
-                "WHERE d.is_current = 1 GROUP BY d.id, d.filename "
+                + ("WHERE d.is_current = 1 "
+                   if rules.get("current_versions_only") else "")
+                + "GROUP BY d.id, d.filename "
                 + ("ORDER BY COUNT(s.id) DESC, d.filename"
                    if rules.get("largest_first") else "ORDER BY d.filename"))]
 
@@ -4009,18 +4374,12 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple:
     only. A pilot has to hear about that instead of quietly being smaller than
     it was meant to be.
     """
+    wanted = wanted or rules.get("documents")
     if not wanted:
         return documents, []
-    ids = set(wanted)
+    ids = {int(one) for one in wanted}
     chosen = [d for d in documents if d[0] in ids]
     return chosen, sorted(ids - {d[0] for d in chosen})
-
-
-def span_marks_of() -> dict:
-    """{coordinate: entry} a value stated for a span of years takes on each
-    of its rows (rule `span_marks`, `reading.span_rows`); {} where the rules
-    say nothing."""
-    return dict(rules.get("span_marks") or {})
 
 
 def year_states_of(spec: Spec) -> dict:
@@ -4092,7 +4451,109 @@ def _decisions_file(harvest_dir: Path) -> tuple:
         return None, path
 
 
+# The switches of the follow-up passes and the flow each one chooses, in the
+# order a run takes one where more than one is given.
+SWITCH_FLOWS = (("recheck", "recheck"), ("remap", "remap"),
+                ("review", "review"), ("top_up", "top_up"),
+                ("top_up_open", "top_up_open"),
+                ("top_up_parameters", "top_up_parameters"),
+                ("start_at", "start_at"))
+# What a flow without a harvest of its own reads: every document of the
+# database, not only those the harvest would read.
+LISTING_FLOWS = ("top_up", "top_up_open", "top_up_parameters")
+
+
+def chosen_flow(args) -> tuple:
+    """(the flow this run starts, why it cannot): `--flow NAME` or the flow
+    the switch chooses, the main flow where there is neither. A switch that
+    chooses another flow than `--flow` names is refused."""
+    switched = [name for switch, name in SWITCH_FLOWS
+                if getattr(args, switch, None)]
+    if args.flow is not None:
+        others = [name for name in switched if name != args.flow]
+        if others:
+            return args.flow, (f"--flow {args.flow} and the switch of the "
+                               f"flow {others[0]} name two flows: a run "
+                               f"starts one")
+        if args.flow == "start_at" and not args.start_at:
+            return args.flow, ("--flow start_at needs the harvest to start "
+                               "at: --start-at HARVEST")
+        return args.flow, None
+    return (switched[0] if switched else passflow.MAIN), None
+
+
+def follow_up_problem(name: str, profile) -> Optional[str]:
+    """Why the flow *name* cannot be started for *profile*, or None."""
+    if name == passflow.MAIN:
+        return None
+    if name not in passflow.names(profile):
+        return (f"--flow {name}: the profile {profile.name!r} has no such "
+                f"flow; it has {', '.join(passflow.names(profile))}")
+    try:
+        tree = passflow.load(name, profile)
+    except (flow_map.FlowError, LookupError, OSError) as exc:
+        return f"--flow {name}: {exc}"
+    said = passflow.startable(tree)
+    return f"--flow {name}: {said}" if said else None
+
+
+def follow_up_run(args, spec, current, documents, document_name, whole,
+                  every, locate, document_axes, frame_axes, year_states,
+                  sweep, owner_sources, in_flight, room, harvest_document,
+                  make_found, harvest_documents_of) -> passflow.Run:
+    """What a flow of a follow-up pass runs with (`passflow.Run`): where the
+    harvest is, the stamp this run would write, and the means to read a
+    document again as the harvest reads it (`whole`: the survey of the
+    plan, asked for the new parameters alone or for the passages nobody
+    read)."""
+    document_spec = document_spec_per_call(args.db, spec, document_axes)
+    deps = {"sweep": sweep, "owner_sources": owner_sources,
+            "document_spec": document_spec,
+            "frame_names": [slot.name for slot in frame_axes],
+            "frame_axes": frame_axes, "year_states": year_states,
+            "dynamic_ok": document_axes is not None, "locate": locate}
+    stems = {Path(fn).stem for _did, fn in documents}
+    return passflow.Run(
+        out=args.out, spec=spec, current=current, deps=deps,
+        only=args.top_up_key, documents=documents, named=lambda: stems,
+        in_flight=in_flight, room=room, locate=locate,
+        document_spec=lambda document_id: (
+            document_spec(document_id) if document_id else spec),
+        take_parameters=lambda document_id, uris: whole(
+            document_id, only=tuple(uris), scope="parameters"),
+        take_passages=lambda document_id, passages, also: whole(
+            document_id, scope="rest", passages=passages, also=also),
+        passages_of=lambda document_id: every(document_id, set()),
+        make_found=make_found, harvest_documents=harvest_documents_of,
+        harvest_document=harvest_document,
+        open_trace=lambda folder: trace.open_trace(args.out / folder,
+                                                   document_name.get),
+        begin_archive=archive.begin, flush_trace=trace.flush)
+
+
+def log_follow_up(name: str, stats) -> None:
+    """The line that says what a pass over a stored harvest did."""
+    if name == "top_up":
+        log.info("top-up: %d row(s) re-read over %d document(s), %d "
+                 "stamp(s) carried forward, %d blocked", stats["rows"],
+                 stats["documents"], stats["stamps carried forward"],
+                 stats["blocked"])
+    elif name == "top_up_open":
+        log.info("top-up-open: %d open coordinate(s) asked over %d "
+                 "document(s), %d still open",
+                 stats["open coordinates asked"], stats["documents"],
+                 stats["open coordinates left"])
+
+
 def main(argv: Optional[list] = None) -> int:
+    """The call line of the run. What a call switch sets for the run alone
+    (`--document`, `--force`) is a rule laid over the rules for as long as
+    the run goes (`rules.overlaid`), and gone after it."""
+    with ExitStack() as stack:
+        return _main(argv, stack)
+
+
+def _main(argv: Optional[list], stack: ExitStack) -> int:
     parser = argparse.ArgumentParser(
         prog=program("docpipe.extraction"),
         description="Ontology-guided value extraction over an indexed corpus")
@@ -4194,8 +4655,10 @@ def main(argv: Optional[list] = None) -> int:
                              "per C or D value: `python "
                              "scripts/curation_list.py OUT --level C` prints "
                              "that count for free")
-    parser.add_argument("--review-limit", type=int, default=0, metavar="N",
-                        help="--review only: stop after N values (0 = all)")
+    parser.add_argument("--review-limit", type=int, default=None,
+                        metavar="N",
+                        help="--review only: stop after N values (0 = all; "
+                             "the rule review_limit where not given)")
     parser.add_argument("--remap", action="store_true",
                         help="map every coordinate's recorded wording onto "
                              "the vocabulary as the spec reads today, over "
@@ -4203,6 +4666,14 @@ def main(argv: Optional[list] = None) -> int:
                              "document's stamp forward for every answer "
                              "space it could fully re-map, so a grown option "
                              "list costs minutes instead of a corpus run")
+    parser.add_argument("--flow", default=None, metavar="NAME",
+                        help="start the flow NAME: main (the harvest, as "
+                             "without a switch) or a follow-up pass of the "
+                             "profile (top_up, top_up_open, "
+                             "top_up_parameters, remap, recheck, review, "
+                             "start_at). Each switch above only chooses "
+                             "its flow, so --top-up and --flow top_up are "
+                             "the same run")
     parser.add_argument("--spec", type=Path, default=None, metavar="FILE",
                         help="read the spec from FILE instead of the "
                              "profile's SPEC_PATH: a trial harvest of a "
@@ -4215,15 +4686,14 @@ def main(argv: Optional[list] = None) -> int:
                              "read --spec (it says so)")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
-    if args.top_up_parameters and args.top_up:
-        # Two passes over one harvest that write their trace into one folder
-        # and truncate it per document: one command, one of them.
-        parser.error("--top-up-parameters is not combined with --top-up")
     if args.top_up_open and (args.top_up or args.top_up_parameters):
         parser.error("--top-up-open is a pass of its own")
     if args.start_at and (args.top_up or args.top_up_parameters
                           or args.top_up_open):
         parser.error("--start-at starts a harvest, it is no top-up")
+    chosen, problem = chosen_flow(args)
+    if problem:
+        parser.error(problem)
     for harvest in args.start_at or ():
         if not harvest.is_dir():
             parser.error(f"--start-at: {harvest} is no harvest")
@@ -4240,6 +4710,27 @@ def main(argv: Optional[list] = None) -> int:
 
     profile = require_profile(args)
     take_flow(profile)
+    if args.top_up_parameters and args.top_up:
+        # Two passes over one harvest: a run starts one flow, and these two
+        # write their trace into one folder and write it anew per document.
+        parser.error("--top-up-parameters is not combined with --top-up: "
+                     + (passflow.shared_trace("top_up", "top_up_parameters",
+                                              profile)
+                        or "a run starts one flow"))
+    problem = follow_up_problem(chosen, profile)
+    if problem:
+        parser.error(problem)
+    # The switch is the flow it chooses: what follows asks the flow.
+    for switch, name in SWITCH_FLOWS:
+        if name != "start_at":
+            setattr(args, switch, chosen == name)
+    if chosen != "start_at":
+        args.start_at = None
+    if args.document:
+        stack.enter_context(rules.overlaid(
+            documents=[str(one) for one in args.document]))
+    if args.force:
+        stack.enter_context(rules.overlaid(skip_current=False))
     token_usage.begin("extraction")
     if args.recheck:
         raw_spec_path = run_spec_path(args, profile)
@@ -4251,7 +4742,8 @@ def main(argv: Optional[list] = None) -> int:
         with document_specs(args.db, run_spec, profile.component(
                 "extraction", "document_axes")) as spec_for:
             stats = recheck_run(args.out, run_spec,
-                                drop_stamps=not args.keep_stamps,
+                                drop_stamps=False if args.keep_stamps
+                                else None,
                                 spec_for=spec_for)
         if stats[fields.LISTS_UNREADABLE]:
             log.warning("recheck: %d document(s) left alone, their choice "
@@ -4303,9 +4795,13 @@ def main(argv: Optional[list] = None) -> int:
             parser.error(str(exc))
         described = profile.component("kg", "PROVENANCE") or {}
         writer = None
-        if args.provenance and provenance.enabled() \
-                and described.get("base"):
-            writer = provenance.Writer(described["base"], described)
+        if args.provenance and provenance.enabled() and described:
+            # Written under the graph rule `base` as it stands now; the
+            # profile names only the vocabulary.
+            from docpipe import graphfile
+            base = graphfile.get("base", profile.name)
+            if base:
+                writer = provenance.Writer(base, {**described, "base": base})
         from .serialize import (apply_graph_file, profile_context,
                                 run as serialize_run, validate)
         held, gold_path = _decisions_file(args.out)
@@ -4393,28 +4889,26 @@ def main(argv: Optional[list] = None) -> int:
         # branch returns before either of them is reached, and a review that
         # reads every table without its picture is a review of a
         # transcription.
-        if ATTACH_IMAGES and not Path(args.image_root).is_dir():
+        if attach_images() and not Path(args.image_root).is_dir():
             parser.error(f"image root {args.image_root} is not a directory — "
                          f"every table and figure crop would be missing. Pass "
                          f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to review "
                          f"from the transcriptions alone")
         review_prompt = prompts.load(REVIEW_PROMPT_ID)
-        set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-                                     context_budget(review_prompt, spec),
-                                     what="extraction review",
-                                     flag="--max-model-len", role="llm"))
+        preflight(context_budget(review_prompt, spec),
+                  what="extraction review")
         start_limit()
         start_counting()
         from .review import run as review_run
         wanted = None
-        if args.document:
+        if rules.get("documents"):
             # The harvest files are named after the documents, so a
             # restriction is resolved through the same listing the harvest
             # selects from and fails the same way on an id that is not on it.
             listing = sqlite3.connect(readonly_uri(args.db), uri=True)
             try:
                 chosen, missing = select_documents(_documents(listing),
-                                                   args.document)
+                                                   None)
             finally:
                 listing.close()
             if missing:
@@ -4428,9 +4922,9 @@ def main(argv: Optional[list] = None) -> int:
                 args.out, spec, ask=make_review_asker(args.image_root),
                 sources_for=make_review_sources(args.db),
                 documents=wanted, limit=args.review_limit,
-                prompt_sha=review_prompt.sha256, model=LLM_MODEL,
+                prompt_sha=review_prompt.sha256, model=llm_model(),
                 spec_for=spec_for,
-                producer=producer("review", LLM_MODEL))
+                producer=producer("review", llm_model()))
         if stats[fields.LISTS_UNREADABLE]:
             log.warning("review: %d document(s) left alone, their choice "
                         "lists could not be closed",
@@ -4470,9 +4964,7 @@ def main(argv: Optional[list] = None) -> int:
         print(required)
         return 0
     # The window every request is sized against before it is sent.
-    set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-                                 required, what="extraction",
-                                 flag="--max-model-len", role="llm"))
+    preflight(required, what="extraction", profile=profile)
     start_limit()
     start_counting()
 
@@ -4484,7 +4976,7 @@ def main(argv: Optional[list] = None) -> int:
     # 8, 9 and 10 of Kassel were planned against an int and the job failed.
     faiss_index, id_to_pos = faiss_store.load_global_index(args.index)
     args.out.mkdir(parents=True, exist_ok=True)
-    if ATTACH_IMAGES and not Path(args.image_root).is_dir():
+    if attach_images() and not Path(args.image_root).is_dir():
         # Loud here, at second one. The alternative is what happened last
         # time: a warning per crop, buried in half a million log lines, while
         # the harvest read every table without its picture.
@@ -4502,7 +4994,7 @@ def main(argv: Optional[list] = None) -> int:
         documents = _documents(listing)
     finally:
         listing.close()
-    documents, missing = select_documents(documents, args.document)
+    documents, missing = select_documents(documents, None)
     if missing:
         log.error("%d named document(s) not found or not current: %s",
                   len(missing), ", ".join(str(m) for m in missing))
@@ -4511,7 +5003,8 @@ def main(argv: Optional[list] = None) -> int:
     documents = documents_to_harvest(
         documents, args.out, spec_sha, force=args.force,
         force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
-        top_up=args.top_up or args.top_up_parameters or args.top_up_open,
+        top_up=chosen in LISTING_FLOWS or chosen not in (
+            passflow.MAIN, "start_at", "recheck", "remap", "review"),
         start_at=bool(args.start_at))
     if args.top_up_parameters or args.top_up_open:
         from . import topup_parameter
@@ -4524,23 +5017,20 @@ def main(argv: Optional[list] = None) -> int:
     if not documents:
         log.info("extraction: nothing to harvest")
         return 0
-    # What this run replaces is kept under its name (archive.py).
-    archive.begin("top-up-open" if args.top_up_open
-                  else "top-up" if args.top_up
-                  else "top-up-parameters" if args.top_up_parameters
-                  else found_places.PASS if args.start_at
-                  else "harvest")
+    # What this run replaces is kept under its name (archive.py); a flow of
+    # a follow-up pass names its own (the setting `archive` of its first box).
+    if chosen == passflow.MAIN:
+        archive.begin("harvest")
 
     # How many documents are in flight at once: as many as the server has
     # room for (`document_room`), and never more than this ceiling, which
     # only guards the runner's memory. Not a group: a document that is
     # written makes room for the next one.
-    in_flight = max(1, int(os.environ.get("EXTRACT_BATCH_DOCS", "256")))
+    in_flight = documents_at_once()
     room = document_room(LIMIT)
     log.info("extraction: %d document(s), %d parameter(s), "
-             "plan_parallel=%d, llm_parallel=%d, documents in flight %s",
+             "documents in flight %s",
              len(documents), len(spec.parameters),
-             PLAN_PARALLEL, LLM_PARALLEL,
              f"by the server's room, at most {in_flight}" if room
              else f"{in_flight}")
 
@@ -4592,76 +5082,13 @@ def main(argv: Optional[list] = None) -> int:
         the harvest's own questions (`surveyed.SurveyedHarvest.sweep`)."""
         return whole.sweep
 
-    if args.top_up:
-        from . import topup
-        trace.open_trace(args.out / TOPUP_TRACE_DIR,
-                         {did: Path(fn).stem for did, fn in documents}.get)
-        frame_names = [slot.name for slot in frame_axes]
-        listing = sqlite3.connect(readonly_uri(args.db), uri=True)
-        listing.row_factory = sqlite3.Row
-
-        document_spec = make_document_spec(listing, spec, document_axes)
-
-        try:
-            log.info("top-up: this may rewrite %s for every question whose "
-                     "wording moved — the anchors key hashes the prompt and "
-                     "the model, not the questions",
-                     args.out / "anchors.json")
-            stats = topup.run(
-                args.out, spec,
-                _stamp_current(spec_sha, anchors_sha, spec),
-                {"sweep": pass_sweep(),
-                 "owner_sources": make_owner_sources(args.db, content=content),
-                 "document_spec": document_spec,
-                 "frame_names": frame_names,
-                 "frame_axes": frame_axes,
-                 "year_states": year_states,
-                 "dynamic_ok": document_axes is not None,
-                 "locate": locate},
-                only=args.top_up_key)
-        finally:
-            listing.close()
-        log.info("top-up: %d row(s) re-read over %d document(s), %d stamp(s) "
-                 "carried forward, %d blocked",
-                 stats["rows"], stats["documents"],
-                 stats["stamps carried forward"], stats["blocked"])
-        write_stats(args.out, [TOPUP_TRACE_DIR],
-                    {Path(fn).stem for _did, fn in documents})
-        return 1 if unheld_requests() else 0
-
-    if args.top_up_open:
-        # First what the stored rows left open, then the passages nobody
-        # read: the rows found there are asked to the end as well.
-        from . import topup
-        read_to_end()
-        trace.open_trace(args.out / OPEN_TRACE_DIR,
-                         {did: Path(fn).stem for did, fn in documents}.get)
-        stats = topup.run_open(
-            args.out, spec,
-            {"sweep": pass_sweep(),
-             "owner_sources": make_owner_sources(args.db, content=content),
-             "document_spec": document_spec_per_call(args.db, spec,
-                                                     document_axes),
-             "frame_axes": frame_axes,
-             "year_states": year_states,
-             "locate": locate},
-            names={Path(fn).stem for _did, fn in documents},
-            workers=in_flight, room=room)
-        log.info("top-up-open: %d open coordinate(s) asked over %d "
-                 "document(s), %d still open", stats["open coordinates asked"],
-                 stats["documents"], stats["open coordinates left"])
-
     document_name = {did: Path(fn).stem for did, fn in documents}
     # Every event carries the document it belongs to and lands in that
     # document's own file, so a redone document overwrites its own trace. A
     # pass over a stored harvest writes beside the harvest's traces and not
-    # into them: they say what the harvest cost, and are opened for writing.
-    if args.top_up_parameters:
-        trace.open_trace(args.out / TOPUP_TRACE_DIR, document_name.get)
-    elif args.top_up_open:
-        from .topup_rest import TRACE_DIR as REST_TRACE_DIR
-        trace.open_trace(args.out / REST_TRACE_DIR, document_name.get)
-    else:
+    # into them (the setting `trace` of the box that starts it): they say
+    # what the harvest cost, and are opened for writing.
+    if chosen == passflow.MAIN:
         trace.open_trace(args.out / "trace", document_name.get)
 
     computer = make_computer(profile,
@@ -4678,11 +5105,22 @@ def main(argv: Optional[list] = None) -> int:
         fold_answers(answered, report, locate=locate, spec=spec)
         # Stopped half way a document is half worked out, and unwritten like
         # one half read.
-        if computer is not None and not computer(
-                answered, report, locate=locate, spec=spec, stop=Halted):
-            return False
+        if computer is not None:
+            reader = whole.reader_of(spec)
+            # The calculation reads the values of its own step, the compute
+            # box of the flow, and not those of the writing around it.
+            with (reader.engine.step_of("compute") if reader is not None
+                  else nullcontext()):
+                if not computer(answered, report, locate=locate, spec=spec,
+                                stop=Halted):
+                    return False
         if completer is not None:
-            completer(report, spec)
+            reader = whole.reader_of(spec)
+            # The completion reads the values of its own step, the
+            # catalogue box of the flow.
+            with (reader.engine.step_of("catalogue") if reader is not None
+                  else nullcontext()):
+                completer(report, spec)
         stamped = finish_document(report, name, args.out, spec_sha,
                                   anchors_sha, answered=replies, spec=spec,
                                   lost=UNSERVED.of(report.document_id))
@@ -4715,6 +5153,8 @@ def main(argv: Optional[list] = None) -> int:
         """No answer for minutes: nothing in flight can finish any more, so
         the run ends at once, like a SIGTERM, instead of waiting for every
         open request to spend its retries on a server that is gone."""
+        if not dead_server_ends_run(seconds):
+            return
         give_up()
         log.error("extraction: the model server stopped answering — no reply "
                   "for %.0f s, the run ends here. What was harvested is "
@@ -4730,19 +5170,16 @@ def main(argv: Optional[list] = None) -> int:
     if not providers.hosted("llm") and not providers.replaying():
         watch_server(server_dead)
 
-    # Shared by every document in flight: the pool bounds the batches of all
-    # of them together, the streak sees a dead server across all of them.
-    batch_pool = ThreadPoolExecutor(max_workers=max(LLM_PARALLEL, 1),
-                                    thread_name_prefix="batch")
-    # Planning is retrieval on the embedder's card and SQL: PLAN_PARALLEL plans
-    # at a time across all documents, not per document.
-    plan_pool = ThreadPoolExecutor(max_workers=max(PLAN_PARALLEL, 1),
-                                   thread_name_prefix="plan")
     # OpenAI client is thread-safe.
     rest_of_document = make_rest_of_document(args.db, content=content)
-    found = (found_places.Found(args.start_at, document_name.get,
-                                rest_of_document)
-             if args.start_at else None)
+    # The places of the earlier harvests, made by the step of the flow
+    # `start_at` that takes them (`passboxes.box_places`).
+    found_of: list = [None]
+
+    def make_found():
+        found_of[0] = found_places.Found(args.start_at, document_name.get,
+                                         rest_of_document)
+        return found_of[0]
 
     whole.halted = Halted.is_set
 
@@ -4755,6 +5192,7 @@ def main(argv: Optional[list] = None) -> int:
         document was read in part.
         """
         name = Path(filename).stem
+        found = found_of[0]
         kept = found.passages(document_id) if found is not None else []
         if kept:
             taken = surveyed_map.take_found(
@@ -4770,45 +5208,36 @@ def main(argv: Optional[list] = None) -> int:
                                 owners_harvested=taken.passages,
                                 planned={stage: taken.passages},
                                 sources_of=taken.sources_of)
-        stamped = verify((name, report, taken.answered),
-                         replies=taken.replies)
+        with whole.reader_of(spec).engine.step_of("write"):
+            stamped = verify((name, report, taken.answered),
+                             replies=taken.replies)
         return stamped, 0 if stamped else 1
 
-    parameter_pass = None
-    if args.top_up_parameters:
-        parameter_pass = surveyed_map.ParameterPass(
-            args.out, spec, _stamp_current(spec_sha, anchors_sha, spec),
-            {"document_spec": document_spec_per_call(args.db, spec,
-                                                     document_axes),
-             "take": lambda document_id, uris: whole(
-                 document_id, only=tuple(uris), scope="parameters"),
-             "locate": locate,
-             "frame_names": [slot.name for slot in frame_axes],
-             "dynamic_ok": document_axes is not None})
-        harvest_document = parameter_pass
-    rest_pass = None
-    if args.top_up_open:
-        rest_pass = surveyed_map.UnreadPass(
-            args.out,
-            {"take": lambda document_id, passages, also: whole(
-                document_id, scope="rest", passages=passages, also=also),
-             "passages_of": lambda document_id: every(document_id, set()),
-             "locate": locate, "spec": spec})
-        harvest_document = rest_pass
+    follow_up = None
+    if chosen != passflow.MAIN:
+        follow_up = follow_up_run(
+            args, spec, _stamp_current(spec_sha, anchors_sha, spec),
+            documents, document_name, whole, every, locate, document_axes,
+            frame_axes, year_states, pass_sweep(),
+            make_owner_sources(args.db, content=content), in_flight, room,
+            harvest_document, make_found,
+            lambda docs, step: harvest_documents(
+                docs, step, in_flight=in_flight, stop=STOP,
+                halted=halt.is_set, room=room))
     install_stop_handler()
     try:
-        done, _written, failed = harvest_documents(
-            documents, harvest_document, in_flight=in_flight, stop=STOP,
-            halted=halt.is_set, room=room)
+        if follow_up is None:
+            done, _written, failed = harvest_documents(
+                documents, harvest_document, in_flight=in_flight, stop=STOP,
+                halted=halt.is_set, room=room)
+        else:
+            passflow.run_named(chosen, follow_up, profile)
+            done, failed = follow_up.done, follow_up.failed
         failures += failed
     finally:
         stopped = STOP.is_set()
-        batch_pool.shutdown(wait=not stopped, cancel_futures=stopped)
-        plan_pool.shutdown(wait=not stopped, cancel_futures=stopped)
-    if parameter_pass is not None:
-        parameter_pass.report()
-    if rest_pass is not None:
-        rest_pass.report()
+    if follow_up is not None:
+        log_follow_up(chosen, follow_up.stats)
 
     if server_gone[0]:
         log.error("extraction: the model server stopped answering — the run "
@@ -4833,10 +5262,9 @@ def main(argv: Optional[list] = None) -> int:
     failures += unheld_requests()
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)
-    from .topup_rest import TRACE_DIR as REST_TRACES
-    write_stats(args.out, [OPEN_TRACE_DIR, REST_TRACES] if args.top_up_open
-                else [TOPUP_TRACE_DIR] if args.top_up_parameters
-                else ["trace"], set(document_name.values()))
+    write_stats(args.out, follow_up.traces if follow_up is not None
+                and follow_up.traces else ["trace"],
+                set(document_name.values()))
     return 1 if failures else 0
 
 

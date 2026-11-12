@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 1536
----
 Answer the question under "question" for the value under "value" with the address of a line under "passages" that says the answer for this value and its words; where none says it, "at" is 0.
 
 * "value" gives the value's words and its address under "passage", its own place, which does not say the answer. "passages" are further pieces of the publication, each under its letter, with its kind, page and title.

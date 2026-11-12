@@ -170,6 +170,14 @@ class Axis:
         return out
 
 
+def group_taken(parameter) -> bool:
+    """Does a value of *parameter* take the members of a group of entries
+    ("all scenarios")? The spec's `takes_group` of the field, else the
+    rule `default_takes_group` as the step that asks has it."""
+    own = getattr(parameter, "takes_group", None)
+    return bool(rules.get("default_takes_group") if own is None else own)
+
+
 @dataclass
 class Parameter:
     uri: str
@@ -224,8 +232,10 @@ class Parameter:
     # Whether a value whose scenario is the words of a group of scenarios
     # ("all scenarios") takes the members the document names, one row each
     # (owner decision 2026-11-08, i): years, regions, types do, a
-    # description does not.
-    takes_group: bool = True
+    # description does not. None where the spec says nothing: the rule
+    # `default_takes_group` decides, as the step that reads it has it
+    # (`group_taken`).
+    takes_group: Optional[bool] = None
     # uri -> the group an entry of the value's list belongs to, as on an
     # axis.
     groups: dict = field(default_factory=dict)
@@ -745,8 +755,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      axes=axes, example=example,
                      once_per_document=bool(raw.get("once_per_document",
                                                     False)),
-                     takes_group=bool(raw.get(
-                         "takes_group", rules.get("default_takes_group"))),
+                     takes_group=raw.get("takes_group"),
                      groups=_entry_groups(f"{path}.vocabulary",
                                           raw.get("vocabulary")),
                      beside=beside)
@@ -1034,7 +1043,7 @@ def parameter_fingerprint(parameter: "Parameter") -> str:
         # Only where set, so no other field's key moves.
         **({"once_per_document": True}
            if parameter.once_per_document else {}),
-        **({"takes_group": False} if not parameter.takes_group else {}),
+        **({"takes_group": False} if not group_taken(parameter) else {}),
     })
 
 
@@ -1117,7 +1126,8 @@ def fingerprints(spec: "Spec") -> dict:
     Flat, and the keys read as what they are: the stamp is compared key by
     key, and "parameter/<uri>" or "axis/<uri>/<name>" is what a run should be
     able to say changed. One nested block would only ever report that
-    something inside it moved.
+    something inside it moved. The rule `stale_keys` says which kinds of
+    keys there are.
 
     Together they have to cover everything a document is asked through, or
     `runner.stale` -- which ignores the whole-file sha once these are present
@@ -1125,17 +1135,23 @@ def fingerprints(spec: "Spec") -> dict:
     "slot/parameter" is doing here: without it the spec's own question and
     the list it offers would be in no key at all.
     """
-    out = {"slot/parameter": parameter_slot_fingerprint(spec)}
-    unit = unit_slot_fingerprint(spec)
+    kinds = rules.get("stale_keys")
+    out = {}
+    if "parameter_slot" in kinds:
+        out["slot/parameter"] = parameter_slot_fingerprint(spec)
+    unit = unit_slot_fingerprint(spec) if "unit_slot" in kinds else ""
     if unit:
         out["slot/unit"] = unit
     for parameter in spec.parameters:
-        out[f"parameter/{parameter.uri}"] = parameter_fingerprint(parameter)
-        value = value_fingerprint(parameter)
+        if "parameter" in kinds:
+            out[f"parameter/{parameter.uri}"] = parameter_fingerprint(
+                parameter)
+        value = value_fingerprint(parameter) if "value" in kinds else ""
         if value:
             out[f"value/{parameter.uri}"] = value
-        for name, axis in (parameter.axes or {}).items():
-            out[f"axis/{parameter.uri}/{name}"] = axis_fingerprint(axis)
+        if "axis" in kinds:
+            for name, axis in (parameter.axes or {}).items():
+                out[f"axis/{parameter.uri}/{name}"] = axis_fingerprint(axis)
     return out
 
 

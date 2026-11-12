@@ -99,7 +99,8 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     the lists it closes (*document_spec*), made once per document: without
     --read the order of each field's pieces, with it the whole reading and
     the fold."""
-    from docpipe.extraction import fields, runner, throttle
+    from docpipe import rules
+    from docpipe.extraction import fields, runner
     from docpipe.extraction.pipeline import DocumentReport
     from docpipe.profile import active_profile
 
@@ -115,7 +116,8 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
     # --parallel requests with the model at once, held by the run's queue,
     # and the run's threads that ask a document's requests side by side.
     runner.start_fixed_limit(args.parallel)
-    runner.AHEAD = ThreadPoolExecutor(max(args.parallel, throttle.MAXIMUM),
+    runner.AHEAD = ThreadPoolExecutor(max(args.parallel,
+                                          rules.get("limit_most")),
                                       thread_name_prefix="ahead")
     whole = runner.make_harvest(
         spec, db_path=args.db, out=args.out, image_root=args.image_root,
@@ -158,10 +160,15 @@ def survey_over(passages: dict, spec, args, document_spec=None) -> list:
                                 owners_harvested=taken.passages,
                                 planned={"survey": taken.passages},
                                 sources_of=taken.sources_of)
-        runner.fold_answers(taken.answered, report, locate=None, spec=spec)
-        # What the run completes from outside the document, as it does
-        # after the fold.
-        row["completion"] = completer(report, own) if completer else None
+        # The fold and the completion are the writing of the run: read in
+        # the step of its write box, as the run does (`runner.verify`).
+        with whole.reader_of(own).engine.step_of("write"):
+            runner.fold_answers(taken.answered, report, locate=None,
+                                spec=spec)
+            # What the run completes from outside the document, as it does
+            # after the fold.
+            row["completion"] = (completer(report, own) if completer
+                                 else None)
         reads = taken.reads
         row.update({
             "seconds": round(time.time() - started, 1),

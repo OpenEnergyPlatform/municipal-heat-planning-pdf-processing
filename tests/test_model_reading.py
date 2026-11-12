@@ -113,7 +113,7 @@ def test_a_building_count_is_written_as_mhpos_class_in_the_count_unit():
     assert typed_as(row) == "mhpo:MHPO_00030021"
     assert kg.unit_of(row) == "UO_0000189"
     _lines, bindings = kg.value_bindings({"quantity": "MHPO_00030021"})
-    assert bindings["QUANTITY"] == ("iri", kg.PREFIX_IRI["mhpo"]
+    assert bindings["QUANTITY"] == ("iri", kg.prefix_iri()["mhpo"]
                                     + "MHPO_00030021")
 
 

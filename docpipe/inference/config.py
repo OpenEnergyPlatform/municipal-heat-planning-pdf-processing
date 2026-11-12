@@ -70,7 +70,7 @@ READOFF_IMAGE_MAX_SIDE = int(os.environ.get("READOFF_IMAGE_MAX_SIDE", "1600"))
 # ---------------------------------------------------------------------------
 CODE_EXEC_URL = os.environ.get("CODE_EXEC_URL", "")
 CODE_EXEC_TOKEN = os.environ.get("CODE_EXEC_TOKEN") or os.environ.get("KWP_SANDBOX_TOKEN", "")
-CODE_EXEC_TIMEOUT = float(os.environ.get("CODE_EXEC_TIMEOUT", "45"))
+# The wait for one run is the rule `code_timeout_s` (env CODE_EXEC_TIMEOUT).
 # Max code runs the model may request while answering ONE batch.
 CODE_EXEC_MAX_ROUNDS = int(os.environ.get("CODE_EXEC_MAX_ROUNDS", "2"))
 

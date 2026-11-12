@@ -34,8 +34,14 @@ title and the DOI the record is found with are those of the front pages
 where they were read there. No model is asked.
 
 The first time the catalogue cannot be reached at all, the run asks it no
-more (`OFFLINE`): each later document says so at once instead of waiting
-out the timeout.
+more (`OFFLINE`, rule `catalogue_stop_when_offline`): each later document of
+that run says so at once instead of waiting out the timeout. The state is the
+run's, not the process's: a run that starts afterwards asks again.
+
+Every value here is a rule read when the catalogue is asked (`rules.json`
+beside `rules.py`): its address, the waiting time, the name the run gives it,
+the keys and their order, the hits looked at, what a hit has to agree in, the
+values it fills in and the flags a looked-up row shares with its anchor.
 
 Author: Felix Vossel
 
@@ -48,6 +54,32 @@ def works() -> str
 ```
 
 Where the catalogue answers (rule `catalogue_address`).
+
+### offline
+
+```python
+def offline() -> bool
+```
+
+Whether the catalogue was found unreachable by the run that goes on
+(rule `catalogue_stop_when_offline`).
+
+### went_offline
+
+```python
+def went_offline() -> None
+```
+
+Note that the catalogue could not be reached, for this run.
+
+### search_hits
+
+```python
+def search_hits(title: str) -> list
+```
+
+The records OpenAlex finds for *title*, as many as the rule
+`catalogue_hits_taken` says, best first.
 
 ### search
 
@@ -104,9 +136,12 @@ of the authors the harvest read, each once, in the record's order.
 def accepted(record: dict, read: list) -> bool
 ```
 
-Whether the record a title found is the document: two of its family
-names among the authors read (rule `catalogue_family_names`), or one
-where either side names one.
+Whether the record a title found is the document: as many of its
+family names among the authors read as the rule `catalogue_family_names`
+says. Where a side names fewer authors than that, all of its authors
+have to agree, unless the rule `catalogue_fewer_authors_suffice` is off:
+then the number is kept as it is, and a record or a paper with fewer
+authors is never accepted by its title.
 
 ### bare_doi
 

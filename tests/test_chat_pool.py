@@ -5,9 +5,24 @@ import time
 
 import pytest
 
+from docpipe import rules
 from docpipe.extraction import scheduler
 from docpipe.inference import answer, chunker, compare, config, db, llm_client, pool
 from docpipe.inference import replies, statements
+
+
+def places(monkeypatch, models, slots):
+    """The models and the places each takes, as the installation sets them
+    (rules `llm_models`, `llm_slots_per_model`)."""
+    monkeypatch.setenv("LLM_MODELS", ",".join(models))
+    monkeypatch.setenv("LLM_SLOTS_PER_MODEL", str(slots))
+    rules.reset()
+
+
+@pytest.fixture(autouse=True)
+def _rules_again():
+    yield
+    rules.reset()
 
 
 class Reply:
@@ -47,8 +62,7 @@ class FakeClient:
 def wide(monkeypatch):
     """Two models with two places each, and a pool of this test's own."""
     def build(client):
-        monkeypatch.setattr(config, "LLM_MODELS", ("a", "b"))
-        monkeypatch.setattr(config, "LLM_SLOTS_PER_MODEL", 2)
+        places(monkeypatch, ("a", "b"), 2)
         made = pool.Pool(client, ("a", "b"), 2)
         monkeypatch.setattr(pool, "_pool", made)
         return made
@@ -83,8 +97,7 @@ def test_asked_again_a_request_lands_on_the_other_model(wide):
 
 
 def test_one_place_is_the_plain_client_and_one_after_the_other(monkeypatch):
-    monkeypatch.setattr(config, "LLM_MODELS", ("a",))
-    monkeypatch.setattr(config, "LLM_SLOTS_PER_MODEL", 1)
+    places(monkeypatch, ("a",), 1)
     client = FakeClient()
     assert pool.over(client) is client
     me = threading.get_ident()
@@ -140,6 +153,26 @@ def test_a_needed_request_overtakes_one_sent_ahead_and_promotion_undoes_that():
 
 
 # -- in order ------------------------------------------------------------------
+
+def test_the_look_ahead_looks_as_often_as_its_rule_says(monkeypatch, wide):
+    """`chat_look_ahead_s`: how long the chat waits for the answer it needs
+    before it looks for a free place to ask ahead."""
+    wide(FakeClient())
+    looked = []
+    real = pool.wait
+
+    def wait(futures, timeout):
+        looked.append(timeout)
+        return real(futures, timeout)
+
+    monkeypatch.setattr(pool, "wait", wait)
+    assert list(pool.in_order(2, lambda i: i, lambda i: i)) == [0, 1]
+    assert set(looked) == {rules.default()["chat_look_ahead_s"]} == {0.05}
+    looked.clear()
+    with rules.overlaid(chat_look_ahead_s=0.5):
+        assert list(pool.in_order(2, lambda i: i, lambda i: i)) == [0, 1]
+    assert set(looked) == {0.5}
+
 
 def test_answers_come_in_order_whichever_returned_first(wide):
     wide(FakeClient())
@@ -393,8 +426,7 @@ def test_a_repeat_named_by_the_model_leaves_and_the_first_stays(monkeypatch, wid
 
 
 def test_nothing_sent_ahead_asks_no_repeat_request(monkeypatch, turn):
-    monkeypatch.setattr(config, "LLM_MODELS", ("a",))
-    monkeypatch.setattr(config, "LLM_SLOTS_PER_MODEL", 1)
+    places(monkeypatch, ("a",), 1)
     told = []
 
     def asked(task, items, **kw):
@@ -467,8 +499,7 @@ def test_the_documents_of_a_comparison_are_asked_at_the_same_time(monkeypatch, w
 
 
 def test_with_one_place_the_documents_are_asked_in_turn(monkeypatch):
-    monkeypatch.setattr(config, "LLM_MODELS", ("a",))
-    monkeypatch.setattr(config, "LLM_SLOTS_PER_MODEL", 1)
+    places(monkeypatch, ("a",), 1)
     inside = []
 
     def asked(task, corpus, document_id, scopes, **kw):

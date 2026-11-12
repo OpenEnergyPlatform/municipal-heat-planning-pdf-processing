@@ -643,16 +643,27 @@ as it is: read with `splitlines()`, that record would become two broken ones.
 Every reader of a harvest, of the decisions file and of a cassette goes through
 it.
 
-`rules.py` holds every value a run follows (quote minimum length, decimal mark,
-year range, span words, request letters, retry waits, image size, country
-groups, `not_extracted`, compute parts, and the rest) in the profile's
-`rules.json`. The code knows a rule's name, kind, bounds and help; a profile's
-file is laid over the default's rule by rule, and an `EXTRACT_*` setting wins
-over the file. A profile declares its own rules in `rules.py: RULES` and its
-graph writer rules in `GRAPH`. No rule makes a harvest stale; the stamp's
-producer entry names the sha of the rules file. It replaced constants such as
-`verify.MIN_QUOTE_CHARS` (now `verify.min_quote_chars()`) and `reading.SHOWN`
-(now `reading.shown_counts()`).
+`rules.py` gathers every value a run follows (quote minimum length, decimal
+mark, year range, span words, request letters, retry waits, image size, country
+groups, `not_extracted`, compute parts, and the rest) as rules. A rule is
+declared in code (what a rule is: `docpipe/ruleset/kit.py`; the core's rules in
+`docpipe/ruleset/*.py`): its name, tab, kind, bounds, help and the kinds of
+steps that read it (`steps`). Its value stands in the profile's `rules.json`;
+that file is laid over the default's rule by rule, and a setting from the
+environment or the project file (`Rule.env`) is laid over the files. A profile
+declares its own rules in `profiles/<name>/rules.py` (`RULES`, and `GRAPH` for
+the graph writer's rules) and sets their values in its `rules.json`.
+`rules.get(name)` reads a value where it is used, never while a module loads,
+and a step or frame of the flow may set a value of its own for a rule that
+names its kind in `steps`; that value wins over the files (see
+[the extraction stage](extraction.md)). A rule without `steps` is the run's
+only. A value of the machine (`Rule.machine`: a model's address, the slots per
+model, the connections) is set only in the project file `docpipe.toml`, a key
+(`Rule.secret`) only in `.env` or the environment, never in a rules file and
+never at a step. No rule makes a harvest stale; the stamp's producer entry names
+the sha of the rules. It replaced constants such as `verify.MIN_QUOTE_CHARS`
+(now `verify.min_quote_chars()`) and `reading.SHOWN` (now
+`reading.shown_counts()`).
 
 `sources.py` reads `sources.json`: the ontology, shapes and knowledge graph
 queries a profile is written against (`sources`), the lists drawn from them
@@ -977,10 +988,17 @@ a setting (`Rule.env`) is set by it where it is set: the environment, then
 the project file, then the file.
 
 A run reads with the rules of its profile (`use`; `current` takes the
-ambient profile's where no run said which). Nothing here decides whether a
-harvest is current: a pass names the sha256 of its rules in its entry of the
-stamp for a reader, as it names its prompts and its flow (owner decision
-2026-09-10: a stamp rests on the questions of the spec alone).
+ambient profile's where no run said which). A step of the flow and the
+frames around it may set a rule for themselves (`"rules"` of a box or frame
+in `flow.json`, owner 2026-11-11: "alles soll anpassbar sein"): while the
+step runs, its values lie over the run's (`STEP`, set by
+`engine.Engine.step`), the innermost frame's over the outer ones', so a
+value is read in this order: the step, its frames from the inside out, the
+setting of the start, the file. `get` is the one way a rule is read.
+Nothing here decides whether a harvest is current: a pass names the sha256
+of its rules in its entry of the stamp for a reader, as it names its
+prompts and its flow (owner decision 2026-09-10: a stamp rests on the
+questions of the spec alone).
 
 Author: Felix Vossel
 
@@ -1025,14 +1043,16 @@ Graphen aufgenommen wird und welche constraints erfüllt sein müssen").
 
     <profile folder>/graph.json
 
-    {"classes": {class: {"written": false} |
+    {"map": {"boxes": [...], "arrows": [...]},
+     "classes": {class: {"written": false} |
                         {"address": {"folder": ..., "key": [property, ...],
                                      "base": ...}}},
      "constraints": {"<constraint> <property> <class>": effect},
      "rules": {name: value}}
 
-What a writer does stays code (`profiles/<name>/kg.py`); the file says what
-the writer is to do with it:
+What the writer does stays code (`docpipe/extraction/graph.py` and the
+bricks of `profiles/<name>/kg.py`); the drawing (`map`) says which node
+each field becomes, and the rest of the file what the writer is to do:
 
 - a class that is not written: its nodes, and every triple that names them,
   leave the written graph;
@@ -1045,7 +1065,7 @@ the writer is to do with it:
   `leave_out_paper` (every node of its document does) or `stop` (the gate,
   `docpipe.extraction.gate`, shuts before a job starts its model);
 - the rules a profile's writer declares (`rules.py: GRAPH`), each read by the
-  writer where it applies it.
+  writer where it applies it (`get`, the value of a step of the flow first).
 
 A class is named by its identifier (`OEO_00030022`), a property by its
 identifier or `prefix:name`, a constraint by the words the validation

@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 1024
----
 Answer the question under "question" with the address of the shown line that says the answer and its words; where no shown line says it, "at" is 0.
 
 * Each line starts with its address, a line of another block with the block's letter before it. A line that "|" divides has cells, counted from 1, wherever it stands: 19.2 is the second cell of line 19.

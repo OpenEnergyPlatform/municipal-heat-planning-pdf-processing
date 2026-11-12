@@ -1,7 +1,3 @@
----
-temperature: 0
-max_tokens: 256
----
 Sagt die Zeile unter "place" die Antwort unter "answer" für DIESEN Wert? "about" ist "yes" oder "no".
 
 * "value" nennt die Worte des Werts und seine Adresse unter "passage", seiner Stelle im Plan; "question" ist die Frage, die "answer" beantwortet.

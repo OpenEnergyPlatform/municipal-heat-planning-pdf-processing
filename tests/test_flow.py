@@ -29,7 +29,7 @@ SETTINGS = sorted({number.env for number in flow.NUMBERS if number.env})
 
 @pytest.fixture(autouse=True)
 def the_run_s_numbers_stay(monkeypatch):
-    for name in ("NUMBERS", "MAX_RETRIES", "TO_END", "_flow_logged"):
+    for name in ("NUMBERS", "TO_END", "_flow_logged"):
         monkeypatch.setattr(runner, name, getattr(runner, name))
     for name in SETTINGS:
         monkeypatch.delenv(name, raising=False)
@@ -153,7 +153,7 @@ def test_a_question_whose_prompt_the_profile_does_not_write_is_refused(
      "no setting 'mode'"),
     (lambda d: node(d, "own_place").update(own={"follow_ups": -1}),
      "at least 0"),
-    (lambda d: node(d, "figures").update(off=True), "cannot be off"),
+    (lambda d: node(d, "pieces").update(off=True), "cannot be off"),
     (lambda d: node(d, "coordinate_way")["else"].insert(0, {
         "id": "early_check", "box": "check",
         "set": {"name": "n", "refuse": {"all": [
@@ -309,14 +309,14 @@ def test_a_number_of_the_file_is_the_run_s_and_a_setting_wins(profile,
     write(profile, search_pieces=35, replies=5)
     numbers = runner.take_flow(profile)
     assert runner.search_budget()[0] == 35
-    assert runner.MAX_RETRIES == 5
+    assert runner.reply_limit() == 5
     assert numbers.origin["search_pieces"] == "flow.json of scenarios"
     assert numbers.origin["search_per_request"] == "flow.json of default"
     # the failure by construction: a setting of the run wins over the file
     monkeypatch.setenv("EXTRACT_SEARCH_PIECES", "7")
     monkeypatch.setenv("EXTRACT_MAX_RETRIES", "2")
     numbers = runner.take_flow(profile)
-    assert (runner.search_budget()[0], runner.MAX_RETRIES) == (7, 2)
+    assert (runner.search_budget()[0], runner.reply_limit()) == (7, 2)
     assert numbers.origin["search_pieces"] == "environment"
     # and without the profile's file the default's number is read
     monkeypatch.delenv("EXTRACT_SEARCH_PIECES")

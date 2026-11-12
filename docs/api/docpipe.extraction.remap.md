@@ -143,7 +143,8 @@ def remap_file(path: Path, spec: Spec, current: dict,
                spec_for: Optional[Callable] = None) -> Counter
 ```
 
-Re-map one harvest file in place, then carry its stamp forward.
+Re-map one harvest file in place, then carry its stamp forward: the
+flow `remap` for this one file.
 
 *spec_for* gives a document its own spec, with the lists its harvest was
 offered: a dynamic list (the regions a document names) is
@@ -157,7 +158,8 @@ def run(harvest_dir: Path, spec: Spec, current: dict,
         spec_for: Optional[Callable] = None) -> Counter
 ```
 
-Re-map a whole harvest directory against the spec as it reads today.
+Re-map a whole harvest directory against the spec as it reads today:
+the flow `remap` (`passflow`).
 
 `current` is the stamp this run would write, so the pass can carry the
 keys it earned forward without knowing how a stamp is assembled.

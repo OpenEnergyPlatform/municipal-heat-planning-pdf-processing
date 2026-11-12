@@ -169,14 +169,17 @@ Graph tab (see [compile](./compile.md)).
 with a harvest: the drawing of how the harvest becomes a graph (`map`, above),
 the rules of the writer and what is done to the written graph; what a brick does
 stays code (`bricks.py`, `profiles/<name>/kg.py`). The default profile's
-`graph.json` sets nothing; a profile writes only what it sets.
+`graph.json` sets nothing; a profile writes only what it sets. The graph rules
+are rules like those of the reading (`docpipe/rules.py`): a step or frame of
+the flow may set its own value for one, and `graphfile.get` looks at the step's
+value first.
 
 | Key | What it says |
 |---|---|
 | `classes` | per class `{"written": false}` (its nodes and every triple that names them leave the graph) or `{"address": {"folder", "key", "base"}}` (the nodes are named anew: the folder under the base and a UUID over the values of the key properties) |
 | `constraints` | per `"<constraint> <property> <class>"` an effect: `report` (the default), `leave_out_value`, `leave_out_paper` or `stop` |
 | `map` | the drawing (above): prefixes, document, evidence, boxes and arrows; checked by `map_problem` on every load and save |
-| `rules` | writer rules the profile's `rules.py: GRAPH` declares: kwp `base`, `rounding_tolerance`, `contested_in_full`; scenarios `base`, `scenario_types_always`, `evidence_as`, `front_first_fields` |
+| `rules` | writer rules the profile's `rules.py: GRAPH` declares, each read where it is used (`graphfile.get`). Both profiles: `base` (the base IRI), `pick_one_order` (which reading of a field written once wins), `settle_order`, `rounding_tolerance` and `contested_in_full` (how different numbers on one place are settled), `corroborated_by_place` (whether a value that two different passages print, a number or a name, is marked as confirmed). Scenarios also `scenario_types_always`, `evidence_as`, `front_first_fields`, `front_pages_rule`, `front_pages_extra` and `front_order` (front pages and their order) |
 
 `serialize.apply_graph_file` runs after the graph is written, by `--serialize`
 and by the gate. The gate shuts for a constraint whose effect is `stop`. With
@@ -307,8 +310,9 @@ edge. The box's `settle` setting lists the words that tell two numbers of one
 address apart (`subject`, `whole`, `carrier_raw`, `sector_raw`; no column head,
 owner decision 2026-11-07). The writer settles every reading of one address
 together (see above): the same number twice is one node, counted `duplicate`
-and marked `corroborated` only where a second passage prints it (one passage
-read twice is one statement, whatever its quotes, owner decision 2026-11-05);
+and marked `corroborated` only where a second passage prints it and the rule
+`corroborated_by_place` is on (one passage read twice is one statement, whatever
+its quotes, owner decision 2026-11-05);
 different numbers under different wording split into a node per wording,
 counted `split:wording`; a reading within the rule `rounding_tolerance` (2%) of
 another loses to the more precise one, `conflict:rounding`; the lower trust
@@ -590,10 +594,11 @@ marks a trust line is built from are at
   check handling). An unresolved scenario identity, an unplaceable row
   and an `out:`/`out_of_graph` answer are each dropped and counted,
   never written as a triple.
-- A profile's `kg.py` reads the drawing at import time (`graphfile.get_map`)
+- A profile's `kg.py` reads the drawing where it is used (`graphfile.get_map`,
+  never while the module loads, since a step may set a graph rule for itself)
   and raises `KeyError` rather than default for a box or an arrow it needs
   that the drawing no longer has, so a drawing that stops backing it fails
-  the whole import before any document runs; an `evidence.prose` missing or
+  at the first document; an `evidence.prose` missing or
   adding a `trust.MARKS` mark raises `LookupError` the same way. A drawing
   the program cannot write from is a `GraphError` that names the entry, a
   graph file without a drawing stops `--serialize` with the reason, and

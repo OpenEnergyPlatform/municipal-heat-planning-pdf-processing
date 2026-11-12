@@ -1,0 +1,31 @@
+{
+  "flow": [
+    {
+      "id": "remap_stored",
+      "box": "stored",
+      "set": {
+        "files": "all",
+        "label": "remap"
+      }
+    },
+    {
+      "id": "remap_remap",
+      "box": "remap"
+    },
+    {
+      "id": "remap_summary",
+      "box": "summary"
+    },
+    {
+      "id": "remap_replace",
+      "box": "replace"
+    },
+    {
+      "id": "remap_carry_stamp",
+      "box": "carry_stamp",
+      "set": {
+        "producer": "remap"
+      }
+    }
+  ]
+}

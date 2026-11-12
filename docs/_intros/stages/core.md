@@ -641,16 +641,27 @@ as it is: read with `splitlines()`, that record would become two broken ones.
 Every reader of a harvest, of the decisions file and of a cassette goes through
 it.
 
-`rules.py` holds every value a run follows (quote minimum length, decimal mark,
-year range, span words, request letters, retry waits, image size, country
-groups, `not_extracted`, compute parts, and the rest) in the profile's
-`rules.json`. The code knows a rule's name, kind, bounds and help; a profile's
-file is laid over the default's rule by rule, and an `EXTRACT_*` setting wins
-over the file. A profile declares its own rules in `rules.py: RULES` and its
-graph writer rules in `GRAPH`. No rule makes a harvest stale; the stamp's
-producer entry names the sha of the rules file. It replaced constants such as
-`verify.MIN_QUOTE_CHARS` (now `verify.min_quote_chars()`) and `reading.SHOWN`
-(now `reading.shown_counts()`).
+`rules.py` gathers every value a run follows (quote minimum length, decimal
+mark, year range, span words, request letters, retry waits, image size, country
+groups, `not_extracted`, compute parts, and the rest) as rules. A rule is
+declared in code (what a rule is: `docpipe/ruleset/kit.py`; the core's rules in
+`docpipe/ruleset/*.py`): its name, tab, kind, bounds, help and the kinds of
+steps that read it (`steps`). Its value stands in the profile's `rules.json`;
+that file is laid over the default's rule by rule, and a setting from the
+environment or the project file (`Rule.env`) is laid over the files. A profile
+declares its own rules in `profiles/<name>/rules.py` (`RULES`, and `GRAPH` for
+the graph writer's rules) and sets their values in its `rules.json`.
+`rules.get(name)` reads a value where it is used, never while a module loads,
+and a step or frame of the flow may set a value of its own for a rule that
+names its kind in `steps`; that value wins over the files (see
+[the extraction stage](extraction.md)). A rule without `steps` is the run's
+only. A value of the machine (`Rule.machine`: a model's address, the slots per
+model, the connections) is set only in the project file `docpipe.toml`, a key
+(`Rule.secret`) only in `.env` or the environment, never in a rules file and
+never at a step. No rule makes a harvest stale; the stamp's producer entry names
+the sha of the rules. It replaced constants such as `verify.MIN_QUOTE_CHARS`
+(now `verify.min_quote_chars()`) and `reading.SHOWN` (now
+`reading.shown_counts()`).
 
 `sources.py` reads `sources.json`: the ontology, shapes and knowledge graph
 queries a profile is written against (`sources`), the lists drawn from them
