@@ -1,18 +1,20 @@
-/* The frame of the page: the head with the profile, its files and the tabs, the tabs themselves (each loaded the first
-   time it opens and kept while the page is open, so switching never loses an edit), the rules drawer, the keyboard and
-   the question before leaving the page with unsaved edits. */
+/* The frame of the page: the head with the profile (a switch to another one starts the editor again with it), its files
+   and the tabs, the tabs themselves (each loaded the first time it opens and kept while the page is open, so switching
+   never loses an edit), the rules drawer, the keyboard and the question before leaving the page with unsaved edits. */
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  ActionIcon, AppShell, Badge, Box, Button, Center, Code, Group, Loader, SegmentedControl, Tabs, Text, Tooltip,
+  ActionIcon, AppShell, Badge, Box, Button, Center, Code, Group, Loader, SegmentedControl, Select, Tabs, Text, Tooltip,
   useComputedColorScheme, useMantineColorScheme,
 } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { LANGS, setLang, t, tn, useLang, type Lang } from './lib/i18n';
 import { IconAdjustments, IconFileText, IconGitBranch, IconMoon, IconSun } from '@tabler/icons-react';
 import {
   anyDirty, dirtyStore, loadState, openRules, RULE_TABS, runAction, setTab, stateStore, tabLabel, tabStore, useStore,
-  type TabName,
+  type PageState, type TabName,
 } from './lib/nav';
-import { showError } from './lib/dialogs';
+import { get, post } from './lib/api';
+import { askConfirm, showError } from './lib/dialogs';
 import { SpecTab } from './tabs/SpecTab';
 import { PromptsTab } from './tabs/PromptsTab';
 import { FlowTab } from './flow/FlowTab';
@@ -49,6 +51,52 @@ function LangSwitch() {
   );
 }
 
+const SWITCH_WAIT = 60000;   // ms the page waits for the editor to run again with the other profile
+const SWITCH_LOOK = 500;     // ms between two looks
+
+/* A switch of the profile: the server ends once it has answered and docpipe edit starts it again with the other profile
+   at the same address (start.py); the page asks for the profile until that one answers, then loads itself anew.
+   Unsaved edits are lost, so it asks first, as leaving the page does. */
+async function switchProfile(name: string) {
+  if (anyDirty() && !(await askConfirm(t('Switch the profile'),
+    t('Edits not yet saved are lost when the editor starts again with {name}.', { name }), t('Switch')))) return;
+  const done = await post<{ profile: string; restart: boolean }>('/api/profile/switch', { profile: name });
+  if (!done.restart) return;
+  const id = modals.open({
+    title: t('Switch the profile'), centered: true, withCloseButton: false, closeOnClickOutside: false,
+    closeOnEscape: false,
+    children: <Group gap="sm" wrap="nowrap"><Loader size="sm" /><Text>{t('The editor starts again with {name}; the page then loads itself anew.', { name })}</Text></Group>,
+  });
+  const until = Date.now() + SWITCH_WAIT;
+  while (Date.now() < until) {
+    await new Promise(wake => setTimeout(wake, SWITCH_LOOK));
+    let now: string | null = null;
+    try { now = (await get<{ profile: string }>('/api/profile')).profile; } catch { /* the editor is starting */ }
+    if (now === name) {
+      dirtyStore.set({});   // given up above: leaving asks no more
+      window.location.reload();
+      return;
+    }
+  }
+  modals.close(id);
+  throw new Error(t('The editor did not start again with {name}; the terminal it runs in says why.', { name }));
+}
+
+/* the profile: a choice where the editor can switch, else its name */
+function ProfileSwitch({ st }: { st: PageState }) {
+  const names = st.profiles || [st.profile];
+  if (names.length < 2) {
+    return <Badge size="lg" variant="light" tt="none" style={{ flexShrink: 0, maxWidth: 'none' }}>{st.profile}</Badge>;
+  }
+  return (
+    <Tooltip label={t('The profile: another one starts the editor again with it')} openDelay={500}>
+      <Select size="sm" w={`${Math.max(...names.map(n => n.length)) + 5}ch`} data={names} value={st.profile}
+        allowDeselect={false} aria-label={t('Profile')} style={{ flexShrink: 0 }}
+        onChange={v => { if (v && v !== st.profile) switchProfile(v).catch(showError); }} />
+    </Tooltip>
+  );
+}
+
 function Head() {
   const st = useStore(stateStore);
   const { tab } = useStore(tabStore);
@@ -59,7 +107,7 @@ function Head() {
     <Group h="100%" px="md" gap="md" wrap="nowrap" justify="space-between">
       <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
         <Text fw={700} size="lg" style={{ whiteSpace: 'nowrap' }}>docpipe edit</Text>{/* i18n-ignore: the program's name */}
-        <Badge size="lg" variant="light" tt="none" style={{ flexShrink: 0, maxWidth: 'none' }}>{st.profile}</Badge>
+        <ProfileSwitch st={st} />
         <Tooltip label={t('The spec file of this profile')}>
           <Group gap={4} wrap="nowrap" visibleFrom="xl"><IconFileText size={16} /><Code>{st.spec}</Code></Group>
         </Tooltip>

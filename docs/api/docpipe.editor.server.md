@@ -21,7 +21,15 @@ and nothing else: "Apply" of a fetch puts the fetched files and the lock
 there (`sourcespage.apply`); a fetch itself writes only into a folder of its
 own in the temp directory (`<temp>/docpipe-sources-fetch`). A path is
 resolved first, so `..` and links cannot lead out. A trace is read by the run's own reader after the guard has
-checked its path (`Files.checked`).
+checked its path (`Files.checked`). A server that `docpipe edit` started
+(start.py) has one more guard, which writes the note of a switch of the
+profile and nothing else, into the temporary folder the command made for it.
+
+A server runs on one profile. Where `docpipe edit` started it, the head of
+the page offers every profile the installation finds; a switch to another
+writes that profile and the server's port into the note and ends the server
+once its answer is sent, and the command starts it again with that profile
+(start.py). A server started otherwise offers only its own profile.
 
 The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
 of another site cannot reach the server by a name of its own) and takes a
@@ -124,7 +132,8 @@ The endpoints of CONTRACT section 3, without a socket.
 ```python
 def __init__(self, profile, harvest: Optional[Path] = None,
              root: Optional[Path] = None, cache: Optional[Path] = None,
-             fetch_root: Optional[Path] = None)
+             fetch_root: Optional[Path] = None,
+             switch: Optional[Callable[[str], None]] = None)
 ```
 
 #### App.shown
@@ -180,10 +189,31 @@ def serve(app: App, port: int) -> ThreadingHTTPServer
 The server bound to 127.0.0.1 (port 0: a free one), not yet
 running.
 
-### command
+### stop_when_closed
 
 ```python
-def command(rest: Sequence[str]) -> int
+def stop_when_closed(stream, stop: Callable[[], None]) -> None
 ```
+
+Call *stop* once *stream* ends. The standard input of a server that
+`docpipe edit` started is a pipe the command holds, so it ends with the
+command, also one that was killed; where there is no stream, or one
+that is no pipe, nothing ends.
+
+On Windows the pipe is looked at every WATCH seconds and read only where
+it holds bytes: a read that waits on it would hold up every process the
+server starts (git, the generating commands), which is handed the same
+standard input, until the read returns.
+
+### serve_one
+
+```python
+def serve_one(args) -> int
+```
+
+One server of `docpipe edit` (start.py) on the profile the
+environment names, until Ctrl+C. With a switch file the server can
+switch the profile: it then ends with `start.RESTART` after a switch,
+and by itself once the command that started it is gone.
 
 [Back to the index](../README.md)

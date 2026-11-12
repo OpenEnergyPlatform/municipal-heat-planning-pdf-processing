@@ -28,9 +28,9 @@ export class Store<T> {
 }
 export function useStore<T>(s: Store<T>): T { return useSyncExternalStore(s.subscribe, s.get); }
 
-/* GET /api/state */
+/* GET /api/state; profiles: what the head offers to switch to, the own one among them */
 export interface PageState {
-  profile: string; spec: string; branch: string | null; changed: string[];
+  profile: string; profiles: string[]; spec: string; branch: string | null; changed: string[];
   harvest: string | null; harvest_documents: number | null; tabs: string[];
 }
 export const stateStore = new Store<PageState | null>(null);

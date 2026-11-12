@@ -31,6 +31,21 @@ exist.
 use. `--no-browser` only prints the address and does not open it. The server
 runs until Ctrl+C.
 
+The profile is switched in the head of the page. A process runs on one
+profile, because a stage binds part of what its profile says when it is
+imported (`profile.resolve_profile` refuses to name another one after that).
+So the command runs the server as a process of its own (`start.py`): a switch
+writes the other profile and the server's port into a note in a temporary
+folder of the command's own and ends the server once it has answered, and the
+command starts the server again with that profile at the same port, without
+opening the page; the page waits for it and loads itself anew. Unsaved edits
+are asked about first, as when leaving the page. The harvest of `--harvest`
+belongs to the profile the command was started with: it comes back with that
+profile, and any other profile runs without one. Ctrl+C ends the command and
+the server, and a server whose command is gone, also a command that was
+killed, ends by itself, because its standard input is a pipe the command
+holds.
+
 ## The page
 
 The server binds `127.0.0.1` only, answers a request only if its `Host` is
@@ -54,7 +69,9 @@ replaces `web/assets/` whole). `npm run dev` serves the sources and passes
 `/api` and `/forms.js` to a running `docpipe edit` (`DOCPIPE_EDIT_URL`, default
 `http://127.0.0.1:8765`).
 
-The head shows the profile and the branch, the five tabs **Spec**, **Prompts**,
+The head shows the profile, as a choice among every profile the installation
+finds (`docpipe profiles`; a server not started by `docpipe edit` shows only
+its own), and the branch, the five tabs **Spec**, **Prompts**,
 **Flow**, **Sources** and **Graph** as pills with a dot on a tab that holds
 edits not yet saved, a badge that says **Unsaved edits** or **All saved**, a
 **Rules** button on the tabs that have rules, which opens the rules of the tab

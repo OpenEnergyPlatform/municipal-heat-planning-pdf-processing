@@ -1,11 +1,12 @@
 """
-test_editor_server.py: what `docpipe edit` promises about files, saves and
-the network.
+test_editor_server.py: what `docpipe edit` promises about files, saves, the
+network and a switch of the profile.
 
 Each test states one promise and holds a case that breaks it by
 construction: a path that leads out, a spec the loader refuses, a removal
 nobody confirmed, a file that moved, a stamp that is not current, a request
-from another site.
+from another site, a profile nobody offers, a server that ends for a switch
+without saying to which profile.
 
 Author: Felix Vossel
 """
@@ -19,13 +20,15 @@ import os
 import select
 import shutil
 import socket
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
 
 import pytest
 
-from docpipe.editor import server, specs
+from docpipe.editor import server, specs, start
 from docpipe.extraction import spec as spec_module
 
 REPO = Path(__file__).resolve().parent.parent
@@ -643,3 +646,162 @@ def test_the_command_is_registered():
     from docpipe import cli
     assert "edit" in cli.OWN
     assert os.path.exists(server.WEB / "index.html")
+
+
+# -- 8. a switch of the profile -------------------------------------------------
+
+PROFILES = ["default", "kwp", "scenarios"]
+SWITCH_HEADERS = {"Content-Type": "application/json", server.EDIT_HEADER: "1"}
+
+
+def test_a_server_switches_only_to_a_profile_it_offers(tmp_path, monkeypatch):
+    monkeypatch.setattr(server, "available_profiles", lambda: PROFILES)
+    app, _ = make_app(tmp_path)
+    # by construction: a server no command can start again offers only its
+    # own profile, and refuses another
+    assert get(app, "/api/profile")[1] == {"profile": "scenarios",
+                                           "profiles": ["scenarios"]}
+    assert post(app, "/api/profile/switch", {"profile": "kwp"})[0] == 400
+    said: list = []
+    app.switch = said.append
+    assert get(app, "/api/state")[1]["profiles"] == PROFILES
+    # by construction: a profile the installation does not find, and none
+    for name in ("nowhere", None, ["kwp"]):
+        assert post(app, "/api/profile/switch", {"profile": name})[0] == 400
+    assert post(app, "/api/profile/switch", {"profile": "scenarios"}) == (
+        200, {"profile": "scenarios", "restart": False})
+    assert said == [] and app.switched is None
+    assert post(app, "/api/profile/switch", {"profile": "kwp"}) == (
+        200, {"profile": "kwp", "restart": True})
+    assert said == ["kwp"] and app.switched == "kwp"
+
+
+def test_a_switch_ends_the_server_once_its_answer_is_sent(tmp_path,
+                                                         monkeypatch):
+    monkeypatch.setattr(server, "available_profiles", lambda: PROFILES)
+    app, _ = make_app(tmp_path)
+    httpd = server.serve(app, 0)
+    port = httpd.server_address[1]
+    note = tmp_path / "command" / start.NOTE
+    note.parent.mkdir()
+    app.switch = lambda name: server._say_switch(
+        server.Files(note.parent, []), note, port, name)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    try:
+        # by construction: a refused switch leaves the server running
+        status, _, _ = fetch(port, "POST", "/api/profile/switch",
+                             SWITCH_HEADERS, json.dumps({"profile": "x"}))
+        assert status == 400
+        thread.join(0.8)
+        assert fetch(port, "GET", "/api/profile")[0] == 200
+        assert thread.is_alive() and not note.exists()
+        status, _, raw = fetch(port, "POST", "/api/profile/switch",
+                               SWITCH_HEADERS, json.dumps({"profile": "kwp"}))
+        assert status == 200 and json.loads(raw)["restart"] is True
+        thread.join(10)
+        assert not thread.is_alive()
+        assert start.read_note(note) == ("kwp", port)
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_a_server_stops_once_the_command_that_started_it_is_gone():
+    read, write = os.pipe()
+    stopped = threading.Event()
+    with os.fdopen(read, "rb") as stream:
+        thread = threading.Thread(target=server.stop_when_closed,
+                                  args=(stream, stopped.set), daemon=True)
+        thread.start()
+        # by construction: while the command holds its end, nothing stops
+        os.write(write, b"no end")
+        assert not stopped.wait(0.3)
+        os.close(write)
+        assert stopped.wait(10)
+        thread.join(10)
+    # and a server without a standard input is never stopped for it
+    called: list = []
+    server.stop_when_closed(None, lambda: called.append(1))
+    assert called == []
+
+
+WATCHED = """
+import subprocess, sys, threading, time
+from docpipe.editor import server
+threading.Thread(target=server.stop_when_closed,
+                 args=(sys.stdin, lambda: None), daemon=True).start()
+time.sleep(1)
+began = time.monotonic()
+subprocess.run([sys.executable, "-c", "pass"], timeout=20)
+print(round(time.monotonic() - began, 1))
+"""
+
+
+def test_watching_the_command_holds_up_nothing_the_server_starts():
+    """A process the server starts gets the same standard input. By
+    construction a read that waits on that pipe held it up on Windows, and
+    the page's first call of git hung."""
+    child = subprocess.Popen([sys.executable, "-c", WATCHED], cwd=REPO,
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+    try:
+        # the command's end of the pipe stays open meanwhile
+        child.wait(30)
+    except subprocess.TimeoutExpired:
+        child.kill()
+        child.wait()
+        raise AssertionError("a process the server started was held up")
+    finally:
+        child.stdin.close()
+    said, fault = child.stdout.read(), child.stderr.read()
+    child.stdout.close()
+    child.stderr.close()
+    assert child.returncode == 0, fault
+    assert float(said.strip()) < 10
+
+
+def test_the_command_starts_the_server_again_with_the_profile_switched_to(
+        tmp_path):
+    harvest = tmp_path / "harvest"
+    said = [("scenarios", 8790), ("kwp", 8790), None]
+    started: list = []
+
+    def run(line):
+        started.append(line)
+        switch = said[len(started) - 1]
+        if switch is None:
+            return 0
+        note = Path(line[line.index("--switch-file") + 1])
+        note.write_bytes(start.note_bytes(*switch))
+        return start.RESTART
+
+    assert start.loop("kwp", 8765, harvest, True, run) == 0
+
+    def value(line, flag):
+        return line[line.index(flag) + 1] if flag in line else None
+
+    assert all(line[:3] == [sys.executable, "-m", "docpipe"]
+               and "edit" in line for line in started)
+    assert [value(line, "--profile") for line in started] == [
+        "kwp", "scenarios", "kwp"]
+    assert [value(line, "--port") for line in started] == [
+        "8765", "8790", "8790"]
+    # the harvest goes with the profile the command started with, and only
+    # the first server opens the page
+    assert [value(line, "--harvest") for line in started] == [
+        str(harvest), None, str(harvest)]
+    assert ["--no-browser" in line for line in started] == [
+        False, True, True]
+
+
+def test_the_command_stops_where_its_server_ends_for_no_switch():
+    started: list = []
+    # by construction: a server that ends for a switch but says to none,
+    # and one that fails
+    assert start.loop("kwp", 8765, None, True,
+                      lambda line: started.append(line) or start.RESTART) \
+        == 1
+    assert start.loop("kwp", 8765, None, True,
+                      lambda line: started.append(line) or 2) == 2
+    assert len(started) == 2

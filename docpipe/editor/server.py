@@ -18,7 +18,15 @@ and nothing else: "Apply" of a fetch puts the fetched files and the lock
 there (`sourcespage.apply`); a fetch itself writes only into a folder of its
 own in the temp directory (`<temp>/docpipe-sources-fetch`). A path is
 resolved first, so `..` and links cannot lead out. A trace is read by the run's own reader after the guard has
-checked its path (`Files.checked`).
+checked its path (`Files.checked`). A server that `docpipe edit` started
+(start.py) has one more guard, which writes the note of a switch of the
+profile and nothing else, into the temporary folder the command made for it.
+
+A server runs on one profile. Where `docpipe edit` started it, the head of
+the page offers every profile the installation finds; a switch to another
+writes that profile and the server's port into the note and ends the server
+once its answer is sent, and the command starts it again with that profile
+(start.py). A server started otherwise offers only its own profile.
 
 The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
 of another site cannot reach the server by a name of its own) and takes a
@@ -33,7 +41,7 @@ from __future__ import annotations
 
 import dataclasses
 
-import argparse
+import functools
 import hashlib
 import json
 import logging
@@ -43,11 +51,13 @@ import subprocess
 import re
 import sys
 import tempfile
+import threading
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Optional, Sequence
+from stat import S_ISFIFO
+from typing import Callable, Optional, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
 from .. import graphfile
@@ -59,10 +69,11 @@ from .. import upstream
 from ..extraction import flow as flow_files
 from ..extraction import passflow
 from ..extraction import trace as trace_files
+from ..profile import available_profiles
 from . import flow as flow_view
 from . import flowtry
 from . import (graphpage, measured, phrases, prompts, rulespage,
-               sourcespage, specs, trying)
+               sourcespage, specs, start, trying)
 from . import requests as recorded
 
 LOG = logging.getLogger(__name__)
@@ -72,6 +83,7 @@ MAX_BODY = 64 * 1024 * 1024
 GIT_TIMEOUT = 10          # seconds
 RUN_TIMEOUT = 600         # seconds, each generating command
 LINGER = 2.0              # seconds, reading off a request that was not read
+WATCH = 0.5               # seconds between two looks at the command's pipe
 STAMP_GLOB = "*.stamp.json"
 EDIT_HEADER = "X-Docpipe-Edit"
 REVIEW_FOLDER = "docpipe-prompt-review"     # what render_prompts.py writes to
@@ -215,7 +227,12 @@ class App:
 
     def __init__(self, profile, harvest: Optional[Path] = None,
                  root: Optional[Path] = None, cache: Optional[Path] = None,
-                 fetch_root: Optional[Path] = None):
+                 fetch_root: Optional[Path] = None,
+                 switch: Optional[Callable[[str], None]] = None):
+        # how a switch to another profile is said to the command that
+        # started this server (start.py); None: it offers only its own
+        self.switch = switch
+        self.switched: Optional[str] = None
         if root is None:
             from ..profile import ROOT
             root = ROOT
@@ -310,6 +327,8 @@ class App:
     def _route(self, method: str, path: str, query: dict, body) -> tuple:
         routes = {
             "/api/state": ("GET", self._state),
+            "/api/profile": ("GET", self._profile),
+            "/api/profile/switch": ("POST", self._profile_switch),
             "/api/spec": ("GET", self._spec),
             "/api/spec/check": ("POST", self._check),
             "/api/spec/save": ("POST", self._save),
@@ -381,6 +400,7 @@ class App:
                 changed.append(name)
         return {
             "profile": self.profile.name,
+            "profiles": self._profiles(),
             "spec": self.shown(self.spec_path) if self.spec_path else None,
             "branch": branch.strip() if branch else None,
             "changed": changed,
@@ -389,6 +409,31 @@ class App:
                                   if self.harvest else None),
             "tabs": ["spec", "prompts", "flow", "sources", "graph"],
         }
+
+    def _profiles(self) -> list:
+        """The profiles the head of the page offers: every one the
+        installation finds where the server can switch, else its own."""
+        if self.switch is None:
+            return [self.profile.name]
+        return sorted(set(available_profiles()) | {self.profile.name})
+
+    def _profile(self, query, body) -> dict:
+        return {"profile": self.profile.name, "profiles": self._profiles()}
+
+    def _profile_switch(self, query, body) -> dict:
+        """A switch to another of the offered profiles: said to the command,
+        which starts the server again with it once this answer is sent
+        (`_Handler.do_POST`); the own profile is no switch."""
+        name = body.get("profile")
+        offered = self._profiles()
+        if not isinstance(name, str) or name not in offered:
+            raise _Refusal(400, f"no profile {name!r} to switch to "
+                                f"(offered: {', '.join(offered)})")
+        if name == self.profile.name:
+            return {"profile": name, "restart": False}
+        self.switch(name)
+        self.switched = name
+        return {"profile": name, "restart": True}
 
     def _spec(self, query, body) -> dict:
         raw = self.files.read(self._need_spec())
@@ -1197,8 +1242,10 @@ class App:
 
 class _Server(ThreadingHTTPServer):
     # On Windows SO_REUSEADDR lets a second server take a port that is in
-    # use, so a taken port would not be noticed.
-    allow_reuse_address = False
+    # use, so a taken port would not be noticed. Elsewhere it only lets a
+    # server take back its port from connections still closing there, which
+    # the server started again after a switch of the profile needs.
+    allow_reuse_address = os.name != "nt"
     daemon_threads = True
     app: App
 
@@ -1307,6 +1354,11 @@ class _Handler(BaseHTTPRequestHandler):
         parts = urlsplit(self.path)
         status, obj = self.server.app.call("POST", parts.path, {}, body)
         self._json(status, obj)
+        if self.server.app.switched is not None:
+            # the answer is out: the server ends, and the command starts it
+            # again with the profile switched to (start.py)
+            threading.Thread(target=self.server.shutdown,
+                             daemon=True).start()
 
 
 def serve(app: App, port: int) -> ThreadingHTTPServer:
@@ -1317,37 +1369,68 @@ def serve(app: App, port: int) -> ThreadingHTTPServer:
     return httpd
 
 
-# -- the command ---------------------------------------------------------------
+# -- one server of the command -------------------------------------------------
 
-def command(rest: Sequence[str]) -> int:
+def _say_switch(notes: Files, note: Path, port: int, name: str) -> None:
+    """Write the note of a switch to profile *name*, which start.py reads."""
+    notes.write(note, start.note_bytes(name, port))
+
+
+def stop_when_closed(stream, stop: Callable[[], None]) -> None:
+    """Call *stop* once *stream* ends. The standard input of a server that
+    `docpipe edit` started is a pipe the command holds, so it ends with the
+    command, also one that was killed; where there is no stream, or one
+    that is no pipe, nothing ends.
+
+    On Windows the pipe is looked at every WATCH seconds and read only where
+    it holds bytes: a read that waits on it would hold up every process the
+    server starts (git, the generating commands), which is handed the same
+    standard input, until the read returns."""
+    try:
+        fileno = stream.fileno()
+    except (AttributeError, OSError, ValueError):
+        return
+    if os.name == "nt":
+        import _winapi
+        import msvcrt
+        try:
+            handle = msvcrt.get_osfhandle(fileno)
+        except OSError:
+            return
+        while True:
+            try:
+                waiting = _winapi.PeekNamedPipe(handle, 0)[0]
+            except BrokenPipeError:
+                break
+            except OSError:
+                return              # no pipe: nothing to watch
+            if waiting:
+                os.read(fileno, waiting)
+            else:
+                time.sleep(WATCH)
+    else:
+        if not S_ISFIFO(os.fstat(fileno).st_mode):
+            return
+        try:
+            while os.read(fileno, 1 << 16):
+                pass
+        except OSError:
+            pass
+    stop()
+
+
+def serve_one(args) -> int:
+    """One server of `docpipe edit` (start.py) on the profile the
+    environment names, until Ctrl+C. With a switch file the server can
+    switch the profile: it then ends with `start.RESTART` after a switch,
+    and by itself once the command that started it is gone."""
     from ..profile import ENV_VAR, active_profile
-    parser = argparse.ArgumentParser(
-        prog="docpipe edit",
-        description="A profile's extraction spec, its prompts, the "
-                    "sentences beside them and the numbers of its flow in "
-                    "the browser, on a local "
-                    "page (127.0.0.1 only). It writes only inside the "
-                    "profile's folder. Nothing leaves this machine but "
-                    "the requests of a click on Try, which go to the "
-                    "model the installation names for it "
-                    "(EDIT_TRY_BASE_URL).")
-    parser.add_argument("--harvest", metavar="DIR",
-                        help="a folder with a harvest, its stamps and "
-                             "traces (a local copy): an edit of the spec "
-                             "then says which documents it makes stale, "
-                             "a prompt is shown with the requests "
-                             "recorded there, and the flow says beside its "
-                             "numbers what that run measured")
-    parser.add_argument("--port", type=int, default=8765,
-                        help="default 8765; a free one if it is taken")
-    parser.add_argument("--no-browser", action="store_true",
-                        help="do not open the page")
-    args = parser.parse_args(list(rest))
     harvest = None
     if args.harvest:
         harvest = Path(args.harvest).expanduser()
         if not harvest.is_dir():
-            parser.error(f"--harvest {args.harvest}: no such folder")
+            raise SystemExit(f"docpipe edit: --harvest {args.harvest}: "
+                             f"no such folder")
     profile = active_profile()
     if profile is None:
         raise SystemExit(f"docpipe edit needs a profile: pass --profile "
@@ -1357,9 +1440,17 @@ def command(rest: Sequence[str]) -> int:
         httpd = serve(app, args.port)
     except OSError:
         httpd = serve(app, 0)
-    url = f"http://127.0.0.1:{httpd.server_address[1]}/"
+    port = httpd.server_address[1]
+    if args.switch_file:
+        note = Path(args.switch_file)
+        app.switch = functools.partial(_say_switch, Files(note.parent, []),
+                                       note, port)
+        threading.Thread(target=stop_when_closed,
+                         args=(sys.stdin, httpd.shutdown),
+                         daemon=True).start()
+    url = f"http://127.0.0.1:{port}/"
     print(f"docpipe edit: profile {profile.name} at {url} "
-          f"(Ctrl+C to stop)")
+          f"(Ctrl+C to stop)", flush=True)
     if not args.no_browser:
         webbrowser.open(url)
     try:
@@ -1368,4 +1459,4 @@ def command(rest: Sequence[str]) -> int:
         pass
     finally:
         httpd.server_close()
-    return 0
+    return start.RESTART if app.switched is not None else 0
