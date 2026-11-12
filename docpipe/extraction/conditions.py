@@ -229,7 +229,17 @@ SUBJECTS = {s.name: s for s in (
         Prop("whole", YES, "reads the whole document (not only the places "
              "an earlier harvest found)"),
     )),
+    # Any variable of the flow (owner decision 2026-11-12): its property is
+    # the path to it, "answer.finds" or "hits.0.kind"; it takes every
+    # comparison, and with none it holds where the value is there and not
+    # empty, 0 or no.
+    Subject("var", "the variable", ()),
 )}
+# The thing a row about a variable is about.
+VAR = "var"
+# Every comparison, which a row about a variable may make.
+ALL_OPS = ("is", "is_not", "less", "more", "at_least", "at_most",
+           "contains", "empty", "one_of")
 
 
 def _rows(condition) -> tuple:
@@ -257,6 +267,8 @@ def row_problem(row, where) -> Optional[str]:
     subject = SUBJECTS.get(row.get("of"))
     if subject is None:
         return f"{row.get('of')!r} is nothing a condition can be about"
+    if subject.name == VAR:
+        return _var_problem(row, where)
     if where is not None and subject.name not in where:
         return (f"{subject.label} is not known here"
                 + (" (no question before it)"
@@ -298,6 +310,36 @@ def row_problem(row, where) -> Optional[str]:
     return None
 
 
+def _var_problem(row: dict, where) -> Optional[str]:
+    """Why a row about a variable cannot be evaluated where the variables
+    *where* names ("var:<name>") are there, None where it can."""
+    path = row.get("is")
+    if not isinstance(path, str) or not path.strip():
+        return "a row about a variable names the variable"
+    root = path.split(".")[0]
+    if where is not None and f"var:{root}" not in where:
+        return f"the variable {root} is not there yet at this place"
+    if "not" in row and not isinstance(row["not"], bool):
+        return "not is yes or no"
+    op = row.get("op")
+    if op is None:
+        return None if "value" not in row else \
+            f"{path}: a row without a comparison takes no value"
+    if op not in ALL_OPS:
+        return f"{path} takes {', '.join(ALL_OPS)}, not {op!r}"
+    if op == "empty":
+        return None if "value" not in row else f"{path} is empty: no value"
+    if "value" not in row:
+        return f"{path} {OP_WORDS[op]}: the value is missing"
+    value = row["value"]
+    if op in ("less", "more", "at_least", "at_most") and (
+            isinstance(value, bool) or not isinstance(value, (int, float))):
+        return f"{path} {OP_WORDS[op]} a number, not {value!r}"
+    if op == "one_of" and (not isinstance(value, list) or not value):
+        return f"{path} is one of: pick one at least"
+    return None
+
+
 def problems(condition, where=None) -> list:
     """Why *condition* cannot be evaluated at a place that knows the things
     *where* (None: anywhere), [] where it can."""
@@ -326,7 +368,46 @@ class Facts:
         self.get = get
 
 
+def _same(have, want) -> bool:
+    if isinstance(have, str) and isinstance(want, str):
+        return have.casefold() == want.casefold()
+    if isinstance(have, (int, float)) and not isinstance(have, bool) \
+            and isinstance(want, (int, float)):
+        return float(have) == float(want)
+    return have == want
+
+
+def _var_holds(row: dict, facts: Facts) -> bool:
+    have = facts.get(VAR, row["is"])
+    op, want = row.get("op"), row.get("value")
+    if op is None:
+        got = bool(have)
+    elif op == "empty":
+        got = have in (None, "", [], {}) or (
+            isinstance(have, str) and not have.strip())
+    elif op in ("is", "is_not"):
+        got = _same(have, want) == (op == "is")
+    elif op in ("less", "more", "at_least", "at_most"):
+        if isinstance(have, bool) or not isinstance(have, (int, float)):
+            try:
+                have = float(str(have))
+            except ValueError:
+                return bool(row.get("not"))
+        got = {"less": have < want, "more": have > want,
+               "at_least": have >= want, "at_most": have <= want}[op]
+    elif op == "contains":
+        if isinstance(have, (list, tuple)):
+            got = any(_same(one, want) for one in have)
+        else:
+            got = str(want).casefold() in str(have or "").casefold()
+    else:
+        got = any(_same(have, one) for one in want)
+    return got != bool(row.get("not"))
+
+
 def _row_holds(row: dict, facts: Facts) -> bool:
+    if row.get("of") == VAR:
+        return _var_holds(row, facts)
     subject = SUBJECTS[row["of"]]
     prop = subject.prop(row["is"])
     have = facts.get(subject.name, prop.name)
@@ -375,6 +456,15 @@ def _said(value) -> str:
 
 
 def row_sentence(row: dict) -> str:
+    if row.get("of") == VAR:
+        no = "not " if row.get("not") else ""
+        op = row.get("op")
+        if op is None:
+            return f"{no}{row.get('is')}"
+        if op == "empty":
+            return f"{row.get('is')} is {no}empty"
+        return f"{row.get('is')} {no}{OP_WORDS.get(op, op)} " \
+               f"{_said(row.get('value'))}"
     subject = SUBJECTS.get(row.get("of"))
     prop = subject.prop(row.get("is")) if subject else None
     if subject is None or prop is None:
@@ -422,6 +512,8 @@ def catalogue() -> list:
     """Every thing a condition can be about with its properties, as the
     page offers them."""
     return [{"name": s.name, "label": s.label,
+             **({"variable": True, "ops": list(ALL_OPS)}
+                if s.name == VAR else {}),
              "props": [{"name": p.name, "kind": p.kind, "label": p.label,
                         "ops": list(OPS[p.kind]),
                         **({"choices": list(p.choices)} if p.choices

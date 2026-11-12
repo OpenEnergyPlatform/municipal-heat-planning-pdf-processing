@@ -189,7 +189,19 @@ def in_order(document_id, sentences, chunks):
     return list(chunks)
 
 
+def flow_of(spec):
+    """The drawing a reading of *spec* reads by: a scenario paper's is the
+    flow of its profile, which draws the steps only scenario papers take
+    (owner decision 2026-11-12), any other the default's."""
+    if spec is SCENARIOS:
+        from docpipe.extraction import flow as flow_map
+        from docpipe.profile import load_profile
+        return flow_map.tree_of(load_profile("scenarios"))
+    return None
+
+
 def reader_of(model: Model, spec=SPEC, **kw) -> Reader:
+    kw.setdefault("flow", flow_of(spec))
     return Reader(spec, model.asks(kw.pop("check", True)), in_order, **kw)
 
 

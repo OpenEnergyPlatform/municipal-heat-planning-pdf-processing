@@ -301,6 +301,12 @@ def _format(name: str, schema: dict) -> dict:
             "json_schema": {"name": name, "schema": schema}}
 
 
+def reply_format(schema: dict) -> dict:
+    """The form of the answer of a general step's request (`general`):
+    its own JSON schema as the grammar."""
+    return _format("reply", schema)
+
+
 def address_key() -> str:
     """How an answer names its line: "at", the number of the line, or
     "quote", the words of the line (rule `answer_with`)."""
@@ -1268,6 +1274,10 @@ class Asks:
     check: Optional[Callable] = None
     work: Optional[Callable] = None
     phrase: Optional[Callable] = None
+    # A request of a general step (`general`, owner decision 2026-11-12):
+    # (prompt, payload, document_id, *, shape, example, follow, **noted),
+    # the prompt the id of a prompt file or {"text": its own}.
+    own: Optional[Callable] = None
 
 
 @dataclass
@@ -1510,6 +1520,30 @@ class Reader:
                 talk.append({"asked": noted["coordinate"], "follow_up": what,
                              "sent": sent, "answer": reply})
         return reply
+
+    def ask_own(self, prompt, payload: dict, document_id: int,
+                shape: dict, example, counts: Counts, /, **noted):
+        """A request of a general step: its own prompt, message and form
+        of the answer (`general.ask_step`)."""
+        counts.ask("own")
+        if self.asks.own is None:
+            raise LookupError("this run asks no request of a general step")
+        return self.asks.own(prompt, payload, document_id, shape=shape,
+                             example=shown_example(example), follow=False,
+                             **noted)
+
+    def follow_own(self, prompt, payload: dict, document_id: int,
+                   shape: dict, example, answer, what: list,
+                   counts: Counts, /, **noted):
+        """A general step's request asked again with the answer that did
+        not hold and why (owner decision 2026-11-08: "Rückfragen sind
+        eigene Anfragen")."""
+        counts.ask("follow")
+        return self.asks.own(prompt, {**payload, "answer": answer,
+                                      "what": what},
+                             document_id, shape=shape,
+                             example=shown_example(example), follow=True,
+                             **noted)
 
     def lists_of(self, plan: Plan) -> None:
         """The lists of names a document builds while it is read: its

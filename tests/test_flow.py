@@ -76,8 +76,14 @@ def said(drawing: list) -> list:
 
 def test_every_request_the_code_sends_is_asked_by_a_box_of_the_default():
     # A follow-up is a request of the question it follows, no box of its
-    # own; every other kind the code sends has its box.
-    assert flow.asked(flow.load().tree) == set(flow.kinds()) - {"follow"}
+    # own; every other kind the code sends has its box: in the default flow,
+    # or among the boxes a profile brings itself (owner decision
+    # 2026-11-12, profiles/<name>/blocks.py).
+    own = {box.asks for box in blocks.LIBRARY.values()
+           if box.profile and box.asks}
+    assert flow.asked(flow.load().tree) | own \
+        == set(flow.kinds()) - {"follow"}
+    assert {"names", "work"} <= own
     # the failure by construction: a box switched off asks nothing
     drawing = tree()
     node(drawing, "compute")["off"] = True
@@ -100,14 +106,16 @@ def test_a_find_where_values_go_is_refused():
     drawing = tree()
     values = node(drawing, "values")
     values["steps"].insert(0, {"id": "lost_find", "box": "find"})
-    assert any("each piece" in m for m in said(drawing))
+    # what it takes (a chunk) no step before it gives (owner decision
+    # 2026-11-12: where a step may stand follows from its inputs)
+    assert any("takes the chunk" in m for m in said(drawing))
 
 
 def test_a_question_of_a_coordinate_outside_each_value_is_refused():
     drawing = tree()
     drawing.insert(drawing.index(node(drawing, "values")),
                    {"id": "stray", "box": "coord"})
-    assert any("each coordinate" in m for m in said(drawing))
+    assert any("takes the dimension" in m for m in said(drawing))
 
 
 def test_a_frame_of_coordinates_without_a_state_is_refused():
@@ -145,7 +153,7 @@ def test_a_question_whose_prompt_the_profile_does_not_write_is_refused(
 @pytest.mark.parametrize("change, part", [
     (lambda d: d.append({"id": "x", "box": "nothing"}), "there is no box"),
     (lambda d: d.append(dict(d[0])), "stands twice"),
-    (lambda d: d.insert(0, d.pop(2)), "starts with document"),
+    (lambda d: d.insert(0, d.pop(2)), "where the flow gives it"),
     (lambda d: d.append({"id": "late", "box": "compute"}),
      "compute stands once at most"),
     (lambda d: node(d, "own_place").update(loops=3), "has no key 'loops'"),
@@ -153,7 +161,9 @@ def test_a_question_whose_prompt_the_profile_does_not_write_is_refused(
      "no setting 'mode'"),
     (lambda d: node(d, "own_place").update(own={"follow_ups": -1}),
      "at least 0"),
-    (lambda d: node(d, "pieces").update(off=True), "cannot be off"),
+    (lambda d: node(d, "write").update(off=True), "cannot be off"),
+    (lambda d: node(d, "pieces").update(off=True),
+     "takes the chunks, and no step of the flow gives it"),
     (lambda d: node(d, "coordinate_way")["else"].insert(0, {
         "id": "early_check", "box": "check",
         "set": {"name": "n", "refuse": {"all": [

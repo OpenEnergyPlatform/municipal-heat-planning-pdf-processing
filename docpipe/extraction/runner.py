@@ -104,6 +104,9 @@ NUMBERS: Optional[flow_map.Numbers] = None
 # request the first box that asks it, its home (`take_flow`, `in_home`).
 _FLOW_NODES: dict = {}
 _HOMES: dict = {}
+# (the id of a question step, a kind of request) -> the step after it that
+# asks this kind for it (`in_home`).
+_ATTACHED_HOMES: dict = {}
 
 
 def in_home(kind: Optional[str]):
@@ -116,16 +119,42 @@ def in_home(kind: Optional[str]):
     of a scenario from a search. Such a request is asked as the step that
     asks that kind says (its model, its answer room, its extras), so that
     every request of a kind is asked alike, wherever it comes from."""
-    home = _HOMES.get(kind) if kind else None
-    if home is None:
-        return nullcontext()
     step = rules.STEP.get()
     here = _FLOW_NODES.get(step.ident) if step is not None else None
     block = blocks.LIBRARY.get(here["box"]) if here is not None else None
     if block is not None and block.asks == kind:
         return nullcontext()
+    # A step that stands after the asking step and asks this kind says how
+    # it is asked there ("Choose the list entry", owner decision
+    # 2026-11-12); elsewhere the first of the flow.
+    home = _ATTACHED_HOMES.get((step.ident if step is not None else None,
+                                kind)) or (_HOMES.get(kind) if kind
+                                           else None)
+    if home is None:
+        return nullcontext()
     from .engine import Engine
     return rules.in_step(rules.stepped(home, Engine.own_values(home)))
+
+
+def attached_homes(tree: list) -> dict:
+    """{(the id of a box, a kind of request): the step after it that asks
+    this kind for it}: the steps that stand right after a box and apply to
+    its answers (`blocks.Box.attached`), such as "Choose the list entry"."""
+    out: dict = {}
+    lists = [tree] + [steps for parent, _frames in flow_map.walk(tree)
+                      for _label, steps in flow_map.children(parent)]
+    for steps in lists:
+        for i, node in enumerate(steps):
+            if not isinstance(node, dict) or "box" not in node:
+                continue
+            for after in steps[i + 1:]:
+                block = blocks.LIBRARY.get(after.get("box")) \
+                    if isinstance(after, dict) else None
+                if block is None or not block.attached:
+                    break
+                if block.asks and not after.get("off"):
+                    out.setdefault((str(node.get("id")), block.asks), after)
+    return out
 
 
 def llm_base_url() -> str:
@@ -619,10 +648,11 @@ def take_flow(profile=None):
     every request from here on and returned. They are logged whenever they
     differ from those logged before, each with where it comes from, so that
     the log of a job says what it read with."""
-    global NUMBERS, _flow_logged, _FLOW_NODES, _HOMES
+    global NUMBERS, _flow_logged, _FLOW_NODES, _HOMES, _ATTACHED_HOMES
     NUMBERS = flow_map.in_effect(profile)
     _FLOW_NODES = {}
     _HOMES = {}
+    _ATTACHED_HOMES = attached_homes(flow_map.tree_of(profile))
     for node, _frames in flow_map.walk(flow_map.tree_of(profile)):
         if "box" in node:
             _FLOW_NODES[str(node.get("id"))] = node
@@ -2187,11 +2217,52 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
 
     def optional(kind: str) -> Optional[Callable]:
         return asker(kind) if kind in loaded else None
+
+    own_cut: dict = {}
+
+    def own_parts(prompt):
+        # A general step's prompt: a prompt file of the profile, or a text
+        # of the step's own, cut at its markers like every prompt.
+        key = json.dumps(prompt, sort_keys=True, ensure_ascii=False)
+        if key not in own_cut:
+            own_cut[key] = thread_map.cut(own_prompt(prompt, profile))
+        return own_cut[key]
+
+    def general_ask(prompt, payload, document_id, /, shape, example,
+                    follow=False, **noted):
+        from . import general
+        parts = own_parts(prompt)
+        system = request_prompt(parts, own(payload), shape)
+        text, payload = general.in_prompt(system.text, payload)
+        system = replace(system, text=text)
+        content = message(payload)
+        if follow:
+            content = f"{content}\n\n{follow_words()}"
+        key = general.first_key(
+            ((shape or {}).get("json_schema") or {}).get("schema") or {})
+        return ask_in_grammar(
+            client, system, messages(payload, content), shape, document_id,
+            "follow" if follow else "own", key, example,
+            **({**noted, "asked": "own"} if follow else noted))
     return addressed_map.Asks(
         find=asker("find"), docfield=asker("docfield"), coord=asker("coord"),
         list=asker("list"), names=optional("names"),
         search=asker("search"), follow=follow, check=optional("check"),
-        work=optional("work"), phrase=optional("phrase"))
+        work=optional("work"), phrase=optional("phrase"),
+        own=general_ask)
+
+
+def own_prompt(prompt, profile=None):
+    """The prompt of a general step: the prompt file *prompt* names
+    ("extraction/find"), or {"text": ...} a text of the step's own, made as
+    a prompt file of the profile would be (`prompts.made`)."""
+    from docpipe.profile import active_profile
+    profile = profile or active_profile()
+    if isinstance(prompt, dict):
+        text = str(prompt.get("text") or "")
+        return prompts.made("own/step", profile, profile,
+                            profile.prompts_dir / "own" / "step.md", text)
+    return prompts.load(str(prompt), profile)
 
 
 def image_path_of(source, image_root: Optional[Path]) -> Optional[str]:

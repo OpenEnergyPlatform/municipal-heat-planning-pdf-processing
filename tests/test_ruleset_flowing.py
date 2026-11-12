@@ -91,7 +91,11 @@ STANDARD = {
 
 ASKING = ("figures", "sentences", "works", "document_fields", "finds",
           "own_place", "quantity", "work", "search_sentence", "beside",
-          "plan_years", "name", "about", "compute")
+          "plan_years", "name", "about", "compute", "settled_list")
+# The steps a profile brings itself stand in its own flow (owner decision
+# 2026-11-12, profiles/<name>/blocks.py).
+OWN_FLOW = {"works": "scenarios", "work": "scenarios", "name": "scenarios",
+            "quantity": "kwp", "plan_years": "kwp"}
 
 
 @pytest.fixture(autouse=True)
@@ -154,11 +158,20 @@ def test_a_rule_names_the_steps_that_read_it_and_a_step_may_set_it():
 
 
 @pytest.mark.parametrize("ident", ASKING)
-def test_each_step_that_asks_takes_its_own_replies_follow_ups_meanings(ident):
+def test_each_step_that_asks_takes_its_own_replies_follow_ups_meanings(
+        ident, monkeypatch):
+    from docpipe.profile import load_profile
+    profile = load_profile(OWN_FLOW[ident]) if ident in OWN_FLOW else None
+    if profile is not None:
+        # the run of a profile reads its own flow
+        monkeypatch.setenv("DOCPIPE_PROFILE", profile.name)
+
+    def default():
+        return copy.deepcopy(flow.load(profile).tree)
     drawing = default()
     node(drawing, ident)["rules"] = {"follow_ups": 3, "replies": 5,
                                      "list_meanings": 7}
-    assert flow.problems(drawing) == []
+    assert flow.problems(drawing, profile=profile) == []
     drawing = default()
     box = node(drawing, ident)
     own = {setting.key: 2 for setting in
@@ -166,7 +179,7 @@ def test_each_step_that_asks_takes_its_own_replies_follow_ups_meanings(ident):
            if setting.key in ("follow_ups", "replies", "list_meanings")}
     assert set(own) == {"follow_ups", "replies", "list_meanings"}
     box["own"] = own
-    assert flow.problems(drawing) == []
+    assert flow.problems(drawing, profile=profile) == []
     engine = Engine(Reading(), drawing)
     assert engine.follow_ups_of(box) == 2
     assert engine.number(box, "replies") == 2

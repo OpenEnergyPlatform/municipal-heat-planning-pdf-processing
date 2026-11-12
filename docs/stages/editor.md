@@ -498,25 +498,34 @@ least, and a drawing the run could not do (below) are refused by name.
 
 ### The library
 
-A box is one kind of the library (`extraction.blocks`). Each kind has a label,
-a group (start, prepare, order, ask, check, remember, state, end), what it takes
-and gives (the arrow before and after it: document, pieces, supply, answers,
-values and so on), its settings with their defaults, the frames it has to stand
-in, and a sentence on what it does. The library is a searchable dialog: the "+" on an arrow opens it and puts the
+A box is one kind of the library (`extraction.blocks`). Each kind has a name,
+a group (start, prepare, order, questions, check, remember, state, logic, end),
+the variables it takes and gives (shown at the box and on its arrows), its
+settings with their defaults, and an explanation for someone who did not write
+it: what goes in, what comes out, what for, an example and how it differs from a
+similar step (owner decision 2026-11-12). The page offers the boxes of the core
+and those of the open profile (`profiles/<name>/blocks.py`). The library is a searchable dialog: the "+" on an arrow opens it and puts the
 picked box or frame there. A right click on a box or frame opens a menu: Move
 up, Move down, Duplicate, Put a box after it, Wrap in Round, If / else or For
 each, Switch off or on, Delete. Shift or Ctrl click chooses several steps that
 stand one after another, so they can be wrapped together.
 
-Some boxes are fixed: the document, the transcription of the figures, the
-cutting into pieces, the lists of the document and the writing cannot be
-removed or switched off, and the card says why. The others can be switched off
-(`"off": true`); a box that is off is not there for any check of the drawing.
+Only the writing of the harvest is fixed, once at the end; every other box can
+be removed, and switched off (`"off": true`) where its kind allows it. A box that
+is off is not there for any check of the drawing; a step that takes what no step
+before it gives is refused with that reason.
 A box that asks a model shows the fixed checks that hold its answers (the quote
 is a line the request showed, the answer stands in its quote, a quote names a
 place, an answer to a list is one of its entries) and cannot lose them.
-What a box does with an answer stays code; a kind of box that is new comes as
-code and appears in the library.
+A new step needs no code: "Ask the model" takes a prompt of the profile or a
+text of its own (`{{key}}` writes an input into it), the inputs it shows, the
+form of its answer as a JSON schema, drawn in a window with jsonjoy-builder or
+written as JSON, and where the answer goes (a variable, for the item or the whole
+document, or values of a field); the model may be allowed to fetch what a line
+points to. Search, order by a text, set a variable, keep what a condition holds
+for, join lists, a step in Python and a loop over any list stand beside it, and a
+condition row may be about any variable. A kind of box with code of its own comes
+from a profile's `blocks.py`.
 
 The catalogue search is a box of its own (`catalogue`) with settings of its
 own; it stands after the calculation, at the end, and where it is switched off

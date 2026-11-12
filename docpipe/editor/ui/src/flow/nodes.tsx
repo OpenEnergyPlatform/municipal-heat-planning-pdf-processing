@@ -4,7 +4,7 @@ import { BaseEdge, EdgeLabelRenderer, getStraightPath, Handle, Position, type Ed
 import { ActionIcon, Badge, Box, Group, Text, Tooltip } from '@mantine/core';
 import {
   IconArrowsSort, IconBookmark, IconChecks, IconChevronDown, IconChevronRight, IconFileText, IconFlag, IconGitBranch,
-  IconMessageQuestion, IconPlayerPlay, IconPlus, IconRefresh, IconRepeat, IconScissors, IconFlagCheck,
+  IconMessageQuestion, IconPlayerPlay, IconPlus, IconRefresh, IconRepeat, IconScissors, IconFlagCheck, IconCode,
 } from '@tabler/icons-react';
 import type { EdgeData, StepData } from './layout';
 import type { Library } from './model';
@@ -21,12 +21,13 @@ export const GROUPS: Record<string, { color: string; icon: (p: { size?: number }
   remember: { color: 'violet', icon: p => <IconBookmark {...p} /> },
   state: { color: 'orange', icon: p => <IconFlag {...p} /> },
   end: { color: 'green', icon: p => <IconFlagCheck {...p} /> },
+  logic: { color: 'lime', icon: p => <IconCode {...p} /> },
   pass: { color: 'pink', icon: p => <IconRefresh {...p} /> },
 };
 /* the word of a group of the library; a group the page does not know is shown by its key */
 export const groupWord = (key: string): string => ({
-  start: t('Start'), prepare: t('Prepare'), order: t('Search'), ask: t('Ask the model'), check: t('Check'),
-  remember: t('Remember'), state: t('State'), end: t('End'), pass: t('Follow-up pass'),
+  start: t('Start'), prepare: t('Prepare'), order: t('Search'), ask: t('Questions'), check: t('Check'),
+  remember: t('Remember'), state: t('State'), end: t('End'), pass: t('Follow-up pass'), logic: t('Logic'),
 } as Record<string, string>)[key] || key;
 /* loops, rounds and branchings: their colour and sign (their word is frameWord) */
 export const FRAMES: Record<string, { color: string; icon: (p: { size?: number }) => ReactNode }> = {

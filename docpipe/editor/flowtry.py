@@ -266,7 +266,7 @@ def run(profile, spec, tree: list, numbers, sources: list,
     if mode not in MODES:
         raise Refused(f"mode is one of {', '.join(MODES)}, not {mode!r}")
     from .. import rules
-    said = flow_map.problems(tree, flow_map.known_rules(profile))
+    said = flow_map.problems(tree, flow_map.known_rules(profile), profile)
     if said:
         raise Refused("the drawing cannot run: " + "; ".join(
             (f"{p['id']}: " if p["id"] else "") + p["message"]

@@ -57,11 +57,12 @@ def rule(name, tab, group, kind, help, **more) -> Rule:
 # The kinds of steps (`step_kind`) that send a request to the model.
 ASKING = ("transcribe", "sentences", "order", "docfield", "works", "find",
           "coord", "quantity", "work_coordinate", "phrase", "search",
-          "last_year", "names", "about", "compute", "review", "example")
+          "last_year", "names", "about", "compute", "review", "example",
+          "list")
 # Those whose request shows lines of the document.
 SHOWING = ("sentences", "order", "docfield", "works", "find", "coord",
            "quantity", "work_coordinate", "phrase", "search", "last_year",
-           "names", "about")
+           "names", "about", "list")
 # The steps of a pass over a stored harvest that take an answer, or hold a
 # stored one, to its quote: a dimension taken back and read again, the new
 # answer where it is better, the parameters and the passages read for the
@@ -72,7 +73,30 @@ PASS_TAKING = ("take_back", "better", "read_parameters", "unread",
 # holds every value to it once more.
 TAKING = ("docfield", "works", "find", "coord", "quantity",
           "work_coordinate", "search", "last_year", "names", "about",
-          "settle", "write") + PASS_TAKING
+          "settle", "write", "list") + PASS_TAKING
+# The general steps of a flow (owner decision 2026-11-12) and the steps
+# whose work each does: it reads the rules they read for that work, so a
+# value set at one of them can be set at the general step too. A question
+# to the model does the asking of every step whose request shows lines of
+# the document; a search and an order by a text do the searching of the
+# steps that search, and read the rules of the search only (`SEARCH_GROUP`).
+STANDS_FOR = {"ask": SHOWING}
+SEARCH_STANDS_FOR = {"retrieve": ("order", "search"),
+                     "rerank": ("order", "search")}
+# The group of the rules of the search, on the Flow tab.
+SEARCH_GROUP = "Search"
+
+
+def with_general(steps: tuple, searching: bool = False) -> tuple:
+    """*steps* and every general step that does the work of one of them:
+    the asking (`STANDS_FOR`), and the searching for a rule of the search
+    (*searching*, `SEARCH_STANDS_FOR`)."""
+    table = {**STANDS_FOR, **(SEARCH_STANDS_FOR if searching else {})}
+    more = tuple(general for general, kinds in table.items()
+                 if general not in steps and set(kinds) & set(steps))
+    return tuple(steps) + more
+
+
 # The steps that write rows into the harvest: the writing of a run, and the
 # steps of a pass that replace the file or append rows to it.
 WRITING = ("write", "replace", "read_parameters", "unread")

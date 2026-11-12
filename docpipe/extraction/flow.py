@@ -63,6 +63,7 @@ import difflib
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -171,7 +172,17 @@ NUMBERS = (
 # the numbers that bound how it is asked again (plan 2026-11-11, 5.2).
 ASKING = ("transcribe", "sentences", "docfield", "works", "find", "coord",
           "quantity", "work_coordinate", "phrase", "search", "last_year",
-          "names", "about", "compute")
+          "names", "about", "compute", "list")
+def _with_general(steps: tuple, searching: bool) -> tuple:
+    from ..ruleset.kit import with_general
+    return with_general(steps, searching)
+
+
+# The numbers of the search: how many chunks it gives and of which kind.
+SEARCH_NUMBERS = ("search_pieces", "search_tables", "search_figures",
+                  "search_text", "listed_field_factor")
+
+
 STEPS = {
     "piece_lines": ("split",),
     "title_page_lines": ("document",),
@@ -187,12 +198,15 @@ STEPS = {
     "follow_ups": ASKING + ("each value",),
     "replies": ASKING + ("order",),
 }
-NUMBERS = tuple(dataclasses.replace(number,
-                                    steps=STEPS.get(number.name, ()))
-                for number in NUMBERS)
+# A general step reads the numbers of the steps whose work it does
+# (ruleset/kit.py STANDS_FOR).
+NUMBERS = tuple(dataclasses.replace(
+    number, steps=_with_general(STEPS.get(number.name, ()),
+                                number.name in SEARCH_NUMBERS))
+    for number in NUMBERS)
 BY_NAME = {number.name: number for number in NUMBERS}
 FRAME_KEYS = {"each": ("id", "each", "which", "when", "together", "order",
-                       "rules", "steps", "off", "note"),
+                       "rules", "steps", "off", "note", "list", "as"),
               "round": ("id", "round", "stop", "rules", "steps", "off",
                         "note"),
               "if": ("id", "if", "else", "rules", "off", "note")}
@@ -365,6 +379,149 @@ def checked(where, name: str, value) -> int:
     return value
 
 
+def availability(tree: list) -> dict:
+    """{id(node): the variables there before *node* runs} of every step of
+    *tree* (owner decision 2026-11-12: what may stand where follows from
+    the inputs and outputs alone): what the run starts with, the item of
+    each frame around the step, and what the steps before it gave. An
+    output that lasts for the whole document (`variables.lasting`) is
+    there for every step after the one that made it; any other only in the
+    item it was made for, which a round's turn or an if's way shares with
+    the steps around it. A step that is off gives nothing."""
+    from . import variables
+    out: dict = {}
+    lasting: set = set(variables.START)
+
+    def go(steps, local: set) -> set:
+        local = set(local)
+        for node in steps if isinstance(steps, list) else []:
+            if not isinstance(node, dict):
+                continue
+            out[id(node)] = frozenset(local | lasting)
+            if node.get("off"):
+                continue
+            kind = kind_of(node)
+            if kind == "box":
+                for name in outputs_of(node):
+                    (lasting if lasting_of(node, name) else local).add(name)
+            elif kind == "each":
+                item = node.get("as") or "item" if node.get("each") == "list" \
+                    else variables.ITEMS.get(node.get("each"), (None, None))[0]
+                go(node.get("steps") or [], local | ({item} if item else set()))
+            elif kind == "round":
+                local |= go(node.get("steps") or [], local | {"round"}) \
+                    - {"round"}
+            elif kind == "if":
+                made: set = set()
+                for _label, steps in children(node):
+                    made |= go(steps, local)
+                local |= made
+        return local
+
+    go(tree, set())
+    return out
+
+
+# The general steps (`general`, owner decision 2026-11-12): what they take
+# and give is named by their settings.
+GENERAL = ("ask", "retrieve", "rerank", "set", "filter", "merge", "python")
+
+
+def _root(path) -> Optional[str]:
+    return str(path).split(".")[0] if isinstance(path, str) and path \
+        else None
+
+
+def available_by_id(tree: list) -> dict:
+    """{id of a step: [the variables there before it], in order} of every
+    step of *tree*, for the page's choice of a variable."""
+    avail = availability(tree) if isinstance(tree, list) else {}
+    return {node.get("id"): sorted(avail.get(id(node), ()))
+            for node, _frames in walk(tree if isinstance(tree, list) else [])
+            if isinstance(node.get("id"), str)}
+
+
+def outputs_of(node: dict) -> list:
+    """The variables a box gives: its kind's, and for a general step the
+    ones its settings name."""
+    kind = blocks.LIBRARY.get(node.get("box"))
+    if kind is None:
+        return []
+    sets = node.get("set") or {}
+    if not isinstance(sets, dict):
+        return []
+    if kind.type == "ask":
+        into = sets.get("into") if isinstance(sets.get("into"), dict) \
+            else {}
+        if into.get("field"):
+            return ["answer", "values"]
+        return ["answer", into.get("var") or node.get("id")]
+    if kind.type in ("retrieve", "rerank", "filter", "merge"):
+        default = "hits" if kind.type == "retrieve" else node.get("id")
+        return [sets.get("into") or default]
+    if kind.type == "set":
+        return [sets["name"]] if isinstance(sets.get("name"), str) else []
+    if kind.type == "python":
+        return [one for one in sets.get("outputs") or ()
+                if isinstance(one, str)]
+    return list(kind.outputs)
+
+
+def inputs_of(node: dict) -> tuple:
+    """What a box takes (`variables.wanted`): its kind's, and for a general
+    step the variables its settings name."""
+    kind = blocks.LIBRARY.get(node.get("box"))
+    if kind is None:
+        return ()
+    sets = node.get("set") or {}
+    if not isinstance(sets, dict) or kind.type not in GENERAL:
+        return kind.inputs
+    if kind.type == "ask":
+        paths = [one.get("from") for one in sets.get("inputs") or ()
+                 if isinstance(one, dict)]
+    elif kind.type == "retrieve":
+        paths = [sets.get("query")]
+    elif kind.type == "rerank":
+        paths = [sets.get("list"), sets.get("query")]
+    elif kind.type in ("set", "filter"):
+        paths = [sets.get("from" if kind.type == "set" else "list")]
+    else:
+        paths = list(sets.get("lists" if kind.type == "merge"
+                              else "inputs") or ())
+    return tuple(dict.fromkeys(root for root in map(_root, paths) if root))
+
+
+def lasting_of(node: dict, name: str) -> bool:
+    """Does the variable *name* that *node* gives last for the whole
+    document?"""
+    from . import variables
+    kind = blocks.LIBRARY.get(node.get("box"))
+    if kind is None or kind.type not in GENERAL:
+        return variables.lasting(name)
+    if name == "values":
+        return True
+    if name == "answer":
+        return False
+    sets = node.get("set") or {}
+    if kind.type == "ask":
+        into = sets.get("into") if isinstance(sets.get("into"), dict) \
+            else {}
+        return bool(into.get("lasting"))
+    return bool(sets.get("lasting"))
+
+
+def makers(tree: list) -> dict:
+    """{variable: [the labels of the boxes that are on and give it]}."""
+    out: dict = {}
+    for node, _frames in on(tree):
+        if kind_of(node) != "box":
+            continue
+        kind = blocks.LIBRARY.get(node.get("box"))
+        for name in outputs_of(node):
+            out.setdefault(name, []).append(kind.label)
+    return out
+
+
 class _Check:
     """The problems of one drawing, each with the id of its node."""
 
@@ -372,6 +529,37 @@ class _Check:
         self.out: list = []
         self.ids: dict = {}
         self.known = known          # the rules of the profile's line
+        # What is there before each step, and which boxes give what.
+        self.avail: dict = {}
+        self.makers: dict = {}
+        self.profile = None         # whose boxes the drawing may take
+
+    def inputs(self, node: dict, label: str, inputs: tuple) -> None:
+        """The inputs of a step: each one there before it, an optional one
+        where a step of the flow gives it (owner decision 2026-11-12)."""
+        from . import variables
+        there = self.avail.get(id(node))
+        if there is None:
+            return
+        for spec in inputs:
+            names, optional = variables.wanted(spec)
+            if any(name in there for name in names):
+                continue
+            words = " or ".join(variables.label(name) for name in names)
+            given = [maker for name in names
+                     for maker in self.makers.get(name, ())]
+            if optional:
+                if given:
+                    self.say(node, f"{label} stands after {given[0]}: it "
+                             f"takes {words} where the flow gives it")
+                continue
+            if given:
+                self.say(node, f"{label} takes {words}, which "
+                         f"{given[0]} gives only after it or in another "
+                         f"frame")
+            else:
+                self.say(node, f"{label} takes {words}, and no step of the "
+                         f"flow gives it")
 
     def say(self, node, message: str) -> None:
         ident = node.get("id") if isinstance(node, dict) else None
@@ -385,6 +573,13 @@ def _innermost(frames: tuple, kind: str = "each") -> Optional[dict]:
 
 def _eaches(frames: tuple) -> list:
     return [f.get("each") for f in frames if kind_of(f) == "each"]
+
+
+def _vars(check, node: dict) -> set:
+    """What a condition at *node* can say of variables: every variable
+    there before it (`conditions.VAR`)."""
+    return {"var"} | {f"var:{name}"
+                      for name in check.avail.get(id(node), ())}
 
 
 def _known(frames: tuple, before: list) -> set:
@@ -429,7 +624,95 @@ def _value_problem(box: blocks.Box, setting: blocks.Setting, value,
             return f"{setting.label}: {said[0]}"
     if setting.kind in (blocks.NUMBER, blocks.COUNT, blocks.RULE):
         return f"{setting.label} is a number of the flow; give it under own"
+    return _general_problem(setting, value)
+
+
+_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PATH = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$")
+
+
+def _general_problem(setting: blocks.Setting, value) -> Optional[str]:
+    """Why *value* is no value of a setting of a general step
+    (`general`), None where it is one."""
+    from . import general
+    label = setting.label
+    if setting.kind == blocks.PROMPT:
+        if isinstance(value, dict):
+            return None if isinstance(value.get("text"), str) \
+                and value["text"].strip() else \
+                f"{label}: a text of its own is not empty"
+        if isinstance(value, str) and "/" in value.strip():
+            return None
+        return f"{label} is the id of a prompt (stage/name) or a text"
+    if setting.kind == blocks.INPUTS:
+        if not isinstance(value, list):
+            return f"{label} is a list of inputs"
+        keys = set()
+        for one in value:
+            if not isinstance(one, dict) or set(one) - {"key", "from",
+                                                        "show"}:
+                return f"{label}: each input has key, from and show"
+            if not _NAME.match(str(one.get("key") or "")):
+                return f"{label}: {one.get('key')!r} is no key"
+            if one["key"] in keys:
+                return f"{label}: the key {one['key']} stands twice"
+            keys.add(one["key"])
+            if not _PATH.match(str(one.get("from") or "")):
+                return f"{label}: {one.get('from')!r} is no variable"
+            if one.get("show", "as_is") not in general.SHOWS:
+                return (f"{label}: shows as one of "
+                        f"{', '.join(general.SHOWS)}")
+        return None
+    if setting.kind == blocks.SCHEMA:
+        said = general.schema_problem(value)
+        return f"{label}: {said}" if said else None
+    if setting.kind == blocks.INTO:
+        if not isinstance(value, dict) or set(value) - {"var", "lasting",
+                                                         "field"}:
+            return f"{label} is a variable (var, lasting) or a field"
+        if "field" in value:
+            return None if isinstance(value["field"], str) \
+                and value["field"] else f"{label}: which field"
+        if not value.get("var"):
+            return None             # the step's id names the variable
+        if not _NAME.match(str(value.get("var") or "")):
+            return f"{label}: {value.get('var')!r} is no name of a variable"
+        return None
+    if setting.kind == blocks.VARNAME:
+        return None if _NAME.match(str(value)) else \
+            f"{label}: {value!r} is no name of a variable"
+    if setting.kind == blocks.PATH:
+        return None if _PATH.match(str(value)) else \
+            f"{label}: {value!r} is no variable"
+    if setting.kind in (blocks.PATHS, blocks.VARNAMES):
+        pattern = _PATH if setting.kind == blocks.PATHS else _NAME
+        if not isinstance(value, list) or not value:
+            return f"{label} names one at least"
+        wrong = [one for one in value if not pattern.match(str(one))]
+        return f"{label}: {wrong[0]!r} is no variable" if wrong else None
+    if setting.kind == blocks.JSON:
+        try:
+            json.dumps(value)
+        except (TypeError, ValueError):
+            return f"{label} is a value in JSON"
+        return None
+    if setting.kind == blocks.CODE:
+        said = general.python_problem(value)
+        return f"{label}: {said}" if said else None
+    if setting.kind == blocks.MULTI:
+        if not isinstance(value, list):
+            return f"{label} is a list of choices"
+        wrong = [one for one in value if one not in setting.choices]
+        return (f"{label} is some of {', '.join(setting.choices)}, not "
+                f"{wrong[0]!r}") if wrong else None
     return None
+
+
+# What a general step cannot do without.
+NEEDED = {"ask": ("prompt",), "retrieve": ("query",),
+          "rerank": ("list", "query", "into"), "set": ("name",),
+          "filter": ("list", "keep", "into"), "merge": ("lists", "into"),
+          "python": ("code", "outputs")}
 
 
 def _kinds_in(node: dict) -> set:
@@ -508,6 +791,11 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
                   f"use for the steps that work on a harvest that is "
                   f"written")
         return
+    if not blocks.offered(kind, check.profile):
+        check.say(node, f"{kind.label} is a step of the profile "
+                  f"{kind.profile} (profiles/{kind.profile}/blocks.py), "
+                  f"and this profile neither is it nor builds on it")
+        return
     for key in node:
         if key not in BOX_KEYS:
             check.say(node, f"a box has no key {key!r}")
@@ -519,25 +807,23 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
                   f"only")
     eaches = _eaches(frames)
     inner = eaches[-1] if eaches else None
-    if kind.needs:
-        wanted = [n for n in kind.needs if n != "round"]
-        if "round" in kind.needs and not any(kind_of(f) == "round"
-                                             for f in frames):
-            check.say(node, f"{kind.label} stands in a round: it shows a "
-                      f"supply a few pieces at a time")
-        if wanted and inner not in wanted:
-            check.say(node, f"{kind.label} stands in "
-                      f"{' or '.join('each ' + n for n in wanted)}, not "
-                      f"{('each ' + inner) if inner else 'the document'}")
-        if kind.type == "find" and len(eaches) < 2 \
-                or kind.type == "find" and eaches[-2] != "field":
-            check.say(node, "a find stands in each piece of each field")
-        if kind.type == "docfield" and inner == "field":
-            frame = _innermost(frames)
-            if frame.get("which", "all") == "pieces":
-                check.say(node, "a field read in pieces is asked by finds, "
-                          "not as a field of the document")
-    where = _known(frames, before)
+    # Where a box may stand follows from what it takes (owner decision
+    # 2026-11-12); a question that shows a supply a few chunks at a time
+    # stands in a round.
+    if _on(node, frames):
+        check.inputs(node, kind.label, inputs_of(node))
+    if "round" in kind.needs and not any(kind_of(f) == "round"
+                                         for f in frames):
+        check.say(node, f"{kind.label} stands in a round: it shows a "
+                  f"supply a few pieces at a time")
+    if kind.type == "docfield" and inner == "field":
+        frame = _innermost(frames)
+        if frame.get("which", "all") == "pieces":
+            check.say(node, "a field read in pieces is asked by finds, "
+                      "not as a field of the document")
+    where = _known(frames, before) | _vars(check, node)
+    if kind.type == "filter":
+        where = where | {"var:item"}
     if kind.type == "transcribe":
         # Each figure is asked, or not, by this box before any chunk is
         # cut: only the figure's own properties are known.
@@ -578,6 +864,15 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
         for key in ("name", "refuse", "sentence"):
             if key not in sets:
                 check.say(node, f"a check needs its {key}")
+    for key in NEEDED.get(kind.type, ()):
+        setting = next((x for x in kind.settings if x.key == key), None)
+        # a setting with a standard needs no value of its own
+        if key not in sets and (setting is None or setting.default is None):
+            label = setting.label if setting is not None else key
+            check.say(node, f"{kind.label} needs its {label}")
+    if kind.type == "set" and "from" not in sets and "value" not in sets:
+        check.say(node, f"{kind.label} takes the value of a variable or a "
+                  f"value of its own")
     if kind.attached:
         previous = [n for n in before if kind_of(n) == "box"]
         chain = list(reversed(previous))
@@ -677,13 +972,39 @@ def _steps(check: _Check, steps, frames: tuple, top: bool,
                       "else unstated)")
 
 
+def _list_frame(check: _Check, node: dict, frames: tuple,
+                before: list) -> None:
+    """A loop over any list (owner decision 2026-11-12): the list it goes
+    through, there before it, and the name of its entry."""
+    path = node.get("list")
+    if not isinstance(path, str) or not _PATH.match(path):
+        check.say(node, "a loop over a list names the list (a variable)")
+    elif _on(node, frames):
+        check.inputs(node, blocks.EACH_TITLES["list"], (_root(path),))
+    name = node.get("as", "item")
+    if not _NAME.match(str(name)):
+        check.say(node, f"{name!r} is no name for the entry of a list")
+    for key in ("which", "order"):
+        if key in node:
+            check.say(node, f"a loop over a list has no {key}")
+    if "together" in node and not isinstance(node["together"], bool):
+        check.say(node, "together is yes or no")
+    inner = frames + (node,)
+    if "when" in node:
+        where = _known(inner, []) | _vars(check, node) | {f"var:{name}"}
+        said = conditions.problems(node["when"], where)
+        if said:
+            check.say(node, f"only when: {said[0]}")
+    _steps(check, node.get("steps"), inner, False)
+
+
 def _frame(check: _Check, node: dict, kind: str, frames: tuple,
            before: list, top: bool, state_after: bool = False) -> None:
     for key in node:
         if key not in FRAME_KEYS[kind]:
             check.say(node, f"a frame {kind} has no key {key!r}")
     _rules_of(check, node)
-    where = _known(frames, before)
+    where = _known(frames, before) | _vars(check, node)
     inner = frames + (node,)
     if kind == "each":
         what = node.get("each")
@@ -693,12 +1014,22 @@ def _frame(check: _Check, node: dict, kind: str, frames: tuple,
             return
         eaches = _eaches(frames)
         outer = eaches[-1] if eaches else None
+        if what == "list":
+            _list_frame(check, node, frames, before)
+            return
         allowed = {"settled": (None,), "field": (None,),
                    "piece": ("field",), "value": (None, "field"),
                    "coordinate": ("value",)}[what]
         if outer not in allowed:
             check.say(node, f"each {what} stands in "
                       f"{' or '.join('the document' if a is None else 'each ' + a for a in allowed)}")
+        from . import variables
+        listed = variables.ITEMS.get(what, (None, None))[1]
+        if listed and _on(node, frames):
+            check.inputs(node, blocks.EACH_TITLES.get(what, what),
+                         (listed,) + (("order?",) if what == "piece"
+                                      and node.get("order", "best_first")
+                                      == "best_first" else ()))
         if what == "settled" and not top:
             check.say(node, "each thing the document settles stands at the "
                       "top")
@@ -722,7 +1053,11 @@ def _frame(check: _Check, node: dict, kind: str, frames: tuple,
                     check.say(node, "side by side inside side by side only "
                               "as the one step of its frame")
         if "when" in node:
-            said = conditions.problems(node["when"], _known(inner, []))
+            from . import variables
+            item = variables.ITEMS.get(what, (None, None))[0]
+            said = conditions.problems(
+                node["when"], _known(inner, []) | _vars(check, node)
+                | ({f"var:{item}"} if item else set()))
             if said:
                 check.say(node, f"only when: {said[0]}")
         if what == "coordinate" and not _has_state(node.get("steps") or []):
@@ -752,9 +1087,12 @@ def _frame(check: _Check, node: dict, kind: str, frames: tuple,
                 check.say(node, "until the supply is used up: a question in "
                           "the round has to show the supply")
         if "stop" in node:
+            made = {f"var:{name}" for one, _f in walk(node.get("steps") or [])
+                    if kind_of(one) == "box" for name in outputs_of(one)}
             said = conditions.problems(
                 node["stop"], _known(inner, before + list(
-                    node.get("steps") or [])))
+                    node.get("steps") or [])) | _vars(check, node) | made
+                | {"var:round"})
             if said:
                 check.say(node, f"stop when: {said[0]}")
         steps = node.get("steps") or []
@@ -801,30 +1139,45 @@ def known_rules(profile) -> dict:
     return {**graphfile.declared(profile), **rules.registry(profile)}
 
 
-def problems(tree, known: Optional[dict] = None) -> list:
+# The profile of a drawing that may take the boxes of every profile: the
+# drawing the engine is given was held to its profile when it was loaded
+# or saved.
+ANY_PROFILE = "*"
+
+
+def problems(tree, known: Optional[dict] = None, profile=None) -> list:
     """Everything the run could not do with the drawing *tree*: [{"id": the
-    box or frame or None, "message"}], [] where it can run. *known* are the
-    rules a step may set (`known_rules`), the active profile's where not
-    given."""
-    if known is None:
+    box or frame or None, "message"}], [] where it can run. *profile* (a
+    profile or its name) is the profile the drawing belongs to, whose boxes
+    it may take; *known* are the rules a step may set (`known_rules`), the
+    profile's where not given. Without a profile, the active one."""
+    if profile is None:
         from ..profile import active_profile
-        known = known_rules(active_profile())
+        profile = active_profile()
+    if profile == ANY_PROFILE:
+        from ..profile import active_profile
+        profile, ambient = None, active_profile()
+    else:
+        ambient = profile
+    if known is None:
+        known = known_rules(_profile_of(ambient))
     check = _Check(known)
+    check.profile = profile
     if not isinstance(tree, list) or not tree:
         return [{"id": None, "message": "the flow is a list of boxes and "
                  "frames, not empty"}]
+    check.avail = availability(tree)
+    check.makers = makers(tree)
     _steps(check, tree, (), True)
     top = [node.get("box") if kind_of(node) == "box" else None
            for node in tree if isinstance(node, dict)]
-    if top[:len(PREPARES)] != list(PREPARES):
-        check.say({}, "the drawing starts with document, transcribe, split "
-                  "and lists, in this order: every request shows the "
-                  "figures' lines and the pieces")
     every = [n.get("box") for n, _ in walk(tree) if kind_of(n) == "box"]
-    for kind in PREPARES + ("write",):
-        if top.count(kind) != 1 or every.count(kind) != 1:
-            check.say({}, f"{kind} stands once, at the top")
-    for kind in ("compute", "catalogue", "sentences", "works"):
+    # Only writing the harvest is fixed (owner decision 2026-11-12: "Ernte
+    # schreiben am Ende darf fest sein"); what prepares the document is
+    # done once, where it stands at the top.
+    if top.count("write") != 1 or every.count("write") != 1:
+        check.say({}, "write stands once, at the top")
+    for kind in PREPARES + ("compute", "catalogue", "sentences", "works"):
         if every.count(kind) > 1:
             check.say({}, f"{kind} stands once at most")
     # What the runner does once a document is read, in its order.
@@ -845,24 +1198,6 @@ def problems(tree, known: Optional[dict] = None) -> list:
     if ends != sorted(ends, key=later.index):
         check.say({}, f"{' and '.join(later)} stand in this order: the run "
                   f"does them so")
-    # The fields read in pieces come before the values of their finds.
-    order = [node for node in tree if isinstance(node, dict)]
-    pieces_at = [i for i, node in enumerate(order)
-                 if node.get("each") == "field"
-                 and node.get("which", "all") != "once"]
-    values_at = [i for i, node in enumerate(order)
-                 if node.get("each") == "value"]
-    if values_at and pieces_at and values_at[0] < pieces_at[0]:
-        check.say(order[values_at[0]], "each value comes after the finds of "
-                  "the fields read in pieces")
-    settled_at = [i for i, node in enumerate(order)
-                  if node.get("each") == "settled"]
-    first_read = next((i for i, node in enumerate(order)
-                       if node.get("box") not in PREPARES
-                       and node.get("each") != "settled"), len(order))
-    if any(i > first_read for i in settled_at):
-        check.say(order[settled_at[0]], "what the document settles is asked "
-                  "before the reading: every request after it shows it")
     return check.out
 
 
@@ -909,11 +1244,23 @@ def kinds() -> tuple:
         compute.COMPUTE_PROMPT_ID.rsplit("/", 1)[-1],)
 
 
-def parse(raw: str, where, whole: bool) -> dict:
+def _profile_of(profile):
+    """*profile* as a profile, where it is given by its name."""
+    if isinstance(profile, str):
+        from ..profile import load_profile
+        try:
+            return load_profile(profile)
+        except LookupError:
+            return None
+    return profile
+
+
+def parse(raw: str, where, whole: bool, profile=None) -> dict:
     """{"numbers": {name: value}, "flow": [...]} of the text *raw*, read
     strictly. A *whole* file names every number and the drawing; any other
     is laid over one and names numbers, and may draw a whole drawing of
-    its own. *where* names the file in what is said about it."""
+    its own. *where* names the file in what is said about it, *profile*
+    (a profile or its name) the profile it belongs to."""
     def once(pairs: list) -> dict:
         out: dict = {}
         for key, value in pairs:
@@ -955,7 +1302,7 @@ def parse(raw: str, where, whole: bool) -> dict:
                             f"the flow")
     if "flow" not in data:
         return {"numbers": read}
-    said = problems(data["flow"])
+    said = problems(data["flow"], profile=profile)
     if said:
         first = said[0]
         raise FlowError(f"{where}: "
@@ -995,12 +1342,12 @@ def _merged(written: list) -> Flow:
     if key in _loaded:
         return _loaded[key]
     (first, start), nearer = written[-1], written[:-1]
-    whole = parse(start.read_text(encoding="utf-8"), start, True)
+    whole = parse(start.read_text(encoding="utf-8"), start, True, first)
     numbers = dict(whole["numbers"])
     owners = {name: first for name in numbers}
     tree, tree_from = whole["flow"], first
     for name, path in reversed(nearer):
-        own = parse(path.read_text(encoding="utf-8"), path, False)
+        own = parse(path.read_text(encoding="utf-8"), path, False, name)
         for number, value in own["numbers"].items():
             numbers[number], owners[number] = value, name
         if "flow" in own:

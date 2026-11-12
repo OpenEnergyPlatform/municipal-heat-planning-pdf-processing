@@ -10,7 +10,7 @@ _r = rule
 # The steps whose request may ask a list of its own (a wording against an
 # entry list, a name against the names, a year against the plan's years).
 LISTED = ("docfield", "works", "find", "coord", "quantity",
-          "work_coordinate", "search", "last_year", "names")
+          "work_coordinate", "search", "last_year", "names", "list")
 # The steps whose request shows lines of a place of the document.
 PLACED = ("docfield", "works", "find", "coord", "work_coordinate", "search",
           "last_year")

@@ -58,7 +58,8 @@ DEFAULT = Path(__file__).resolve().parent / "builtin" / DEFAULT_NAME / FILE
 # rules stand in ruleset/kit.py, which the ruleset's modules import
 # while this module gathers their rules (below).
 from .ruleset.kit import (ASKING, KINDS, SHOWING, TABS,  # noqa: F401
-                          TAKING, WRITING, Rule, rule)
+                          TAKING, WRITING, Rule, rule, with_general,
+                          SEARCH_GROUP)
 
 
 class RuleError(ValueError):
@@ -539,6 +540,10 @@ RULES = tuple(replace(one, steps=STEPS.get(one.name, one.steps))
 from .ruleset import MORE as _MORE  # noqa: E402
 
 RULES = RULES + _MORE
+# A general step reads what the steps whose work it does read (owner
+# decision 2026-11-12, ruleset/kit.py STANDS_FOR).
+RULES = tuple(replace(one, steps=with_general(
+    one.steps, one.group == SEARCH_GROUP)) for one in RULES)
 BY_NAME = {one.name: one for one in RULES}
 if len(BY_NAME) != len(RULES):
     raise AssertionError("rules.RULES names a rule twice")

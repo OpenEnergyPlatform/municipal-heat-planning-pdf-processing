@@ -45,6 +45,8 @@ def profile(tmp_path):
     home.mkdir()
     shutil.copy(REPO / "profiles" / "scenarios" / "extraction_spec.json",
                 home)
+    # the profile draws its own flow (owner decision 2026-11-12)
+    shutil.copy(REPO / "profiles" / "scenarios" / "flow.json", home)
     shutil.copytree(REPO / "profiles" / "scenarios" / "prompts",
                     home / "prompts")
     return dataclasses.replace(load_profile("scenarios"), home=home)

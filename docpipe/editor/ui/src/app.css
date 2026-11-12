@@ -33,3 +33,8 @@ body { font-size: 16px; }
 .dp-gone { text-decoration: line-through; color: var(--mantine-color-dimmed); }
 .dp-mono { font-family: var(--mantine-font-family-monospace); }
 .dp-scroll { overflow: auto; min-height: 0; }
+
+/* the dialogs of the schema editor (jsonjoy-builder) stand above the window it opens in */
+html .jsonjoy.z-50, html .jsonjoy .z-50 { z-index: 300; }
+/* the schema editor keeps its light colours: a light card under it in both schemes */
+.dp-schema { background: #ffffff; color: #0f172a; border-radius: 8px; padding: 8px; }

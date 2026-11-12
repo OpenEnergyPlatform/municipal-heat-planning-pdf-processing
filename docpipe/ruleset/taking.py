@@ -17,7 +17,7 @@ from .kit import TAKING, TRUSTING, WRITING, rule
 CHECKED = TAKING + ("compute",)
 # The steps that ask which entry of a list a wording means.
 LISTED = ("docfield", "find", "coord", "quantity", "work_coordinate",
-          "search", "names", "each value")
+          "search", "names", "each value", "list")
 
 STATES = ("read", "unstated", "unbacked", "exhausted", "unanswered",
           "derived", "out_of_slice")

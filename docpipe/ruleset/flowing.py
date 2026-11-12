@@ -14,13 +14,14 @@ from .kit import rule
 
 # The kinds of steps (`rules.step_kind`) that are frames.
 FRAMES = ("each settled", "each field", "each piece", "each value",
-          "each coordinate", "round", "if")
+          "each coordinate", "each list", "round", "if")
 # Every box of the library: a condition is read wherever one stands.
 BOXES = ("document", "transcribe", "split", "lists", "sentences", "order",
          "beside", "docfield", "works", "find", "coord", "quantity",
          "work_coordinate", "phrase", "search", "last_year", "names",
          "about", "check", "settle", "state", "write", "compute",
-         "catalogue")
+         "catalogue", "ask", "retrieve", "rerank", "set", "filter", "merge",
+         "python")
 EACH = tuple(kind for kind in FRAMES if kind.startswith("each"))
 
 _STATES = ("read", "unstated", "unbacked", "exhausted", "unanswered",

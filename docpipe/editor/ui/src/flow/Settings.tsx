@@ -7,6 +7,7 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconPlus, IconTrash } from '@tabler/icons-react';
 import { NumberBox, TextBox } from '../components/Inputs';
+import { GENERAL_KINDS, GeneralField, ioOf } from './General';
 import { openPrompt, openRule, openSpec } from '../lib/nav';
 import { own, type Obj } from '../lib/util';
 import { rich, t, tr, useLang } from '../lib/i18n';
@@ -31,6 +32,8 @@ export interface Panel {
   reload(): void;
   /* a flow of a follow-up pass: its boxes take no conditions and its loops only go on or off */
   pass?: boolean;
+  /* the variables there before a step (extraction/flow.py availability), as the last check said */
+  availableOf(id: string): string[];
 }
 
 const Field = ({ label, children, help }: { label: string; children: ReactNode; help?: string }) => (
@@ -47,12 +50,12 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
   const lib = P.data.library;
   const subjects = P.data.conditions;
   const b = k === 'box' ? libBox(lib, n.box) : null;
+  const vars = P.availableOf(n.id);
   const out: ReactNode[] = [];
   if (b) {
-    const arrows = lib.arrows || {};
-    const arrow = (key: string) => tr(arrows[key] || key);
+    const io = ioOf(lib, n);
     out.push(<Text key="says" size="sm">{rich(tr(b.says))}</Text>);
-    out.push(<Text key="takes" size="xs" c="dimmed">{rich(t('takes {takes}, gives {gives} · in the code: `{code}`', { takes: b.takes ? arrow(b.takes) : t('nothing'), gives: arrow(b.gives), code: b.code }))}{b.decided ? t(' · decided on {date}', { date: b.decided }) : ''}</Text>);
+    out.push(<Text key="takes" size="xs" c="dimmed">{rich(t('takes {takes}, gives {gives} · in the code: `{code}`', { takes: io.takes.length ? io.takes.join(', ') : t('nothing'), gives: io.gives.length ? io.gives.join(', ') : t('nothing'), code: b.code }))}{b.decided ? t(' · decided on {date}', { date: b.decided }) : ''}</Text>);
     if (b.fixed) out.push(<Alert key="fixed" color="gray" variant="light" p="xs"><Text size="sm">{t('Fixed: {fixed}', { fixed: tr(b.fixed) })}</Text></Alert>);
     if (b.marks && b.marks.length) out.push(<Group key="marks" gap={4}>{b.marks.map(m => <Badge key={m} variant="outline" color="gray" title={t('fixed checks, cannot be removed')}>{rich(tr(m))}</Badge>)}</Group>);
     if (b.asks && P.data.prompts[b.asks]) {
@@ -70,6 +73,14 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
         : <Text size="sm" c="dimmed">{rich(tr(sw.none))}</Text>}</Field>);
     }
     for (const s of b.settings) out.push(<SettingField key={'s:' + s.key} P={P} n={n} s={s} />);
+  }
+  if (k === 'each' && !P.pass && n.each === 'list') {
+    out.push(<Field key="list" label={t('the list')} help={t('The variable whose entries the steps inside go through, such as the hits of a search.')}>
+      <TextBox mono list={vars} value={String(n.list || '')} onText={() => {}} aria-label={t('the list')}
+        onCommit={v => { if (v.trim() === n.list) return; n.list = v.trim(); P.edited(); }} /></Field>);
+    out.push(<Field key="as" label={t('name of its entry')} help={t('Inside the loop the entry is a variable of this name.')}>
+      <TextBox mono value={String(n.as || 'item')} onText={() => {}} aria-label={t('name of its entry')}
+        onCommit={v => { const x = v.trim() || 'item'; if (x === n.as) return; n.as = x; P.edited(); }} /></Field>);
   }
   if (k === 'each' && !P.pass) {
     if (n.each === 'field') {
@@ -96,14 +107,14 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
         {!supply && <NumberBox w={90} min={1} value={String(most)} onText={() => {}} aria-label={t('at most')}
           onCommit={x => { const v = Number(x) || 1; if (n.round && n.round.most === v) return; n.round = { most: v }; P.edited(); }} />}
       </Group></Field>);
-    out.push(<Field key="stop" label={t('stop when')}><CondEditor subjects={subjects} get={() => (n.stop as Cond) || null}
+    out.push(<Field key="stop" label={t('stop when')}><CondEditor subjects={subjects} vars={vars} get={() => (n.stop as Cond) || null}
       set={c => { if (c) n.stop = c; else delete n.stop; P.edited(); }} /></Field>);
   }
   if (k === 'if') {
     (n.if as { when?: Cond }[]).forEach((w, i) => out.push(
       <Field key={'way' + i} label={t('branch {n} when', { n: i + 1 })}>
         <Stack gap={4}>
-          <CondEditor subjects={subjects} get={() => w.when || null}
+          <CondEditor subjects={subjects} vars={vars} get={() => w.when || null}
             set={c => { w.when = c || { all: [normRow(subjects, { of: 'coordinate', is: 'year' })] }; P.edited(); }} />
           {n.if.length > 1 && <Box><Button size="compact-xs" variant="subtle" color="red" onClick={() => { n.if.splice(i, 1); P.edited(); }}>{t('remove this branch')}</Button></Box>}
         </Stack>
@@ -114,7 +125,7 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
       onChange={e => { if (e.currentTarget.checked) n.else = n.else || []; else delete n.else; P.edited(); }} /></Field>);
   }
   if (k !== 'if' && !(b && b.type === 'check') && !P.pass) {
-    out.push(<Field key="when" label={t('only when')}><CondEditor subjects={subjects} get={() => (n.when as Cond) || null}
+    out.push(<Field key="when" label={t('only when')}><CondEditor subjects={subjects} vars={k === 'each' && n.each === 'list' ? [...vars, String(n.as || 'item')] : vars} get={() => (n.when as Cond) || null}
       set={c => { if (c) n.when = c; else delete n.when; P.edited(); }} /></Field>);
   }
   if (!(b && (b.fixed || !b.switch))) {
@@ -163,6 +174,9 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
     if (!Object.keys(n.set).length) delete n.set;
     P.edited();
   };
+  if (GENERAL_KINDS.has(s.kind)) {
+    return <GeneralField s={s} value={sets[s.key]} put={v => put(s.key, v)} vars={P.availableOf(n.id)} data={P.data} />;
+  }
   if (s.kind === 'number') {
     const named = P.data.numbers.find(x => x.name === s.number);
     const has = own(ownVals, s.key);
@@ -213,6 +227,7 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
   }
   if (s.kind === 'condition') {
     return <Field label={tr(s.label)} help={tr(s.help)}><CondEditor subjects={P.data.conditions} only={n.box === 'split' ? 'line' : null}
+      vars={[...P.availableOf(n.id), ...(n.box === 'filter' ? ['item'] : [])]}
       get={() => (sets[s.key] as Cond) || null} set={c => put(s.key, c || undefined)} /></Field>;
   }
   return null;

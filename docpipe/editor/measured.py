@@ -59,8 +59,10 @@ def step_of(request: dict) -> Optional[str]:
     if kind == "search":
         return "beside" if request.get("shows") == NEAR else "search"
     if kind == "list":
+        # the step that says how list entries are chosen (owner decision
+        # 2026-11-12), the plan's years where the request names them
         return "plan_years" if request.get("step") == "plan_years" \
-            else "quantity"
+            else "settled_list"
     return {"transcribe": "figures", "work": "works", "find": "finds",
             "coord": "own_place", "check": "about", "names": "name",
             "compute": "compute"}.get(kind)
@@ -70,7 +72,7 @@ def step_of(request: dict) -> Optional[str]:
 # drawing.
 STEPS = ("figures", "sentences", "settled", "works", "document_fields",
          "finds", "own_place", "beside", "search_sentence", "search", "about",
-         "plan_years", "quantity", "name", "compute")
+         "plan_years", "settled_list", "name", "compute")
 
 
 def names_place(answer) -> bool:

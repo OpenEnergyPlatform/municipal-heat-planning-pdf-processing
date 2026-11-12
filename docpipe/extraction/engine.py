@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from .. import rules
-from . import addressed, blocks, conditions, fields
+from . import addressed, blocks, conditions, fields, general
 from . import flow as flow_map
 from .addressed import (Asking, Counts, Found, Plan, Read, field_shown,
                         field_shown_of, joined, years_in)
@@ -139,6 +139,9 @@ class Doc:
     seen_of: dict = field(default_factory=dict)     # coordinate -> seen
     started: float = field(default_factory=time.monotonic)
     about: dict = field(default_factory=dict)       # facts made once
+    # The variables the page's steps made for the whole document
+    # (`general.put`, owner decision 2026-11-12).
+    made: dict = field(default_factory=dict)
 
     @property
     def whole(self) -> bool:
@@ -421,16 +424,22 @@ class Engine:
     def __init__(self, reader, tree: Optional[list] = None):
         self.reader = reader
         self.tree = tree if tree is not None else flow_map.tree_of(None)
-        said = flow_map.problems(self.tree)
+        # the boxes were held to their profile when the drawing was loaded
+        said = flow_map.problems(self.tree, profile=flow_map.ANY_PROFILE)
         if said:
             raise Stop("; ".join((f"{p['id']}: " if p["id"] else "")
                                  + p["message"] for p in said[:3]))
         top = [node for node in self.tree if isinstance(node, dict)]
-        prepares = [n for n in top if n.get("box") in flow_map.PREPARES]
-        self.split_node = next(n for n in prepares if n["box"] == "split")
+        # What prepares the document is done once, where it stands and is
+        # on (owner decision 2026-11-12: no step but writing is fixed); a
+        # step that is not there is not done, the chunks are then cut as
+        # the rules say.
+        prepares = [n for n in top if n.get("box") in flow_map.PREPARES
+                    and not n.get("off")]
         self.prepares = {n["box"]: n for n in prepares}
-        self.transcribe_id = next(n["id"] for n in prepares
-                                  if n["box"] == "transcribe")
+        self.split_node = self.prepares.get("split")
+        self.transcribe_id = (self.prepares.get("transcribe")
+                              or {}).get("id")
         self.settled_frames = [n for n in top if n.get("each") == "settled"]
         self.reading = [n for n in top if n.get("box") not in
                         flow_map.PREPARES + AFTER
@@ -459,10 +468,14 @@ class Engine:
                     values[setting.number] = value
         return values
 
-    def step(self, node: dict) -> rules.in_step:
+    def step(self, node: Optional[dict]):
         """Read with *node*'s own values laid over those of the frames it
         stands in, while it runs (`rules.STEP`); work it hands to other
-        threads takes them along (`runner.run_each` copies the context)."""
+        threads takes them along (`runner.run_each` copies the context).
+        No node (a step of the preparation that is not drawn): the run's
+        values."""
+        if node is None:
+            return contextlib.nullcontext()
         return rules.in_step(rules.stepped(node, self.own_values(node)))
 
     # -- numbers and settings of a box ----------------------------------------
@@ -494,12 +507,16 @@ class Engine:
         return int(getattr(reader.numbers, name))
 
     @staticmethod
-    def setting(node: dict, key: str):
-        sets = node.get("set") or {}
+    def setting(node: Optional[dict], key: str, kind: str = ""):
+        """A setting of a box: its own value, else its rule's, else its
+        default. A box of *kind* that is not drawn (*node* None) has the
+        rule's or the default."""
+        sets = (node or {}).get("set") or {}
         if key in sets:
             return sets[key]
-        setting = next(s for s in blocks.LIBRARY[node["box"]].settings
-                       if s.key == key)
+        setting = next(s for s in blocks.LIBRARY[
+            node["box"] if node is not None else kind].settings
+            if s.key == key)
         if setting.rule:
             return rules.get(setting.rule)
         return setting.default
@@ -559,6 +576,8 @@ class Engine:
                 if prop == "seconds":
                     return time.monotonic() - doc.started \
                         if doc is not None else 0
+            if subject == conditions.VAR:
+                return general.get(scope, prop)
             if subject == "run":
                 return doc.whole if doc is not None else True
             if subject == "round":
@@ -775,16 +794,17 @@ class Engine:
         node = self.split_node
         return addressed.Cut(
             lines=self.number_of_split("lines"),
-            new_piece=self.setting(node, "new_piece"),
-            across=bool(self.setting(node, "across")),
-            table_head=bool(self.setting(node, "table_head")),
-            caption=bool(self.setting(node, "caption")),
-            figure_numbers=bool(self.setting(node, "figure_numbers")),
+            new_piece=self.setting(node, "new_piece", "split"),
+            across=bool(self.setting(node, "across", "split")),
+            table_head=bool(self.setting(node, "table_head", "split")),
+            caption=bool(self.setting(node, "caption", "split")),
+            figure_numbers=bool(self.setting(node, "figure_numbers",
+                                             "split")),
             headings=self.number_of_split("headings"))
 
     def number_of_split(self, key: str) -> int:
         node = self.split_node
-        own = node.get("own") or {}
+        own = (node or {}).get("own") or {}
         name = {"lines": "piece_lines", "headings": "headings"}[key]
         if key in own:
             rules.noted(name)
@@ -797,10 +817,10 @@ class Engine:
         (*transcripts*), its pieces cut as the split box says, then the
         lists and what it settles (`prepare`)."""
         counts = Counts()
-        with self.step(self.prepares["document"]):
+        with self.step(self.prepares.get("document")):
             sources = self.included(sources)
-        node = self.prepares["transcribe"]
-        figures = [] if node.get("off") else \
+        node = self.prepares.get("transcribe")
+        figures = [] if node is None else \
             [s for s in sources if s.owner_kind == "figure"]
         if figures and "when" in node:
             figures = [s for s in figures if conditions.holds(
@@ -812,7 +832,7 @@ class Engine:
                 lines, asked = transcripts(document_id, figures, each)
         with self.step(self.split_node):
             cut = self.cut()
-        with self.step(self.prepares["document"]):
+        with self.step(self.prepares.get("document")):
             plan = Plan(document_id, sources, lines,
                         numbers=numbers or self.reader.numbers, cut=cut,
                         cutting=lambda: self.step(self.split_node))
@@ -824,8 +844,9 @@ class Engine:
     def prepare(self, plan: Plan, counts: Counts) -> None:
         """The lists of the document and what it settles, as the drawing
         says."""
-        with self.step(self.prepares["lists"]):
-            self.reader.lists_of(plan)
+        if "lists" in self.prepares:
+            with self.step(self.prepares["lists"]):
+                self.reader.lists_of(plan)
         doc = Doc(plan, counts, [])
         scope = Scope(None, True, doc=doc, plan=plan)
         for frame in self.settled_frames:
@@ -842,8 +863,9 @@ class Engine:
         key]} the order each field reads them in, or *order_fields(located
         fields)* makes it where the drawing orders them (`sentences`)."""
         counts = counts or Counts()
-        with self.step(self.prepares["lists"]):
-            self.reader.lists_of(plan)
+        if "lists" in self.prepares:
+            with self.step(self.prepares["lists"]):
+                self.reader.lists_of(plan)
         doc = Doc(plan, counts, list(parameters), chunks,
                   dict(order_of or {}), order_fields)
         scope = Scope(None, True, doc=doc, plan=plan)
@@ -894,12 +916,18 @@ class Engine:
     def run_node(self, node: dict, scope: Scope) -> None:
         kind = flow_map.kind_of(node)
         if kind == "box":
-            if blocks.LIBRARY[node["box"]].attached:
+            kind = blocks.LIBRARY[node["box"]]
+            if kind.attached:
                 return          # applied by the question before it
             with self.step(node):
                 if "when" in node and not self.holds(node["when"], scope):
                     return
-                getattr(self, f"box_{node['box']}")(node, scope)
+                # A box of a profile runs the code its profile gives it
+                # (`blocks.Box.run`), one of the core the engine's own.
+                if kind.run is not None:
+                    kind.run(self, node, scope)
+                else:
+                    getattr(self, f"box_{node['box']}")(node, scope)
         elif kind == "each":
             with self.step(node):
                 self.each(node, scope)
@@ -943,6 +971,8 @@ class Engine:
     def items(self, node: dict, scope: Scope) -> list:
         """[(child scope values)] of the items *node* iterates at *scope*."""
         what = node["each"]
+        if what == "list":
+            return general.list_items(node, scope)
         doc: Doc = scope.get("doc")
         plan = doc.plan
         reader = self.reader
@@ -1419,7 +1449,7 @@ class Engine:
                 continue
             if kind.type == "about":
                 about, about_node = after["id"], after
-            else:
+            elif kind.type == "check":
                 checks.append((self.setting(after, "name"),
                                self.setting(after, "refuse"),
                                self.setting(after, "sentence"), after["id"]))
@@ -1434,6 +1464,44 @@ class Engine:
                       self.follow_ups_of(node),
                       about_step=(lambda n=about_node: engine.step(n))
                       if about_node is not None else None)
+
+    def own_checks(self, node: dict) -> list:
+        """[(name, condition, sentence, id)] of the own checks that stand
+        right after *node* and are on."""
+        out = []
+        for after in self.after(node):
+            if flow_map.kind_of(after) != "box":
+                break
+            kind = blocks.LIBRARY.get(after.get("box"))
+            if kind is None or not kind.attached:
+                break
+            if after.get("off") or kind.type != "check":
+                continue
+            out.append((self.setting(after, "name"),
+                        self.setting(after, "refuse"),
+                        self.setting(after, "sentence"), after["id"]))
+        return out
+
+    def keep(self, doc: Doc, parameter, claims: list) -> None:
+        """Each value a general step read of *parameter* in the read of its
+        field and passage, as a find's are (`after_items`)."""
+        plan = doc.plan
+        for claim in claims:
+            owner = tuple((claim.get("at") or {}).get("owner") or ())
+            passage = plan.passages.get(owner)
+            if passage is None:
+                continue
+            key = (parameter.uri, owner)
+            with doc.counts.lock:
+                read = doc.by_find.get(key)
+                if read is None:
+                    read = doc.by_find[key] = Read(Batch(
+                        plan.document_id, parameter,
+                        [WorkItem(plan.document_id, parameter,
+                                  passage.source)],
+                        spec=self.reader.spec), [])
+                    doc.find_reads.append(read)
+                read.claims.append(claim)
 
     def follow_ups_of(self, node: dict) -> Optional[int]:
         """The box's own number of follow-ups, None for the flow's."""
@@ -1536,30 +1604,6 @@ class Engine:
                     node["id"], follow_ups=self.follow_ups_of(node))):
                 doc.order_of = dict(doc.order_fields(located) or {})
 
-    def box_works(self, node: dict, scope: Scope) -> None:
-        reader = self.reader
-        doc: Doc = scope.get("doc")
-        plan = doc.plan
-        if reader.works_field is None or "work" not in plan.names:
-            return
-        with addressed.asking(Asking(node["id"], follow_ups=self.number(
-                node, "follow_ups"))):
-            doc.reads.extend(reader.works(plan, plan.pieces(False),
-                                          doc.counts))
-
-    def box_names(self, node: dict, scope: Scope) -> None:
-        value: ValueItem = scope.get("value")
-        doc: Doc = scope.get("doc")
-        plan = doc.plan
-        parameter = value.read.batch.parameter
-        merged = getattr(parameter, "merged", None)
-        if not merged or merged not in plan.names:
-            return
-        with addressed.asking(Asking(
-                node["id"], follow_ups=self.follow_ups_of(node))):
-            for one in value.rows:
-                self.reader.named_value(plan, parameter, one, doc.counts)
-
     # -- the boxes of a coordinate --------------------------------------------
 
     def coord_base(self, coord: CoordItem, plan: Plan) -> None:
@@ -1593,26 +1637,6 @@ class Engine:
         scope.put("answer", Answer(answered, 1 if state == READ else 0,
                                    state != READ, False,
                                    **self.came_to(part)))
-
-    def box_quantity(self, node: dict, scope: Scope) -> None:
-        coord: CoordItem = scope.get("coord")
-        doc: Doc = scope.get("doc")
-        with addressed.asking(Asking(
-                node["id"], follow_ups=self.follow_ups_of(node))):
-            self.reader.quantity(doc.plan, coord.read.batch.parameter,
-                                 coord.row, coord.slot, doc.counts)
-        scope.put("answer", Answer(True))
-
-    def box_work_coordinate(self, node: dict, scope: Scope) -> None:
-        coord: CoordItem = scope.get("coord")
-        doc: Doc = scope.get("doc")
-        if "work" not in doc.plan.names:
-            return
-        with addressed.asking(Asking(node["id"], follow_ups=self.number(
-                node, "follow_ups"))):
-            self.reader.work_coordinate(
-                doc.plan, coord.read, coord.row, coord.slot, doc.counts)
-        scope.put("answer", Answer(True))
 
     def box_phrase(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")
@@ -1674,16 +1698,6 @@ class Engine:
         scope.put("answer", Answer(True, 1 if held else 0, not held, False,
                                    **self.came_to(part)))
 
-    def box_last_year(self, node: dict, scope: Scope) -> None:
-        coord: CoordItem = scope.get("coord")
-        doc: Doc = scope.get("doc")
-        self.coord_base(coord, doc.plan)
-        with addressed.asking(Asking(
-                node["id"], follow_ups=self.follow_ups_of(node))):
-            self.reader.last_year(doc.plan, coord.read.batch.parameter,
-                                  coord.row, coord.slot, doc.counts,
-                                  coord.noted or {})
-
     def box_state(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")
         plan = scope.get("doc").plan
@@ -1700,6 +1714,29 @@ class Engine:
                        for c in plan.pieces(numbers))
             coord.row.claim[key] = state_for(
                 "exhausted" if rest else "unstated_after_combing")
+
+    # -- the general steps (`general`, owner decision 2026-11-12) ------------
+
+    def box_ask(self, node: dict, scope: Scope) -> None:
+        general.ask_step(self, node, scope)
+
+    def box_retrieve(self, node: dict, scope: Scope) -> None:
+        general.retrieve_step(self, node, scope)
+
+    def box_rerank(self, node: dict, scope: Scope) -> None:
+        general.rerank_step(self, node, scope)
+
+    def box_set(self, node: dict, scope: Scope) -> None:
+        general.set_step(self, node, scope)
+
+    def box_filter(self, node: dict, scope: Scope) -> None:
+        general.filter_step(self, node, scope)
+
+    def box_merge(self, node: dict, scope: Scope) -> None:
+        general.merge_step(self, node, scope)
+
+    def box_python(self, node: dict, scope: Scope) -> None:
+        general.python_step(self, node, scope)
 
     def step_of(self, kind: str):
         """The values of the top box of *kind* (one of `AFTER`), for

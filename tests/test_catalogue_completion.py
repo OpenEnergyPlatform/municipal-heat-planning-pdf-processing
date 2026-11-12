@@ -478,11 +478,11 @@ def test_the_catalogue_stands_once_after_compute_at_the_end():
     scenarios = load_profile("scenarios")
     shipped = flow_map.tree_of(scenarios)
     known = flow_map.known_rules(scenarios)
-    assert flow_map.problems(shipped, known) == []
+    assert flow_map.problems(shipped, known, scenarios) == []
     box = next(node for node in shipped if node.get("box") == "catalogue")
     twice = shipped + [dict(box, id="catalogue_2")]
     assert any("catalogue stands once" in one["message"]
-               for one in flow_map.problems(twice, known))
+               for one in flow_map.problems(twice, known, scenarios))
     first = [node for node in shipped if node is not box]
     at = next(i for i, node in enumerate(first)
               if node.get("box") == "compute")

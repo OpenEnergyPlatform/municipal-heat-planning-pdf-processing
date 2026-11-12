@@ -71,6 +71,14 @@
                 "temperature": 0,
                 "max_tokens": 2048
               }
+            },
+            {
+              "id": "settled_list",
+              "box": "list",
+              "rules": {
+                "temperature": 0,
+                "max_tokens": 512
+              }
             }
           ]
         },
@@ -86,22 +94,6 @@
       "rules": {
         "temperature": 0,
         "max_tokens": 300
-      }
-    },
-    {
-      "id": "works",
-      "box": "works",
-      "when": {
-        "all": [
-          {
-            "of": "run",
-            "is": "whole"
-          }
-        ]
-      },
-      "rules": {
-        "temperature": 0,
-        "max_tokens": 1024
       }
     },
     {
@@ -182,58 +174,6 @@
                         ]
                       },
                       "steps": []
-                    },
-                    {
-                      "when": {
-                        "all": [
-                          {
-                            "of": "coordinate",
-                            "is": "kind",
-                            "op": "one_of",
-                            "value": [
-                              "quantity"
-                            ]
-                          }
-                        ]
-                      },
-                      "steps": [
-                        {
-                          "id": "document_quantity",
-                          "box": "quantity",
-                          "rules": {
-                            "temperature": 0,
-                            "max_tokens": 512
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "when": {
-                        "all": [
-                          {
-                            "of": "coordinate",
-                            "is": "kind",
-                            "op": "one_of",
-                            "value": [
-                              "work"
-                            ]
-                          },
-                          {
-                            "of": "document",
-                            "is": "works"
-                          }
-                        ]
-                      },
-                      "steps": [
-                        {
-                          "id": "document_work",
-                          "box": "work_coordinate",
-                          "rules": {
-                            "temperature": 0,
-                            "max_tokens": 1024
-                          }
-                        }
-                      ]
                     }
                   ],
                   "else": [
@@ -458,58 +398,12 @@
                               ]
                             }
                           ]
-                        },
-                        {
-                          "id": "document_year_way",
-                          "if": [
-                            {
-                              "when": {
-                                "all": [
-                                  {
-                                    "of": "coordinate",
-                                    "is": "year"
-                                  },
-                                  {
-                                    "of": "coordinate",
-                                    "is": "plan_years"
-                                  },
-                                  {
-                                    "of": "coordinate",
-                                    "is": "state",
-                                    "op": "one_of",
-                                    "value": [
-                                      "read"
-                                    ],
-                                    "not": true
-                                  }
-                                ]
-                              },
-                              "steps": [
-                                {
-                                  "id": "document_plan_years",
-                                  "box": "last_year",
-                                  "rules": {
-                                    "temperature": 0,
-                                    "max_tokens": 512
-                                  }
-                                }
-                              ]
-                            }
-                          ]
                         }
                       ]
                     }
                   ]
                 }
               ]
-            },
-            {
-              "id": "document_name",
-              "box": "names",
-              "rules": {
-                "temperature": 0,
-                "max_tokens": 512
-              }
             }
           ]
         }
@@ -588,58 +482,6 @@
                     ]
                   },
                   "steps": []
-                },
-                {
-                  "when": {
-                    "all": [
-                      {
-                        "of": "coordinate",
-                        "is": "kind",
-                        "op": "one_of",
-                        "value": [
-                          "quantity"
-                        ]
-                      }
-                    ]
-                  },
-                  "steps": [
-                    {
-                      "id": "quantity",
-                      "box": "quantity",
-                      "rules": {
-                        "temperature": 0,
-                        "max_tokens": 512
-                      }
-                    }
-                  ]
-                },
-                {
-                  "when": {
-                    "all": [
-                      {
-                        "of": "coordinate",
-                        "is": "kind",
-                        "op": "one_of",
-                        "value": [
-                          "work"
-                        ]
-                      },
-                      {
-                        "of": "document",
-                        "is": "works"
-                      }
-                    ]
-                  },
-                  "steps": [
-                    {
-                      "id": "work",
-                      "box": "work_coordinate",
-                      "rules": {
-                        "temperature": 0,
-                        "max_tokens": 1024
-                      }
-                    }
-                  ]
                 }
               ],
               "else": [
@@ -864,58 +706,12 @@
                           ]
                         }
                       ]
-                    },
-                    {
-                      "id": "year_way",
-                      "if": [
-                        {
-                          "when": {
-                            "all": [
-                              {
-                                "of": "coordinate",
-                                "is": "year"
-                              },
-                              {
-                                "of": "coordinate",
-                                "is": "plan_years"
-                              },
-                              {
-                                "of": "coordinate",
-                                "is": "state",
-                                "op": "one_of",
-                                "value": [
-                                  "read"
-                                ],
-                                "not": true
-                              }
-                            ]
-                          },
-                          "steps": [
-                            {
-                              "id": "plan_years",
-                              "box": "last_year",
-                              "rules": {
-                                "temperature": 0,
-                                "max_tokens": 512
-                              }
-                            }
-                          ]
-                        }
-                      ]
                     }
                   ]
                 }
               ]
             }
           ]
-        },
-        {
-          "id": "name",
-          "box": "names",
-          "rules": {
-            "temperature": 0,
-            "max_tokens": 512
-          }
         }
       ]
     },

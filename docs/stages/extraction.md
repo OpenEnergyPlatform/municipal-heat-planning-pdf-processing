@@ -2318,6 +2318,40 @@ item asked, nothing came back. An own check is a box that refuses an answer wher
 its condition holds; the answer is asked again with its sentence, and its
 refusals are counted as `check:<name>`.
 
+Every step takes named inputs and gives named outputs, the variables of the
+flow (`extraction.variables`: the document, the chunks, a field, the search
+hits, the answer, the values, ..., each with a JSON schema; owner decision
+2026-11-12). What may stand where follows from them alone (`flow.availability`):
+a step that takes a variable no step before it gives is refused with that
+reason, and only writing the harvest is fixed, once at the end. A variable lasts
+for the item it was made for, or for the whole document where its step says so.
+Beside the question steps of the two use cases the library has general steps
+(`extraction.general`): ask the model with a prompt of the profile or a text of
+the step's own (`ask`; an input named as `{{key}}` or `{{key.field}}` is
+written into the prompt and not into the message, the answer has the form of
+its JSON schema, drawn in the editor, and goes into a variable or into values
+of a field, each held to its line like every value; the model may be allowed
+to fetch what a line points to), search the document with a text (`retrieve`),
+order chunks by a text (`rerank`), set a variable, keep the entries of a list a
+condition holds for, join lists, a step in Python (`python`, `run(inputs)`
+returning a dict, run in the run's own process) and a loop over any list
+(`"each": "list"` with `list` and `as`). A condition row may be about any
+variable (`"of": "var"`, its path as `is`). The default profile has a general
+prompt for each kind of question (`prompts/extraction/`), which a profile
+replaces with its own. A rule a question step reads is read at `ask` as well,
+a rule of the search at `retrieve` and `rerank` (`ruleset/kit.py`,
+`with_general`).
+
+The steps only one use case needs are boxes of its profile
+(`profiles/<name>/blocks.py: BOXES`, each with the code of its step): the works
+of a chunk, the work of a value and the entry of a scenario's name for
+scenarios, what a number is and the year among the plan's years for heat
+plans. The page offers the general boxes and those of the open profile
+(`blocks.offered`), and a flow cannot take a box of another profile. The list
+entry a question asks is asked as the step "Choose the list entry" after that
+question says (`list`, `runner.in_home`), else as the first of them in the
+flow.
+
 A step or a frame may also carry `rules`: a value of its own for each rule it
 reads (the rule's `steps` say which steps read it; the rules of the graph file
 count too, `flow.known_rules`). While the step runs, its value lies over the
@@ -2338,16 +2372,18 @@ default (for example `conversation`, `answer_with`, `repair_replies`,
 catalogue search is the box `catalogue`, after `compute` at the end, with
 settings of its own; switched off, nothing is looked up.
 
-The default profile's file is the whole flow, `numbers` and `flow`. A profile that
-extends it may have a `flow.json` of its own that holds the `numbers` it sets
-differently, laid over the inherited file number by number (`flow.load`), and a
-`flow` where it draws otherwise, which is then the whole drawing. The file is read
+The default profile's file is the whole flow, `numbers` and `flow`, drawn with
+the general boxes only. A profile that extends it may have a `flow.json` of its
+own that holds the `numbers` it sets differently, laid over the inherited file
+number by number (`flow.load`), and a `flow` where it draws otherwise, which is
+then the whole drawing; kwp and scenarios each draw their own, the default's with
+the boxes of their profile. The file is read
 strictly: an unknown key, a key written twice, a number that is no whole number or
 below its least, and a drawing the run could not do (`flow.problems`: a box
 where it cannot stand, a round that may not end, a frame of coordinates without
-a state, a condition about something not there yet at its place, the order the
-run needs: the document, the figures, the pieces and the lists first, the writing
-last) are refused by name, each at its box. A box that is on and asks a request
+a state, a condition about something not there yet at its place, a step that
+takes what no step before it gives, a box of another profile, the writing not
+once at the end) are refused by name, each at its box. A box that is on and asks a request
 whose prompt the profile does not write is refused as well
 (`flow.prompt_problems`).
 

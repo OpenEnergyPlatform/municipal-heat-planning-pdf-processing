@@ -1,0 +1,809 @@
+{
+  "flow": [
+    {
+      "id": "document",
+      "box": "document"
+    },
+    {
+      "id": "figures",
+      "box": "transcribe",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 4096
+      }
+    },
+    {
+      "id": "pieces",
+      "box": "split"
+    },
+    {
+      "id": "lists",
+      "box": "lists"
+    },
+    {
+      "id": "plan",
+      "each": "settled",
+      "order": "spec",
+      "steps": [
+        {
+          "id": "settled_order",
+          "box": "order",
+          "set": {
+            "rest_after": true
+          }
+        },
+        {
+          "id": "settled_round",
+          "round": {
+            "supply": true
+          },
+          "stop": {
+            "all": [
+              {
+                "of": "answer",
+                "is": "finds",
+                "op": "more",
+                "value": 0
+              }
+            ]
+          },
+          "steps": [
+            {
+              "id": "settled",
+              "box": "docfield",
+              "rules": {
+                "show_title_page": "first",
+                "field_text": "whole",
+                "temperature": 0,
+                "max_tokens": 2048
+              }
+            },
+            {
+              "id": "settled_list",
+              "box": "list",
+              "rules": {
+                "temperature": 0,
+                "max_tokens": 512
+              }
+            }
+          ]
+        },
+        {
+          "id": "remember",
+          "box": "settle"
+        }
+      ]
+    },
+    {
+      "id": "sentences",
+      "box": "sentences",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 300
+      }
+    },
+    {
+      "id": "works",
+      "box": "works",
+      "when": {
+        "all": [
+          {
+            "of": "run",
+            "is": "whole"
+          }
+        ]
+      },
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 1024
+      }
+    },
+    {
+      "id": "once",
+      "each": "field",
+      "which": "once",
+      "order": "spec",
+      "steps": [
+        {
+          "id": "document_order",
+          "box": "order",
+          "set": {
+            "list_factor": true
+          }
+        },
+        {
+          "id": "document_round",
+          "round": {
+            "supply": true
+          },
+          "steps": [
+            {
+              "id": "document_fields",
+              "box": "docfield",
+              "rules": {
+                "show_title_page": "first",
+                "field_text": "whole",
+                "temperature": 0,
+                "max_tokens": 2048
+              }
+            }
+          ]
+        },
+        {
+          "id": "document_values",
+          "each": "value",
+          "order": "document",
+          "together": true,
+          "steps": [
+            {
+              "id": "document_coordinates",
+              "each": "coordinate",
+              "order": "groups",
+              "steps": [
+                {
+                  "id": "document_coordinate_way",
+                  "if": [
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "closed_before"
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "document_closed",
+                          "box": "state",
+                          "set": {
+                            "mode": "out_of_slice"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "state",
+                            "op": "one_of",
+                            "value": [
+                              "read"
+                            ]
+                          }
+                        ]
+                      },
+                      "steps": []
+                    },
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "kind",
+                            "op": "one_of",
+                            "value": [
+                              "work"
+                            ]
+                          },
+                          {
+                            "of": "document",
+                            "is": "works"
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "document_work",
+                          "box": "work_coordinate",
+                          "rules": {
+                            "temperature": 0,
+                            "max_tokens": 1024
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "else": [
+                    {
+                      "id": "document_own_place",
+                      "box": "coord",
+                      "rules": {
+                        "temperature": 0,
+                        "max_tokens": 1024
+                      }
+                    },
+                    {
+                      "id": "document_after_own_place",
+                      "if": [
+                        {
+                          "when": {
+                            "any": [
+                              {
+                                "of": "answer",
+                                "is": "answered",
+                                "not": true
+                              },
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "read"
+                                ]
+                              }
+                            ]
+                          },
+                          "steps": []
+                        }
+                      ],
+                      "else": [
+                        {
+                          "id": "document_search_way",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "unbacked"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "steps": []
+                            },
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "own_only"
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "document_own_only",
+                                  "box": "state",
+                                  "set": {
+                                    "mode": "unstated"
+                                  }
+                                }
+                              ]
+                            }
+                          ],
+                          "else": [
+                            {
+                              "id": "document_search_sentence",
+                              "box": "phrase",
+                              "rules": {
+                                "temperature": 0,
+                                "max_tokens": 300
+                              }
+                            },
+                            {
+                              "id": "document_near",
+                              "box": "beside"
+                            },
+                            {
+                              "id": "document_beside_round",
+                              "round": {
+                                "supply": true
+                              },
+                              "stop": {
+                                "any": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "read"
+                                    ]
+                                  },
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "unbacked"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "document_beside",
+                                  "box": "search",
+                                  "rules": {
+                                    "temperature": 0,
+                                    "max_tokens": 1536
+                                  }
+                                },
+                                {
+                                  "id": "document_beside_about",
+                                  "box": "about",
+                                  "rules": {
+                                    "temperature": 0,
+                                    "max_tokens": 256
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "id": "document_search_on",
+                              "if": [
+                                {
+                                  "when": {
+                                    "all": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read",
+                                          "unbacked"
+                                        ],
+                                        "not": true
+                                      }
+                                    ]
+                                  },
+                                  "steps": [
+                                    {
+                                      "id": "document_search_order",
+                                      "box": "order"
+                                    },
+                                    {
+                                      "id": "document_search_round",
+                                      "round": {
+                                        "supply": true
+                                      },
+                                      "stop": {
+                                        "any": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "read"
+                                            ]
+                                          },
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "unbacked"
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "steps": [
+                                        {
+                                          "id": "document_search",
+                                          "box": "search",
+                                          "rules": {
+                                            "temperature": 0,
+                                            "max_tokens": 1536
+                                          }
+                                        },
+                                        {
+                                          "id": "document_about",
+                                          "box": "about",
+                                          "rules": {
+                                            "temperature": 0,
+                                            "max_tokens": 256
+                                          }
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "id": "document_searched",
+                                      "box": "state",
+                                      "when": {
+                                        "all": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "read",
+                                              "unbacked"
+                                            ],
+                                            "not": true
+                                          }
+                                        ]
+                                      },
+                                      "set": {
+                                        "mode": "by_supply"
+                                      }
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "document_name",
+              "box": "names",
+              "rules": {
+                "temperature": 0,
+                "max_tokens": 512
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "in_pieces",
+      "each": "field",
+      "which": "pieces",
+      "order": "spec",
+      "together": true,
+      "steps": [
+        {
+          "id": "field_pieces",
+          "each": "piece",
+          "order": "best_first",
+          "together": true,
+          "steps": [
+            {
+              "id": "finds",
+              "box": "find",
+              "rules": {
+                "show_title_page": "never",
+                "temperature": 0,
+                "max_tokens": 2048
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "values",
+      "each": "value",
+      "order": "names_first",
+      "together": true,
+      "steps": [
+        {
+          "id": "coordinates",
+          "each": "coordinate",
+          "order": "groups",
+          "steps": [
+            {
+              "id": "coordinate_way",
+              "if": [
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "coordinate",
+                        "is": "closed_before"
+                      }
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "id": "closed",
+                      "box": "state",
+                      "set": {
+                        "mode": "out_of_slice"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "coordinate",
+                        "is": "state",
+                        "op": "one_of",
+                        "value": [
+                          "read"
+                        ]
+                      }
+                    ]
+                  },
+                  "steps": []
+                },
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "coordinate",
+                        "is": "kind",
+                        "op": "one_of",
+                        "value": [
+                          "work"
+                        ]
+                      },
+                      {
+                        "of": "document",
+                        "is": "works"
+                      }
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "id": "work",
+                      "box": "work_coordinate",
+                      "rules": {
+                        "temperature": 0,
+                        "max_tokens": 1024
+                      }
+                    }
+                  ]
+                }
+              ],
+              "else": [
+                {
+                  "id": "own_place",
+                  "box": "coord",
+                  "rules": {
+                    "temperature": 0,
+                    "max_tokens": 1024
+                  }
+                },
+                {
+                  "id": "after_own_place",
+                  "if": [
+                    {
+                      "when": {
+                        "any": [
+                          {
+                            "of": "answer",
+                            "is": "answered",
+                            "not": true
+                          },
+                          {
+                            "of": "coordinate",
+                            "is": "state",
+                            "op": "one_of",
+                            "value": [
+                              "read"
+                            ]
+                          }
+                        ]
+                      },
+                      "steps": []
+                    }
+                  ],
+                  "else": [
+                    {
+                      "id": "search_way",
+                      "if": [
+                        {
+                          "when": {
+                            "all": [
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "unbacked"
+                                ]
+                              }
+                            ]
+                          },
+                          "steps": []
+                        },
+                        {
+                          "when": {
+                            "all": [
+                              {
+                                "of": "coordinate",
+                                "is": "own_only"
+                              }
+                            ]
+                          },
+                          "steps": [
+                            {
+                              "id": "own_only",
+                              "box": "state",
+                              "set": {
+                                "mode": "unstated"
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "else": [
+                        {
+                          "id": "search_sentence",
+                          "box": "phrase",
+                          "rules": {
+                            "temperature": 0,
+                            "max_tokens": 300
+                          }
+                        },
+                        {
+                          "id": "near",
+                          "box": "beside"
+                        },
+                        {
+                          "id": "beside_round",
+                          "round": {
+                            "supply": true
+                          },
+                          "stop": {
+                            "any": [
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "read"
+                                ]
+                              },
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "unbacked"
+                                ]
+                              }
+                            ]
+                          },
+                          "steps": [
+                            {
+                              "id": "beside",
+                              "box": "search",
+                              "rules": {
+                                "temperature": 0,
+                                "max_tokens": 1536
+                              }
+                            },
+                            {
+                              "id": "beside_about",
+                              "box": "about",
+                              "rules": {
+                                "temperature": 0,
+                                "max_tokens": 256
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "id": "search_on",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "coordinate",
+                                    "is": "state",
+                                    "op": "one_of",
+                                    "value": [
+                                      "read",
+                                      "unbacked"
+                                    ],
+                                    "not": true
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "search_order",
+                                  "box": "order"
+                                },
+                                {
+                                  "id": "search_round",
+                                  "round": {
+                                    "supply": true
+                                  },
+                                  "stop": {
+                                    "any": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read"
+                                        ]
+                                      },
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "unbacked"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "steps": [
+                                    {
+                                      "id": "search",
+                                      "box": "search",
+                                      "rules": {
+                                        "temperature": 0,
+                                        "max_tokens": 1536
+                                      }
+                                    },
+                                    {
+                                      "id": "about",
+                                      "box": "about",
+                                      "rules": {
+                                        "temperature": 0,
+                                        "max_tokens": 256
+                                      }
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "searched",
+                                  "box": "state",
+                                  "when": {
+                                    "all": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read",
+                                          "unbacked"
+                                        ],
+                                        "not": true
+                                      }
+                                    ]
+                                  },
+                                  "set": {
+                                    "mode": "by_supply"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "name",
+          "box": "names",
+          "rules": {
+            "temperature": 0,
+            "max_tokens": 512
+          }
+        }
+      ]
+    },
+    {
+      "id": "write",
+      "box": "write"
+    },
+    {
+      "id": "compute",
+      "box": "compute",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 2048
+      }
+    },
+    {
+      "id": "catalogue",
+      "box": "catalogue"
+    }
+  ]
+}

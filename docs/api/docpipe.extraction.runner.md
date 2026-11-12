@@ -268,6 +268,16 @@ of a scenario from a search. Such a request is asked as the step that
 asks that kind says (its model, its answer room, its extras), so that
 every request of a kind is asked alike, wherever it comes from.
 
+### attached_homes
+
+```python
+def attached_homes(tree: list) -> dict
+```
+
+{(the id of a box, a kind of request): the step after it that asks
+this kind for it}: the steps that stand right after a box and apply to
+its answers (`blocks.Box.attached`), such as "Choose the list entry".
+
 ### llm_base_url
 
 ```python
@@ -1199,6 +1209,16 @@ those of `addressed.OPTIONAL` aside. A request asked again
 after the payload. The sentence a search goes with is a request of its
 own (`phrase`, owner decision 2026-11-09), under the prompt the
 document's search sentences are written with.
+
+### own_prompt
+
+```python
+def own_prompt(prompt, profile=None)
+```
+
+The prompt of a general step: the prompt file *prompt* names
+("extraction/find"), or {"text": ...} a text of the step's own, made as
+a prompt file of the profile would be (`prompts.made`).
 
 ### image_path_of
 

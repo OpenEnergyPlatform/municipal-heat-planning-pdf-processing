@@ -442,6 +442,7 @@ function FlowInner() {
     numberSet: (name, v) => { F.cur[name] = v; F.report = null; remember(); touch(); measured(); },
     select: id => { F.sel = id; F.multi = new Set(id ? [id] : []); touch(); },
     focusNumber, reload: () => { load(true); }, pass: !!F.which,
+    availableOf: id => (((F.report && F.report.r && F.report.r.available) || d.available || {}) as Record<string, string[]>)[id] || [],
   };
   const isDirty = dirty();
   const menuStep = menu ? find(F.tree, menu.id) : null;

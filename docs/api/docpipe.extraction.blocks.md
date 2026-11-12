@@ -87,6 +87,10 @@ Fields:
 - `scope: str = ""`
 - `after: tuple = ()`
 - `inside: str = ""`
+- `inputs: tuple = ()`: What it takes and gives by name (`variables.VARIABLES`): an input "a|b" takes one of them, one ending in "?" is taken where a step before it gives it (owner decision 2026-11-12: what may stand where follows from the inputs and outputs alone).
+- `outputs: tuple = ()`
+- `profile: str = ""`: A box of a profile (profiles/\<name>/blocks.py, owner decision 2026-11-12): the profile it belongs to, and the code of its step, run(engine, node, scope). A box of the core has neither; its step is the engine's `box_<type>`.
+- `run: Optional[Callable] = None`
 
 ## Functions
 
@@ -96,13 +100,24 @@ Fields:
 def box(type_: str) -> Box
 ```
 
+### offered
+
+```python
+def offered(b: Box, profile=None) -> bool
+```
+
+Does the page offer *b* where *profile* (a profile or its name) is
+open: a box of the core always, a box of a profile where *profile* is
+that profile or extends it. Without a profile, every box.
+
 ### catalogue
 
 ```python
-def catalogue() -> dict
+def catalogue(profile=None) -> dict
 ```
 
-The library as the page shows it: the boxes of the main flow, and
-apart from them the boxes of the follow-up passes.
+The library as the page shows it where *profile* is open: the
+boxes of the main flow, those of the core and those of the profile
+(`offered`), and apart from them the boxes of the follow-up passes.
 
 [Back to the index](../README.md)

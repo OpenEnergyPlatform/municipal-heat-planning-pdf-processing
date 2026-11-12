@@ -797,15 +797,20 @@ def test_every_asking_step_of_the_shipped_flow_carries_its_longest_answer():
     asking = {"transcribe": 4096, "docfield": 2048, "find": 2048,
               "coord": 1024, "search": 1536, "check": 256, "names": 512,
               "work": 1024, "phrase": 300, "compute": 2048}
+    from docpipe.profile import load_profile
     seen = set()
-    for node in flow.boxes(flow.tree_of()):
-        block = blocks.LIBRARY.get(node["box"])
-        if block is not None and block.asks in asking:
-            assert node["rules"]["max_tokens"] == asking[block.asks], node
-            assert node["rules"]["temperature"] == 0
-            seen.add(block.asks)
+    # the shipped flows: the default's and those kwp and scenarios draw
+    # with the steps of their own (owner decision 2026-11-12)
+    for profile in (None, load_profile("kwp"), load_profile("scenarios")):
+        for node in flow.boxes(flow.tree_of(profile)):
+            block = blocks.LIBRARY.get(node["box"])
+            if block is not None and block.asks in asking:
+                assert node["rules"]["max_tokens"] == asking[block.asks], \
+                    node
+                assert node["rules"]["temperature"] == 0
+                seen.add(block.asks)
+        assert flow.problems(flow.tree_of(profile), profile=profile) == []
     assert seen == set(asking)
-    assert flow.problems(flow.tree_of()) == []
 
 
 # -- the rest of the rows -----------------------------------------------------

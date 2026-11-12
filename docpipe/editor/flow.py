@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import graphfile, rules, settings
-from ..extraction import blocks, conditions
+from ..extraction import blocks, conditions, general
 from ..extraction import flow as flow_map
 from ..extraction import passflow
 from ..extraction.spec import YEAR_FIELDS
@@ -182,7 +182,7 @@ def _prompts(profile) -> dict:
               for row in prompt_files.listing(profile)}
     out = {}
     for box in blocks.LIBRARY.values():
-        if box.flow:
+        if box.flow or not blocks.offered(box, profile):
             continue
         if box.asks and box.asks not in out:
             prompt_id = f"{STAGE}/{box.asks}"
@@ -197,7 +197,7 @@ def _never(prompts: dict, data: Optional[dict], computes: bool) -> dict:
     line writes its prompt, or its switch of the spec is off."""
     out = {}
     for box in blocks.LIBRARY.values():
-        if box.flow:
+        if box.flow or box.asks not in prompts and box.asks:
             continue
         why = None
         if box.asks and not prompts[box.asks]["written"]:
@@ -420,13 +420,25 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
             "drawn_by": flow.tree_from,
             "inherited_tree": below.tree if below is not None else None,
             "numbers": numbers, "tree": flow.tree,
-            "library": blocks.catalogue(),
+            "library": blocks.catalogue(profile),
             "conditions": conditions.catalogue(),
             "prompts": prompts,
+            # What the general steps choose from (owner decision
+            # 2026-11-12): how an input is shown, the profile's prompts,
+            # the fields of the Spec, the variables before each step.
+            "shows": general.shows_catalogue(),
+            "prompt_ids": sorted(row["id"] for row in
+                                 prompt_files.listing(profile)
+                                 if str(row["id"]).startswith(STAGE + "/")),
+            "spec_fields": [{"uri": one["uri"],
+                             "label": one.get("label") or one["uri"]}
+                            for one in _fields(data or {})],
+            "available": flow_map.available_by_id(flow.tree),
             "never": _never(prompts, data, computes),
             "switches": {name: _switch(name, data) for name in SWITCHES},
             "problems": flow_map.problems(flow.tree,
-                                          flow_map.known_rules(profile))
+                                          flow_map.known_rules(profile),
+                                          profile)
             + flow_map.prompt_problems(flow.tree, profile),
             "notes": _notes(data), "settings": _settings(),
             "step_rules": step_rules(profile),
@@ -486,7 +498,8 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
     values = dict(flow.numbers)
     drawing = flow.tree if tree is None else tree
     if tree is not None:
-        said = flow_map.problems(drawing, flow_map.known_rules(profile)) \
+        said = flow_map.problems(drawing, flow_map.known_rules(profile),
+                                 profile) \
             if isinstance(drawing, list) \
             else [{"id": None, "message": "the flow is a list of boxes and "
                    "frames"}]
@@ -553,6 +566,7 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
     edited = [] if errors or drawing == flow.tree else tree_changes(
         flow.tree, drawing)
     return {"ok": not errors, "errors": errors,
+            "available": flow_map.available_by_id(drawing),
             "changed": [{"name": "flow", "from": "", "to": line}
                         for line in edited]
             + [{"name": number.name, "from": flow.numbers[number.name],

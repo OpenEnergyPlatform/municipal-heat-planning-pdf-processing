@@ -17,6 +17,7 @@
     "@mantine/notifications": "9.8.0",
     "@tabler/icons-react": "3.51.0",
     "@xyflow/react": "12.12.1",
+    "jsonjoy-builder": "1.0.4",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },

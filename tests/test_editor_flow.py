@@ -123,10 +123,14 @@ def test_a_box_no_run_of_the_profile_takes_says_why():
     kwp, scenarios = load_profile("kwp"), load_profile("scenarios")
     plans = view(kwp, computes=True)
     papers = view(scenarios)
-    # kwp writes no prompt for the works and names requests, scenarios none
-    # for the calculation
-    assert "extraction/work" in plans["never"]["works"]
-    assert "extraction/names" in plans["never"]["names"]
+    # the works and names of scenario papers are boxes of their profile,
+    # which the page of the heat plans does not offer; scenarios writes no
+    # prompt for the calculation
+    offered = {box["type"] for box in plans["library"]["boxes"]}
+    assert "works" not in offered and "names" not in offered
+    assert {"works", "names"} <= {box["type"] for box
+                                  in papers["library"]["boxes"]}
+    assert "works" not in plans["never"]
     assert "extraction/compute" in papers["never"]["compute"]
     assert "works" not in papers["never"]
     assert "compute" not in plans["never"]
@@ -529,8 +533,11 @@ def test_what_the_traces_say_stands_at_the_number_it_measures():
 
 
 def test_a_request_is_counted_at_the_box_that_asked_it():
-    boxes = {node["id"]: node for node, _ in flow.walk(
-        flow.load(load_profile("default")).tree) if "box" in node}
+    # the boxes of every profile's flow: a step a profile brings itself
+    # stands in its own flow (owner decision 2026-11-12)
+    boxes = {node["id"]: node for name in ("default", "kwp", "scenarios")
+             for node, _ in flow.walk(flow.load(load_profile(name)).tree)
+             if "box" in node}
     assert set(measured.STEPS) <= set(boxes)
     kinds = {measured.step_of({"kind": kind, **notes})
              for kind in flow.kinds()

@@ -363,6 +363,7 @@ Fields:
 - `check: Optional[Callable] = None`
 - `work: Optional[Callable] = None`
 - `phrase: Optional[Callable] = None`
+- `own: Optional[Callable] = None`: A request of a general step (`general`, owner decision 2026-11-12): (prompt, payload, document_id, *, shape, example, follow, **noted), the prompt the id of a prompt file or {"text": its own}.
 
 ### Counts
 
@@ -516,6 +517,28 @@ def follow_ups(self) -> int
 
 How often an answer that did not hold is asked again: the box
 asking's own number, else the flow's.
+
+#### Reader.ask_own
+
+```python
+def ask_own(self, prompt, payload: dict, document_id: int,
+            shape: dict, example, counts: Counts, /, **noted)
+```
+
+A request of a general step: its own prompt, message and form
+of the answer (`general.ask_step`).
+
+#### Reader.follow_own
+
+```python
+def follow_own(self, prompt, payload: dict, document_id: int,
+               shape: dict, example, answer, what: list,
+               counts: Counts, /, **noted)
+```
+
+A general step's request asked again with the answer that did
+not hold and why (owner decision 2026-11-08: "Rückfragen sind
+eigene Anfragen").
 
 #### Reader.lists_of
 
@@ -1288,6 +1311,15 @@ def is_question(sentence: str) -> bool
 
 Is a search sentence a question rather than a sentence of the
 plan?
+
+### reply_format
+
+```python
+def reply_format(schema: dict) -> dict
+```
+
+The form of the answer of a general step's request (`general`):
+its own JSON schema as the grammar.
 
 ### address_key
 

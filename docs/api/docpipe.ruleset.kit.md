@@ -50,4 +50,14 @@ Fields:
 def rule(name, tab, group, kind, help, **more) -> Rule
 ```
 
+### with_general
+
+```python
+def with_general(steps: tuple, searching: bool = False) -> tuple
+```
+
+*steps* and every general step that does the work of one of them:
+the asking (`STANDS_FOR`), and the searching for a rule of the search
+(*searching*, `SEARCH_STANDS_FOR`).
+
 [Back to the index](../README.md)

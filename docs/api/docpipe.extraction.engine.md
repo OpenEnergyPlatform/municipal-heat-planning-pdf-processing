@@ -140,6 +140,7 @@ Fields:
 - `seen_of: dict = field(default_factory=dict)`: coordinate -> seen
 - `started: float = field(default_factory=time.monotonic)`
 - `about: dict = field(default_factory=dict)`: facts made once
+- `made: dict = field(default_factory=dict)`: The variables the page's steps made for the whole document (`general.put`, owner decision 2026-11-12).
 
 #### Doc.whole
 
@@ -345,12 +346,14 @@ box's own numbers ("own") under the names of the flow's numbers.
 #### Engine.step
 
 ```python
-def step(self, node: dict) -> rules.in_step
+def step(self, node: Optional[dict])
 ```
 
 Read with *node*'s own values laid over those of the frames it
 stands in, while it runs (`rules.STEP`); work it hands to other
 threads takes them along (`runner.run_each` copies the context).
+No node (a step of the preparation that is not drawn): the run's
+values.
 
 #### Engine.number
 
@@ -366,8 +369,12 @@ setting of the run won over the file already, `flow.in_effect`).
 
 ```python
 @staticmethod
-def setting(node: dict, key: str)
+def setting(node: Optional[dict], key: str, kind: str = "")
 ```
+
+A setting of a box: its own value, else its rule's, else its
+default. A box of *kind* that is not drawn (*node* None) has the
+rule's or the default.
 
 #### Engine.counted
 
@@ -637,6 +644,24 @@ def asking_of(self, node: dict, scope: Scope, steps_after: list
 What a question asks with: its box, the boxes after it that check
 its answers (the place of a find, own checks).
 
+#### Engine.own_checks
+
+```python
+def own_checks(self, node: dict) -> list
+```
+
+[(name, condition, sentence, id)] of the own checks that stand
+right after *node* and are on.
+
+#### Engine.keep
+
+```python
+def keep(self, doc: Doc, parameter, claims: list) -> None
+```
+
+Each value a general step read of *parameter* in the read of its
+field and passage, as a find's are (`after_items`).
+
 #### Engine.follow_ups_of
 
 ```python
@@ -671,18 +696,6 @@ def box_find(self, node: dict, scope: Scope) -> None
 def box_sentences(self, node: dict, scope: Scope) -> None
 ```
 
-#### Engine.box_works
-
-```python
-def box_works(self, node: dict, scope: Scope) -> None
-```
-
-#### Engine.box_names
-
-```python
-def box_names(self, node: dict, scope: Scope) -> None
-```
-
 #### Engine.coord_base
 
 ```python
@@ -697,18 +710,6 @@ What every request about the coordinate shows, made once.
 def box_coord(self, node: dict, scope: Scope) -> None
 ```
 
-#### Engine.box_quantity
-
-```python
-def box_quantity(self, node: dict, scope: Scope) -> None
-```
-
-#### Engine.box_work_coordinate
-
-```python
-def box_work_coordinate(self, node: dict, scope: Scope) -> None
-```
-
 #### Engine.box_phrase
 
 ```python
@@ -721,16 +722,52 @@ def box_phrase(self, node: dict, scope: Scope) -> None
 def box_search(self, node: dict, scope: Scope) -> None
 ```
 
-#### Engine.box_last_year
-
-```python
-def box_last_year(self, node: dict, scope: Scope) -> None
-```
-
 #### Engine.box_state
 
 ```python
 def box_state(self, node: dict, scope: Scope) -> None
+```
+
+#### Engine.box_ask
+
+```python
+def box_ask(self, node: dict, scope: Scope) -> None
+```
+
+#### Engine.box_retrieve
+
+```python
+def box_retrieve(self, node: dict, scope: Scope) -> None
+```
+
+#### Engine.box_rerank
+
+```python
+def box_rerank(self, node: dict, scope: Scope) -> None
+```
+
+#### Engine.box_set
+
+```python
+def box_set(self, node: dict, scope: Scope) -> None
+```
+
+#### Engine.box_filter
+
+```python
+def box_filter(self, node: dict, scope: Scope) -> None
+```
+
+#### Engine.box_merge
+
+```python
+def box_merge(self, node: dict, scope: Scope) -> None
+```
+
+#### Engine.box_python
+
+```python
+def box_python(self, node: dict, scope: Scope) -> None
 ```
 
 #### Engine.step_of

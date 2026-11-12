@@ -244,6 +244,65 @@ def checked(where, name: str, value) -> int
 *value* as the number *name* of the flow, FlowError where it is
 none (`problem`). *where* names the file in what is said about it.
 
+### availability
+
+```python
+def availability(tree: list) -> dict
+```
+
+{id(node): the variables there before *node* runs} of every step of
+*tree* (owner decision 2026-11-12: what may stand where follows from
+the inputs and outputs alone): what the run starts with, the item of
+each frame around the step, and what the steps before it gave. An
+output that lasts for the whole document (`variables.lasting`) is
+there for every step after the one that made it; any other only in the
+item it was made for, which a round's turn or an if's way shares with
+the steps around it. A step that is off gives nothing.
+
+### available_by_id
+
+```python
+def available_by_id(tree: list) -> dict
+```
+
+{id of a step: [the variables there before it], in order} of every
+step of *tree*, for the page's choice of a variable.
+
+### outputs_of
+
+```python
+def outputs_of(node: dict) -> list
+```
+
+The variables a box gives: its kind's, and for a general step the
+ones its settings name.
+
+### inputs_of
+
+```python
+def inputs_of(node: dict) -> tuple
+```
+
+What a box takes (`variables.wanted`): its kind's, and for a general
+step the variables its settings name.
+
+### lasting_of
+
+```python
+def lasting_of(node: dict, name: str) -> bool
+```
+
+Does the variable *name* that *node* gives last for the whole
+document?
+
+### makers
+
+```python
+def makers(tree: list) -> dict
+```
+
+{variable: [the labels of the boxes that are on and give it]}.
+
 ### known_rules
 
 ```python
@@ -258,13 +317,14 @@ rounding a compute box checks a computed number with).
 ### problems
 
 ```python
-def problems(tree, known: Optional[dict] = None) -> list
+def problems(tree, known: Optional[dict] = None, profile=None) -> list
 ```
 
 Everything the run could not do with the drawing *tree*: [{"id": the
-box or frame or None, "message"}], [] where it can run. *known* are the
-rules a step may set (`known_rules`), the active profile's where not
-given.
+box or frame or None, "message"}], [] where it can run. *profile* (a
+profile or its name) is the profile the drawing belongs to, whose boxes
+it may take; *known* are the rules a step may set (`known_rules`), the
+profile's where not given. Without a profile, the active one.
 
 ### prompt_problems
 
@@ -297,13 +357,14 @@ the reading (`addressed.KINDS`) and the calculation after it.
 ### parse
 
 ```python
-def parse(raw: str, where, whole: bool) -> dict
+def parse(raw: str, where, whole: bool, profile=None) -> dict
 ```
 
 {"numbers": {name: value}, "flow": [...]} of the text *raw*, read
 strictly. A *whole* file names every number and the drawing; any other
 is laid over one and names numbers, and may draw a whole drawing of
-its own. *where* names the file in what is said about it.
+its own. *where* names the file in what is said about it, *profile*
+(a profile or its name) the profile it belongs to.
 
 ### dump
 
