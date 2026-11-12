@@ -15,7 +15,7 @@ import {
   IconFocusCentered, IconFrame, IconArrowsMinimize, IconArrowsMaximize, IconPlayerPlay, IconPower, IconTrash, IconX,
 } from '@tabler/icons-react';
 import { api, apiR } from '../lib/api';
-import { rich, t, tr, useLang } from '../lib/i18n';
+import { rich, t, tr, trCheck, useLang } from '../lib/i18n';
 import { askConfirm, showError, showInfo } from '../lib/dialogs';
 import { loadState, setDirty, tabStore, useRequests, useTabActions } from '../lib/nav';
 import { clone, wrote } from '../lib/util';
@@ -544,27 +544,27 @@ function ReportStrip({ R, problems, onStep, onNumber, onReload }: {
     <List.Item key={i}>
       {e.id ? <><Anchor component="button" type="button" onClick={() => onStep(e.id!)}>{e.id}</Anchor>: </> : null}
       {e.name ? <><Anchor component="button" type="button" onClick={() => onNumber(e.name!)}>{e.name}</Anchor>: </> : null}
-      {rich(tr(e.message))}
+      {rich(trCheck(e.message))}
     </List.Item>
   );
   if (!R) {
     if (!problems || !problems.length) return null;
     return <Box px="md" pb={8}><Alert color="red" title={t('The flow on disk has problems')}><List size="sm">{problems.map(item)}</List></Alert></Box>;
   }
-  if (R.error) return <Box px="md" pb={8}><Alert color="red">{R.error}</Alert></Box>;
+  if (R.error) return <Box px="md" pb={8}><Alert color="red">{rich(trCheck(R.error))}</Alert></Box>;
   const r = R.r || {};
   const errs: { id?: string; name?: string; message: string }[] = r.errors || [];
   return (
     <ScrollArea.Autosize mah="32vh" px="md" pb={8}>
       <Stack gap="xs">
         {R.source === 'save' && r.reason === 'moved' && (
-          <Alert color="red"><Group justify="space-between"><Text size="sm">{r.message}</Text><Button size="xs" color="red" variant="white" onClick={onReload}>{t('Reload from disk')}</Button></Group></Alert>
+          <Alert color="red"><Group justify="space-between"><Text size="sm">{rich(trCheck(r.message))}</Text><Button size="xs" color="red" variant="white" onClick={onReload}>{t('Reload from disk')}</Button></Group></Alert>
         )}
         {errs.length > 0 && <Alert color="red" title={t('The run could not do this ({n})', { n: errs.length })}><List size="sm" spacing={2}>{errs.map(item)}</List></Alert>}
         {!errs.length && r.ok && <Alert color="teal" title={t('The run can do this flow.')} />}
         {!errs.length && (r.changed || []).length > 0 && (
           <Alert color="gray" title={t('Changes')}>
-            <List size="sm" spacing={2}>{r.changed.map((c: any, i: number) => <List.Item key={i}>{c.name === 'flow' ? tr(c.to) : <><Code>{c.name}</Code>: {String(c.from)} → {String(c.to)}</>}</List.Item>)}</List>
+            <List size="sm" spacing={2}>{r.changed.map((c: any, i: number) => <List.Item key={i}>{c.name === 'flow' ? trCheck(c.to) : <><Code>{c.name}</Code>: {String(c.from)} → {String(c.to)}</>}</List.Item>)}</List>
           </Alert>
         )}
         {(r.diff || []).length > 0 && (

@@ -88,8 +88,9 @@ are written to, None where the page cannot say.
 def tree_changes(old: list, new: list) -> list
 ```
 
-What an edit did to a drawing, one line each: boxes and frames added,
-removed, changed or moved.
+What an edit did to a drawing, one line each, the step first as in
+every reason of the check ("own_place: changed"): boxes and frames
+added, removed, changed or moved.
 
 ### judge
 

@@ -10,7 +10,7 @@ import { NumberBox, TextBox } from '../components/Inputs';
 import { GENERAL_KINDS, GeneralField, ioOf } from './General';
 import { openPrompt, openRule, openSpec } from '../lib/nav';
 import { own, type Obj } from '../lib/util';
-import { rich, t, tr, useLang } from '../lib/i18n';
+import { rich, t, tr, trCheck, useLang } from '../lib/i18n';
 import { CondEditor } from './Conditions';
 import { StepRules } from './StepRules';
 import { OwnAt } from '../rules/OwnAt';
@@ -148,7 +148,7 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
         <Button size="xs" variant="subtle" leftSection={<IconArrowLeft size={14} />} onClick={() => P.select(null)}>{P.pass ? t('overview') : t('numbers')}</Button>
       </Group>
       {never && <Alert color="gray" p="xs">{t('Never taken by this profile: {reason}', { reason: tr(never) })}</Alert>}
-      {bad.map((p, i) => <Alert key={i} color="red" p="xs">{p.message}</Alert>)}
+      {bad.map((p, i) => <Alert key={i} color="red" p="xs">{rich(trCheck(p.message))}</Alert>)}
       {out}
       <StepRules P={P} n={n} />
       {tried && tried.first && (
@@ -185,7 +185,7 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
   if (GENERAL_KINDS.has(s.kind)) {
     const mine = own(sets, s.key);
     return <GeneralField s={s} value={mine ? sets[s.key] : base} put={v => put(s.key, v)} vars={P.availableOf(n.id)}
-      data={P.data} reset={preset && mine && part !== undefined ? () => put(s.key, undefined) : undefined} />;
+      data={P.data} reset={preset && mine && part !== undefined ? () => put(s.key, undefined) : undefined} base={base} />;
   }
   if (s.kind === 'number') {
     const named = P.data.numbers.find(x => x.name === s.number);

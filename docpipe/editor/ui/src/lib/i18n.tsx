@@ -110,6 +110,30 @@ export function tr(en: string | null | undefined): string {
   return en;
 }
 
+/* A reason the check of a flow gives (its problems, the dry run's refusal, the changes of an edit), in the page's
+   language: a sentence of the server's, or one of its templates with what the server filled in translated the same way
+   (a step's label, the words of a variable, a reason inside the reason); else "where: what" and reasons joined with
+   "; " part by part, and words joined with " or " each. What has no German (an id, a key, a name) stays as it is. */
+const JOINS: [string, string][] = [['; ', '; '], [': ', ': '], [' or ', ' oder ']];
+export function trCheck(en: string | null | undefined, depth = 0): string {
+  if (en == null) return '';
+  if (lang !== 'de' || !en) return en;
+  if (DE[en]) return DE[en];
+  if (depth > 8) return localNumbers(en);
+  for (const tpl of templatesOf()) {
+    const m = tpl.re.exec(en);
+    if (!m) continue;
+    const vars: Vars = {};
+    tpl.names.forEach((name, i) => { vars[name] = trCheck(m[i + 1], depth + 1); });
+    return fill(DE[tpl.key], vars);
+  }
+  for (const [sep, said] of JOINS) {
+    const at = en.indexOf(sep);
+    if (at > 0) return trCheck(en.slice(0, at), depth + 1) + said + trCheck(en.slice(at + sep.length), depth + 1);
+  }
+  return localNumbers(en);
+}
+
 /* a translated sentence with **bold** and `code` in it, as elements */
 export function rich(text: string): ReactNode {
   return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/).map((part, i) => {

@@ -22,11 +22,18 @@ instead of sent. The answer comes from here, in one of two ways:
   first number where it prints one, else its first word). It shows the
   shortest way.
 
-No embedder and no reranker are asked either: a search orders the pieces
-in the document's order, which a run never does instead of a search (owner
-decision 2026-11-09); the page says so. The document is one of the corpus
-database (its passages, some pages of them where asked) or, without one, a
-plan made up from the examples of the profile's spec.
+Every way the run asks stands here (`addressed.Asks`): a request with
+the prompt of its kind, a follow-up, a request with a step's own prompt
+(its {{key}} inputs written into it as the run writes them), the writing out
+of a figure; and the sentence a field's chunks are ordered by is asked from
+the inputs of the step that writes it, as the run asks it
+(`runner.make_seek_probes`). No embedder and no reranker are asked either:
+a search orders the pieces in the document's order, which a run never does
+instead of a search (owner decision 2026-11-09); the page says so. A figure
+is written out only where its picture can be read, as in a run. The
+document is one of the corpus database (its passages, some pages of them
+where asked) or, without one, a plan made up from the examples of the
+profile's spec.
 
 What comes back: per box the requests it asked and the first one in full,
 the states the coordinates of the values ended in, and the pieces the
@@ -86,11 +93,13 @@ of a *numeric* field names a number.
 
 ```python
 def run(profile, spec, tree: list, numbers, sources: list,
-        mode: str = "nothing") -> dict
+        mode: str = "nothing", context: Optional[dict] = None) -> dict
 ```
 
 What the drawing *tree* asks of the document *sources* with the
-made-up answers of *mode*, nothing sent (see the module's head).
+made-up answers of *mode*, nothing sent (see the module's head);
+*context* is what the document says of itself (the profile's
+`document_context`), which a field's sentence request shows.
 
 ### sources_of
 

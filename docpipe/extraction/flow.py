@@ -660,7 +660,7 @@ def _general_problem(setting: blocks.Setting, value) -> Optional[str]:
         if isinstance(value, dict):
             return None if isinstance(value.get("text"), str) \
                 and value["text"].strip() else \
-                f"{label}: a text of its own is not empty"
+                f"{label}: a text of its own is empty"
         if isinstance(value, str) and "/" in value.strip():
             return None
         return f"{label} is the id of a prompt (stage/name) or a text"
@@ -772,12 +772,18 @@ def _ask_parts(check: _Check, node: dict, where: set) -> None:
                   f"{_nearest(parts['into'].get('to'), targets.TARGETS)}")
         return
     said = forms.problem(parts["reply"])
+    # A target that names the forms it reads takes no other, named or of
+    # the step's own: it could read none of its answers.
+    taken = " or ".join(forms.FORMS[name][0] for name in target.forms
+                        if name in forms.FORMS)
     if said:
         check.say(node, f"form of the answer: {said}")
-    elif isinstance(parts["reply"], str) and target.forms \
-            and parts["reply"] not in target.forms:
-        check.say(node, f"{target.label} takes an answer as "
-                  f"{', '.join(target.forms)}, not {parts['reply']}")
+    elif target.forms and not isinstance(parts["reply"], str):
+        check.say(node, f"{target.label} takes an answer as {taken}, not "
+                  f"a form of its own")
+    elif target.forms and parts["reply"] not in target.forms:
+        check.say(node, f"{target.label} takes an answer as {taken}, not "
+                  f"as {forms.FORMS[parts['reply']][0]}")
     if target.nested and not blocks.is_attached(node):
         check.say(node, f"{target.label} is asked inside the answer of "
                   f"another question: give the step a preset that stands "
@@ -793,7 +799,7 @@ def _ask_parts(check: _Check, node: dict, where: set) -> None:
         if isinstance(one, dict) and one.get("when") is not None:
             said = conditions.problems(one["when"], where)
             if said:
-                check.say(node, f"input {one.get('key')}: {said[0]}")
+                check.say(node, f"the input {one.get('key')}: {said[0]}")
 
 
 def _kinds_in(node: dict) -> set:

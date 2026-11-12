@@ -72,7 +72,13 @@ first time, follows its own. Every text the page writes goes through `t()` or
 explanation the server sends (what a step does, the help of a rule or of a key
 of the spec, the details of the sources, what the request logs measured) goes
 through `tr()`: the exact entry, or one of the server's own templates in
-`i18n/templates.json`, English texts with `{names}` the server fills in. The
+`i18n/templates.json`, English texts with `{names}` the server fills in. A
+reason the check of a flow gives (its problems, the reasons of a condition, the
+dry run's refusal, the lines of what changed) goes through `trCheck()`: as
+`tr()`, but what the server filled in (a step's label, the name of a form, a
+reason inside the reason) is made German the same way, and where no template
+fits, "where: what", reasons joined with "; " and words joined with " or " are
+made German part by part; what has no German, such as a step's id, stays. The
 numbers the server filled in are written the page's way (German "9.206", "4,2"),
 and a server text shown as an element goes through `rich()`, so its `code` shows
 as code. What comes from a source is never translated: labels and definitions of
@@ -514,7 +520,9 @@ setting that "as its preset" takes back to the preset's: the request (the kind
 it is in the log, which decides the rules and numbers it reads), the prompt, the
 inputs, the reply (the form of the answer, `extraction.forms`) and where the
 answer goes (`extraction.targets`: a variable, values of a field, a dimension of
-a value, a sentence and so on); how an input is shown is a choice of
+a value, a sentence and so on). Switching a part back to the kind its preset has
+(a prompt of the profile, a form the reading knows, the preset's target) takes
+it back to the preset's as well. How an input is shown is a choice of
 `extraction.shows`. The page offers the boxes and presets of the core and those
 of the open profile (`profiles/<name>/blocks.py`: `PRESETS` and `TARGETS`). The
 library is a searchable dialog: the "+" on an arrow opens it and puts the
@@ -530,6 +538,10 @@ before it gives is refused with that reason.
 A box that asks a model shows the fixed checks that hold its answers (the quote
 is a line the request showed, the answer stands in its quote, a quote names a
 place, an answer to a list is one of its entries) and cannot lose them.
+A target that names the forms it reads takes an answer in one of them only: a
+step whose answer goes there in another form, named or of its own, is refused,
+since the target could read none of its answers (owner decision 2026-11-12
+evening); a variable names none and takes any.
 A new step needs no code: "Ask the model" takes a prompt of the profile or a
 text of its own (`{{key}}` writes an input into it), the inputs it shows, the
 form of its answer as a JSON schema, drawn in a window with jsonjoy-builder or
@@ -666,7 +678,8 @@ which the tab says. Editing a number or the drawing marks the tab as unsaved.
 
 **Check** writes nothing. It refuses a number the flow does not take and a
 drawing the run could not do, each with its words and at its box, lists what
-changed (numbers, and boxes and frames added, removed, changed or moved), says
+changed (numbers, and boxes and frames added, removed, changed or moved, a line
+naming its box first as every reason does: `own_place: changed`), says
 what a save would do to the file (created, changed, removed or unchanged), shows
 the diff, and says that a changed flow makes no harvest stale: a stamp names, for
 each pass that read the document, the numbers it read with, and compares none of
@@ -712,6 +725,10 @@ form, in one of two modes:
 - "first_line": every answer names the first line the request showed, which shows
   the shortest way.
 
+Every way the run asks stands in the dry run, built by the run's own code: a step
+with a prompt of its own is asked with its inputs written in as the run writes
+them, and the sentence each field's chunks are ordered by is asked from the
+inputs of the step that writes it, once per field and kept at that step.
 No embedder and no reranker are asked, so a search shows its pieces in the
 document's order, which a run never does; the page says so. Per box the Try
 gives the number of requests and the first one in full, and it lists the states

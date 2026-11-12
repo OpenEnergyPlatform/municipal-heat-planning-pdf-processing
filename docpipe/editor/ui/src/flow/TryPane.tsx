@@ -1,7 +1,7 @@
 /* Dry run: the flow run on one document with placeholder answers (POST /api/flow/try); nothing is sent to a model. */
 import { Alert, Button, Group, NativeSelect, Stack, Table, Text, TextInput, Title } from '@mantine/core';
 import { IconPlayerPlay } from '@tabler/icons-react';
-import { rich, t, tr, useLang } from '../lib/i18n';
+import { rich, t, tr, trCheck, useLang } from '../lib/i18n';
 import type { Subject } from './model';
 
 export interface TryState { doc: string; pages: string; mode: string }
@@ -28,7 +28,7 @@ export function TryPane({ st, set, docs, loadDocs, trying, trial, run, subjects 
         data={[{ value: 'nothing', label: t("nothing found (a find names its chunk's first number, or first word for a field of words; every other answer is empty)") },
           { value: 'first_line', label: t('first line (every answer names the first line shown)') }]} />
       <Group><Button leftSection={<IconPlayerPlay size={16} />} loading={trying} onClick={run}>{t('Dry run')}</Button></Group>
-      {trial && trial.error && <Alert color="red">{trial.error}</Alert>}
+      {trial && trial.error && <Alert color="red">{rich(trCheck(trial.error))}</Alert>}
       {trial && !trial.error && (
         <Stack gap="xs">
           <Text size="sm" c="dimmed">{rich(tr(trial.said))}</Text>

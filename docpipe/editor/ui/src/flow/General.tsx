@@ -26,16 +26,17 @@ const Label = ({ s }: { s: LibSetting }) => <Text size="sm" fw={600} mb={4}>{ric
 const Help = ({ s }: { s: LibSetting }) => s.help ? <Text size="xs" c="dimmed" mt={4}>{rich(tr(s.help))}</Text> : null;
 
 /* one setting of a general step; *vars* are the variables there before it, *reset* takes the step back to its preset's
-   part where it has one of its own */
-export function GeneralField({ s, value, put, vars, data, reset }: {
-  s: LibSetting; value: unknown; put: Put; vars: string[]; data: FlowData; reset?: () => void;
+   part where it has one of its own, *base* is what the step has without a value of its own (its preset's part or the
+   library's), which a part switched back to its kind takes */
+export function GeneralField({ s, value, put, vars, data, reset, base }: {
+  s: LibSetting; value: unknown; put: Put; vars: string[]; data: FlowData; reset?: () => void; base?: unknown;
 }) {
   useLang();
   let body: React.ReactNode = null;
-  if (s.kind === 'prompt') body = <PromptField value={value ?? s.default} put={put} ids={data.prompt_ids || []} />;
+  if (s.kind === 'prompt') body = <PromptField value={value ?? s.default} put={put} ids={data.prompt_ids || []} base={base} />;
   else if (s.kind === 'inputs') body = <InputsField value={value} put={put} vars={vars} data={data} />;
-  else if (s.kind === 'schema') body = <SchemaField value={value} put={put} data={data} />;
-  else if (s.kind === 'into') body = <IntoField value={value} put={put} data={data} />;
+  else if (s.kind === 'schema') body = <SchemaField value={value} put={put} data={data} base={base} />;
+  else if (s.kind === 'into') body = <IntoField value={value} put={put} data={data} base={base} />;
   else if (s.kind === 'varname') {
     body = <TextBox mono value={String(value ?? s.default ?? '')} onText={() => {}} aria-label={tr(s.label)}
       onCommit={v => put(v.trim() || undefined)} />;
@@ -68,15 +69,16 @@ export function GeneralField({ s, value, put, vars, data, reset }: {
   );
 }
 
-/* a prompt of the profile, or a text of the step's own ({"text": ...}) */
-function PromptField({ value, put, ids }: { value: unknown; put: Put; ids: string[] }) {
+/* a prompt of the profile, or a text of the step's own ({"text": ...}); back to a prompt of the profile, the step
+   takes the one it has without a text of its own (*base*: its preset's), the first of the list only where it has none */
+function PromptField({ value, put, ids, base }: { value: unknown; put: Put; ids: string[]; base?: unknown }) {
   const own = typeof value === 'object' && value !== null;
   const text = own ? String((value as { text?: string }).text || '') : '';
   return (
     <Stack gap={6}>
       <SegmentedControl size="xs" value={own ? 'own' : 'file'}
         data={[{ value: 'file', label: t('a prompt of the profile') }, { value: 'own', label: t('a text of its own') }]}
-        onChange={v => put(v === 'own' ? { text: text || '' } : (ids[0] || undefined))} />
+        onChange={v => put(v === 'own' ? { text: text || '' } : (typeof base === 'string' ? undefined : (ids[0] || undefined)))} />
       {own
         ? <AreaBox mono minRows={6} value={text} onText={() => {}} aria-label={t('prompt')}
             placeholder={t('What the model is told. An input whose key you write as {{key}} stands here instead of in the message.')}
@@ -123,7 +125,9 @@ function InputsField({ value, put, vars, data }: { value: unknown; put: Put; var
 /* the form of the answer: a form the reading knows (values with their lines, a place, a list entry, ...), or a JSON
    schema of its own, drawn with jsonjoy-builder in a window, or written as JSON */
 const ONE_TEXT = { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'] };
-function SchemaField({ value, put, data }: { value: unknown; put: Put; data: FlowData }) {
+/* back to a form the reading knows, the step takes the one it has without a form of its own (*base*: its preset's),
+   the first of the list only where it has none */
+function SchemaField({ value, put, data, base }: { value: unknown; put: Put; data: FlowData; base?: unknown }) {
   const lang = useLang();
   const [open, setOpen] = useState(false);
   const forms = data.library.forms || {};
@@ -136,7 +140,7 @@ function SchemaField({ value, put, data }: { value: unknown; put: Put; data: Flo
     <Stack gap={6}>
       <SegmentedControl size="xs" value={named ? 'named' : 'own'}
         data={[{ value: 'named', label: t('a form the reading knows') }, { value: 'own', label: t('a form of its own') }]}
-        onChange={v => put(v === 'named' ? (Object.keys(forms)[0] || undefined) : ONE_TEXT)} />
+        onChange={v => put(v === 'named' ? (typeof base === 'string' ? undefined : (Object.keys(forms)[0] || undefined)) : ONE_TEXT)} />
       {named && <NativeSelect value={value as string} aria-label={t('form of the answer')}
         data={Object.entries(forms).map(([k, f]) => ({ value: k, label: tr(f.label) }))}
         onChange={e => put(e.currentTarget.value)} />}
@@ -168,10 +172,13 @@ function SchemaField({ value, put, data }: { value: unknown; put: Put; data: Flo
 /* where the answer goes, its target: a variable of its own name, for this item or for the whole document; the values of
    a field of the Spec, each with its line, kept at once or gathered over the rounds; or what a preset's target does with
    it (a dimension of the value, a list entry, a search sentence, ...) */
-function IntoField({ value, put, data }: { value: unknown; put: Put; data: FlowData }) {
+function IntoField({ value, put, data, base }: { value: unknown; put: Put; data: FlowData; base?: unknown }) {
   const into = (typeof value === 'object' && value !== null ? value : {}) as {
     to?: string; var?: string; lasting?: boolean; field?: string; keep?: string;
   };
+  // the target the step has without one of its own (its preset's): chosen again, it is taken back whole
+  const had = (typeof base === 'object' && base !== null ? base : null) as { to?: string; field?: string } | null;
+  const back = had ? (had.to || (had.field ? 'values' : 'var')) : undefined;
   const targets = data.library.targets || {};
   const to = into.to || (into.field ? 'values' : 'var');
   const target = targets[to];
@@ -182,6 +189,7 @@ function IntoField({ value, put, data }: { value: unknown; put: Put; data: FlowD
         data={Object.entries(targets).filter(([k, x]) => !x.nested || k === to).map(([k, x]) => ({ value: k, label: tr(x.label) }))}
         onChange={e => {
           const v = e.currentTarget.value;
+          if (v === back) { put(undefined); return; }
           put(v === 'var' ? { var: 'answer_1' } : v === 'values' ? { to: 'values', field: fields[0] ? fields[0].uri : '' } : { to: v });
         }} />
       {target && <Text size="xs" c="dimmed">{rich(tr(target.says))}</Text>}

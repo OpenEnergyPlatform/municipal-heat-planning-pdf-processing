@@ -214,7 +214,7 @@ def test_a_drawing_is_written_only_where_it_differs_from_the_inherited(
     assert report["ok"] and report["writes"] == "created"
     assert json.loads(report["text"]) == {"flow": tree}
     assert report["changed"] == [{"name": "flow", "from": "",
-                                  "to": "changed search_round"}]
+                                  "to": "search_round: changed"}]
     # the failure by construction: the inherited drawing writes nothing
     same = flow_view.judge(profile, None, numbers_of(profile), "flow.json",
                            copy.deepcopy(flow.tree_of(profile)))
@@ -251,7 +251,7 @@ def test_what_an_edit_did_to_the_drawing_is_said_one_line_each():
            {"id": "c", "each": "value", "steps": [{"id": "e",
                                                   "box": "state"}]}]
     assert flow_view.tree_changes(old, new) == [
-        "added e", "removed d", "changed a", "moved: b, a"]
+        "e: added", "d: removed", "a: changed", "moved: b, a"]
     # the failure by construction: the same drawing says nothing
     assert flow_view.tree_changes(old, copy.deepcopy(old)) == []
 
@@ -382,7 +382,7 @@ def test_the_page_is_given_the_flow_and_a_check_writes_nothing(tmp_path,
                           {"numbers": {**numbers, "search_pieces": 35},
                            "tree": tree})
     assert status == 200 and report["writes"] == "created"
-    assert {"name": "flow", "from": "", "to": "changed search_round"} \
+    assert {"name": "flow", "from": "", "to": "search_round: changed"} \
         in report["changed"]
     assert "text" not in report and not own_file(profile).exists()
     # the failure by construction: a save does write, into the profile's

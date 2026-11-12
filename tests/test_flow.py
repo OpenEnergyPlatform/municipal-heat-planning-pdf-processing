@@ -139,6 +139,28 @@ def test_a_step_asked_apart_from_the_reading_takes_what_its_target_gives():
     assert any("asked apart from the reading" in m for m in said(drawing))
 
 
+def test_a_target_that_names_its_forms_takes_an_answer_in_no_other():
+    # A target that names the forms it reads takes an answer in one of them:
+    # a named form outside them is refused, AND a form of the step's own is
+    # refused, AND a target that names none takes a form of the step's own
+    # (owner decision 2026-11-12 evening: it could read none of its answers).
+    own = {"type": "object", "properties": {"answer": {"type": "string"}},
+           "required": ["answer"]}
+    drawing = tree()
+    node(drawing, "own_place")["set"] = {"reply": "place"}
+    assert said(drawing) == []
+    node(drawing, "own_place")["set"] = {"reply": own,
+                                         "into": {"to": "var", "var": "said"}}
+    assert said(drawing) == []
+    # the failures by construction: another named form, a form of its own
+    node(drawing, "own_place")["set"] = {"reply": "yes_no"}
+    assert said(drawing) == ["a dimension of the value takes an answer as a "
+                             "place, not as yes or no"]
+    node(drawing, "own_place")["set"] = {"reply": own}
+    assert said(drawing) == ["a dimension of the value takes an answer as a "
+                             "place, not a form of its own"]
+
+
 def test_a_frame_of_coordinates_without_a_state_is_refused():
     drawing = tree()
     frame = node(drawing, "coordinates")

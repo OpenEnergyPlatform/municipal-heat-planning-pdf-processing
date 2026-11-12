@@ -464,11 +464,12 @@ def _boxes(tree: list) -> dict:
 
 
 def tree_changes(old: list, new: list) -> list:
-    """What an edit did to a drawing, one line each: boxes and frames added,
-    removed, changed or moved."""
+    """What an edit did to a drawing, one line each, the step first as in
+    every reason of the check ("own_place: changed"): boxes and frames
+    added, removed, changed or moved."""
     before, after = _boxes(old), _boxes(new)
-    out = [f"added {ident}" for ident in after if ident not in before]
-    out += [f"removed {ident}" for ident in before if ident not in after]
+    out = [f"{ident}: added" for ident in after if ident not in before]
+    out += [f"{ident}: removed" for ident in before if ident not in after]
     for ident, node in after.items():
         was = before.get(ident)
         if was is None:
@@ -478,7 +479,7 @@ def tree_changes(old: list, new: list) -> list:
         were = {k: v for k, v in was.items()
                 if k not in ("steps", "if", "else")}
         if same != were:
-            out.append(f"changed {ident}")
+            out.append(f"{ident}: changed")
     order_old = [i for i in before if i in after]
     order_new = [i for i in after if i in before]
     if order_old != order_new:

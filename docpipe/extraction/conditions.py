@@ -270,9 +270,9 @@ def row_problem(row, where) -> Optional[str]:
     if subject.name == VAR:
         return _var_problem(row, where)
     if where is not None and subject.name not in where:
-        return (f"{subject.label} is not known here"
-                + (" (no question before it)"
-                   if subject.name in ("answer", "quote") else ""))
+        return (f"{subject.label} is not known here (no question before it)"
+                if subject.name in ("answer", "quote")
+                else f"{subject.label} is not known here")
     prop = subject.prop(row.get("is"))
     if prop is None:
         return f"{subject.label} has no property {row.get('is')!r}"
@@ -281,31 +281,31 @@ def row_problem(row, where) -> Optional[str]:
     op = row.get("op")
     if prop.kind == YES:
         if op is not None or "value" in row:
-            return f"{subject.label} {prop.label}: a yes or no takes no " \
+            return f"{subject.label} · {prop.label}: a yes or no takes no " \
                    f"comparison"
         return None
     if op not in OPS[prop.kind]:
-        return (f"{subject.label} {prop.label} takes "
+        return (f"{subject.label} · {prop.label} takes "
                 f"{', '.join(OP_WORDS[o] for o in OPS[prop.kind])}, "
                 f"not {op!r}")
     if op == "empty":
         return None if "value" not in row else \
-            f"{subject.label} {prop.label} is empty: no value"
+            f"{subject.label} · {prop.label} is empty: no value"
     if "value" not in row:
-        return f"{subject.label} {prop.label} {OP_WORDS[op]}: the value " \
+        return f"{subject.label} · {prop.label} {OP_WORDS[op]}: the value " \
                f"is missing"
     value = row["value"]
     if prop.kind == NUMBER and (isinstance(value, bool)
                                 or not isinstance(value, (int, float))):
-        return f"{subject.label} {prop.label} is a number, not {value!r}"
+        return f"{subject.label} · {prop.label} is a number, not {value!r}"
     if prop.kind == TEXT and not isinstance(value, str):
-        return f"{subject.label} {prop.label} is a text, not {value!r}"
+        return f"{subject.label} · {prop.label} is a text, not {value!r}"
     if prop.kind == CHOICE:
         if not isinstance(value, list) or not value:
-            return f"{subject.label} {prop.label}: pick one at least"
+            return f"{subject.label} · {prop.label}: pick one at least"
         wrong = [v for v in value if v not in prop.choices]
         if wrong:
-            return (f"{subject.label} {prop.label} is one of "
+            return (f"{subject.label} · {prop.label} is one of "
                     f"{', '.join(prop.choices)}, not {wrong[0]!r}")
     return None
 

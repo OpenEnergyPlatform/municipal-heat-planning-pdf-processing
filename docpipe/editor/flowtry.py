@@ -19,11 +19,18 @@ instead of sent. The answer comes from here, in one of two ways:
   first number where it prints one, else its first word). It shows the
   shortest way.
 
-No embedder and no reranker are asked either: a search orders the pieces
-in the document's order, which a run never does instead of a search (owner
-decision 2026-11-09); the page says so. The document is one of the corpus
-database (its passages, some pages of them where asked) or, without one, a
-plan made up from the examples of the profile's spec.
+Every way the run asks stands here (`addressed.Asks`): a request with
+the prompt of its kind, a follow-up, a request with a step's own prompt
+(its {{key}} inputs written into it as the run writes them), the writing out
+of a figure; and the sentence a field's chunks are ordered by is asked from
+the inputs of the step that writes it, as the run asks it
+(`runner.make_seek_probes`). No embedder and no reranker are asked either:
+a search orders the pieces in the document's order, which a run never does
+instead of a search (owner decision 2026-11-09); the page says so. A figure
+is written out only where its picture can be read, as in a run. The
+document is one of the corpus database (its passages, some pages of them
+where asked) or, without one, a plan made up from the examples of the
+profile's spec.
 
 What comes back: per box the requests it asked and the first one in full,
 the states the coordinates of the values ended in, and the pieces the
@@ -34,13 +41,16 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import collections
+import dataclasses
 import json
 import re
 from typing import Optional
 
 from docpipe import prompts as prompt_files
 from ..extraction import addressed
+from ..extraction import blocks
 from ..extraction import flow as flow_map
+from ..extraction import general
 from ..extraction import runner
 from ..extraction import thread as thread_map
 from ..extraction.pipeline import Source
@@ -181,7 +191,30 @@ def answer(kind: str, payload: dict, shape: dict, mode: str,
         return {"found": [], "own": one}
     if kind == "phrase":
         return {"phrase": line}
-    return {}
+    return filled(schema, one, line)
+
+
+def filled(schema: dict, one: dict, line: str):
+    """The answer of the form *schema* (a form of a step's own) that names
+    the first shown line *one* (its address and words, the whole *line*):
+    every key the form requires, the address and the words where it asks
+    for them, the line where it asks for a sentence, each other text the
+    words, each other key empty."""
+    out = empty(schema)
+    if not isinstance(out, dict):
+        return out
+    properties = schema.get("properties") or {}
+    for key in out:
+        kinds = (properties.get(key) or {}).get("type")
+        if key in one:
+            out[key] = one[key]
+        elif key == "found":
+            out[key] = [one]
+        elif key == "phrase":
+            out[key] = line
+        elif kinds == "string":
+            out[key] = one["words"]
+    return out
 
 
 class Recorder:
@@ -194,6 +227,7 @@ class Recorder:
         # the names of the fields whose values are numbers (the spec's)
         self.numeric = frozenset(numeric)
         self.parts: dict = {}
+        self.own_parts: dict = {}
         self.by_box: dict = collections.OrderedDict()
         self.kinds: collections.Counter = collections.Counter()
 
@@ -206,8 +240,26 @@ class Recorder:
                 self.parts[kind] = None
         return self.parts[kind]
 
+    def _parts_of(self, prompt):
+        """The parts of a step's own prompt (a prompt file of the profile,
+        or a text of the step's own), as the run cuts it
+        (`runner.own_prompt`)."""
+        key = json.dumps(prompt, sort_keys=True, ensure_ascii=False)
+        if key not in self.own_parts:
+            try:
+                self.own_parts[key] = thread_map.cut(
+                    runner.own_prompt(prompt, self.profile))
+            except (FileNotFoundError, LookupError):
+                self.own_parts[key] = None
+        return self.own_parts[key]
+
     def keep(self, kind: str, payload: dict, shape, example,
-             follows: Optional[str] = None) -> None:
+             follows: Optional[str] = None, prompt=None) -> None:
+        """One request kept by the step that asks it; the first of a step
+        kept in full, as it goes out: its prompt told what its message
+        carries, a step's own prompt (*prompt*) with its {{key}} inputs
+        written into it, the message without what goes beside it (a
+        figure's picture, the questions asked before)."""
         box = addressed.asking_box() or "(no box)"
         entry = self.by_box.setdefault(box, {"requests": 0, "kinds":
                                              collections.Counter(),
@@ -215,16 +267,26 @@ class Recorder:
         entry["requests"] += 1
         entry["kinds"][follows and "follow" or kind] += 1
         self.kinds[kind] += 1
-        if entry["first"] is None:
-            parts = self._parts(follows or kind)
-            system = runner.system_text(runner.request_prompt(
-                parts, payload, shape), example) if parts is not None \
-                else ""
-            entry["first"] = {
-                "kind": kind if not follows else f"follow of {follows}",
-                "system": system,
-                "message": json.dumps(payload, ensure_ascii=False,
-                                      indent=1)}
+        if entry["first"] is not None:
+            return
+        sent = {key: value for key, value in payload.items()
+                if key not in ("conversation", addressed.PICTURE)}
+        parts = self._parts_of(prompt) if prompt is not None \
+            else self._parts(follows or kind)
+        system = ""
+        if parts is not None:
+            built = runner.request_prompt(parts, sent, shape)
+            if prompt is not None:
+                text, sent = general.in_prompt(built.text, sent)
+                built = dataclasses.replace(built, text=text)
+            # A request without an example reply (a field's sentence) goes
+            # out as its prompt is written (`runner.document_anchor`).
+            system = built.text if example is None \
+                else runner.system_text(built, example)
+        entry["first"] = {
+            "kind": kind if not follows else f"follow of {follows}",
+            "system": system,
+            "message": json.dumps(sent, ensure_ascii=False, indent=1)}
 
     def asker(self, kind: str):
         def ask(payload, document_id, /, *, shape, example, **noted):
@@ -243,26 +305,72 @@ class Recorder:
         return answer(kind, payload, shape, self.mode,
                       self.numeric_field(payload))
 
+    def own(self, prompt, payload, document_id, /, *, shape, example,
+            follow=False, kind=None, **noted):
+        """A request with a step's own prompt (*prompt*: a prompt file of
+        the profile or a text of the step's own), under the name of its
+        kind (`own` for a step of the page's own), as the run asks it
+        (`runner.make_asks`: general_ask)."""
+        kind = kind or "own"
+        if follow:
+            self.keep("follow", payload, shape, example, follows=kind,
+                      prompt=prompt)
+        else:
+            self.keep(kind, payload, shape, example, prompt=prompt)
+        return answer(kind, payload, shape, self.mode,
+                      self.numeric_field(payload))
+
     def asks(self) -> addressed.Asks:
-        def optional(kind):
-            return self.asker(kind) if self._parts(kind) is not None \
-                else None
-        return addressed.Asks(
-            find=self.asker("find"), docfield=self.asker("docfield"),
-            coord=self.asker("coord"), list=self.asker("list"),
-            search=self.asker("search"), follow=self.follow,
-            names=optional("names"), check=optional("check"),
-            work=optional("work"), phrase=optional("phrase"))
+        """Every way the run asks (`addressed.Asks`), taken from the list
+        of them, so that none is left out: a follow-up, a request with a
+        step's own prompt, and each request of a kind, None where the
+        profile writes no prompt for one it may leave out, as in the run
+        (`runner.make_asks`)."""
+        ways = {}
+        for way in dataclasses.fields(addressed.Asks):
+            if way.name == "follow":
+                ways[way.name] = self.follow
+            elif way.name == "own":
+                ways[way.name] = self.own
+            elif way.default is dataclasses.MISSING \
+                    or self._parts(way.name) is not None:
+                ways[way.name] = self.asker(way.name)
+            else:
+                ways[way.name] = None
+        return addressed.Asks(**ways)
 
 
 def in_order(document_id, sentences, chunks) -> list:
     return list(chunks)
 
 
+def sentence_writer(tree: list, recorder: Recorder):
+    """write(parameter, context) for `runner.make_seek_probes`: the request
+    of a field's sentence built from the inputs of the step of *tree* that
+    orders the chunks by it (its preset where the drawing has none,
+    `runner.sentence_step`) and asked with its prompt, kept, and no
+    sentence written: a dry run orders the chunks as the document has
+    them."""
+    step = next((node for node, _frames in flow_map.walk(tree)
+                 if blocks.target_of(node) == "chunk_order"), None) \
+        or {"id": "sentences", "box": "ask", "preset": "sentences"}
+    prompt = general.parts_of(step)["prompt"]
+    own = None if prompt == runner.PHRASE_PROMPT_ID else prompt
+
+    def write(parameter, context):
+        recorder.keep("phrase", runner.phrase_payload(parameter, context,
+                                                      step),
+                      None, None, prompt=own)
+        return []
+    return write
+
+
 def run(profile, spec, tree: list, numbers, sources: list,
-        mode: str = "nothing") -> dict:
+        mode: str = "nothing", context: Optional[dict] = None) -> dict:
     """What the drawing *tree* asks of the document *sources* with the
-    made-up answers of *mode*, nothing sent (see the module's head)."""
+    made-up answers of *mode*, nothing sent (see the module's head);
+    *context* is what the document says of itself (the profile's
+    `document_context`), which a field's sentence request shows."""
     if mode not in MODES:
         raise Refused(f"mode is one of {', '.join(MODES)}, not {mode!r}")
     from .. import rules
@@ -277,11 +385,11 @@ def run(profile, spec, tree: list, numbers, sources: list,
         parameter.label for parameter in spec.parameters
         if getattr(parameter, "is_numeric", False)))
 
-    def sentence(parameter, document_id):
-        recorder.keep("phrase", {"label": parameter.label}, None, None)
-        return []
+    seek = runner.make_seek_probes(
+        lambda document_id: dict(context or {}),
+        write=sentence_writer(tree, recorder))
     reader = addressed.Reader(
-        spec, recorder.asks(), in_order, probes=sentence,
+        spec, recorder.asks(), in_order, probes=seek,
         known=runner.row_context,
         plan_fields=spec.plan_fields, works=spec.works,
         frame_slots=runner.frame_slots_of(spec), numbers=numbers,
@@ -290,12 +398,17 @@ def run(profile, spec, tree: list, numbers, sources: list,
     document_id = sources[0].provenance.get("document_id", 0) \
         if sources[0].provenance else 0
 
-    def transcripts(document_id, figures, each, **_how):
-        return {}, 0
+    def transcripts(document_id, figures, each, ask=None, **_how):
+        # Each figure written out by the step that does it, its request
+        # kept; the plan reads the figures as the document gives them.
+        asked = 0
+        for figure in figures if ask is not None else ():
+            if ask(figure, document_id) is not None:
+                asked += 1
+        return {}, asked
     plan, counts = engine.plan(document_id, sources, transcripts, None,
                                numbers)
-    orders = addressed.Orders(in_order, lambda parameter, document_id: [],
-                              None)
+    orders = addressed.Orders(in_order, seek, None)
     reads = engine.read(plan, list(spec.parameters), None, counts, None,
                         lambda located: orders(plan, located,
                                                plan.cut.key()))

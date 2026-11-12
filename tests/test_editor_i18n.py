@@ -24,6 +24,10 @@ test of its own, with a case that breaks it by construction:
    by its template.
 6. A server text the page shows as an element goes through rich(), so its
    `code` shows as code and not as backticks.
+7. Every reason the check of a flow can give (its problems, the reasons of
+   a condition, the dry run's refusal) has a German entry, AND a reason
+   made of reasons or filled in with a step's label is German through and
+   through (`trCheck`).
 
 What comes from a source (the spec, the ontology, a prompt, a document, a
 check of the pipeline) is shown as it is and is not asked for here.
@@ -683,3 +687,183 @@ def test_a_german_entry_keeps_the_names_of_its_key():
     # the failure by construction: a name lost in the German
     key, said = "Saved {file}.", "Gespeichert."
     assert sorted(NAME.findall(key)) != sorted(NAME.findall(said))
+
+
+# -- 7. the reasons of the check of a flow -----------------------------------
+
+# file -> the functions whose returns and raises are reasons (empty: the
+# reasons it says and writes as {"message": ...} only)
+CHECK_SOURCES = {
+    "docpipe/extraction/flow.py": set(),
+    "docpipe/extraction/passflow.py": set(),
+    "docpipe/editor/flow.py": set(),
+    "docpipe/extraction/conditions.py": {"problems", "row_problem", "_rows",
+                                         "_var_problem"},
+    "docpipe/extraction/forms.py": {"problem"},
+    "docpipe/extraction/general.py": {"schema_problem"},
+}
+
+
+def _name_of(node) -> str:
+    import ast
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    if isinstance(node, ast.Subscript):
+        return _name_of(node.value)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if node.func.attr == "join" and node.args:
+            return _name_of(node.args[0])
+        if node.func.attr == "get" and node.args \
+                and isinstance(node.args[0], ast.Constant):
+            return str(node.args[0].value)
+        return _name_of(node.func)
+    if isinstance(node, (ast.GeneratorExp, ast.ListComp)):
+        return _name_of(node.elt)
+    if isinstance(node, ast.Call):
+        return _name_of(node.func)
+    return "x"
+
+
+def _template(node):
+    """A text of the code with {names} where it fills something in."""
+    import ast
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        out, used = [], {}
+        for part in node.values:
+            if isinstance(part, ast.Constant):
+                out.append(str(part.value))
+                continue
+            name = _name_of(part.value)
+            used[name] = used.get(name, 0) + 1
+            out.append("{" + (name if used[name] == 1
+                              else f"{name}{used[name]}") + "}")
+        return "".join(out)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _template(node.left), _template(node.right)
+        return left + right if left is not None and right is not None \
+            else None
+    return None
+
+
+def check_reasons(sources: dict = CHECK_SOURCES) -> dict:
+    """{reason as a template: where it stands} of every reason the check of
+    a flow can give: what it says (say), writes ({"message": ...}), and the
+    returns and raises of the functions whose problems it says."""
+    import ast
+    found: dict = {}
+    for rel, functions in sources.items():
+        tree = ast.parse((REPO / rel).read_text(encoding="utf-8"))
+        for func in ast.walk(tree):
+            if not isinstance(func, ast.FunctionDef):
+                continue
+            mine = func.name in functions or func.name.endswith("problem")
+            for node in ast.walk(func):
+                said = []
+                if isinstance(node, ast.Call) \
+                        and isinstance(node.func, ast.Attribute) \
+                        and node.func.attr == "say" and len(node.args) > 1:
+                    said.append(node.args[1])
+                elif isinstance(node, ast.Return) and node.value is not None \
+                        and mine:
+                    said.append(node.value)
+                elif isinstance(node, ast.Raise) and mine \
+                        and isinstance(node.exc, ast.Call) and node.exc.args:
+                    said.append(node.exc.args[0])
+                elif isinstance(node, ast.Dict):
+                    said += [value for key, value in zip(node.keys,
+                                                         node.values)
+                             if isinstance(key, ast.Constant)
+                             and key.value == "message"]
+                for one in said:
+                    for text in ((one.body, one.orelse)
+                                 if isinstance(one, ast.IfExp) else (one,)):
+                        text = _template(text)
+                        if text and wordy(NAME.sub("", text)):
+                            found.setdefault(text, f"{rel}:{one.lineno}")
+    return found
+
+
+def german_check(text: str, german_of: dict, depth: int = 0) -> str:
+    """A reason in German as `trCheck` in lib/i18n.tsx makes it: the entry
+    of the reason, or of the template it fits with what is filled in made
+    German the same way, else "where: what", reasons joined with "; " and
+    words joined with " or " part by part; what has no German stays."""
+    if text in german_of:
+        return german_of[text]
+    if depth > 8:
+        return text
+    for key in sorted((k for k in server_templates() if k in german_of
+                       and NAME.search(k) and template_words(k) >= 6),
+                      key=lambda k: -len(NAME.sub("", k))):
+        names = NAME.findall(key)
+        body = "".join("(.+?)" if NAME.fullmatch(part) else re.escape(part)
+                       for part in re.split(r"(\{\w+\})", key))
+        got = re.fullmatch(body, text, re.S)
+        if got:
+            filled = dict(zip(names, (german_check(one, german_of,
+                                                   depth + 1)
+                                      for one in got.groups())))
+            return NAME.sub(lambda m: filled[m.group(1)], german_of[key])
+    for sep, said in (("; ", "; "), (": ", ": "), (" or ", " oder ")):
+        if sep in text[1:]:
+            left, _, right = text.partition(sep)
+            return german_check(left, german_of, depth + 1) + said \
+                + german_check(right, german_of, depth + 1)
+    return text
+
+
+def lacking(reasons: dict, german_of: dict) -> list:
+    """The reasons without German; one of names only ("{label}: {said}")
+    is said by its parts."""
+    return sorted(f"{where}: {text!r}" for text, where in reasons.items()
+                  if text not in german_of and template_words(text) > 0)
+
+
+def test_every_reason_of_the_check_of_a_flow_has_its_german():
+    german_of = catalogue()
+    reasons = check_reasons()
+    assert len(reasons) > 100, "the check gives almost no reason"
+    missing = lacking(reasons, german_of)
+    assert not missing, "no German for:\n" + "\n".join(missing)
+    # the failure by construction: a reason the catalogue lacks is found
+    assert lacking({"a reason no catalogue knows": "here"}, german_of)
+
+
+def test_a_reason_made_of_reasons_is_german_through_and_through():
+    from docpipe.extraction import flow
+    from docpipe.profile import load_profile
+
+    german_of = catalogue()
+    # a check's reason filled in with a target's label and a form's
+    profile = load_profile("scenarios")
+    tree = json.loads(json.dumps(flow.tree_of(profile)))
+    node = next(node for node, _ in flow.walk(tree)
+                if node.get("id") == "own_place")
+    node["set"] = {"reply": {"type": "object", "properties": {
+        "answer": {"type": "string"}}, "required": ["answer"]}}
+    (said,) = [p["message"] for p in flow.problems(
+        tree, flow.known_rules(profile), profile)]
+    assert german_check(said, german_of) == (
+        "eine Dimension des Werts nimmt nur eine Antwort in der Form „eine "
+        "Stelle“, keine eigene Form")
+    # the dry run's refusal: reasons inside a reason
+    refused = ("the drawing cannot run: own_place: prompt: a text of its "
+               "own is empty")
+    assert german_check(refused, german_of) == (
+        "der Ablauf kann so nicht laufen: own_place: Prompt: der eigene Text "
+        "ist leer")
+    # the failure by construction: a part without German stays as it stands,
+    # so the reason is no longer German through and through
+    unknown = said.replace("a dimension of the value",
+                           "a target no catalogue knows")
+    assert german_check(unknown, german_of) == (
+        "a target no catalogue knows nimmt nur eine Antwort in der Form "
+        "„eine Stelle“, keine eigene Form")
+    assert german_check(refused.replace("prompt", "a part no catalogue knows"),
+                        german_of) == (
+        "der Ablauf kann so nicht laufen: own_place: a part no catalogue "
+        "knows: der eigene Text ist leer")

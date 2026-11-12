@@ -14,11 +14,13 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 
 from docpipe.editor import flowtry, specs
 from docpipe.extraction import addressed, flow, runner
+from docpipe.extraction.presets import PRESETS
 from docpipe.profile import load_profile
 
 
@@ -191,3 +193,50 @@ def test_a_drawing_the_run_cannot_do_is_not_tried(scenarios):
         tried(scenarios, "nothing", tree)
     with pytest.raises(flowtry.Refused, match="mode"):
         tried(scenarios, "everything")
+
+
+def test_a_step_with_a_prompt_of_its_own_is_tried_as_the_run_asks_it(
+        scenarios):
+    # every way the run asks stands in a try (`addressed.Asks`): a question
+    # with a text of its own is kept under its kind, its prompt that text
+    # with its {{key.field}} inputs written in
+    profile, _ = scenarios
+    tree = copy.deepcopy(flow.tree_of(profile))
+    node = next(node for node, _ in flow.walk(tree)
+                if node["id"] == "own_place")
+    node["set"] = {"prompt": {"text": "Say the line of {{value.words}}."}}
+    first = tried(scenarios, "first_line", tree)["boxes"]["own_place"][
+        "first"]
+    assert first["kind"] == "coord"
+    assert first["system"].startswith("Say the line of Example.")
+    # the failure by construction: a try without a stand-in for a prompt of
+    # a step's own cannot ask it
+    def lacking(self):
+        return addressed.Asks(**{**vars(asks_of(self)), "own": None})
+    asks_of = flowtry.Recorder.asks
+    try:
+        flowtry.Recorder.asks = lacking
+        with pytest.raises(TypeError):
+            tried(scenarios, "first_line", tree)
+    finally:
+        flowtry.Recorder.asks = asks_of
+
+
+def test_a_field_s_sentence_is_asked_from_the_inputs_of_its_step(scenarios):
+    # the request a field's chunks are ordered by is built as the run builds
+    # it (`runner.phrase_payload`): from the inputs of the step that writes
+    # it, kept at that step
+    profile, _ = scenarios
+    got = tried(scenarios, "nothing")["boxes"]["sentences"]
+    assert got["kinds"] == {"phrase": got["requests"]} and got["requests"]
+    assert set(json.loads(got["first"]["message"])) >= {"label",
+                                                          "description"}
+    # the failure by construction: a step without the input "description"
+    # asks without it
+    tree = copy.deepcopy(flow.tree_of(profile))
+    node = next(node for node, _ in flow.walk(tree)
+                if node["id"] == "sentences")
+    node["set"] = {"inputs": [one for one in PRESETS["sentences"].inputs
+                              if one["key"] != "description"]}
+    again = tried(scenarios, "nothing", tree)["boxes"]["sentences"]
+    assert "description" not in json.loads(again["first"]["message"])
