@@ -17,10 +17,11 @@ The steps of a document (`Reader`):
 
 1. Its passages as numbered lines and pieces of at most eight
    (`units.Chunk`); a figure transcribed once per run into its caption and
-   its numbers and kept under the harvest (`Transcripts`), its image sent
-   to no other request. A field of numbers reads a figure in the pieces of
-   its numbers, any other field in the piece of its caption
-   (`units.pieces_for`).
+   its numbers and kept under the harvest (`Transcripts`); its image goes
+   only to a question about a coordinate that asks for it, once a request
+   (`image`, owner decision 2026-11-12). A field of numbers reads a figure
+   in the pieces of its numbers, any other field in the piece of its
+   caption (`units.pieces_for`).
 2. What the plan settles for all its values and its own years, where the
    spec asks them (`Spec.plan_fields`). Where the spec keeps a list of
    works (`Spec.works`), every piece is asked once which of its lines
@@ -434,7 +435,8 @@ the default profile's where none are given): they say *budget*, *shares*
 and *per_request* where those are not given, how many times the budget
 a field with a list reads, up to how many entries a list is shown with
 what each means and how often an answer that did not hold is asked
-again.
+again. *image_of(source)* is the picture of a figure a coordinate
+request may ask for (`IMAGE`), None where the run attaches none.
 
 #### Reader.\_\_init\_\_
 
@@ -453,7 +455,8 @@ def __init__(self, spec, asks: Asks, order: Callable, *,
              shares: Optional[dict] = None,
              per_request: Optional[int] = None,
              context: Optional[Callable] = None, numbers=None,
-             flow: Optional[list] = None)
+             flow: Optional[list] = None,
+             image_of: Optional[Callable] = None)
 ```
 
 #### Reader.span_marks
@@ -622,15 +625,17 @@ def ask_window(self, plan: Plan, field_: dict, batch: list,
                listed=None, title_page: bool = False) -> tuple
 ```
 
-([Found] that hold, lost) of one request of a field asked over
-pieces of the document (`docfield`, owner decision 2026-11-08):
-the title page where *title_page*, the pieces *batch* each under a
-letter of its own; what does not hold is asked again with its
-reason (as often as the flow says). *listed* is the field's list
-(`listing`), whose entry a find names. *lost* is CUT or NO_ANSWER
-where the request came to nothing, else None. A request whose
-answer did not fit its room is asked in halves as a request about
-a piece is (`halves`, owner decision 2026-09-12).
+([Found] that hold, lost, what it asks to fetch) of one request
+of a field asked over pieces of the document (`docfield`, owner
+decision 2026-11-08): the title page where *title_page*, the pieces
+*batch* each under a letter of its own; what does not hold is asked
+again with its reason (as often as the flow says). *listed* is the
+field's list (`listing`), whose entry a find names. *lost* is CUT or
+NO_ANSWER where the request came to nothing, else None. A request
+whose answer did not fit its room is asked in halves as a request
+about a piece is (`halves`, owner decision 2026-09-12). Its answer
+may ask for pieces a line points to (`fetches`, owner decision
+2026-11-12), which the next request of the field shows first.
 
 #### Reader.settled
 
@@ -685,6 +690,45 @@ None where no answer came. Each name is asked once per document and
 work. A new entry keeps *work_read*, how the value it is read for
 read its work.
 
+#### Reader.asked_with_fetched
+
+```python
+def asked_with_fetched(self, kind: str, plan: Plan, payload: dict, reply,
+                       shape: dict, example: dict, counts: Counts,
+                       noted: dict, anchor: list,
+                       shown: Optional[Shown] = None) -> tuple
+```
+
+(reply, payload, shown) of a request that is no round of a
+search (a name, a detail of a work) asked again with the pieces its
+reply asked to see under "passages", each under a letter of its own,
+as often as the rule `fetch_rounds` says (owner decision 2026-11-12:
+where the document says a missing detail at another place or points
+to it, the model may fetch that place itself). *anchor* is the piece
+the request stands at, which "next" and "previous" go from; the
+reply, payload and a copy of *shown* as they were where it asked for
+nothing that could be fetched.
+
+#### Reader.show_fetched
+
+```python
+@staticmethod
+def show_fetched(plan: Plan, shown: Shown, pieces: list) -> dict
+```
+
+{letter: block} of *pieces* added to *shown*, each under a
+letter of its own, as a request shows them under "passages".
+
+#### Reader.anchor_of
+
+```python
+@staticmethod
+def anchor_of(plan: Plan, got: Optional[Found]) -> list
+```
+
+[the piece] the first line of *got* stands in, [] where it stands
+in none (a heading, the title page).
+
 #### Reader.coordinate
 
 ```python
@@ -712,16 +756,46 @@ payload None where the value has no place.
 
 ```python
 def ask_own_place(self, plan: Plan, read: Read, row: Row, slot,
-                  counts: Counts, clone: Callable) -> tuple
+                  counts: Counts, clone: Callable,
+                  pictures_seen: Optional[set] = None) -> tuple
 ```
 
-(answered, rows made, payload, noted) of a coordinate asked at its
-value's own place (`coord`): its line with the head of its table or
-the sentences beside it, the headings up to it, the title page and
-the plan's settings; the answer an address and words, or 0. What
-does not hold is asked again with its reason, then stays
-`unbacked`. Not answered where the value has no place or no answer
-came.
+(answered, rows made, payload, noted, what it asks to fetch) of a
+coordinate asked at its value's own place (`coord`): its line with
+the head of its table or the sentences beside it, the headings up to
+it, the title page and the plan's settings; the answer an address
+and words, or 0. What does not hold is asked again with its reason,
+then stays `unbacked`. Not answered where the value has no place or
+no answer came. The answer may ask for pieces a line points to
+(`fetches`, owner decision 2026-11-12), which the search shows
+first, and for the picture of a figure it shows (`with_picture`).
+
+#### Reader.pictures
+
+```python
+def pictures(self, shown: Shown, seen: set) -> dict
+```
+
+{letter: picture} of the figures *shown* shows whose picture the
+run attaches and this coordinate has not seen yet ("" the value's
+own place), where the step allows a request to ask for it (rule
+`fetches`, `IMAGE`).
+
+#### Reader.with_picture
+
+```python
+def with_picture(self, kind: str, payload: dict, document_id: int,
+                 several: bool, example: dict, counts: Counts, reply,
+                 pictures: dict, seen: set, noted: dict)
+```
+
+A coordinate request's reply, where it asked for the picture of a
+figure it shows (`IMAGE`, owner decision 2026-11-12: the picture as
+a tool) the reply of the same request asked again with that picture
+beside it, which may ask for no picture: one picture a request, each
+once a coordinate (*seen*). The answer is a shown line as always;
+the picture helps to read what the figure's lines do not say. The
+reply itself where it asked for none it may see.
 
 #### Reader.several
 
@@ -753,11 +827,12 @@ def take(self, plan: Plan, read: Read, row: Row, slot, shown: Shown,
          noted: dict) -> tuple
 ```
 
-(rows made, held) of a coordinate's answer: its finds each read
-onto the row, one row per entry where several are named, and
-checked (`merge_field`); what does not hold is asked again with its
-reason (`follow`, as often as the flow says), then stays
-`unbacked`.
+(rows made, held, what its replies ask to fetch) of a
+coordinate's answer: its finds each read onto the row, one row per
+entry where several are named, and checked (`merge_field`); what
+does not hold is asked again with its reason (`follow`, as often as
+the flow says), then stays `unbacked`. A follow-up may fetch as its
+request may (owner decision 2026-11-12).
 
 #### Reader.settle
 
@@ -879,12 +954,14 @@ sentence where none was written.
 ```python
 def search_round(self, plan: Plan, read: Read, row: Row, slot,
                  payload: dict, batch: list, counts: Counts,
-                 clone: Callable, window: tuple, noted: dict) -> tuple
+                 clone: Callable, window: tuple, noted: dict,
+                 pictures_seen: Optional[set] = None) -> tuple
 ```
 
 (rows made, held, what it asks to fetch) of one request of a
 search: the value's place and the pieces *batch* under letters of
-their own.
+their own. It may ask for the picture of a figure it shows
+(`with_picture`), each once a coordinate (*pictures_seen*).
 
 #### Reader.about
 
@@ -993,14 +1070,19 @@ a figure's caption), else its own lines.
 ```python
 def work_value(self, plan: Plan, parameter, question: str, one: Found,
                label: str, counts: Counts, shown: Shown,
-               payload: dict) -> Optional[tuple]
+               payload: dict, chunk: Optional[Chunk] = None
+               ) -> Optional[tuple]
 ```
 
 One detail of a work, asked with the piece that names it (`coord`):
 (the claim of a value of *parameter* whose work is that work, with
 the line as its quote, the passage it is checked against); None
 where no line gives it. A heading is quoted as it is shown, and
-checked against itself.
+checked against itself. Where the piece names the work in short
+("(Prognos 2021)", "[12]"), the reply may fetch the place that says
+it in full, such as the entry of the list of references, and the
+detail is asked again with it (`asked_with_fetched`, owner decision
+2026-11-12); its line is then the quote.
 
 #### Reader.work_coordinate
 
@@ -1219,27 +1301,46 @@ How an answer names its line: "at", the number of the line, or
 ### fetches
 
 ```python
-def fetches() -> list
+def fetches(image: bool = False) -> list
 ```
 
-What a reply may fetch itself (rule `fetches`), in the order of
-`GETS`.
+What a reply may fetch itself (rule `fetches` of the step that
+asks), in the order of `GETS`; with *image* the picture of a shown
+figure too, where the rule allows it.
 
 ### more_schema
 
 ```python
-def more_schema() -> dict
+def more_schema(image: bool = False) -> dict
 ```
+
+### with_more
+
+```python
+def with_more(properties: dict, more: bool, image: bool = False) -> dict
+```
+
+*properties* of a reply with "more" beside them where *more* and the
+step allows a way of fetching (rule `fetches`).
+
+### asked_more
+
+```python
+def asked_more(reply) -> list
+```
+
+What a reply asks to fetch ("more"), [] where it asks nothing.
 
 ### found_format
 
 ```python
-def found_format(closed: bool = False) -> dict
+def found_format(closed: bool = False, more: bool = False) -> dict
 ```
 
 The finds of a request: each an address and the words of the value,
 and where the field has a list the number of its entry (*closed*); an
-empty list where nothing shown holds one.
+empty list where nothing shown holds one. With *more* the pieces it
+asks to see besides (`fetches`).
 
 ### work_format
 
@@ -1271,22 +1372,26 @@ A sentence as the plan would print what a search looks for.
 ### coord_format
 
 ```python
-def coord_format(several: bool, more: bool = False) -> dict
+def coord_format(several: bool, more: bool = False,
+                 image: bool = False) -> dict
 ```
 
 A coordinate's answer: an address and its words, or 0 (owner
 decision 2026-11-09: the sentence a search goes with is a request of
 its own, `phrase`); one that may name several entries lists its
-finds.
+finds. With *more* the pieces it asks to see besides (`fetches`), with
+*image* the picture of a figure it shows among them.
 
 ### entry_format
 
 ```python
-def entry_format(several: bool = False, new: bool = False) -> dict
+def entry_format(several: bool = False, new: bool = False,
+                 more: bool = False) -> dict
 ```
 
 The number of a list's entry, 0 for none; a list of them where
 several may be meant; "new" for a name not on the document's list.
+With *more* the pieces it asks to see besides (`fetches`).
 
 ### year_format
 

@@ -230,16 +230,21 @@ class Trace:
 
     def carried(self, index: int) -> tuple:
         """The fields the message of request *index* carries: the keys of
-        its payload, () where it shows none. Which parts of its prompt a
-        request is told hangs on them (`thread.Parts.system`)."""
+        its payload, and what its reply form offers ("more", "get_image"),
+        () where it shows none. Which parts of its prompt a request is told
+        hangs on them (`runner.request_prompt`)."""
         if index not in self._carried:
+            from ..extraction import runner
             try:
                 payload, _ = json.JSONDecoder().raw_decode(
                     self.requests[index]["user"])
             except ValueError:
                 payload = None
-            self._carried[index] = (tuple(payload)
-                                    if isinstance(payload, dict) else ())
+            offers = runner.reply_offers(
+                (self.sent(index) or {}).get("response_format"))
+            self._carried[index] = (
+                tuple(payload) + tuple(sorted(offers - set(payload)))
+                if isinstance(payload, dict) else ())
         return self._carried[index]
 
     def kinds(self) -> list:

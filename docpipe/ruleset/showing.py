@@ -190,8 +190,8 @@ RULES: tuple = (
        "caption. Decided on 2026-11-09.",
        choices=("by_field", "caption", "numbers"), decided="2026-11-09",
        steps=(
-           "sentences", "order", "docfield", "find", "beside",
-           "search", "state", "works", "work_coordinate",
+           "sentences", "order", "docfield", "find", "beside", "coord",
+           "search", "state", "names", "works", "work_coordinate",
            "each field", "each piece"),
        where="addressed.py (Plan.part)"),
     _r("title_page_first", "flow", "Chunks", "whole",

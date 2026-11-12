@@ -116,7 +116,7 @@ is for and what it hands to what; this is the reference.
 
 - [docpipe.extraction](docpipe.extraction.md): Marks the extraction package as the OBIE stage.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
-- [docpipe.extraction.addressed](docpipe.extraction.addressed.md): One document read in pieces of numbered lines, one question per request, every answer an address (owner decisions 2026-11-08 evening, both profiles). (12 classes, 50 functions)
+- [docpipe.extraction.addressed](docpipe.extraction.addressed.md): One document read in pieces of numbered lines, one question per request, every answer an address (owner decisions 2026-11-08 evening, both profiles). (12 classes, 52 functions)
 - [docpipe.extraction.archive](docpipe.extraction.archive.md): A harvest or stamp file is never overwritten. (3 functions)
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
 - [docpipe.extraction.blocks](docpipe.extraction.blocks.md): The library of a flow's boxes and frames (owner decisions 2026-11-10 evening: the flow is a drawing of boxes and frames, a library to take them from, and the run does exactly what the drawing says). (2 classes, 2 functions)
@@ -147,7 +147,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.remap](docpipe.extraction.remap.md): Re-resolves a moved or grown vocabulary against a harvest already on disk. (10 functions)
 - [docpipe.extraction.replies](docpipe.extraction.replies.md): The reply each extraction request asks for, as a JSON schema. (3 functions)
 - [docpipe.extraction.review](docpipe.extraction.review.md): Reads again, under a narrower window, the values at the lowest trust level. (8 functions)
-- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (5 classes, 128 functions)
+- [docpipe.extraction.runner](docpipe.extraction.runner.md): Wires the pure harvest loop of `pipeline.py` to the live stack. (5 classes, 129 functions)
 - [docpipe.extraction.scheduler](docpipe.extraction.scheduler.md): One queue for every model request of a run, served oldest document first. (8 classes, 6 functions)
 - [docpipe.extraction.schema](docpipe.extraction.schema.md): Builds a JSON Schema for the harvest, the stamp and the trace. (7 functions)
 - [docpipe.extraction.scratch](docpipe.extraction.scratch.md): Where a column of one's own lives, and why its harvest stays there. (1 function)

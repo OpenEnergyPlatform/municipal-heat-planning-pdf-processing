@@ -14,10 +14,11 @@ The steps of a document (`Reader`):
 
 1. Its passages as numbered lines and pieces of at most eight
    (`units.Chunk`); a figure transcribed once per run into its caption and
-   its numbers and kept under the harvest (`Transcripts`), its image sent
-   to no other request. A field of numbers reads a figure in the pieces of
-   its numbers, any other field in the piece of its caption
-   (`units.pieces_for`).
+   its numbers and kept under the harvest (`Transcripts`); its image goes
+   only to a question about a coordinate that asks for it, once a request
+   (`image`, owner decision 2026-11-12). A field of numbers reads a figure
+   in the pieces of its numbers, any other field in the piece of its
+   caption (`units.pieces_for`).
 2. What the plan settles for all its values and its own years, where the
    spec asks them (`Spec.plan_fields`). Where the spec keeps a list of
    works (`Spec.works`), every piece is asked once which of its lines
@@ -317,25 +318,56 @@ def _found() -> dict:
 # plan of 2026-11-09): the piece before or after a shown one, a table or
 # figure by its placeholder, the pieces a pattern stands in, the pieces
 # best for a sentence of its own. The kinds stand in `reading.GETS`, the one
-# list; the rule `fetches` allows some of them.
+# list; the rule `fetches` allows some of them. Since 2026-11-12 (owner
+# decision: where the document prints a missing detail at another place or
+# points to it, the model may fetch that place itself) a request at a
+# value's own place, of a field the document has once, of a name and of a
+# cited work's details may fetch too, each step by its own value of the
+# rule; a coordinate request may also ask for the picture of a figure it
+# shows (`IMAGE`), and is then asked again with the picture beside it.
+IMAGE = "image"
+# The key of a request's payload that carries the picture's file to the
+# runner, which sends it beside the message and not in it (`runner.own`).
+PICTURE = "_picture"
 
 
-def fetches() -> list:
-    """What a reply may fetch itself (rule `fetches`), in the order of
-    `GETS`."""
+def fetches(image: bool = False) -> list:
+    """What a reply may fetch itself (rule `fetches` of the step that
+    asks), in the order of `GETS`; with *image* the picture of a shown
+    figure too, where the rule allows it."""
     allowed = rules.get("fetches")
-    return [get for get in GETS if get in allowed]
+    return [get for get in GETS if get in allowed] \
+        + ([IMAGE] if image and IMAGE in allowed else [])
 
 
-def more_schema() -> dict:
+def more_schema(image: bool = False) -> dict:
     return {"type": "array", "items": {
         "type": "object",
-        "properties": {"get": {"enum": fetches()},
+        "properties": {"get": {"enum": fetches(image)},
                        "at": {"type": "string"},
                        "id": {"type": "string"},
                        "pattern": {"type": "string"},
                        "text": {"type": "string"}},
         "required": ["get"], "additionalProperties": False}}
+
+
+def with_more(properties: dict, more: bool, image: bool = False) -> dict:
+    """*properties* of a reply with "more" beside them where *more* and the
+    step allows a way of fetching (rule `fetches`)."""
+    if more and fetches(image):
+        return {**properties, "more": more_schema(image)}
+    return properties
+
+
+def asked_more(reply) -> list:
+    """What a reply asks to fetch ("more"), [] where it asks nothing."""
+    more = reply.get("more") if isinstance(reply, dict) else None
+    return [ask for ask in more if isinstance(ask, dict)] \
+        if isinstance(more, list) else []
+
+
+# The coordinate requests whose follow-up may fetch as they may.
+FETCHING = ("search", "coord")
 
 
 # A find of a field with a list: the number of its entry beside its address
@@ -350,15 +382,16 @@ def _entry_found() -> dict:
             "additionalProperties": False}
 
 
-def found_format(closed: bool = False) -> dict:
+def found_format(closed: bool = False, more: bool = False) -> dict:
     """The finds of a request: each an address and the words of the value,
     and where the field has a list the number of its entry (*closed*); an
-    empty list where nothing shown holds one."""
+    empty list where nothing shown holds one. With *more* the pieces it
+    asks to see besides (`fetches`)."""
     return _format("found_reply", {
         "type": "object",
-        "properties": {"found": {"type": "array", "items":
-                                 _entry_found() if closed
-                                 else _found()}},
+        "properties": with_more({"found": {"type": "array", "items":
+                                           _entry_found() if closed
+                                           else _found()}}, more),
         "required": ["found"], "additionalProperties": False})
 
 
@@ -397,11 +430,13 @@ def phrase_format() -> dict:
         "required": ["phrase"], "additionalProperties": False})
 
 
-def coord_format(several: bool, more: bool = False) -> dict:
+def coord_format(several: bool, more: bool = False,
+                 image: bool = False) -> dict:
     """A coordinate's answer: an address and its words, or 0 (owner
     decision 2026-11-09: the sentence a search goes with is a request of
     its own, `phrase`); one that may name several entries lists its
-    finds."""
+    finds. With *more* the pieces it asks to see besides (`fetches`), with
+    *image* the picture of a figure it shows among them."""
     if several:
         properties = {"found": {"type": "array", "items": _found()}}
         required = ["found"]
@@ -409,22 +444,22 @@ def coord_format(several: bool, more: bool = False) -> dict:
         properties = {address_key(): {"type": ["string", "integer"]},
                       "words": {"type": "string"}}
         required = [address_key()]
-    if more:
-        properties["more"] = more_schema()
     return _format("coordinate_reply", {
-        "type": "object", "properties": properties, "required": required,
-        "additionalProperties": False})
+        "type": "object", "properties": with_more(properties, more, image),
+        "required": required, "additionalProperties": False})
 
 
-def entry_format(several: bool = False, new: bool = False) -> dict:
+def entry_format(several: bool = False, new: bool = False,
+                 more: bool = False) -> dict:
     """The number of a list's entry, 0 for none; a list of them where
-    several may be meant; "new" for a name not on the document's list."""
+    several may be meant; "new" for a name not on the document's list.
+    With *more* the pieces it asks to see besides (`fetches`)."""
     one: dict = {"type": "integer"}
     if new:
         one = {"anyOf": [{"type": "integer"}, {"enum": [NEW]}]}
     entry = {"type": "array", "items": one} if several else one
     return _format("entry_reply", {
-        "type": "object", "properties": {"entry": entry},
+        "type": "object", "properties": with_more({"entry": entry}, more),
         "required": ["entry"], "additionalProperties": False})
 
 
@@ -1288,7 +1323,8 @@ class Reader:
     and *per_request* where those are not given, how many times the budget
     a field with a list reads, up to how many entries a list is shown with
     what each means and how often an answer that did not hold is asked
-    again.
+    again. *image_of(source)* is the picture of a figure a coordinate
+    request may ask for (`IMAGE`), None where the run attaches none.
     """
 
     def __init__(self, spec, asks: Asks, order: Callable, *,
@@ -1305,8 +1341,10 @@ class Reader:
                  shares: Optional[dict] = None,
                  per_request: Optional[int] = None,
                  context: Optional[Callable] = None, numbers=None,
-                 flow: Optional[list] = None):
+                 flow: Optional[list] = None,
+                 image_of: Optional[Callable] = None):
         self.spec = spec
+        self.image_of = image_of or (lambda source: None)
         self.asks = asks
         self.order = order
         self.search_order = search_order or order
@@ -1794,23 +1832,26 @@ class Reader:
     def ask_window(self, plan: Plan, field_: dict, batch: list,
                    counts: Counts, uri: str, *, numbers: bool = False,
                    listed=None, title_page: bool = False) -> tuple:
-        """([Found] that hold, lost) of one request of a field asked over
-        pieces of the document (`docfield`, owner decision 2026-11-08):
-        the title page where *title_page*, the pieces *batch* each under a
-        letter of its own; what does not hold is asked again with its
-        reason (as often as the flow says). *listed* is the field's list
-        (`listing`), whose entry a find names. *lost* is CUT or NO_ANSWER
-        where the request came to nothing, else None. A request whose
-        answer did not fit its room is asked in halves as a request about
-        a piece is (`halves`, owner decision 2026-09-12)."""
+        """([Found] that hold, lost, what it asks to fetch) of one request
+        of a field asked over pieces of the document (`docfield`, owner
+        decision 2026-11-08): the title page where *title_page*, the pieces
+        *batch* each under a letter of its own; what does not hold is asked
+        again with its reason (as often as the flow says). *listed* is the
+        field's list (`listing`), whose entry a find names. *lost* is CUT or
+        NO_ANSWER where the request came to nothing, else None. A request
+        whose answer did not fit its room is asked in halves as a request
+        about a piece is (`halves`, owner decision 2026-09-12). Its answer
+        may ask for pieces a line points to (`fetches`, owner decision
+        2026-11-12), which the next request of the field shows first."""
         mode = rules.get("show_title_page")
         title_page = {"always": True, "never": False}.get(mode, title_page)
         held_all: list = []
         lost_all = None
+        wanted: list = []
         pending = [(list(batch), 0)]
         while pending:
             piece, depth = pending.pop(0)
-            held, lost = self._window_once(
+            held, lost, more = self._window_once(
                 plan, field_, piece, counts, uri, numbers=numbers,
                 listed=listed, title_page=title_page)
             if lost == CUT:
@@ -1821,14 +1862,15 @@ class Reader:
             if lost:
                 lost_all = lost_all or lost
             held_all = joined(held_all, held)
-        return held_all, lost_all
+            wanted += more
+        return held_all, lost_all, wanted
 
     def _window_once(self, plan: Plan, field_: dict, batch: list,
                      counts: Counts, uri: str, *, numbers: bool = False,
                      listed=None, title_page: bool = False) -> tuple:
-        """([Found] that hold, lost) of one request of a window, asked
-        once (`ask_window`)."""
-        shape = found_format(listed is not None)
+        """([Found] that hold, lost, what it asks to fetch) of one request
+        of a window, asked once (`ask_window`)."""
+        shape = found_format(listed is not None, more=True)
         shown = Shown()
         if title_page:
             shown.add(letter_title_page(), "title_page", plan.title_page,
@@ -1858,7 +1900,8 @@ class Reader:
                           example, counts, parameter=uri,
                           chunks=len(batch))
         if not isinstance(reply, dict):
-            return [], (CUT if reply == CUT else NO_ANSWER)
+            return [], (CUT if reply == CUT else NO_ANSWER), []
+        wanted = asked_more(reply)
         held, refused = self._finds(plan, shown, reply, listed, numbers)
         for _, why in refused:
             counts.fail(why)
@@ -1870,10 +1913,11 @@ class Reader:
                 reply, refusals(refused), counts, parameter=uri)
             if not isinstance(reply, dict):
                 break
+            wanted += asked_more(reply)
             more, refused = self._finds(plan, shown, reply, listed,
                                         numbers)
             held = joined(held, more)
-        return held, None
+        return held, None, wanted
 
     def settled(self, plan: Plan, counts: Counts) -> None:
         """What the plan settles for all its values and its own years, as
@@ -2062,12 +2106,17 @@ class Reader:
                           if works is not None
                           and 0 < work <= len(works.entries) else {}),
                        "list": listed}
-            shape = entry_format(several=group, new=True)
+            shape = entry_format(several=group, new=True, more=True)
             example = {"entry": [1]} if group else {"entry": 1}
             noted = {"kind": kind, "names": len(listed),
                      **({"parameter": uri} if uri else {})}
             reply = self._ask("names", payload, plan.document_id, shape,
                               example, counts, **noted)
+            # The place that says what the name means, where the reply asks
+            # to see it (owner decision 2026-11-12).
+            reply, payload, _shown = self.asked_with_fetched(
+                "names", plan, payload, reply, shape, example, counts,
+                noted, self.anchor_of(plan, got))
             if not isinstance(reply, dict):
                 return None
             picks = self._name_picks(reply, len(listed))
@@ -2105,6 +2154,66 @@ class Reader:
             with names.lock:
                 names.asked[key] = list(out)
             return out
+
+    def asked_with_fetched(self, kind: str, plan: Plan, payload: dict, reply,
+                           shape: dict, example: dict, counts: Counts,
+                           noted: dict, anchor: list,
+                           shown: Optional[Shown] = None) -> tuple:
+        """(reply, payload, shown) of a request that is no round of a
+        search (a name, a detail of a work) asked again with the pieces its
+        reply asked to see under "passages", each under a letter of its own,
+        as often as the rule `fetch_rounds` says (owner decision 2026-11-12:
+        where the document says a missing detail at another place or points
+        to it, the model may fetch that place itself). *anchor* is the piece
+        the request stands at, which "next" and "previous" go from; the
+        reply, payload and a copy of *shown* as they were where it asked for
+        nothing that could be fetched."""
+        shown = Shown(dict(shown.blocks)) if shown is not None else Shown()
+        seen = {chunk.key for chunk in anchor}
+        for _ in range(int(rules.get("fetch_rounds"))):
+            more = asked_more(reply)
+            if not more or not anchor:
+                break
+            pieces = self.fetch(plan, more, anchor, seen, False)
+            if not pieces:
+                break
+            seen.update(chunk.key for chunk in pieces)
+            blocks = self.show_fetched(plan, shown, pieces)
+            payload = {**payload, "passages": {
+                **(payload.get("passages") or {}), **blocks}}
+            again = self._ask(kind, payload, plan.document_id, shape,
+                              example, counts, **noted,
+                              fetched=len(pieces))
+            if not isinstance(again, dict):
+                break
+            reply = again
+        return reply, payload, shown
+
+    @staticmethod
+    def show_fetched(plan: Plan, shown: Shown, pieces: list) -> dict:
+        """{letter: block} of *pieces* added to *shown*, each under a
+        letter of its own, as a request shows them under "passages"."""
+        letters: list = []
+        for chunk in pieces:
+            letter = shown.letter_for(chunk.owner)
+            shown.add(letter, letter, own_lines(chunk))
+            if letter not in letters:
+                letters.append(letter)
+        return {letter: block_payload(plan.passages.get(
+            (shown.blocks[letter].entries[0][2].owner_kind,
+             shown.blocks[letter].entries[0][2].owner_id)), shown, letter)
+            for letter in letters}
+
+    @staticmethod
+    def anchor_of(plan: Plan, got: Optional[Found]) -> list:
+        """[the piece] the first line of *got* stands in, [] where it stands
+        in none (a heading, the title page)."""
+        if got is None or not got.lines:
+            return []
+        line, source = got.lines[0]
+        chunk = plan.chunk_of((source.owner_kind, source.owner_id),
+                              line.number, False)
+        return [chunk] if chunk is not None else []
 
     @staticmethod
     def _name_picks(reply, size: int) -> Optional[list]:
@@ -2165,28 +2274,88 @@ class Reader:
         return shown, payload, noted
 
     def ask_own_place(self, plan: Plan, read: Read, row: Row, slot,
-                      counts: Counts, clone: Callable) -> tuple:
-        """(answered, rows made, payload, noted) of a coordinate asked at its
-        value's own place (`coord`): its line with the head of its table or
-        the sentences beside it, the headings up to it, the title page and
-        the plan's settings; the answer an address and words, or 0. What
-        does not hold is asked again with its reason, then stays
-        `unbacked`. Not answered where the value has no place or no answer
-        came."""
+                      counts: Counts, clone: Callable,
+                      pictures_seen: Optional[set] = None) -> tuple:
+        """(answered, rows made, payload, noted, what it asks to fetch) of a
+        coordinate asked at its value's own place (`coord`): its line with
+        the head of its table or the sentences beside it, the headings up to
+        it, the title page and the plan's settings; the answer an address
+        and words, or 0. What does not hold is asked again with its reason,
+        then stays `unbacked`. Not answered where the value has no place or
+        no answer came. The answer may ask for pieces a line points to
+        (`fetches`, owner decision 2026-11-12), which the search shows
+        first, and for the picture of a figure it shows (`with_picture`)."""
         shown, payload, noted = self.coord_payload(plan, read, row, slot)
         if payload is None:
-            return False, [], None, noted
+            return False, [], None, noted, []
         several = self.several(slot)
         example = self.coord_example(shown, several)
+        seen = pictures_seen if pictures_seen is not None else set()
+        pictures = self.pictures(shown, seen)
         reply = self._ask("coord", payload, plan.document_id,
-                          coord_format(several), example, counts, **noted)
+                          coord_format(several, more=True,
+                                       image=bool(pictures)),
+                          example, counts, **noted)
+        reply = self.with_picture("coord", payload, plan.document_id,
+                                  several, example, counts, reply, pictures,
+                                  seen, noted)
         if not isinstance(reply, dict):
             # No answer for this value: `unanswered` (`mark_unanswered`).
-            return False, [], payload, noted
-        made, _held = self.take(plan, read, row, slot, shown, reply, payload,
-                                "coord", example, counts, clone, ("own", 1),
-                                noted)
-        return True, made, payload, noted
+            return False, [], payload, noted, []
+        made, held, more = self.take(plan, read, row, slot, shown, reply,
+                                     payload, "coord", example, counts,
+                                     clone, ("own", 1), noted)
+        return True, made, payload, noted, [] if held else more
+
+    def pictures(self, shown: Shown, seen: set) -> dict:
+        """{letter: picture} of the figures *shown* shows whose picture the
+        run attaches and this coordinate has not seen yet ("" the value's
+        own place), where the step allows a request to ask for it (rule
+        `fetches`, `IMAGE`)."""
+        if IMAGE not in fetches(True):
+            return {}
+        out = {}
+        for letter, block in shown.blocks.items():
+            if not block.entries:
+                continue
+            source = block.entries[0][2]
+            if source.owner_kind != "figure":
+                continue
+            picture = self.image_of(source)
+            if picture and picture not in seen:
+                out[letter] = picture
+        return out
+
+    def with_picture(self, kind: str, payload: dict, document_id: int,
+                     several: bool, example: dict, counts: Counts, reply,
+                     pictures: dict, seen: set, noted: dict):
+        """A coordinate request's reply, where it asked for the picture of a
+        figure it shows (`IMAGE`, owner decision 2026-11-12: the picture as
+        a tool) the reply of the same request asked again with that picture
+        beside it, which may ask for no picture: one picture a request, each
+        once a coordinate (*seen*). The answer is a shown line as always;
+        the picture helps to read what the figure's lines do not say. The
+        reply itself where it asked for none it may see."""
+        if not isinstance(reply, dict) or not pictures:
+            return reply
+        for ask in reply.get("more") or ():
+            if not isinstance(ask, dict) or ask.get("get") != IMAGE:
+                continue
+            letter = str(ask.get("id") or "").strip()
+            if letter.casefold() == "passage":
+                letter = ""
+            picture = pictures.get(letter)
+            if picture is None:
+                continue
+            seen.add(picture)
+            again = self._ask(kind, {**payload,
+                                     "image": letter or "passage",
+                                     PICTURE: picture},
+                              document_id, coord_format(several, more=True),
+                              example, counts, **noted, picture=letter
+                              or "passage")
+            return again if isinstance(again, dict) else reply
+        return reply
 
     @staticmethod
     def several(slot) -> bool:
@@ -2216,22 +2385,25 @@ class Reader:
              reply: dict, payload: dict, kind: str, example: dict,
              counts: Counts, clone: Callable, window: tuple,
              noted: dict) -> tuple:
-        """(rows made, held) of a coordinate's answer: its finds each read
-        onto the row, one row per entry where several are named, and
-        checked (`merge_field`); what does not hold is asked again with its
-        reason (`follow`, as often as the flow says), then stays
-        `unbacked`."""
+        """(rows made, held, what its replies ask to fetch) of a
+        coordinate's answer: its finds each read onto the row, one row per
+        entry where several are named, and checked (`merge_field`); what
+        does not hold is asked again with its reason (`follow`, as often as
+        the flow says), then stays `unbacked`. A follow-up may fetch as its
+        request may (owner decision 2026-11-12)."""
+        wanted = asked_more(reply)
         finds = self.coord_finds(reply)
         if not finds:
-            return [], False
+            return [], False, wanted
         made, held, failed = self.settle(plan, read, row, slot, shown, finds,
                                          counts, clone, window)
         if failed and not held:
             for _ in range(self.follow_ups()):
                 reply = self._follow(kind, payload, plan.document_id,
                                      coord_format(self.several(slot),
-                                                  more=kind == "search"),
+                                                  more=kind in FETCHING),
                                      example, reply, failed, counts, **noted)
+                wanted += asked_more(reply)
                 finds = self.coord_finds(reply)
                 if not finds:
                     break
@@ -2243,7 +2415,7 @@ class Reader:
                     break
             if not held and rules.get("after_follow_ups") == "unbacked":
                 row.claim[f"{slot.name}_state"] = UNBACKED
-        return made, held
+        return made, held, wanted
 
     def settle(self, plan: Plan, read: Read, row: Row, slot, shown: Shown,
                finds: list, counts: Counts, clone: Callable,
@@ -2557,10 +2729,12 @@ class Reader:
 
     def search_round(self, plan: Plan, read: Read, row: Row, slot,
                      payload: dict, batch: list, counts: Counts,
-                     clone: Callable, window: tuple, noted: dict) -> tuple:
+                     clone: Callable, window: tuple, noted: dict,
+                     pictures_seen: Optional[set] = None) -> tuple:
         """(rows made, held, what it asks to fetch) of one request of a
         search: the value's place and the pieces *batch* under letters of
-        their own."""
+        their own. It may ask for the picture of a figure it shows
+        (`with_picture`), each once a coordinate (*pictures_seen*)."""
         shown, base = show_value(
             plan, row.claim, headings=False if slot.name == "work" else None)
         letters: list = []
@@ -2583,9 +2757,15 @@ class Reader:
                        **({"known": known} if known else {}),
                        "passages": blocks}
         example = self.coord_example(shown, several)
+        seen = pictures_seen if pictures_seen is not None else set()
+        pictures = self.pictures(shown, seen)
         reply = self._ask("search", ask_payload, plan.document_id,
-                          coord_format(several, more=True), example, counts,
-                          **noted, chunks=len(batch))
+                          coord_format(several, more=True,
+                                       image=bool(pictures)),
+                          example, counts, **noted, chunks=len(batch))
+        reply = self.with_picture("search", ask_payload, plan.document_id,
+                                  several, example, counts, reply, pictures,
+                                  seen, {**noted, "chunks": len(batch)})
         if not isinstance(reply, dict):
             return [], False, []
         own = tuple((row.claim.get("at") or {}).get("owner") or ())
@@ -2602,8 +2782,7 @@ class Reader:
                     and not self.about(plan, row, slot, got, counts, noted):
                 continue
             kept.append(entry)
-        more = reply.get("more") if isinstance(reply.get("more"), list) \
-            else []
+        more = asked_more(reply)
         if not kept:
             return [], False, more
         # The first find alone is the answer where the rule says so: the
@@ -2612,10 +2791,10 @@ class Reader:
             if several or rules.get("search_finds_taken") == "all" \
             else {**{key: value for key, value in reply.items()
                      if key != "found"}, **kept[0]}
-        made, held = self.take(plan, read, row, slot, shown, answer,
-                                  ask_payload, "search", example, counts,
-                                  clone, window, noted)
-        return made, held, [] if held else more
+        made, held, wanted = self.take(plan, read, row, slot, shown, answer,
+                                       ask_payload, "search", example,
+                                       counts, clone, window, noted)
+        return made, held, [] if held else wanted
 
     def about(self, plan: Plan, row: Row, slot, got: Found, counts: Counts,
               noted: dict) -> bool:
@@ -2791,17 +2970,18 @@ class Reader:
                     continue
                 number = picked[0][1]
                 if number > before:
-                    new.append((number, one, shown, payload))
+                    new.append((number, one, shown, payload, chunk))
                 finds.append((self.covered(chunk, one), number, one))
             plan.works_of[chunk.key] = PieceWork(finds, own,
                                                  shown.evidence())
-        jobs = [(number, one, shown, payload, uri, question)
-                for number, one, shown, payload in new
+        jobs = [(number, one, shown, payload, uri, question, chunk)
+                for number, one, shown, payload, chunk in new
                 for uri, question in (field_.get("fields") or {}).items()
                 if self.spec.by_uri.get(uri) is not None]
         made = self.each(jobs, lambda job: self.work_value(
             plan, self.spec.by_uri[job[4]], job[5], job[1],
-            works.entries[job[0] - 1].label, counts, job[2], job[3]))
+            works.entries[job[0] - 1].label, counts, job[2], job[3],
+            job[6]))
         reads: dict = {}
         for job, got in zip(jobs, made):
             if got is None:
@@ -2912,18 +3092,28 @@ class Reader:
 
     def work_value(self, plan: Plan, parameter, question: str, one: Found,
                    label: str, counts: Counts, shown: Shown,
-                   payload: dict) -> Optional[tuple]:
+                   payload: dict, chunk: Optional[Chunk] = None
+                   ) -> Optional[tuple]:
         """One detail of a work, asked with the piece that names it (`coord`):
         (the claim of a value of *parameter* whose work is that work, with
         the line as its quote, the passage it is checked against); None
         where no line gives it. A heading is quoted as it is shown, and
-        checked against itself."""
+        checked against itself. Where the piece names the work in short
+        ("(Prognos 2021)", "[12]"), the reply may fetch the place that says
+        it in full, such as the entry of the list of references, and the
+        detail is asked again with it (`asked_with_fetched`, owner decision
+        2026-11-12); its line is then the quote."""
         ask_payload = {**payload, "work": label,
                        "field": field_shown(parameter), "question": question}
         example = {**point(shown, False), "words": fields.said()}
-        reply = self._ask("coord", ask_payload, plan.document_id,
-                          coord_format(False), example, counts,
-                          parameter=parameter.uri, coordinate="work")
+        shape = coord_format(False, more=True)
+        noted = {"parameter": parameter.uri, "coordinate": "work"}
+        reply = self._ask("coord", ask_payload, plan.document_id, shape,
+                          example, counts, **noted)
+        reply, ask_payload, shown = self.asked_with_fetched(
+            "coord", plan, ask_payload, reply, shape, example, counts, noted,
+            [chunk] if chunk is not None else self.anchor_of(plan, one),
+            shown)
         finds = self.coord_finds(reply)
         if not finds:
             return None

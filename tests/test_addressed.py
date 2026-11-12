@@ -1080,8 +1080,10 @@ def test_the_details_of_new_works_run_side_by_side_before_any_value_is_read():
             return {"at": "3.1", "words": "IRENA"}
         return {"at": 0}
     _names, model, reads = read_works({"entry": 0}, each=each, detail=detail)
+    # A detail's job: (number, find, shown, payload, field, question,
+    # the piece that names the work).
     (details,) = [jobs for jobs in batches if jobs
-                  and isinstance(jobs[0], tuple) and len(jobs[0]) == 6]
+                  and isinstance(jobs[0], tuple) and len(jobs[0]) == 7]
     # Every detail of the three new works in one turn of side by side.
     assert len(details) == 3 * len(SCENARIOS.works["fields"])
     first_find = next(i for i, (kind, _p, _n) in enumerate(model.calls)

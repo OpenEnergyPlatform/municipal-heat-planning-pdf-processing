@@ -199,32 +199,54 @@ class CoordItem:
     # The rules whose second way the requests of this coordinate went
     # through (`second_ways`), noted on them.
     ways: list = field(default_factory=list)
+    # The pieces the request at the value's own place asked to see, shown
+    # first by the search that follows it, and the pictures of figures its
+    # requests saw, each once (owner decision 2026-11-12).
+    fetched: list = field(default_factory=list)
+    pictures: set = field(default_factory=set)
 
 
 class ListSupply:
     """The pieces a field of the document is asked over: the title page with
-    the first request, then the pieces in their order, a few a request."""
+    the first request, then the pieces in their order, a few a request. The
+    pieces a reply asked to see (*fetched*) come first in the next request,
+    beyond the pieces of the order and not counted in them; no piece is
+    shown twice (*seen*, owner decision 2026-11-12)."""
 
     def __init__(self, pieces: list):
         self.pieces = list(pieces)
         self.at = 0
         self.started = False
+        self.fetched: list = []
+        self.seen: set = set()
 
     def take(self, size: int):
         """(first request?, pieces) of the next request, None where the
         supply is used up."""
-        if not self.started:
-            self.started = True
+        first = not self.started
+        self.started = True
+        fetched = [c for c in dict.fromkeys(self.fetched)
+                   if c.key not in self.seen]
+        self.fetched = []
+        batch: list = []
+        while self.at < len(self.pieces) and len(batch) < size:
+            piece = self.pieces[self.at]
+            self.at += 1
+            if piece.key not in self.seen and piece not in fetched:
+                batch.append(piece)
+        if first and not fetched:
+            # The first request takes its size of the order, as it always
+            # did, whether or not a piece of it was shown.
+            batch = self.pieces[:size]
             self.at = size
-            return True, self.pieces[:size]
-        if self.at >= len(self.pieces):
+        batch = fetched + batch
+        if not batch and not first:
             return None
-        batch = self.pieces[self.at:self.at + size]
-        self.at += size
-        return False, batch
+        self.seen.update(c.key for c in batch)
+        return first, batch
 
     def left(self) -> int:
-        return max(0, len(self.pieces) - self.at)
+        return max(0, len(self.pieces) - self.at) + len(self.fetched)
 
 
 class SearchSupply:
@@ -1328,8 +1350,9 @@ class Engine:
                 again = coord.sentence if coord.sentence is not None \
                     else sentence
                 return reader.rerank_left(plan, [again], left)
-            scope.put("supply", SearchSupply([], ranked, "found", budget,
-                                             reordered))
+            supply = SearchSupply([], ranked, "found", budget, reordered)
+            supply.fetched, coord.fetched = coord.fetched, []
+            scope.put("supply", supply)
             return
         item: FieldItem = scope.get("field_item")
         if item.sentences is None:
@@ -1355,7 +1378,11 @@ class Engine:
         numbers = coord.read.batch.parameter.is_numeric
         first = plan.beside(coord.chunk, numbers) \
             if coord.chunk is not None else []
-        scope.put("supply", SearchSupply(first, None, "near"))
+        supply = SearchSupply(first, None, "near")
+        # What the answer at the value's own place asked to see comes first,
+        # before the pieces beside it (owner decision 2026-11-12).
+        supply.fetched, coord.fetched = coord.fetched, []
+        scope.put("supply", supply)
 
     @staticmethod
     def locate(coord: CoordItem, plan: Plan) -> None:
@@ -1442,7 +1469,12 @@ class Engine:
                 plan, item.shown, batch, part, item.key,
                 numbers=item.numbers, listed=item.listed,
                 title_page=first and bool(self.setting(node, "title_page")))
-        held, lost = got
+        held, lost, more = got
+        if more:
+            # What the answer asked to see comes first in the field's next
+            # request (owner decision 2026-11-12).
+            supply.fetched = reader.fetch(plan, more, batch, supply.seen,
+                                          item.numbers)
         if lost is not None:
             item.lost = item.lost or lost
         # The finds of the parts that were read count even where another
@@ -1542,13 +1574,22 @@ class Engine:
         with addressed.asking(self.asking_of(node, scope,
                                              self.after(node))), \
                 self.counted(doc) as part:
-            answered, made, payload, noted = self.reader.ask_own_place(
-                doc.plan, coord.read, coord.row, coord.slot, part,
-                coord.clone)
+            answered, made, payload, noted, more = \
+                self.reader.ask_own_place(doc.plan, coord.read, coord.row,
+                                          coord.slot, part, coord.clone,
+                                          coord.pictures)
         if payload is not None:
             coord.payload, coord.noted = payload, noted
         coord.made += made
         state = coord.row.claim.get(f"{coord.slot.name}_state")
+        if more and state != READ:
+            # What the answer at the value's own place asked to see comes
+            # first in the search after it (owner decision 2026-11-12).
+            self.locate(coord, doc.plan)
+            if coord.chunk is not None:
+                coord.fetched = self.reader.fetch(
+                    doc.plan, more, [coord.chunk], coord.seen,
+                    coord.read.batch.parameter.is_numeric)
         scope.put("answer", Answer(answered, 1 if state == READ else 0,
                                    state != READ, False,
                                    **self.came_to(part)))
@@ -1618,7 +1659,7 @@ class Engine:
                 plan, coord.read, coord.row, coord.slot, coord.payload,
                 batch, part, coord.clone, (supply.label, 1),
                 {**coord.noted, "shows": label,
-                 **addressed.second_ways(ways)})
+                 **addressed.second_ways(ways)}, coord.pictures)
         state = coord.row.claim.get(f"{coord.slot.name}_state")
         found = bool(held) or state == UNBACKED
         if found:

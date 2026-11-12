@@ -220,6 +220,8 @@ Fields:
 - `located: bool = False`
 - `seen_of: Optional[dict] = None`
 - `ways: list = field(default_factory=list)`: The rules whose second way the requests of this coordinate went through (`second_ways`), noted on them.
+- `fetched: list = field(default_factory=list)`: The pieces the request at the value's own place asked to see, shown first by the search that follows it, and the pictures of figures its requests saw, each once (owner decision 2026-11-12).
+- `pictures: set = field(default_factory=set)`
 
 ### ListSupply
 
@@ -228,7 +230,10 @@ class ListSupply
 ```
 
 The pieces a field of the document is asked over: the title page with
-the first request, then the pieces in their order, a few a request.
+the first request, then the pieces in their order, a few a request. The
+pieces a reply asked to see (*fetched*) come first in the next request,
+beyond the pieces of the order and not counted in them; no piece is
+shown twice (*seen*, owner decision 2026-11-12).
 
 #### ListSupply.\_\_init\_\_
 

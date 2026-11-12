@@ -145,8 +145,10 @@
       "previous",
       "item",
       "search",
-      "similar"
+      "similar",
+      "image"
     ],
+    "fetch_rounds": 1,
     "question_as_sentence": true,
     "retry_wait_s": 2,
     "retry_wait_most_s": 6,

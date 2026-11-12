@@ -117,12 +117,13 @@ def test_the_finds_of_a_window_count_where_another_part_was_a_hole():
                      ENERGY)
     scope = window_scope(engine, plan, item)
     box = node(engine.tree, "document_fields")
-    reader.ask_window = lambda *a, **k: ([found], addressed.NO_ANSWER)
+    # the third part is what the answer asked to see: nothing here
+    reader.ask_window = lambda *a, **k: ([found], addressed.NO_ANSWER, [])
     engine.box_docfield(box, scope)
     assert item.found == [found] and item.lost == addressed.NO_ANSWER
     assert scope.get("answer").answered is True
     # by construction: nothing read and a hole is no answer
-    reader.ask_window = lambda *a, **k: ([], addressed.NO_ANSWER)
+    reader.ask_window = lambda *a, **k: ([], addressed.NO_ANSWER, [])
     item.found = []
     engine.box_docfield(box, scope)
     assert item.found == [] and scope.get("answer").answered is False

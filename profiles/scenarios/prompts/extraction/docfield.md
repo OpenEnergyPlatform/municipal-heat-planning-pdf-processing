@@ -27,3 +27,6 @@ Where no line prints one, in this form:
 
 <!-- with: passages -->
 "passages" are pieces of the publication a search for this field found best, each under its letter, with its kind, page and title.
+
+<!-- with: more -->
+"more" fetches pieces a shown line points to or that you still need, such as "see figure 12" or the list of references: {"get":"next"} the piece after the one shown, {"get":"previous"} the one before, {"get":"item","id":"p17_img1"} the table or figure a line names as "[p17_img1 ...]", {"get":"search","pattern":"baseline"} the pieces a pattern stands in, {"get":"similar","text":"..."} the pieces closest to a sentence, written as the publication would print it, never as a question. What you fetch is shown to you in the next request.

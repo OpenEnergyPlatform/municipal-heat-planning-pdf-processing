@@ -348,10 +348,25 @@ RULES = (
        "shown, `item` is a table or figure it names, `search` is the chunks "
        "that match a pattern, and `similar` is the chunks closest to a text "
        "it writes. Chunks asked for this way come first in the next request, "
-       "and no chunk is shown twice. Remove an entry to forbid it. Empty: "
-       "the model sees only the chunks of the search.",
-       choices=("next", "previous", "item", "search", "similar"), empty=True,
-       decided="2026-11-07, 2026-11-09", where="addressed.py"),
+       "and no chunk is shown twice. `image` lets a question about a "
+       "dimension ask once for the picture of a figure it shows: the same "
+       "question is then asked again with the picture, and its answer is "
+       "still a shown line. Besides the search, the question at the value's "
+       "place, a field of the whole document, the list entry of a name and "
+       "the details of a cited work may ask to see more; a name or a detail "
+       "is then asked again with what it asked for. Each of these steps has "
+       "a value of its own. Remove an entry to forbid it. Empty: the model "
+       "sees only what the step shows.",
+       choices=("next", "previous", "item", "search", "similar", "image"),
+       empty=True, decided="2026-11-07, 2026-11-09, 2026-11-12",
+       where="addressed.py"),
+    _r("fetch_rounds", "flow", "Search", "whole",
+       "How often the list entry of a name or a detail of a cited work is "
+       "asked again with the chunks its answer asked to see, such as the "
+       "place that explains a short scenario name or the entry of the list "
+       "of references. 0: such an answer is taken as it is and nothing is "
+       "fetched.",
+       least=0, decided="2026-11-12", where="addressed.py"),
     _r("question_as_sentence", "flow", "Search", "switch",
        "On: a search sentence that is a question is used, and the run counts "
        "it. Off: such a sentence is replaced by the field's own search "
@@ -502,7 +517,9 @@ STEPS = {
     "abbreviations": ("split",),
     "title_page_also": ("document",),
     "rerank": ("order", "search"),
-    "fetches": ("search",),
+    "fetches": ("search", "coord", "docfield", "names", "works"),
+    # A name is asked where its value or coordinate is read, too.
+    "fetch_rounds": ("names", "works", "coord", "search"),
     "question_as_sentence": ("sentences", "order", "phrase"),
     "retry_wait_s": ASKING + ("each value",),
     "retry_wait_most_s": ASKING + ("each value",),

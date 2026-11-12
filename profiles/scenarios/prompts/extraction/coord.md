@@ -38,3 +38,15 @@ The question asks one detail of the work under "work", a work this publication p
 
 <!-- with: settings -->
 "settings" are what this publication settles for all its values, under the letter F. They hold for this value too where they speak about it.
+
+<!-- with: more -->
+"more" fetches pieces a shown line points to or that you still need, such as "see figure 12" or the list of references: {"get":"next"} the piece after the one shown, {"get":"previous"} the one before, {"get":"item","id":"p17_img1"} the table or figure a line names as "[p17_img1 ...]", {"get":"search","pattern":"baseline"} the pieces a pattern stands in, {"get":"similar","text":"..."} the pieces closest to a sentence, written as the publication would print it, never as a question. What you fetch is shown to you in the next request.
+
+<!-- with: get_image -->
+{"get":"image"} under "more" asks for the picture of the figure the value stands in, {"get":"image","id":"B"} for the picture of the figure under letter B: where the figure's lines do not say the answer but its picture shows it, such as the colour of a legend entry or the part of a bar. The question is then asked again with the picture; the answer is still a shown line, such as the legend line of that colour.
+
+<!-- with: image -->
+The picture of the figure under "image" ("passage": the figure the value stands in) is attached. Read in it what its lines do not say, and answer with the shown line that names it, such as the legend line of the colour.
+
+<!-- with: passages -->
+"passages" are further pieces of the publication you asked to see, each under its letter, with its kind, page and title.

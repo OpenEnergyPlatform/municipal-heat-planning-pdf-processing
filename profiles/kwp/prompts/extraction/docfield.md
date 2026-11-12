@@ -27,3 +27,6 @@ Wo keine Zeile einen druckt, in dieser Form:
 
 <!-- with: passages -->
 "passages" sind Stücke des Plans, die eine Suche nach diesem Feld am besten fand, jedes unter seinem Buchstaben, mit Art, Seite und Titel.
+
+<!-- with: more -->
+"more" holt Stücke, auf die eine gezeigte Zeile verweist oder die du noch brauchst, etwa „siehe Abbildung 12“: {"get":"next"} das Stück nach dem gezeigten, {"get":"previous"} das davor, {"get":"item","id":"p17_img1"} die Tabelle oder Abbildung, die eine Zeile mit „[p17_img1 …]“ nennt, {"get":"search","pattern":"Bilanzjahr"} die Stücke, in denen ein Muster steht, {"get":"similar","text":"…"} die Stücke, die einem Satz am nächsten sind; der Satz steht so da, wie der Plan ihn drucken würde, nie als Frage. Was du holst, siehst du in der nächsten Anfrage.

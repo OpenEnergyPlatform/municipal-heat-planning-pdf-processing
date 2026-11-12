@@ -310,9 +310,10 @@ it. The instruction is not the recorded one but is made again from the text bein
 edited, unsaved text included, and the sentences the edit changes are marked,
 with those it removed listed beneath. A switch shows the instruction as it was
 sent. It is made by the two functions every request of the harvest passes
-(`runner.request_prompt`, which gives what every request is told and the part of
-each field the message carries, and `runner.system_text`, which writes the
-example reply in). The editor has no rule of its own for this.
+(`runner.request_prompt`, which gives what every request is told, the part of
+each field the message carries and the parts its recorded reply form offers,
+such as `more` where the answer may fetch, and `runner.system_text`, which
+writes the example reply in). The editor has no rule of its own for this.
 
 Above the chat stand the other requests of the same value
 (`requests.chain_of`): the find of its field and passage, its readings and

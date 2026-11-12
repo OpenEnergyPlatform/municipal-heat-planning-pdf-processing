@@ -396,13 +396,14 @@ def _places(text: str, recorded: str) -> tuple:
     return None, {}
 
 
-def _template(prompt, kind: str, payload: dict):
+def _template(prompt, kind: str, payload: dict, shape=None):
     """The prompt of one request as the run makes it, before its example
-    is written in."""
+    is written in: the parts its payload carries and its reply form
+    *shape* offers (`runner.request_prompt`)."""
     from ..extraction import runner, thread
     if kind in WHOLE:
         return prompt
-    return runner.request_prompt(thread.cut(prompt), payload)
+    return runner.request_prompt(thread.cut(prompt), payload, shape)
 
 
 def _system(template, kind: str, filled: dict) -> str:
@@ -506,18 +507,23 @@ def preview(profile, request: dict, sent: dict, edits: dict,
     if payload is None or not isinstance(recorded, str):
         out["why"] = "the record of this request holds no payload to read"
         return out
+    shape = sent.get("response_format")
     try:
         old, new = _prompt(profile, out["prompt"], edits, read)
-        how, filled = _places(_template(old, kind, payload).text, recorded)
-        if how is None and _template(old, kind, payload).placeholders:
+        how, filled = _places(_template(old, kind, payload, shape).text,
+                              recorded)
+        if how is None and _template(old, kind, payload,
+                                     shape).placeholders:
             out["why"] = (
                 "the example reply of this request cannot be read from its "
                 "record: the prompt was worded differently when it was "
                 "sent, and the record does not show as many example "
                 "replies as the prompt has places for")
             return out
-        file_system = _system(_template(old, kind, payload), kind, filled)
-        edit_system = _system(_template(new, kind, payload), kind, filled)
+        file_system = _system(_template(old, kind, payload, shape), kind,
+                              filled)
+        edit_system = _system(_template(new, kind, payload, shape), kind,
+                              filled)
         file_user = edit_user = content
         if request["kind"] == FOLLOW:
             follow = addressed.PROMPT_IDS[FOLLOW]

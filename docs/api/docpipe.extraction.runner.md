@@ -1165,13 +1165,24 @@ for themselves. A job that fails takes back every job not yet begun.
 ### request_prompt
 
 ```python
-def request_prompt(parts, payload: dict)
+def request_prompt(parts, payload: dict, shape: Optional[dict] = None)
 ```
 
 The prompt of one request: what every request of its kind is told,
 and the part of each field its payload carries (`thread.Parts.system`,
 owner decision 2026-11-07: no request is told about a field it does not
-carry).
+carry); where its reply may fetch (*shape* offers "more"), the part
+`more`, and `get_image` where it may ask for a figure's picture (owner
+decision 2026-11-12).
+
+### reply_offers
+
+```python
+def reply_offers(shape: Optional[dict]) -> set
+```
+
+{"more", "get_image"} as far as the reply form *shape* offers them:
+what a request's prompt tells about besides its payload.
 
 ### make_asks
 
@@ -1230,7 +1241,8 @@ a pass that reads to the end shows every piece (`read_to_end`).
 def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
                 probes: Optional[Callable] = None,
                 rerank: Optional[Callable] = None,
-                context: Optional[Callable] = None)
+                context: Optional[Callable] = None,
+                image_of: Optional[Callable] = None)
 ```
 
 The reading of a document piece by piece (`addressed.Reader`), or

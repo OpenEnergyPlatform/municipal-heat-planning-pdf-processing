@@ -116,6 +116,24 @@ MEANINGS = Setting("list_meanings", NUMBER, "show what each list entry "
                    "asked in two steps, first the group, then the entry.")
 # What every step that asks the model takes (plan 2026-11-11, 5.2).
 NUMBERS = (FOLLOW, REPLIES, MEANINGS)
+# What a question may ask to see besides what it shows (owner decision
+# 2026-11-12: where the document says a missing detail at another place or
+# points to it, the model may fetch that place itself), each step its own.
+FETCHES = Setting("fetches", RULE, "what the model may ask to see",
+                  help="The ways in which an answer may ask to see more "
+                  "chunks: the next or previous chunk, a table or figure "
+                  "it names, a search for a pattern and chunks similar to "
+                  "a text it writes; a question about a dimension may also "
+                  "ask once for the picture of a figure it shows. What is "
+                  "fetched comes first in the next request, or the "
+                  "question is asked again with it, and it does not count "
+                  "against the chunks of a search. Removing an entry "
+                  "forbids that way; empty, the step fetches nothing.")
+FETCH_ROUNDS = Setting("fetch_rounds", RULE, "asked again with what was "
+                       "fetched, at most",
+                       help="How often this question is asked again with "
+                       "the chunks its answer asked to see. 0: the answer "
+                       "is taken as it is.")
 CHECKS = ("the quote is a line the request showed",
           "the answer is in its quote",
           "a quote is long enough to point to one place (quote_min_chars)",
@@ -295,12 +313,14 @@ LIBRARY = {box.type: box for box in (
         "This step asks a field that a document states once, or a field "
         "of the whole document such as its base year. A request shows the "
         "title page and a few search hits, and every find that passes the "
-        "checks is kept. To change it: set the chunks per request, "
-        "whether the title page goes with the first request, the "
-        "follow-up questions, the answers in the wrong form and up to "
-        "how many entries a list shows what they mean. Which fields are "
-        "asked here is set by the key `once_per_document` in the Spec "
-        "tab, and how they are asked by the prompt `docfield`.",
+        "checks is kept. The model may ask to see a chapter a shown line "
+        "points to, which comes first in the next request. To change it: "
+        "set the chunks per request, whether the title page goes with the "
+        "first request, the follow-up questions, the answers in the wrong "
+        "form, up to how many entries a list shows what they mean and what "
+        "the model may ask to see (`fetches`). Which fields are asked here "
+        "is set by the key `once_per_document` in the Spec tab, and how "
+        "they are asked by the prompt `docfield`.",
         "addressed.Reader.ask_window", asks="docfield",
         needs=("field", "settled"),
         settings=(PER_REQUEST,
@@ -311,20 +331,24 @@ LIBRARY = {box.type: box for box in (
                           "suits what a title page states. Off: it shows "
                           "only the search hits.",
                           rule="docfield_title_page"), FOLLOW, REPLIES,
-                  MEANINGS),
-        decided="2026-11-08", marks=CHECKS),
+                  MEANINGS, FETCHES),
+        decided="2026-11-08, 2026-11-12", marks=CHECKS),
     Box("works", "Ask the works of each chunk", "ask", "pieces", "values",
         "For each chunk the model says which lines speak of another work "
         "(a study or plan that is presented, compared or cited), and "
         "which line shows that the remaining lines belong to this "
         "publication. Each named work is matched against the document's "
-        "list of works, and each new work is asked for its details. To "
-        "change it: set the follow-up questions and the answers in the "
-        "wrong form. What is asked about a new work is set under the "
-        "works in the Spec tab, which this step needs.",
+        "list of works, and each new work is asked for its details. "
+        "Where the chunk names a work only in short, the model may fetch "
+        "the place that names it in full, such as the list of references, "
+        "and the detail is asked again with it. To change it: set the "
+        "follow-up questions, the answers in the wrong form and what the "
+        "model may ask to see (`fetches`, `fetch_rounds`). What is asked "
+        "about a new work is set under the works in the Spec tab, which "
+        "this step needs.",
         "addressed.Reader.works", asks="work",
-        settings=NUMBERS, decided="2026-11-09", spec="works",
-        top=True),
+        settings=NUMBERS + (FETCHES, FETCH_ROUNDS),
+        decided="2026-11-09, 2026-11-12", spec="works", top=True),
     Box("find", "Ask the values in a chunk", "ask", "pieces", "answers",
         "For one chunk and one field, the model reads the values: for "
         "each one the line number and its wording, and the entry where "
@@ -345,9 +369,12 @@ LIBRARY = {box.type: box for box in (
         "sentences around it, the headings above it, the title page and "
         "the fields of the whole document. The answer is a line number "
         "and its wording, or 0, and a list entry is asked once per "
-        "wording. To change it: set the follow-up questions, the answers "
-        "in the wrong form, the list meanings and the sentences around "
-        "the value. The prompt `coord` shapes the question.",
+        "wording. The model may ask to see what a shown line points to, "
+        "such as \"see figure 12\", which the search shows first, and the "
+        "picture of a figure it shows. To change it: set the follow-up "
+        "questions, the answers in the wrong form, the list meanings, the "
+        "sentences around the value and what the model may ask to see "
+        "(`fetches`). The prompt `coord` shapes the question.",
         "addressed.Reader.ask_own_place", asks="coord",
         needs=("coordinate",),
         settings=(FOLLOW, REPLIES, MEANINGS,
@@ -357,8 +384,8 @@ LIBRARY = {box.type: box for box in (
                           "lines before and after the value's line, in a "
                           "table the value's row under the table head. A "
                           "larger number gives the model more context and "
-                          "makes each request longer.")),
-        decided="2026-11-08", marks=CHECKS),
+                          "makes each request longer."), FETCHES),
+        decided="2026-11-08, 2026-11-12", marks=CHECKS),
     Box("quantity", "Ask what a number is", "ask", "coordinates", "answers",
         "This step finds out what a number is, such as a demand or a "
         "share, from the words it was read with: its label, the head of "
@@ -409,23 +436,15 @@ LIBRARY = {box.type: box for box in (
         "This step asks about one dimension of a value over the search "
         "hits. A request shows the value's own place and a few search "
         "hits. Chunks the model asks to see come first in the next "
-        "request, and no chunk is shown twice. To change it: set the "
-        "chunks per request, the follow-up questions, the answers in the "
-        "wrong form and what the model may ask to see (`fetches`). The "
-        "prompt `search` shapes the question.",
+        "request, and no chunk is shown twice; it may also ask once for "
+        "the picture of a figure it shows. To change it: set the chunks "
+        "per request, the follow-up questions, the answers in the wrong "
+        "form and what the model may ask to see (`fetches`). The prompt "
+        "`search` shapes the question.",
         "addressed.Reader.search_round, addressed.Reader.fetch",
         asks="search", needs=("round", "coordinate"),
-        settings=(PER_REQUEST, FOLLOW, REPLIES, MEANINGS,
-                  Setting("fetches", RULE, "what the model may ask to "
-                          "see",
-                          help="The ways in which an answer may ask for "
-                          "more chunks: the next or previous chunk, a "
-                          "table or figure it names, a search for a "
-                          "pattern and chunks similar to one shown. "
-                          "Chunks fetched this way do not count against "
-                          "the chunks of the search. Removing an entry "
-                          "forbids that way.")),
-        decided="2026-11-09", marks=CHECKS),
+        settings=(PER_REQUEST, FOLLOW, REPLIES, MEANINGS, FETCHES),
+        decided="2026-11-09, 2026-11-12", marks=CHECKS),
     Box("last_year", "Ask the document's years", "ask", "coordinates",
         "answers",
         "A year that no earlier step found is asked last. The request "
@@ -441,11 +460,14 @@ LIBRARY = {box.type: box for box in (
         "the name is not on the list yet. The model may also answer 0, "
         "then the value stays read without an entry. Words for several "
         "entries (\"all scenarios\") become one row per member where the "
-        "field allows it. To change it: the keys `merged` and "
-        "`takes_group` of the field in the Spec tab, which this step "
-        "needs.",
+        "field allows it. Where a short name is explained elsewhere, the "
+        "model may fetch that place, and the name is asked again with it. "
+        "To change it: what the model may ask to see (`fetches`, "
+        "`fetch_rounds`) and the keys `merged` and `takes_group` of the "
+        "field in the Spec tab, which this step needs.",
         "addressed.Reader.named_value", asks="names", needs=("value",),
-        settings=NUMBERS, decided="2026-11-08", spec="names"),
+        settings=NUMBERS + (FETCHES, FETCH_ROUNDS),
+        decided="2026-11-08, 2026-11-12", spec="names"),
     # -- check ---------------------------------------------------------------
     Box("about", "Is the find about this value?", "check",
         "answers", "answers",

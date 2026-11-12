@@ -680,6 +680,43 @@ holds (`read`), when an answer does not hold after its follow-ups (`unbacked`), 
 `--top-up-open` sets the budget to every piece (`runner.read_to_end`), so a
 coordinate ends `read` or `unstated` there.
 
+### Fetching what a line points to
+
+Where the document says a missing detail at another place or points to it ("see
+figure 12", "(Prognos 2021)", a chapter named in a sentence), the model may fetch
+that place itself (owner decision 2026-11-12). Besides the search, four requests
+offer `more` with the same ways of fetching, each by its own value of the rule
+`fetches` at its step (empty: the step fetches nothing):
+
+- the request at the value's own place (`coord`, `Reader.ask_own_place`) and its
+  follow-up: what it asks for comes first in the search after it, before the pieces
+  beside the value (`CoordItem.fetched`, `SearchSupply.fetched`);
+- the request of a field the document has once (`docfield`, `Reader.ask_window`):
+  what it asks for comes first in the field's next request, beyond the field's budget
+  and not counted in it (`ListSupply.fetched`);
+- the request of a name (`names`, `Reader.name_of`) and of a cited work's detail
+  (`coord` with `work`, `Reader.work_value`): the same request is asked again with
+  the fetched pieces under `passages`, each under a letter of its own, as often as
+  the rule `fetch_rounds` says (`Reader.asked_with_fetched`), so that a short
+  scenario name meets the sentence that explains it and a short citation the entry
+  of the list of references; an answer may name a line of them, checked as always.
+
+A question about a dimension (`coord` at the value's own place, `search`) that shows
+a figure whose picture the run attaches (`attach_images`) may also ask for that
+picture, `{"get": "image"}` for the figure the value stands in, `{"get": "image",
+"id": "B"}` for the figure under letter B (`addressed.IMAGE`, a way of the rule
+`fetches`). The same request is then asked again with the picture beside its
+message (`Reader.with_picture`; the runner sends it as an image part,
+`addressed.PICTURE`) and with `image` under the figure's letter, and it may ask for
+no picture: one picture a request, each picture once a coordinate
+(`CoordItem.pictures`). The answer is still a shown line of the figure's
+transcription, such as the legend line of a colour, and both checks apply as
+always; the picture only helps to read what the transcription does not say. A
+prompt tells a request about fetching only where its reply may fetch: the parts
+`<!-- with: more -->` and `<!-- with: get_image -->` follow the reply's form, not
+its payload (`runner.reply_offers`), and `<!-- with: image -->` the request that
+carries a picture.
+
 A find from another passage than the value's own is asked whether that place speaks
 about this value (`Reader.about`, prompt `extraction/check`, answer `yes` or `no`,
 owner decision 2026-11-07), and a `no` drops it. The check is the profile's

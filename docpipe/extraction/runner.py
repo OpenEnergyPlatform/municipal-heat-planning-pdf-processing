@@ -2087,12 +2087,27 @@ ASK_KEYS = {"transcribe": "caption", "find": "found", "docfield": "found",
             "phrase": "phrase"}
 
 
-def request_prompt(parts, payload: dict):
+def request_prompt(parts, payload: dict, shape: Optional[dict] = None):
     """The prompt of one request: what every request of its kind is told,
     and the part of each field its payload carries (`thread.Parts.system`,
     owner decision 2026-11-07: no request is told about a field it does not
-    carry)."""
-    return parts.system(payload.keys())
+    carry); where its reply may fetch (*shape* offers "more"), the part
+    `more`, and `get_image` where it may ask for a figure's picture (owner
+    decision 2026-11-12)."""
+    return parts.system(set(payload.keys()) | reply_offers(shape))
+
+
+def reply_offers(shape: Optional[dict]) -> set:
+    """{"more", "get_image"} as far as the reply form *shape* offers them:
+    what a request's prompt tells about besides its payload."""
+    schema = ((shape or {}).get("json_schema") or {}).get("schema") or {}
+    more = (schema.get("properties") or {}).get("more")
+    if not isinstance(more, dict):
+        return set()
+    gets = (((more.get("items") or {}).get("properties") or {})
+            .get("get") or {}).get("enum") or ()
+    return {"more"} | ({"get_image"} if addressed_map.IMAGE in gets
+                       else set())
 
 
 def make_asks(profile=None) -> Optional[addressed_map.Asks]:
@@ -2127,14 +2142,16 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
 
     def own(payload: dict) -> dict:
         return {key: value for key, value in payload.items()
-                if key != "conversation"}
+                if key not in ("conversation", addressed_map.PICTURE)}
 
     def messages(payload: dict, content: str) -> list:
         """The messages of a request: where the rule `conversation` keeps
         the questions asked before about the same value
         (`addressed.Reader._talk`), each of them and its answer as a
         message of its own, then this request's (owner decision
-        2026-11-07: one question a message, a follow-up after it)."""
+        2026-11-07: one question a message, a follow-up after it). A
+        request that carries a figure's picture (`addressed.PICTURE`,
+        owner decision 2026-11-12) sends it beside its message."""
         out = []
         for one in payload.get("conversation") or ():
             asked = message(one["sent"])
@@ -2143,6 +2160,11 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
             out += [{"role": "user", "content": asked},
                     {"role": "assistant", "content": json.dumps(
                         one["answer"], ensure_ascii=False)}]
+        picture = payload.get(addressed_map.PICTURE)
+        part = _image_part(picture) if picture else None
+        if part is not None:
+            return out + [{"role": "user", "content": [
+                {"type": "text", "text": content}, part]}]
         return out + [{"role": "user", "content": content}]
 
     def asker(kind: str) -> Callable:
@@ -2150,7 +2172,7 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
 
         def ask(payload, document_id, /, shape, example, **noted):
             return ask_in_grammar(
-                client, request_prompt(parts, own(payload)),
+                client, request_prompt(parts, own(payload), shape),
                 messages(payload, message(payload)),
                 shape, document_id, kind, ASK_KEYS[kind], example, **noted)
         return ask
@@ -2158,7 +2180,7 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
     def follow(kind, payload, document_id, /, shape, example, **noted):
         content = f"{message(payload)}\n\n{follow_words()}"
         return ask_in_grammar(
-            client, request_prompt(loaded[kind], own(payload)),
+            client, request_prompt(loaded[kind], own(payload), shape),
             messages(payload, content),
             shape, document_id, "follow", ASK_KEYS[kind], example,
             **{**noted, "asked": kind})
@@ -2238,7 +2260,8 @@ def search_budget() -> tuple:
 def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
                 probes: Optional[Callable] = None,
                 rerank: Optional[Callable] = None,
-                context: Optional[Callable] = None):
+                context: Optional[Callable] = None,
+                image_of: Optional[Callable] = None):
     """The reading of a document piece by piece (`addressed.Reader`), or
     None where its spec names no groups or the profile writes no prompts
     for it. What is asked once of a plan beside its fields
@@ -2259,7 +2282,7 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
         frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
         budget=pieces, shares=shares, per_request=per_request,
         context=context, numbers=numbers(),
-        flow=flow_map.tree_of(profile))
+        flow=flow_map.tree_of(profile), image_of=image_of)
 
 
 class Persistent:
@@ -2328,8 +2351,12 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
              Path(out) / "transcripts", Path(out) / "survey")
     return surveyed_map.SurveyedHarvest(
         spec,
-        lambda doc_spec: make_reader(doc_spec, profile, order, search_order,
-                                     seek, rerank, context_of),
+        lambda doc_spec: make_reader(
+            doc_spec, profile, order, search_order, seek, rerank, context_of,
+            # The picture a coordinate request may ask for: the figure's
+            # crop where the run attaches images (owner decision
+            # 2026-11-12).
+            lambda source: image_path_of(source, image_root)),
         lambda document_id: every(document_id, set()),
         spec_for=spec_for, transcripts=transcripts, orders=orders,
         numbers=numbers, each=run_each, trace=trace.event)

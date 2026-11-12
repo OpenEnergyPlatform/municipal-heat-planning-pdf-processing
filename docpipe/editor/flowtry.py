@@ -218,7 +218,8 @@ class Recorder:
         if entry["first"] is None:
             parts = self._parts(follows or kind)
             system = runner.system_text(runner.request_prompt(
-                parts, payload), example) if parts is not None else ""
+                parts, payload, shape), example) if parts is not None \
+                else ""
             entry["first"] = {
                 "kind": kind if not follows else f"follow of {follows}",
                 "system": system,

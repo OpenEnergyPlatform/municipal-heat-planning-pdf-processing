@@ -65,6 +65,22 @@ def test_every_request_is_kept_at_its_box_and_none_is_sent(scenarios):
     assert "name" not in tried(scenarios, "first_line", tree)["boxes"]
 
 
+def test_a_request_whose_answer_may_fetch_is_built_with_its_part(scenarios):
+    # the try builds a prompt as the run does (`runner.request_prompt`): the
+    # question at the value's place may fetch, so it is told how
+    told = "fetches pieces a shown line points to"
+    got = tried(scenarios, "first_line")
+    assert told in got["boxes"]["own_place"]["first"]["system"]
+    # the failure by construction: a step that may fetch nothing has no
+    # "more" in its reply form, and its prompt does not tell of it
+    profile, _ = scenarios
+    tree = copy.deepcopy(flow.tree_of(profile))
+    next(node for node, _ in flow.walk(tree)
+         if node["id"] == "own_place")["rules"] = {"fetches": []}
+    again = tried(scenarios, "first_line", tree)
+    assert told not in again["boxes"]["own_place"]["first"]["system"]
+
+
 def test_nothing_goes_the_whole_way_and_no_answer_fails_its_form(scenarios):
     nothing = tried(scenarios, "nothing")
     first = tried(scenarios, "first_line")

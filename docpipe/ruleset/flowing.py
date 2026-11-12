@@ -160,7 +160,7 @@ RULES = (
          "it already. Off: the search may show that chunk again. Decided "
          "on 2026-11-09.", decided="2026-11-09",
          where="engine.py (locate)",
-         steps=("order", "beside", "search", "state")),
+         steps=("order", "beside", "coord", "search", "state")),
     rule("fetch_after_found", "flow", "Search", "switch",
          "On: chunks that an answer asked to see are still fetched when "
          "the same answer already gave a value, or a value not backed by "

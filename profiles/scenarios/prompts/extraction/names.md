@@ -14,3 +14,9 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 
 <!-- with: work -->
 "work" is the work the value with this name belongs to.
+
+<!-- with: more -->
+"more" fetches pieces a shown line points to or that you still need, such as "see figure 12" or the list of references: {"get":"next"} the piece after the one shown, {"get":"previous"} the one before, {"get":"item","id":"p17_img1"} the table or figure a line names as "[p17_img1 ...]", {"get":"search","pattern":"baseline"} the pieces a pattern stands in, {"get":"similar","text":"..."} the pieces closest to a sentence, written as the publication would print it, never as a question. What you fetch is shown to you in the next request.
+
+<!-- with: passages -->
+"passages" are further pieces of the publication you asked to see, each under its letter, with its kind, page and title.

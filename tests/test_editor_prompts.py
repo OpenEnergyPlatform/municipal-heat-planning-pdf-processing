@@ -137,6 +137,38 @@ def test_a_changed_part_changes_only_the_requests_that_carry_its_field(
     assert view(record, 0, follow)["changed"] is False
 
 
+def test_a_request_whose_answer_may_fetch_is_previewed_with_its_part(
+        monkeypatch):
+    # a request whose reply form offers "more" is told the part `more`
+    # (`runner.request_prompt`), AND the preview gives it character for
+    # character, AND the request log counts "more" among what it carried
+    sent: list = []
+    monkeypatch.setattr(runner, "_client", lambda: model(sent))
+    monkeypatch.setattr(runner.trace, "event", lambda *a, **k: None)
+    asks = runner.make_asks(KWP)
+    example = {"at": "2", "words": "..."}
+    asks.coord(PAYLOAD, 7, shape=addressed.coord_format(False, more=True),
+               example=example)
+    asks.coord(PAYLOAD, 7, shape=addressed.coord_format(False),
+               example=example)
+    events = [{"t": "coord_ask", "doc": 7, "attempt": 1, "input": request,
+               "output": {"content": ANSWER, "finish": "stop"}}
+              for request in sent]
+    trace = recorded.Trace("doc7.trace.jsonl.gz", events)
+    told = "auf die eine gezeigte Zeile verweist"
+    assert told in trace.requests[0]["system"]
+    assert told not in trace.requests[1]["system"]
+    got = view(trace, 0)
+    assert got["why"] is None and got["same_as_recorded"] is True
+    assert "more" in trace.carried(0) and "more" not in trace.carried(1)
+    # the failure by construction: the record without its reply form is
+    # put together without the part, which is not what was sent
+    bare = copy.deepcopy(trace.sent(0))
+    del bare["response_format"]
+    assert prompts.preview(KWP, trace.requests[0], bare, {},
+                           read)["same_as_recorded"] is False
+
+
 def test_a_prompt_cut_for_editing_is_put_back_character_for_character():
     for profile in (KWP, SCENARIOS):
         for row in prompts.listing(profile):
@@ -147,7 +179,9 @@ def test_a_prompt_cut_for_editing_is_put_back_character_for_character():
     # where it writes one (the second reading's)
     cut = prompts.segments(FRONT + prompts.on_disk(KWP, "extraction/coord",
                                                    read)["raw"])
-    assert cut["front"].startswith("---\n") and len(cut["parts"]) == 5
+    # five parts of what a request carries, four of what it may fetch
+    # (owner decision 2026-11-12: more, get_image, image, passages)
+    assert cut["front"].startswith("---\n") and len(cut["parts"]) == 9
     assert all(part["mark"].startswith("<!-- with: ")
                and part["mark"].endswith("-->\n") for part in cut["parts"])
 

@@ -43,8 +43,9 @@ def carried(self, index: int) -> tuple
 ```
 
 The fields the message of request *index* carries: the keys of
-its payload, () where it shows none. Which parts of its prompt a
-request is told hangs on them (`thread.Parts.system`).
+its payload, and what its reply form offers ("more", "get_image"),
+() where it shows none. Which parts of its prompt a request is told
+hangs on them (`runner.request_prompt`).
 
 #### Trace.kinds
 
