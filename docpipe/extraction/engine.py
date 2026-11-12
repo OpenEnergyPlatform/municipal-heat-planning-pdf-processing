@@ -1069,23 +1069,37 @@ class Engine:
                     members = list(chunk) if isinstance(chunk, list) \
                         else [chunk]
 
-                    def read_of(member) -> Read:
-                        key = (parameter.uri, member.owner)
+                    def read_at(owner, source) -> Read:
+                        key = (parameter.uri, owner)
                         read = doc.by_find.get(key)
                         if read is None:
                             read = doc.by_find[key] = Read(Batch(
                                 plan.document_id, parameter,
                                 [WorkItem(plan.document_id, parameter,
-                                          member.passage.source)],
+                                          source)],
                                 spec=self.reader.spec), [])
                             doc.find_reads.append(read)
                         return read
+
+                    def read_of(member) -> Read:
+                        return read_at(member.owner, member.passage.source)
                     first = read_of(members[0])
                     by_owner = {member.owner: member for member in members}
                     first.asked += got["asked"]
+                    # Found in another passage of the document, which is
+                    # its place (`addressed.Found.elsewhere`, owner
+                    # decision 2026-11-12).
+                    elsewhere = {id(claim)
+                                 for claim in got.get("elsewhere", ())}
                     for claim in got["claims"]:
                         owner = tuple((claim.get("at") or {}).get("owner")
                                       or ())
+                        passage = plan.passages.get(owner)
+                        if id(claim) in elsewhere and passage is not None \
+                                and owner not in by_owner:
+                            read_at(owner, passage.source).claims \
+                                .append(claim)
+                            continue
                         read_of(by_owner.get(owner, members[0])).claims \
                             .append(claim)
                     first.lost.extend(got["lost"])

@@ -1,4 +1,8 @@
+<!-- way: answer_with=address -->
 Answer the question under "question" for the value under "value" with the address of a line under "passages" that says the answer for this value and its words; where none says it, "at" is 0.
+<!-- way: answer_with=quote -->
+Answer the question under "question" for the value under "value" with a line under "passages" that says the answer for this value, under "quote" character for character, and its words; where none says it, "quote" is 0.
+<!-- /way -->
 
 * "value" gives the value's words and its address under "passage", its own place, which does not say the answer. "passages" are further pieces of the publication, each under its letter, with its kind, page and title.
 * Each line starts with its address and the letter of its block. A line that "|" divides has cells, counted from 1, wherever it stands: A19.2 is the second cell of line A19.

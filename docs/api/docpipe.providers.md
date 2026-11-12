@@ -195,4 +195,16 @@ def timed_out(exc: BaseException) -> bool
 
 A request that got no answer within its time, whatever sent it.
 
+### no_reply
+
+```python
+def no_reply(exc: BaseException) -> bool
+```
+
+A request that got no reply at all: it timed out (`timed_out`), its
+connection could not be made or broke off before the answer was read,
+or a provider said so (a `ProviderError` without a status). Any other
+failure without a status is a fault of the code that sent the request
+(owner decision 2026-11-12), and asking again changes nothing.
+
 [Back to the index](../README.md)

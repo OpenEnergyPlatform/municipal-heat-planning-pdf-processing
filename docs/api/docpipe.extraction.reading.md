@@ -227,11 +227,15 @@ of it.
 ### passage_of
 
 ```python
-def passage_of(claim: dict, shown: list) -> Optional[Source]
+def passage_of(claim: dict, shown: list,
+               document: Sequence = ()) -> Optional[Source]
 ```
 
 The first passage of *shown* whose text carries the claim's quote:
-the one its value is read from. None where the quote stands in none.
+the one its value is read from; where the rule `check_quote_shown` is
+off and none does, the first passage of *document*, the document's
+passages in its order, that does (`pipeline.place_of`). None where the
+quote stands in none.
 
 ### span_rows
 

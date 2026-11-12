@@ -206,25 +206,35 @@ RULES: tuple = (
          "How often a request is asked again after the server's failure "
          "(a rate limit, a server error, a timeout, no connection). 0: "
          "without a limit, until the run halts, so that nothing is lost "
-         "for a server that comes back. Decided on 2026-11-09.",
-         least=0, decided="2026-11-09", steps=_ASKS,
+         "for a server that comes back. Any other error without a status "
+         "is a fault in our own code, asked again as `other_errors_retry` "
+         "says. Decided on 2026-11-09 and 2026-11-12.",
+         least=0, decided="2026-11-09, 2026-11-12", steps=_ASKS,
          where="runner.py (Failures)"),
     rule("other_errors_retry", _FLOW, _AGAIN, "whole",
          "How often a request is asked again after an error that is neither "
-         "the server's failure nor a refusal, such as a fault in the code "
-         "that sent it. 0: it is not asked again.", least=0, steps=_ASKS,
-         where="runner.py (Failures)"),
+         "the server's failure (no reply, a rate limit, a server error) nor "
+         "a refusal: a fault in the code that sent it. 0: it is not asked "
+         "again. A request not asked again leaves its document unfinished, "
+         "the run goes on, a later run reads it again, and the log names "
+         "the fault and where in the code it arose. This holds for a "
+         "search, an embedding and a reranking too. Decided on 2026-11-12.",
+         least=0, decided="2026-11-12", steps=_ASKS,
+         where="runner.py (Failures, persistently)"),
     rule("unserved_unstamped", _FLOW, _AGAIN, "switch",
          "On: a document one of whose requests was never answered gets no "
          "stamp, so a later run reads it again. Off: it is stamped as read "
          "all the same. Decided on 2026-11-09.", decided="2026-11-09",
          steps=("write",), where="runner.py (not_happened)"),
     rule("search_retry_most", _FLOW, _AGAIN, "whole",
-         "How often a search, an embedding or a reranking that failed is "
-         "asked again before its document fails. 0: without a limit, until "
-         "it answers, and the plan's own order never stands in for a "
-         "failed search. Decided on 2026-11-09.", least=0,
-         decided="2026-11-09", steps=_ASKS, where="runner.py (persistently)"),
+         "How often a search, an embedding or a reranking that the server "
+         "failed (no reply, a rate limit, a server error) is asked again "
+         "before its document fails. 0: without a limit, until it answers, "
+         "and the plan's own order never stands in for a failed search. A "
+         "fault in our own code is asked again as often as "
+         "`other_errors_retry` says. Decided on 2026-11-09 and 2026-11-12.",
+         least=0, decided="2026-11-09, 2026-11-12", steps=_ASKS,
+         where="runner.py (persistently)"),
     rule("repair_replies", _FLOW, _AGAIN, "texts",
          "Which repairs a reply that is no JSON object gets before it is "
          "asked again: think (a think block is taken off), fences (code "

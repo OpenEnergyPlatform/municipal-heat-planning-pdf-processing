@@ -396,7 +396,8 @@ a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
 `docpipe/extraction/runner.py:4539`, `:4561` to `4562`), when nothing
 answered at all (`:4563` to `4564`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4565` to `4568`); `not_happened`
+on a 429 or a 5xx, timed out, was refused to the end or failed in our own
+code, which is no answer (`:4565` to `4568`); `not_happened`
 (`:4542` to `4569`) tells the three apart, and the pass that appends a
 parameter asks it too.
 `finish_document` removes an earlier stamp before it writes the file, so a

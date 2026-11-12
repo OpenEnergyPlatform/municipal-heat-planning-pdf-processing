@@ -28,7 +28,7 @@ a harvest already written can use without starting a document over.
 |---|---|
 | **In** | The corpus [chunking](chunking.md) built: the SQLite database's `Sections`, `Tables`, `Images`, `Embeddings`, `Documents` and `DocumentMeta` rows, and the FAISS index. No file under `results/` is read directly. Also a profile's validated `extraction_spec.json` (`spec.load`). |
 | **Out** | One `<document>.jsonl` harvest and one `<document>.stamp.json` resume stamp per document, a per-document trace file under `trace/`, a `survey/<document id>.json` per document, the order its pieces are read in, a `transcripts/<document id>.json` per document with figures, the caption and numbers its figures were transcribed into, `query_cache.db` once per run, a `stats/<pass>-<run start>.json` and, for every file the run replaced, the copy it found under `archive/` (see Archive and stats). A `--serialize` call reads the harvest back and writes one Turtle file (a profile whose drawing asks for a strict graph, kwp, writes a second, `.strict.ttl`), feeding [the knowledge graph](graph.md) stage. |
-| **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchors key and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, or timed out, is not stamped, which the run counts as a failure and answers with exit code 1. |
+| **Resumes on** | `<document>.stamp.json`, compared against what today's spec would produce, one key per parameter, value list, axis and slot; the whole-file spec sha stands in only for a stamp that carries none of those. The sha256 of the PDF the harvest was read from is compared too, where the stamp and the database both carry one. The model, the anchors key and every prompt are written into the stamp for a reader and are never compared. A document with no stamp is read as fully stale, never as finished, and a document one of whose requests ended on a 429 or a 5xx, timed out, was refused to the end or failed in our own code is not stamped, which the run counts as a failure and answers with exit code 1. |
 | **Needs** | A served LLM reached over the network, the query embedder, the FAISS index, the corpus database, and, unless `EXTRACT_LOCATE=0`, the source PDF (`--pdf-root`) to place a quote's highlight rectangles. Unless `EXTRACT_ATTACH_IMAGES=0`, also the `images/` directory (`--image-root`) with the table and figure crops that ride along with every request. |
 
 Extraction is the seventh of the pipeline's eight stages. [Chunking,
@@ -695,8 +695,11 @@ instruction of its own kind, plus the answer that did not hold under `answer` an
 what did not hold under `what`: for each refused entry its address, its words and
 the reason in the profile's words (`wording.say`: `not_an_address`,
 `words_not_in_line`, `quote_not_in_source`, `answer_not_in_quote`,
-`not_an_option`, `name_not_listed`, ...); the words of the follow-up prompt follow
-the payload. Each further follow-up carries the answer before it and why it did
+`not_an_option`, `name_not_listed`, ...); where the rule `answer_with` has an
+answer name its line by its words, `not_an_address_quote` and
+`words_not_in_line_quote` say the same and ask for the line under `quote`, so a
+follow-up asks for what its request asked (owner decision 2026-11-12). The words
+of the follow-up prompt follow the payload. Each further follow-up carries the answer before it and why it did
 not hold. What holds after one is taken. What does not hold after the last ends
 `unbacked` for a coordinate and is left for a find, and no further request
 follows. The number counts the places that ask again: finds, document fields,
@@ -769,7 +772,20 @@ one of those keys and of no other (`thread.Parts.system`). A prompt of the compu
 step may also hold `<!-- follow-up: KEY ... -->` parts, the words of a message
 following an answer; the run checks at its start that the compute prompt has words
 for every field its follow-ups carry (`compute.FOLLOWS`) and stops with a
-`LookupError` otherwise. The prompt shows the reply of its request (the
+`LookupError` otherwise. A prompt may also hold groups of ways, words between which
+a rule with choices chooses: `<!-- way: RULE=CHOICE -->` before the words of each
+way and `<!-- /way -->` after the last, each marker on a line of its own
+(`thread.chosen`). A request is told the way its rule has in the request's step, and
+no marker; a group that lacks a way for a choice of its rule, names a choice the rule
+does not have or a rule that is none, or is not closed, is an error when the prompt
+is cut, before anything is sent (`thread.check_ways`). The prompts of the reading
+(find, coord, docfield, search and list, and work in scenarios) ask for a line's
+address in the way `answer_with=address` and for the line itself, character for
+character, under `quote` in the way `answer_with=quote` (owner decision
+2026-11-12: the prompts get a second wording of that sentence, the rule chooses
+which is sent, and in the standard every request is asked word for word as
+before). The room a request's instruction takes is measured with its longest way
+(`thread.widest`). The prompt shows the reply of its request (the
 `{{example}}`) where it has the place for it, written for this request with
 exactly the keys its own grammar asks, an address shown by the first line of the
 request's own passage (`runner.system_text`); a request that finds values (find,
@@ -969,10 +985,14 @@ search keeps a passage's best. A figure goes with its picture where the run atta
 figures, any other passage as its text; the server cuts a pair that outgrows the model
 to the model's length. Scores are kept per thread for the document in hand, so a
 search asked again with fewer passages left scores nothing twice. A search, an
-embedding or a reranker request that fails is asked again until it answers or the run
-halts (`runner.persistently`, owner decision 2026-11-09) and is replaced by no other
-order and by no empty result; one the server refuses is asked `replies` times at most
-(a number of the flow) and then fails its document, which stays unfinished.
+embedding or a reranker request that the server failed (no reply, a 429, a 5xx) is
+asked again until it answers or the run halts, `search_retry_most` times at most
+where that rule sets a limit (`runner.persistently`, owner decision 2026-11-09), and
+is replaced by no other order and by no empty result; one the server refuses is asked
+`refusal_retry_most` times at most and then fails its document, which stays
+unfinished. One that fails in our own code is asked again `other_errors_retry` times
+(standard 0) and then fails its document the same way, the log naming the fault and
+where it arose (owner decision 2026-11-12).
 
 The pieces: the order of a plan's pieces for a field has the reranker score every
 piece with each of the field's sentences (`runner.make_chunk_reranker`, a pool that
@@ -1035,18 +1055,25 @@ apart. A failure that is the server's is asked again without a limit until the r
 halts (`runner.Failures.attempts`, `runner.halted`: a stop signal or a server that
 answers no more); a reply that cannot be read is asked again at most
 `replies` times (a number of the flow) and then given up, the coordinate being
-`unanswered` (owner decision 2026-11-09). A request that never arrived has no status and is the server's:
-`server_side` is true, and the loop waits on the long curve,
+`unanswered` (owner decision 2026-11-09). A request that got no reply (no
+connection, a connection broken off, a timeout: `providers.no_reply`) has no status
+and is the server's: `server_side` is true, and the loop waits on the long curve,
 `retry_wait(attempt, transport=True)`, rather than the short one a reply the
-model got wrong gets (`runner.py`). A 429, a 5xx or a timeout is `unserved`:
+model got wrong gets (`runner.py`). Any other failure without a status is a fault
+of our own code that built or sent the request, a `KeyError` or a `TypeError`: it
+is asked again `other_errors_retry` times (standard 0), and a request not asked
+again leaves its document unfinished like an unserved one, the run going on, a
+later run reading the document again, and the log naming the fault with the place
+in the code where it arose (owner decision 2026-11-12; until then such a fault
+counted as the server's and was asked again without a limit). A 429, a 5xx or a timeout is `unserved`:
 the server was asked and did not do the work, which says nothing about the
 request, so it is `server_side` too, waits on the long curve, and ends the
 request as unserved if the run halts while the last attempt still got it. Any other 4xx refuses
 the request itself (`runner.refused`, its status read from the exception or
 from its response): a request too long for the model, or one our code built
 wrong ("System message must be at the beginning.", a probe of 2026-11-01).
-It is asked again after the short wait, `replies` times at
-most, and a request refused to the end leaves its document unfinished like
+It is asked again after the short wait, `refusal_retry_most` times
+at most, and a request refused to the end leaves its document unfinished like
 an unserved one: the stamp is withheld, a later run reads the document again,
 and the log names the request and the server's reason (owner decision
 2026-11-09, so that nothing is lost without a word and a code error does not
@@ -1197,7 +1224,17 @@ entry fails once.
 holding every answer to the two clauses the value's own quote is held to:
 its cited passage sits verbatim in a shown source, and it contains the
 answer, with a floor of the rule `quote_min_chars` so that a quote names a place.
-Those are the check for a quote (`pipeline.py`). Without its own `value_raw`
+Those are the check for a quote (`pipeline.py`). Where the place is looked for is
+the rule `check_quote_shown` (`pipeline.place_of`): on, the standard, a quote has
+to stand in a shown source; off, a quote that stands in nothing shown is looked
+for, character for character, in every passage of the document, the first passage
+in the document's order that holds it is the value's place and source, and a quote
+that stands nowhere falls all the same (owner decision 2026-11-12). The same rule
+places a number the calculation takes (`reading.passage_of`) and a find whose
+quote stands in another passage than the one asked (`addressed.resolve`, the find
+then read as one of that passage); the quote is checked at its place either way
+(`verify.verify_tuple`). An address that names no shown line is asked again
+whatever the rule says. Without its own `value_raw`
 wording, a closed-list answer's quote is checked against every spelling the
 spec lists for the chosen option, not only its label: the real classes
 carry the ontology's English names, which stand in no German plan, and
@@ -1583,7 +1620,7 @@ flowchart TD
 |---|---|---|---|
 | `--recheck` | No model, no GPU, no index; the corpus database, read-only, where the profile closes lists per document | Every tuple's coordinates | Clears every stamp in the directory (unless `--keep-stamps`), except a document left alone |
 | `--remap` | No model, no GPU, no index; the corpus database, read-only, where the profile closes lists per document | A category coordinate's mapped class | Writes forward only the answer spaces it fully settled; a document left alone keeps its stamp |
-| `--top-up` | The model, the FAISS index, the embedder, the database | One named coordinate of every row that has it | Writes forward only the exact stamp keys it could settle, and none when one of its requests ended on a 429 or a 5xx, or timed out |
+| `--top-up` | The model, the FAISS index, the embedder, the database | One named coordinate of every row that has it | Writes forward only the exact stamp keys it could settle, and none when one of its requests ended on a 429 or a 5xx, timed out, was refused to the end or failed in our own code |
 | `--top-up-parameters` | The model, the FAISS index, the embedder, the database | Nothing that is stored: it appends the rows, refusals and state line of each parameter the spec gained, and builds the summary line again | Writes forward the keys of the parameters it appended and of the questions the addition alone moved, and none for a document it did not read completely |
 | `--top-up-open` | The model, the FAISS index, the embedder, the database and the harvest's traces; a document without a trace is skipped | The coordinates a stored row left `exhausted`, `unanswered` or `unbacked` (an answer replaces the block, a coordinate still open keeps its old one), and it appends the rows of the passages the harvest never asked | Moves no key; enters `top-up-open` and `rest` in `producers`, and a document whose list holds `rest` is not read again |
 | `--review` | The model, and the crops for image-attached prompts | Only a row's `flags` | Adds `review/prompt` and `review/model`, compared by nothing |
@@ -1643,7 +1680,8 @@ the sweep runs; `restore` puts the old block back unless the fresh
 sweep genuinely improves on it. A coordinate the spec derives from the unit is
 asked as in the harvest and derived only where no answer was read
 (`fields.derives`, owner decision 2026-11-07). A top-up whose own requests ended on a
-429 or a 5xx leaves the file's stamp as it was, so the next top-up asks
+429 or a 5xx, timed out, were refused to the end or failed in our own code
+leaves the file's stamp as it was, so the next top-up asks
 again; the stat lines count it as `stamps left, a request ended on 429 or
 5xx` (`topup.py`). A row whose passage no longer carries
 its stored quote is left untouched, and top-up traces land under their
@@ -1742,7 +1780,8 @@ over the new passages`). Every coordinate of an appended row carries
 are written before the keys, as the coordinate pass does.
 
 A document is written only when the new parameters were read completely.
-A request of any kind that ended on a 429 or a 5xx, or timed out, more than half the
+A request of any kind that ended on a 429 or a 5xx, timed out, was refused to the
+end or failed in our own code, more than half the
 sources never reaching the server, not one batch answering
 (`runner.not_happened`, which `finish_document` asks too), or an order
 that raised leave the file and the stamp as they were
@@ -2150,8 +2189,8 @@ A harvest line is one of four kinds, named by its `kind` field.
 A refusal whose claim carries `_harvest_failed` is a sentinel: a passage the
 run never got an answer for. Its `_why` is one of `unreachable` (the request
 never arrived), `unserved` (the server answered 429 or a 5xx, or the request timed out), `no_answer`
-(the model answered nothing, or the server refused the request with another
-4xx) and `cut_off` (the reply did not fit and there was nothing left to
+(the model answered nothing, the server refused the request with another
+4xx, or the request failed in our own code) and `cut_off` (the reply did not fit and there was nothing left to
 split); a trace `error` event with `kind: gave_up` carries the same value as
 `why`. `scripts/harvest_report.py` counts the sentinels of a harvest by these
 four causes (`SENTINEL_WHY`, `scripts/harvest_report.py`) and marks any
@@ -2413,7 +2452,8 @@ and withholds the stamp entirely, forcing a full redo on the next run, in
 three cases, which `not_happened` tells apart and the pass that appends a
 parameter asks as well: more than half a document's planned sources came back
 from a server it could not reach (the rule `unreachable_share`, `0.5`), not one batch
-answered at all, or any one of its requests ended on a 429 or a 5xx, or timed out. The last
+answered at all, or any one of its requests ended on a 429 or a 5xx, timed out, was
+refused to the end or failed in our own code. The last
 count adds the `unserved` sentinels to the document's entry in `UNSERVED`,
 which the callers pass as `lost`; one is enough, because such a request was
 never answered and nothing says it cannot be.

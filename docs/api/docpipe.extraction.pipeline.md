@@ -427,6 +427,21 @@ where its list has no entry for it (`fields.Slot.keeps_print`, the unit):
 the wording of an answer with no entry, or of one whose answer is no
 entry of the list; None for any other answer, which is read as before.
 
+### place_of
+
+```python
+def place_of(sources: list, quote,
+             document: Sequence = ()) -> Optional[Source]
+```
+
+Where *quote* stands (`quote_in`): the first of *sources*, what the
+request showed, whose text holds it; where none does and the rule
+`check_quote_shown` is off, the first passage of *document*, the
+document's passages in its order, that holds it (owner decision
+2026-11-12: the code looks for the quote in the whole document and
+takes the place where it stands). None where it stands in neither, or
+is no text: the answer falls.
+
 ### merge_field
 
 ```python
@@ -434,7 +449,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
                 bases: Optional[list] = None,
                 not_shown: str = "quote_not_in_source",
-                not_in_quote: str = "or_unstated") -> dict
+                not_in_quote: str = "or_unstated",
+                document: Sequence = ()) -> dict
 ```
 
 Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
@@ -456,7 +472,10 @@ Shown, not the row's own source: the year of a table is in its caption and
 the scenario is in the section heading, so a coordinate's evidence is
 routinely in a different passage than the number's. Checking it against
 the row's own source would refuse exactly the readings this stage exists
-to collect.
+to collect. *document* is the document's passages in its order: where
+the rule `check_quote_shown` is off, a quote that stands in nothing
+shown is looked for there, and the first passage that holds it is its
+place (`place_of`, owner decision 2026-11-12).
 
 Those two clauses, and a quote long enough to name a place in the
 document, are the whole check. Which table a passage belongs to, how far

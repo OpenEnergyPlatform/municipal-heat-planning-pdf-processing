@@ -43,7 +43,8 @@ REQUIRED = frozenset({
     "wrong_shape", "code_failed", "code_error_unknown", "code_silent",
     "code_output", "image_for", "anchor_parameter", "anchor_unit",
     "value_in_several_rows", "compute_output", "compute_needs_code",
-    "not_an_address", "words_not_in_line", "compute_taken",
+    "not_an_address", "words_not_in_line", "not_an_address_quote",
+    "words_not_in_line_quote", "compute_taken",
     "compute_not_taken", "compute_quote", "compute_rejected",
 })
 
@@ -68,6 +69,10 @@ NOTES = {
         "phrase differently has moved all of it."),
     "shape_rule": "a reply that could not be read",
     "not_an_address": "a round of the values of a passage, one value each",
+    "not_an_address_quote": (
+        "the same two sentences where the rule answer_with has an answer "
+        "name its line by its words, not by its address (owner decision "
+        "2026-11-12)"),
     "code_failed": "what the model gets back after a calculation",
     "image_for": "labels inside a request",
 }

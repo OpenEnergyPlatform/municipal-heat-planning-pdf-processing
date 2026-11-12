@@ -18,6 +18,20 @@ No request is told what another one may bring (owner decision 2026-11-07:
 "Jede Anfrage sollte genau die Prompt bekommen, die beschreibt, was sie tun
 soll").
 
+Where a rule chooses how a request asks, the words of each choice stand
+side by side, and a request is told those of the choice its rule has in its
+step (owner decision 2026-11-12: a second wording of a sentence, and the
+rule chooses which is sent):
+
+    <!-- way: answer_with=address -->
+    ... with the address of its line ...
+    <!-- way: answer_with=quote -->
+    ... with the words of its line, character for character ...
+    <!-- /way -->
+
+Each marker stands on a line of its own; a group holds one way for every
+choice of its rule and is closed by "<!-- /way -->" (`chosen`).
+
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -31,8 +45,105 @@ WITH, FOLLOW_UP = "with", "follow-up"
 # A part's marker: its kind and the names after it, on a line of its own.
 MARK = re.compile(r"^<!-- (with|follow-up): ([A-Za-z_][A-Za-z_ ]*?)"
                   r" *-->[ \t]*$", re.MULTILINE)
+# A way's marker, "<!-- way: rule=choice -->", or the close of a group of
+# ways, "<!-- /way -->", each a line of its own with its line break.
+WAY = re.compile(r"^<!-- (?:way: ([A-Za-z_]\w*)=([\w-]+)|(/way)) -->"
+                 r"[ \t]*(?:\n|\Z)", re.MULTILINE)
 # The reply a part shows (`runner.system_text`).
 EXAMPLE = "{{example}}"
+
+
+def ways_of(text: str, where: str = "") -> list:
+    """[(start, end, rule, {choice: words})] of the groups of ways in
+    *text*, in its order, *start* and *end* spanning a group from its first
+    marker to the line break of its close. LookupError where a group is not
+    closed, a close has no group, or a group names two rules or one choice
+    twice."""
+    groups: list = []
+    group: Optional[dict] = None
+    for mark in WAY.finditer(text):
+        if group is not None:
+            group["ways"][group["choice"]] = text[group["from"]:mark.start()]
+        if mark.group(3) is not None:
+            if group is None:
+                raise LookupError(f"{where}: a <!-- /way --> closes no way")
+            groups.append((group["start"], mark.end(), group["rule"],
+                           group["ways"]))
+            group = None
+            continue
+        rule, choice = mark.group(1), mark.group(2)
+        if group is None:
+            group = {"start": mark.start(), "rule": rule, "ways": {}}
+        elif rule != group["rule"]:
+            raise LookupError(f"{where}: one group of ways names the rules "
+                              f"{group['rule']!r} and {rule!r}")
+        if choice in group["ways"]:
+            raise LookupError(f"{where}: two ways for {rule}={choice}")
+        group["choice"], group["from"] = choice, mark.end()
+    if group is not None:
+        raise LookupError(f"{where}: the ways of {group['rule']!r} are not "
+                          f"closed by <!-- /way -->")
+    return groups
+
+
+def _with_ways(text: str, pick, where: str) -> str:
+    """*text* with each group of ways replaced by the words *pick(rule,
+    ways)* says."""
+    groups = ways_of(text, where)
+    if not groups:
+        return text
+    out, at = [], 0
+    for start, end, rule, ways in groups:
+        out += [text[at:start], pick(rule, ways)]
+        at = end
+    return "".join(out + [text[at:]])
+
+
+def chosen(text: str, where: str = "") -> str:
+    """*text* with each group of ways replaced by the words of the way its
+    rule has now, read in the step of the request that is asked
+    (`rules.get`). Text without ways is returned as it is."""
+    from .. import rules
+
+    def pick(rule: str, ways: dict) -> str:
+        value = rules.get(rule)
+        if value not in ways:
+            raise LookupError(f"{where}: no way for {rule}={value!r}")
+        return ways[value]
+    return _with_ways(text, pick, where)
+
+
+def widest(text: str, where: str = "") -> str:
+    """*text* with each group of ways replaced by its longest way, in
+    words: the most a request of it can be told, whatever its rule says."""
+    return _with_ways(
+        text, lambda rule, ways: max(ways.values(),
+                                     key=lambda words: len(words.split())),
+        where)
+
+
+def check_ways(text: str, where: str = "",
+               known: Optional[dict] = None) -> None:
+    """LookupError where a group of ways in *text* names a rule that is
+    none of *known* (the rules of the ambient profile where not given) or
+    has no choices, or does not hold exactly one way for each choice of its
+    rule: a request would be sent words its rule never chooses, or none."""
+    groups = ways_of(text, where)
+    if not groups:
+        return
+    if known is None:
+        from .. import rules
+        from ..profile import active_profile
+        known = rules.registry(active_profile())
+    for _start, _end, name, ways in groups:
+        rule = known.get(name)
+        if rule is None or not rule.choices:
+            raise LookupError(f"{where}: ways for {name!r}, which is no "
+                              f"rule with choices")
+        if set(ways) != set(rule.choices):
+            raise LookupError(
+                f"{where}: the ways of {name!r} are {sorted(ways)}, and "
+                f"its choices are {sorted(rule.choices)}")
 
 
 @dataclass(frozen=True)
@@ -59,10 +170,12 @@ class Parts:
         """The system prompt of a request whose message carries the fields
         *carried*: what every request is told, then the part of each field
         it carries, in the order of the file. A field no part names is told
-        nothing beyond what every request is told."""
+        nothing beyond what every request is told. Of each group of ways,
+        the way its rule has in the request's step (`chosen`)."""
         carried = set(carried)
-        pieces = [self.common.strip()] + [
-            part.text.strip() for part in self.of(WITH)
+        where = self.prompt.id
+        pieces = [chosen(self.common, where).strip()] + [
+            chosen(part.text, where).strip() for part in self.of(WITH)
             if carried & set(part.keys)]
         return replace(self.prompt,
                        text="\n\n".join(p for p in pieces if p) + "\n")
@@ -80,7 +193,8 @@ class Parts:
         if missing:
             raise LookupError(f"{self.prompt.id}: no follow-up part for "
                               f"{missing}")
-        return "\n\n".join(part.text.strip() for part in parts)
+        return "\n\n".join(chosen(part.text, self.prompt.id).strip()
+                           for part in parts)
 
     def follow_up(self, follow: dict, example: Optional[dict] = None) -> str:
         """A follow-up message: its words (`words`), then the fields that
@@ -119,11 +233,13 @@ def shown_with(text: str, example: Optional[dict], where: str) -> str:
 def cut(prompt, follows: Iterable = ()) -> Parts:
     """*prompt* cut at its markers. *follows* are the fields the code sends
     follow-ups with, each of which needs a follow-up part. A part marked
-    twice or a follow-up field without its words raises LookupError, which
-    the run raises at its start."""
+    twice, a follow-up field without its words, or a group of ways that is
+    not one way for each choice of its rule (`check_ways`) raises
+    LookupError, which the run raises at its start."""
     text = prompt.text
     marks = list(MARK.finditer(text))
     common = text[:marks[0].start()] if marks else text
+    check_ways(common, prompt.id)
     parts: list = []
     seen: set = set()
     for index, mark in enumerate(marks):
@@ -135,6 +251,8 @@ def cut(prompt, follows: Iterable = ()) -> Parts:
                 raise LookupError(f"{prompt.id}: two {kind} parts for "
                                   f"{key!r}")
             seen.add((kind, key))
+        check_ways(text[mark.end():end],
+                   f"{prompt.id} ({kind}: {' '.join(keys)})")
         parts.append(Part(kind, keys, text[mark.end():end]))
     out = Parts(prompt, common, tuple(parts))
     for key in follows:

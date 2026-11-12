@@ -7,6 +7,7 @@ refused to the end fails its document (`runner.persistently`). Each promise
 has a case that breaks it beside the one that keeps it."""
 import ast
 import json
+import logging
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,7 +16,9 @@ import httpx
 import openai
 import pytest
 
+from docpipe import rules
 from docpipe.extraction import runner
+from docpipe.providers import ProviderError, ProviderTimeout
 
 from conftest import in_turn
 from docpipe.prompts import Prompt
@@ -245,6 +248,95 @@ def test_a_search_refused_to_the_end_fails_its_document(waits):
     # asked again and answered
     call, calls = calling(Status(400), ["p1"])
     assert runner.persistently("search", call)(7) == ["p1"]
+
+
+# -- a fault of our own code (owner decision 2026-11-12) ---------------------
+# Only a missing reply and the server's error codes are the server's
+# failure, asked again without a limit; any other failure is a fault of our
+# own code: not asked again, its document stays unfinished, the run goes on,
+# and the log says where it arose.
+
+def no_connection():
+    return openai.APIConnectionError(request=httpx.Request("POST", "http://x"))
+
+
+@pytest.mark.parametrize("failure", [
+    slow, no_connection, lambda: ConnectionError("reset"),
+    lambda: TimeoutError("socket"), lambda: httpx.ConnectError("refused"),
+    lambda: httpx.ReadTimeout("slow"),
+    lambda: httpx.RemoteProtocolError("closed mid-answer"),
+    lambda: ProviderError("no connection"),
+    lambda: ProviderTimeout("no answer in time"),
+    lambda: Status(429), lambda: Status(503)])
+def test_a_missing_reply_429_and_5xx_are_the_server_s_failure(failure):
+    assert runner.server_side(failure())
+
+
+@pytest.mark.parametrize("fault", [
+    lambda: KeyError("value"), lambda: TypeError("None is no list"),
+    lambda: AttributeError("no claim"), lambda: ValueError("bad shape"),
+    lambda: FileNotFoundError("index.bin"), lambda: LookupError("cassette"),
+    lambda: httpx.LocalProtocolError("our request is malformed")])
+def test_a_failure_without_a_status_that_is_no_missing_reply_is_ours(fault):
+    exc = fault()
+    assert not runner.server_side(exc) and not runner.refused(exc)
+
+
+def raised(fault):
+    """*fault* raised in a function of its own, so its traceback names
+    where it arose."""
+    def where_it_arose():
+        raise fault
+    try:
+        where_it_arose()
+    except Exception as exc:
+        return exc
+
+
+def test_a_fault_of_ours_is_not_asked_again_and_leaves_its_document_open(
+        waits, caplog):
+    fault = raised(KeyError("value"))
+    failures = runner.Failures(7)
+    assert failures.failed(fault) is False
+    with caplog.at_level(logging.ERROR, logger=runner.log.name):
+        failures.given_up()
+    assert runner.UNSERVED.of(7) == 1
+    assert "where_it_arose" in caplog.text          # the log says where
+    # the failure by construction: the server's failure is asked again and
+    # an answer after a fault leaves nothing unfinished
+    assert runner.Failures(8).failed(raised(ConnectionError("reset")))
+    again = runner.Failures(9)
+    with rules.overlaid(other_errors_retry=1):
+        assert again.failed(fault) is True
+    again.answered()
+    again.given_up()
+    assert runner.UNSERVED.of(9) == 0
+
+
+def test_a_fault_of_a_request_whose_end_is_told_another_way_is_logged(
+        waits, caplog):
+    failures = runner.Failures(7, noted=False)
+    with caplog.at_level(logging.ERROR, logger=runner.log.name):
+        assert failures.failed(raised(KeyError("value"))) is False
+        failures.given_up()
+    assert runner.UNSERVED.of(7) == 0
+    assert "where_it_arose" in caplog.text
+
+
+def test_a_search_failing_in_our_own_code_fails_its_document_at_once(
+        waits, caplog):
+    call, calls = calling(raised(KeyError("vector")), ["p1"])
+    with caplog.at_level(logging.ERROR, logger=runner.log.name):
+        with pytest.raises(KeyError):
+            runner.persistently("search", call)(7)
+    assert len(calls) == 1 and waits == []
+    assert "where_it_arose" in caplog.text
+    # the failure by construction: asked again as often as the rule says,
+    # after the short wait, and answered
+    call, calls = calling(raised(KeyError("vector")), ["p1"])
+    with rules.overlaid(other_errors_retry=1):
+        assert runner.persistently("search", call)(7) == ["p1"]
+    assert waits == [(1, False)]
 
 
 # -- every request of the stage ----------------------------------------------

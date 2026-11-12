@@ -17,13 +17,13 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import dataclass, field, replace
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 from .. import rules
 from . import fields, lookup
 from .pipeline import (READ, Batch, Row, Source, answer_in_quote,
-                       window_around)
-from .verify import flat, quote_in
+                       place_of, window_around)
+from .verify import flat
 
 # A request that did not fit its room, and one that came to no answer: the
 # reasons of a hole (`surveyed.hole`).
@@ -329,14 +329,14 @@ def first_line(source: Source) -> str:
                  if line.strip() and line.strip() != title), "")
 
 
-def passage_of(claim: dict, shown: list) -> Optional[Source]:
+def passage_of(claim: dict, shown: list,
+               document: Sequence = ()) -> Optional[Source]:
     """The first passage of *shown* whose text carries the claim's quote:
-    the one its value is read from. None where the quote stands in none."""
-    quote = claim.get("quote")
-    if not isinstance(quote, str):
-        return None
-    return next((source for source in shown
-                 if quote_in(source.text or "", quote)), None)
+    the one its value is read from; where the rule `check_quote_shown` is
+    off and none does, the first passage of *document*, the document's
+    passages in its order, that does (`pipeline.place_of`). None where the
+    quote stands in none."""
+    return place_of(shown, claim.get("quote"), document)
 
 
 def span_rows(row: Row, slot, until: Optional[int], marks: dict,

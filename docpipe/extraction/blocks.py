@@ -685,7 +685,8 @@ LIBRARY.update({box.type: box for box in (
           "The stamp keys that the pass could account for are written "
           "forward and every other key stays as it was, so that a later "
           "run still sees what it has to redo. The stamp goes on only "
-          "where no request of the pass ended on a 429 or a 5xx. To "
+          "where no request of the pass went unserved (a 429, a 5xx, a "
+          "timeout), was refused to the end or failed in our own code. To "
           "change it: switch the step off, then no key is carried "
           "forward and the next run reads the file again.",
           "remap.stamp_forward", "chain", after=("replace",),

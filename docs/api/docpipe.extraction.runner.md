@@ -50,7 +50,8 @@ class Unserved
 ```
 
 Documents one of whose requests ended on a 429, a 5xx or a timeout,
-or on a refusal asked `refusal_retry_most` times (`refused`).
+on a refusal asked `refusal_retry_most` times (`refused`), or on a fault
+of our own code (owner decision 2026-11-12).
 
 Such a request was never answered, so its document is not finished,
 whichever request it was: a passage's rows, one coordinate, the frame, a
@@ -93,18 +94,21 @@ loops, three kept all of it, and the compute request asked again at once
 after a server error, asked a refused request again, and left its
 document stamped as finished when no attempt of it was served.
 
-A failure that is the server's (`server_side`) is asked again, after the
-long wait (`retry_wait`), without a limit until the run halts (`halted`,
-owner decision 2026-11-09: "Wenn es aber Codefehler etc. sind, dann
-immer wiederholen. Es wird nichts abgebrochen"), or as often as the rule
-`server_retry_most` says where it is above 0; a reply that could not be
-read is asked again as often as the number `replies` says at most
-(`attempts`, read for the request, in its step), and a request the
-server refuses (`refused`, owner decision 2026-11-09) as often as
-`refusal_retry_most` says, after the short wait. Any other failure is
-not asked again. A request given up on whose last attempt the server
-did not serve (`unserved`) or refused leaves its document unfinished
-(`UNSERVED`): the stamp is withheld and a resume reads it again.
+A failure that is the server's (`server_side`: no reply, a 429, a 5xx)
+is asked again, after the long wait (`retry_wait`), without a limit
+until the run halts (`halted`, owner decisions 2026-11-09 and
+2026-11-12: only the server's error codes are asked again without a
+limit), or as often as the rule `server_retry_most` says where it is
+above 0; a reply that could not be read is asked again as often as the
+number `replies` says at most (`attempts`, read for the request, in its
+step), and a request the server refuses (`refused`, owner decision
+2026-11-09) as often as `refusal_retry_most` says, after the short
+wait. Any other failure is a fault of our own code: asked again as
+often as the rule `other_errors_retry` says (0: not at all). A request
+given up on whose last attempt the server did not serve (`unserved`),
+refused, or failed in our own code leaves its document unfinished
+(`UNSERVED`): the stamp is withheld, the run goes on, a resume reads it
+again, and the log names the fault with where it arose.
 
 *document_id* is the document the request reads, None for a request of
 the run itself. *noted* is False for a request whose end is told another
@@ -142,7 +146,9 @@ def failed(self, exc: BaseException) -> bool
 Whether the request that raised *exc* is asked again: after the
 server's failure until the run halts or the rule `server_retry_most`
 is reached (`attempts`), after a refusal until it is the
-`refusal_retry_most`th, after any other failure never.
+`refusal_retry_most`th, after a fault of our own code as often as
+the rule `other_errors_retry` says. A request not asked again has
+no answer, and its document is not finished (`lost`).
 
 #### Failures.answered
 
@@ -175,7 +181,9 @@ the server's failure, the short one after a reply.
 def given_up(self) -> None
 ```
 
-The request is asked no more and has no answer.
+The request is asked no more and has no answer. A fault of our
+own code is logged with where it arose, whether or not its document
+is noted: it is what a person fixes.
 
 ### Coalescer
 
@@ -399,10 +407,15 @@ its response, the reranker's.
 def server_side(exc: BaseException) -> bool
 ```
 
-Whether a failure is the server's: it never arrived, or was `unserved`.
+Whether a failure is the server's: no reply came at all (no
+connection, one that broke off, a timeout: `providers.no_reply`), or the
+server said it did not do the work (`unserved`).
 
 These wait on the long curve and count towards the dead-server streak. A
-429 retried after two seconds is the same 429.
+429 retried after two seconds is the same 429. Any other failure without
+a status is a fault of our own code (owner decision 2026-11-12: only the
+server's error codes are asked again without a limit): asked again, the
+same request runs through the same code.
 
 ### refused
 
@@ -431,17 +444,19 @@ Does the run stop: a SIGTERM, or a server that answers no more?
 def persistently(what: str, call: Callable) -> Callable
 ```
 
-*call*, asked again after every failure until it answers or the run
-halts (owner decision 2026-11-09: "Wenn es aber Codefehler etc. sind,
-dann immer wiederholen. Es wird nichts abgebrochen, wir brauchen die
-Werte"): a search, an embedding or a reranker that failed is never
-replaced by another order or by nothing. Each failure is logged and
-waited for on the long curve (`retry_wait`); a run that halts raises
-the last one. A request the server refuses (`refused`) is asked
-`refusal_retry_most` times at most and then raised: its document fails
-and stays unfinished, and a later run reads it again (owner decision
-2026-11-09). With the rule `search_retry_most` above 0, any other
-failure is asked that many times as well and then raised.
+*call*, asked again after the server's failure (`server_side`) until
+it answers or the run halts (owner decisions 2026-11-09 and 2026-11-12:
+only the server's error codes are asked again without a limit): a
+search, an embedding or a reranker that failed is never replaced by
+another order or by nothing. Each failure is logged and waited for on
+the long curve (`retry_wait`); a run that halts raises the last one.
+With the rule `search_retry_most` above 0 the server's failure is asked
+that many times at most and then raised. A request the server refuses
+(`refused`) is asked `refusal_retry_most` times at most, and a fault of
+our own code as often again as the rule `other_errors_retry` says, then
+each is raised: its document fails and stays unfinished, the run goes
+on, and a later run reads it again (owner decisions 2026-11-09 and
+2026-11-12).
 
 ### code_rounds
 
@@ -1763,8 +1778,9 @@ in the unit the message needs: "unreachable" is the sources that never
 reached the server, of the sources the plan held; "no_reply" is the
 sources planned, when not one batch came back (`answered` is how many did;
 None means the caller does not track it and the count is not checked);
-"unserved" is the requests that ended on a 429, a 5xx, a timeout or a
-refusal asked `refusal_retry_most` times, `lost` of them
+"unserved" is the requests that ended on a 429, a 5xx, a timeout, a
+refusal asked `refusal_retry_most` times or a fault of our own code
+asked `other_errors_retry` times, `lost` of them
 noted beside the report and the rest in its sentinels. None when the
 reading happened. `finish_document` withholds the stamp on any of them
 and the pass for a new parameter writes nothing.
@@ -1796,8 +1812,8 @@ stamps an empty file. That is how a dead server turned 872 planned
 documents into 0-byte results a resume would have skipped.
 
 `lost` is how many of the document's other requests (a coordinate,
-the frame, a search sentence) ended on a 429 or a 5xx, timed out or
-were refused to the end; the passages that
+the frame, a search sentence) ended on a 429 or a 5xx, timed out,
+were refused to the end or failed in our own code; the passages that
 ended there carry it in their sentinel. One is enough to withhold the
 stamp: the request was never answered and nothing says it cannot be.
 

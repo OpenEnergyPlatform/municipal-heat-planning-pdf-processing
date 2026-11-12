@@ -15,7 +15,8 @@ import pytest
 
 from docpipe import rules
 from docpipe.extraction import (compute, fields, found, lookup, pipeline,
-                                schema, spec as spec_module, trust, verify)
+                                reading, schema, spec as spec_module, trust,
+                                verify)
 from docpipe.extraction.pipeline import Row, Source, merge_field
 
 from test_addressed import ENERGY, SLOTS, SPEC
@@ -37,10 +38,10 @@ def year_row():
     return Row("R1", 0, {})
 
 
-def ask_year(answer, sources=(SOURCE,), row=None):
+def ask_year(answer, sources=(SOURCE,), row=None, document=()):
     row = row or year_row()
     got = merge_field([row], list(sources), SLOTS["year"],
-                      {"answers": {"R1": answer}})
+                      {"answers": {"R1": answer}}, document=document)
     return row, got
 
 
@@ -54,27 +55,64 @@ def state(row, name="year"):
 # -- the two checks every answer passes ---------------------------------------
 
 def test_check_quote_shown_decides_if_a_quote_must_stand_in_a_shown_line():
-    elsewhere = {"value": 2030, "quote": "im Jahr 2030 steht hier nirgends"}
-    row, got = ask_year(elsewhere)
+    nowhere = {"value": 2030, "quote": "im Jahr 2030 steht hier nirgends"}
+    row, got = ask_year(nowhere)
     assert state(row) == fields.UNBACKED
     assert got["failed"][0]["why"] == "quote_not_in_source"
+    # off, a quote that stands nowhere in the document falls all the same
+    # (owner decision 2026-11-12); it once took the first shown passage
     with rules.overlaid(check_quote_shown=False):
-        row, got = ask_year(elsewhere)
-        assert state(row) == fields.READ
-        assert row.claim["year_source"] == ["section", 1]   # the first shown
+        row, got = ask_year(nowhere, document=[SOURCE, OTHER])
+        assert state(row) == fields.UNBACKED
+        assert got["failed"][0]["why"] == "quote_not_in_source"
+        assert "year_source" not in row.claim
     row, _ = ask_year(GOOD)
     assert state(row) == fields.READ                        # the standard
 
 
+# Owner decision 2026-11-12: with the check off, the code looks for the quote
+# in every passage of the document and takes the first that holds it.
+LATER = Source("section", 9, "Ab dem Jahr 2030 sinkt der Verbrauch.")
+EARLIER = Source("section", 4, "Ab dem Jahr 2030 sinkt der Verbrauch stark.")
+DOCUMENT = [SOURCE, EARLIER, OTHER, LATER]
+
+
+def test_with_the_check_off_a_quote_takes_the_first_passage_holding_it():
+    answer = {"value": 2030, "quote": "Ab dem Jahr 2030 sinkt der Verbrauch"}
+    row, _ = ask_year(answer, document=DOCUMENT)
+    assert state(row) == fields.UNBACKED            # on: what was shown only
+    with rules.overlaid(check_quote_shown=False):
+        row, _ = ask_year(answer, document=DOCUMENT)
+        assert state(row) == fields.READ
+        assert row.claim["year_source"] == ["section", 4]   # the first
+        # what was shown comes before the document
+        row, _ = ask_year(answer, sources=(LATER,), document=DOCUMENT)
+        assert row.claim["year_source"] == ["section", 9]
+
+
 def test_check_quote_shown_holds_for_a_value_and_a_step_may_switch_it():
     raw = {"value": 450, "unit": "MWh", "quote": "dies steht nirgends 450"}
-    parameter = ENERGY
-    assert verify.value_refused(raw, parameter, TEXT) == verify.QUOTE_NOT_FOUND
+    # A value's quote stands at its place or falls, whatever the rule: the
+    # rule says where the reading may find that place (`place_of`).
+    assert verify.value_refused(raw, ENERGY, TEXT) == verify.QUOTE_NOT_FOUND
+    quote = "Ab dem Jahr 2030 sinkt der Verbrauch"
     node = {"id": "x", "box": "find"}
-    values = {"check_quote_shown": False}
-    with rules.in_step(rules.stepped(node, values)):
-        assert verify.value_refused(raw, parameter, TEXT) is None
-    assert verify.value_refused(raw, parameter, TEXT) == verify.QUOTE_NOT_FOUND
+    with rules.in_step(rules.stepped(node, {"check_quote_shown": False})):
+        assert verify.value_refused(
+            raw, ENERGY, TEXT) == verify.QUOTE_NOT_FOUND
+        assert pipeline.place_of([SOURCE], quote, DOCUMENT) is EARLIER
+        assert pipeline.place_of([SOURCE], "nirgends", DOCUMENT) is None
+    assert pipeline.place_of([SOURCE], quote, DOCUMENT) is None
+    assert pipeline.place_of([EARLIER], quote, DOCUMENT) is EARLIER
+
+
+def test_a_number_the_calculation_takes_stands_where_its_quote_stands():
+    claim = {"quote": "Ab dem Jahr 2030 sinkt der Verbrauch"}
+    assert reading.passage_of(claim, [SOURCE], DOCUMENT) is None
+    with rules.overlaid(check_quote_shown=False):
+        assert reading.passage_of(claim, [SOURCE], DOCUMENT) is EARLIER
+        assert reading.passage_of({"quote": "nirgends"}, [SOURCE],
+                                  DOCUMENT) is None
 
 
 def test_check_answer_in_quote_decides_if_the_answer_must_be_in_its_quote():

@@ -326,7 +326,8 @@ def not_read(cause: str, found: int, of: int) -> str:
         return f"{found} of {of} source(s) never reached the server"
     if cause == "no_reply":
         return f"{of} source(s) planned and not one reply"
-    return f"{found} request(s) ended on a 429 or a 5xx, or timed out"
+    return (f"{found} request(s) ended on a 429 or a 5xx, timed out, were "
+            f"refused to the end or failed in our own code")
 
 
 def _write_lines(path: Path, lines: list) -> None:

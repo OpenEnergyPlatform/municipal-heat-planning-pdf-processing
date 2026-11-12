@@ -256,9 +256,40 @@ def timed_out(exc: BaseException) -> bool:
     return isinstance(exc, openai.APITimeoutError)
 
 
+def _broken_off() -> tuple:
+    """The errors of the clients requests are sent with that say the
+    connection could not be made, broke off, or timed out: no reply came."""
+    found: list = [ConnectionError, TimeoutError]
+    try:
+        import openai
+        found.append(openai.APIConnectionError)
+    except ImportError:                     # pragma: no cover - a core package
+        pass
+    try:
+        import httpx
+        found += [httpx.TimeoutException, httpx.NetworkError,
+                  httpx.RemoteProtocolError, httpx.ProxyError]
+    except ImportError:                     # pragma: no cover - a core package
+        pass
+    return tuple(found)
+
+
+def no_reply(exc: BaseException) -> bool:
+    """A request that got no reply at all: it timed out (`timed_out`), its
+    connection could not be made or broke off before the answer was read,
+    or a provider said so (a `ProviderError` without a status). Any other
+    failure without a status is a fault of the code that sent the request
+    (owner decision 2026-11-12), and asking again changes nothing."""
+    if timed_out(exc):
+        return True
+    if isinstance(exc, ProviderError):
+        return exc.status_code is None
+    return isinstance(exc, _broken_off())
+
+
 __all__ = ["HOSTED", "OPENAI_COMPATIBLE", "PROVIDERS", "ROLES", "Endpoint",
            "ProviderError", "ProviderTimeout", "client", "endpoint",
            "enforces_schema", "formatted", "gate", "grammar", "hosted",
            "llm_api_key", "llm_base_url", "llm_model", "llm_timeout",
-           "provider", "replaying", "reply_format", "request_options",
-           "timed_out"]
+           "no_reply", "provider", "replaying", "reply_format",
+           "request_options", "timed_out"]

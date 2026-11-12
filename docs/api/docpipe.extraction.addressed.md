@@ -107,6 +107,7 @@ Fields:
 - `quoted: list = field(default_factory=list)`: The lines its quote is: the named ones, and where they are too short to name a place, the shown lines around them (`Shown.around`).
 - `entry: Optional[int] = None`: The number of the entry of the request's list a find names, where the field has a list (owner decision 2026-11-09), 0 for none.
 - `outside: bool = False`: The entry it named is none of the list's and the rule `outside_list` keeps its wording (entry 0).
+- `elsewhere: bool = False`: Its quote stands in no shown line and was found in another passage of the document, which is its place (rule `check_quote_shown` off).
 
 #### Found.quote
 
@@ -251,6 +252,16 @@ def __init__(self, document_id: int, sources: list, transcripts: dict,
              cut: Optional[Cut] = None,
              cutting: Optional[Callable] = None)
 ```
+
+#### Plan.document
+
+```python
+def document(self) -> list
+```
+
+What a quote may stand in anywhere in the document, in its order
+(`pipeline.place_of`): each passage as a value read from it is
+checked against it, a figure as its transcription.
 
 #### Plan.part
 
@@ -1022,7 +1033,8 @@ read the work or said none (0, `unstated`).
 ```python
 @staticmethod
 def take_work(row: Row, slot, number: int, got: Found, evidence: list,
-              window: tuple, works: "Names") -> list
+              window: tuple, works: "Names",
+              document: Sequence = ()) -> list
 ```
 
 The work *number* of the document's list read onto a value with
@@ -1141,7 +1153,9 @@ def told(why: str, entry) -> str
 ```
 
 Why a find or an answer did not hold, in the profile's words, with
-the address and the words it gave.
+the address and the words it gave; where the rule `answer_with` has the
+answer name its line by its words, in the sentence that asks for them
+and not for an address (`<why>_quote`, owner decision 2026-11-12).
 
 ### refusals
 
@@ -1456,6 +1470,16 @@ def has_address(reply) -> bool
 Does the answer name a line: an address, or, where the rule
 `answer_with` has it quote, a quote?
 
+### quoted_elsewhere
+
+```python
+def quoted_elsewhere(passages: dict, quote: str) -> tuple
+```
+
+(the passage shown alone, the address of its lines that hold
+*quote*) of the first of *passages*, in the document's order, whose
+lines hold it (`quoted_address`); (None, None) where none does.
+
 ### resolve
 
 ```python
@@ -1466,7 +1490,11 @@ The lines an answer's address names in what *shown* showed, its
 words checked against them: `NOT_AN_ADDRESS` where it names no shown
 line or cell, `WORDS_NOT_IN_LINE` where its words do not stand in what
 it names. Words left empty are the cell's, or the lines' of a stretch;
-a single line without a cell needs words.
+a single line without a cell needs words. An answer that names its line
+by its words (rule `answer_with`) whose words stand in no shown line is
+looked for in every passage of *passages*, the document's, where the
+rule `check_quote_shown` is off (owner decision 2026-11-12); an address
+is never: the rule is about the quote.
 
 ### image_key
 

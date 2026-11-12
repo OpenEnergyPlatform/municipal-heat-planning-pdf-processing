@@ -50,10 +50,12 @@ WHOLE = ("transcribe",)
 # The request asked again goes under the prompt of the one it follows;
 # the words after its payload are those of this prompt.
 FOLLOW = "follow"
-# What is written as the marker of a part, wherever it stands. The run reads
-# one only on a line of its own (`thread.MARK`); any other is text, and what
-# was meant as a part goes to the model with the words before it.
-_MARKER = re.compile(r"<!--[ \t]*(?:with|follow-up)[ \t]*:[^\n]*?-->")
+# What is written as the marker of a part or of a way, wherever it stands.
+# The run reads one only on a line of its own (`thread.MARK`, `thread.WAY`);
+# any other is text, and what was meant as a part or a way goes to the
+# model with the words before it.
+_MARKER = re.compile(r"<!--[ \t]*(?:(?:with|follow-up|way)[ \t]*:[^\n]*?"
+                     r"|/way[ \t]*)-->")
 
 
 class Refused(ValueError):
@@ -196,7 +198,8 @@ def _numbers(prompt) -> None:
 def _loose(text: str) -> list:
     """What *text* writes as a marker and the run would not read as one."""
     from ..extraction import thread
-    read = {mark.start() for mark in thread.MARK.finditer(text)}
+    read = {mark.start() for marks in (thread.MARK, thread.WAY)
+            for mark in marks.finditer(text)}
     return [hit.group(0) for hit in _MARKER.finditer(text)
             if hit.start() not in read]
 
@@ -232,7 +235,8 @@ def problem(profile, prompt_id: str, raw: str, disk: dict) -> Optional[str]:
             raise Refused(
                 f"{' '.join(loose[0].split())} opens no part: the run reads "
                 f"a marker only on a line of its own, written as "
-                f"<!-- with: name --> or <!-- follow-up: name -->; here its "
+                f"<!-- with: name -->, <!-- follow-up: name -->, "
+                f"<!-- way: rule=choice --> or <!-- /way -->; here its "
                 f"text would go to the model with the words before it")
         try:
             cut = thread.cut(new)
@@ -415,7 +419,7 @@ def _system(template, kind: str, filled: dict) -> str:
 
 def _follow_words(prompt) -> str:
     from ..extraction import thread
-    return thread.cut(prompt).common.strip()
+    return thread.chosen(thread.cut(prompt).common, prompt.id).strip()
 
 
 def marked(before: str, after: str) -> dict:

@@ -71,7 +71,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 import regex
 
@@ -203,8 +203,14 @@ def _question():
 
 def told(why: str, entry) -> str:
     """Why a find or an answer did not hold, in the profile's words, with
-    the address and the words it gave."""
+    the address and the words it gave; where the rule `answer_with` has the
+    answer name its line by its words, in the sentence that asks for them
+    and not for an address (`<why>_quote`, owner decision 2026-11-12)."""
     entry = entry if isinstance(entry, dict) else {}
+    if address_key() == "quote" and why in (NOT_AN_ADDRESS,
+                                            WORDS_NOT_IN_LINE):
+        return say(f"{why}_quote", quote=entry.get("quote"),
+                   words=entry.get("words"))
     return say(why, at=entry.get("at"), words=entry.get("words"))
 
 
@@ -557,6 +563,9 @@ class Found:
     # The entry it named is none of the list's and the rule `outside_list`
     # keeps its wording (entry 0).
     outside: bool = False
+    # Its quote stands in no shown line and was found in another passage of
+    # the document, which is its place (rule `check_quote_shown` off).
+    elsewhere: bool = False
 
     @property
     def quote(self) -> str:
@@ -718,21 +727,46 @@ def has_address(reply) -> bool:
         and bool(quote.strip()))
 
 
+def quoted_elsewhere(passages: dict, quote: str) -> tuple:
+    """(the passage shown alone, the address of its lines that hold
+    *quote*) of the first of *passages*, in the document's order, whose
+    lines hold it (`quoted_address`); (None, None) where none does."""
+    for passage in passages.values():
+        alone = Shown()
+        alone.add("", "passage", [(line, passage.source)
+                                  for line in passage.lines])
+        at = quoted_address(alone, quote)
+        if at is not None:
+            return alone, at
+    return None, None
+
+
 def resolve(shown: Shown, entry, passages: dict) -> Found:
     """The lines an answer's address names in what *shown* showed, its
     words checked against them: `NOT_AN_ADDRESS` where it names no shown
     line or cell, `WORDS_NOT_IN_LINE` where its words do not stand in what
     it names. Words left empty are the cell's, or the lines' of a stretch;
-    a single line without a cell needs words."""
+    a single line without a cell needs words. An answer that names its line
+    by its words (rule `answer_with`) whose words stand in no shown line is
+    looked for in every passage of *passages*, the document's, where the
+    rule `check_quote_shown` is off (owner decision 2026-11-12); an address
+    is never: the rule is about the quote."""
     at = entry.get("at") if isinstance(entry, dict) else None
     words = entry.get("words") if isinstance(entry, dict) else None
     words = words.strip() if isinstance(words, str) else ""
+    placed = False
     if isinstance(entry, dict) and rules.get("answer_with") == "quote":
         # The answer names its line by its words: the code finds the line
         # among the shown ones (rule `answer_with`).
         quote = entry.get("quote")
         if isinstance(quote, str) and quote.strip():
             at = quoted_address(shown, quote)
+            if at is None and not rules.get("check_quote_shown"):
+                # In no shown line: the first passage of the document that
+                # holds it is its place, shown as the passage alone.
+                alone, at = quoted_elsewhere(passages, quote)
+                if alone is not None:
+                    shown, placed = alone, True
             if at is None:
                 return Found(words=words, why="quote_not_in_source")
     address = address_of(at)
@@ -748,7 +782,8 @@ def resolve(shown: Shown, entry, passages: dict) -> Found:
         return Found(words=words, why=NOT_AN_ADDRESS)
     text = " ".join(one.text for one, _ in lines)
     found = Found(lines, passage, cell, words, address.letter,
-                  quoted=shown.around(address, min_quote_chars()))
+                  quoted=shown.around(address, min_quote_chars()),
+                  elsewhere=placed)
     if not words:
         if cell is not None:
             found.words = line.cells[cell - 1]
@@ -1022,6 +1057,12 @@ class Plan:
         self._locks: dict = {}
         self._headings: dict = {}
         self._first: set = set()
+
+    def document(self) -> list:
+        """What a quote may stand in anywhere in the document, in its order
+        (`pipeline.place_of`): each passage as a value read from it is
+        checked against it, a figure as its transcription."""
+        return [passage.source for passage in self.passages.values()]
 
     @staticmethod
     def part(numbers: bool) -> bool:
@@ -1478,7 +1519,7 @@ class Reader:
         decision 2026-09-12: a request is split, never its answer
         rescued)."""
         out = {"claims": [], "asked": 0, "failed": collections.Counter(),
-               "lost": []}
+               "lost": [], "elsewhere": []}
         # A piece of several passages (`Plan.groups`) is asked as one, each
         # passage under its letter; it is halved by its passages first.
         pending = [(list(chunk) if isinstance(chunk, (list, tuple))
@@ -1490,6 +1531,7 @@ class Reader:
                                   counts)
             out["asked"] += got["asked"]
             out["claims"] += got["claims"]
+            out["elsewhere"] += got["elsewhere"]
             out["failed"].update(got["failed"])
             if got["lost"] == CUT:
                 halves = self.halves(piece, depth)
@@ -1576,7 +1618,7 @@ class Reader:
                  "owner": first.passage.source.owner_id, "chunk": first.index,
                  **({"chunks": len(members)} if members else {})}
         out = {"claims": [], "asked": 1, "failed": collections.Counter(),
-               "lost": None}
+               "lost": None, "elsewhere": []}
         reply = self._ask("find", payload, plan.document_id, shape,
                           example, counts, **noted)
         if not isinstance(reply, dict):
@@ -1603,6 +1645,9 @@ class Reader:
             claim = self.claim(plan, parameter, got, counts)
             if claim is not None:
                 out["claims"].append(claim)
+                if got.elsewhere:
+                    # Its place is another passage (`Found.elsewhere`).
+                    out["elsewhere"].append(claim)
         return out
 
     def list_of(self, options, two_step: bool = True) -> tuple:
@@ -2234,7 +2279,8 @@ class Reader:
             one.claim.pop(f"{slot.name}_state", None)
             got = merge_field([one], evidence, slot,
                               {"answers": {one.label: answer}},
-                              window=window, bases=plan.bases)
+                              window=window, bases=plan.bases,
+                              document=plan.document())
             if one.claim.get(f"{slot.name}_state") == READ:
                 held = True
                 if means is not None:
@@ -2349,7 +2395,8 @@ class Reader:
         answer = {"value": label or "", "value_raw": wording, "quote": quote}
         merge_field([row], shown.evidence() + [Source(
             source.owner_kind, source.owner_id, quote or "")], slot,
-            {"answers": {row.label: answer}}, window=("own", 1))
+            {"answers": {row.label: answer}}, window=("own", 1),
+            document=plan.document())
 
     def plan_year(self, plan: Plan, parameter, slot, got: Found,
                   counts: Counts) -> dict:
@@ -2401,7 +2448,7 @@ class Reader:
         merge_field([row], shown.evidence(), slot, {"answers": {row.label: {
             "value": listed[picks[0] - 1]["year"], "value_raw": got.words,
             "quote": got.quote}}}, window=("plan_years", 1),
-            bases=plan.bases)
+            bases=plan.bases, document=plan.document())
         if row.claim.get(f"{slot.name}_state") != READ and state:
             row.claim[f"{slot.name}_state"] = state
 
@@ -2963,11 +3010,12 @@ class Reader:
             return [{"at": reply.get("at"), "words": reply.get("words"),
                      "why": told(got.why, reply)}]
         return self.take_work(row, slot, pick, got, shown.evidence(),
-                              ("own", 1), works)
+                              ("own", 1), works, plan.document())
 
     @staticmethod
     def take_work(row: Row, slot, number: int, got: Found, evidence: list,
-                  window: tuple, works: "Names") -> list:
+                  window: tuple, works: "Names",
+                  document: Sequence = ()) -> list:
         """The work *number* of the document's list read onto a value with
         the line *got* names as its quote (`merge_field`): [] where it holds,
         [what did not hold] else."""
@@ -2977,7 +3025,7 @@ class Reader:
         row.claim.pop(f"{slot.name}_state", None)
         result = merge_field([row], evidence, slot, {"answers": {row.label: {
             "value": option, "value_raw": got.words, "quote": got.quote}}},
-            window=window)
+            window=window, document=document)
         if row.claim.get(f"{slot.name}_state") == READ:
             row.claim[f"{slot.name}_means"] = [works.entries[number - 1].label]
             return []
@@ -3002,7 +3050,7 @@ class Reader:
         if not 0 < number <= len(works.entries):
             return False
         return not self.take_work(row, slot, number, found, evidence,
-                                  ("piece", 1), works)
+                                  ("piece", 1), works, plan.document())
 
     def work_by_piece(self, plan: Plan, row: Row, slot) -> bool:
         """Does the value take the work its piece names, or this
@@ -3034,7 +3082,7 @@ class Reader:
         if got.why is not None:
             return False
         if self.take_work(row, slot, number, got, shown.evidence(),
-                          ("piece", 1), works):
+                          ("piece", 1), works, plan.document()):
             return False
         self._traced("second_way", plan.document_id,
                      rule="work_without_line", work=number)

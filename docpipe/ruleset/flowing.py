@@ -31,13 +31,18 @@ from .taking import CHECKED  # noqa: E402
 RULES = (
     # -- spec: what a quote must show -----------------------------------------
     rule("check_quote_shown", "spec", "What a quote must show", "switch",
-         "On: an answer has to name a line, or a cell of a line, that the "
-         "request showed, and the quote of the value is that line; an "
-         "answer that names no shown line is refused and asked again. "
-         "Off: the quote is not looked for in what was shown. This is the "
-         "first of the two checks every answer passes.",
-         where="blocks.py (CHECKS), addressed.py (resolve), pipeline.py "
-               "(merge_field), verify.py",
+         "On: the quote of an answer has to stand in what the request "
+         "showed, a line or a cell of a line, or the answer is refused and "
+         "asked again. Off: a quote that stands in nothing shown is looked "
+         "for, character for character, in every passage of the document, "
+         "and the first passage in the document's order that holds it is "
+         "the value's place; a quote that stands nowhere falls all the "
+         "same. An address that names no shown line is asked again either "
+         "way: the switch is about the quote, not the address. This is the "
+         "first of the two checks every answer passes. What happens when "
+         "it is off was decided on 2026-11-12.",
+         where="blocks.py (CHECKS), pipeline.py (place_of: merge_field), "
+               "reading.py (passage_of), addressed.py (resolve), engine.py",
          steps=tuple(dict.fromkeys(("find", "docfield", "coord", "search")
                                    + CHECKED))),
     rule("check_answer_in_quote", "spec", "What a quote must show",

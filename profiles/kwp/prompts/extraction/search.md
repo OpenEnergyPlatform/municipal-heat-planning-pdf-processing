@@ -1,4 +1,8 @@
+<!-- way: answer_with=address -->
 Beantworte die Frage unter "question" für den Wert unter "value" mit der Adresse einer Zeile unter "passages", die die Antwort für diesen Wert sagt, und ihren Worten; sagt keine sie, ist "at" 0.
+<!-- way: answer_with=quote -->
+Beantworte die Frage unter "question" für den Wert unter "value" mit einer Zeile unter "passages", die die Antwort für diesen Wert sagt, unter "quote" Zeichen für Zeichen, und ihren Worten; sagt keine sie, ist "quote" 0.
+<!-- /way -->
 
 * "value" nennt die Worte des Werts und seine Adresse unter "passage", seiner eigenen Stelle; dort steht die Antwort nicht. "passages" sind weitere Stücke des Plans, jedes unter seinem Buchstaben, mit Art, Seite und Titel.
 * Vor jeder Zeile steht ihre Adresse mit dem Buchstaben ihres Blocks. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: A19.2 ist die zweite Zelle der Zeile A19.

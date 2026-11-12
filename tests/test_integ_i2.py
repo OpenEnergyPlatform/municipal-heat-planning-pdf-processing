@@ -213,7 +213,7 @@ def test_only_the_first_work_is_the_publications_own_where_the_rule_is_on():
                                          label="other")]
         name = "work"
 
-    def merged(rows, evidence, slot, answer, window=None):
+    def merged(rows, evidence, slot, answer, window=None, document=()):
         seen.append(answer["answers"]["r"]["value"])
         return {"failed": []}
 

@@ -1,4 +1,8 @@
+<!-- way: answer_with=address -->
 Beantworte die Frage unter "question" für den Wert unter "value" mit der Adresse der gezeigten Zeile, die die Antwort für diesen Wert sagt, und ihren Worten; sagt keine gezeigte Zeile sie, ist "at" 0.
+<!-- way: answer_with=quote -->
+Beantworte die Frage unter "question" für den Wert unter "value" mit der gezeigten Zeile, die die Antwort für diesen Wert sagt, unter "quote" Zeichen für Zeichen, und ihren Worten; sagt keine gezeigte Zeile sie, ist "quote" 0.
+<!-- /way -->
 
 * "value" nennt die Worte des Werts und seine Adresse unter "passage". "passage" zeigt seine Zeile, bei einer Tabelle mit ihrem Titel und Kopf, sonst mit dem Satz davor und danach.
 * Vor jeder Zeile steht ihre Adresse, bei einem anderen Block mit seinem Buchstaben davor. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: 19.2 ist die zweite Zelle der Zeile 19.

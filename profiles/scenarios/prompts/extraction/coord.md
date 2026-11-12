@@ -1,4 +1,8 @@
+<!-- way: answer_with=address -->
 Answer the question under "question" with the address of the shown line that says the answer and its words; where no shown line says it, "at" is 0.
+<!-- way: answer_with=quote -->
+Answer the question under "question" with the shown line that says the answer, under "quote" character for character, and its words; where no shown line says it, "quote" is 0.
+<!-- /way -->
 
 * Each line starts with its address, a line of another block with the block's letter before it. A line that "|" divides has cells, counted from 1, wherever it stands: 19.2 is the second cell of line 19.
 * "words" are the words of that line that say the answer, character for character.
@@ -11,7 +15,11 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 The question is about the value under "value": its words and its address under "passage", which shows its line, in a table with the table's title and head, else with the sentences before and after it. The line of the answer has to speak about THIS value: its own line, the head of its column, the title of its table, its sentence and those beside it, the heading of its section.
 
 <!-- with: list -->
+<!-- way: answer_with=address -->
 "list" holds the works this publication names, each under its number, 1 this publication itself. "entry" is the number of the work whose result the value is, and "at" the address of the shown line that shows it: a line or heading naming that work's study, model or authors, or for this publication words such as "this study", "we" or "our scenarios". Where no shown line shows whose result the value is, "entry" is 0.
+<!-- way: answer_with=quote -->
+"list" holds the works this publication names, each under its number, 1 this publication itself. "entry" is the number of the work whose result the value is, and "quote" the shown line that shows it, character for character: a line or heading naming that work's study, model or authors, or for this publication words such as "this study", "we" or "our scenarios". Where no shown line shows whose result the value is, "entry" is 0.
+<!-- /way -->
 
 <!-- with: work -->
 The question asks one detail of the work under "work", a work this publication presents, compares, reviews or cites, which the shown lines name.

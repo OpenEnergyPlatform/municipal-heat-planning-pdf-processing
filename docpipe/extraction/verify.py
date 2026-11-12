@@ -651,8 +651,12 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     else:
         if not isinstance(quote, str) or len(quote) < min_quote_chars():
             return Refusal(raw, QUOTE_TOO_SHORT)
-        if rules.get("check_quote_shown") \
-                and not quote_in(source_text, quote):
+        # Whatever the rule `check_quote_shown` says: it decides where a
+        # quote may stand, what was shown or the whole document, and the
+        # reading gives the value the place it stands in (`pipeline.place_of`,
+        # owner decision 2026-11-12). A quote that does not stand at its
+        # place stands nowhere the reading found it, and falls.
+        if not quote_in(source_text, quote):
             return Refusal(raw, QUOTE_NOT_FOUND)
         if rules.get("check_answer_in_quote") \
                 and not value_in_quote(raw, parameter, quote):
@@ -749,8 +753,10 @@ def value_refused(raw: dict, parameter: Parameter, source_text: str,
     quote = raw.get("quote")
     if not isinstance(quote, str) or len(quote) < min_quote_chars():
         return QUOTE_TOO_SHORT
-    if rules.get("check_quote_shown") \
-            and not quote_in(source_text or "", quote):
+    # As in `verify_tuple`: *source_text* is the value's place, which the
+    # rule `check_quote_shown` lets the reading find in what was shown or
+    # in the whole document (`pipeline.place_of`).
+    if not quote_in(source_text or "", quote):
         return QUOTE_NOT_FOUND
     if rules.get("check_answer_in_quote") \
             and not value_in_quote(raw, parameter, quote):

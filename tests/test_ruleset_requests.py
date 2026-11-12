@@ -188,13 +188,13 @@ def test_a_search_is_asked_again_until_it_answers_or_the_limit(monkeypatch):
 
     def failing(*args):
         calls.append(args)
-        raise OSError("gone")
+        raise ConnectionError("gone")
     with at("search", search_retry_most=3):
-        with pytest.raises(OSError):
+        with pytest.raises(ConnectionError):
             runner.persistently("search", failing)(1)
     assert len(calls) == 3
 
-    answers = in_turn([OSError("a")] * 7 + ["ok"], "the search")
+    answers = in_turn([ConnectionError("a")] * 7 + ["ok"], "the search")
 
     def later(*args):
         got = answers()

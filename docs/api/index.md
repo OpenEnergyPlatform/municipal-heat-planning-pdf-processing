@@ -116,7 +116,7 @@ is for and what it hands to what; this is the reference.
 
 - [docpipe.extraction](docpipe.extraction.md): Marks the extraction package as the OBIE stage.
 - [docpipe.extraction.\_\_main\_\_](docpipe.extraction.__main__.md): Allow execution via: python -m docpipe.extraction
-- [docpipe.extraction.addressed](docpipe.extraction.addressed.md): One document read in pieces of numbered lines, one question per request, every answer an address (owner decisions 2026-11-08 evening, both profiles). (12 classes, 49 functions)
+- [docpipe.extraction.addressed](docpipe.extraction.addressed.md): One document read in pieces of numbered lines, one question per request, every answer an address (owner decisions 2026-11-08 evening, both profiles). (12 classes, 50 functions)
 - [docpipe.extraction.archive](docpipe.extraction.archive.md): A harvest or stamp file is never overwritten. (3 functions)
 - [docpipe.extraction.benchmark](docpipe.extraction.benchmark.md): One harvest, recorded once and made again without a model. (7 functions)
 - [docpipe.extraction.blocks](docpipe.extraction.blocks.md): The library of a flow's boxes and frames (owner decisions 2026-11-10 evening: the flow is a drawing of boxes and frames, a library to take them from, and the run does exactly what the drawing says). (2 classes, 2 functions)
@@ -138,7 +138,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.mend](docpipe.extraction.mend.md): The two second ways of reading a reply that the owner decided against on 2026-09-12 ("no JSON is repaired") and that a flow may choose again: `repair_replies` (what is taken off or put right in a reply before it is read) and `cut_off` (the complete entries of a list a reply was cut off in). (3 functions)
 - [docpipe.extraction.passboxes](docpipe.extraction.passboxes.md): What each box of a follow-up pass does (`passflow`, library entries with `flow == "pass"` in `blocks`). (2 classes, 23 functions)
 - [docpipe.extraction.passflow](docpipe.extraction.passflow.md): The follow-up passes as flows of their own (owner decision 2026-11-11). (2 classes, 17 functions)
-- [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): What turns the claims of a harvest into verified value tuples. (5 classes, 27 functions)
+- [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): What turns the claims of a harvest into verified value tuples. (5 classes, 28 functions)
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)
 - [docpipe.extraction.provenance](docpipe.extraction.provenance.md): Where every value of a graph comes from, as a graph. (1 class, 3 functions)
 - [docpipe.extraction.reading](docpipe.extraction.reading.md): What the reading of a plan shares with the steps around it: the coordinates a value of a field is asked, in the order of the spec's groups; a value stated for a span of years as one row per year; the two ends of a range linked; what a request fetches of the rest of a plan itself (`Gathered`, the compute step's tools); and what reading one field in one passage came to (`Read`). (2 classes, 12 functions)
@@ -157,7 +157,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.stats](docpipe.extraction.stats.md): Where a harvest is hard, written beside it after every run. (6 functions)
 - [docpipe.extraction.survey](docpipe.extraction.survey.md): What a stored order of a plan says each field was read in. (2 classes)
 - [docpipe.extraction.surveyed](docpipe.extraction.surveyed.md): One document harvested piece by piece, both profiles (owner decisions 2026-11-08 evening). (2 classes, 9 functions)
-- [docpipe.extraction.thread](docpipe.extraction.thread.md): Each request with exactly the words of its own task (owner decisions 2026-11-07). (2 classes, 2 functions)
+- [docpipe.extraction.thread](docpipe.extraction.thread.md): Each request with exactly the words of its own task (owner decisions 2026-11-07). (2 classes, 6 functions)
 - [docpipe.extraction.throttle](docpipe.extraction.throttle.md): How many model requests the harvest keeps open, steered by the server's own queue. (6 classes, 3 functions)
 - [docpipe.extraction.topup](docpipe.extraction.topup.md): Re-reads the one coordinate a stamp names as moved, instead of the whole document. (2 classes, 18 functions)
 - [docpipe.extraction.topup_parameter](docpipe.extraction.topup_parameter.md): Appends the rows of a parameter the spec has gained to a harvest that is already on disk, instead of harvesting the document again. (2 classes, 13 functions)
@@ -226,7 +226,7 @@ is for and what it hands to what; this is the reference.
 
 ## docpipe.providers
 
-- [docpipe.providers](docpipe.providers.md): providers: Which API a stage's requests go to. (16 functions)
+- [docpipe.providers](docpipe.providers.md): providers: Which API a stage's requests go to. (17 functions)
 - [docpipe.providers.anthropic_api](docpipe.providers.anthropic_api.md): The Anthropic API, through its SDK. (1 class)
 - [docpipe.providers.base](docpipe.providers.base.md): What every provider speaks towards the stages. (3 classes, 17 functions)
 - [docpipe.providers.cassette](docpipe.providers.cassette.md): The answers of a run, kept, so the run can be made again without a model. (4 classes, 6 functions)

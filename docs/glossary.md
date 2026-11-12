@@ -421,7 +421,8 @@ resume stamp
   every prompt id are written for a reader and never compared. The stamp
   is withheld, and the next run harvests the document again, when more than
   half its sources never reached the server, when no batch answered, or when
-  any request ended on a 429 or a 5xx; an earlier stamp is removed with it,
+  any request ended on a 429 or a 5xx, timed out, was refused to the end or
+  failed in our own code; an earlier stamp is removed with it,
   and the run exits 1 for the document. See [extraction](stages/extraction.md).
 
 review

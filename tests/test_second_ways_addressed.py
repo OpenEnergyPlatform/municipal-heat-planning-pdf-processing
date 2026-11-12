@@ -33,7 +33,7 @@ import types
 import pytest
 
 from docpipe import rules
-from docpipe.extraction import addressed, conditions, fields
+from docpipe.extraction import addressed, conditions, fields, pipeline
 from docpipe.extraction.addressed import Counts, Reader, say
 from docpipe.extraction.engine import SearchSupply
 from docpipe.extraction.pipeline import Row, Source, merge_field
@@ -513,6 +513,57 @@ def test_an_answer_names_its_line_by_its_quote_where_the_rule_says_so():
         assert "at" not in properties(addressed.coord_format(False))
         assert "at" not in properties(addressed.found_format())[
             "found"]["items"]["properties"]
+
+
+def found_in(owner, reply, **way):
+    """(claims with the source of their read, failures) of a reading of
+    the table and the text whose find of piece *owner* replies *reply*."""
+    model = Model(find=lambda p, n: reply if n.get("owner") == owner
+                  else {"found": []}, follow=lambda p, n: None)
+    with rules.overlaid(**way):
+        reads = reader_of(model)(plan_of(TABLE, TEXT), [ENERGY])
+    claims = [(claim, read.batch.items[0].source) for read in reads
+              for claim in read.claims]
+    failed: dict = {}
+    for read in reads:
+        for why, number in read.failed.items():
+            failed[why] = failed.get(why, 0) + number
+    return claims, failed
+
+
+def test_with_the_check_off_a_quote_is_looked_for_in_the_whole_document():
+    """Owner decision 2026-11-12: with the rule `check_quote_shown` off, a
+    quote that stands in no shown line is looked for in every passage of
+    the document, and the first that holds it is the value's place; one
+    that stands nowhere falls; an address that names no shown line is
+    asked again either way."""
+    elsewhere = {"found": [{"quote": "verbrauchte die Stadt 300 MWh Erdgas",
+                            "words": "300"}]}
+    # on: the table's request did not show the text
+    claims, failed = found_in(3, elsewhere, answer_with="quote")
+    assert not claims and failed == {"quote_not_in_source": 1}
+    claims, failed = found_in(3, elsewhere, answer_with="quote",
+                              check_quote_shown=False)
+    ((claim, source),) = claims
+    assert not failed and claim["value"] == 300
+    assert claim["at"]["owner"] == ["section", 2]
+    assert (source.owner_kind, source.owner_id) == ("section", 2)
+    assert "300 MWh Erdgas" in claim["quote"]
+    # the fold reads it at its place
+    report = pipeline.DocumentReport(document_id=7)
+    batch = pipeline.Batch(7, ENERGY, [pipeline.WorkItem(7, ENERGY, source)],
+                           spec=SPEC)
+    pipeline.fold_batch(batch, {"tuples": [claim]}, report, spec=SPEC)
+    assert [row["provenance"]["owner_id"] for row in report.tuples] == [2]
+    # the failure by construction: standing nowhere it falls, and an address
+    # that names no shown line is asked again, the check off or on
+    nowhere = {"found": [{"quote": "| Fernwärme | 99 | 5 |", "words": "99"}]}
+    claims, failed = found_in(3, nowhere, answer_with="quote",
+                              check_quote_shown=False)
+    assert not claims and failed == {"quote_not_in_source": 1}
+    no_line = {"found": [{"at": "A9", "words": "300"}]}
+    claims, failed = found_in(3, no_line, check_quote_shown=False)
+    assert not claims and failed == {addressed.NOT_AN_ADDRESS: 1}
 
 
 def test_a_quote_that_stands_in_no_shown_line_is_not_in_the_source():

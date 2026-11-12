@@ -25,7 +25,7 @@ import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 from .. import rules
 from . import archive
@@ -669,27 +669,33 @@ def printed_only(slot, answer: dict) -> Optional[str]:
     return wording or given.strip()
 
 
-def _shown_in(sources: list, quote) -> Optional[Source]:
-    """The source of *sources* whose text holds *quote*; where it stands in
-    none and the rule `check_quote_shown` is off, the first of them. None
-    where the quote is no text."""
+def place_of(sources: list, quote,
+             document: Sequence = ()) -> Optional[Source]:
+    """Where *quote* stands (`quote_in`): the first of *sources*, what the
+    request showed, whose text holds it; where none does and the rule
+    `check_quote_shown` is off, the first passage of *document*, the
+    document's passages in its order, that holds it (owner decision
+    2026-11-12: the code looks for the quote in the whole document and
+    takes the place where it stands). None where it stands in neither, or
+    is no text: the answer falls."""
     if not isinstance(quote, str) or not quote.strip():
         return None
     found = next((s for s in sources if quote_in(s.text or "", quote)), None)
-    if found is None and not rules.get("check_quote_shown") and sources:
-        found = sources[0]
+    if found is None and not rules.get("check_quote_shown"):
+        found = next((s for s in document if quote_in(s.text or "", quote)),
+                     None)
     return found
 
 
 def _print_read(row, slot, printed: str, answer: dict, sources: list,
                 window: Optional[tuple], not_shown: str,
-                not_in_quote: str) -> Optional[dict]:
+                not_in_quote: str, document: Sequence = ()) -> Optional[dict]:
     """*printed*, the print of a coordinate with no entry for it, read onto
     *row* by the two checks every answer passes (its quote stands in a shown
     source, long enough, and holds the print): None when read, else the
     failure, as `merge_field` records one."""
     quote = answer.get("quote")
-    found = _shown_in(sources, quote)
+    found = place_of(sources, quote, document)
     base = {"row": row.label, "given": answer.get("value"), "raw": printed,
             "quote": quote}
     row.claim[f"{slot.name}_state"] = state_for("refused")
@@ -715,12 +721,13 @@ def _print_read(row, slot, printed: str, answer: dict, sources: list,
     return None
 
 
-def _says_unstated(sources: list, answer: dict) -> bool:
+def _says_unstated(sources: list, answer: dict,
+                   document: Sequence = ()) -> bool:
     """Does the answer "not stated" cite a shown line long enough to name a
     place? Where the rule `unstated_needs_no_quote` is off it must, like
     every other answer."""
     quote = answer.get("quote")
-    return (_shown_in(sources, quote) is not None
+    return (place_of(sources, quote, document) is not None
             and len(quote.strip()) >= min_quote_chars())
 
 
@@ -741,7 +748,8 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 *, window: Optional[tuple] = None,
                 bases: Optional[list] = None,
                 not_shown: str = "quote_not_in_source",
-                not_in_quote: str = "or_unstated") -> dict:
+                not_in_quote: str = "or_unstated",
+                document: Sequence = ()) -> dict:
     """Fold one field's answers. Returns {"filled", "unquoted", "unbacked"}.
 
     *window* is (stage, index) and is written next to each coordinate this
@@ -761,7 +769,10 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
     the scenario is in the section heading, so a coordinate's evidence is
     routinely in a different passage than the number's. Checking it against
     the row's own source would refuse exactly the readings this stage exists
-    to collect.
+    to collect. *document* is the document's passages in its order: where
+    the rule `check_quote_shown` is off, a quote that stands in nothing
+    shown is looked for there, and the first passage that holds it is its
+    place (`place_of`, owner decision 2026-11-12).
 
     Those two clauses, and a quote long enough to name a place in the
     document, are the whole check. Which table a passage belongs to, how far
@@ -832,7 +843,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                 got = merge_field(
                     [kept], sources, slot, {"answers": {label: answer}},
                     window=window, bases=bases, not_shown=not_shown,
-                    not_in_quote=not_in_quote)
+                    not_in_quote=not_in_quote, document=document)
                 if kept.claim.get(f"{slot.name}_state") == READ:
                     for suffix in COORDINATE_KEYS:
                         row.claim.pop(f"{slot.name}{suffix}", None)
@@ -854,7 +865,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             # quote stands in what was shown and holds the print, the entry
             # left empty, and converted once the list has an entry for it.
             got = _print_read(row, slot, printed, answer, sources, window,
-                              not_shown, not_in_quote)
+                              not_shown, not_in_quote, document)
             if got is None:
                 filled += 1
             else:
@@ -876,13 +887,14 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
             continue
         if str(given).strip() == UNSTATED:
             if not rules.get("unstated_needs_no_quote") and \
-                    not _says_unstated(sources, answer):
+                    not _says_unstated(sources, answer, document):
                 # The rule asks "not stated" for a shown line like any
                 # other answer, and it cited none that serves.
                 quote = answer.get("quote")
-                shown = _shown_in(sources, quote) is not None
+                placed = place_of(sources, quote, document)
+                shown = placed is not None
                 row.claim[f"{slot.name}_state"] = state_for("refused")
-                _keep_refused(row, slot, quote, _shown_in(sources, quote))
+                _keep_refused(row, slot, quote, placed)
                 failed.append({
                     "row": row.label, "given": given, "quote": quote,
                     "raw": answer.get("value_raw"),
@@ -935,7 +947,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
                     # holds it, as a unit the list has no entry for is.
                     got = _print_read(row, slot, noticed.strip(), answer,
                                       sources, window, not_shown,
-                                      not_in_quote)
+                                      not_in_quote, document)
                     if got is None:
                         filled += 1
                     else:
@@ -963,7 +975,7 @@ def merge_field(rows: list, sources: list, slot, reply: Optional[dict],
         quote = answer.get("quote")
         # WHICH source, not whether any: it is written next to the
         # coordinate, and a boolean cannot be turned back into a source.
-        found = _shown_in(sources, quote)
+        found = place_of(sources, quote, document)
         if found is None:
             row.claim[f"{slot.name}_state"] = state_for("refused")
             _keep_refused(row, slot, quote, None)
