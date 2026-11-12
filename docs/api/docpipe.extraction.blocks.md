@@ -94,6 +94,69 @@ Fields:
 
 ## Functions
 
+### preset_of
+
+```python
+def preset_of(node: Optional[dict])
+```
+
+The preset a step of "Ask the model" names (`presets`), None for
+any other step.
+
+### box_of
+
+```python
+def box_of(node: Optional[dict]) -> Optional[Box]
+```
+
+The box a step is, seen through its preset: a step of "Ask the
+model" with a preset has the preset's name, explanation, frames,
+settings and request; None where the library has no such box.
+
+### label_of
+
+```python
+def label_of(kind: str) -> str
+```
+
+What the page calls a kind of step (`rules.step_kind`): a box of
+the library, or the preset of "Ask the model" that stands for it.
+
+### settings_of
+
+```python
+def settings_of(node: dict) -> tuple
+```
+
+The settings of a step: its box's, and its preset's.
+
+### is_attached
+
+```python
+def is_attached(node: dict) -> bool
+```
+
+Is *node* applied to the answers of the question before it (an own
+check, a list entry, whether a place speaks about the value), so that
+no frame runs it?
+
+### target_of
+
+```python
+def target_of(node: dict) -> Optional[str]
+```
+
+The target of a step of "Ask the model" (`targets`), None for any
+other step.
+
+### asks_of
+
+```python
+def asks_of(node: dict) -> Optional[str]
+```
+
+The request a step sends, None where it sends none.
+
 ### box
 
 ```python
@@ -118,6 +181,18 @@ def catalogue(profile=None) -> dict
 
 The library as the page shows it where *profile* is open: the
 boxes of the main flow, those of the core and those of the profile
-(`offered`), and apart from them the boxes of the follow-up passes.
+(`offered`), the presets of "Ask the model" its flow takes, and apart
+from them the boxes of the follow-up passes.
+
+### presets_catalogue
+
+```python
+def presets_catalogue(profile=None) -> list
+```
+
+The presets of "Ask the model" the page offers where *profile* is
+open, in the order of the library: each as the box it is
+(`box_of`: its name, explanation, settings, frames and where it runs)
+with its five parts and the values of its settings.
 
 [Back to the index](../README.md)

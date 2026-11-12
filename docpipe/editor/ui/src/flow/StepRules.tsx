@@ -8,17 +8,17 @@ import { openRule, tabLabel } from '../lib/nav';
 import { clone, own, same } from '../lib/util';
 import { rich, t, tn, tr, useLang } from '../lib/i18n';
 import { RuleInput } from '../rules/RuleInputs';
-import { ancestors, find, kindOf, labelOf, libBox, stepKind, walk, type Step, type StepRule } from './model';
+import { ancestors, find, kindOf, labelOf, stepBox, stepKind, walk, type Step, type StepRule } from './model';
 import type { Panel } from './Settings';
 
 /* the rules and numbers a box or frame is offered: those read by its own kind of step, and for a frame those read by any
    step in it (the run takes a value of a frame to everything in it) */
 export function offered(P: Panel, n: Step): StepRule[] {
-  const kinds = new Set([...walk([n])].map(([x]) => stepKind(x)));
+  const lib = P.data.library;
+  const kinds = new Set([...walk([n])].map(([x]) => stepKind(x, lib)));
   const names = new Set<string>();
   for (const k of kinds) for (const name of P.data.step_rules.kinds[k] || []) names.add(name);
-  const lib = P.data.library;
-  const b = kindOf(n) === 'box' ? libBox(lib, n.box) : null;
+  const b = kindOf(n) === 'box' ? stepBox(lib, n) : null;
   // a number the box shows as a setting of its own ("only here") is not offered twice
   const shown = new Set((b ? b.settings : []).filter(s => s.kind === 'number' && s.number).map(s => s.number));
   return P.data.step_rules.rules.filter(r => names.has(r.name) && !r.secret && !r.machine && !shown.has(r.name));

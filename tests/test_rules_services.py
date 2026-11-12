@@ -16,6 +16,7 @@ import pytest
 from docpipe import llm_preflight, rules
 from docpipe.extraction import preflight, reading, throttle
 from docpipe.profile import load_profile
+from conftest import step_node
 
 DEFAULT = rules.default()
 
@@ -30,7 +31,7 @@ def fresh(monkeypatch):
 
 
 def at_step(box, **values):
-    return rules.in_step(rules.stepped({"id": "x", "box": box}, values))
+    return rules.in_step(rules.stepped(step_node(box), values))
 
 
 # -- the limit of open requests -----------------------------------------------

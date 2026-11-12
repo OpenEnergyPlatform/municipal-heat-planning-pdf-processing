@@ -107,7 +107,7 @@ RULES: tuple = (
          "name, with no request. Decided on 2026-11-08 and 2026-11-09.",
          choices=("phrase", "question", "name"),
          decided="2026-11-08, 2026-11-09", steps=("phrase",),
-         where="addressed.py (search_sentence)"),
+         where="targets.py (search_sentence)"),
     rule("rerank_when", "flow", "Search", "choice",
          "When the reranker orders the chunks of a search for a dimension. "
          "Once: when the search starts, with the search sentence, which is "
@@ -123,7 +123,7 @@ RULES: tuple = (
          "value, where the model fetches it or where the order reaches it, "
          "and never a third time. Decided on 2026-11-09.",
          decided="2026-11-09", steps=("search", "round", "if"),
-         where="engine.py (SearchSupply, box_search)"),
+         where="engine.py (SearchSupply), targets.py (over_hits)"),
     rule("fetched_count", "flow", "Search", "switch",
          "Off: chunks that the model fetched itself do not count against "
          "the most chunks a search shows, so a search may show more. On: "

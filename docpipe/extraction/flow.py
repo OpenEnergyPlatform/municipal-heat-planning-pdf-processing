@@ -210,7 +210,8 @@ FRAME_KEYS = {"each": ("id", "each", "which", "when", "together", "order",
               "round": ("id", "round", "stop", "rules", "steps", "off",
                         "note"),
               "if": ("id", "if", "else", "rules", "off", "note")}
-BOX_KEYS = ("id", "box", "set", "own", "rules", "when", "off", "note")
+BOX_KEYS = ("id", "box", "preset", "set", "own", "rules", "when", "off",
+            "note")
 
 
 @dataclass(frozen=True)
@@ -330,16 +331,19 @@ def asked(tree: list) -> set:
     for node, _frames in on(tree):
         if kind_of(node) != "box":
             continue
-        kind = blocks.LIBRARY.get(node.get("box"))
-        if kind is not None and kind.asks:
-            out.add(kind.asks)
+        asks = blocks.asks_of(node)
+        if asks:
+            out.add(asks)
     return out
 
 
 def box_on(tree: list, kind: str) -> bool:
-    """Does the top box of *kind* stand in *tree* and is it on? The boxes
-    the runner does after the reading (compute, catalogue) run only so."""
-    return any(node.get("box") == kind and not node.get("off")
+    """Does the top step of *kind* (`rules.step_kind`) stand in *tree* and
+    is it on? The steps the runner does after the reading (compute,
+    catalogue) run only so."""
+    from ..rules import step_kind
+    return any("box" in node and step_kind(node) == kind
+               and not node.get("off")
                for node in tree if isinstance(node, dict))
 
 
@@ -407,7 +411,16 @@ def availability(tree: list) -> dict:
             elif kind == "each":
                 item = node.get("as") or "item" if node.get("each") == "list" \
                     else variables.ITEMS.get(node.get("each"), (None, None))[0]
-                go(node.get("steps") or [], local | ({item} if item else set()))
+                items = {item} if item else set()
+                # A field asked once per document is a fact of it; a value
+                # is a value of its field (what the frame holds besides its
+                # item, `engine.Engine.items`).
+                if node.get("each") == "field" \
+                        and node.get("which", "all") == "once":
+                    items.add("fact")
+                if node.get("each") == "value":
+                    items.add("field")
+                go(node.get("steps") or [], local | items)
             elif kind == "round":
                 local |= go(node.get("steps") or [], local | {"round"}) \
                     - {"round"}
@@ -442,8 +455,8 @@ def available_by_id(tree: list) -> dict:
 
 
 def outputs_of(node: dict) -> list:
-    """The variables a box gives: its kind's, and for a general step the
-    ones its settings name."""
+    """The variables a box gives: its kind's, for a step of "Ask the model"
+    its target's, and for a general step the ones its settings name."""
     kind = blocks.LIBRARY.get(node.get("box"))
     if kind is None:
         return []
@@ -451,11 +464,13 @@ def outputs_of(node: dict) -> list:
     if not isinstance(sets, dict):
         return []
     if kind.type == "ask":
-        into = sets.get("into") if isinstance(sets.get("into"), dict) \
-            else {}
-        if into.get("field"):
-            return ["answer", "values"]
-        return ["answer", into.get("var") or node.get("id")]
+        from . import targets
+        from .general import parts_of
+        into = parts_of(node)["into"]
+        target = targets.TARGETS.get(into.get("to"))
+        if into.get("to") == "var":
+            return ["answer", into.get("var") or node.get("id")]
+        return list(target.outputs) if target is not None else []
     if kind.type in ("retrieve", "rerank", "filter", "merge"):
         default = "hits" if kind.type == "retrieve" else node.get("id")
         return [sets.get("into") or default]
@@ -477,8 +492,14 @@ def inputs_of(node: dict) -> tuple:
     if not isinstance(sets, dict) or kind.type not in GENERAL:
         return kind.inputs
     if kind.type == "ask":
-        paths = [one.get("from") for one in sets.get("inputs") or ()
-                 if isinstance(one, dict)]
+        from . import targets
+        from .general import parts_of
+        parts = parts_of(node)
+        target = targets.TARGETS.get(parts["into"].get("to"))
+        given = set(target.gives) if target is not None else set()
+        paths = [one.get("from") for one in parts["inputs"] or ()
+                 if isinstance(one, dict)
+                 and _root(one.get("from")) not in given]
     elif kind.type == "retrieve":
         paths = [sets.get("query")]
     elif kind.type == "rerank":
@@ -504,9 +525,8 @@ def lasting_of(node: dict, name: str) -> bool:
         return False
     sets = node.get("set") or {}
     if kind.type == "ask":
-        into = sets.get("into") if isinstance(sets.get("into"), dict) \
-            else {}
-        return bool(into.get("lasting"))
+        from .general import parts_of
+        return bool(parts_of(node)["into"].get("lasting"))
     return bool(sets.get("lasting"))
 
 
@@ -599,7 +619,7 @@ def _known(frames: tuple, before: list) -> set:
         out.add("round")
     for node in before:
         # A box that is off is not there: it gives nothing.
-        kind = blocks.LIBRARY.get(node.get("box")) \
+        kind = blocks.box_of(node) \
             if kind_of(node) == "box" and _on(node) else None
         if kind is not None and kind.asks:
             out |= {"answer", "quote"}
@@ -648,10 +668,13 @@ def _general_problem(setting: blocks.Setting, value) -> Optional[str]:
         if not isinstance(value, list):
             return f"{label} is a list of inputs"
         keys = set()
+        from . import shows
         for one in value:
-            if not isinstance(one, dict) or set(one) - {"key", "from",
-                                                        "show"}:
-                return f"{label}: each input has key, from and show"
+            if not isinstance(one, dict) or set(one) - {
+                    "key", "from", "show", "when", "first_only",
+                    "several_only"}:
+                return (f"{label}: each input has key, from and show, and "
+                        f"may have when, first_only and several_only")
             if not _NAME.match(str(one.get("key") or "")):
                 return f"{label}: {one.get('key')!r} is no key"
             if one["key"] in keys:
@@ -659,20 +682,33 @@ def _general_problem(setting: blocks.Setting, value) -> Optional[str]:
             keys.add(one["key"])
             if not _PATH.match(str(one.get("from") or "")):
                 return f"{label}: {one.get('from')!r} is no variable"
-            if one.get("show", "as_is") not in general.SHOWS:
+            if one.get("show", "as_is") not in shows.SHOWS:
                 return (f"{label}: shows as one of "
-                        f"{', '.join(general.SHOWS)}")
+                        f"{', '.join(shows.SHOWS)}")
         return None
     if setting.kind == blocks.SCHEMA:
-        said = general.schema_problem(value)
+        from . import forms
+        said = forms.problem(value)
         return f"{label}: {said}" if said else None
     if setting.kind == blocks.INTO:
-        if not isinstance(value, dict) or set(value) - {"var", "lasting",
-                                                         "field"}:
-            return f"{label} is a variable (var, lasting) or a field"
+        from . import targets
+        if not isinstance(value, dict) or set(value) - {
+                "to", "var", "lasting", "field", "keep", "where"}:
+            return (f"{label} is a target (to) with what it takes: a "
+                    f"variable (var, lasting), a field (field, keep), a "
+                    f"place (where)")
+        if "to" in value and value["to"] not in targets.TARGETS:
+            return f"{label}: there is no target {value['to']!r}"
+        if value.get("keep") not in (None, "now", "gathered"):
+            return f"{label}: values are kept now or gathered"
+        if value.get("where") not in (None, "own", "hits"):
+            return f"{label}: a dimension is asked at its own place or " \
+                f"over the hits"
         if "field" in value:
             return None if isinstance(value["field"], str) \
                 and value["field"] else f"{label}: which field"
+        if value.get("to") not in (None, "var"):
+            return None
         if not value.get("var"):
             return None             # the step's id names the variable
         if not _NAME.match(str(value.get("var") or "")):
@@ -709,10 +745,55 @@ def _general_problem(setting: blocks.Setting, value) -> Optional[str]:
 
 
 # What a general step cannot do without.
-NEEDED = {"ask": ("prompt",), "retrieve": ("query",),
+NEEDED = {"retrieve": ("query",),
           "rerank": ("list", "query", "into"), "set": ("name",),
           "filter": ("list", "keep", "into"), "merge": ("lists", "into"),
           "python": ("code", "outputs")}
+
+
+def _given(node: dict) -> set:
+    """The variables the target of a step of "Ask the model" gives its
+    request (`targets.Target.gives`), for its conditions."""
+    from . import targets
+    target = targets.TARGETS.get(blocks.target_of(node))
+    return {f"var:{name}" for name in target.gives} if target else set()
+
+
+def _ask_parts(check: _Check, node: dict, where: set) -> None:
+    """The parts of a step of "Ask the model", as its preset and its own
+    values make them: a target there is, an answer form it takes, inputs
+    whose conditions can be told where it stands."""
+    from . import forms, targets
+    from .general import parts_of
+    parts = parts_of(node)
+    target = targets.TARGETS.get(parts["into"].get("to"))
+    if target is None:
+        check.say(node, f"there is no target {parts['into'].get('to')!r}"
+                  f"{_nearest(parts['into'].get('to'), targets.TARGETS)}")
+        return
+    said = forms.problem(parts["reply"])
+    if said:
+        check.say(node, f"form of the answer: {said}")
+    elif isinstance(parts["reply"], str) and target.forms \
+            and parts["reply"] not in target.forms:
+        check.say(node, f"{target.label} takes an answer as "
+                  f"{', '.join(target.forms)}, not {parts['reply']}")
+    if target.nested and not blocks.is_attached(node):
+        check.say(node, f"{target.label} is asked inside the answer of "
+                  f"another question: give the step a preset that stands "
+                  f"after one")
+    if target.apart:
+        for one in parts["inputs"] or ():
+            if isinstance(one, dict) \
+                    and _root(one.get("from")) not in target.gives:
+                check.say(node, f"input {one.get('key')}: {target.label} "
+                          f"is asked apart from the reading, from "
+                          f"{' and '.join(target.gives)} alone")
+    for one in parts["inputs"] or ():
+        if isinstance(one, dict) and one.get("when") is not None:
+            said = conditions.problems(one["when"], where)
+            if said:
+                check.say(node, f"input {one.get('key')}: {said[0]}")
 
 
 def _kinds_in(node: dict) -> set:
@@ -785,6 +866,16 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
         check.say(node, f"there is no box {node.get('box')!r}"
                   f"{_nearest(node.get('box'), blocks.LIBRARY)}")
         return
+    if "preset" in node:
+        from .presets import PRESETS
+        if node.get("box") != "ask":
+            check.say(node, "only a step of \"Ask the model\" has a preset")
+            return
+        if blocks.preset_of(node) is None:
+            check.say(node, f"there is no preset {node.get('preset')!r}"
+                      f"{_nearest(node.get('preset'), PRESETS)}")
+            return
+    kind = blocks.box_of(node)
     if kind.flow:
         check.say(node, f"{kind.label} is a step of a follow-up pass "
                   f"(`flows/`), and this flow reads documents: it has no "
@@ -816,24 +907,32 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
                                          for f in frames):
         check.say(node, f"{kind.label} stands in a round: it shows a "
                   f"supply a few pieces at a time")
-    if kind.type == "docfield" and inner == "field":
+    if kind.type == "ask" and inner == "field" \
+            and blocks.target_of(node) == "values":
+        from .general import parts_of
         frame = _innermost(frames)
-        if frame.get("which", "all") == "pieces":
+        if frame.get("which", "all") == "pieces" \
+                and parts_of(node)["into"].get("keep") == "gathered":
             check.say(node, "a field read in pieces is asked by finds, "
                       "not as a field of the document")
     where = _known(frames, before) | _vars(check, node)
     if kind.type == "filter":
         where = where | {"var:item"}
-    if kind.type == "transcribe":
-        # Each figure is asked, or not, by this box before any chunk is
-        # cut: only the figure's own properties are known.
-        where = {"figure"}
+    if kind.type == "ask":
+        from . import targets
+        target = targets.TARGETS.get(blocks.target_of(node))
+        if target is not None and target.facts:
+            # A step asked once a figure, before any chunk is cut, knows
+            # only the figure's own properties.
+            where = set(target.facts)
     sets = node.get("set") or {}
     own = node.get("own") or {}
     if not isinstance(sets, dict) or not isinstance(own, dict):
         check.say(node, "set and own are objects: setting -> value")
         return
     by_key = {s.key: s for s in kind.settings}
+    if kind.type == "ask":
+        where = where | _given(node)
     for key, value in sets.items():
         setting = by_key.get(key)
         if setting is None:
@@ -864,6 +963,8 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
         for key in ("name", "refuse", "sentence"):
             if key not in sets:
                 check.say(node, f"a check needs its {key}")
+    if kind.type == "ask":
+        _ask_parts(check, node, where)
     for key in NEEDED.get(kind.type, ()):
         setting = next((x for x in kind.settings if x.key == key), None)
         # a setting with a standard needs no value of its own
@@ -876,10 +977,9 @@ def _box(check: _Check, node: dict, frames: tuple, before: list,
     if kind.attached:
         previous = [n for n in before if kind_of(n) == "box"]
         chain = list(reversed(previous))
-        while chain and blocks.LIBRARY.get(chain[0].get("box")) is not None \
-                and blocks.LIBRARY[chain[0]["box"]].attached:
+        while chain and blocks.is_attached(chain[0]):
             chain.pop(0)
-        asking = chain[0].get("box") if chain else None
+        asking = blocks.asks_of(chain[0]) if chain else None
         if not before or kind_of(before[-1]) != "box" \
                 or asking not in kind.attached:
             check.say(node, f"{kind.label} stands right after a question "
@@ -904,10 +1004,25 @@ def _supply_before(before: list) -> bool:
                for n in before)
 
 
+def hits_question(node: dict) -> Optional[str]:
+    """The target of a question that shows the next search hits a few a
+    request (an input shown as "next_chunks"): "dimension" for a search of
+    a value's dimension, "values" for a field of the whole document; None
+    for any other step."""
+    if kind_of(node) != "box" or node.get("box") != "ask":
+        return None
+    from .general import parts_of
+    parts = parts_of(node)
+    if not any(isinstance(one, dict) and one.get("show") == "next_chunks"
+               for one in parts["inputs"] or ()):
+        return None
+    return parts["into"].get("to")
+
+
 def _draws(steps: list) -> bool:
     """Does a question in *steps* draw from a supply?"""
     return any(kind_of(n) == "box" and _on(n, frames)
-               and n.get("box") in ("docfield", "search")
+               and hits_question(n) is not None
                for n, frames in walk(steps))
 
 
@@ -917,7 +1032,7 @@ def _searches(node: dict) -> bool:
     if not _on(node):
         return False
     if kind_of(node) == "box":
-        return node.get("box") == "search"
+        return hits_question(node) == "dimension"
     if kind_of(node) == "each":
         return False
     return any(_searches(child) for _label, steps in children(node)
@@ -1096,12 +1211,14 @@ def _frame(check: _Check, node: dict, kind: str, frames: tuple,
             if said:
                 check.say(node, f"stop when: {said[0]}")
         steps = node.get("steps") or []
-        if any(n.get("box") == "search" for n in steps) \
+        if any(hits_question(n) == "dimension" for n in steps
+               if isinstance(n, dict)) \
                 and not _supply_before(before) \
                 and not _supply_before(steps):
             check.say(node, "a search in the round needs a supply before it "
                       "(order the pieces, or the pieces beside)")
-        if any(n.get("box") == "docfield" for n in steps) \
+        if any(hits_question(n) == "values" for n in steps
+               if isinstance(n, dict)) \
                 and not _supply_before(before):
             check.say(node, "a field asked in the round needs the pieces "
                       "ordered before it")
@@ -1128,6 +1245,9 @@ def _frame(check: _Check, node: dict, kind: str, frames: tuple,
 
 
 PREPARES = ("document", "transcribe", "split", "lists")
+# What the runner does once a document is read and written, in its order
+# (`engine.AFTER`).
+ENDS = ("compute", "catalogue")
 
 
 def known_rules(profile) -> dict:
@@ -1169,9 +1289,11 @@ def problems(tree, known: Optional[dict] = None, profile=None) -> list:
     check.avail = availability(tree)
     check.makers = makers(tree)
     _steps(check, tree, (), True)
-    top = [node.get("box") if kind_of(node) == "box" else None
+    from ..rules import step_kind
+    # a step of "Ask the model" counts as the step its preset stands for
+    top = [step_kind(node) if kind_of(node) == "box" else None
            for node in tree if isinstance(node, dict)]
-    every = [n.get("box") for n, _ in walk(tree) if kind_of(n) == "box"]
+    every = [step_kind(n) for n, _ in walk(tree) if kind_of(n) == "box"]
     # Only writing the harvest is fixed (owner decision 2026-11-12: "Ernte
     # schreiben am Ende darf fest sein"); what prepares the document is
     # done once, where it stands at the top.
@@ -1181,8 +1303,7 @@ def problems(tree, known: Optional[dict] = None, profile=None) -> list:
         if every.count(kind) > 1:
             check.say({}, f"{kind} stands once at most")
     # What the runner does once a document is read, in its order.
-    later = [kind for kind, box in blocks.LIBRARY.items()
-             if box.group == "end" and kind != "write"]
+    later = list(ENDS)
     if "write" in top:
         after = top[top.index("write") + 1:]
         if any(kind not in [None] + later for kind in after) \
@@ -1212,11 +1333,16 @@ def prompt_problems(tree: list, profile) -> list:
     for node, _frames in on(tree):
         if kind_of(node) != "box":
             continue
-        kind = blocks.LIBRARY.get(node.get("box"))
+        kind = blocks.box_of(node)
         if kind is None or not kind.asks:
             continue
         prompt_id = compute.COMPUTE_PROMPT_ID if kind.asks == "compute" \
             else f"extraction/{kind.asks}"
+        if node.get("box") == "ask":
+            from .general import parts_of
+            prompt_id = parts_of(node)["prompt"]
+            if not isinstance(prompt_id, str):
+                continue        # a text of the step's own
         try:
             prompts.load(prompt_id, profile)
         except (FileNotFoundError, LookupError):

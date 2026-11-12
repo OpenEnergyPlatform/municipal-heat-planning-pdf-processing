@@ -21,7 +21,7 @@ from types import SimpleNamespace
 import pytest
 
 from docpipe import rules
-from docpipe.extraction import blocks, flow, general, runner
+from docpipe.extraction import addressed, blocks, flow, general, runner
 from docpipe.extraction.addressed import Counts
 from docpipe.extraction.engine import Engine, Scope
 from docpipe.profile import load_profile
@@ -131,17 +131,19 @@ def test_a_box_of_a_profile_stands_only_in_its_profiles_flow():
     # the failure by construction: the same drawing as a heat plan's
     assert any("is a step of the profile scenarios" in m
                for m in said(drawing, load_profile("kwp")))
-    offered = {box["type"] for box in
-               blocks.catalogue(load_profile("kwp"))["boxes"]}
+    library = blocks.catalogue(load_profile("kwp"))
+    offered = {box["type"] for box in library["boxes"]} \
+        | {one["name"] for one in library["presets"]}
     assert "quantity" in offered and "works" not in offered
 
 
 # -- 6. the home of the list question ----------------------------------------------
 
 def test_a_list_question_is_asked_as_its_list_step_says():
-    tree = [{"id": "finds", "box": "find"},
-            {"id": "finds_list", "box": "list", "rules": {"max_tokens": 99}},
-            {"id": "own", "box": "coord"}]
+    tree = [{"id": "finds", "box": "ask", "preset": "find"},
+            {"id": "finds_list", "box": "ask", "preset": "list",
+             "rules": {"max_tokens": 99}},
+            {"id": "own", "box": "ask", "preset": "coord"}]
     homes = runner.attached_homes(tree)
     assert homes[("finds", "list")]["id"] == "finds_list"
     # the failure by construction: a question without such a step, and a
@@ -162,13 +164,14 @@ class Asked(Reading):
         self.replies = list(replies)
         self.asked, self.followed = [], []
 
-    def ask_own(self, prompt, payload, document_id, shape, example, counts,
-                /, **noted):
-        self.asked.append((prompt, payload, example))
+    def _ask(self, kind, payload, document_id, shape, example, counts,
+             /, **noted):
+        # An own question asks with its step's prompt (`addressed.PROMPT`).
+        self.asked.append((addressed.own_prompt(kind), payload, example))
         return self.replies.pop(0)
 
-    def follow_own(self, prompt, payload, document_id, shape, example, reply,
-                   what, counts, /, **noted):
+    def _follow(self, kind, payload, document_id, shape, example, reply,
+                what, counts, /, **noted):
         self.followed.append(what)
         return self.replies.pop(0)
 

@@ -270,8 +270,8 @@ def step_kind(node: dict) -> str
 ```
 
 How a node of a flow is named where a rule says which steps read it:
-a box by its kind ("find"), a frame as "each \<what>", "round" or
-"if".
+a box by its kind ("split"), a step of "Ask the model" by its preset
+("find"), a frame as "each \<what>", "round" or "if".
 
 ### stepped
 

@@ -3,46 +3,187 @@
 `docpipe/extraction/general.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
 general.py: The general steps of a flow (owner decision 2026-11-12, plan
-of the general blocks, points 2 to 7).
+of the general blocks, points 2 to 7) and "Ask the model", which every
+step that asks the model is (owner decision 2026-11-12 evening: "alles
+umbauen").
 
 A flow can be built from steps that know nothing of a use case: ask the
-model with a prompt of one's own (`ask`), and let it fetch what a shown
-line points to (`ask` with tools), search the document's chunks
-(`search`), order a list of chunks again (`rerank`), set a variable
-(`set`), keep the entries of a list a condition holds for (`filter`), join
-lists (`merge`), run a piece of Python (`python`), and go through any list
-(`each_list`). Each takes named inputs and gives named outputs
-(`variables`): a variable the page makes lives in the item it was made
-for, or for the whole document where its step says so.
+model (`ask`), search the document's chunks (`search`), order a list of
+chunks again (`rerank`), set a variable (`set`), keep the entries of a
+list a condition holds for (`filter`), join lists (`merge`), run a piece of
+Python (`python`), and go through any list (`each_list`). Each takes named
+inputs and gives named outputs (`variables`): a variable the page makes
+lives in the item it was made for, or for the whole document where its
+step says so.
 
-What a request shows is built from its inputs: each a key of the message,
-the variable it comes from and how it is shown (`SHOWS`): as it is, as a
+A step of "Ask the model" has five parts (`parts_of`): the request it is
+in the log and whose rules it reads, its prompt, its inputs, the form of
+its answer and its target; a preset (`presets`) gives all five for one
+question the use cases ask, and whatever the step sets of its own wins.
+What a request shows is built from its inputs (`shows`): each a key of the
+message, the variable it comes from and how it is shown: as it is, as a
 field with what it means, as numbered lines the answer can name, as the
-title page or the headings. An input whose key the prompt names as
-{{key}} stands in the prompt and not in the message, so that a prompt says
-each thing once. The answer is read in the form of its JSON schema; an
-answer that names lines and words is checked as every answer is (the line
-was shown, the words stand in it), asked again with what did not hold, and
-kept as values of a field of the Spec where the step says so.
+title page or the headings, as the next search hits. An input whose key the
+prompt names as {{key}} stands in the prompt and not in the message, so
+that a prompt says each thing once. The answer is read in its form
+(`forms`) and its target (`targets`) does with it what the question is
+for: a variable, values of a field, a dimension of a value, a search
+sentence, a list entry; an answer that names lines and words is checked as
+every answer is (the line was shown, the words stand in it) and asked again
+with what did not hold.
 
 Author: Felix Vossel
 
 ## Classes
 
-### Request
+### Ask
 
 ```python
-class Request
+class Ask
 ```
 
-What one request shows: its lines by letter (`units.Shown`), the
-document, and the reading.
+One question a step of "Ask the model" asks: its parts
+(`parts_of`), where it stands (*scope*; with *values* the variables a
+target gives the request, `PAGE`), and how it asks. Its requests are
+built from its inputs (`shows.build`) and sent as the request its step
+is (`Reader._ask`), under the step's prompt where it is not the prompt
+of its kind (`addressed.PROMPT`).
 
-#### Request.\_\_init\_\_
+#### Ask.\_\_init\_\_
 
 ```python
-def __init__(self, plan, reader, scope)
+def __init__(self, engine, node: Optional[dict], scope,
+             values: Optional[dict] = None, plan=None,
+             document_id: Optional[int] = None)
 ```
+
+#### Ask.setting
+
+```python
+def setting(self, key: str)
+```
+
+#### Ask.number
+
+```python
+def number(self, key: str) -> int
+```
+
+#### Ask.fetch
+
+```python
+@property
+def fetch(self) -> bool
+```
+
+May the answer ask to see more (`fetches`)?
+
+#### Ask.picture
+
+```python
+@property
+def picture(self) -> bool
+```
+
+May the answer ask for the picture of a figure it shows?
+
+#### Ask.holds
+
+```python
+def holds(self, condition) -> bool
+```
+
+#### Ask.with_values
+
+```python
+def with_values(self, values: dict) -> "Ask"
+```
+
+The same question with *values* as variables of its request.
+
+#### Ask.request
+
+```python
+def request(self, values: Optional[dict] = None, **over)
+```
+
+A request built from the step's inputs, with *values* as
+variables of its own and *over* as what it shows already (`batch`,
+`first`: the chunks of a half of the hits).
+
+#### Ask.chunk_input
+
+```python
+def chunk_input(self) -> Optional[dict]
+```
+
+The input that shows the request's chunks.
+
+#### Ask.source
+
+```python
+def source(self, spec: Optional[dict])
+```
+
+The variable an input comes from.
+
+#### Ask.field
+
+```python
+def field(self)
+```
+
+The field of the Spec the answer reads values of: the one the
+target names, else the field of the step's frame.
+
+#### Ask.standard
+
+```python
+@property
+def standard(self) -> bool
+```
+
+Is the step's prompt the prompt of its kind of request?
+
+#### Ask.prompting
+
+```python
+def prompting(self)
+```
+
+The step's prompt for the requests of its kind while it asks,
+where it is not the prompt of that kind (`addressed.PROMPT`).
+
+#### Ask.noted
+
+```python
+def noted(self, noted: dict) -> dict
+```
+
+What the log notes of a request: a step of the page's own is
+named by its id.
+
+#### Ask.ask
+
+```python
+def ask(self, req, shape: dict, example, counts, /, **noted)
+```
+
+#### Ask.follow
+
+```python
+def follow(self, req, shape: dict, example, reply, what: list,
+           counts, /, **noted)
+```
+
+#### Ask.asks
+
+```python
+def asks(self) -> bool
+```
+
+Is there a prompt this question can be asked with: its own, or
+the profile's for its kind (`addressed.OPTIONAL`)?
 
 ## Functions
 
@@ -84,21 +225,6 @@ def put(scope, name: str, value, lasting: bool = False) -> None
 The page's variable *name* set to *value*: for the item it was made
 for, or for the whole document (*lasting*).
 
-### shows_catalogue
-
-```python
-def shows_catalogue() -> dict
-```
-
-### payload_of
-
-```python
-def payload_of(req: Request, inputs: list) -> dict
-```
-
-The message of a request: each input under its key, shown as it
-says; an input that shows nothing is left out.
-
 ### placed
 
 ```python
@@ -118,16 +244,6 @@ def in_prompt(text: str, payload: dict) -> tuple
 written in, the message without the keys the prompt holds whole): a
 prompt says each thing once (owner 2026-11-12: "die Prompts nicht
 überladen"). A place whose input shows nothing is empty.
-
-### reply_schema
-
-```python
-def reply_schema(node: dict) -> dict
-```
-
-The JSON schema the answer of an ask step has: its own, or for a
-step that keeps values of a field, the form of a find (line and words,
-the entry of a list).
 
 ### example_of
 
@@ -201,16 +317,77 @@ else.
 def to_list(value) -> list
 ```
 
+### preset_of
+
+```python
+def preset_of(node: Optional[dict])
+```
+
+The preset a step of "Ask the model" names, None where it names
+none (`presets`).
+
+### default_prompt
+
+```python
+def default_prompt(request: str) -> str
+```
+
+The prompt a request has where its step names none: the prompt of
+its kind (`extraction/<request>`), for a step of the page's own the
+general one (`extraction/ask`).
+
+### into_of
+
+```python
+def into_of(into) -> dict
+```
+
+The target of an answer as {"to": name, ...}: a step that names a
+field keeps values of it, one that names nothing a variable.
+
+### parts_of
+
+```python
+def parts_of(node: Optional[dict]) -> dict
+```
+
+The five parts of a step of "Ask the model": its own where it sets
+them, else its preset's, else the general step's.
+
+### schema_with_more
+
+```python
+def schema_with_more(schema: dict) -> dict
+```
+
+*schema* with "more" beside its keys, where the step lets the model
+ask to see more (`addressed.with_more`).
+
+### nested
+
+```python
+def nested(reader, target: str, plan, values: dict, node=None) -> Ask
+```
+
+A question asked inside the answer of another (a list entry, a
+name, the year of a wording, whether a place speaks about the value):
+as the step after the asking question says that has this target, else
+the first of the flow, else its preset (owner decision 2026-11-12
+evening, plan "modell_fragen", point 7); built in the step that asks,
+as it always was.
+
 ### ask_step
 
 ```python
 def ask_step(engine, node: dict, scope) -> None
 ```
 
-Ask the model with the step's prompt, inputs and form of the answer
-(owner decision 2026-11-12): the answer becomes the step's variable,
-or the values of a field of the Spec, each with its line, checked as
-every value is and asked again with what did not hold.
+Ask the model as the step's parts say (owner decisions 2026-11-12):
+the request built from its inputs, the answer in its form, and what
+becomes of the answer as its target says (`targets.TARGETS`), with the
+ways the target goes (rounds over the search hits, halves of a request
+whose answer did not fit, what the answer asks to see, the picture of a
+figure, follow-up questions).
 
 ### retrieve_step
 

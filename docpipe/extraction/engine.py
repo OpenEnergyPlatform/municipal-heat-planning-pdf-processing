@@ -48,9 +48,9 @@ from typing import Callable, Optional
 from .. import rules
 from . import addressed, blocks, conditions, fields, general
 from . import flow as flow_map
-from .addressed import (Asking, Counts, Found, Plan, Read, field_shown,
-                        field_shown_of, joined, years_in)
-from .fields import NUMBER, READ, UNBACKED, state_for
+from .addressed import (Asking, Counts, Found, Plan, Read,
+                        field_shown_of, years_in)
+from .fields import NUMBER, state_for
 from .pipeline import (Batch, Row, Source, WorkItem, mark_unanswered,
                        row_label)
 from .reading import groups_of, in_group_order, link_ranges, slots_of
@@ -190,8 +190,6 @@ class CoordItem:
     before: list
     clone: Callable
     made: list = field(default_factory=list)
-    payload: Optional[dict] = None
-    noted: Optional[dict] = None
     sentence: Optional[str] = None
     sentences: list = field(default_factory=list)
     seen: Optional[set] = None
@@ -415,7 +413,7 @@ def refusal_of(failed) -> str:
 
 # The top boxes the runner does once a document is read, each in its own
 # step (`Engine.step_of`).
-AFTER = ("write", "compute", "catalogue")
+AFTER = ("write",) + flow_map.ENDS
 
 class Engine:
     """The drawing *tree* of a flow done for documents with the reading
@@ -434,15 +432,14 @@ class Engine:
         # on (owner decision 2026-11-12: no step but writing is fixed); a
         # step that is not there is not done, the chunks are then cut as
         # the rules say.
-        prepares = [n for n in top if n.get("box") in flow_map.PREPARES
+        prepares = [n for n in top if "box" in n
+                    and rules.step_kind(n) in flow_map.PREPARES
                     and not n.get("off")]
-        self.prepares = {n["box"]: n for n in prepares}
+        self.prepares = {rules.step_kind(n): n for n in prepares}
         self.split_node = self.prepares.get("split")
-        self.transcribe_id = (self.prepares.get("transcribe")
-                              or {}).get("id")
         self.settled_frames = [n for n in top if n.get("each") == "settled"]
-        self.reading = [n for n in top if n.get("box") not in
-                        flow_map.PREPARES + AFTER
+        self.reading = [n for n in top if not (
+            "box" in n and rules.step_kind(n) in flow_map.PREPARES + AFTER)
                         and n.get("each") != "settled"]
         values = [n for n in top if n.get("each") == "value"]
         self.sweep_frame = next(
@@ -460,8 +457,7 @@ class Engine:
         box's own numbers ("own") under the names of the flow's numbers."""
         values = dict(node.get("rules") or {})
         if "box" in node:
-            kind = blocks.LIBRARY.get(node["box"])
-            by_key = {s.key: s for s in kind.settings} if kind else {}
+            by_key = {s.key: s for s in blocks.settings_of(node)}
             for key, value in (node.get("own") or {}).items():
                 setting = by_key.get(key)
                 if setting is not None and setting.number:
@@ -485,12 +481,11 @@ class Engine:
         around it, else the named number of the flow as the run reads it (a
         setting of the run won over the file already, `flow.in_effect`)."""
         own = node.get("own") or {}
+        settings = blocks.settings_of(node)
         if key in own:
-            rules.noted(next(s for s in blocks.LIBRARY[node["box"]].settings
-                             if s.key == key).number)
+            rules.noted(next(s for s in settings if s.key == key).number)
             return int(own[key])
-        setting = next(s for s in blocks.LIBRARY[node["box"]].settings
-                       if s.key == key)
+        setting = next(s for s in settings if s.key == key)
         reader = self.reader
         name = setting.number
         stepped, value = rules.stepped_value(name)
@@ -514,9 +509,12 @@ class Engine:
         sets = (node or {}).get("set") or {}
         if key in sets:
             return sets[key]
-        setting = next(s for s in blocks.LIBRARY[
-            node["box"] if node is not None else kind].settings
-            if s.key == key)
+        found = blocks.preset_of(node)
+        if found is not None and found.values and key in found.values:
+            return found.values[key]
+        setting = next(s for s in (
+            blocks.settings_of(node) if node is not None
+            else blocks.LIBRARY[kind].settings) if s.key == key)
         if setting.rule:
             return rules.get(setting.rule)
         return setting.default
@@ -746,7 +744,8 @@ class Engine:
 
     @staticmethod
     def figure_facts(source: Source) -> conditions.Facts:
-        """What a condition of the transcribe box knows of a figure."""
+        """What a condition of the step that writes out the figures
+        knows of a figure."""
         def size() -> tuple:
             try:
                 from PIL import Image
@@ -767,6 +766,32 @@ class Engine:
                 return page if isinstance(page, int) else 0
             return size()[0 if prop == "image_width" else 1]
         return conditions.Facts(get)
+
+    def writes_figures(self, node: dict, document_id: int) -> dict:
+        """How the step *node* writes out a figure for the kept lines
+        (`addressed.Transcripts`): its request, as its parts say ("ask":
+        None where it has no prompt to ask with), and its prompt, inputs
+        and answer form where they are not its preset's ("told"), which a
+        kept transcription is named by besides the model."""
+        from . import targets
+        ask = general.Ask(self, node, Scope(None, True),
+                          document_id=document_id)
+        preset = general.preset_of(node)
+        told: dict = {}
+        if not ask.standard:
+            told["prompt"] = ask.prompt
+        if preset is None or ask.inputs != list(preset.inputs):
+            told["inputs"] = ask.inputs
+        if preset is None or ask.reply != preset.reply:
+            told["reply"] = ask.reply
+        target = targets.TARGETS.get(ask.into.get("to"))
+        if target is None or target.run is None or not ask.asks():
+            return {"ask": None, "told": told or None}
+
+        def one(source, _document_id):
+            # Counted as the figures asked, by the plan.
+            return target.run(ask.with_values({"figure": source}), Counts())
+        return {"ask": one, "told": told or None}
 
     def included(self, sources: list) -> list:
         """The sources the document step reads: the kinds of passages of
@@ -829,7 +854,9 @@ class Engine:
         if transcripts is not None and figures:
             with self.step(node), addressed.asking(
                     Asking(node["id"], follow_ups=self.follow_ups_of(node))):
-                lines, asked = transcripts(document_id, figures, each)
+                lines, asked = transcripts(
+                    document_id, figures, each,
+                    **self.writes_figures(node, document_id))
         with self.step(self.split_node):
             cut = self.cut()
         with self.step(self.prepares.get("document")):
@@ -917,7 +944,7 @@ class Engine:
         kind = flow_map.kind_of(node)
         if kind == "box":
             kind = blocks.LIBRARY[node["box"]]
-            if kind.attached:
+            if blocks.is_attached(node):
                 return          # applied by the question before it
             with self.step(node):
                 if "when" in node and not self.holds(node["when"], scope):
@@ -1113,51 +1140,10 @@ class Engine:
         what = node["each"]
         doc: Doc = scope.get("doc")
         plan = doc.plan
-        if what == "piece":
-            for child in done:
-                for got in child.values.get("finds", ()):
-                    parameter = child.get("parameter")
-                    chunk = child.values["chunk"]
-                    members = list(chunk) if isinstance(chunk, list) \
-                        else [chunk]
-
-                    def read_at(owner, source) -> Read:
-                        key = (parameter.uri, owner)
-                        read = doc.by_find.get(key)
-                        if read is None:
-                            read = doc.by_find[key] = Read(Batch(
-                                plan.document_id, parameter,
-                                [WorkItem(plan.document_id, parameter,
-                                          source)],
-                                spec=self.reader.spec), [])
-                            doc.find_reads.append(read)
-                        return read
-
-                    def read_of(member) -> Read:
-                        return read_at(member.owner, member.passage.source)
-                    first = read_of(members[0])
-                    by_owner = {member.owner: member for member in members}
-                    first.asked += got["asked"]
-                    # Found in another passage of the document, which is
-                    # its place (`addressed.Found.elsewhere`, owner
-                    # decision 2026-11-12).
-                    elsewhere = {id(claim)
-                                 for claim in got.get("elsewhere", ())}
-                    for claim in got["claims"]:
-                        owner = tuple((claim.get("at") or {}).get("owner")
-                                      or ())
-                        passage = plan.passages.get(owner)
-                        if id(claim) in elsewhere and passage is not None \
-                                and owner not in by_owner:
-                            read_at(owner, passage.source).claims \
-                                .append(claim)
-                            continue
-                        read_of(by_owner.get(owner, members[0])).claims \
-                            .append(claim)
-                    first.lost.extend(got["lost"])
-                    for why, n in got["failed"].items():
-                        first.failed[why] = first.failed.get(why, 0) + n
-        elif what == "field":
+        for child in done:
+            if child.values.get("finds"):
+                self.reads_of_finds(doc, child.values["finds"])
+        if what == "field":
             for child in done:
                 item: Optional[FieldItem] = child.values.get("field_item")
                 if item is None or item.parameter is None \
@@ -1436,20 +1422,21 @@ class Engine:
 
     def asking_of(self, node: dict, scope: Scope, steps_after: list
                   ) -> Asking:
-        """What a question asks with: its box, the boxes after it that check
-        its answers (the place of a find, own checks)."""
-        about, about_node, checks = None, None, []
-        for after in steps_after:
-            if flow_map.kind_of(after) != "box":
-                break
-            kind = blocks.LIBRARY.get(after.get("box"))
-            if kind is None or not kind.attached:
-                break
+        """What a question asks with: its box, the steps after it that
+        check its answers (the place of a find, own checks) or are asked
+        inside them (a list entry, a name), and where it stands."""
+        checks: list = []
+        nested: dict = {}
+        for after in self.attached_after(steps_after):
             if after.get("off"):
                 continue
-            if kind.type == "about":
-                about, about_node = after["id"], after
-            elif kind.type == "check":
+            target = blocks.target_of(after)
+            if target == "keep_find":
+                # The question asks it itself (`targets.keep_find`).
+                continue
+            if target is not None:
+                nested.setdefault(target, after)
+            elif after.get("box") == "check":
                 checks.append((self.setting(after, "name"),
                                self.setting(after, "refuse"),
                                self.setting(after, "sentence"), after["id"]))
@@ -1460,48 +1447,117 @@ class Engine:
                 if conditions.holds(condition, engine.facts(scope, got)):
                     return f"check:{name}", sentence
             return None
-        return Asking(node["id"], about, refused if checks else None,
-                      self.follow_ups_of(node),
-                      about_step=(lambda n=about_node: engine.step(n))
-                      if about_node is not None else None)
+        return Asking(node["id"], refused if checks else None,
+                      self.follow_ups_of(node), scope=scope, nested=nested)
+
+    @staticmethod
+    def attached_after(steps_after: list) -> list:
+        """The steps right after a question that are applied to its
+        answers (`blocks.is_attached`), up to the first that is not."""
+        out = []
+        for after in steps_after:
+            if flow_map.kind_of(after) != "box" \
+                    or not blocks.is_attached(after):
+                break
+            out.append(after)
+        return out
+
+    def attached_of(self, node: dict, target: str) -> Optional[dict]:
+        """The step after *node*, applied to its answers, that has
+        *target* and is on; None where none stands there."""
+        return next((after for after in self.attached_after(self.after(node))
+                     if not after.get("off")
+                     and blocks.target_of(after) == target), None)
+
+    def nested_node(self, target: str) -> dict:
+        """The step a question inside an answer is asked as (owner decision
+        2026-11-12 evening, plan "modell_fragen", point 7): the one after
+        the asking question that has its target, else the first of the
+        flow, else its preset."""
+        what = addressed.ASKING.get()
+        if what is not None and what.nested and target in what.nested:
+            return what.nested[target]
+        first = self._first_of.get(target) if hasattr(self, "_first_of") \
+            else None
+        if first is None:
+            found = next((n for n, _f in flow_map.on(self.tree)
+                          if blocks.target_of(n) == target), None)
+            if not hasattr(self, "_first_of"):
+                self._first_of = {}
+            self._first_of[target] = found or {
+                "box": "ask", "preset": blocks.NESTED_PRESETS[target]}
+            first = self._first_of[target]
+        return first
 
     def own_checks(self, node: dict) -> list:
         """[(name, condition, sentence, id)] of the own checks that stand
         right after *node* and are on."""
         out = []
-        for after in self.after(node):
-            if flow_map.kind_of(after) != "box":
-                break
-            kind = blocks.LIBRARY.get(after.get("box"))
-            if kind is None or not kind.attached:
-                break
-            if after.get("off") or kind.type != "check":
+        for after in self.attached_after(self.after(node)):
+            if after.get("off") or after.get("box") != "check":
                 continue
             out.append((self.setting(after, "name"),
                         self.setting(after, "refuse"),
                         self.setting(after, "sentence"), after["id"]))
         return out
 
-    def keep(self, doc: Doc, parameter, claims: list) -> None:
-        """Each value a general step read of *parameter* in the read of its
-        field and passage, as a find's are (`after_items`)."""
+    def keep_finds(self, scope: Scope, parameter, got: dict) -> None:
+        """What a question found in its chunks (*got*: claims, asked,
+        failed, lost, the chunks it showed) for the frame of its item,
+        which makes the reads of their passages once its items are through
+        (`after_items`); at the top of the drawing at once."""
+        owner = scope.owner()
+        got = {**got, "parameter": parameter}
+        if owner.parent is None:
+            self.reads_of_finds(scope.get("doc"), [got])
+            return
+        owner.values.setdefault("finds", []).append(got)
+
+    def reads_of_finds(self, doc, finds: list) -> None:
+        """The finds of a question (`keep_finds`) as the reads of their
+        field and passage: each value in the read of the passage it stands
+        in, the requests and the holes counted at the first chunk."""
         plan = doc.plan
-        for claim in claims:
-            owner = tuple((claim.get("at") or {}).get("owner") or ())
-            passage = plan.passages.get(owner)
-            if passage is None:
-                continue
-            key = (parameter.uri, owner)
-            with doc.counts.lock:
-                read = doc.by_find.get(key)
-                if read is None:
-                    read = doc.by_find[key] = Read(Batch(
-                        plan.document_id, parameter,
-                        [WorkItem(plan.document_id, parameter,
-                                  passage.source)],
-                        spec=self.reader.spec), [])
-                    doc.find_reads.append(read)
-                read.claims.append(claim)
+        for got in finds:
+            parameter = got["parameter"]
+            members = [m for m in got.get("members") or () if m is not None]
+
+            def read_at(owner, source) -> Read:
+                key = (parameter.uri, owner)
+                with doc.counts.lock:
+                    read = doc.by_find.get(key)
+                    if read is None:
+                        read = doc.by_find[key] = Read(Batch(
+                            plan.document_id, parameter,
+                            [WorkItem(plan.document_id, parameter,
+                                      source)],
+                            spec=self.reader.spec), [])
+                        doc.find_reads.append(read)
+                return read
+            by_owner = {member.owner: member for member in members}
+            first = read_at(members[0].owner, members[0].passage.source) \
+                if members else None
+            if first is not None:
+                first.asked += got.get("asked", 0)
+            # Found in another passage of the document, which is its place
+            # (`addressed.Found.elsewhere`, owner decision 2026-11-12).
+            elsewhere = {id(claim) for claim in got.get("elsewhere", ())}
+            for claim in got["claims"]:
+                owner = tuple((claim.get("at") or {}).get("owner") or ())
+                passage = plan.passages.get(owner)
+                if (id(claim) in elsewhere or first is None) \
+                        and passage is not None and owner not in by_owner:
+                    read_at(owner, passage.source).claims.append(claim)
+                    continue
+                if first is None:
+                    continue
+                member = by_owner.get(owner, members[0])
+                read_at(member.owner, member.passage.source).claims \
+                    .append(claim)
+            if first is not None:
+                first.lost.extend(got.get("lost") or ())
+                for why, n in (got.get("failed") or {}).items():
+                    first.failed[why] = first.failed.get(why, 0) + n
 
     def follow_ups_of(self, node: dict) -> Optional[int]:
         """The box's own number of follow-ups, None for the flow's."""
@@ -1509,50 +1565,6 @@ class Engine:
         if any(s.key == "follow_ups" for s in kind.settings):
             return self.number(node, "follow_ups")
         return None
-
-    def box_docfield(self, node: dict, scope: Scope) -> None:
-        reader = self.reader
-        doc: Doc = scope.get("doc")
-        plan = doc.plan
-        item: FieldItem = scope.get("field_item")
-        supply: ListSupply = scope.get("supply")
-        size = self.number(node, "per_request")
-        taken = supply.take(size) if supply is not None else None
-        if taken is None:
-            scope.used_up()
-            return
-        first, batch = taken
-        scope.drew()
-        item.asked_by = node["id"]
-        if item.shown is None:
-            # Built here, in the step of the box that asks, so that the
-            # rule `field_text` is the box's own.
-            item.shown = field_shown(item.parameter)
-        if item.first_source is None and batch:
-            item.first_source = batch[0].passage.source
-        with addressed.asking(self.asking_of(node, scope,
-                                             self.after(node))), \
-                self.counted(doc) as part:
-            got = reader.ask_window(
-                plan, item.shown, batch, part, item.key,
-                numbers=item.numbers, listed=item.listed,
-                title_page=first and bool(self.setting(node, "title_page")))
-        held, lost, more = got
-        if more:
-            # What the answer asked to see comes first in the field's next
-            # request (owner decision 2026-11-12).
-            supply.fetched = reader.fetch(plan, more, batch, supply.seen,
-                                          item.numbers)
-        if lost is not None:
-            item.lost = item.lost or lost
-        # The finds of the parts that were read count even where another
-        # part of the window was a hole (as a `find` does).
-        item.found = joined(item.found, held)
-        scope.put("answer", Answer(lost is None or bool(held), len(held),
-                                   not held, False,
-                                   held[0].words if held else "",
-                                   held[0].quote if held else "",
-                                   **self.came_to(part)))
 
     def after(self, node: dict) -> list:
         """The steps after *node* in its list of steps."""
@@ -1574,129 +1586,7 @@ class Engine:
             self._after_cache = cached
         return cached
 
-    def box_find(self, node: dict, scope: Scope) -> None:
-        doc: Doc = scope.get("doc")
-        parameter = scope.get("parameter")
-        chunk = scope.get("chunk")
-        with addressed.asking(self.asking_of(node, scope,
-                                             self.after(node))), \
-                self.counted(doc) as part:
-            got = self.reader.find(doc.plan, parameter, chunk, part)
-        owner = scope.owner()
-        owner.values.setdefault("finds", []).append(got)
-        owner.values["answer"] = Answer(
-            not got["lost"] or bool(got["claims"]), len(got["claims"]),
-            not got["claims"], False,
-            str((got["claims"][0].get("value_raw")
-                 or got["claims"][0].get("value") or "")
-                if got["claims"] else ""),
-            got["claims"][0].get("quote", "") if got["claims"] else "",
-            **self.came_to(part))
-
-    def box_sentences(self, node: dict, scope: Scope) -> None:
-        doc: Doc = scope.get("doc")
-        if doc.order_fields is None:
-            return
-        located = [p for p in doc.parameters
-                   if not getattr(p, "once_per_document", False)]
-        if located:
-            with addressed.asking(Asking(
-                    node["id"], follow_ups=self.follow_ups_of(node))):
-                doc.order_of = dict(doc.order_fields(located) or {})
-
     # -- the boxes of a coordinate --------------------------------------------
-
-    def coord_base(self, coord: CoordItem, plan: Plan) -> None:
-        """What every request about the coordinate shows, made once."""
-        if coord.payload is None:
-            _shown, coord.payload, coord.noted = self.reader.coord_payload(
-                plan, coord.read, coord.row, coord.slot)
-
-    def box_coord(self, node: dict, scope: Scope) -> None:
-        coord: CoordItem = scope.get("coord")
-        doc: Doc = scope.get("doc")
-        with addressed.asking(self.asking_of(node, scope,
-                                             self.after(node))), \
-                self.counted(doc) as part:
-            answered, made, payload, noted, more = \
-                self.reader.ask_own_place(doc.plan, coord.read, coord.row,
-                                          coord.slot, part, coord.clone,
-                                          coord.pictures)
-        if payload is not None:
-            coord.payload, coord.noted = payload, noted
-        coord.made += made
-        state = coord.row.claim.get(f"{coord.slot.name}_state")
-        if more and state != READ:
-            # What the answer at the value's own place asked to see comes
-            # first in the search after it (owner decision 2026-11-12).
-            self.locate(coord, doc.plan)
-            if coord.chunk is not None:
-                coord.fetched = self.reader.fetch(
-                    doc.plan, more, [coord.chunk], coord.seen,
-                    coord.read.batch.parameter.is_numeric)
-        scope.put("answer", Answer(answered, 1 if state == READ else 0,
-                                   state != READ, False,
-                                   **self.came_to(part)))
-
-    def box_phrase(self, node: dict, scope: Scope) -> None:
-        coord: CoordItem = scope.get("coord")
-        doc: Doc = scope.get("doc")
-        anew = bool(self.setting(node, "anew")) \
-            and scope.get("round", 1) >= rules.get("phrase_new_from_round") \
-            and coord.sentences
-        with addressed.asking(Asking(
-                node["id"], follow_ups=self.follow_ups_of(node))):
-            sentence = self.reader.search_sentence(
-                doc.plan, coord.read, coord.row, coord.slot, doc.counts,
-                before=list(coord.sentences) if anew else None)
-        coord.sentence = sentence
-        coord.sentences.append(sentence)
-        if rules.get("search_with") != "phrase":
-            coord.ways.append("search_with")
-
-    def box_search(self, node: dict, scope: Scope) -> None:
-        reader = self.reader
-        coord: CoordItem = scope.get("coord")
-        doc: Doc = scope.get("doc")
-        plan = doc.plan
-        supply = scope.get("supply")
-        self.locate(coord, plan)
-        self.coord_base(coord, plan)
-        if not isinstance(supply, SearchSupply):
-            scope.used_up()
-            return
-        size = self.number(node, "per_request")
-        batch, label = supply.take(size, coord.seen)
-        if not batch:
-            scope.used_up()
-            return
-        scope.drew()
-        coord.seen.update(c.key for c in batch)
-        if label == supply.label and supply.ranked is not None:
-            coord.ordered.update(c.key for c in batch)
-        numbers = coord.read.batch.parameter.is_numeric
-        ways = sorted(set(coord.ways) | supply.ways)
-        with addressed.asking(self.asking_of(node, scope,
-                                             self.after(node))), \
-                self.counted(doc) as part:
-            made, held, more = reader.search_round(
-                plan, coord.read, coord.row, coord.slot, coord.payload,
-                batch, part, coord.clone, (supply.label, 1),
-                {**coord.noted, "shows": label,
-                 **addressed.second_ways(ways)}, coord.pictures)
-        state = coord.row.claim.get(f"{coord.slot.name}_state")
-        found = bool(held) or state == UNBACKED
-        if found:
-            coord.made += made
-        if found and not rules.get("fetch_after_found"):
-            supply.fetched = []
-        else:
-            supply.fetched = reader.fetch(
-                plan, more, batch,
-                {c.key for c in batch} if rules.get("show_twice")
-                else coord.seen, numbers)
-        scope.put("answer", Answer(True, 1 if held else 0, not held, False,
-                                   **self.came_to(part)))
 
     def box_state(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")
@@ -1743,7 +1633,7 @@ class Engine:
         the run that does it outside the engine (`runner`); no values where
         the drawing has none."""
         node = next((n for n in self.tree if isinstance(n, dict)
-                     and n.get("box") == kind), None)
+                     and "box" in n and rules.step_kind(n) == kind), None)
         return self.step(node) if node is not None \
             else contextlib.nullcontext()
 
@@ -1752,8 +1642,8 @@ class Engine:
     def box_document(self, node, scope):
         return None
 
-    box_transcribe = box_split = box_lists = box_write = box_compute = \
-        box_catalogue = box_document
+    box_split = box_lists = box_write = box_compute = box_catalogue = \
+        box_document
 
 
 def compute_on(profile=None) -> bool:

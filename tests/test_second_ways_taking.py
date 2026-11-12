@@ -23,6 +23,7 @@ from profiles.kwp import compute as kwp_compute
 
 from test_addressed import SLOTS
 from test_evidence import (PARAMETER, SOURCE as TABLE, claim, SPEC)
+from conftest import step_node
 
 TEXT = "Der Endenergieverbrauch liegt im Jahr 2030 bei 450 MWh."
 SHOWN = Source("section", 1, TEXT)
@@ -36,7 +37,7 @@ def fresh():
 
 
 def at(**values):
-    return rules.in_step(rules.stepped({"id": "x", "box": "find"}, values))
+    return rules.in_step(rules.stepped(step_node("find"), values))
 
 
 def ask(answer):

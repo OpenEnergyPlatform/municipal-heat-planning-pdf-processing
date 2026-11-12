@@ -48,6 +48,7 @@ from test_compute_step import (GAS, HOMES, OIL, SPEC as KWP_SPEC, TOTAL,
 from profiles.kwp import compute
 from profiles.scenarios import completion, front
 from profiles.scenarios import extraction as scenario_extraction
+from conftest import step_node
 
 SCENARIO_SPEC = load_spec(json.loads(
     (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
@@ -70,7 +71,7 @@ def fresh(monkeypatch):
 
 def at(kind: str, **values):
     """What the engine does around a step of *kind* with its own values."""
-    return rules.in_step(rules.stepped({"id": "x", "box": kind}, values))
+    return rules.in_step(rules.stepped(step_node(kind), values))
 
 
 # -- 1, 2, 4: the reranker ----------------------------------------------------

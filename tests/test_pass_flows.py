@@ -331,7 +331,7 @@ def lacking(tree: list) -> list:
     temperature and the answer room of their request."""
     out = []
     for node, _frames in flow_map.walk(tree):
-        kind = blocks.LIBRARY.get(node.get("box"))
+        kind = blocks.box_of(node)
         if kind is not None and kind.asks:
             own = node.get("rules") or {}
             if not {"temperature", "max_tokens"} <= set(own):
@@ -345,7 +345,7 @@ def test_every_asking_box_of_every_shipped_flow_carries_its_values():
         if name != passflow.MAIN:
             assert lacking(passflow.load(name)) == [], name
     # the failure by construction: a box that asks and sets nothing
-    bad = [{"id": "r", "box": "review"}]
+    bad = [{"id": "r", "box": "ask", "preset": "review"}]
     assert lacking(bad) == ["r"]
     assert lacking([{"id": "s", "box": "stored"}]) == []
 
@@ -362,14 +362,28 @@ def test_the_flow_files_are_written_in_the_one_form_they_are_read_in():
 
 # -- a pass box is no box of the main flow ------------------------------------
 
+def steps_of_the_library() -> dict:
+    """{kind of step (`rules.step_kind`): the box it is}: the boxes of the
+    library and the presets of "Ask the model"."""
+    from docpipe.extraction.presets import PRESETS
+    out = {kind: box for kind, box in blocks.LIBRARY.items()
+           if kind != "ask"}
+    for name, one in PRESETS.items():
+        out.setdefault(one.kind, blocks.box_of(
+            {"box": "ask", "preset": name}))
+    return out
+
+
 def test_a_pass_box_is_never_an_end_box_of_the_main_flow():
     tree = copy.deepcopy(flow_map.tree_of(None))
     assert flow_map.problems(tree) == []
-    ends = [kind for kind, box in blocks.LIBRARY.items()
+    steps = steps_of_the_library()
+    ends = [kind for kind, box in steps.items()
             if box.group == "end" and kind != "write"]
-    assert not any(blocks.LIBRARY[kind].flow for kind in ends)
-    assert not any(blocks.LIBRARY[kind].flow for kind in engine.AFTER)
-    for kind, box in blocks.LIBRARY.items():
+    assert "compute" in ends
+    assert not any(steps[kind].flow for kind in ends)
+    assert not any(steps[kind].flow for kind in engine.AFTER)
+    for kind, box in steps.items():
         if box.flow:
             assert box.group == "pass" and kind not in engine.AFTER
     # the failure by construction: a pass box after write is refused, and
@@ -383,8 +397,11 @@ def test_a_pass_box_is_never_an_end_box_of_the_main_flow():
 
 def test_the_page_gets_the_pass_boxes_apart_from_the_boxes_of_the_flow():
     library = blocks.catalogue()
-    kinds = {box["type"] for box in library["boxes"]}
-    apart = {box["type"] for box in library["pass_boxes"]}
+    kinds = {box["type"] for box in library["boxes"]} \
+        | {one["name"] for one in library["presets"]}
+    apart = {box["type"] for box in library["pass_boxes"]} \
+        | {one["name"] for one in blocks.presets_catalogue()
+           if one["flow"] == "pass"}
     assert kinds.isdisjoint(apart) and "review" in apart
     assert "write" in kinds and "write" not in apart
 
@@ -417,8 +434,8 @@ def test_the_editor_loads_a_flow_by_name_and_refuses_a_name_that_is_none(
     assert status == 200 and shown["tree"] == passflow.load("review")
     assert not shown["exists"] and shown["base"] is None
     assert shown["problems"] == []
-    assert {box["type"] for box in shown["library"]["boxes"]} >= {
-        "stored", "review"}
+    assert "stored" in {box["type"] for box in shown["library"]["boxes"]}
+    assert "review" in {one["name"] for one in shown["library"]["presets"]}
     assert shown["library"]["each"].keys() == {"dimension"}
     # the failure by construction: a name that is no flow, and one that
     # tries to leave the folder of the flows
@@ -473,7 +490,7 @@ def test_a_save_writes_the_profiles_own_file_and_a_save_back_removes_it(
 def test_a_save_of_a_flow_the_run_cannot_do_writes_nothing(tmp_path,
                                                            profile):
     app = make_app(tmp_path, profile)
-    tree = [{"id": "x", "box": "review"}]
+    tree = [{"id": "x", "box": "ask", "preset": "review"}]
     status, told = app.call("POST", "/api/flow/pass/save", {},
                             {"name": "review", "base": None, "tree": tree})
     assert not told["saved"] and told["reason"] == "invalid"

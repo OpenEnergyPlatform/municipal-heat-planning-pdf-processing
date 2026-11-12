@@ -4,7 +4,7 @@ Each promise below is one sentence, each AND is its own test, and each has
 a case that breaks it by construction.
 
 about: the box that checks a find has its own step AND the asking box hands
-it on, so the rules `about_shows` and `about_no_reply` read there.
+it on, so the rule `about_no_reply` reads there.
 
 field_text: a field of the whole document is built inside the box that asks
 it, so the rule `field_text` is that box's own.
@@ -43,8 +43,8 @@ import types
 import pytest
 
 from docpipe import rules
-from docpipe.extraction import (addressed, fields, flow, reading, spec,
-                                surveyed, topup_rest, units)
+from docpipe.extraction import (addressed, fields, flow, general, reading,
+                                spec, surveyed, targets, topup_rest, units)
 from docpipe.extraction.addressed import Names
 from docpipe.extraction.engine import Doc, FieldItem, Scope
 from docpipe.extraction.pipeline import Source
@@ -52,6 +52,7 @@ from docpipe.extraction.pipeline import Source
 from test_addressed import ENERGY, TABLE, TEXT, TITLE, plan_of
 from test_ruleset_flowing import coord_of, engine_of, node
 import test_surveyed_passes as sp
+from conftest import step_node
 
 
 def default():
@@ -59,7 +60,7 @@ def default():
 
 
 def at(kind, **values):
-    return rules.in_step(rules.stepped({"id": "x", "box": kind}, values))
+    return rules.in_step(rules.stepped(step_node(kind), values))
 
 
 # -- about -------------------------------------------------------------------
@@ -67,22 +68,20 @@ def at(kind, **values):
 def test_the_asking_box_hands_the_about_box_on_as_a_step_of_its_own():
     engine, _ = engine_of()
     drawing = engine.tree
-    node(drawing, "about")["rules"] = {"about_shows": ["answer"]}
-    asking = node(drawing, "search")
-    got = engine.asking_of(asking, None, engine.after(asking))
-    assert got.about == "about" and got.about_step is not None
-    with at("search"), got.about_step():
-        assert rules.get("about_shows") == ["answer"]
+    node(drawing, "about")["rules"] = {"about_no_reply": "keep"}
+    keeper = engine.attached_of(node(drawing, "search"), "keep_find")
+    assert keeper is node(drawing, "about")
+    with at("search"), engine.step(keeper):
+        assert rules.get("about_no_reply") == "keep"
     # by construction: the search step alone has the standard
     with at("search"):
-        assert rules.get("about_shows") != ["answer"]
+        assert rules.get("about_no_reply") != "keep"
 
 
 def test_a_question_with_no_about_box_after_it_has_no_about_step():
     engine, _ = engine_of()
-    asking = node(engine.tree, "finds")
-    got = engine.asking_of(asking, None, [])
-    assert got.about is None and got.about_step is None
+    assert engine.attached_of(node(engine.tree, "finds"),
+                              "keep_find") is None
 
 
 # -- field_text --------------------------------------------------------------
@@ -100,33 +99,45 @@ def test_a_field_of_the_whole_document_is_built_in_the_box_that_asks():
 
 # -- docfield: the finds of a window with a hole ------------------------------
 
-def window_scope(engine, plan, item):
-    chunk = types.SimpleNamespace(passage=types.SimpleNamespace(source=None))
-    supply = types.SimpleNamespace(take=lambda n: (False, [chunk]))
+def window_scope(plan, item):
+    chunks = list(plan.chunks[:2])
+    supply = types.SimpleNamespace(take=lambda n: (False, list(chunks)),
+                                   seen=set(), fetched=[])
     doc = Doc(plan, addressed.Counts(), [ENERGY])
     return Scope(None, True, doc=doc, plan=plan, field_item=item,
                  supply=supply)
 
 
-def test_the_finds_of_a_window_count_where_another_part_was_a_hole():
+def test_the_finds_of_a_window_count_where_another_part_was_a_hole(
+        monkeypatch):
     plan = plan_of(TITLE, TEXT, TABLE)
     engine, reader = engine_of()
     found = addressed.Found(lines=[(addressed.Line(1, "x"), TEXT)],
                             words="x")
     item = FieldItem("k", {"name": "n", "means": "m"}, [], False, None,
                      ENERGY)
-    scope = window_scope(engine, plan, item)
     box = node(engine.tree, "document_fields")
-    # the third part is what the answer asked to see: nothing here
-    reader.ask_window = lambda *a, **k: ([found], addressed.NO_ANSWER, [])
-    engine.box_docfield(box, scope)
+    reader.halves = lambda piece, depth: [piece[:1], piece[1:]] \
+        if len(piece) > 1 else None
+
+    def window(*parts):
+        replies = iter(parts)
+        monkeypatch.setattr(targets, "_gathered_once",
+                            lambda *a: next(replies))
+        item.found, item.lost = [], None
+        scope = window_scope(plan, item)
+        general.ask_step(engine, box, scope)
+        return scope.get("answer")
+    # the whole window did not fit: its first half is read, its second is
+    # a hole
+    answer = window(([], addressed.CUT, []), ([found], None, []),
+                    ([], addressed.NO_ANSWER, []))
     assert item.found == [found] and item.lost == addressed.NO_ANSWER
-    assert scope.get("answer").answered is True
+    assert answer.answered is True
     # by construction: nothing read and a hole is no answer
-    reader.ask_window = lambda *a, **k: ([], addressed.NO_ANSWER, [])
-    item.found = []
-    engine.box_docfield(box, scope)
-    assert item.found == [] and scope.get("answer").answered is False
+    answer = window(([], addressed.CUT, []), ([], None, []),
+                    ([], addressed.NO_ANSWER, []))
+    assert item.found == [] and answer.answered is False
 
 
 # -- flow.problems ------------------------------------------------------------

@@ -20,6 +20,7 @@ from docpipe.editor import prompts as editor_prompts
 from docpipe.extraction import addressed, thread
 from docpipe.profile import load_profile
 from docpipe.prompts import Prompt
+from conftest import step_node
 
 GROUP = ("Before.\n"
          "<!-- way: answer_with=address -->\n"
@@ -50,7 +51,7 @@ def test_a_request_is_told_the_way_its_rule_has_in_its_step():
     assert quoted == ("Before.\nName its line, character for character, "
                       "under quote.\n\nAfter.\n")
     # a step's own value chooses for the requests of that step
-    node = {"id": "x", "box": "find"}
+    node = step_node("find")
     with rules.in_step(rules.stepped(node, {"answer_with": "quote"})):
         assert thread.cut(prompt_of(GROUP)).system().text == quoted
     # the longest way counts where the most a request is told is measured

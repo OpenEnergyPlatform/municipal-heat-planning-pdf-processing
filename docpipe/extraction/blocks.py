@@ -161,7 +161,15 @@ CHECKS = ("the quote is a line the request showed",
           "the answer is in its quote",
           "a quote is long enough to point to one place (quote_min_chars)",
           "an answer to a list is one of its entries")
-ASKING = ("find", "docfield", "coord", "search", "ask")
+# The requests whose answers read a value or a dimension: an own check and
+# a list entry stand after them.
+QUESTIONS = ("find", "docfield", "coord", "search", "own")
+# What a request of "Ask the model" may be in the log (`addressed.KINDS`,
+# the general step's own "own"), and the prompts of the other requests a
+# run sends.
+REQUESTS = ("find", "docfield", "coord", "search", "phrase", "check",
+            "list", "names", "work", "transcribe", "compute", "review",
+            "example", "own")
 
 LIBRARY = {box.type: box for box in (
     # -- start ---------------------------------------------------------------
@@ -184,19 +192,6 @@ LIBRARY = {box.type: box for box in (
                           "A larger number takes a later page.")),
         prepares=True, top=True),
     # -- prepare -------------------------------------------------------------
-    Box("transcribe", "Write out the figures", "prepare", "document",
-        "document",
-        "The model looks at the picture of each figure once and writes it out "
-        "as lines: first its caption (title, axes, legend), then its numbers. "
-        "Later questions read a figure from these lines, not from its "
-        "picture. Example: a bar chart of the heat demand becomes lines such "
-        "as \"2030 | Gas | 245 GWh\". Unlike \"Ask the model\", which asks "
-        "whatever its prompt says, this step only writes out pictures. To "
-        "change it: switch it off (a figure is then shown by its description "
-        "only), set with a condition which figures are written out, or change "
-        "the prompt `transcribe`.",
-        "addressed.Transcripts", asks="transcribe", settings=NUMBERS,
-        decided="2026-11-09", prepares=True, top=True),
     Box("split", "Split the document into chunks", "prepare",
         "document", "pieces",
         "Splits the document into chunks of at most eight lines (or as many "
@@ -263,18 +258,6 @@ LIBRARY = {box.type: box for box in (
         "addressed.Reader.lists_of",
         prepares=True, top=True),
     # -- order ---------------------------------------------------------------
-    Box("sentences", "Order the chunks for each field", "order", "pieces",
-        "pieces",
-        "For each field read chunk by chunk, the model writes one sentence as "
-        "this document would print a value of the field, and the chunks are "
-        "ordered by how well they match it, best first. The questions of the "
-        "field then go through the chunks in this order. Example: for the "
-        "heat demand, \"The heat demand of the town was 245 GWh in 2021.\" "
-        "Unlike \"Find the best chunks for a question\", which searches for "
-        "one question, this order is made once per field and kept with the "
-        "harvest. To change it: switch it off (every field then reads the "
-        "chunks in the document's order) or change the prompt `phrase`.",
-        "addressed.Orders", asks="phrase", settings=NUMBERS, top=True),
     Box("order", "Find the best chunks for a question", "order",
         "pieces", "supply",
         "Searches the document for the chunks that best match the search "
@@ -331,123 +314,7 @@ LIBRARY = {box.type: box for box in (
         "the search are shown.",
         "addressed.Plan.beside", needs=("coordinate",)),
     # -- ask -----------------------------------------------------------------
-    Box("docfield", "Ask a field once for the whole document", "ask", "supply",
-        "answers",
-        "Asks a field the document states once, such as its title, its "
-        "authors or its base year, over the best search hits for the field; "
-        "the first request also shows the title page. Out come the values of "
-        "the field, each with its line, and every value that passes the "
-        "checks is kept. Example: the authors from the title page and the "
-        "imprint. Unlike \"Ask for the values in a chunk\", which goes "
-        "through every chunk, this step asks the field once with the best "
-        "chunks. To change it: the chunks per request, whether the title page "
-        "goes with the first request, the follow-up questions and what the "
-        "model may ask to see (`fetches`); which fields are asked here is set "
-        "by the key `once_per_document` in the Spec tab, how they are asked "
-        "by the prompt `docfield`.",
-        "addressed.Reader.ask_window", asks="docfield",
-        needs=("field", "settled"),
-        settings=(PER_REQUEST,
-                  Setting("title_page", SWITCH, "the title page with the "
-                          "first request", True,
-                          help="On: the first request of a field shows the "
-                          "title page besides the search hits, which "
-                          "suits what a title page states. Off: it shows "
-                          "only the search hits.",
-                          rule="docfield_title_page"), FOLLOW, REPLIES,
-                  MEANINGS, FETCHES),
-        decided="2026-11-08, 2026-11-12", marks=CHECKS),
-    Box("find", "Ask for the values in a chunk", "ask", "pieces", "answers",
-        "Shows the model one chunk and one field and asks for every value of "
-        "the field the chunk prints: for each the number of its line, its "
-        "words, and the entry where the field has a list. Every value that "
-        "passes the checks is kept. An answer too long for its room is asked "
-        "again for each half of the chunk. Example: in a table of the heat "
-        "demand by energy carrier, the numbers of its five rows. Unlike \"Ask "
-        "a field once for the whole document\", this step goes through every "
-        "chunk. To change it: the follow-up questions, the answers in the "
-        "wrong form and up to how many entries a list shows what they mean; "
-        "the prompt `find` and the keys of the field in the Spec tab shape "
-        "the question.",
-        "addressed.Reader.find", asks="find", needs=("piece",),
-        settings=(FOLLOW, REPLIES, MEANINGS), decided="2026-11-08",
-        marks=CHECKS),
-    Box("coord", "Ask a dimension at the value's line", "ask",
-        "coordinates", "answers",
-        "Asks one dimension of a value, such as its year or its energy "
-        "carrier, where the value stands: the request shows its line with the "
-        "head of its table or the sentences around it, the headings above it, "
-        "the title page and what holds for the whole document. The answer is "
-        "the number of the line that says it and its words, or 0 where no "
-        "shown line says it. Example: the year 2021 from the head of the "
-        "value's column. Unlike \"Ask a dimension over the search hits\", "
-        "this step looks only at the value's own place. To change it: the "
-        "follow-up questions, the answers in the wrong form, the sentences "
-        "around the value and what the model may ask to see (`fetches`); the "
-        "prompt `coord` shapes the question.",
-        "addressed.Reader.ask_own_place", asks="coord",
-        needs=("coordinate",),
-        settings=(FOLLOW, REPLIES, MEANINGS,
-                  Setting("lines_around", RULE,
-                          "sentences around the value",
-                          help="In running text a request shows this many "
-                          "lines before and after the value's line, in a "
-                          "table the value's row under the table head. A "
-                          "larger number gives the model more context and "
-                          "makes each request longer."), FETCHES),
-        decided="2026-11-08, 2026-11-12", marks=CHECKS),
-    Box("phrase", "Write a search sentence", "ask", "coordinates",
-        "coordinates",
-        "The model writes a sentence as the document would print the missing "
-        "answer, once for each field, dimension and wording; the search after "
-        "it looks for chunks like this sentence. Example: for the missing "
-        "year of a heat demand, \"In 2021 the heat demand was 245 GWh.\" To "
-        "change it: a new sentence from round 2 on and whether a question may "
-        "stand in for a sentence; the prompt `phrase` shapes the sentence.",
-        "addressed.Reader.search_sentence", asks="phrase",
-        needs=("coordinate",),
-        settings=(Setting("anew", SWITCH, "a new sentence from round 2, "
-                          "written knowing the earlier ones", False,
-                          help="On: from the second round on the model "
-                          "writes a new sentence and sees the sentences "
-                          "of the earlier rounds, so it can try another "
-                          "wording. Off: the first sentence is used in "
-                          "every round.",
-                          rule="phrase_anew"),
-                  Setting("question_as_sentence", RULE,
-                          "a question may stand in for the sentence",
-                          help="On: if the model writes a question "
-                          "instead of a sentence, the search uses the "
-                          "question, and the run counts it. Off: the "
-                          "search then uses the field's own sentence."))
-        + NUMBERS, decided="2026-11-09"),
-    Box("search", "Ask a dimension over the search hits", "ask",
-        "supply", "answers",
-        "Asks one dimension of a value over the search hits, a few chunks per "
-        "request, until a line says it or the hits run out. The request shows "
-        "the value's own place and the hits; chunks the model asks to see "
-        "come first in the next request, and no chunk is shown twice. "
-        "Example: the scenario of a value, found in the introduction of its "
-        "chapter. Unlike \"Ask a dimension at the value's line\", this step "
-        "looks elsewhere in the document. To change it: the chunks per "
-        "request, the follow-up questions and what the model may ask to see "
-        "(`fetches`); the prompt `search` shapes the question.",
-        "addressed.Reader.search_round, addressed.Reader.fetch",
-        asks="search", needs=("round", "coordinate"),
-        settings=(PER_REQUEST, FOLLOW, REPLIES, MEANINGS, FETCHES),
-        decided="2026-11-09, 2026-11-12", marks=CHECKS),
     # -- check ---------------------------------------------------------------
-    Box("about", "Check that a find is about this value", "check",
-        "answers", "answers",
-        "A find of the search that stands in another section, table or figure "
-        "than the value is kept only where the model says that place speaks "
-        "about this value. It checks the answers of the search step before "
-        "it. Example: a line \"base year 2021\" from another chapter is "
-        "refused for a value of a table about 2030. To change it: switch it "
-        "off, then such finds are kept unchecked; the prompt `check` shapes "
-        "the question.",
-        "addressed.Reader.about", asks="check", needs=("coordinate",),
-        attached=("search",), settings=NUMBERS, decided="2026-11-07"),
     Box("check", "Own check of an answer", "check", "answers", "answers",
         "Your own check of the answers of the question step before it: where "
         "your condition holds, the answer is refused and asked again with "
@@ -455,7 +322,7 @@ LIBRARY = {box.type: box for box in (
         "fixed checks refuse; its refusals are counted under check:<name>. "
         "Example: refuse a year before 1990 with \"The year must be 1990 or "
         "later.\" To change it: the name, the condition and the sentence.",
-        "engine.own_checks", attached=ASKING,
+        "engine.own_checks", attached=QUESTIONS,
         settings=(Setting("name", TEXT, "name",
                           help="The name of the check. Its refusals are "
                           "counted in the run's statistics under "
@@ -468,19 +335,6 @@ LIBRARY = {box.type: box for box in (
                           "to tell the model what was wrong with its "
                           "answer.")),
         decided="2026-11-10"),
-    Box("list", "Choose the list entry", "check", "answers", "answers",
-        "Where the words of an answer have to be an entry of a list, such "
-        "as an energy carrier or a sector, the model chooses the entry the "
-        "words mean, once for each wording. This step stands after the "
-        "question whose list entries it chooses and says how that is asked: "
-        "the answer room and the temperature of the request, the follow-up "
-        "questions and up to how many entries the list shows what they "
-        "mean. A list entry asked where no such step stands is asked as the "
-        "first of them in the flow says. Example: the words \"heat from the "
-        "grid\" become the entry district heating. To change it: these "
-        "settings and the prompt `list`.",
-        "addressed.Reader.entry", asks="list", attached=ASKING,
-        settings=NUMBERS, switch=False, decided="2026-11-12"),
     # -- remember and state --------------------------------------------------
     Box("settle", "Keep for the whole document", "remember", "answers",
         "document",
@@ -515,53 +369,72 @@ LIBRARY = {box.type: box for box in (
                           rule="state_mode"),)),
     # -- general (owner decision 2026-11-12) ----------------------------------
     Box("ask", "Ask the model", "ask", "answers", "answers",
-        "Sends one request to the model: your prompt, the inputs you choose, "
-        "each shown as you say, and the form of the answer as a JSON schema. "
-        "Out comes the answer as a variable, or values of a field of the "
-        "Spec, each with the line it stands in and checked like every value. "
-        "Where you allow it, the model may ask to see what a shown line "
-        "points to and is asked again with it. Example: \"Which year does the "
-        "table speak of?\" with the chunk as numbered lines, answered as "
-        "{\"year\": 2021}. Unlike the question steps above, which each ask "
-        "one kind of question, this step asks whatever its prompt says. To "
-        "change it: the prompt, the inputs, the form of the answer and where "
-        "the answer goes.",
+        "Sends a request to the model: its prompt, the inputs you choose, "
+        "each shown as you say, and the form of its answer. What becomes of "
+        "the answer is its target: a variable, values of a field of the "
+        "Spec, a dimension of a value, a list entry, a search sentence and "
+        "more, each checked as the reading checks it. Every question of the "
+        "flow is this step with a preset (owner decision 2026-11-12), which "
+        "fills in its parts; whatever the step sets of its own wins. "
+        "Example: \"Which year does the table speak of?\" with the chunk as "
+        "numbered lines, answered as {\"year\": 2021}. To change it: the "
+        "request, the prompt, the inputs, the form of the answer, the target "
+        "and the ways it goes.",
         "general.ask_step",
-        settings=(Setting("prompt", PROMPT, "prompt", "extraction/ask",
+        settings=(Setting("request", TEXT, "request",
+                          help="What the request is in the log, and whose "
+                          "settings it reads (its answer room and "
+                          "temperature): find, docfield, coord, search, "
+                          "phrase, check, list, names, work, transcribe, "
+                          "compute, review, example, or own for a question "
+                          "of your own."),
+                  Setting("prompt", PROMPT, "prompt",
                           help="The id of a prompt of the profile, such as "
-                          "extraction/find, or a text of its own. An input "
-                          "whose key the prompt names as {{key}} is written "
-                          "into the prompt and not into the message; "
+                          "extraction/find, or a text of its own. Without "
+                          "one, the prompt of its request. An input whose "
+                          "key the prompt names as {{key}} is written into "
+                          "the prompt and not into the message; "
                           "{{key.field}} writes in one field of it. "
                           "{{example}} shows an answer in the form of the "
                           "answer."),
                   Setting("inputs", INPUTS, "what the request shows",
                           help="Each input is a key of the message, the "
-                          "variable it comes from and how it is shown."),
+                          "variable it comes from and how it is shown, "
+                          "optionally only where a condition holds. They "
+                          "stand in the message in this order."),
                   Setting("reply", SCHEMA, "form of the answer",
-                          help="The answer as a JSON schema. It goes to the "
-                          "model as its grammar, and each of its keys is a "
-                          "variable after the step."),
+                          help="A form the reading knows (values with their "
+                          "lines, a place, a list entry, ...) or a JSON "
+                          "schema of your own. It goes to the model as its "
+                          "grammar."),
                   Setting("into", INTO, "where the answer goes",
-                          help="A variable of its own name, for this item "
-                          "or for the whole document, or the values of a "
-                          "field of the Spec, each with its line."),
-                  Setting("tools", MULTI, "what the model may ask to see",
-                          (), choices=("next", "previous", "item", "search",
-                                       "similar", "image"),
-                          words=("the next chunk", "the chunk before",
-                                 "a table or figure a line names",
-                                 "a search for a pattern",
-                                 "chunks like a text it writes",
-                                 "the picture of a figure"),
-                          help="Empty: the model answers from what it is "
-                          "shown. Each entry allows one way of asking to "
-                          "see more; the request is then asked again with "
-                          "it."),
-                  Setting("tool_rounds", NUMBER, "asked again with what was "
-                          "fetched, at most", number="follow_ups"),
-                  FOLLOW, REPLIES),
-        decided="2026-11-12", marks=CHECKS[:2]),
+                          help="The target: a variable of its own name, for "
+                          "this item or for the whole document; the values "
+                          "of a field of the Spec, each with its line; a "
+                          "dimension of the value; and the targets of the "
+                          "presets."),
+                  Setting("fetch", SWITCH, "the model may ask to see more",
+                          False,
+                          help="On: an answer may ask to see what a shown "
+                          "line points to, in the ways the rule fetches "
+                          "allows; it is shown first in the next request, "
+                          "or the question is asked again with it (rule "
+                          "fetch_rounds). Off: the model answers from what "
+                          "it is shown."),
+                  Setting("picture", SWITCH, "the model may ask for the "
+                          "picture of a figure", False,
+                          help="On: a question about a dimension may ask "
+                          "once for the picture of a figure it shows, and "
+                          "is asked again with it (the entry image of the "
+                          "rule fetches)."),
+                  Setting("example_at", CHOICE, "the example answer names",
+                          "own", choices=("own", "title_page"),
+                          words=("the request's own lines",
+                                 "the title page where it is shown"),
+                          help="Which lines the example of a request that "
+                          "finds values points to."),
+                  FETCHES, FETCH_ROUNDS, FOLLOW, REPLIES, MEANINGS),
+        decided="2026-11-12", marks=CHECKS),
     Box("retrieve", "Search the document with a text", "order",
         "answers", "supply",
         "Searches the document for the chunks that best match a text you "
@@ -655,18 +528,6 @@ LIBRARY = {box.type: box for box in (
         fixed="A run always writes what it read, so this step cannot be "
               "removed or switched off.",
         switch=False, top=True),
-    Box("compute", "Compute shares and sums", "end", "rows", "rows",
-        "Once a document is read, its values that passed the checks are gone "
-        "through for what they leave open: the absolute number of a share, or "
-        "the sum of parts. For each question the model writes code, the "
-        "sandbox runs it, and a new value comes out with the code, its output "
-        "and its input numbers as proof. Example: a share of 40 % of 600 GWh "
-        "gives 240 GWh. Unlike \"Own step in Python\", where you write the "
-        "code, here the model writes it for each question. To change it: "
-        "switch it off; which shares and sums are computed is set in the "
-        "profile's code, and the prompt `compute` shapes the question.",
-        "compute.py", asks="compute", settings=NUMBERS,
-        decided="2026-11-02", spec="compute", top=True),
     Box("catalogue", "Look the publication up in a catalogue", "end",
         "rows", "rows",
         "Once a document is read, what its front pages leave open of the "
@@ -681,32 +542,103 @@ LIBRARY = {box.type: box for box in (
         "profiles/<name>/completion.py", decided="2026-11-04", top=True),
 )}
 
-# What each box of the main flow takes and gives (`variables`).
+# What each box of the main flow takes and gives (`variables`); a step of
+# "Ask the model" takes what its inputs name and gives what its target
+# makes (`flow.inputs_of`, `flow.outputs_of`).
 IO = {
     "document": (("document",), ("document",)),
-    "transcribe": (("document",), ("figure_lines",)),
     "split": (("document", "figure_lines?"), ("chunks",)),
     "lists": (("chunks",), ("lists",)),
-    "sentences": (("fields", "chunks"), ("order",)),
     "order": (("field|fact|dimension", "chunks"), ("hits",)),
     "beside": (("dimension", "chunks"), ("hits",)),
-    "docfield": (("field|fact", "hits"), ("answer", "values")),
-    "find": (("field", "chunk"), ("answer", "values")),
-    "coord": (("dimension", "facts?"), ("answer",)),
-    "phrase": (("dimension",), ("sentence",)),
-    "search": (("dimension", "hits", "facts?"), ("answer",)),
-    "about": (("answer",), ("answer",)),
     "check": (("answer",), ("answer",)),
-    "list": (("answer",), ("answer",)),
     "settle": (("fact", "answer"), ("facts",)),
     "state": (("dimension",), ()),
     "write": (("values",), ("rows",)),
-    "compute": (("rows",), ("rows",)),
     "catalogue": (("rows",), ("rows",)),
 }
 LIBRARY = {kind: dataclasses.replace(box, inputs=IO[kind][0],
                                      outputs=IO[kind][1])
            if kind in IO else box for kind, box in LIBRARY.items()}
+
+# The preset a question inside an answer is asked as where no step after
+# the asking question says otherwise (`engine.Engine.nested_node`), by its
+# target.
+NESTED_PRESETS = {"entry": "list", "plan_year": "plan_year_words",
+                  "name": "name", "keep_find": "about"}
+
+
+def preset_of(node: Optional[dict]):
+    """The preset a step of "Ask the model" names (`presets`), None for
+    any other step."""
+    if not isinstance(node, dict) or node.get("box") != "ask" \
+            or not node.get("preset"):
+        return None
+    from .presets import preset
+    return preset(node["preset"])
+
+
+def box_of(node: Optional[dict]) -> Optional[Box]:
+    """The box a step is, seen through its preset: a step of "Ask the
+    model" with a preset has the preset's name, explanation, frames,
+    settings and request; None where the library has no such box."""
+    kind = LIBRARY.get((node or {}).get("box")) \
+        if isinstance(node, dict) else None
+    if kind is None or kind.type != "ask":
+        return kind
+    from .general import parts_of
+    parts = parts_of(node)
+    found = preset_of(node)
+    if found is None:
+        return dataclasses.replace(kind, asks=parts["request"])
+    return dataclasses.replace(
+        kind, label=found.label, says=found.says, asks=parts["request"],
+        needs=found.needs, top=found.top, prepares=found.prepares,
+        attached=found.attached, settings=kind.settings + found.settings,
+        profile=found.profile, decided=found.decided or kind.decided,
+        spec=found.spec or None, group=found.group or kind.group,
+        flow=found.flow, scope=found.scope, after=found.after)
+
+
+def label_of(kind: str) -> str:
+    """What the page calls a kind of step (`rules.step_kind`): a box of
+    the library, or the preset of "Ask the model" that stands for it."""
+    box = LIBRARY.get(kind)
+    if box is not None:
+        return box.label
+    from .presets import PRESETS
+    found = next((one for one in PRESETS.values() if one.kind == kind),
+                 None)
+    return found.label if found is not None else kind
+
+
+def settings_of(node: dict) -> tuple:
+    """The settings of a step: its box's, and its preset's."""
+    kind = box_of(node)
+    return kind.settings if kind is not None else ()
+
+
+def is_attached(node: dict) -> bool:
+    """Is *node* applied to the answers of the question before it (an own
+    check, a list entry, whether a place speaks about the value), so that
+    no frame runs it?"""
+    kind = box_of(node)
+    return kind is not None and bool(kind.attached)
+
+
+def target_of(node: dict) -> Optional[str]:
+    """The target of a step of "Ask the model" (`targets`), None for any
+    other step."""
+    if not isinstance(node, dict) or node.get("box") != "ask":
+        return None
+    from .general import parts_of
+    return parts_of(node)["into"].get("to")
+
+
+def asks_of(node: dict) -> Optional[str]:
+    """The request a step sends, None where it sends none."""
+    kind = box_of(node)
+    return kind.asks if kind is not None else None
 
 
 
@@ -738,6 +670,21 @@ class _Library(dict):
                                      f" has already")
                 dict.__setitem__(self, b.type,
                                  dataclasses.replace(b, profile=name))
+            # What a profile's presets of "Ask the model" need: its
+            # presets, targets, shows and forms (owner decision 2026-11-12
+            # evening, plan "modell_fragen").
+            from . import forms, presets, shows, targets
+            for one in profile.own("blocks", "SHOWS") or ():
+                shows.register(*one)
+            for one in profile.own("blocks", "FORMS") or ():
+                forms.register(*one)
+            for one in profile.own("blocks", "TARGETS") or ():
+                targets.register(dataclasses.replace(one, profile=name))
+            for one in profile.own("blocks", "PRESETS") or ():
+                presets.register(dataclasses.replace(one, profile=name))
+            for target, preset_name in (profile.own(
+                    "blocks", "NESTED_PRESETS") or {}).items():
+                NESTED_PRESETS.setdefault(target, preset_name)
 
     def __getitem__(self, key):
         self._load()
@@ -936,17 +883,6 @@ LIBRARY.update({box.type: box for box in (
           "`recheck_drop_without_quote` and `recheck_dropped_state` "
           "say how.",
           "recheck.recheck_row", "chain", after=("stored",)),
-    _pass("review", "Second reading", "rows", "answers",
-          "Each row of the trust levels C and D is read a second time, "
-          "over its own passage and the section above it, with the "
-          "picture where there is one: one request for each row. The "
-          "row only gets a mark, agree, disagree or unbacked, and what "
-          "the second reading said goes into the working list. To "
-          "change it: the rules `review_levels`, `review_once_per_row`, "
-          "`review_shown_passages` and `review_limit` say which rows are "
-          "read and how many; the prompt `review` shapes the question.",
-          "review.review_row", "chain", after=("stored",), asks="review",
-          decided="2026-09-13"),
     _pass("worklist", "Working list", "rows", "rows",
           "What the second reading said, one line for each field it "
           "asked, is written into the working list `review.csv` beside "
@@ -1005,12 +941,6 @@ LIBRARY.update({box.type: box for box in (
           "harvest stands before it, a document starts at those places.",
           "runner.harvest_documents", "documents",
           settings=(_TRACE, _LABEL)),
-    _pass("example", "Example for a field", "", "answers",
-          "This is the request that proposes an example for a field "
-          "while a spec is compiled. No run starts it. It stands here so "
-          "that its answer room and its temperature are set like those "
-          "of any request.",
-          "compile.cli.ask_for_example", "run", asks="example"),
 )})
 
 # What each kind of frame iterates and what it takes.
@@ -1079,32 +1009,39 @@ def offered(b: Box, profile=None) -> bool:
     return b.profile in {one.name for one in profile.lineage()}
 
 
+def _setting_entry(s: Setting) -> dict:
+    """A setting as the page shows it."""
+    return {"key": s.key, "kind": s.kind, "label": s.label,
+            **({"default": s.default} if s.default is not None else {}),
+            **({"number": s.number} if s.number else {}),
+            **({"choices": list(s.choices)} if s.choices else {}),
+            **({"words": dict(zip(s.choices, s.words))}
+               if s.words else {}),
+            **({"help": s.help} if s.help else {}),
+            **({"where": list(s.where)} if s.where else {}),
+            **({"rule": s.rule} if s.rule else {})}
+
+
+def _box_entry(b: Box) -> dict:
+    """A box as the page shows it."""
+    return {"type": b.type, "label": b.label, "group": b.group,
+            "takes": b.takes, "gives": b.gives, "says": b.says,
+            "code": b.code, "asks": b.asks, "needs": list(b.needs),
+            "settings": [_setting_entry(s) for s in b.settings],
+            "fixed": b.fixed, "switch": b.switch,
+            "decided": b.decided, "attached": list(b.attached),
+            "prepares": b.prepares, "spec": b.spec, "top": b.top,
+            "marks": list(b.marks), "inputs": list(b.inputs),
+            "outputs": list(b.outputs), "profile": b.profile}
+
+
 def catalogue(profile=None) -> dict:
     """The library as the page shows it where *profile* is open: the
     boxes of the main flow, those of the core and those of the profile
-    (`offered`), and apart from them the boxes of the follow-up passes."""
-    def setting(s: Setting) -> dict:
-        return {"key": s.key, "kind": s.kind, "label": s.label,
-                **({"default": s.default} if s.default is not None else {}),
-                **({"number": s.number} if s.number else {}),
-                **({"choices": list(s.choices)} if s.choices else {}),
-                **({"words": dict(zip(s.choices, s.words))}
-                   if s.words else {}),
-                **({"help": s.help} if s.help else {}),
-                **({"where": list(s.where)} if s.where else {}),
-                **({"rule": s.rule} if s.rule else {})}
-
-    def entry(b: Box) -> dict:
-        return {"type": b.type, "label": b.label, "group": b.group,
-                "takes": b.takes, "gives": b.gives, "says": b.says,
-                "code": b.code, "asks": b.asks, "needs": list(b.needs),
-                "settings": [setting(s) for s in b.settings],
-                "fixed": b.fixed, "switch": b.switch,
-                "decided": b.decided, "attached": list(b.attached),
-                "prepares": b.prepares, "spec": b.spec, "top": b.top,
-                "marks": list(b.marks), "inputs": list(b.inputs),
-                "outputs": list(b.outputs), "profile": b.profile}
-
+    (`offered`), the presets of "Ask the model" its flow takes, and apart
+    from them the boxes of the follow-up passes."""
+    entry = _box_entry
+    from . import forms, shows, targets
     return {
         "boxes": [entry(b) for b in LIBRARY.values()
                   if not b.flow and offered(b, profile)],
@@ -1117,7 +1054,36 @@ def catalogue(profile=None) -> dict:
         "variables": variables.catalogue(),
         "items": {k: list(v) for k, v in variables.ITEMS.items()},
         "start": list(variables.START),
+        "presets": [one for one in presets_catalogue(profile)
+                    if not one["flow"]],
+        "shows": shows.shows_catalogue(),
+        "forms": forms.forms_catalogue(),
+        "targets": targets.targets_catalogue(),
+        "requests": list(REQUESTS),
     }
+
+
+def presets_catalogue(profile=None) -> list:
+    """The presets of "Ask the model" the page offers where *profile* is
+    open, in the order of the library: each as the box it is
+    (`box_of`: its name, explanation, settings, frames and where it runs)
+    with its five parts and the values of its settings."""
+    from .presets import PRESETS
+    LIBRARY.get("ask")
+    out = []
+    for one in PRESETS.values():
+        if one.profile and profile is not None and not offered(
+                dataclasses.replace(LIBRARY["ask"], profile=one.profile),
+                profile):
+            continue
+        box = box_of({"box": "ask", "preset": one.name})
+        out.append({**_box_entry(box), "name": one.name, "kind": one.kind,
+                    "request": one.request, "parts": {
+                        "inputs": list(one.inputs), "reply": one.reply,
+                        "into": dict(one.into)},
+                    "values": dict(one.values or {}), "flow": one.flow,
+                    "scope": one.scope, "after": list(one.after)})
+    return out
 
 
 # The library the flow, the engine and the page read: the core's boxes and,

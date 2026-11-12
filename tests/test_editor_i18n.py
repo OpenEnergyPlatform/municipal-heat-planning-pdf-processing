@@ -403,7 +403,17 @@ ANSWERS = {
         "library.each_titles.*", "library.which.*", "library.order_words.*",
         "library.arrows.*", "conditions[].label", "conditions[].props[].label",
         "conditions[].props[].words.*", "numbers[].help", "notes[].says",
-        "switches.*.label", "switches.*.none", "never.*"),
+        "switches.*.label", "switches.*.none", "never.*",
+        # every question is "Ask the model" with a preset (owner decision
+        # 2026-11-12 evening): the presets, the forms of an answer, the
+        # targets and how an input is shown
+        "library.presets[].label", "library.presets[].says",
+        "library.presets[].settings[].label",
+        "library.presets[].settings[].help",
+        "library.presets[].settings[].words.*",
+        "library.forms.*.label", "library.forms.*.says",
+        "library.targets.*.label", "library.targets.*.says",
+        "shows.*.label", "shows.*.says"),
     "/api/spec": ("form.*[].help", "form.*[].about"),
     "/api/prompts": ("traces_note", "try.why"),
     "/api/graph": ("rules[].group", "rules[].help", "skipped",
@@ -430,7 +440,13 @@ PASS_ANSWER = ("library.boxes[].label", "library.boxes[].says",
                "library.boxes[].settings[].help",
                "library.boxes[].settings[].words.*", "library.each.*",
                "library.each_titles.*", "problems[].message",
-               "not_started")
+               "not_started", "library.presets[].label",
+               "library.presets[].says",
+               "library.presets[].settings[].label",
+               "library.presets[].settings[].help",
+               "library.presets[].settings[].words.*",
+               "library.forms.*.label", "library.forms.*.says",
+               "library.targets.*.label", "library.targets.*.says")
 
 
 def server_texts() -> dict:

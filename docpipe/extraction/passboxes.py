@@ -746,7 +746,7 @@ ACTS = {
     "derive": box_derive, "reopen_closed": box_reopen_closed,
     "demote": box_demote, "summary": box_summary, "replace": box_replace,
     "carry_stamp": box_carry_stamp, "remap": box_remap,
-    "recheck": box_recheck, "review": box_review, "worklist": box_worklist,
+    "recheck": box_recheck, "worklist": box_worklist,
     "clear_stamps": box_clear_stamps, "classify": box_classify,
     "read_parameters": box_read_parameters, "unread": box_unread,
     "places": box_places, "main_flow": box_main_flow,

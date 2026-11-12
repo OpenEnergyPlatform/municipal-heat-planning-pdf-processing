@@ -12,6 +12,7 @@ from docpipe.profile import load_profile
 from docpipe.extraction import fields, pipeline, spec as spec_module, verify
 
 from test_addressed import ENERGY, SLOTS
+from conftest import step_node
 
 DEFAULT = rules.default()
 TEXT = "Im Jahr 2030 bei 450.123456789 MWh und bei 3,251 MWh."
@@ -26,7 +27,7 @@ def fresh():
 
 def at_step(box="find", **values):
     """The step *box* of a flow with its own *values* for rules."""
-    return rules.in_step(rules.stepped({"id": "x", "box": box}, values))
+    return rules.in_step(rules.stepped(step_node(box), values))
 
 
 def verified(raw, text=TEXT):

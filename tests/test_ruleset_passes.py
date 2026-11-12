@@ -39,7 +39,7 @@ SPEC = load_spec(json.loads(
     .read_text(encoding="utf-8")))
 PARAMETER = SPEC.by_uri["energy_consumption"]
 SLOTS = {s.name: s for s in fields.axis_slots(PARAMETER)}
-STEP = {"id": "ask", "box": "coord"}
+STEP = {"id": "ask", "box": "ask", "preset": "coord"}
 
 
 @pytest.fixture(autouse=True)
@@ -307,9 +307,9 @@ def test_a_run_writes_its_statistics_unless_the_rule_says_not(tmp_path):
 # -- 3. the check before a run --
 
 def test_the_prompts_are_those_of_the_steps_that_are_on(monkeypatch):
-    tree = [{"id": "a", "box": "coord"}, {"id": "b", "box": "find",
-                                          "off": True},
-            {"id": "c", "box": "docfield"}]
+    tree = [{"id": "a", "box": "ask", "preset": "coord"},
+            {"id": "b", "box": "ask", "preset": "find", "off": True},
+            {"id": "c", "box": "ask", "preset": "docfield"}]
     monkeypatch.setattr("docpipe.extraction.flow.tree_of",
                         lambda profile=None: tree)
     got = preflight.prompts_in_effect(None)

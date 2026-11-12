@@ -211,8 +211,6 @@ Fields:
 - `before: list`
 - `clone: Callable`
 - `made: list = field(default_factory=list)`
-- `payload: Optional[dict] = None`
-- `noted: Optional[dict] = None`
 - `sentence: Optional[str] = None`
 - `sentences: list = field(default_factory=list)`
 - `seen: Optional[set] = None`
@@ -443,7 +441,20 @@ def holds(self, condition, scope: Scope) -> bool
 def figure_facts(source: Source) -> conditions.Facts
 ```
 
-What a condition of the transcribe box knows of a figure.
+What a condition of the step that writes out the figures
+knows of a figure.
+
+#### Engine.writes_figures
+
+```python
+def writes_figures(self, node: dict, document_id: int) -> dict
+```
+
+How the step *node* writes out a figure for the kept lines
+(`addressed.Transcripts`): its request, as its parts say ("ask":
+None where it has no prompt to ask with), and its prompt, inputs
+and answer form where they are not its preset's ("told"), which a
+kept transcription is named by besides the model.
 
 #### Engine.included
 
@@ -641,8 +652,39 @@ def asking_of(self, node: dict, scope: Scope, steps_after: list
               ) -> Asking
 ```
 
-What a question asks with: its box, the boxes after it that check
-its answers (the place of a find, own checks).
+What a question asks with: its box, the steps after it that
+check its answers (the place of a find, own checks) or are asked
+inside them (a list entry, a name), and where it stands.
+
+#### Engine.attached_after
+
+```python
+@staticmethod
+def attached_after(steps_after: list) -> list
+```
+
+The steps right after a question that are applied to its
+answers (`blocks.is_attached`), up to the first that is not.
+
+#### Engine.attached_of
+
+```python
+def attached_of(self, node: dict, target: str) -> Optional[dict]
+```
+
+The step after *node*, applied to its answers, that has
+*target* and is on; None where none stands there.
+
+#### Engine.nested_node
+
+```python
+def nested_node(self, target: str) -> dict
+```
+
+The step a question inside an answer is asked as (owner decision
+2026-11-12 evening, plan "modell_fragen", point 7): the one after
+the asking question that has its target, else the first of the
+flow, else its preset.
 
 #### Engine.own_checks
 
@@ -653,14 +695,26 @@ def own_checks(self, node: dict) -> list
 [(name, condition, sentence, id)] of the own checks that stand
 right after *node* and are on.
 
-#### Engine.keep
+#### Engine.keep_finds
 
 ```python
-def keep(self, doc: Doc, parameter, claims: list) -> None
+def keep_finds(self, scope: Scope, parameter, got: dict) -> None
 ```
 
-Each value a general step read of *parameter* in the read of its
-field and passage, as a find's are (`after_items`).
+What a question found in its chunks (*got*: claims, asked,
+failed, lost, the chunks it showed) for the frame of its item,
+which makes the reads of their passages once its items are through
+(`after_items`); at the top of the drawing at once.
+
+#### Engine.reads_of_finds
+
+```python
+def reads_of_finds(self, doc, finds: list) -> None
+```
+
+The finds of a question (`keep_finds`) as the reads of their
+field and passage: each value in the read of the passage it stands
+in, the requests and the holes counted at the first chunk.
 
 #### Engine.follow_ups_of
 
@@ -670,12 +724,6 @@ def follow_ups_of(self, node: dict) -> Optional[int]
 
 The box's own number of follow-ups, None for the flow's.
 
-#### Engine.box_docfield
-
-```python
-def box_docfield(self, node: dict, scope: Scope) -> None
-```
-
 #### Engine.after
 
 ```python
@@ -683,44 +731,6 @@ def after(self, node: dict) -> list
 ```
 
 The steps after *node* in its list of steps.
-
-#### Engine.box_find
-
-```python
-def box_find(self, node: dict, scope: Scope) -> None
-```
-
-#### Engine.box_sentences
-
-```python
-def box_sentences(self, node: dict, scope: Scope) -> None
-```
-
-#### Engine.coord_base
-
-```python
-def coord_base(self, coord: CoordItem, plan: Plan) -> None
-```
-
-What every request about the coordinate shows, made once.
-
-#### Engine.box_coord
-
-```python
-def box_coord(self, node: dict, scope: Scope) -> None
-```
-
-#### Engine.box_phrase
-
-```python
-def box_phrase(self, node: dict, scope: Scope) -> None
-```
-
-#### Engine.box_search
-
-```python
-def box_search(self, node: dict, scope: Scope) -> None
-```
 
 #### Engine.box_state
 

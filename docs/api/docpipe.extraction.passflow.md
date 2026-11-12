@@ -177,6 +177,16 @@ def run_node(run: Run, doc, node: dict) -> None
 One box or frame for one document, with its own values for as long
 as it runs. A node that is off does not run.
 
+### act_of
+
+```python
+def act_of(node: dict) -> Optional[Callable]
+```
+
+What runs a step of a pass, act(run, doc, node), None where no run
+starts it: its box's (`passboxes.ACTS`), for "Ask the model" its
+target's (`targets.Target.pass_run`).
+
 ### run_flow
 
 ```python

@@ -290,7 +290,7 @@ def run(profile, spec, tree: list, numbers, sources: list,
     document_id = sources[0].provenance.get("document_id", 0) \
         if sources[0].provenance else 0
 
-    def transcripts(document_id, figures, each):
+    def transcripts(document_id, figures, each, **_how):
         return {}, 0
     plan, counts = engine.plan(document_id, sources, transcripts, None,
                                numbers)

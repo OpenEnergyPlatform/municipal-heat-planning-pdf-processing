@@ -8,7 +8,7 @@ import {
 } from '@tabler/icons-react';
 import type { EdgeData, StepData } from './layout';
 import type { Library } from './model';
-import { libBox } from './model';
+import { stepBox } from './model';
 import { num, t, tn, tr, useLang } from '../lib/i18n';
 
 /* the groups of the library: their colour and sign (their word is groupWord) */
@@ -58,10 +58,10 @@ const Handles = () => (
 
 function lookOf(c: FlowCtx, d: StepData) {
   if (d.kind === 'box') {
-    const b = libBox(c.lib, d.step.box);
+    const b = stepBox(c.lib, d.step);
     const g = GROUPS[b ? b.group : ''] || { color: 'gray', icon: (p: { size?: number }) => <IconFileText {...p} /> };
     const word = b ? groupWord(b.group) : '';
-    return { ...g, sub: b && b.asks ? t('prompt: {prompt}', { prompt: b.asks }) : (b ? word : t('unknown step')), never: tr(c.never[d.step.box] || '') };
+    return { ...g, sub: b && b.asks ? t('prompt: {prompt}', { prompt: b.asks }) : (b ? word : t('unknown step')), never: tr(c.never[d.step.preset || d.step.box] || '') };
   }
   const f = FRAMES[d.kind] || FRAMES.each;
   return { ...f, sub: t('{n} inside', { n: d.inside ?? 0 }), never: '' };

@@ -44,6 +44,7 @@ import pytest
 
 from docpipe import rules
 from docpipe.extraction import conditions, engine as engine_map, fields, flow
+from docpipe.extraction import general, targets
 from docpipe.extraction import reading
 from docpipe.extraction.addressed import Counts, Reader
 from docpipe.extraction.engine import (Answer, CoordItem, Doc, Engine,
@@ -54,7 +55,8 @@ from docpipe.extraction.reading import Read
 from docpipe.ruleset import flowing
 
 from test_addressed import (ENERGY, SPEC, TABLE, TEXT, TITLE, Model,
-                            plan_of, in_order)
+                            plan_of, in_order, reader_of)
+from conftest import step_node
 
 
 def default() -> list:
@@ -66,7 +68,7 @@ def node(drawing: list, ident: str) -> dict:
 
 
 def at_step(kind: str, **values):
-    return rules.in_step(rules.stepped({"id": "x", "box": kind}, values))
+    return rules.in_step(rules.stepped(step_node(kind), values))
 
 
 STANDARD = {
@@ -77,7 +79,7 @@ STANDARD = {
     "split_figure_numbers": True,
     "include_kinds": ["section", "table", "figure"], "pages": None,
     "plans_kept": 8, "search_list_factor_on": False,
-    "search_rest_after": False, "docfield_title_page": True,
+    "search_rest_after": False,
     "phrase_anew": False, "phrase_new_from_round": 2,
     "search_skips_own_piece": True, "fetch_after_found": False,
     "supply_order": ["fetched", "beside", "ranked"],
@@ -313,51 +315,57 @@ def test_the_own_chunk_of_a_value_is_left_out_of_every_search():
         assert other.chunk is not None and other.seen == set()
 
 
-def stubbed_search(**more):
-    engine, reader = engine_of(**more)
-    plan = plan_of(TEXT, TABLE)
-    reader.coord_payload = lambda *a: (None, {}, {})
-    reader.search_round = lambda *a: ([], [object()], [{"get": "next"}])
+def stubbed_search():
+    """The search step over TEXT and TABLE, its answer holding a value AND
+    asking to see the next chunk: (the engine, the scope it asks in, the
+    supply it notes what to fetch on)."""
+    reader = reader_of(Model(search=lambda p, n: {"at": "1",
+                                                  "words": "2021"}))
+    reader.take = lambda *a: ([], [object()], [{"get": "next"}])
     reader.fetch = lambda plan, more, batch, seen, numbers: ["asked"]
+    plan = plan_of(TEXT, TABLE)
     coord = coord_of(plan)
     doc = Doc(plan, Counts(), [ENERGY])
     supply = SearchSupply([], lambda: list(plan.chunks), "found")
     scope = Scope(None, True, doc=doc, plan=plan).child(
         True, coord=coord, supply=supply)
-    return engine, scope, supply
+    return reader.engine, scope, supply
 
 
 def test_an_answer_that_found_a_value_drops_the_chunks_it_asked_for():
     engine, scope, supply = stubbed_search()
-    engine.box_search(node(engine.tree, "search"), scope)
+    general.ask_step(engine, node(engine.tree, "search"), scope)
     assert supply.fetched == []
 
 
 def test_with_the_rule_on_the_chunks_it_asked_for_are_fetched_anyway():
     engine, scope, supply = stubbed_search()
     with rules.overlaid(fetch_after_found=True):
-        engine.box_search(node(engine.tree, "search"), scope)
+        general.ask_step(engine, node(engine.tree, "search"), scope)
     assert supply.fetched == ["asked"]
 
 
-def test_a_new_sentence_is_written_from_the_round_the_rule_names():
+def test_a_new_sentence_is_written_from_the_round_the_rule_names(
+        monkeypatch):
     seen = []
 
-    def sentence(plan, read, row, slot, counts, before=None):
+    def sentence(ask, coord, counts, before=None):
         seen.append(before)
         return f"s{len(seen)}"
-    box = {"id": "p", "box": "phrase", "set": {"anew": True}}
+    monkeypatch.setattr(targets, "search_sentence", sentence)
+    box = {"id": "p", "box": "ask", "preset": "phrase",
+           "set": {"anew": True}}
     results = {}
     for start in (2, 3):
         seen.clear()
-        engine, reader = engine_of(search_sentence=sentence)
+        engine, reader = engine_of()
         plan = plan_of(TEXT)
         coord = coord_of(plan)
         coord.sentences = ["first"]
         scope = Scope(None, True, doc=Doc(plan, Counts(), [ENERGY]),
                       plan=plan).child(True, coord=coord, round=2)
         with rules.overlaid(phrase_new_from_round=start):
-            engine.box_phrase(box, scope)
+            general.ask_step(engine, box, scope)
         results[start] = seen[0]
     assert results[2] == ["first"] and results[3] is None
 
@@ -563,7 +571,7 @@ def test_the_document_step_reads_the_pages_the_rule_names():
 def test_a_figure_left_out_is_not_transcribed():
     asked = []
 
-    def transcripts(document_id, figures, each):
+    def transcripts(document_id, figures, each, **_how):
         asked.append([f.owner_id for f in figures])
         return {}, 0
     drawing = default()
@@ -593,7 +601,7 @@ def test_the_title_page_lines_of_the_document_box_decide_the_title_page():
 def transcribed(drawing=None) -> list:
     asked = []
 
-    def transcripts(document_id, figures, each):
+    def transcripts(document_id, figures, each, **_how):
         asked.append(sorted(f.owner_id for f in figures))
         return {}, 0
     planned(drawing, [TITLE, TEXT, FIGURE_A, FIGURE_B],
@@ -784,16 +792,14 @@ SETTINGS = [("split", "across", "split_across", True),
             ("order", "list_factor", "search_list_factor_on", True),
             ("order", "rest_after", "search_rest_after", True),
             ("phrase", "anew", "phrase_anew", True),
-            ("docfield", "title_page", "docfield_title_page", False),
             ("state", "mode", "state_mode", "unstated")]
 
 
 @pytest.mark.parametrize("kind,key,rule,other", SETTINGS)
 def test_a_box_without_a_value_of_its_own_takes_the_rule(kind, key, rule,
                                                          other):
-    box = {"id": "b", "box": kind}
-    setting = next(s for s in flow.blocks.LIBRARY[kind].settings
-                   if s.key == key)
+    box = step_node(kind, "b")
+    setting = next(s for s in flow.blocks.settings_of(box) if s.key == key)
     assert setting.rule == rule
     assert Engine.setting(box, key) == setting.default == STANDARD[rule]
     with at_step(kind, **{rule: other}):

@@ -475,6 +475,7 @@ def test_a_value_set_at_the_catalogue_box_is_the_one_the_lookup_reads():
 def test_the_catalogue_stands_once_after_compute_at_the_end():
     from docpipe.extraction import flow as flow_map
     from docpipe.profile import load_profile
+    from docpipe.rules import step_kind
     scenarios = load_profile("scenarios")
     shipped = flow_map.tree_of(scenarios)
     known = flow_map.known_rules(scenarios)
@@ -485,7 +486,7 @@ def test_the_catalogue_stands_once_after_compute_at_the_end():
                for one in flow_map.problems(twice, known, scenarios))
     first = [node for node in shipped if node is not box]
     at = next(i for i, node in enumerate(first)
-              if node.get("box") == "compute")
+              if step_kind(node) == "compute")
     before = first[:at] + [box] + first[at:]
     assert any("stand in this order" in one["message"]
                for one in flow_map.problems(before, known))

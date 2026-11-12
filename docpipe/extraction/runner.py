@@ -77,6 +77,7 @@ from . import passflow
 from . import compute as computing
 from . import fields
 from . import flow as flow_map
+from . import shows as shows_map
 from . import found as found_places
 from . import reading as reading_map
 from . import replies
@@ -121,8 +122,7 @@ def in_home(kind: Optional[str]):
     every request of a kind is asked alike, wherever it comes from."""
     step = rules.STEP.get()
     here = _FLOW_NODES.get(step.ident) if step is not None else None
-    block = blocks.LIBRARY.get(here["box"]) if here is not None else None
-    if block is not None and block.asks == kind:
+    if here is not None and blocks.asks_of(here) == kind:
         return nullcontext()
     # A step that stands after the asking step and asks this kind says how
     # it is asked there ("Choose the list entry", owner decision
@@ -148,12 +148,12 @@ def attached_homes(tree: list) -> dict:
             if not isinstance(node, dict) or "box" not in node:
                 continue
             for after in steps[i + 1:]:
-                block = blocks.LIBRARY.get(after.get("box")) \
-                    if isinstance(after, dict) else None
-                if block is None or not block.attached:
+                if not isinstance(after, dict) \
+                        or not blocks.is_attached(after):
                     break
-                if block.asks and not after.get("off"):
-                    out.setdefault((str(node.get("id")), block.asks), after)
+                asks = blocks.asks_of(after)
+                if asks and not after.get("off"):
+                    out.setdefault((str(node.get("id")), asks), after)
     return out
 
 
@@ -659,9 +659,9 @@ def take_flow(profile=None):
     # The home of a kind of request is the first box asking it that takes
     # part in the run: a box that is off asks nothing.
     for node, _frames in flow_map.on(flow_map.tree_of(profile)):
-        block = blocks.LIBRARY.get(node.get("box"))
-        if block is not None and block.asks:
-            _HOMES.setdefault(block.asks, node)
+        asks = blocks.asks_of(node) if "box" in node else None
+        if asks:
+            _HOMES.setdefault(asks, node)
     # A request the main flow never asks (the second reading, the example
     # of a field) has its home in the flow of its pass.
     for kind, node in passflow.homes(profile).items():
@@ -1479,30 +1479,92 @@ def phrase_told(prompt) -> str:
     return thread_map.cut(prompt).system(PHRASE_KEYS).text
 
 
+def step_asking(target: str, preset: str, profile=None) -> dict:
+    """The step of a request asked apart from the reading of a document (a
+    calculation, a second reading, the example of a field): the first of
+    the flow of *profile* whose answer goes to *target*, on or off, else
+    the first of the flow of a pass, else its *preset*; read once where the
+    request's sender is made."""
+    from docpipe.profile import active_profile
+    profile = profile or active_profile()
+    trees = [flow_map.tree_of(profile)]
+    for name in passflow.names(profile):
+        if name == passflow.MAIN:
+            continue
+        try:
+            trees.append(passflow.load(name, profile))
+        except (flow_map.FlowError, LookupError, OSError):
+            continue
+    for tree in trees:
+        for node, _frames in flow_map.walk(tree):
+            if "box" in node and blocks.target_of(node) == target:
+                return node
+    return {"id": preset, "box": "ask", "preset": preset}
+
+
+def step_parts(step: dict, standard: str, profile=None) -> tuple:
+    """(prompt, inputs) of a step asked apart from the reading: the prompt
+    of its kind (*standard*) where it names that one, else its own
+    (`own_prompt`), and the inputs its first message is built from."""
+    from . import general
+    parts = general.parts_of(step)
+    named = parts["prompt"]
+    prompt = (prompts.load(standard, profile) if profile is not None
+              else prompts.load(standard)) if named == standard \
+        else own_prompt(named, profile)
+    return prompt, parts["inputs"]
+
+
+def sentence_step() -> dict:
+    """The step whose request writes a field's sentence, which the chunks
+    of a field are ordered by and the search of a field of the whole
+    document goes with: the first of the run's flow that orders the chunks
+    by it (`targets.chunk_order`), on or off, else its preset."""
+    for node in _FLOW_NODES.values():
+        if blocks.target_of(node) == "chunk_order":
+            return node
+    return {"id": "sentences", "box": "ask", "preset": "sentences"}
+
+
 def phrase_payload(parameter, context: Optional[dict] = None,
-                   frame: Optional[dict] = None) -> dict:
-    """What a phrase request is written from: the parameter's label and
-    description, the names of its list where it has one, what the document
-    says of itself (*context*) and the pair the sentence searches for
-    (*frame*)."""
-    body = {"label": parameter.label, "description": parameter.description}
-    if parameter.vocabulary:
-        # The entries a document names, which the label alone never does
-        # (owner decision 2026-11-05: the sentence is written from label,
-        # description and list names).
-        body["names"] = [labels[0] for labels in parameter.vocabulary.values()
-                         if labels]
-    if context:
-        body["document"] = context
-    if frame:
-        # The pair this sentence searches for, in the document's own
-        # wording where the frame read one. "Nutzwaermebedarf 2040 im
-        # Zielszenario" finds the table for 2040; the parameter alone
-        # finds the first table of the chapter, whatever its year.
-        body["frame"] = {k: frame.get(f"{k}_raw") or v
-                         for k, v in frame.items()
-                         if not k.endswith(("_raw", "_quote", "_source"))}
-    return body
+                   step: Optional[dict] = None) -> dict:
+    """What a field's sentence request carries: the inputs of the step that
+    writes it (*step*, `sentence_step` where None), from the field (its
+    name, what it means and the names of its list, owner decision
+    2026-11-05) and from what the document says of itself (*context*, its
+    texts only)."""
+    from . import general, shows
+    context = {k: v for k, v in (context or {}).items()
+               if isinstance(v, str) and v.strip()}
+    inputs = general.parts_of(step or sentence_step())["inputs"]
+    return shows.apart(inputs, {"field": parameter, "context": context})
+
+
+def sentences_written(profile=None) -> str:
+    """What names the sentences the orders of a harvest are made with
+    (`addressed.Orders`): the part of the prompt a field's sentence is told
+    (`phrase_told`), and the inputs and answer form of the step that writes
+    them where they are not its preset's. An order kept from sentences
+    written otherwise is made again; a part told only to the sentence of
+    one coordinate's search changes no order."""
+    from . import general
+    step = sentence_step()
+    parts = general.parts_of(step)
+    prompt = prompts.load(PHRASE_PROMPT_ID, profile) \
+        if parts["prompt"] == PHRASE_PROMPT_ID \
+        else own_prompt(parts["prompt"], profile)
+    written = "document:" + hashlib.sha256(
+        phrase_told(prompt).encode("utf-8")).hexdigest()
+    preset = general.preset_of(step)
+    own = {key: parts[key] for key, theirs in (
+        ("inputs", list(preset.inputs) if preset else None),
+        ("reply", preset.reply if preset else None))
+        if preset is None or parts[key] != theirs}
+    if own:
+        written += "|" + hashlib.sha256(json.dumps(
+            own, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:16]
+    return written
 
 
 def document_context_of(db_path: Optional[Path],
@@ -1559,8 +1621,8 @@ def make_seek_probes(context_of: Optional[Callable] = None,
 
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
-                    frame: Optional[dict] = None,
-                    document_id: Optional[int] = None) -> dict:
+                    document_id: Optional[int] = None,
+                    step: Optional[dict] = None) -> dict:
     """{parameter uri: [one sentence]} — the probe THIS document is searched with.
 
     The QA app turns a question into one short statement before it searches,
@@ -1589,15 +1651,23 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     the ticket of the thread that asked (`_for`), although a thread of the
     pool below sends it: such a thread belongs to no document, and a request
     of none goes before every document (owner decision 2026-11-07).
+
+    The request is built from the inputs of the step that orders the chunks
+    by the sentence (*step*, `sentence_step` where None) and asked with its
+    prompt (owner decision 2026-11-12 evening: every question is "Ask the
+    model").
     """
-    prompt = prompt if prompt is not None else prompts.load(PHRASE_PROMPT_ID)
+    from . import general
+    step = step or sentence_step()
+    if prompt is None:
+        named = general.parts_of(step)["prompt"]
+        prompt = prompts.load(PHRASE_PROMPT_ID) \
+            if named == PHRASE_PROMPT_ID else own_prompt(named)
     client = _repeating(client or _client())
-    context = {k: v for k, v in (context or {}).items()
-               if isinstance(v, str) and v.strip()}
     behalf = (document_id, scheduler.current()[1])
 
     def one(parameter):
-        body = phrase_payload(parameter, context, frame)
+        body = phrase_payload(parameter, context, step)
         payload = json.dumps(body, ensure_ascii=False, indent=2)
         # Told only what its message carries: the parts of the prompt for a
         # sentence of one coordinate stay out (`addressed.Reader.sentence`).
@@ -1888,8 +1958,7 @@ def asked_values(kind: Optional[str], profile=None) -> dict:
     home = None
     for node, _frames in flow_map.on(flow_map.tree_of(
             profile or active_profile())):
-        block = blocks.LIBRARY.get(node.get("box")) if kind else None
-        if block is not None and block.asks == kind:
+        if kind and "box" in node and blocks.asks_of(node) == kind:
             home = node
             break
     if home is None and kind:
@@ -2152,12 +2221,12 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
     document's search sentences are written with."""
     loaded: dict = {}
     for kind, prompt_id in addressed_map.PROMPT_IDS.items():
-        if kind == "transcribe":
-            continue
         try:
             loaded[kind] = thread_map.cut(prompts.load(prompt_id, profile))
         except (FileNotFoundError, LookupError):
-            if kind not in addressed_map.OPTIONAL:
+            # Writing out the figures prepares a document; the flow says
+            # where its prompt is missing (`flow.prompt_problems`).
+            if kind not in addressed_map.OPTIONAL and kind != "transcribe":
                 return None
     client = _client()
 
@@ -2229,7 +2298,10 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
         return own_cut[key]
 
     def general_ask(prompt, payload, document_id, /, shape, example,
-                    follow=False, **noted):
+                    follow=False, kind=None, **noted):
+        # A step's own prompt: of a step of the page's own, or of a
+        # question whose prompt was changed, which keeps the name of its
+        # kind in the log (owner decision 2026-11-12 evening).
         from . import general
         parts = own_parts(prompt)
         system = request_prompt(parts, own(payload), shape)
@@ -2238,18 +2310,19 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
         content = message(payload)
         if follow:
             content = f"{content}\n\n{follow_words()}"
-        key = general.first_key(
+        kind = kind or "own"
+        key = ASK_KEYS.get(kind) or general.first_key(
             ((shape or {}).get("json_schema") or {}).get("schema") or {})
         return ask_in_grammar(
             client, system, messages(payload, content), shape, document_id,
-            "follow" if follow else "own", key, example,
-            **({**noted, "asked": "own"} if follow else noted))
+            "follow" if follow else kind, key, example,
+            **({**noted, "asked": kind} if follow else noted))
     return addressed_map.Asks(
         find=asker("find"), docfield=asker("docfield"), coord=asker("coord"),
         list=asker("list"), names=optional("names"),
         search=asker("search"), follow=follow, check=optional("check"),
         work=optional("work"), phrase=optional("phrase"),
-        own=general_ask)
+        own=general_ask, transcribe=optional("transcribe"))
 
 
 def own_prompt(prompt, profile=None):
@@ -2275,45 +2348,32 @@ def image_path_of(source, image_root: Optional[Path]) -> Optional[str]:
         else source.image_path
 
 
-def make_transcribe(profile, image_root: Optional[Path]) -> tuple:
-    """(ask(source, document_id), fingerprint): the request that writes a
-    figure as lines once per run (`addressed.Transcripts`, owner decision
-    2026-11-08, e), its caption apart from its numbers (owner decision
-    2026-11-09), its crop and its description shown, and what names the
-    prompt and model that wrote a kept transcription; (None, "") where the
-    profile writes no prompt for it."""
+def transcript_fingerprint(profile) -> Callable:
+    """fingerprint(told=None): what names the prompt and model that wrote a
+    kept transcription of a figure (`addressed.Transcripts`, owner decision
+    2026-11-08, e), told where it is read, in the step that writes out the
+    figures, whose model it names; *told* the step's own prompt, inputs and
+    answer form where they are not its preset's
+    (`engine.Engine.writes_figures`). "" where the profile writes no prompt
+    for it."""
     try:
-        prompt = prompts.load(addressed_map.PROMPT_IDS["transcribe"], profile)
+        standard = prompts.load(addressed_map.PROMPT_IDS["transcribe"],
+                                profile)
     except (FileNotFoundError, LookupError):
-        return None, ""
-    client = _client()
+        standard = None
 
-    def fingerprint() -> str:
-        # Told where it is used, in the step that transcribes, so that the
-        # model that step names is the model it names.
+    def fingerprint(told: Optional[dict] = None) -> str:
+        told = dict(told or {})
+        prompt = own_prompt(told.pop("prompt"), profile) \
+            if "prompt" in told else standard
+        if prompt is None:
+            return ""
+        rest = "|" + json.dumps(told, sort_keys=True, ensure_ascii=False) \
+            if told else ""
         return hashlib.sha256(
-            f"{prompt.sha256}|{llm_model()}".encode("utf-8")
+            f"{prompt.sha256}|{llm_model()}{rest}".encode("utf-8")
         ).hexdigest()[:16]
-
-    def ask(source, document_id):
-        path = image_path_of(source, image_root)
-        part = _image_part(path) if path else None
-        if part is None:
-            return None
-        lines = (source.text or "").strip().splitlines()
-        payload = {"figure": {"title": lines[0] if lines else "",
-                              "description": "\n".join(lines[1:])}}
-        content = [{"type": "text", "text": json.dumps(
-            payload, ensure_ascii=False, indent=1)}, part]
-        return ask_in_grammar(
-            client, prompt, [{"role": "user", "content": content}],
-            addressed_map.lines_format(), document_id, "transcribe",
-            ASK_KEYS["transcribe"],
-            example={"caption": [payload["figure"]["title"] or fields.said(),
-                                 fields.said()],
-                     "numbers": [fields.said()]},
-            kind="figure", owner=source.owner_id)
-    return ask, fingerprint
+    return fingerprint
 
 
 def search_budget() -> tuple:
@@ -2403,20 +2463,16 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
     context_of = document_context_of(
         db_path, component("extraction", "document_context"))
     seek = make_seek_probes(context_of)
-    transcribe, fingerprint = make_transcribe(profile, image_root)
+    # The figures are written out by the step of the flow that does it
+    # (`engine.Engine.writes_figures`) and kept under the harvest.
     transcripts = addressed_map.Transcripts(
-        transcribe, Path(out) / "transcripts", fingerprint,
+        None, Path(out) / "transcripts", transcript_fingerprint(profile),
         lambda source: addressed_map.image_key(image_path_of(source,
                                                              image_root)))
-    # What writes the sentences the orders are made with: the part of the
-    # phrase prompt a field's sentence is told (`phrase_told`). An order
-    # kept from sentences written otherwise is made again; a part told only
-    # to the sentence of one coordinate's search changes no order.
-    written = "document:" + hashlib.sha256(phrase_told(prompts.load(
-        PHRASE_PROMPT_ID, profile)).encode("utf-8")).hexdigest()
-    orders = addressed_map.Orders(order, seek, Path(out) / "survey",
-                                  trace=trace.event, written=written)
     numbers = take_flow(profile)
+    orders = addressed_map.Orders(order, seek, Path(out) / "survey",
+                                  trace=trace.event,
+                                  written=sentences_written(profile))
     log.info("harvest: pieces of %d lines, figures transcribed once under "
              "%s, orders kept in %s", numbers.piece_lines,
              Path(out) / "transcripts", Path(out) / "survey")
@@ -3073,6 +3129,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     same way twice.
     """
     client = _client()
+    step = step_asking("review_marks", "review")
 
     def ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
         # Asked with the values of the box that is the home of the second
@@ -3083,8 +3140,9 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     def _ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
         # The prompt is composed where it is used: it names rules (the
         # least characters of a quote) the box may set for itself.
-        prompt = prompts.load(REVIEW_PROMPT_ID)
-        payload = json.dumps(_review_payload(row, shown, parameter, slots),
+        prompt, inputs = step_parts(step, REVIEW_PROMPT_ID)
+        payload = json.dumps(shows_map.apart(inputs, {"row": SimpleNamespace(
+            row=row, shown=shown, parameter=parameter, slots=slots)}),
                              ensure_ascii=False, indent=2)
         # The crops ride along exactly as they do for a field request: a
         # transcription is a model's reading of a picture, and a review of a
@@ -3226,8 +3284,12 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             or not flow_map.compute_on(flow_map.tree_of(profile)):
         return None
     same = profile.component("compute", "same")
+    # The question is asked as its step says: its prompt, and the inputs
+    # its first message is built from (owner decision 2026-11-12 evening).
     try:
-        prompt = prompts.load(computing.COMPUTE_PROMPT_ID)
+        prompt, inputs = step_parts(step_asking("computed", "compute",
+                                                profile),
+                                    computing.COMPUTE_PROMPT_ID)
     except (FileNotFoundError, LookupError):
         return None
     # A prompt that lacks the words of a follow-up stops the run here, not
@@ -3263,7 +3325,8 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         # its first message shows what is wanted, the numbers and their
         # passages; what it fetched, a number it took and its code's output
         # follow the answer that asked for them, each with what is new.
-        first = {**computing.payload(question, shown, gathered.sources),
+        first = {**shows_map.apart(inputs, {"question": SimpleNamespace(
+            question=question, shown=shown, fetched=gathered.sources)}),
                  **gathered.context()}
         system = parts.system(first).text
         conversation = [{"role": "user", "content": json.dumps(
@@ -3460,7 +3523,7 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         # that its requests name it in the trace (`addressed.ASKING`).
         computing_box = next((node.get("id") for node in flow_map.tree_of(
             profile) if isinstance(node, dict)
-            and node.get("box") == "compute"), None)
+            and rules.step_kind(node) == "compute"), None)
         with addressed_map.asking(addressed_map.Asking(computing_box)):
             pool = compute_pool()
             asked = [(question, pool.submit(
@@ -4472,9 +4535,8 @@ def answer_tokens_of(prompt) -> int:
     name = "max_tokens"
     own = []
     for node in flow_map.boxes(flow_map.tree_of(active_profile())):
-        block = blocks.LIBRARY.get(node.get("box"))
         said = (node.get("rules") or {}).get(name)
-        if block is not None and block.asks == kind and said is not None:
+        if blocks.asks_of(node) == kind and said is not None:
             own.append(int(said))
     return max(own) if own else int(rules.get(name))
 
@@ -5042,7 +5104,8 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                          f"every table and figure crop would be missing. Pass "
                          f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to review "
                          f"from the transcriptions alone")
-        review_prompt = prompts.load(REVIEW_PROMPT_ID)
+        review_prompt, _inputs = step_parts(
+            step_asking("review_marks", "review"), REVIEW_PROMPT_ID)
         preflight(context_budget(review_prompt, spec),
                   what="extraction review")
         start_limit()

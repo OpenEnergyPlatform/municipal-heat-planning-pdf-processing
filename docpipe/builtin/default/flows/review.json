@@ -10,7 +10,8 @@
     },
     {
       "id": "review_review",
-      "box": "review",
+      "box": "ask",
+      "preset": "review",
       "rules": {
         "temperature": 0,
         "max_tokens": 1024

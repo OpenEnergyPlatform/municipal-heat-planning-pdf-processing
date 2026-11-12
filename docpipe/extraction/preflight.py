@@ -97,14 +97,24 @@ def prompts_in_effect(profile) -> list:
     for node, _frames in flow.on(flow.tree_of(profile)):
         if flow.kind_of(node) != "box":
             continue
-        kind = blocks.LIBRARY.get(node.get("box"))
-        if kind is None or not kind.asks or kind.asks in seen:
+        asks = blocks.asks_of(node)
+        if not asks:
             continue
-        seen.add(kind.asks)
-        prompt_id = compute.COMPUTE_PROMPT_ID if kind.asks == "compute" \
-            else f"extraction/{kind.asks}"
-        out.append((prompt_id, kind.asks in addressed.OPTIONAL
-                    or kind.asks == "compute"))
+        # The prompt the step names: its own, else its kind's (a step of
+        # "Ask the model", owner decision 2026-11-12 evening).
+        prompt_id = compute.COMPUTE_PROMPT_ID if asks == "compute" \
+            else f"extraction/{asks}"
+        if node.get("box") == "ask":
+            from .general import parts_of
+            named = parts_of(node)["prompt"]
+            if not isinstance(named, str):
+                continue        # a text of the step's own
+            prompt_id = named
+        if prompt_id in seen:
+            continue
+        seen.add(prompt_id)
+        out.append((prompt_id, asks in addressed.OPTIONAL
+                    or asks == "compute"))
     for prompt_id in rules.get("preflight_prompts"):
         if prompt_id not in {one for one, _opt in out}:
             out.append((prompt_id, False))

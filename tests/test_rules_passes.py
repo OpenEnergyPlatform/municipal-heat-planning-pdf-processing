@@ -18,13 +18,14 @@ from docpipe.extraction import (fields, passflow, review, runner,
 from docpipe.extraction.pipeline import Source
 
 from test_ruleset_passes import SPEC, energy
+from conftest import step_node
 
 DEFAULT = rules.default()
 
 
 def at(kind: str, values: dict):
     """What the engine does around a box of *kind* that sets *values*."""
-    return rules.in_step(rules.stepped({"id": "x", "box": kind}, values))
+    return rules.in_step(rules.stepped(step_node(kind), values))
 
 
 @pytest.fixture(autouse=True)
@@ -38,7 +39,8 @@ def fresh():
 
 def reviewed_by(tmp_path, **at_box):
     """How many rows the flow `review` reads a second time, where the rules
-    *at_box* are set at its box of that kind, as {box kind: {rule: value}}."""
+    *at_box* are set at its step of that kind, as {kind of step
+    (`rules.step_kind`): {rule: value}}."""
     rows = [energy(1, provenance={"owner_kind": "section", "owner_id": 1}),
             energy(2, carrier="exhausted", provenance={
                 "owner_kind": "section", "owner_id": 1}),
@@ -49,7 +51,8 @@ def reviewed_by(tmp_path, **at_box):
     source = SimpleNamespace(owner_kind="section", owner_id=1, text="t")
     tree = json.loads(json.dumps(passflow.load("review")))
     for node in tree:
-        node.setdefault("rules", {}).update(at_box.get(node["box"], {}))
+        node.setdefault("rules", {}).update(
+            at_box.get(rules.step_kind(node), {}))
     kept = passflow.load
     passflow.load = lambda name, profile=None: tree
     try:

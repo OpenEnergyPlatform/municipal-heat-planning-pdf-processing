@@ -882,17 +882,64 @@ def phrase_told(prompt) -> str
 The system prompt a field's sentence request is told, every part of
 *prompt* it may carry (`PHRASE_KEYS`).
 
+### step_asking
+
+```python
+def step_asking(target: str, preset: str, profile=None) -> dict
+```
+
+The step of a request asked apart from the reading of a document (a
+calculation, a second reading, the example of a field): the first of
+the flow of *profile* whose answer goes to *target*, on or off, else
+the first of the flow of a pass, else its *preset*; read once where the
+request's sender is made.
+
+### step_parts
+
+```python
+def step_parts(step: dict, standard: str, profile=None) -> tuple
+```
+
+(prompt, inputs) of a step asked apart from the reading: the prompt
+of its kind (*standard*) where it names that one, else its own
+(`own_prompt`), and the inputs its first message is built from.
+
+### sentence_step
+
+```python
+def sentence_step() -> dict
+```
+
+The step whose request writes a field's sentence, which the chunks
+of a field are ordered by and the search of a field of the whole
+document goes with: the first of the run's flow that orders the chunks
+by it (`targets.chunk_order`), on or off, else its preset.
+
 ### phrase_payload
 
 ```python
 def phrase_payload(parameter, context: Optional[dict] = None,
-                   frame: Optional[dict] = None) -> dict
+                   step: Optional[dict] = None) -> dict
 ```
 
-What a phrase request is written from: the parameter's label and
-description, the names of its list where it has one, what the document
-says of itself (*context*) and the pair the sentence searches for
-(*frame*).
+What a field's sentence request carries: the inputs of the step that
+writes it (*step*, `sentence_step` where None), from the field (its
+name, what it means and the names of its list, owner decision
+2026-11-05) and from what the document says of itself (*context*, its
+texts only).
+
+### sentences_written
+
+```python
+def sentences_written(profile=None) -> str
+```
+
+What names the sentences the orders of a harvest are made with
+(`addressed.Orders`): the part of the prompt a field's sentence is told
+(`phrase_told`), and the inputs and answer form of the step that writes
+them where they are not its preset's. An order kept from sentences
+written otherwise is made again; a part told only to the sentence of
+one coordinate's search changes no order.
 
 ### document_context_of
 
@@ -934,8 +981,8 @@ its label. Each sentence is sent in its document's turn (owner decision
 ```python
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
-                    frame: Optional[dict] = None,
-                    document_id: Optional[int] = None) -> dict
+                    document_id: Optional[int] = None,
+                    step: Optional[dict] = None) -> dict
 ```
 
 {parameter uri: [one sentence]} — the probe THIS document is searched with.
@@ -966,6 +1013,11 @@ Each request is sent for *document_id*, in that document's turn, with
 the ticket of the thread that asked (`_for`), although a thread of the
 pool below sends it: such a thread belongs to no document, and a request
 of none goes before every document (owner decision 2026-11-07).
+
+The request is built from the inputs of the step that orders the chunks
+by the sentence (*step*, `sentence_step` where None) and asked with its
+prompt (owner decision 2026-11-12 evening: every question is "Ask the
+model").
 
 ### model_window
 
@@ -1229,18 +1281,19 @@ def image_path_of(source, image_root: Optional[Path]) -> Optional[str]
 Where a figure's crop is, None where the run sends no image or the
 figure has none.
 
-### make_transcribe
+### transcript_fingerprint
 
 ```python
-def make_transcribe(profile, image_root: Optional[Path]) -> tuple
+def transcript_fingerprint(profile) -> Callable
 ```
 
-(ask(source, document_id), fingerprint): the request that writes a
-figure as lines once per run (`addressed.Transcripts`, owner decision
-2026-11-08, e), its caption apart from its numbers (owner decision
-2026-11-09), its crop and its description shown, and what names the
-prompt and model that wrote a kept transcription; (None, "") where the
-profile writes no prompt for it.
+fingerprint(told=None): what names the prompt and model that wrote a
+kept transcription of a figure (`addressed.Transcripts`, owner decision
+2026-11-08, e), told where it is read, in the step that writes out the
+figures, whose model it names; *told* the step's own prompt, inputs and
+answer form where they are not its preset's
+(`engine.Engine.writes_figures`). "" where the profile writes no prompt
+for it.
 
 ### search_budget
 

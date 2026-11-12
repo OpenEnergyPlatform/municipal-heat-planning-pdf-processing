@@ -494,6 +494,23 @@ def test_the_answer_is_a_row_with_code_output_and_inputs(monkeypatch):
     assert run["inputs"][1]["source"] == ["table", 1]
 
 
+def test_the_requests_of_the_calculation_name_its_step_of_the_flow(
+        monkeypatch):
+    # The calculation is a step "Ask the model" with the preset "compute"
+    # (owner decision 2026-11-12 evening), and its requests stand under it
+    # in the trace; the failure by construction: a flow without that step
+    # names none.
+    def boxes(tree=None):
+        step, _asked, _runs, events = computing(monkeypatch, CODE, ANSWER)
+        if tree is not None:
+            monkeypatch.setattr(runner.flow_map, "tree_of",
+                                lambda profile=None: tree)
+        run_step(step, share(21), amount(185200))
+        return {e.get("box") for e in events if e["t"] == "compute_ask"}
+    assert boxes() == {"compute"}
+    assert boxes([]) == {None}
+
+
 def test_a_row_stands_under_the_quote_of_its_anchor(monkeypatch):
     step, _asked, _runs, _events = computing(monkeypatch, CODE, ANSWER)
     report, _done = run_step(step, share(21), amount(185200))

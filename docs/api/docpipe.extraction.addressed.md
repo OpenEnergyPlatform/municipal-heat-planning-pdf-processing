@@ -70,22 +70,20 @@ class Asking
 ```
 
 What a box of the flow asks with (`engine.Engine`): its id, which
-every request it sends carries in the trace (`box`); the id of the box
-that asks whether a find of another passage speaks about the value
-(`about`), None where none follows the question; *refused(Found)* ->
-(reason, sentence) of the first own check that refuses a find, None
+every request it sends carries in the trace (`box`); *refused(Found)*
+-> (reason, sentence) of the first own check that refuses a find, None
 where every check lets it be; how often an answer that did not hold is
-asked again, None for the flow's number. *about_step()* is the context
-the box that checks a find of another passage reads its own values in
-(`engine.Engine.step`), None where it reads the asking box's.
+asked again, None for the flow's number. Whether a find of another
+passage speaks about the value the question asks itself, in the own
+values of the step after it that checks (`targets.keep_find`).
 
 Fields:
 
 - `box: Optional[str] = None`
-- `about: Optional[str] = None`
 - `refused: Optional[Callable] = None`
 - `follow_ups: Optional[int] = None`
-- `about_step: Optional[Callable] = None`
+- `scope: object = None`: Where the question stands (`engine.Scope`), and the steps after it asked inside its answers, by their target (a list entry, a name; owner decision 2026-11-12 evening).
+- `nested: Optional[dict] = None`
 
 ### Found
 
@@ -136,12 +134,13 @@ image and prompt are those of the kept transcription is not asked again
 (owner decision 2026-11-08, e); one kept in another form is (owner
 decision 2026-11-09: caption and numbers apart).
 
-*ask(source, document_id)* is the transcription request, the reply as
+*ask(source, document_id)* is the transcription request where the
+step that writes out the figures gives none (`__call__`), the reply as
 a dict or None; *fingerprint* says which prompt and model wrote it (a
 text, or a function that tells it where it is read, in the step that
-transcribes, whose model it names), *image_key(source)* which image
-(None where the figure has none: then nothing is asked and its
-description stands for it).
+transcribes, whose model it names, `fingerprint_of`),
+*image_key(source)* which image (None where the figure has none: then
+nothing is asked and its description stands for it).
 
 #### Transcripts.\_\_init\_\_
 
@@ -156,6 +155,18 @@ def __init__(self, ask: Optional[Callable], store: Optional[Path],
 @property
 def fingerprint(self) -> str
 ```
+
+#### Transcripts.fingerprint_of
+
+```python
+def fingerprint_of(self, told: Optional[dict] = None) -> str
+```
+
+What names the prompt and model a transcription is written with,
+and *told*, the prompt, inputs and answer form of the step that
+writes it where they are not its preset's (`engine.Engine.
+writes_figures`): a transcription kept from another is written
+again.
 
 ### Entry
 
@@ -364,6 +375,7 @@ Fields:
 - `work: Optional[Callable] = None`
 - `phrase: Optional[Callable] = None`
 - `own: Optional[Callable] = None`: A request of a general step (`general`, owner decision 2026-11-12): (prompt, payload, document_id, *, shape, example, follow, **noted), the prompt the id of a prompt file or {"text": its own}.
+- `transcribe: Optional[Callable] = None`: The lines of a figure (`Transcripts`), None where the profile writes no prompt for them: the flow says so where its step is on (`flow.prompt_problems`).
 
 ### Counts
 
@@ -518,28 +530,6 @@ def follow_ups(self) -> int
 How often an answer that did not hold is asked again: the box
 asking's own number, else the flow's.
 
-#### Reader.ask_own
-
-```python
-def ask_own(self, prompt, payload: dict, document_id: int,
-            shape: dict, example, counts: Counts, /, **noted)
-```
-
-A request of a general step: its own prompt, message and form
-of the answer (`general.ask_step`).
-
-#### Reader.follow_own
-
-```python
-def follow_own(self, prompt, payload: dict, document_id: int,
-               shape: dict, example, answer, what: list,
-               counts: Counts, /, **noted)
-```
-
-A general step's request asked again with the answer that did
-not hold and why (owner decision 2026-11-08: "Rückfragen sind
-eigene Anfragen").
-
 #### Reader.lists_of
 
 ```python
@@ -550,21 +540,6 @@ The lists of names a document builds while it is read: its
 scenarios (a field or coordinate the spec merges) and its works
 (where the profile keeps them), the publication itself the first
 work.
-
-#### Reader.find
-
-```python
-def find(self, plan: Plan, parameter, chunk: Chunk,
-         counts: Counts) -> dict
-```
-
-The values of *parameter* in one piece (`find`): {"claims",
-"asked", "failed", "lost"}, *lost* [why] of every part that came to
-nothing. A piece whose answer did not fit its room is asked in
-halves of its own lines, each with the lines every piece of its
-passage shows, until a single line is a hole of its own (owner
-decision 2026-09-12: a request is split, never its answer
-rescued).
 
 #### Reader.halves
 
@@ -640,26 +615,6 @@ def rerank_left(self, plan: Plan, sentences: list, pieces: list) -> list
 the rule `rerank_when` (each round), where the rule `rerank` is on
 and there are enough of them.
 
-#### Reader.ask_window
-
-```python
-def ask_window(self, plan: Plan, field_: dict, batch: list,
-               counts: Counts, uri: str, *, numbers: bool = False,
-               listed=None, title_page: bool = False) -> tuple
-```
-
-([Found] that hold, lost, what it asks to fetch) of one request
-of a field asked over pieces of the document (`docfield`, owner
-decision 2026-11-08): the title page where *title_page*, the pieces
-*batch* each under a letter of its own; what does not hold is asked
-again with its reason (as often as the flow says). *listed* is the
-field's list (`listing`), whose entry a find names. *lost* is CUT or
-NO_ANSWER where the request came to nothing, else None. A request
-whose answer did not fit its room is asked in halves as a request
-about a piece is (`halves`, owner decision 2026-09-12). Its answer
-may ask for pieces a line points to (`fetches`, owner decision
-2026-11-12), which the next request of the field shows first.
-
 #### Reader.settled
 
 ```python
@@ -674,14 +629,17 @@ the drawing of the flow asks them (`engine.Engine.prepare`).
 ```python
 def entry(self, plan: Plan, uri: str, name: str, slot, words: str,
           got: Optional[Found], counts: Counts, several: bool = False,
-          group: Optional[str] = None)
+          group: Optional[str] = None, node: Optional[dict] = None)
 ```
 
 The entry of *slot*'s list a wording means, asked once per
 document, field, coordinate, wording and group (`list`, owner
 decision 2026-11-08): its label, a list of labels where several may
 be meant, "" where none fits (0). With *group* (a find named it,
-owner decision 2026-11-09) the entries of that group are asked.
+owner decision 2026-11-09) the entries of that group are asked. It
+is asked as the step after the question says that chooses list
+entries, else the first of the flow (`general.nested`), or as
+*node*.
 
 #### Reader.earlier_entries
 
@@ -701,7 +659,8 @@ already settled for other wordings, for the rule
 def name_of(self, plan: Plan, kind: str, words: str,
             got: Optional[Found], counts: Counts, work: int = 0,
             besides: tuple = (), group: bool = False,
-            uri: str = "", work_read: Optional[dict] = None)
+            uri: str = "", work_read: Optional[dict] = None,
+            node: Optional[dict] = None)
 ```
 
 The entries of the document's list of *kind* a name means
@@ -762,36 +721,6 @@ def coordinate(self, plan: Plan, read: Read, row: Row, group, slot,
 One coordinate of one value as the drawing's frame of
 coordinates asks it (`engine.Engine.coordinate`): [the rows made
 beside it].
-
-#### Reader.coord_payload
-
-```python
-def coord_payload(self, plan: Plan, read: Read, row: Row,
-                  slot) -> tuple
-```
-
-(Shown, payload, noted) of what every request about one
-coordinate of a value shows: the value's place (`show_value`), the
-field, the question and what the value has read (`known`); the
-payload None where the value has no place.
-
-#### Reader.ask_own_place
-
-```python
-def ask_own_place(self, plan: Plan, read: Read, row: Row, slot,
-                  counts: Counts, clone: Callable,
-                  pictures_seen: Optional[set] = None) -> tuple
-```
-
-(answered, rows made, payload, noted, what it asks to fetch) of a
-coordinate asked at its value's own place (`coord`): its line with
-the head of its table or the sentences beside it, the headings up to
-it, the title page and the plan's settings; the answer an address
-and words, or 0. What does not hold is asked again with its reason,
-then stays `unbacked`. Not answered where the value has no place or
-no answer came. The answer may ask for pieces a line points to
-(`fetches`, owner decision 2026-11-12), which the search shows
-first, and for the picture of a figure it shows (`with_picture`).
 
 #### Reader.pictures
 
@@ -893,7 +822,7 @@ list of works, 0 where none.
 
 ```python
 def quantity(self, plan: Plan, parameter, row: Row, slot,
-             counts: Counts) -> None
+             counts: Counts, node: Optional[dict] = None) -> None
 ```
 
 What a number is, by the words it was read with: its own
@@ -915,34 +844,6 @@ years (`list`, owner decision 2026-11-07): the answer for
 `merge_field`, which reads it where the words stand in the line and
 the year is one of the plan's (`pipeline.named_year`).
 
-#### Reader.last_year
-
-```python
-def last_year(self, plan: Plan, parameter, row: Row, slot,
-              counts: Counts, noted: dict) -> None
-```
-
-A year nothing found, asked last with the plan's base and target
-years (owner decision 2026-11-07): the line of the value's place
-that names the plan's word for its state, and the year of the list
-it means; read where the words stand in that line and the year is
-one of the plan's (`pipeline.named_year`).
-
-#### Reader.search_sentence
-
-```python
-def search_sentence(self, plan: Plan, read: Read, row: Row, slot,
-                    counts: Counts, before: Optional[list] = None) -> str
-```
-
-The sentence a search goes with (`sentence`); a question where
-the rule `question_as_sentence` takes none is the field's own
-sentence instead, and a question taken is counted. *before* are the
-sentences of the rounds before, shown where a new one is asked
-(`phrase` with `before`). The rule `search_with` may take the
-field's question or the coordinate's name instead, with no request
-for a sentence.
-
 #### Reader.field_sentence
 
 ```python
@@ -958,44 +859,6 @@ question or name; or its question, or its name, or none.
 ```python
 def fallback(self, plan: Plan, parameter, slot) -> str
 ```
-
-#### Reader.sentence
-
-```python
-def sentence(self, plan: Plan, read: Read, row: Row, slot,
-             counts: Counts, before: Optional[list] = None) -> str
-```
-
-The sentence a search for one coordinate goes with: as the plan
-would print the answer for this value (HyDE), written by a request
-of its own once per document, field, coordinate and wording of the
-value (`phrase`, owner decision 2026-11-09); the field's own
-sentence where none was written.
-
-#### Reader.search_round
-
-```python
-def search_round(self, plan: Plan, read: Read, row: Row, slot,
-                 payload: dict, batch: list, counts: Counts,
-                 clone: Callable, window: tuple, noted: dict,
-                 pictures_seen: Optional[set] = None) -> tuple
-```
-
-(rows made, held, what it asks to fetch) of one request of a
-search: the value's place and the pieces *batch* under letters of
-their own. It may ask for the picture of a figure it shows
-(`with_picture`), each once a coordinate (*pictures_seen*).
-
-#### Reader.about
-
-```python
-def about(self, plan: Plan, row: Row, slot, got: Found, counts: Counts,
-          noted: dict) -> bool
-```
-
-Does the place a find of another passage stands in speak about
-this value (`check`, owner decision 2026-11-07)? The box that
-checks reads its own values (`about_shows`, `about_no_reply`).
 
 #### Reader.fetch
 
@@ -1025,44 +888,13 @@ which can backtrack without end).
 
 ```python
 def named_value(self, plan: Plan, parameter, row: Row,
-                counts: Counts) -> None
+                counts: Counts, node: Optional[dict] = None) -> None
 ```
 
 A value that is the name the document gives a thing (a
 scenario): the entry of the document's list it is, a new one where
 it is not on it yet, under `value_means` (owner decisions
 2026-11-08: the list is built piece by piece).
-
-#### Reader.works
-
-```python
-def works(self, plan: Plan, chunks: list, counts: Counts) -> list
-```
-
-The works the document presents, compares or cites beside itself
-(owner decisions 2026-11-08, h, and 2026-11-09): every piece asked
-once which of its lines speak of another work and which line shows
-the rest are this publication's own (`work_piece`), kept for the
-values found in it (`Plan.works_of`, `inherit_work`); each name of
-a work asked against the document's list of works, piece by piece in
-the plan's order, and each new work asked at its line for what the
-profile asks of a work (its title, its organisation, its year, its
-short name), side by side: values of that work, never of this
-publication, which the graph does not take. [Read] of those
-values.
-
-#### Reader.work_piece
-
-```python
-def work_piece(self, plan: Plan, shown_field: dict, chunk: Chunk,
-               counts: Counts) -> Optional[tuple]
-```
-
-(shown, payload, [Found] of other works, the line of this
-publication's own or None) of one piece's work request (`work`):
-the piece with the headings up to it and the title page; what does
-not hold is asked again with its reason (as often as the flow
-says). None where no answer came.
 
 #### Reader.own_line
 
@@ -1087,41 +919,6 @@ The (passage, line) places a find of a piece's work request
 speaks for: the whole piece (None) where it stands in a heading or
 in what every piece of its passage shows (a table's title and head,
 a figure's caption), else its own lines.
-
-#### Reader.work_value
-
-```python
-def work_value(self, plan: Plan, parameter, question: str, one: Found,
-               label: str, counts: Counts, shown: Shown,
-               payload: dict, chunk: Optional[Chunk] = None
-               ) -> Optional[tuple]
-```
-
-One detail of a work, asked with the piece that names it (`coord`):
-(the claim of a value of *parameter* whose work is that work, with
-the line as its quote, the passage it is checked against); None
-where no line gives it. A heading is quoted as it is shown, and
-checked against itself. Where the piece names the work in short
-("(Prognos 2021)", "[12]"), the reply may fetch the place that says
-it in full, such as the entry of the list of references, and the
-detail is asked again with it (`asked_with_fetched`, owner decision
-2026-11-12); its line is then the quote.
-
-#### Reader.work_coordinate
-
-```python
-def work_coordinate(self, plan: Plan, read: Read, row: Row, slot,
-                    counts: Counts) -> None
-```
-
-The work of one value (owner decisions 2026-11-09): the work of
-the line it stands in where its piece's work request named one
-(`inherit_work`), else asked as an entry of the document's list of
-works with the value's line, the headings and the title page, the
-answer the entry and the line that shows it; 0 leaves it
-`unstated`, and it is never searched. What does not hold is asked
-again with its reason (as often as the flow says), then stays
-`unbacked`.
 
 #### Reader.read_work
 
@@ -1233,6 +1030,25 @@ def asking_box() -> Optional[str]
 ```
 
 The id of the box asking now, None outside a box.
+
+### prompting
+
+```python
+@contextlib.contextmanager
+def prompting(kind: str, prompt)
+```
+
+The requests of *kind* asked with *prompt* while the block runs; with
+None, with the prompt of their kind.
+
+### own_prompt
+
+```python
+def own_prompt(kind: str)
+```
+
+The prompt the step asking now asks requests of *kind* with, None
+for the prompt of the kind.
 
 ### years_in
 
@@ -1651,15 +1467,6 @@ Does the request that is built now show the title page (rule
 `show_title_page`)? "first" shows it in the first request the step
 makes in the document only.
 
-### blocks_in_order
-
-```python
-def blocks_in_order(parts: dict) -> dict
-```
-
-*parts* (block name -> payload) as the rule `shown_block_order`
-orders them; those it does not name come last in the usual order.
-
 ### show_value
 
 ```python
@@ -1667,8 +1474,9 @@ def show_value(plan: Plan, claim: dict, headings: Optional[bool] = None,
                plain: bool = False) -> tuple
 ```
 
-(Shown, payload) of what every request about a value's coordinates
-shows: its line with its table's title and head, or the sentences
+(Shown, payload) of a value's place as the requests about its
+coordinates show it (they are built from their step's inputs,
+`shows`): its line with its table's title and head, or the sentences
 before and after it; the headings up to it, the title page and the
 plan's settings, as the step that asks says (rules `show_headings`,
 `show_title_page`, `show_settled`); the value as its words and its
@@ -1676,16 +1484,6 @@ address. *headings* False shows none whatever the rules say, *plain*
 asks only for the lines of the place: the title page and the settings
 stand in what a quote may cite, as the rules `show_*` do not touch
 them.
-
-### about_box
-
-```python
-def about_box() -> Optional[str]
-```
-
-The id of the box that asks of a find from another passage whether
-it speaks about the value, None where the question asking now has
-none after it.
 
 ### own_check
 

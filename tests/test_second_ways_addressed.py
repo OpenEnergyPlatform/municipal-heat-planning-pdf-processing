@@ -43,6 +43,7 @@ from test_addressed import (ENERGY, SCENARIOS, SLOTS, SPEC, TABLE, TEXT, Model,
 from test_addressed import in_order as _order  # noqa: F401
 from test_ruleset_flowing import scope_of
 from test_addressed import read_works
+from conftest import step_node
 
 
 @pytest.fixture(autouse=True)
@@ -365,7 +366,7 @@ def test_the_sign_of_a_find_s_number_stays_outside_where_the_rule_is_off():
     with rules.overlaid(sign_belongs="off"):
         assert addressed.number_of("-1.155") == "1155"
         assert addressed.number_of("1.155") == "1155"
-    with rules.in_step(rules.stepped({"id": "x", "box": "find"},
+    with rules.in_step(rules.stepped(step_node("find"),
                                      {"sign_belongs": "off"})):
         assert addressed.number_of("-1.155") == "1155"
     assert addressed.number_of("-1.155") == "-1155"
@@ -376,7 +377,7 @@ def test_the_marks_of_a_span_are_read_where_the_value_is_read():
     standard = rules.get("span_marks")
     assert standard and reader.span_marks == standard
     marks = {"carrier": "out:approximate"}
-    with rules.in_step(rules.stepped({"id": "x", "box": "find"},
+    with rules.in_step(rules.stepped(step_node("find"),
                                      {"span_marks": marks})):
         assert reader.span_marks == marks
     with rules.overlaid(span_marks={}):
@@ -399,14 +400,20 @@ def test_a_search_may_read_every_chunk_where_a_step_says_so():
 
 def test_the_model_that_wrote_a_transcription_is_the_step_s_model():
     from docpipe.extraction import runner
-    _ask, fingerprint = runner.make_transcribe(None, None)
+    fingerprint = runner.transcript_fingerprint(None)
     standard = fingerprint()
-    with rules.in_step(rules.stepped({"id": "x", "box": "transcribe"},
+    assert standard
+    with rules.in_step(rules.stepped(step_node("transcribe"),
                                      {"model": "another-model"})):
         assert fingerprint() != standard
     assert fingerprint() == standard
     kept = addressed.Transcripts(None, None, fingerprint, lambda s: None)
     assert kept.fingerprint == standard
+    # a step's own parts name it too, the preset's do not
+    own = {"inputs": [{"key": "figure", "from": "figure",
+                       "show": "figure_text"}]}
+    assert kept.fingerprint_of(own) not in ("", standard)
+    assert kept.fingerprint_of({}) == standard
 
 
 def test_a_rule_read_in_a_step_names_that_step():

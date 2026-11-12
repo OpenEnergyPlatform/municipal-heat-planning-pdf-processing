@@ -136,25 +136,18 @@ RULES = (
          "shown. Off: only the best chunks are offered. A value set at the "
          "box itself wins over this rule.",
          where="blocks.py (order), engine.py (_order)", steps=("order",)),
-    rule("docfield_title_page", "flow", "Search", "switch",
-         "On: the first request of a field asked once per document shows "
-         "the title page besides the search hits, which suits what a title "
-         "page states. Off: it shows only the search hits. A value set at "
-         "the box itself wins over this rule.",
-         where="blocks.py (docfield), engine.py (box_docfield)",
-         steps=("docfield",)),
     rule("phrase_anew", "flow", "Search", "switch",
          "On: from the second round on the model writes a new search "
          "sentence and sees the sentences of the earlier rounds, so it can "
          "try another wording. Off: the first sentence is used in every "
          "round. A value set at the box itself wins over this rule.",
-         where="blocks.py (phrase), engine.py (box_phrase)",
+         where="presets.py (phrase), shows.py (sentences_before)",
          steps=("phrase",)),
     rule("phrase_new_from_round", "flow", "Search", "whole",
          "From which round on a new search sentence is written, where "
          "writing a new sentence is on. Round 2 is the first round that can "
          "know an earlier sentence.", least=1,
-         where="engine.py (box_phrase)", steps=("phrase",)),
+         where="shows.py (sentences_before)", steps=("phrase",)),
     rule("search_skips_own_piece", "flow", "Search", "switch",
          "On: the chunk in which the value stands is left out of every "
          "search, because the first request about the dimension has shown "
@@ -167,7 +160,7 @@ RULES = (
          "the same answer already gave a value, or a value not backed by "
          "its quote. Off: such a request lapses as soon as a value is read "
          "or not backed. Decided on 2026-11-09.", decided="2026-11-09",
-         where="engine.py (box_search)", steps=("search",)),
+         where="targets.py (over_hits)", steps=("search",)),
     rule("supply_order", "flow", "Search", "texts",
          "The order in which a search shows the chunks it can show: "
          "\"fetched\" are the chunks an earlier answer asked to see, "

@@ -20,6 +20,7 @@ from docpipe.extraction import runner, scheduler, throttle
 from docpipe.providers import base, governor
 
 from conftest import in_turn
+from conftest import step_node
 
 
 class Status(Exception):
@@ -30,7 +31,7 @@ class Status(Exception):
 
 def at(box, **values):
     """Read with these values for a step of this kind."""
-    return rules.in_step(rules.stepped({"id": "x", "box": box}, values))
+    return rules.in_step(rules.stepped(step_node(box), values))
 
 
 @pytest.fixture(autouse=True)
@@ -618,10 +619,12 @@ def test_the_check_refuses_a_step_whose_model_the_server_does_not_offer(
 
 
 def test_the_steps_that_name_a_model_are_found_in_the_drawing(monkeypatch):
-    tree = [{"id": "a", "box": "find", "rules": {"model": "m1"}},
+    tree = [{"id": "a", "box": "ask", "preset": "find",
+             "rules": {"model": "m1"}},
             {"id": "f", "each": "value", "steps": [
-                {"id": "b", "box": "coord", "rules": {"model": "m2"}},
-                {"id": "c", "box": "search"}]}]
+                {"id": "b", "box": "ask", "preset": "coord",
+                 "rules": {"model": "m2"}},
+                {"id": "c", "box": "ask", "preset": "search"}]}]
     monkeypatch.setattr(runner.flow_map, "tree_of", lambda profile=None: tree)
     assert runner.step_models() == {"a": "m1", "b": "m2"}
     # A step that is off, or stands in a frame that is off, asks nothing:
@@ -803,7 +806,7 @@ def test_every_asking_step_of_the_shipped_flow_carries_its_longest_answer():
     # with the steps of their own (owner decision 2026-11-12)
     for profile in (None, load_profile("kwp"), load_profile("scenarios")):
         for node in flow.boxes(flow.tree_of(profile)):
-            block = blocks.LIBRARY.get(node["box"])
+            block = blocks.box_of(node)
             if block is not None and block.asks in asking:
                 assert node["rules"]["max_tokens"] == asking[block.asks], \
                     node

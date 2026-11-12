@@ -501,8 +501,23 @@ a group (start, prepare, order, questions, check, remember, state, logic, end),
 the variables it takes and gives (shown at the box and on its arrows), its
 settings with their defaults, and an explanation for someone who did not write
 it: what goes in, what comes out, what for, an example and how it differs from a
-similar step (owner decision 2026-11-12). The page offers the boxes of the core
-and those of the open profile (`profiles/<name>/blocks.py`). The library is a searchable dialog: the "+" on an arrow opens it and puts the
+similar step (owner decision 2026-11-12). Every step that asks the model is
+the box "Ask the model" with a preset (`{"box": "ask", "preset": NAME}`;
+`extraction.presets`, owner decision 2026-11-12 evening), and the library lists
+the presets beside the other kinds: write out the figures, order the chunks for
+each field, ask a field once for the whole document, ask for the values in a
+chunk, ask a dimension at the value's line or over the search hits, write a
+search sentence, check that a find is about the value, choose a list entry and
+compute shares and sums; the second reading and the example of a field are
+presets of the library of the passes. A step has five parts, each shown as a
+setting that "as its preset" takes back to the preset's: the request (the kind
+it is in the log, which decides the rules and numbers it reads), the prompt, the
+inputs, the reply (the form of the answer, `extraction.forms`) and where the
+answer goes (`extraction.targets`: a variable, values of a field, a dimension of
+a value, a sentence and so on); how an input is shown is a choice of
+`extraction.shows`. The page offers the boxes and presets of the core and those
+of the open profile (`profiles/<name>/blocks.py`: `PRESETS` and `TARGETS`). The
+library is a searchable dialog: the "+" on an arrow opens it and puts the
 picked box or frame there. A right click on a box or frame opens a menu: Move
 up, Move down, Duplicate, Put a box after it, Wrap in Round, If / else or For
 each, Switch off or on, Delete. Shift or Ctrl click chooses several steps that
@@ -522,8 +537,8 @@ written as JSON, and where the answer goes (a variable, for the item or the whol
 document, or values of a field); the model may be allowed to fetch what a line
 points to. Search, order by a text, set a variable, keep what a condition holds
 for, join lists, a step in Python and a loop over any list stand beside it, and a
-condition row may be about any variable. A kind of box with code of its own comes
-from a profile's `blocks.py`.
+condition row may be about any variable. A step with code of its own is a
+target of a profile's `blocks.py` (`TARGETS`), named by a preset of the profile.
 
 The catalogue search is a box of its own (`catalogue`) with settings of its
 own; it stands after the calculation, at the end, and where it is switched off

@@ -6,7 +6,8 @@ import { FRAMES, GROUPS, frameWord, groupWord } from './nodes';
 import { t, tr, useLang } from '../lib/i18n';
 import type { Library } from './model';
 
-export type Pick = { kind: 'box'; arg: string } | { kind: 'each'; arg: string } | { kind: 'round' } | { kind: 'if' };
+export type Pick = { kind: 'box'; arg: string } | { kind: 'preset'; arg: string } | { kind: 'each'; arg: string }
+  | { kind: 'round' } | { kind: 'if' };
 interface Item { label: string; says: string; pick: Pick; color: string; icon: React.ReactNode; group: string }
 
 export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }: {
@@ -27,6 +28,11 @@ export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }:
     for (const b of lib.boxes) {
       const g = GROUPS[b.group] || { color: 'gray', icon: () => null };
       out.push({ label: tr(b.label), says: tr(b.says), pick: { kind: 'box', arg: b.type }, color: g.color, icon: g.icon({ size: 18 }), group: groupWord(b.group) });
+    }
+    // every question the reading asks is "Ask the model" with a preset (extraction/presets.py)
+    for (const p of lib.presets || []) {
+      const g = GROUPS[p.group] || { color: 'gray', icon: () => null };
+      out.push({ label: tr(p.label), says: tr(p.says), pick: { kind: 'preset', arg: p.name }, color: g.color, icon: g.icon({ size: 18 }), group: groupWord(p.group) });
     }
     return out;
   }, [lib, lang, loopsOnly]);
@@ -52,7 +58,7 @@ export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }:
                       <Group gap="sm" wrap="nowrap" align="flex-start">
                         <Box className="fl-icon" mt={2}>{it.icon}</Box>
                         <Box style={{ minWidth: 0 }}>
-                          <Group gap={6}><Text fw={600} size="sm">{it.label}</Text>{it.pick.kind === 'box' && <Badge size="xs" variant="light" color={it.color}>{it.group}</Badge>}</Group>
+                          <Group gap={6}><Text fw={600} size="sm">{it.label}</Text>{(it.pick.kind === 'box' || it.pick.kind === 'preset') && <Badge size="xs" variant="light" color={it.color}>{it.group}</Badge>}</Group>
                           <Text size="sm" c="dimmed">{it.says}</Text>
                         </Box>
                       </Group>

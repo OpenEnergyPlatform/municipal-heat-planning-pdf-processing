@@ -32,6 +32,7 @@ from docpipe.extraction.pipeline import Source
 
 from test_addressed import (ENERGY, SPEC, TABLE, TEXT, Model, in_order,
                             plan_of)
+from docpipe.rules import step_kind
 
 
 def default() -> list:
@@ -209,7 +210,8 @@ def test_a_second_search_of_20_shows_at_most_20_more_after_the_first_50():
             "stop": {"any": [row("coordinate", "state", "one_of", ["read"]),
                              row("coordinate", "state", "one_of",
                                  ["unbacked"])]},
-            "steps": [{"id": "more_search", "box": "search"}]},
+            "steps": [{"id": "more_search", "box": "ask",
+                       "preset": "search"}]},
            state]
     model = Boxed(find=finding_table)
     read(drawing, model, TEXT, TABLE, *MANY)
@@ -354,7 +356,7 @@ def test_an_own_check_lets_a_long_enough_quote_hold():
 def test_a_quote_outside_the_shown_lines_is_refused_with_every_box_off():
     drawing = checked(default())
     for one, _ in flow.walk(drawing):
-        if flow.kind_of(one) == "box" and one["box"] in (
+        if flow.kind_of(one) == "box" and step_kind(one) in (
                 "phrase", "about", "check", "names", "works", "sentences",
                 "compute"):
             one["off"] = True
@@ -407,8 +409,9 @@ def test_a_new_sentence_from_round_2_is_asked_with_the_sentences_before():
     on[:] = [{"id": "again", "round": {"most": 2},
               "stop": {"any": [row("coordinate", "state", "one_of",
                                    ["read", "unbacked"])]},
-              "steps": [{"id": "again_sentence", "box": "phrase",
-                         "set": {"anew": True}}, order, round_]},
+              "steps": [{"id": "again_sentence", "box": "ask",
+                         "preset": "phrase", "set": {"anew": True}},
+                        order, round_]},
              state]
     model = Boxed(find=finding_table,
                   phrase=lambda p, n: {"phrase": f"Satz {len(p.get('before') or [])}."})
@@ -438,7 +441,8 @@ def with_second_pass(most: int) -> list:
                         "stop": {"any": [row("coordinate", "state",
                                              "one_of",
                                              ["read", "unbacked"])]},
-                        "steps": [{"id": "again_search", "box": "search"}]},
+                        "steps": [{"id": "again_search", "box": "ask",
+                                   "preset": "search"}]},
                        {"id": "again_state", "box": "state",
                         "when": {"all": [row("coordinate", "state",
                                              "one_of", ["read", "unbacked"],

@@ -19,11 +19,12 @@ from docpipe.extraction.pipeline import Source
 from docpipe.extraction.units import Line
 
 from test_addressed import TABLE, TEXT, TITLE, plan_of
+from conftest import step_node
 
 
 def at(kind: str, values: dict):
     """What the engine does around a box of *kind* that sets *values*."""
-    return rules.in_step(rules.stepped({"id": "x", "box": kind}, values))
+    return rules.in_step(rules.stepped(step_node(kind), values))
 
 
 @pytest.fixture(autouse=True)

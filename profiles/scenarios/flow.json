@@ -6,7 +6,8 @@
     },
     {
       "id": "figures",
-      "box": "transcribe",
+      "box": "ask",
+      "preset": "transcribe",
       "rules": {
         "temperature": 0,
         "max_tokens": 4096
@@ -50,7 +51,8 @@
           "steps": [
             {
               "id": "settled",
-              "box": "docfield",
+              "box": "ask",
+              "preset": "docfield",
               "rules": {
                 "show_title_page": "first",
                 "field_text": "whole",
@@ -60,7 +62,8 @@
             },
             {
               "id": "settled_list",
-              "box": "list",
+              "box": "ask",
+              "preset": "list",
               "rules": {
                 "temperature": 0,
                 "max_tokens": 512
@@ -76,7 +79,8 @@
     },
     {
       "id": "sentences",
-      "box": "sentences",
+      "box": "ask",
+      "preset": "sentences",
       "rules": {
         "temperature": 0,
         "max_tokens": 300
@@ -84,7 +88,8 @@
     },
     {
       "id": "works",
-      "box": "works",
+      "box": "ask",
+      "preset": "works",
       "when": {
         "all": [
           {
@@ -119,7 +124,8 @@
           "steps": [
             {
               "id": "document_fields",
-              "box": "docfield",
+              "box": "ask",
+              "preset": "docfield",
               "rules": {
                 "show_title_page": "first",
                 "field_text": "whole",
@@ -197,7 +203,8 @@
                       "steps": [
                         {
                           "id": "document_work",
-                          "box": "work_coordinate",
+                          "box": "ask",
+                          "preset": "work_coordinate",
                           "rules": {
                             "temperature": 0,
                             "max_tokens": 1024
@@ -209,7 +216,8 @@
                   "else": [
                     {
                       "id": "document_own_place",
-                      "box": "coord",
+                      "box": "ask",
+                      "preset": "coord",
                       "rules": {
                         "temperature": 0,
                         "max_tokens": 1024
@@ -281,7 +289,8 @@
                           "else": [
                             {
                               "id": "document_search_sentence",
-                              "box": "phrase",
+                              "box": "ask",
+                              "preset": "phrase",
                               "rules": {
                                 "temperature": 0,
                                 "max_tokens": 300
@@ -319,7 +328,8 @@
                               "steps": [
                                 {
                                   "id": "document_beside",
-                                  "box": "search",
+                                  "box": "ask",
+                                  "preset": "search",
                                   "rules": {
                                     "temperature": 0,
                                     "max_tokens": 1536
@@ -327,7 +337,8 @@
                                 },
                                 {
                                   "id": "document_beside_about",
-                                  "box": "about",
+                                  "box": "ask",
+                                  "preset": "about",
                                   "rules": {
                                     "temperature": 0,
                                     "max_tokens": 256
@@ -386,7 +397,8 @@
                                       "steps": [
                                         {
                                           "id": "document_search",
-                                          "box": "search",
+                                          "box": "ask",
+                                          "preset": "search",
                                           "rules": {
                                             "temperature": 0,
                                             "max_tokens": 1536
@@ -394,7 +406,8 @@
                                         },
                                         {
                                           "id": "document_about",
-                                          "box": "about",
+                                          "box": "ask",
+                                          "preset": "about",
                                           "rules": {
                                             "temperature": 0,
                                             "max_tokens": 256
@@ -437,7 +450,8 @@
             },
             {
               "id": "document_name",
-              "box": "names",
+              "box": "ask",
+              "preset": "names",
               "rules": {
                 "temperature": 0,
                 "max_tokens": 512
@@ -462,7 +476,8 @@
           "steps": [
             {
               "id": "finds",
-              "box": "find",
+              "box": "ask",
+              "preset": "find",
               "rules": {
                 "show_title_page": "never",
                 "temperature": 0,
@@ -541,7 +556,8 @@
                   "steps": [
                     {
                       "id": "work",
-                      "box": "work_coordinate",
+                      "box": "ask",
+                      "preset": "work_coordinate",
                       "rules": {
                         "temperature": 0,
                         "max_tokens": 1024
@@ -553,7 +569,8 @@
               "else": [
                 {
                   "id": "own_place",
-                  "box": "coord",
+                  "box": "ask",
+                  "preset": "coord",
                   "rules": {
                     "temperature": 0,
                     "max_tokens": 1024
@@ -625,7 +642,8 @@
                       "else": [
                         {
                           "id": "search_sentence",
-                          "box": "phrase",
+                          "box": "ask",
+                          "preset": "phrase",
                           "rules": {
                             "temperature": 0,
                             "max_tokens": 300
@@ -663,7 +681,8 @@
                           "steps": [
                             {
                               "id": "beside",
-                              "box": "search",
+                              "box": "ask",
+                              "preset": "search",
                               "rules": {
                                 "temperature": 0,
                                 "max_tokens": 1536
@@ -671,7 +690,8 @@
                             },
                             {
                               "id": "beside_about",
-                              "box": "about",
+                              "box": "ask",
+                              "preset": "about",
                               "rules": {
                                 "temperature": 0,
                                 "max_tokens": 256
@@ -730,7 +750,8 @@
                                   "steps": [
                                     {
                                       "id": "search",
-                                      "box": "search",
+                                      "box": "ask",
+                                      "preset": "search",
                                       "rules": {
                                         "temperature": 0,
                                         "max_tokens": 1536
@@ -738,7 +759,8 @@
                                     },
                                     {
                                       "id": "about",
-                                      "box": "about",
+                                      "box": "ask",
+                                      "preset": "about",
                                       "rules": {
                                         "temperature": 0,
                                         "max_tokens": 256
@@ -781,7 +803,8 @@
         },
         {
           "id": "name",
-          "box": "names",
+          "box": "ask",
+          "preset": "names",
           "rules": {
             "temperature": 0,
             "max_tokens": 512
@@ -795,7 +818,8 @@
     },
     {
       "id": "compute",
-      "box": "compute",
+      "box": "ask",
+      "preset": "compute",
       "rules": {
         "temperature": 0,
         "max_tokens": 2048

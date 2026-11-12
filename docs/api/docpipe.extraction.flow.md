@@ -214,8 +214,9 @@ The requests the boxes of *tree* ask, of the boxes that are on.
 def box_on(tree: list, kind: str) -> bool
 ```
 
-Does the top box of *kind* stand in *tree* and is it on? The boxes
-the runner does after the reading (compute, catalogue) run only so.
+Does the top step of *kind* (`rules.step_kind`) stand in *tree* and
+is it on? The steps the runner does after the reading (compute,
+catalogue) run only so.
 
 ### compute_on
 
@@ -274,8 +275,8 @@ step of *tree*, for the page's choice of a variable.
 def outputs_of(node: dict) -> list
 ```
 
-The variables a box gives: its kind's, and for a general step the
-ones its settings name.
+The variables a box gives: its kind's, for a step of "Ask the model"
+its target's, and for a general step the ones its settings name.
 
 ### inputs_of
 
@@ -302,6 +303,17 @@ def makers(tree: list) -> dict
 ```
 
 {variable: [the labels of the boxes that are on and give it]}.
+
+### hits_question
+
+```python
+def hits_question(node: dict) -> Optional[str]
+```
+
+The target of a question that shows the next search hits a few a
+request (an input shown as "next_chunks"): "dimension" for a search of
+a value's dimension, "values" for a field of the whole document; None
+for any other step.
 
 ### known_rules
 

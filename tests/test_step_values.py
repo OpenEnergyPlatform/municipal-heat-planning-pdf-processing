@@ -41,7 +41,7 @@ def step(node: dict) -> rules.in_step:
 
 
 FRAME = {"id": "values", "each": "value", "rules": {NAME: 700}}
-BOX = {"id": "ask", "box": "coord", "rules": {NAME: 500}}
+BOX = {"id": "ask", "box": "ask", "preset": "coord", "rules": {NAME: 500}}
 
 
 @pytest.fixture(autouse=True)
@@ -70,7 +70,7 @@ def test_the_step_then_the_frame_then_the_start_then_the_file(monkeypatch):
 
 
 def test_a_box_without_a_value_reads_its_frame():
-    with step(FRAME), step({"id": "other", "box": "coord"}):
+    with step(FRAME), step({"id": "other", "box": "ask", "preset": "coord"}):
         assert rules.get(NAME) == 700
         assert rules.STEP.get().owners[NAME] == "frame values"
 
@@ -92,7 +92,8 @@ def test_a_worker_thread_reads_the_step_with_the_context_only():
 
 def test_numbers_of_the_flow_go_the_same_way():
     numbers = flow.default()
-    search = {"id": "search", "box": "search", "own": {"per_request": 3}}
+    search = {"id": "search", "box": "ask", "preset": "search",
+              "own": {"per_request": 3}}
     frame = {"id": "coords", "each": "coordinate",
              "rules": {"search_per_request": 4, "headings": 1}}
     run = flow.number(numbers, "search_per_request")
@@ -124,7 +125,7 @@ def tree_with(node: dict) -> list:
     question."""
     tree = copy.deepcopy(flow.tree_of(None))
     for found, _frames in flow.walk(tree):
-        if found.get("box") == "coord":
+        if rules.step_kind(found) == "coord":
             found.update(node)
             return tree
     raise AssertionError("the default drawing has no coordinate question")

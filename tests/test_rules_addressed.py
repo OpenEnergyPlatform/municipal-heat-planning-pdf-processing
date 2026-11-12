@@ -17,19 +17,20 @@ import pytest
 
 from docpipe import rules
 from docpipe.extraction import addressed, fields
-from docpipe.extraction.addressed import (Asking, Counts, Found, Names, Orders,
-                                          Reader, asking)
+from docpipe.extraction.addressed import (Counts, Found, Names, Orders,
+                                          Reader)
 from docpipe.extraction.pipeline import Row, Source
 from docpipe.extraction.units import Line
 
 from test_addressed import (ENERGY, SLOTS, SPEC, TABLE, TEXT, TITLE, Model,
                             coordinate_answers, entry_of, in_order, plan_of,
                             reader_of, searching)
+from conftest import step_node
 
 
 def at(kind: str, values: dict):
     """What the engine does around a box of *kind* that sets *values*."""
-    return rules.in_step(rules.stepped({"id": "x", "box": kind}, values))
+    return rules.in_step(rules.stepped(step_node(kind), values))
 
 
 @pytest.fixture(autouse=True)
@@ -161,9 +162,7 @@ def test_a_find_in_the_values_own_passage_is_checked_where_the_rule_says():
     def checks(**values):
         model = Model(find=long_value, search=lambda p, n: years_found(
             p, n, ("2021",)))
-        about = Asking("search", "about", about_step=lambda: rules.in_step(
-            rules.stepped({"id": "a", "box": "about"}, {})))
-        with at("search", values), asking(about):
+        with at("search", values):
             reader_of(model)(plan_of(LONG, chunk_units=2), [ENERGY])
         return len(model.of("check"))
     assert checks() == 0                      # the value's own passage

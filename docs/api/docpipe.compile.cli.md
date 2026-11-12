@@ -35,13 +35,15 @@ rdflib is missing as ModuleNotFoundError, for the caller to say.
 ### ask_for_example
 
 ```python
-def ask_for_example(client, prompt, parameter: dict, passage: str)
+def ask_for_example(client, prompt, parameter: dict, passage: str,
+                    inputs: Optional[list] = None)
 ```
 
 The reply to one example request as an object, or why there is none
 (a text). A reply that is not the one object that was asked for is
 asked again with what was wrong with it, as the harvest does; nothing
-is repaired.
+is repaired. Its message is built from *inputs*, those of its preset
+where None (`presets.PRESETS["example"]`).
 
 ### main
 

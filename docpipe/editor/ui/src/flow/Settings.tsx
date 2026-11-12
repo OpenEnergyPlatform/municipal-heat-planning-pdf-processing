@@ -15,7 +15,8 @@ import { CondEditor } from './Conditions';
 import { StepRules } from './StepRules';
 import { OwnAt } from '../rules/OwnAt';
 import { RunSection } from './Run';
-import { kindOf, labelOf, libBox, normRow, type Cond, type FlowData, type LibSetting, type Step } from './model';
+import { kindOf, labelOf, normRow, partsOf, presetOf, presetPart, stepBox, type Cond, type FlowData, type LibSetting,
+  type Step } from './model';
 
 export interface Panel {
   data: FlowData;
@@ -49,7 +50,9 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
   const k = kindOf(n);
   const lib = P.data.library;
   const subjects = P.data.conditions;
-  const b = k === 'box' ? libBox(lib, n.box) : null;
+  const b = k === 'box' ? stepBox(lib, n) : null;
+  // what a step of "Ask the model" asks: its own request, else its preset's
+  const asks = b && n.box === 'ask' ? partsOf(lib, n).request : b ? b.asks : null;
   const vars = P.availableOf(n.id);
   const out: ReactNode[] = [];
   if (b) {
@@ -58,8 +61,8 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
     out.push(<Text key="takes" size="xs" c="dimmed">{rich(t('takes {takes}, gives {gives} · in the code: `{code}`', { takes: io.takes.length ? io.takes.join(', ') : t('nothing'), gives: io.gives.length ? io.gives.join(', ') : t('nothing'), code: b.code }))}{b.decided ? t(' · decided on {date}', { date: b.decided }) : ''}</Text>);
     if (b.fixed) out.push(<Alert key="fixed" color="gray" variant="light" p="xs"><Text size="sm">{t('Fixed: {fixed}', { fixed: tr(b.fixed) })}</Text></Alert>);
     if (b.marks && b.marks.length) out.push(<Group key="marks" gap={4}>{b.marks.map(m => <Badge key={m} variant="outline" color="gray" title={t('fixed checks, cannot be removed')}>{rich(tr(m))}</Badge>)}</Group>);
-    if (b.asks && P.data.prompts[b.asks]) {
-      const pr = P.data.prompts[b.asks];
+    if (asks && P.data.prompts[asks]) {
+      const pr = P.data.prompts[asks];
       out.push(<Field key="prompt" label={t('prompt')}>{pr.written
         ? <Anchor component="button" type="button" onClick={() => openPrompt(pr.id)}>{pr.id}</Anchor>
         : <Text size="sm" c="dimmed">{t('{id} (not written)', { id: pr.id })}</Text>}</Field>);
@@ -132,7 +135,7 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
     out.push(<Field key="on" label={t('on')}><Switch checked={!n.off} label={n.off ? t('switched off: no run takes this') : t('the run takes this')}
       onChange={e => { if (e.currentTarget.checked) delete n.off; else n.off = true; P.edited(); }} /></Field>);
   }
-  const never = b && P.data.never ? P.data.never[n.box] : null;
+  const never = b && P.data.never ? P.data.never[n.preset || n.box] : null;
   const bad = P.problemsOf(n.id);
   const tried = P.trial && P.trial.boxes && P.trial.boxes[n.id];
   return (
@@ -174,8 +177,15 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
     if (!Object.keys(n.set).length) delete n.set;
     P.edited();
   };
+  // what the step has where it sets nothing of its own: its preset's part or value, else the library's
+  const lib = P.data.library;
+  const preset = presetOf(lib, n);
+  const part = presetPart(lib, n, s.key);
+  const base = part !== undefined ? part : s.default;
   if (GENERAL_KINDS.has(s.kind)) {
-    return <GeneralField s={s} value={sets[s.key]} put={v => put(s.key, v)} vars={P.availableOf(n.id)} data={P.data} />;
+    const mine = own(sets, s.key);
+    return <GeneralField s={s} value={mine ? sets[s.key] : base} put={v => put(s.key, v)} vars={P.availableOf(n.id)}
+      data={P.data} reset={preset && mine && part !== undefined ? () => put(s.key, undefined) : undefined} />;
   }
   if (s.kind === 'number') {
     const named = P.data.numbers.find(x => x.name === s.number);
@@ -212,18 +222,19 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
     );
   }
   if (s.kind === 'switch') {
-    const on = own(sets, s.key) ? !!sets[s.key] : !!s.default;
+    const on = own(sets, s.key) ? !!sets[s.key] : !!base;
     return <Field label={tr(s.label)} help={tr(s.help)}><Switch checked={on}
-      onChange={e => put(s.key, e.currentTarget.checked === !!s.default ? undefined : e.currentTarget.checked)} /></Field>;
+      onChange={e => put(s.key, e.currentTarget.checked === !!base ? undefined : e.currentTarget.checked)} /></Field>;
   }
   if (s.kind === 'choice') {
-    return <Field label={tr(s.label)} help={tr(s.help)}><NativeSelect value={String(own(sets, s.key) ? sets[s.key] : s.default)}
+    return <Field label={tr(s.label)} help={tr(s.help)}><NativeSelect value={String(own(sets, s.key) ? sets[s.key] : base)}
       data={(s.choices || []).map(v => ({ value: v, label: tr((s.words || {})[v] || v.replace(/_/g, ' ')) }))}
-      onChange={e => put(s.key, e.currentTarget.value === s.default ? undefined : e.currentTarget.value)} /></Field>;
+      onChange={e => put(s.key, e.currentTarget.value === base ? undefined : e.currentTarget.value)} /></Field>;
   }
   if (s.kind === 'text') {
-    return <Field label={tr(s.label)} help={tr(s.help)}><TextBox value={sets[s.key] || ''} onText={() => {}}
-      onCommit={v => { if (v === (sets[s.key] || '')) return; put(s.key, v || undefined); }} /></Field>;
+    const shown = String(own(sets, s.key) ? sets[s.key] : (base ?? ''));
+    return <Field label={tr(s.label)} help={tr(s.help)}><TextBox value={shown} onText={() => {}}
+      onCommit={v => { if (v === shown) return; put(s.key, v === String(base ?? '') ? undefined : v || undefined); }} /></Field>;
   }
   if (s.kind === 'condition') {
     return <Field label={tr(s.label)} help={tr(s.help)}><CondEditor subjects={P.data.conditions} only={n.box === 'split' ? 'line' : null}

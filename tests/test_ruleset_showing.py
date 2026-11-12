@@ -8,24 +8,56 @@ today's standard gives today's result. Each case sets a rule at a step
 (`rules.in_step`) or for the run (`rules.overlaid`) and sees the code do
 what the value says, with the standard as the control.
 """
+import copy
 import time
+from types import SimpleNamespace
 
 import pytest
 
 from docpipe import rules
-from docpipe.extraction import addressed, units
-from docpipe.extraction.addressed import (Asking, Counts, Found, Names,
-                                          Reader, Shown, budgeted, number_of)
+from docpipe.extraction import addressed, flow, general, targets, units
+from docpipe.extraction.addressed import (Counts, Found, Names, Reader, Shown,
+                                          budgeted, number_of)
+from docpipe.extraction.engine import Scope
 from docpipe.extraction.pipeline import Row, Source
+from docpipe.extraction.presets import PRESETS
 from docpipe.extraction.units import Line, TooManyPlaces
 
-from test_addressed import (ENERGY, SLOTS, TABLE, TEXT, TITLE, Model,
-                            plan_of, reader_of)
+from test_addressed import (ENERGY, SCENARIOS, SLOTS, TABLE, TEXT, TITLE,
+                            Model, flow_of, plan_of, reader_of)
+from conftest import step_node
 
 
 def at(kind: str, values: dict):
-    """What the engine does around a box of *kind* that sets *values*."""
-    return rules.in_step(rules.stepped({"id": "x", "box": kind}, values))
+    """What the engine does around a step of *kind* that sets *values*."""
+    return rules.in_step(rules.stepped(step_node(kind), values))
+
+
+def step(preset: str, **parts) -> dict:
+    """A step of "Ask the model" with *preset* and parts of its own."""
+    return {"id": preset, "box": "ask", "preset": preset,
+            **({"set": parts} if parts else {})}
+
+
+def asked(reader, plan, node: dict, scope=None, **values):
+    """What the step *node* does once outside a flow, its frames holding
+    *scope* and its target giving *values* (the field, the chunk): (what
+    its target answered, the scope it kept its finds in)."""
+    ask = general.Ask(reader.engine, node,
+                      Scope(None, True, plan=plan, **(scope or {})), values)
+    return targets.TARGETS[ask.into["to"]].run(ask, Counts()), ask.scope
+
+
+def dimension_at(owner=("section", 2), line=2) -> dict:
+    """What the frames around a question about the year of the value at
+    *line* of *owner* hold: the value, its dimension, its field."""
+    row = Row("v", 0, {"at": {"owner": list(owner), "line": line},
+                       "value": 300, "value_raw": "300 MWh"})
+    read = SimpleNamespace(batch=SimpleNamespace(parameter=ENERGY))
+    coord = SimpleNamespace(read=read, row=row, slot=SLOTS["year"],
+                            sentence=None, sentences=[], ways=[])
+    return {"coord": coord, "value": SimpleNamespace(read=read, row=row),
+            "parameter": ENERGY}
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +72,7 @@ def find_payloads(model: Model, values: dict) -> list:
     reader = reader_of(model)
     chunk = next(c for c in plan.chunks if c.passage.kind == "table")
     with at("find", values):
-        reader.find(plan, ENERGY, chunk, Counts())
+        asked(reader, plan, step("find"), field=ENERGY, chunk=chunk)
     return [payload for payload, _ in model.of("find")]
 
 
@@ -68,7 +100,7 @@ def test_a_title_page_shown_for_the_first_request_only_is_shown_once():
     reader = reader_of(model)
     with at("find", {"show_title_page": "first"}):
         for chunk in plan.chunks[:2]:
-            reader.find(plan, ENERGY, chunk, Counts())
+            asked(reader, plan, step("find"), field=ENERGY, chunk=chunk)
     first, second = [p for p, _ in model.of("find")]
     assert "title_page" in first and "title_page" not in second
 
@@ -93,17 +125,23 @@ def test_a_value_in_a_table_is_shown_the_rows_around_it_as_the_rule_says():
     assert len(more["passage"]["lines"]) == 4            # and the row after
 
 
-def test_the_blocks_of_a_place_stand_in_the_order_the_rule_says():
+def test_the_blocks_of_a_place_stand_in_the_order_of_the_step_s_inputs():
+    # What a request shows stands in the order of its step's inputs (owner
+    # decision 2026-11-12 evening: the rule shown_block_order became the
+    # inputs of the preset).
     plan = plan_of(TITLE, TEXT, TABLE)
     plan.settings = [(Line(1, "Alle Werte gelten für 2021."), TEXT)]
-    claim = {"at": {"owner": ["section", 2], "line": 2}, "value": 1}
-    _shown, usual = addressed.show_value(plan, claim)
-    assert list(usual) == ["value", "passage", "headings", "title_page",
-                           "settings"]
-    with rules.overlaid(shown_block_order=["settings", "passage"]):
-        _shown, other = addressed.show_value(plan, claim)
-    assert list(other) == ["value", "settings", "passage", "headings",
-                           "title_page"]
+    place = ("value", "passage", "headings", "title_page", "settings")
+
+    def shown(node):
+        ask = general.Ask(reader_of(Model()).engine, node,
+                          Scope(None, True, plan=plan, **dimension_at()))
+        return [key for key in ask.request().payload if key in place]
+    assert shown(step("coord")) == list(place)
+    first = sorted(PRESETS["coord"].inputs,
+                   key=lambda one: one["key"] != "settings")
+    assert shown(step("coord", inputs=first)) == [
+        "settings", "value", "passage", "headings", "title_page"]
 
 
 def test_the_examples_of_a_request_are_shown_as_the_rules_say():
@@ -137,22 +175,30 @@ def test_the_page_and_title_of_a_chunk_are_shown_as_the_rules_say():
     assert "page" not in none and "title" not in none
 
 
-def test_the_sentence_request_shows_the_parts_the_rule_names():
-    def payload_with(values):
-        model = Model()
-        plan = plan_of(TITLE, TEXT, TABLE)
-        row = Row("v", 0, {"at": {"owner": ["section", 2], "line": 2},
-                        "value": 300, "value_raw": "300 MWh"})
-        reader = reader_of(model, context=lambda d: {"name": "Musterstadt"})
-        read = type("R", (), {"batch": type("B", (), {"parameter": ENERGY})})
-        with at("phrase", values):
-            reader.sentence(plan, read, row, SLOTS["year"], Counts())
-        (payload, _), = model.of("phrase")
-        return payload
-    assert {"label", "headings", "document"} <= set(payload_with({}))
-    narrow = payload_with({"phrase_shows": ["label", "question", "value"]})
-    assert set(narrow) == {"label", "question", "value"}
-    assert "headings" not in payload_with({"show_headings": False})
+def sentence_payload(node: dict, values=None, plan=None) -> dict:
+    """The request of the step *node* that writes the search sentence for
+    the year of the value at line 2 of TEXT, the step setting *values*."""
+    model = Model()
+    reader = reader_of(model)
+    with rules.in_step(rules.stepped(node, values or {})):
+        asked(reader, plan or plan_of(TITLE, TEXT, TABLE), node,
+              scope=dimension_at())
+    (payload, _), = model.of("phrase")
+    return payload
+
+
+def test_the_sentence_request_shows_the_inputs_its_step_names():
+    # What the request shows are its step's inputs: the preset's, or the
+    # step's own (owner decision 2026-11-12 evening: the rule phrase_shows
+    # became the inputs of the preset).
+    assert {"label", "headings", "document"} <= set(
+        sentence_payload(step("phrase")))
+    own = [one for one in PRESETS["phrase"].inputs
+           if one["key"] in ("label", "question", "value")]
+    assert list(sentence_payload(step("phrase", inputs=own))) == [
+        "label", "question", "value"]
+    assert "headings" not in sentence_payload(step("phrase"),
+                                              {"show_headings": False})
 
 
 # -- cutting ------------------------------------------------------------------
@@ -266,34 +312,41 @@ BIG = Source("table", 8, "Tabelle 9: Verbrauch\n| Gebäude | Erdgas |\n"
 
 
 def test_a_request_that_did_not_fit_is_halved_as_the_rules_say():
-    def asked(**values):
+    def asked_whole(**values):
         model = Model(find=lambda p, n: "cut_off")
         plan = plan_of(TITLE, BIG)
         chunk = next(c for c in plan.chunks if c.passage.kind == "table")
         reader = reader_of(model)
         with at("find", values):
-            got = reader.find(plan, ENERGY, chunk, Counts())
+            _answer, kept = asked(reader, plan, step("find"), field=ENERGY,
+                                  chunk=chunk)
+        (got,) = kept.values["finds"]
         return len(model.of("find")), len(got["lost"])
     # Four rows: the whole, two halves, four single rows, each a hole.
-    assert asked() == (7, 4)
-    assert asked(split_by="lines") == (7, 4)
-    assert asked(split_cut_off=False) == (1, 1)         # a hole at once
-    assert asked(split_most=1) == (3, 2)                # halved once
+    assert asked_whole() == (7, 4)
+    assert asked_whole(split_by="lines") == (7, 4)
+    assert asked_whole(split_cut_off=False) == (1, 1)   # a hole at once
+    assert asked_whole(split_most=1) == (3, 2)          # halved once
 
 
 def test_the_window_of_a_field_of_the_whole_document_is_split_too():
+    title = SCENARIOS.by_uri["publication_title"]
+
     def window(**values):
         model = Model(docfield=lambda p, n: "cut_off"
                       if len(p["passages"]) > 1 else {"found": []})
-        plan = plan_of(TITLE, TEXT, TABLE)
-        reader = reader_of(model)
-        with at("docfield", values):
-            got = reader.ask_window(plan, {"name": "e", "means": "m"},
-                                    plan.chunks, Counts(), "energy")
-        return len(model.of("docfield")), got[1]
-    asks, lost = window()
-    assert asks > 1 and lost is None                     # halved, answered
-    assert window(split_cut_off=False) == (1, addressed.CUT)
+        tree = copy.deepcopy(flow_of(SCENARIOS))
+        # the step that asks the fields a document has once
+        field_step = next(n for n, _ in flow.walk(tree)
+                          if n.get("id") == "document_fields")
+        field_step.setdefault("rules", {}).update(values)
+        reads = reader_of(model, spec=SCENARIOS, flow=tree)(
+            plan_of(TITLE, TEXT, TABLE), [title])
+        return len(model.of("docfield")), [r.why for r in reads
+                                           if r.unread]
+    asks, holes = window()
+    assert asks > 1 and holes == []                      # halved, answered
+    assert window(split_cut_off=False) == (1, [addressed.CUT])
 
 
 # -- search -------------------------------------------------------------------
@@ -440,35 +493,43 @@ def test_a_find_that_names_several_years_is_read_as_the_rule_says():
         assert "until" not in run()
 
 
-def test_a_find_from_another_place_is_checked_as_the_rule_says():
+def checked(model_reply, keeper=None, **values):
+    """(whether the step that checks keeps a find of another place for the
+    year of the value at line 2 of TEXT, the model): the model replying
+    *model_reply*, the step *keeper* (the preset's where None)."""
     plan = plan_of(TITLE, TEXT, TABLE)
-    row = Row("v", 0, {"at": {"owner": ["section", 2], "line": 2}, "value": 1})
     got = Found(lines=[(Line(1, "x"), TEXT)], words="x")
+    model = Model(check=lambda p, n: model_reply)
+    reader = reader_of(model)
+    ask = general.Ask(reader.engine, step("search"),
+                      Scope(None, True, plan=plan, **dimension_at()))
+    with rules.overlaid(**values):
+        kept = targets.keep_find(ask, keeper or step("about"), got,
+                                 Counts(), {})
+    return kept, model
 
-    def about(model_reply, **values):
-        model = Model(check=lambda p, n: model_reply)
-        reader = reader_of(model)
-        with rules.overlaid(**values):
-            return reader.about(plan, row, SLOTS["year"], got, Counts(), {})
-    assert about({"about": "yes"}) is True
-    assert about(None) is False
-    assert about(None, about_no_reply="keep") is True
+
+def test_a_find_from_another_place_is_checked_as_the_rule_says():
+    assert checked({"about": "yes"})[0] is True
+    assert checked(None)[0] is False
+    assert checked(None, about_no_reply="keep")[0] is True
 
 
 def test_the_step_of_the_box_that_checks_reads_its_own_values():
-    plan = plan_of(TITLE, TEXT, TABLE)
-    row = Row("v", 0, {"at": {"owner": ["section", 2], "line": 2}, "value": 1})
-    got = Found(lines=[(Line(1, "x"), TEXT)], words="x")
-    model = Model()
-    reader = reader_of(model)
-    box = {"id": "about", "box": "about",
-           "rules": {"about_shows": ["answer"]}}
-    what = Asking("search", "about", about_step=lambda: at(
-        "about", {"about_shows": ["answer"]}))
-    with at("search", {}), addressed.asking(what):
-        reader.about(plan, row, SLOTS["year"], got, Counts(), {})
+    # Its own values hold while it asks, inside the question that hands it
+    # the find (`targets.keep_find`), and its own inputs are what its
+    # request shows (owner decision 2026-11-12 evening: the rule
+    # about_shows became the inputs of the preset).
+    own = {**step("about"), "rules": {"about_no_reply": "keep"}}
+    with at("search", {}):
+        assert checked(None, own)[0] is True
+    answer = [one for one in PRESETS["about"].inputs
+              if one["key"] == "answer"]
+    _kept, model = checked({"about": "yes"}, step("about", inputs=answer))
     assert set(model.of("check")[0][0]) == {"answer"}
-    assert box["rules"]                                  # (the node's own)
+    # the failure by construction: without a value of its own the standard
+    # holds, and no answer keeps nothing
+    assert checked(None, step("about"))[0] is False
 
 
 # -- lists --------------------------------------------------------------------
@@ -517,14 +578,8 @@ def test_a_long_list_with_groups_is_asked_in_two_steps_where_the_rule_says():
 
 def test_a_document_name_is_taken_from_the_title_page_as_the_rule_says():
     def payload_with(**values):
-        model = Model()
-        plan = plan_of(TITLE, TEXT)
-        row = Row("v", 0, {"at": {"owner": ["section", 2], "line": 2},
-                        "value": 300})
-        read = type("R", (), {"batch": type("B", (), {"parameter": ENERGY})})
-        reader = reader_of(model)
         with rules.overlaid(**values):
-            reader.sentence(plan, read, row, SLOTS["year"], Counts())
-        return model.of("phrase")[0][0]
+            return sentence_payload(step("phrase"),
+                                    plan=plan_of(TITLE, TEXT))
     assert payload_with()["document"] == {"name": TITLE.text.split("\n")[0]}
     assert "document" not in payload_with(document_name_fallback=False)

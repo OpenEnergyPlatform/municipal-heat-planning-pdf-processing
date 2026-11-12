@@ -17,6 +17,18 @@ export interface LibBox {
   /* what it takes and gives by name (extraction/variables.py); "a|b" one of them, "?" where it does without */
   inputs?: string[]; outputs?: string[];
 }
+/* a preset of "Ask the model" (extraction/presets.py): the box it is, with its name, explanation, settings and frames
+   (blocks.box_of), the kind of step whose rules it reads, its request and the parts it gives a step that sets none */
+export interface LibPreset extends LibBox {
+  name: string; kind: string; request: string; parts: { inputs: Obj[]; reply: unknown; into: Obj };
+  values: Obj; flow: string; scope: string; after: string[];
+}
+/* a form of an answer the reading knows, and a target: what becomes of an answer (extraction/forms.py, targets.py) */
+export interface LibForm { label: string; says: string }
+export interface LibTarget {
+  label: string; says: string; nested: boolean; gives: string[]; forms: string[]; profile: string; apart?: boolean;
+  outputs?: string[];
+}
 /* a variable a step can take: what the page calls it, what it holds, its JSON schema, whether it holds for the whole
    document */
 export interface Variable { label: string; says: string; schema: unknown; lasting: boolean }
@@ -24,6 +36,7 @@ export interface Library {
   boxes: LibBox[]; each: Record<string, string>; which: Record<string, string>; orders: Record<string, string[]>;
   arrows: Record<string, string>; each_titles: Record<string, string>; order_words: Record<string, string>;
   variables?: Record<string, Variable>; items?: Record<string, (string | null)[]>; start?: string[];
+  presets?: LibPreset[]; forms?: Record<string, LibForm>; targets?: Record<string, LibTarget>;
 }
 export interface Prop { name: string; kind: string; label: string; ops: string[]; choices?: string[]; words?: Record<string, string> }
 /* a thing a condition is about; "variable" takes any variable by its path and every comparison */
@@ -63,10 +76,12 @@ export interface FlowData {
   available?: Record<string, string[]>;
 }
 
-/* how a rule names the kind of a step (rules.step_kind): a box by its kind, a frame as "each <what>", "round" or "if" */
-export const stepKind = (n: Step): string => {
+/* how a rule names the kind of a step (rules.step_kind): a box by its kind, a step of "Ask the model" by its preset's,
+   a frame as "each <what>", "round" or "if" */
+export const stepKind = (n: Step, lib?: Library): string => {
   const k = kindOf(n);
-  return k === 'box' ? n.box : k === 'each' ? 'each ' + n.each : k;
+  if (k === 'box') { const p = lib ? presetOf(lib, n) : undefined; return p ? p.kind : n.box; }
+  return k === 'each' ? 'each ' + n.each : k;
 };
 
 export type Kind = 'box' | 'each' | 'round' | 'if' | '';
@@ -121,10 +136,36 @@ export function newId(tree: Step[], base: string, taken: Set<string> = new Set()
   return base + '_' + i;
 }
 export const libBox = (lib: Library, t: string) => (lib.boxes || []).find(b => b.type === t);
+/* the preset a step of "Ask the model" names, where the library has it */
+export const presetOf = (lib: Library, n: Step): LibPreset | undefined =>
+  n.box === 'ask' && n.preset ? (lib.presets || []).find(p => p.name === n.preset) : undefined;
+/* the box a step is: a step of "Ask the model" with a preset is that preset (blocks.box_of) */
+export const stepBox = (lib: Library, n: Step): LibBox | undefined => presetOf(lib, n) || libBox(lib, n.box);
+/* what a step of "Ask the model" has of *key* where it sets nothing of its own: its preset's part or value; the prompt
+   of its request (general.parts_of) */
+export function presetPart(lib: Library, n: Step, key: string): unknown {
+  const p = presetOf(lib, n);
+  if (key === 'request') return p ? p.request : undefined;
+  if (key === 'prompt') {
+    const request = String((n.set && n.set.request) || (p ? p.request : 'own'));
+    return request === 'own' ? 'extraction/ask' : 'extraction/' + request;
+  }
+  if (p && key in p.parts) return (p.parts as Obj)[key];
+  return p ? (p.values || {})[key] : undefined;
+}
+/* the five parts of a step of "Ask the model": its own where it sets them, else its preset's (general.parts_of) */
+export function partsOf(lib: Library, n: Step): { request: string; prompt: unknown; inputs: Obj[]; reply: unknown; into: Obj } {
+  const set = (n.set || {}) as Obj;
+  const part = (key: string) => (set[key] !== undefined ? set[key] : presetPart(lib, n, key));
+  const into = { ...((part('into') as Obj) || {}) };
+  if (into.to === undefined) into.to = into.field ? 'values' : 'var';
+  return { request: String(part('request') || 'own'), prompt: part('prompt'), inputs: (part('inputs') as Obj[]) || [],
+    reply: part('reply'), into };
+}
 
 export function labelOf(lib: Library, n: Step): string {
   const k = kindOf(n);
-  if (k === 'box') { const b = libBox(lib, n.box); return b ? tr(b.label) : n.box; }
+  if (k === 'box') { const b = stepBox(lib, n); return b ? tr(b.label) : n.box; }
   if (k === 'each' && n.each === 'list') {
     const title = tr((lib.each_titles || {}).list) || t('For each entry of a list');
     return n.list ? t('{title}: {list}', { title, list: String(n.list) }) : title;
@@ -143,7 +184,7 @@ export function giveOf(lib: Library, n: Step): string {
   const k = kindOf(n);
   const arrows = lib.arrows || {};
   const word = (key: string) => tr(arrows[key] || key);
-  if (k === 'box') { const b = libBox(lib, n.box); return b && b.gives ? word(b.gives) : ''; }
+  if (k === 'box') { const b = stepBox(lib, n); return b && b.gives ? word(b.gives) : ''; }
   if (k === 'each') return word(ARROW_OF_EACH[n.each] || n.each);
   return '';
 }
@@ -206,8 +247,9 @@ export function freshRow(subjects: Subject[], of: string): Row { return normRow(
 
 /* -- edits ----------------------------------------------------------------------------------------------------- */
 
-export function fresh(tree: Step[], subjects: Subject[], kind: 'box' | 'each' | 'round' | 'if', arg?: string): Step {
+export function fresh(tree: Step[], subjects: Subject[], kind: 'box' | 'preset' | 'each' | 'round' | 'if', arg?: string): Step {
   if (kind === 'box') return { id: newId(tree, arg!), box: arg };
+  if (kind === 'preset') return { id: newId(tree, arg!), box: 'ask', preset: arg };
   if (kind === 'each' && arg === 'list') return { id: newId(tree, 'each_list'), each: 'list', list: '', as: 'item', steps: [] };
   if (kind === 'each') return { id: newId(tree, 'each_' + arg), each: arg, steps: [] };
   if (kind === 'round') return { id: newId(tree, 'round'), round: { most: 1 }, steps: [] };

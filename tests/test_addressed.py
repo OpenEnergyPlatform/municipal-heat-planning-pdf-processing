@@ -1092,10 +1092,12 @@ def test_the_details_of_new_works_run_side_by_side_before_any_value_is_read():
             return {"at": "3.1", "words": "IRENA"}
         return {"at": 0}
     _names, model, reads = read_works({"entry": 0}, each=each, detail=detail)
-    # A detail's job: (number, find, shown, payload, field, question,
-    # the piece that names the work).
+    # A detail's job: (number of the work, find, field, question, the
+    # piece that names the work).
+    asked_of_a_work = set(SCENARIOS.works["fields"])
     (details,) = [jobs for jobs in batches if jobs
-                  and isinstance(jobs[0], tuple) and len(jobs[0]) == 7]
+                  and isinstance(jobs[0], tuple) and len(jobs[0]) == 5
+                  and jobs[0][2] in asked_of_a_work]
     # Every detail of the three new works in one turn of side by side.
     assert len(details) == 3 * len(SCENARIOS.works["fields"])
     first_find = next(i for i, (kind, _p, _n) in enumerate(model.calls)
@@ -1222,6 +1224,31 @@ def test_a_figure_is_transcribed_once_in_two_lists_and_its_value_is_drawn(
                                   owner_kind="figure")
     row = {**checked.tuple, "flags": checked.flags, "tier": checked.tier}
     assert trust.trust(row)["level"] == trust.LEVEL_C
+
+
+def test_a_figure_written_out_with_a_step_s_own_parts_is_kept_apart(
+        tmp_path):
+    # A step that writes out the figures with a prompt, inputs or answer
+    # form of its own asks with its own request AND keeps what it wrote
+    # under its own mark, so that neither step takes the other's
+    # transcription (owner decision 2026-11-12 evening, every question is
+    # "Ask the model"; `engine.Engine.writes_figures`).
+    asked: list = []
+    told = {"inputs": [{"key": "figure", "from": "figure",
+                        "show": "figure_text"}]}
+    kept = transcripts(tmp_path, asked)
+    kept(7, [FIGURE])
+    assert asked == [5]
+    own: list = []
+
+    def own_ask(source, document_id):
+        own.append(source.owner_id)
+        return {"caption": CAPTION, "numbers": NUMBERS}
+    assert kept(7, [FIGURE], ask=own_ask, told=told)[1] == 1
+    assert own == [5] and asked == [5]
+    assert kept(7, [FIGURE], ask=own_ask, told=told)[1] == 0
+    # the failure by construction: the preset's step does not take it
+    assert kept(7, [FIGURE])[1] == 1 and asked == [5, 5]
 
 
 # -- 12. the reasons ------------------------------------------------------------

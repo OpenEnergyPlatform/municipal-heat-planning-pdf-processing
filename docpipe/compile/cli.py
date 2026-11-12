@@ -259,18 +259,24 @@ def _corpus(args, profile):
               for source in retrieve([probe], document, set())]
              for document, name in documents])
 
-    prompt = prompts.load(proposing.EXAMPLE_PROMPT_ID, profile)
+    # Asked as its step says: its prompt, and the inputs its message is
+    # built from (owner decision 2026-11-12 evening).
+    prompt, inputs = runner.step_parts(
+        runner.step_asking("example_proposal", "example", profile),
+        proposing.EXAMPLE_PROMPT_ID, profile)
     client = runner._client()
     token_usage.begin("compile")
     return find, lambda parameter, passage: ask_for_example(
-        client, prompt, parameter, passage)
+        client, prompt, parameter, passage, inputs)
 
 
-def ask_for_example(client, prompt, parameter: dict, passage: str):
+def ask_for_example(client, prompt, parameter: dict, passage: str,
+                    inputs: Optional[list] = None):
     """The reply to one example request as an object, or why there is none
     (a text). A reply that is not the one object that was asked for is
     asked again with what was wrong with it, as the harvest does; nothing
-    is repaired."""
+    is repaired. Its message is built from *inputs*, those of its preset
+    where None (`presets.PRESETS["example"]`)."""
     from .. import providers
     from .. import usage as token_usage
     from ..extraction import runner
@@ -280,8 +286,13 @@ def ask_for_example(client, prompt, parameter: dict, passage: str):
     numeric = parameter.get("value_type") in ("float", "int")
     name, shape = proposing.reply_shape(numeric)
     limit = asked["max_tokens"]
+    from ..extraction import general, shows
+    if inputs is None:
+        inputs = general.parts_of({"box": "ask", "preset": "example"})[
+            "inputs"]
     conversation = [{"role": "user", "content": json.dumps(
-        proposing.payload(parameter, passage), ensure_ascii=False)}]
+        shows.apart(inputs, {"field": parameter, "passage": passage}),
+        ensure_ascii=False)}]
     cause = "not_served"
     for attempt in range(1, ASK_ATTEMPTS + 1):
         try:

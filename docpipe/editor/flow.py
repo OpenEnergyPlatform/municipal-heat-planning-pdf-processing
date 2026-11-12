@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from .. import graphfile, rules, settings
-from ..extraction import blocks, conditions, general
+from ..extraction import blocks, conditions, shows
 from ..extraction import flow as flow_map
 from ..extraction import passflow
 from ..extraction.spec import YEAR_FIELDS
@@ -176,27 +176,33 @@ def _switch(name: str, data: Optional[dict]) -> dict:
 
 
 def _prompts(profile) -> dict:
-    """{request kind: {"id", "written", "owner"}} of every request a box
-    asks."""
+    """{request kind: {"id", "written", "owner"}} of every request a box or
+    a preset of "Ask the model" asks in the flow of a run."""
     owners = {row["id"]: row["owner"]
               for row in prompt_files.listing(profile)}
     out = {}
-    for box in blocks.LIBRARY.values():
-        if box.flow or not blocks.offered(box, profile):
-            continue
-        if box.asks and box.asks not in out:
-            prompt_id = f"{STAGE}/{box.asks}"
+    asked = [box.asks for box in blocks.LIBRARY.values()
+             if not box.flow and blocks.offered(box, profile)] + [
+        one["request"] for one in blocks.presets_catalogue(profile)
+        if not one["flow"]]
+    for kind in asked:
+        if kind and kind not in out:
+            prompt_id = f"{STAGE}/{kind}"
             owner = owners.get(prompt_id)
-            out[box.asks] = {"id": prompt_id, "written": owner is not None,
-                             "owner": owner}
+            out[kind] = {"id": prompt_id, "written": owner is not None,
+                         "owner": owner}
     return out
 
 
 def _never(prompts: dict, data: Optional[dict], computes: bool) -> dict:
-    """{kind of box: why this profile never takes it}: no profile of its
-    line writes its prompt, or its switch of the spec is off."""
+    """{kind of box, or name of a preset of "Ask the model": why this
+    profile never takes it}: no profile of its line writes its prompt, or
+    its switch of the spec is off."""
     out = {}
-    for box in blocks.LIBRARY.values():
+    steps = [(box.type, box) for box in blocks.LIBRARY.values()] + [
+        (one["name"], blocks.box_of({"box": "ask", "preset": one["name"]}))
+        for one in blocks.presets_catalogue()]
+    for name, box in steps:
         if box.flow or box.asks not in prompts and box.asks:
             continue
         why = None
@@ -216,7 +222,7 @@ def _never(prompts: dict, data: Optional[dict], computes: bool) -> dict:
                        else "This profile has no extraction spec, so no "
                        "run takes this step.")
         if why:
-            out[box.type] = why
+            out[name] = why
     return out
 
 
@@ -354,7 +360,7 @@ def own_at(tree: list) -> dict:
         given = node.get("rules")
         for name in (given if isinstance(given, dict) else {}):
             note(name, node)
-        box = blocks.LIBRARY.get(node.get("box"))
+        box = blocks.box_of(node)
         mine = node.get("own")
         for setting in (box.settings if box is not None else ()):
             if (setting.number and isinstance(mine, dict)
@@ -426,7 +432,7 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
             # What the general steps choose from (owner decision
             # 2026-11-12): how an input is shown, the profile's prompts,
             # the fields of the Spec, the variables before each step.
-            "shows": general.shows_catalogue(),
+            "shows": shows.shows_catalogue(),
             "prompt_ids": sorted(row["id"] for row in
                                  prompt_files.listing(profile)
                                  if str(row["id"]).startswith(STAGE + "/")),
@@ -659,7 +665,11 @@ def pass_library() -> dict:
     whole = blocks.catalogue()
     return {"boxes": whole["pass_boxes"], "each": dict(passflow.EACH),
             "each_titles": dict(passflow.EACH_TITLES), "which": {},
-            "orders": {}, "order_words": {}, "arrows": whole["arrows"]}
+            "orders": {}, "order_words": {}, "arrows": whole["arrows"],
+            "presets": [one for one in blocks.presets_catalogue()
+                        if one["flow"] == "pass"],
+            "forms": whole["forms"], "targets": whole["targets"],
+            "shows": whole["shows"]}
 
 
 def pass_view(profile, own_raw: Optional[bytes], name: str,

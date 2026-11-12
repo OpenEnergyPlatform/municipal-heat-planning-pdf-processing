@@ -186,7 +186,7 @@ def test_a_find_of_a_number_field_names_a_number_as_its_line_prints_it():
 def test_a_drawing_the_run_cannot_do_is_not_tried(scenarios):
     profile, _ = scenarios
     tree = copy.deepcopy(flow.tree_of(profile))
-    tree.insert(1, {"id": "lost_search", "box": "search"})
+    tree.insert(1, {"id": "lost_search", "box": "ask", "preset": "search"})
     with pytest.raises(flowtry.Refused, match="lost_search"):
         tried(scenarios, "nothing", tree)
     with pytest.raises(flowtry.Refused, match="mode"):

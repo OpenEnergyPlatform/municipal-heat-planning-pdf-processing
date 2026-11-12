@@ -299,28 +299,6 @@
     "rows_around": 0,
     "show_table_title": true,
     "show_table_head": true,
-    "phrase_shows": [
-      "label",
-      "description",
-      "document",
-      "question",
-      "value",
-      "headings",
-      "before"
-    ],
-    "about_shows": [
-      "value",
-      "passage",
-      "question",
-      "answer",
-      "place"
-    ],
-    "shown_block_order": [
-      "passage",
-      "headings",
-      "title_page",
-      "settings"
-    ],
     "bullet_marks": "•▪●◦",
     "split_bullets": true,
     "split_ordinals": false,
@@ -411,7 +389,6 @@
     "plans_kept": 8,
     "search_list_factor_on": false,
     "search_rest_after": false,
-    "docfield_title_page": true,
     "phrase_anew": false,
     "phrase_new_from_round": 2,
     "search_skips_own_piece": true,

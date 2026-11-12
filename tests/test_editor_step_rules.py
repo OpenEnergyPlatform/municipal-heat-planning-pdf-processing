@@ -57,7 +57,7 @@ def test_a_step_may_set_a_rule_of_the_graph_file_it_reads():
     profile = load_profile("kwp")
     tree = copy.deepcopy(flow_map.tree_of(profile))
     box = next(node for node, _frames in flow_map.walk(tree)
-               if node.get("box") == "compute")
+               if rules.step_kind(node) == "compute")
     box.setdefault("rules", {})["rounding_tolerance"] = 0.5
     known = flow_map.known_rules(profile)
     assert flow_map.problems(tree, known) == []

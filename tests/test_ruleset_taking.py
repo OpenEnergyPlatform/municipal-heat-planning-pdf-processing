@@ -20,6 +20,7 @@ from docpipe.extraction import (compute, fields, found, lookup, pipeline,
 from docpipe.extraction.pipeline import Row, Source, merge_field
 
 from test_addressed import ENERGY, SLOTS, SPEC
+from conftest import step_node
 
 TEXT = ("Der Endenergieverbrauch liegt im Jahr 2030 bei 450 MWh und im "
         "Basisjahr 2022 bei 500 MWh.")
@@ -96,7 +97,7 @@ def test_check_quote_shown_holds_for_a_value_and_a_step_may_switch_it():
     # rule says where the reading may find that place (`place_of`).
     assert verify.value_refused(raw, ENERGY, TEXT) == verify.QUOTE_NOT_FOUND
     quote = "Ab dem Jahr 2030 sinkt der Verbrauch"
-    node = {"id": "x", "box": "find"}
+    node = step_node("find")
     with rules.in_step(rules.stepped(node, {"check_quote_shown": False})):
         assert verify.value_refused(
             raw, ENERGY, TEXT) == verify.QUOTE_NOT_FOUND
@@ -205,7 +206,7 @@ def test_read_off_figures_decides_if_a_drawn_number_is_read_off_the_image():
     assert not verify.read_off(raw, "table")
     with rules.overlaid(read_off_figures=False):
         assert not verify.read_off(raw, "figure")
-    node = {"id": "x", "box": "coord"}
+    node = step_node("coord")
     with rules.in_step(rules.stepped(node, {"read_off_figures": False})):
         assert not verify.read_off(raw, "figure")
     assert verify.read_off(raw, "figure")
@@ -622,7 +623,7 @@ def test_every_rule_of_taking_has_its_standard_and_its_decision_is_named():
 
 
 def test_what_is_made_from_a_rule_is_made_again_for_a_step_that_sets_it():
-    node = {"id": "x", "box": "coord"}
+    node = step_node("coord")
     text = "rund 45 000 MWh"
     assert "45000" in verify.numbers_in(text)
     with rules.in_step(rules.stepped(node, {"thousands_spaces": ""})):

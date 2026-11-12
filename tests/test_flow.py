@@ -79,8 +79,9 @@ def test_every_request_the_code_sends_is_asked_by_a_box_of_the_default():
     # own; every other kind the code sends has its box: in the default flow,
     # or among the boxes a profile brings itself (owner decision
     # 2026-11-12, profiles/<name>/blocks.py).
-    own = {box.asks for box in blocks.LIBRARY.values()
-           if box.profile and box.asks}
+    from docpipe.extraction.presets import PRESETS
+    blocks.LIBRARY.get("ask")               # the profiles' presets are read
+    own = {one.request for one in PRESETS.values() if one.profile}
     assert flow.asked(flow.load().tree) | own \
         == set(flow.kinds()) - {"follow"}
     assert {"names", "work"} <= own
@@ -90,9 +91,12 @@ def test_every_request_the_code_sends_is_asked_by_a_box_of_the_default():
     assert "compute" not in flow.asked(drawing)
 
 
-def test_every_number_is_a_setting_of_a_box_of_the_library():
+def test_every_number_is_a_setting_of_a_box_or_preset_of_the_library():
+    from docpipe.extraction.presets import PRESETS
     taken = {s.number for box in blocks.LIBRARY.values()
-             for s in box.settings if s.number}
+             for s in box.settings if s.number} \
+        | {s.number for one in PRESETS.values()
+           for s in one.settings if s.number}
     assert taken == {number.name for number in flow.NUMBERS}
 
 
@@ -105,7 +109,8 @@ def test_the_default_drawing_can_run():
 def test_a_find_where_values_go_is_refused():
     drawing = tree()
     values = node(drawing, "values")
-    values["steps"].insert(0, {"id": "lost_find", "box": "find"})
+    values["steps"].insert(0, {"id": "lost_find", "box": "ask",
+                               "preset": "find"})
     # what it takes (a chunk) no step before it gives (owner decision
     # 2026-11-12: where a step may stand follows from its inputs)
     assert any("takes the chunk" in m for m in said(drawing))
@@ -114,14 +119,30 @@ def test_a_find_where_values_go_is_refused():
 def test_a_question_of_a_coordinate_outside_each_value_is_refused():
     drawing = tree()
     drawing.insert(drawing.index(node(drawing, "values")),
-                   {"id": "stray", "box": "coord"})
+                   {"id": "stray", "box": "ask", "preset": "coord"})
     assert any("takes the dimension" in m for m in said(drawing))
+
+
+def test_a_step_asked_apart_from_the_reading_takes_what_its_target_gives():
+    # The figures are written out before the document is cut: the step
+    # takes the figure and nothing of the reading (owner decision
+    # 2026-11-12 evening; the chunks of a field are ordered the same way,
+    # by the field and the document alone).
+    drawing = tree()
+    figures = node(drawing, "figures")
+    figures["set"] = {"inputs": [{"key": "figure", "from": "figure",
+                                  "show": "figure_text"}]}
+    assert said(drawing) == []
+    # the failure by construction: an input of the reading
+    figures["set"] = {"inputs": [{"key": "headings", "from": "chunk",
+                                  "show": "headings"}]}
+    assert any("asked apart from the reading" in m for m in said(drawing))
 
 
 def test_a_frame_of_coordinates_without_a_state_is_refused():
     drawing = tree()
     frame = node(drawing, "coordinates")
-    frame["steps"] = [{"id": "only", "box": "coord"}]
+    frame["steps"] = [{"id": "only", "box": "ask", "preset": "coord"}]
     assert any("needs a state box" in m for m in said(drawing))
 
 
@@ -154,7 +175,7 @@ def test_a_question_whose_prompt_the_profile_does_not_write_is_refused(
     (lambda d: d.append({"id": "x", "box": "nothing"}), "there is no box"),
     (lambda d: d.append(dict(d[0])), "stands twice"),
     (lambda d: d.insert(0, d.pop(2)), "where the flow gives it"),
-    (lambda d: d.append({"id": "late", "box": "compute"}),
+    (lambda d: d.append({"id": "late", "box": "ask", "preset": "compute"}),
      "compute stands once at most"),
     (lambda d: node(d, "own_place").update(loops=3), "has no key 'loops'"),
     (lambda d: node(d, "own_place").update(set={"mode": "x"}),

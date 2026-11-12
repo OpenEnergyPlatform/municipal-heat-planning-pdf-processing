@@ -210,7 +210,8 @@ RULES = (
        "table head instead. A larger number gives the model more context and "
        "makes every request longer. 0 shows only the value's own line.",
        least=0,
-       decided="2026-11-08", where="addressed.py (show_value)"),
+       decided="2026-11-08",
+       where="shows.py (around), addressed.py (show_value)"),
     _r("letter_title_page", "prompts", "How a place in the document is shown",
        "text",
        "The letter put before the line numbers of the title page in a "
@@ -1011,9 +1012,16 @@ STEP: contextvars.ContextVar = contextvars.ContextVar("step", default=None)
 
 def step_kind(node: dict) -> str:
     """How a node of a flow is named where a rule says which steps read it:
-    a box by its kind ("find"), a frame as "each <what>", "round" or
-    "if"."""
+    a box by its kind ("split"), a step of "Ask the model" by its preset
+    ("find"), a frame as "each <what>", "round" or "if"."""
     if "box" in node:
+        if node.get("box") == "ask" and node.get("preset"):
+            # A step of "Ask the model" reads the rules of the step its
+            # preset stands for (owner decision 2026-11-12 evening).
+            from .extraction.blocks import preset_of
+            found = preset_of(node)
+            if found is not None:
+                return found.kind
         return str(node["box"])
     if "each" in node:
         return f"each {node['each']}"

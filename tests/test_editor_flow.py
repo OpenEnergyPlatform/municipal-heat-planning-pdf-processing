@@ -126,10 +126,11 @@ def test_a_box_no_run_of_the_profile_takes_says_why():
     # the works and names of scenario papers are boxes of their profile,
     # which the page of the heat plans does not offer; scenarios writes no
     # prompt for the calculation
-    offered = {box["type"] for box in plans["library"]["boxes"]}
-    assert "works" not in offered and "names" not in offered
-    assert {"works", "names"} <= {box["type"] for box
-                                  in papers["library"]["boxes"]}
+    def offered(shown):
+        return {box["type"] for box in shown["library"]["boxes"]} \
+            | {one["name"] for one in shown["library"]["presets"]}
+    assert "works" not in offered(plans) and "names" not in offered(plans)
+    assert {"works", "names"} <= offered(papers)
     assert "works" not in plans["never"]
     assert "extraction/compute" in papers["never"]["compute"]
     assert "works" not in papers["never"]
@@ -224,7 +225,7 @@ def test_a_drawing_is_written_only_where_it_differs_from_the_inherited(
 def test_a_drawing_the_run_cannot_do_is_refused_at_its_box(profile):
     tree = copy.deepcopy(flow.tree_of(profile))
     # a search outside any coordinate, and a box no library knows
-    tree.insert(1, {"id": "lost_search", "box": "search"})
+    tree.insert(1, {"id": "lost_search", "box": "ask", "preset": "search"})
     tree.insert(1, {"id": "made_up", "box": "no_such_box"})
     report = flow_view.judge(profile, None, numbers_of(profile), "flow.json",
                              tree)
@@ -241,11 +242,12 @@ def test_a_drawing_the_run_cannot_do_is_refused_at_its_box(profile):
 
 
 def test_what_an_edit_did_to_the_drawing_is_said_one_line_each():
-    old = [{"id": "a", "box": "find"}, {"id": "b", "box": "write"},
+    old = [{"id": "a", "box": "ask", "preset": "find"},
+           {"id": "b", "box": "write"},
            {"id": "c", "each": "value", "steps": [{"id": "d",
                                                   "box": "settle"}]}]
-    new = [{"id": "b", "box": "write"}, {"id": "a", "box": "find",
-                                         "off": True},
+    new = [{"id": "b", "box": "write"},
+           {"id": "a", "box": "ask", "preset": "find", "off": True},
            {"id": "c", "each": "value", "steps": [{"id": "e",
                                                   "box": "state"}]}]
     assert flow_view.tree_changes(old, new) == [
@@ -549,7 +551,7 @@ def test_a_request_is_counted_at_the_box_that_asked_it():
     for kind in flow.kinds():
         step = measured.step_of({"kind": kind})
         if step is not None:
-            assert blocks.LIBRARY[boxes[step]["box"]].asks == kind
+            assert blocks.box_of(boxes[step]).asks == kind
     # a request that names its box is counted there, a follow-up at its
     # question's box
     found = measured.facts([

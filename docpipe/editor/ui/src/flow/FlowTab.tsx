@@ -22,7 +22,7 @@ import { clone, wrote } from '../lib/util';
 import { Diff } from '../components/Bits';
 import { layout, type Decor } from './layout';
 import {
-  ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, libBox, listOf, moveBy, remove, siblingsRun, walk,
+  ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, listOf, moveBy, remove, siblingsRun, stepBox, walk,
   wrap, type FlowData, type Step,
 } from './model';
 import { Ctx, DotNode, FrameNode, StepEdge, StepNode, WayNode, frameWord, type FlowCtx } from './nodes';
@@ -377,7 +377,7 @@ function FlowInner() {
     };
     return { list: keyOf(got.steps), at: got.steps.indexOf(got.n) + 1 };
   };
-  const removable = (n: Step) => { const b = kindOf(n) === 'box' && F.data ? libBox(F.data.library, n.box) : null; return !(b && (b.fixed || !b.switch)); };
+  const removable = (n: Step) => { const b = kindOf(n) === 'box' && F.data ? stepBox(F.data.library, n) : null; return !(b && (b.fixed || !b.switch)); };
   const act = (what: string, id: string, arg?: string) => {
     const got = find(F.tree, id);
     if (!got || !F.data) return;

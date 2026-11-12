@@ -11,7 +11,7 @@ import {
 import { IconMinus, IconPlus } from '@tabler/icons-react';
 import { AreaBox, TextBox } from '../components/Inputs';
 import { rich, t, tr, useLang } from '../lib/i18n';
-import { libBox, type FlowData, type Library, type LibSetting, type Step } from './model';
+import { partsOf, stepBox, type FlowData, type Library, type LibSetting, type Step } from './model';
 
 /* the visual editor of a schema, loaded when it is opened */
 const SchemaEditor = lazy(() => import('./SchemaEditor'));
@@ -25,15 +25,16 @@ interface Input { key: string; from: string; show?: string }
 const Label = ({ s }: { s: LibSetting }) => <Text size="sm" fw={600} mb={4}>{rich(tr(s.label))}</Text>;
 const Help = ({ s }: { s: LibSetting }) => s.help ? <Text size="xs" c="dimmed" mt={4}>{rich(tr(s.help))}</Text> : null;
 
-/* one setting of a general step; *vars* are the variables there before it */
-export function GeneralField({ s, value, put, vars, data }: {
-  s: LibSetting; value: unknown; put: Put; vars: string[]; data: FlowData;
+/* one setting of a general step; *vars* are the variables there before it, *reset* takes the step back to its preset's
+   part where it has one of its own */
+export function GeneralField({ s, value, put, vars, data, reset }: {
+  s: LibSetting; value: unknown; put: Put; vars: string[]; data: FlowData; reset?: () => void;
 }) {
   useLang();
   let body: React.ReactNode = null;
   if (s.kind === 'prompt') body = <PromptField value={value ?? s.default} put={put} ids={data.prompt_ids || []} />;
   else if (s.kind === 'inputs') body = <InputsField value={value} put={put} vars={vars} data={data} />;
-  else if (s.kind === 'schema') body = <SchemaField value={value} put={put} />;
+  else if (s.kind === 'schema') body = <SchemaField value={value} put={put} data={data} />;
   else if (s.kind === 'into') body = <IntoField value={value} put={put} data={data} />;
   else if (s.kind === 'varname') {
     body = <TextBox mono value={String(value ?? s.default ?? '')} onText={() => {}} aria-label={tr(s.label)}
@@ -59,7 +60,12 @@ export function GeneralField({ s, value, put, vars, data }: {
           put(v.length ? v : undefined);
         }} />))}</Stack>;
   }
-  return <Box><Label s={s} />{body}<Help s={s} /></Box>;
+  return (
+    <Box>
+      <Label s={s} />{body}<Help s={s} />
+      {reset && <Button mt={4} size="compact-xs" variant="subtle" color="gray" onClick={reset}>{t('as its preset')}</Button>}
+    </Box>
+  );
 }
 
 /* a prompt of the profile, or a text of the step's own ({"text": ...}) */
@@ -114,22 +120,32 @@ function InputsField({ value, put, vars, data }: { value: unknown; put: Put; var
   );
 }
 
-/* the form of the answer: a JSON schema, drawn with jsonjoy-builder in a window, or written as JSON */
-function SchemaField({ value, put }: { value: unknown; put: Put }) {
+/* the form of the answer: a form the reading knows (values with their lines, a place, a list entry, ...), or a JSON
+   schema of its own, drawn with jsonjoy-builder in a window, or written as JSON */
+const ONE_TEXT = { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'] };
+function SchemaField({ value, put, data }: { value: unknown; put: Put; data: FlowData }) {
   const lang = useLang();
   const [open, setOpen] = useState(false);
-  const schema = (typeof value === 'object' && value !== null ? value : {
-    type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'],
-  }) as Record<string, unknown>;
+  const forms = data.library.forms || {};
+  const named = typeof value === 'string';
+  const schema = (!named && typeof value === 'object' && value !== null ? value : ONE_TEXT) as Record<string, unknown>;
   const [draft, setDraft] = useState<Record<string, unknown>>(schema);
   const keys = Object.keys((schema.properties as Record<string, unknown>) || {});
+  const form = named ? forms[value as string] : undefined;
   return (
     <Stack gap={6}>
-      <Group gap={6}>
+      <SegmentedControl size="xs" value={named ? 'named' : 'own'}
+        data={[{ value: 'named', label: t('a form the reading knows') }, { value: 'own', label: t('a form of its own') }]}
+        onChange={v => put(v === 'named' ? (Object.keys(forms)[0] || undefined) : ONE_TEXT)} />
+      {named && <NativeSelect value={value as string} aria-label={t('form of the answer')}
+        data={Object.entries(forms).map(([k, f]) => ({ value: k, label: tr(f.label) }))}
+        onChange={e => put(e.currentTarget.value)} />}
+      {form && <Text size="xs" c="dimmed">{rich(tr(form.says))}</Text>}
+      {!named && <Group gap={6}>
         <Text size="sm" className="dp-mono">{keys.length ? keys.join(', ') : t('no keys yet')}</Text>
         <Button size="compact-xs" variant="light" onClick={() => { setDraft(schema); setOpen(true); }}>{t('Edit the form')}</Button>
         {value !== undefined && <Button size="compact-xs" variant="subtle" color="gray" onClick={() => put(undefined)}>{t('one text answer')}</Button>}
-      </Group>
+      </Group>}
       <Modal opened={open} onClose={() => setOpen(false)} size="xl" title={t('Form of the answer')}>
         <Stack gap="sm">
           <Box className="dp-schema">
@@ -149,21 +165,35 @@ function SchemaField({ value, put }: { value: unknown; put: Put }) {
   );
 }
 
-/* where the answer goes: a variable of its own name, for this item or for the whole document, or the values of a field
-   of the Spec, each with its line */
+/* where the answer goes, its target: a variable of its own name, for this item or for the whole document; the values of
+   a field of the Spec, each with its line, kept at once or gathered over the rounds; or what a preset's target does with
+   it (a dimension of the value, a list entry, a search sentence, ...) */
 function IntoField({ value, put, data }: { value: unknown; put: Put; data: FlowData }) {
-  const into = (typeof value === 'object' && value !== null ? value : {}) as { var?: string; lasting?: boolean; field?: string };
-  const field = 'field' in into;
+  const into = (typeof value === 'object' && value !== null ? value : {}) as {
+    to?: string; var?: string; lasting?: boolean; field?: string; keep?: string;
+  };
+  const targets = data.library.targets || {};
+  const to = into.to || (into.field ? 'values' : 'var');
+  const target = targets[to];
   const fields = data.spec_fields || [];
   return (
     <Stack gap={6}>
-      <SegmentedControl size="xs" value={field ? 'field' : 'var'}
-        data={[{ value: 'var', label: t('a variable') }, { value: 'field', label: t('values of a field') }]}
-        onChange={v => put(v === 'field' ? { field: fields[0] ? fields[0].uri : '' } : { var: 'answer_1' })} />
-      {field
-        ? <NativeSelect value={into.field || ''} aria-label={t('field of the Spec')}
-            data={fields.map(f => ({ value: f.uri, label: f.label }))} onChange={e => put({ field: e.currentTarget.value })} />
-        : <Group gap="sm">
+      <NativeSelect value={to} aria-label={t('target')}
+        data={Object.entries(targets).filter(([k, x]) => !x.nested || k === to).map(([k, x]) => ({ value: k, label: tr(x.label) }))}
+        onChange={e => {
+          const v = e.currentTarget.value;
+          put(v === 'var' ? { var: 'answer_1' } : v === 'values' ? { to: 'values', field: fields[0] ? fields[0].uri : '' } : { to: v });
+        }} />
+      {target && <Text size="xs" c="dimmed">{rich(tr(target.says))}</Text>}
+      {to === 'values' && <Group gap="sm">
+        <NativeSelect value={into.field || ''} aria-label={t('field of the Spec')}
+          data={[{ value: '', label: t('the field of its loop') }, ...fields.map(f => ({ value: f.uri, label: f.label }))]}
+          onChange={e => put({ ...into, to: 'values', field: e.currentTarget.value || undefined })} />
+        <NativeSelect value={into.keep || 'now'} aria-label={t('how the values are kept')}
+          data={[{ value: 'now', label: t('kept at once') }, { value: 'gathered', label: t('gathered over the rounds') }]}
+          onChange={e => put({ ...into, to: 'values', keep: e.currentTarget.value })} />
+      </Group>}
+      {to === 'var' && <Group gap="sm">
             <TextBox mono w={160} value={into.var || ''} onText={() => {}} aria-label={t('name of the variable')}
               onCommit={v => put({ ...into, var: v.trim() })} />
             <Switch size="xs" label={t('holds for the whole document')} checked={!!into.lasting}
@@ -182,7 +212,7 @@ function JsonField({ value, put, label }: { value: unknown; put: Put; label: str
 /* what a step takes and gives, in the words of the variables: a step of the library by its inputs and outputs, a
    general step by its settings (as inputs_of and outputs_of of extraction/flow.py say it) */
 export function ioOf(lib: Library, n: Step): { takes: string[]; gives: string[] } {
-  const b = libBox(lib, n.box);
+  const b = stepBox(lib, n);
   if (!b) return { takes: [], gives: [] };
   const known = lib.variables || {};
   const word = (name: string) => tr((known[name] || { label: name }).label);
@@ -192,10 +222,17 @@ export function ioOf(lib: Library, n: Step): { takes: string[]; gives: string[] 
   const root = (p: unknown) => (typeof p === 'string' && p ? p.split('.')[0] : '');
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
   switch (b.type) {
-    case 'ask': return {
-      takes: uniq((set.inputs || []).map((i: { from?: string }) => root(i.from))).map(word),
-      gives: (set.into && set.into.field ? ['answer', 'values'] : ['answer', (set.into && set.into.var) || n.id]).map(word),
-    };
+    case 'ask': {
+      // what its target gives the request is not taken (flow.inputs_of), what it makes is given (flow.outputs_of)
+      const parts = partsOf(lib, n);
+      const to = String(parts.into.to);
+      const target = (lib.targets || {})[to];
+      const given = new Set(target ? target.gives : []);
+      return {
+        takes: uniq(parts.inputs.map(i => root(i.from)).filter(r => !given.has(r))).map(word),
+        gives: (to === 'var' ? ['answer', String(parts.into.var || n.id)] : (target && target.outputs) || []).map(word),
+      };
+    }
     case 'retrieve': return { takes: uniq([root(set.query)]).map(word), gives: [word(set.into || 'hits')] };
     case 'rerank': return { takes: uniq([root(set.list), root(set.query)]).map(word), gives: [word(set.into || n.id)] };
     case 'set': return { takes: uniq([root(set.from)]).map(word), gives: set.name ? [word(set.name)] : [] };

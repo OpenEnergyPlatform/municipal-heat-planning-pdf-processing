@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 MAIN = "main"
 FOLDER = "flows"
 KEYS = ("flow",)
-BOX_KEYS = ("id", "box", "set", "rules", "off", "note")
+BOX_KEYS = ("id", "box", "preset", "set", "rules", "off", "note")
 FRAME_KEYS = ("id", "each", "rules", "steps", "off", "note")
 # What a frame of a pass goes through: the dimensions a box before it chose.
 FRAMES = ("dimension",)
@@ -218,9 +218,9 @@ def problems(tree, known: Optional[dict] = None) -> list:
                       f"read one after the other")
         if box.scope == "chain":
             _how(check, node, box, chain)
-        seen_on.append(box.type)
+        seen_on.append(rules.step_kind(node))
         if chain is not None:
-            chain.append(box.type)
+            chain.append(rules.step_kind(node))
     return check.out
 
 
@@ -241,6 +241,16 @@ def _box(check, node: dict):
         check.say(node, f"there is no box {node.get('box')!r}"
                   f"{flow_map._nearest(node.get('box'), blocks.LIBRARY)}")
         return None
+    if "preset" in node:
+        if node.get("box") != "ask":
+            check.say(node, "only a step of \"Ask the model\" has a preset")
+            return None
+        if blocks.preset_of(node) is None:
+            from .presets import PRESETS
+            check.say(node, f"there is no preset {node.get('preset')!r}"
+                      f"{flow_map._nearest(node.get('preset'), PRESETS)}")
+            return None
+    box = blocks.box_of(node)
     if box.flow != "pass":
         check.say(node, f"{box.label} is a box of the main flow: a pass "
                   f"reads a harvest that is written, and has no use for "
@@ -258,8 +268,7 @@ def _box(check, node: dict):
 
 def _after(check, node: dict, box: blocks.Box, before: list) -> None:
     if box.after and not any(kind in before for kind in box.after):
-        wanted = " or ".join(
-            blocks.LIBRARY[kind].label for kind in box.after)
+        wanted = " or ".join(blocks.label_of(kind) for kind in box.after)
         check.say(node, f"{box.label} works on what {wanted} gives, so "
                   f"{wanted} stands before it, and is on")
 
@@ -315,7 +324,7 @@ def _frame(check, node: dict, chain: Optional[list], seen_on: list) -> None:
                       f"an each dimension frame")
             continue
         _after(check, child, box, inside)
-        inside.append(box.type)
+        inside.append(rules.step_kind(child))
 
 
 def shared_trace(first: str, second: str, profile=None) -> Optional[str]:
@@ -353,9 +362,9 @@ def homes(profile=None) -> dict:
             log.warning("flow %s: %s", name, exc)
             continue
         for node, _frames in flow_map.on(tree):
-            box = blocks.LIBRARY.get(node.get("box"))
-            if box is not None and box.asks:
-                found.setdefault(box.asks, node)
+            asks = blocks.asks_of(node) if "box" in node else None
+            if asks:
+                found.setdefault(asks, node)
     return found
 
 
@@ -414,7 +423,7 @@ def setting(node: dict, key: str):
     own = node.get("set") or {}
     if key in own:
         return own[key]
-    box = blocks.LIBRARY[node["box"]]
+    box = blocks.box_of(node)
     found = next(s.default for s in box.settings if s.key == key)
     return "" if found is None and next(
         s.kind for s in box.settings if s.key == key) == blocks.TEXT \
@@ -443,11 +452,22 @@ def run_node(run: Run, doc, node: dict) -> None:
                     run_node(run, doc, child)
             doc.unit = None
             return
-        act = passboxes.ACTS.get(node["box"])
+        act = act_of(node)
         if act is None:
-            raise PassError(f"{blocks.LIBRARY[node['box']].label} is not "
+            raise PassError(f"{blocks.box_of(node).label} is not "
                             f"a step a run starts")
         act(run, doc, node)
+
+
+def act_of(node: dict) -> Optional[Callable]:
+    """What runs a step of a pass, act(run, doc, node), None where no run
+    starts it: its box's (`passboxes.ACTS`), for "Ask the model" its
+    target's (`targets.Target.pass_run`)."""
+    from . import passboxes, targets
+    if node.get("box") == "ask":
+        target = targets.TARGETS.get(blocks.target_of(node))
+        return target.pass_run if target is not None else None
+    return passboxes.ACTS.get(node.get("box"))
 
 
 def _chains(tree: list) -> list:
@@ -455,7 +475,7 @@ def _chains(tree: list) -> list:
     order, the chains with the box that starts them first."""
     out: list = []
     for node in tree:
-        box = blocks.LIBRARY.get(node.get("box"))
+        box = blocks.box_of(node)
         if "each" in node:
             if out and isinstance(out[-1], list):
                 out[-1].append(node)
@@ -479,10 +499,10 @@ def run_flow(tree: list, run: Run) -> Counter:
         if isinstance(part, dict):
             if not part.get("off"):
                 with rules.in_step(stepped(part)):
-                    act = passboxes.ACTS.get(part["box"])
+                    act = act_of(part)
                     if act is None:
                         raise PassError(
-                            f"{blocks.LIBRARY[part['box']].label} is not "
+                            f"{blocks.box_of(part).label} is not "
                             f"a step a run starts")
                     act(run, None, part)
             continue
@@ -516,7 +536,7 @@ def _one(run: Run, chain: list, make_doc: Callable, key) -> tuple:
 def _chain(run: Run, chain: list) -> None:
     from . import passboxes
     start = chain[0]
-    box = blocks.LIBRARY[start["box"]]
+    box = blocks.box_of(start)
     folder, archive_as, label = (
         setting(start, key) if any(s.key == key for s in box.settings)
         else "" for key in ("trace", "archive", "label"))
@@ -632,11 +652,9 @@ def startable(tree: list) -> Optional[str]:
     """Why no run starts this flow, or None: a box that stands in the
     library for a request no run starts (the example of a field is asked
     while a spec is compiled) cannot be started from here."""
-    from . import passboxes
     for node, _frames in flow_map.on(tree):
-        kind = node.get("box")
-        if kind in blocks.LIBRARY and kind not in passboxes.ACTS:
-            return (f"{blocks.LIBRARY[kind].label} is not a step a run "
+        if node.get("box") in blocks.LIBRARY and act_of(node) is None:
+            return (f"{blocks.box_of(node).label} is not a step a run "
                     f"starts: it stands in the library so that its "
                     f"request has values of its own")
     return None

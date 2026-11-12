@@ -198,7 +198,10 @@ and are never used in place of them (see Finding a field's values in a piece).
 ### Transcribing the figures
 
 A figure goes through the model once per run, before the document is read
-(`addressed.Transcripts`, prompt `extraction/transcribe`, owner decision
+(the preset `transcribe`, target `figure_lines`: `Engine.writes_figures` and
+`targets.figure_lines` write it out, `addressed.Transcripts` keeps it, and
+`runner.transcript_fingerprint` names the prompt, model, inputs and answer form it
+was written with; prompt `extraction/transcribe`, owner decision
 2026-11-08): its crop and its description go out, and the reply is
 `{"caption": [...], "numbers": [...]}` (owner decision 2026-11-09). The caption is
 the title, a line for each axis with its unit and the names on it, and a line for
@@ -329,7 +332,8 @@ strict graph (owner decision 2026-11-02).
 
 ### Finding a field's values in a piece
 
-The reading proper (`addressed.Reader.find`, prompt `extraction/find`, owner
+The reading proper (the preset `find` of "Ask the model", target `values` with
+`keep: now`: `targets.values`, `targets.at_once`; prompt `extraction/find`, owner
 decisions 2026-11-08). Every field is asked of every piece, best first
 (see The order of a whole plan), one request per field and piece. The request
 shows the field, what a value of it is (its `brief` where the spec writes one,
@@ -339,7 +343,7 @@ with their addresses, and nothing else; a field with a list shows the list too
 `{"found": [{"at": ..., "words": ...}]}`: one entry for each value, its address
 (the cell where the value stands in a cell line, else the line, a stretch where
 it runs over several) and its words as the line prints them; an empty list says
-the piece holds none. Every request that finds values (find, docfield, work) shows
+the piece holds none. Every request that finds values (the presets find, docfield, works) shows
 two example replies in its prompt: one with a find at the request's own first line
 (a cell where that line has cells) and one with no finds
 (`addressed.find_example`; the prompt places `{{example}}` and `{{nothing}}`,
@@ -398,7 +402,7 @@ twice from two pieces is one node in the kwp graph, which merges repeats.
 
 A piece whose answer did not fit its room is asked again in halves of its own
 lines, each with the lines every piece of its passage shows, until a single line
-is a hole of its own (`Reader.find`; owner decision 2026-09-12: a request is
+is a hole of its own (`targets.at_once`, halves by `Reader.halves`; owner decision 2026-09-12: a request is
 split, never its answer rescued). A request that came to no reply leaves a hole
 for its field and passage, `cut_off` where it did not fit and `no_answer`
 otherwise, and the other pieces are read (`reading.Read.lost`,
@@ -416,7 +420,8 @@ of the rows it used (`profiles/kwp/compute.qualified`).
 
 A field the spec marks `once_per_document` (a publication's title, its authors,
 its organisation; kwp: the planning organisation) is asked once per document,
-never per piece (the box `docfield`: `Engine.box_docfield`, `Reader.ask_window`, prompt `extraction/docfield`, owner decisions
+never per piece (the preset `docfield`, target `values` with `keep: gathered`:
+`targets.gathered`, prompt `extraction/docfield`, owner decisions
 2026-11-08 and 2026-11-09): the first request shows the field in full (its whole
 description) and the title page (`T`); the pieces are those the search finds best
 for the field's sentence, the run's budget of them (`search_pieces`, by kind as in
@@ -437,7 +442,8 @@ in one probe the title in 17 documents, the abstract in 132 of 164.
 
 ### Asking a coordinate of a value
 
-Every found value is then asked its coordinates (the frame of each coordinate and its box `coord`: `Engine.box_coord`, `Reader.ask_own_place`, prompt
+Every found value is then asked its coordinates (the frame of each coordinate and its step, the preset `coord`, target `dimension`
+with `where: own`: `targets.at_own_place`, prompt
 `extraction/coord`, owner decisions 2026-11-05, 2026-11-07 and 2026-11-08): each
 on its own, one request for each, in the order of the spec's groups and of
 each group's coordinates, side by side with every other value. A request has no
@@ -476,14 +482,15 @@ reasons (see Asking again: follow-ups), and then ends `unbacked`.
 
 **What a `0` leads to.** A coordinate whose own place does not state it goes on
 to the search (see Searching for what a value's place does not say), which goes
-with a sentence a request of its own writes (`phrase`), unless only
+with a sentence a request of its own writes (the preset `phrase`, target `sentence`), unless only
 the place of the value can say it: the coordinates a group names under
 `own_passage` or `own_value` (owner decision 2026-11-06; kwp: `unit`, `what`,
 `subject`, `aggregation` and `role` are `own_passage`, `qualifier` is `own_value`)
 are never searched and end `unstated` where their place does not state them. A
 number's year still open after the search is asked last with the plan's years:
 the line of the value's place that names the plan's word for its state, and the
-entry of the years the plan's settings gave (`Reader.last_year`; its reply is
+entry of the years the plan's settings gave (kwp's preset `last_year`, target
+`plan_year_of_value`, `profiles/kwp/blocks.py`; its reply is
 `{"at", "words", "entry"}`).
 
 **A year.** The model looks for a year first, and the plan's years are shown only to the
@@ -491,7 +498,7 @@ last question of a year and to the list request below (owner decision 2026-11-07
 quote. A year is a number in the rule `year_range` (see Numbers, years and
 per-document lists). A year whose words print none, the plan's word for a state
 alone, is asked among the plan's years (`Reader.plan_year`, a list request, the
-step `plan_years`). A year the plan states for a span ("im Mittel der Jahre 2019
+preset `plan_year_words`, target `plan_year`). A year the plan states for a span ("im Mittel der Jahre 2019
 bis 2021") is answered with its first year, and `until`, its last
 (the words and dashes of a span are the rules `span_words` and `span_dashes`, built into `addressed`). The run makes one row per distinct year of the span (owner
 decision 2026-11-07: "als ca. für jedes distinkte Jahr erfassen"): the first and
@@ -517,7 +524,7 @@ asks the field's values again after such a value.
 **The quantity.** The coordinate `quantity`, where the spec's list is closed, is
 chosen from the words the value was read with: its own designation (`what`, where it
 was read), the head of its column and its unit go to the list request
-(`Reader.quantity`, owner decision 2026-11-08), and the line that holds the
+(kwp's preset `quantity`, target `quantity`, `Reader.quantity`; owner decision 2026-11-08), and the line that holds the
 designation, else the value's own, is its quote.
 
 A coordinate's `value_raw` is asked only where the coordinate is a closed list or
@@ -567,7 +574,8 @@ for.
 ### Entries of a list
 
 A wording that has to be one entry of a closed list is asked in a request of its
-own (`Reader.entry`, prompt `extraction/list`, owner decisions 2026-11-08), once
+own (the preset `list`, target `entry`, a question asked inside the answer of
+another: `Reader.entry`, prompt `extraction/list`, owner decisions 2026-11-08), once
 per document, field, coordinate and wording, whichever value it stands with
 (`Plan.lists`): the words, the question of the coordinate, the lines the words
 stand in (and the title of their table), the plan's settings, and the list, each
@@ -599,7 +607,9 @@ thing has several names: "the Zero Carbon scenario" in a sentence, "LCEO Zero
 Carbon" in a table; one name can also stand for several things ("the EC LTS
 scenarios"). The scenarios profile keeps a list of the document's scenarios and a
 list of its works, built piece by piece while the document is read (`addressed.Names`,
-`Reader.name_of`, prompt `extraction/names`, owner decisions 2026-11-08). The
+`Reader.name_of`, the preset `name`, target `name`, a question asked inside the answer
+of another; the scenarios preset `names`, target `value_name`, asks it for each value;
+prompt `extraction/names`, owner decisions 2026-11-08). The
 steps of the older flow, the request over all names, the embedding of every name
 with its neighbours and the request that put the names together after the compute
 step, are gone, and so is the matching of two wordings by their spelling.
@@ -639,11 +649,13 @@ number of entries shown).
 ### Searching for what a value's place does not say
 
 A coordinate the value's own place left open (a `0` answer), and not one only the
-place can say, is searched for in the rest of the plan (the boxes `order` and `search` in a round: `Engine.box_search`, `Reader.search_round`, prompt
+place can say, is searched for in the rest of the plan (the box `order` and the preset `search` in a round, target `dimension` with
+`where: hits`: `targets.over_hits`, prompt
 `extraction/search`, owner decisions 2026-11-04 to 2026-11-08). Every search runs
 with a sentence in the form of the plan, never with a question (HyDE). The `coord`
 answer writes none: a request of its own, `phrase` (prompt `extraction/phrase`,
-with the parts `with: question` and `with: headings`; `Reader.sentence`), writes
+with the parts `with: question` and `with: headings`; target `sentence`:
+`targets.sentence`, `targets.search_sentence`), writes
 it from the field, the question, the value's words and lines, the headings up to
 the value and what the document says of itself, once per document, field,
 coordinate and wording of the value (kept in `plan.lists`); the trace writes it as
@@ -688,14 +700,14 @@ that place itself (owner decision 2026-11-12). Besides the search, four requests
 offer `more` with the same ways of fetching, each by its own value of the rule
 `fetches` at its step (empty: the step fetches nothing):
 
-- the request at the value's own place (`coord`, `Reader.ask_own_place`) and its
+- the request at the value's own place (`coord`, `targets.at_own_place`) and its
   follow-up: what it asks for comes first in the search after it, before the pieces
   beside the value (`CoordItem.fetched`, `SearchSupply.fetched`);
-- the request of a field the document has once (`docfield`, `Reader.ask_window`):
+- the request of a field the document has once (`docfield`, `targets.gathered`):
   what it asks for comes first in the field's next request, beyond the field's budget
   and not counted in it (`ListSupply.fetched`);
 - the request of a name (`names`, `Reader.name_of`) and of a cited work's detail
-  (`coord` with `work`, `Reader.work_value`): the same request is asked again with
+  (the preset `work_detail`, target `work_detail`): the same request is asked again with
   the fetched pieces under `passages`, each under a letter of its own, as often as
   the rule `fetch_rounds` says (`Reader.asked_with_fetched`), so that a short
   scenario name meets the sentence that explains it and a short citation the entry
@@ -718,7 +730,7 @@ its payload (`runner.reply_offers`), and `<!-- with: image -->` the request that
 carries a picture.
 
 A find from another passage than the value's own is asked whether that place speaks
-about this value (`Reader.about`, prompt `extraction/check`, answer `yes` or `no`,
+about this value (the preset `about`, target `keep_find`, prompt `extraction/check`, answer `yes` or `no`,
 owner decision 2026-11-07), and a `no` drops it. The check is the profile's
 choice: a profile that writes no `check` prompt does without it
 (`addressed.OPTIONAL`). A find in the value's own passage needs none.
@@ -755,26 +767,26 @@ request they follow (`asked`) and counted under `follow`.
 A scenarios publication presents, compares, reviews or cites works beside itself,
 and its values may be about any of them (the KWP profile has no works). The profile
 names the field and the details of a work (the spec's `works` block; owner decisions
-2026-11-08, h, and 2026-11-09, and 2026-11-10 for the move into the spec). Before any value is read, a request `work` (prompt
-`extraction/work`, optional like `names`; `Reader.work_piece`) asks every piece once
+2026-11-08, h, and 2026-11-09, and 2026-11-10 for the move into the spec). Before any value is read, a step `works` (request `work`, target `works`, `profiles/scenarios/blocks.py`; prompt
+`extraction/work`, optional like `names`) asks every piece once
 which shown lines name another work whose results the lines of the piece state
 (`found`: a cell, a line or a stretch and the work's name) and which line shows
 that the rest of the piece is this publication's own (`own`: an address, or `0`).
 Each name is asked against the document's list of works, whose first entry is the
-publication itself (`Reader.works`), and the details of each new work (title,
+publication itself (`Reader.name_of`), and the details of each new work (title,
 organisation, year, short name: `works.fields`) are asked side by side, one
-`coord` request per detail, the question the profile wrote, the answer an address
+`work_detail` step per detail (request `coord`, target `work_detail`), the question the profile wrote, the answer an address
 and words. Those values are values of that work: their `work` coordinate is the
 entry "another work" with the work's name under `work_means`. The harvest keeps
 them, the graph does not, since `work` keeps this publication only (the document
 condition `kept_coordinates`).
 
-The work of a value (`Reader.work_coordinate`): a find whose lines cover the
+The work of a value (the preset `work_coordinate`, target `work_of_value`): a find whose lines cover the
 value's line gives that work, read and quoted with the find's line, window
 `["piece", 1]`; a find in a heading, or in a table's title or head or a figure's
 caption, covers the whole piece. Else the `own` line gives this publication. Else
 the value asks its own work as a choice from the document's list of works, a
-`coord` request with `list` whose reply is `{"entry", "at", "words"}`
+`coord` request (preset `work_coordinate`) with `list` whose reply is `{"entry", "at", "words"}`
 (`addressed.work_choice_format`); `0`, or an entry without a line, leaves it
 `unstated`, and a work is never searched. A scenario name that is an existing
 entry of the scenario list takes the work its entry was read with when its own
@@ -1366,7 +1378,9 @@ nothing is ever missing: of six test cases the rows prompt of the time took the
 sandbox in none, a request of its own naming the number wanted in four. A tool is used where a
 question stands open, so this step asks that question itself (owner decision
 2026-11-02). It runs inside the run, after a document is folded and before its
-file is written (`runner.make_computer`, `compute.py`), and works from rows that
+file is written (the preset `compute`, target `computed`, a step at the end of the
+flow, `flow.ENDS`; `runner.make_computer` builds the first message of each question
+from the step's inputs, `compute.py`), and works from rows that
 passed `verify_tuple`. The step does not exist for a profile that names no open
 question (`compute.py` of the profile, `questions`) or writes no prompt
 (`extraction/compute`), or for a run without a sandbox: a number the model works
@@ -1631,7 +1645,11 @@ Each of these passes is a flow of its own, `top_up`, `top_up_open`,
 `top_up_parameters`, `remap`, `recheck`, `review` or `start_at` (and `example`,
 which runs a field's example), a file under `flows/` of the default profile
 (`docpipe/extraction/passflow.py`, `passboxes.py`) that a profile may replace by
-a file of the same name. Each switch of the call (`--top-up`, `--top-up-open`,
+a file of the same name. The second reading and the example are steps of "Ask the
+model" there (the presets `review` and `example`, targets `review_marks` and
+`example_proposal`); a pass runs such a step by its target's `pass_run`
+(`passflow.act_of`), and `runner.make_review_asker` and
+`compile.cli.ask_for_example` build their first message from the step's inputs. Each switch of the call (`--top-up`, `--top-up-open`,
 `--top-up-parameters`, `--remap`, `--recheck`, `--review`, `--start-at`) runs
 its flow, and `--flow NAME` runs any flow by name, `main` being the harvest. The
 Flow tab of [the editor](editor.md) draws and edits them.
@@ -2325,9 +2343,19 @@ hits, the answer, the values, ..., each with a JSON schema; owner decision
 a step that takes a variable no step before it gives is refused with that
 reason, and only writing the harvest is fixed, once at the end. A variable lasts
 for the item it was made for, or for the whole document where its step says so.
-Beside the question steps of the two use cases the library has general steps
-(`extraction.general`): ask the model with a prompt of the profile or a text of
-the step's own (`ask`; an input named as `{{key}}` or `{{key.field}}` is
+Every step that asks the model is the one box "Ask the model"
+(`{"box": "ask", "preset": NAME}`), and a step of it has five parts
+(`general.parts_of`): the request (the kind it is in the log, whose rules and
+numbers the step reads: `Preset.kind`, `rules.step_kind`), the prompt, the inputs
+(each a variable and how it is shown, `shows.build`), the reply (the form of the
+answer, `forms`) and `into` (what becomes of the answer, the target, `targets`).
+The presets (`presets.PRESETS`, `Preset`) fill the five parts for the questions
+of the two use cases: `transcribe`, `sentences`, `docfield`, `find`, `coord`,
+`phrase`, `search`, `about`, `list`, `plan_year_words`, `name`, `compute`,
+`review` and `example`; what a step sets of its own wins over its preset.
+`general.Ask` and `general.ask_step` send the request. Beside them the library
+has general steps (`extraction.general`): ask the model with a prompt of the profile or a text of
+the step's own (`ask` without a preset; an input named as `{{key}}` or `{{key.field}}` is
 written into the prompt and not into the message, the answer has the form of
 its JSON schema, drawn in the editor, and goes into a variable or into values
 of a field, each held to its line like every value; the model may be allowed
@@ -2342,15 +2370,18 @@ replaces with its own. A rule a question step reads is read at `ask` as well,
 a rule of the search at `retrieve` and `rerank` (`ruleset/kit.py`,
 `with_general`).
 
-The steps only one use case needs are boxes of its profile
-(`profiles/<name>/blocks.py: BOXES`, each with the code of its step): the works
-of a chunk, the work of a value and the entry of a scenario's name for
-scenarios, what a number is and the year among the plan's years for heat
-plans. The page offers the general boxes and those of the open profile
-(`blocks.offered`), and a flow cannot take a box of another profile. The list
-entry a question asks is asked as the step "Choose the list entry" after that
-question says (`list`, `runner.in_home`), else as the first of them in the
-flow.
+The steps only one use case needs are presets and targets of its profile
+(`profiles/<name>/blocks.py: PRESETS`, `TARGETS`, each target with the code of
+its step): the works of a chunk, a detail of a cited work, the work of a value
+and the entry of a scenario's name for scenarios (`works`, `work_detail`,
+`work_coordinate`, `names`), what a number is and the year among the plan's years
+for heat plans (`quantity`, `last_year`). The page offers the general boxes and
+those of the open profile (`blocks.offered`), and a flow cannot take a preset of
+another profile. A question asked inside the answer of another (a list entry, a
+name, the plan's year of a wording, whether a place speaks about the value: the
+targets marked `nested`) is asked as the step after the asking question that has
+its target, "Choose the list entry" for the list entry, else as the first of them
+in the flow, else as its preset (`engine.Engine.nested_node`, `general.nested`).
 
 A step or a frame may also carry `rules`: a value of its own for each rule it
 reads (the rule's `steps` say which steps read it; the rules of the graph file
@@ -2369,7 +2400,7 @@ the project file `docpipe.toml`, which git ignores, never in a rules file and
 never at a step. Several rules choose a second way of reading and stand off by
 default (for example `conversation`, `answer_with`, `repair_replies`,
 `outside_list`); the help of each in its module says what it does. The
-catalogue search is the box `catalogue`, after `compute` at the end, with
+catalogue search is the box `catalogue`, after the step `compute` at the end (`flow.ENDS`), with
 settings of its own; switched off, nothing is looked up.
 
 The default profile's file is the whole flow, `numbers` and `flow`, drawn with
@@ -2471,7 +2502,7 @@ harvest read with.
 | `span_marks` | rule | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
 | `flow.json` | profile file | the default profile's whole flow | The drawing of the reading and the numbers that bound it; a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and the `flow` (the drawing) where it draws otherwise. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
 | `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
-| `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `addressed.Reader.works` |
+| `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `profiles/scenarios/blocks.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
 | `decimal_mark` | rule | `.` (kwp sets `,`) | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
 | `document_axes` | profile hook | none | A callable `(connection, document_id)` that returns `{axis name: {uri: [labels]}}`, the closed lists of the spec's dynamic axes for that document (scenarios closes its regions); every batch of the document carries the spec with them | `runner.fill_dynamic_axes`, `runner.make_document_spec` |
@@ -2650,7 +2681,7 @@ unreadable directory cannot overwrite a valid graph from an earlier
 run. Called only by `runner.py`'s `--serialize` branch.
 
 `runner.py` is the harvest CLI and by far the largest module of the stage: the
-makers of the harvest's askers (`make_asks`, `make_transcribe`,
+makers of the harvest's askers (`make_asks`, `transcript_fingerprint`,
 `make_reader`, `make_harvest`, `make_computer`), the
 retrieval and the shared request client, the resume-stamp comparison, and the
 argparse branches dispatching `--recheck`, `--remap`, `--top-up`, `--review` and

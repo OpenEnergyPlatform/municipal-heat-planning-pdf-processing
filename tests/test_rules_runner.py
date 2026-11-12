@@ -21,6 +21,7 @@ from docpipe.profile import load_profile
 
 from test_compute_step import (ANSWER, CODE, amount, computing, printed,
                                run_step, share)
+from conftest import step_node
 
 DEFAULT = rules.default()
 
@@ -37,7 +38,7 @@ def fresh(monkeypatch):
 
 
 def at_step(box, **values):
-    return rules.in_step(rules.stepped({"id": "x", "box": box}, values))
+    return rules.in_step(rules.stepped(step_node(box), values))
 
 
 # -- the temperature and the waits of an asked-again request ------------------

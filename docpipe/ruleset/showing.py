@@ -32,7 +32,8 @@ RULES: tuple = (
        "which section a line belongs to. Off: no heading is shown.",
        steps=("works", "find", "coord", "work_coordinate", "search",
               "last_year", "phrase", "about"),
-       where="addressed.py (show_value)"),
+       where="shows.py (_headings, _value_headings), "
+             "addressed.py (show_value)"),
     _r("show_settled", "flow", SHOWN, "switch",
        "Whether a request shows what the plan settles for all its values, "
        "such as its base year or its municipality, beside the entries of a "
@@ -40,14 +41,14 @@ RULES: tuple = (
        steps=(
            "docfield", "works", "find", "coord", "quantity", "work_coordinate",
            "search", "last_year", "each value"),
-       where="addressed.py (show_value, settings_of)"),
+       where="shows.py (_settings), addressed.py (show_value, settings_of)"),
     _r("show_known", "flow", SHOWN, "switch",
        "Whether the request for one dimension of a value shows what the "
        "value has already been read as, in the words of the plan. This helps "
        "the model to read the dimension that is left. Off: the request "
        "shows nothing of it. Decided on 2026-10-22.",
        steps=("coord", "search"), decided="2026-10-22",
-       where="addressed.py (coord_payload, search_round)"),
+       where="shows.py (_known)"),
     _r("show_example", "flow", SHOWN, "switch",
        "Whether a request shows an example of the reply it asks for. The "
        "example shows the form of the reply with a placeholder wording. Off: "
@@ -89,7 +90,8 @@ RULES: tuple = (
        "around the value too, so that the model sees its neighbours.",
        least=0,
        steps=("coord", "quantity", "work_coordinate", "search", "last_year",
-              "phrase", "about"), where="addressed.py (show_value)"),
+              "phrase", "about"),
+       where="shows.py (around), addressed.py (show_value)"),
     _r("show_table_title", "flow", SHOWN, "switch",
        "Whether a request shows the title lines of a table with the table's "
        "rows. Off: the model sees the rows without their title.",
@@ -103,31 +105,6 @@ RULES: tuple = (
        steps=("docfield", "works", "find", "coord", "quantity",
               "work_coordinate", "search", "last_year", "phrase", "about"),
        where="units.py (own_lines, passage_lines)"),
-    _r("phrase_shows", "flow", SHOWN, "texts",
-       "The parts the request that asks for the search sentence shows: the "
-       "label and the description of the field, the document, the question, "
-       "the value with its lines, the headings above it, and the sentences "
-       "written before for the same value. A part that is left out is not "
-       "shown.",
-       choices=("label", "description", "document", "question", "value",
-                "headings", "before"), steps=("phrase",),
-       where="addressed.py (_sentence)"),
-    _r("about_shows", "flow", SHOWN, "texts",
-       "The parts the request shows that asks whether a find from another "
-       "passage is about the value: the value, its passage, the headings "
-       "above it, the question, the answer found and the place it was found "
-       "in. A part that is left out is not shown.",
-       choices=("value", "passage", "headings", "question", "answer",
-                "place"), steps=("about",),
-       where="addressed.py (about)"),
-    _r("shown_block_order", "prompts", "How a place in the document is "
-       "shown", "texts",
-       "The order in which a request shows the blocks about a value: its "
-       "place, the headings above it, the title page and what the plan "
-       "settles. A block that is not named comes last in this order.",
-       choices=("passage", "headings", "title_page", "settings"),
-       steps=("coord", "work_coordinate", "search", "last_year"),
-       where="addressed.py (blocks_in_order)"),
     # -- flow: chunks ------------------------------------------------------
     _r("bullet_marks", "flow", "Chunks", "chars",
        "The characters that mark an item of a list. A line is split before "
@@ -255,19 +232,19 @@ RULES: tuple = (
        "Which finds of the answer of a search are taken where the dimension "
        "has one value only. First: the first find. All: every find, so that "
        "a search can make several rows.", choices=("first", "all"),
-       steps=("search",), where="addressed.py (search_round)"),
+       steps=("search",), where="targets.py (over_hits)"),
     _r("about_other", "flow", "Search", "choice",
        "Which finds of a search are checked as finds from another place. "
        "Passage: a find in a passage other than the value's own. Any: every "
        "find in a chunk the search shows, also in the value's own passage.",
        choices=("passage", "any"), steps=("search",),
-       where="addressed.py (search_round)"),
+       where="targets.py (over_hits)"),
     _r("about_no_reply", "flow", "Search", "choice",
        "What a find from another place is where the check whether it is "
        "about the value gets no answer. Reject: it is not about the value. "
        "Keep: it is kept.", choices=("reject", "keep"),
        steps=("about",),
-       where="addressed.py (about)"),
+       where="targets.py (keep_find)"),
     _r("beside_pieces", "flow", "Search", "whole",
        "How many chunks before and after the chunk of the value the step "
        "that shows the neighbours shows. 1 shows the chunk before and the "
@@ -410,5 +387,5 @@ RULES: tuple = (
        "the profile gives no name of it to the request for the search "
        "sentence. Off: the request says nothing of the document. Decided on "
        "2026-11-09.", decided="2026-11-09", steps=("phrase",),
-       where="addressed.py (_sentence)"),
+       where="shows.py (_about_document)"),
 )
