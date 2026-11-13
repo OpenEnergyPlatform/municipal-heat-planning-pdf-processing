@@ -45,6 +45,8 @@
 
 .fl-edge { stroke: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2)) !important; stroke-width: 1.6 !important; }
 .fl-edge-label { position: absolute; pointer-events: all; }
+/* the "+" of an arrow inside an open loop, round or branching is drawn above that frame, which otherwise covers it */
+.react-flow__edgelabel-renderer { z-index: 5000; }
 .fl-edge-text {
   max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8)); padding: 0 4px; border-radius: 4px;

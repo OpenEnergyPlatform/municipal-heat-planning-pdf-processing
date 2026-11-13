@@ -171,10 +171,10 @@ export function StepEdge({ id, sourceX, sourceY, targetX, targetY, data, markerE
       <BaseEdge id={id} path={path} markerEnd={markerEnd} className="fl-edge" />
       <EdgeLabelRenderer>
         <Group gap={6} wrap="nowrap" className="fl-edge-label nodrag nopan" data-edge={id}
-          style={{ transform: `translate(-11px, -50%) translate(${lx}px, ${ly}px)` }}>
+          style={{ transform: `translate(-14px, -50%) translate(${lx}px, ${ly}px)` }}>
           <Tooltip label={c.loopsOnly ? t('Put a step or loop here') : t('Put a step, loop, round or branching here')}>
-            <ActionIcon size="sm" radius="xl" variant="default" aria-label={c.loopsOnly ? t('Put a step or loop here') : t('Put a step, loop, round or branching here')} onClick={() => c.add(d.list, d.at)}>
-              <IconPlus size={14} />
+            <ActionIcon size="md" radius="xl" variant="filled" color="blue" className="fl-plus" aria-label={c.loopsOnly ? t('Put a step or loop here') : t('Put a step, loop, round or branching here')} onClick={() => c.add(d.list, d.at)}>
+              <IconPlus size={18} stroke={2.5} />
             </ActionIcon>
           </Tooltip>
           {text && <Text size="xs" c="dimmed" className="fl-edge-text" title={text}>{text}</Text>}
