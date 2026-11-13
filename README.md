@@ -174,7 +174,7 @@ Output: `visuals.json`.
 
 ### 7. Reading the values out (`docpipe.extraction` + profile)
 
-The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). A document is read in pieces: the code numbers the sentences and the cells of every table, a piece is at most eight sentences or table rows (a table's head is shown with each of its pieces), and the model answers with addresses (`row.column`) and words, one question per request. A search orders the pieces with a reranker (a vLLM `/rerank` server, `RERANK_BASE_URL`) using a search sentence the model writes for each field and document, and shows at most 50 of them. A field with a closed list is asked with its list and answers with the number of an entry; the work a value belongs to is asked once per piece. A value is accepted only when the quoted line really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty.
+The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). A document is read in pieces: the code numbers the sentences and the cells of every table, a piece is at most eight sentences or table rows (a table's head is shown with each of its pieces), and the model answers with addresses (`row.column`) and words, one question per request. A search embeds a search sentence the model writes for each field and document (the embedding server, `EMBEDDING_BASE_URL`), takes from the vector search, of each kind of piece (table, figure, text), the best 30 and 20 drawn at random from its places 31 to 100 (the rules `rerank_pool`, `rerank_drawn`, `rerank_drawn_from`; the draw is seeded by the document and the sentences, so the same search draws the same pieces), orders them with a reranker ([Qwen3-VL-Reranker-8B](https://huggingface.co/Qwen/Qwen3-VL-Reranker-8B) on a vLLM `/rerank` server, `RERANK_BASE_URL`) and shows at most 50 of them, five a request. The run's threads share the reranker's scores per document, so a pair of sentence and piece is scored once, and a request to the reranker has no time limit. A coordinate is searched until it is read: a request without an answer or a quote that does not back its answer lets the search go on, the value's own piece is shown whole first, and from round 2 on the model writes a new search sentence. A field with a closed list is asked with its list and answers with the number of an entry; the work a value belongs to is asked once per piece. A value is accepted only when the quoted line really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty.
 
 The order of these steps is not fixed in code. It is a drawing of boxes and frames (each, round, if) in the profile's `flow.json`, which the run executes exactly as drawn (`docpipe/extraction/engine.py`, `blocks.py`, `conditions.py`); the built-in default holds the whole drawing and the numbers that bound it. A request the server refuses (4xx except 429) is asked three times at most; if the refusal stays, the document is left unfinished and unstamped, and a later run reads it again.
 
@@ -192,11 +192,12 @@ The accepted tuples of a harvest are serialized into Turtle by the profile's `kg
 | --- | --- | --- | --- |
 | [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_safetensors) | PaddlePaddle | — | Document layout detection (Stage 2) |
 | Qwen3.5-122B-A10B-FP8 | Alibaba / Qwen | 122B MoE (FP8) | LLM section refinement (Stage 4) **and** vision-language image processing (Stage 5) — one model, one vLLM instance per stage |
-| [Qwen3-VL-Embedding-8B](https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B) | Alibaba / Qwen | 8B | Multimodal embeddings (Stage 6): 4096-dimensional text and vision-language vectors |
+| [Qwen3-VL-Embedding-8B](https://huggingface.co/Qwen/Qwen3-VL-Embedding-8B) | Alibaba / Qwen | 8B | Multimodal embeddings (Stage 6): 4096-dimensional text and vision-language vectors; in Stage 7 the search sentences, served by vLLM |
+| [Qwen3-VL-Reranker-8B](https://huggingface.co/Qwen/Qwen3-VL-Reranker-8B) | Alibaba / Qwen | 8B | Orders the pieces of each search in Stage 7, figures with their image, served by vLLM (`/rerank`) |
 
 ### Python Libraries
 
-[vLLM](https://github.com/vllm-project/vllm) serves the LLM stages (one instance each for 4 and 5),
+[vLLM](https://github.com/vllm-project/vllm) serves the LLM stages (one instance each for 4 and 5) and, in Stage 7, the model, the embedder and the reranker,
 reached through the [openai](https://github.com/openai/openai-python) client; a hosted API
 takes its place when a role's provider is set (`LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER`).
 [Transformers](https://huggingface.co/docs/transformers/) runs PP-DocLayoutV3 (Stage 2) and the
@@ -280,7 +281,7 @@ documents its configuration.
 | Sources | `sources.json` |
 | Graph | `graph.json` |
 
-It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node; changing the page needs it (`npm ci` and `npm run build` in `docpipe/editor/ui`). See [the editor chapter](docs/stages/editor.md).
+The head of the page switches to any other profile the installation finds; the editor starts again with it at the same address, asking first where edits are not saved. It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node; changing the page needs it (`npm ci` and `npm run build` in `docpipe/editor/ui`). See [the editor chapter](docs/stages/editor.md).
 
 ## Collaboration
 
