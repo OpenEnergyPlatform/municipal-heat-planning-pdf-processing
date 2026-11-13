@@ -453,10 +453,11 @@ def test_one_wording_asks_its_sentence_once_per_coordinate_and_document():
         _sentences, _counts, model = searching("Ein Satz.", second=second)
         return collections.Counter(n["coordinate"]
                                    for _, n in model.of("phrase"))
-    # Two values of the same words: one sentence per coordinate.
-    assert asked("1.200") == {"year": 1, "carrier": 1}
+    # Two values of the same words share their sentence per coordinate; the
+    # new sentence of round 2 on comes on top of it (2026-11-13).
+    same = asked("1.200")
     # the failure by construction: other words are a sentence of their own
-    assert asked("950") == {"year": 2, "carrier": 2}
+    assert asked("950") == same + collections.Counter(year=1, carrier=1)
 
 
 # -- 7. the list -----------------------------------------------------------------
@@ -496,8 +497,8 @@ def test_a_wording_no_entry_fits_is_kept_as_today_s_empty_answer():
     claim, checked, model = read(0)
     assert claim["carrier_seen"] == "Erdgas" and not claim.get("carrier")
     assert "unmapped:unit:MWh" in checked.flags
-    # A place that answered is searched no further.
-    assert not model.of("search")
+    # A wording no entry fits is not "read": the search goes on for it
+    # (2026-11-13), and the wording stays beside the open entry.
     # the failure by construction: an entry of the list is read as it
     claim, checked, _model = read(1)
     assert claim["carrier"] == "Erdgas"
@@ -606,11 +607,15 @@ def test_a_search_ends_unstated_where_its_ranking_runs_out_or_at_its_budget():
     assert claim["year_state"] == fields.SAID_UNSTATED
     # Own-passage coordinates are not searched at all.
     assert claim["unit_state"] == fields.SAID_UNSTATED
-    assert not [n for _, n in model.of("search") if n["coordinate"] == "unit"]
+    # it is shown its own chunk whole and nothing else (2026-11-13)
+    assert {tuple(b["page"] for b in p["passages"].values())
+            for p, n in model.of("search") if n["coordinate"] == "unit"} \
+        == {(3,)}
     claim, model = read(budget=2)
     assert claim["year_state"] == fields.EXHAUSTED
-    # A find that does not hold after its follow-up ends the search
-    # `unbacked`, and nothing more is shown.
+    # A find that does not hold after its follow-up no longer ends the
+    # search (2026-11-13): it searches on and, found nowhere else, ends
+    # `unbacked`.
     claim, model = read(
         budget=100,
         search=lambda p, n: {"at": "A1", "words": "1999"}
@@ -619,7 +624,7 @@ def test_a_search_ends_unstated_where_its_ranking_runs_out_or_at_its_budget():
         if n.get("coordinate") == "year" else None)
     assert claim["year_state"] == fields.UNBACKED
     assert len([n for _, n in model.of("search")
-                if n["coordinate"] == "year"]) == 1
+                if n["coordinate"] == "year"]) > 1
 
 
 def test_a_reading_given_no_numbers_takes_the_default_flow_s():
@@ -834,10 +839,10 @@ def test_a_search_reranks_its_budget_once_and_shows_no_piece_twice():
                 for c in r.claims]
     pages = [[block["page"] for block in p["passages"].values()]
              for p, n in model.of("search") if n["coordinate"] == "year"]
-    # The piece after the value's, the piece its answer fetched, then the
-    # budget of ten in the reranker's order, five a request; the value's
-    # own piece and the pieces shown before are not shown again.
-    assert pages == [[10], [39], [18, 17, 16, 15, 14], [13, 12, 11]]
+    # The value's own piece whole with the piece after it, the piece its
+    # answer fetched, then the budget of ten in the reranker's order, five a
+    # request; the pieces shown before are not shown again.
+    assert pages == [[3, 10], [39], [18, 17, 16, 15, 14], [13, 12, 11]]
     # One order of the reranker per search, of the budget's pieces.
     assert reranked == [10, 10]
     # the failure by construction: pieces of the plan stay unshown, so the
@@ -853,9 +858,9 @@ def test_a_coordinate_request_without_an_answer_leaves_it_unanswered():
     (claim,) = [c for r in reader_of(model)(plan_of(TABLE), [ENERGY])
                 for c in r.claims]
     assert claim["year_state"] == fields.UNANSWERED
-    # Nothing searched for it: it was not answered, not found nowhere.
-    assert not [n for _, n in model.of("search")
-                if n["coordinate"] == "year"]
+    # It is searched on (2026-11-13) and, found nowhere, stays unanswered:
+    # it was not answered, not found nowhere.
+    assert [n for _, n in model.of("search") if n["coordinate"] == "year"]
 
 
 def test_a_piece_whose_answer_did_not_fit_is_asked_in_halves_of_its_lines():

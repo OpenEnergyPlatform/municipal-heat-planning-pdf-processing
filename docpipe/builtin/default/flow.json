@@ -283,6 +283,7 @@
                                           "box": "ask",
                                           "preset": "search",
                                           "rules": {
+                                            "temperature": 0,
                                             "max_tokens": 1536
                                           }
                                         },
@@ -291,6 +292,7 @@
                                           "box": "ask",
                                           "preset": "about",
                                           "rules": {
+                                            "temperature": 0,
                                             "max_tokens": 256
                                           }
                                         }
@@ -444,6 +446,7 @@
                                             ]
                                           },
                                           "rules": {
+                                            "temperature": 0,
                                             "max_tokens": 300
                                           },
                                           "set": {
@@ -710,6 +713,7 @@
                                       "box": "ask",
                                       "preset": "search",
                                       "rules": {
+                                        "temperature": 0,
                                         "max_tokens": 1536
                                       }
                                     },
@@ -718,6 +722,7 @@
                                       "box": "ask",
                                       "preset": "about",
                                       "rules": {
+                                        "temperature": 0,
                                         "max_tokens": 256
                                       }
                                     }
@@ -871,6 +876,7 @@
                                         ]
                                       },
                                       "rules": {
+                                        "temperature": 0,
                                         "max_tokens": 300
                                       },
                                       "set": {

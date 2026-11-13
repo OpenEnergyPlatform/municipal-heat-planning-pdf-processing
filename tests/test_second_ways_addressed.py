@@ -459,7 +459,12 @@ def test_the_questions_about_one_value_are_one_conversation_where_asked():
     assert later
     held = later[-1][0]["conversation"]
     asked = [entry["asked"] for entry in held if "follow_up" not in entry]
-    assert asked == [n["coordinate"] for _, n in coords[:-1]]
+    # every request about the value before it, the searches among them
+    value = first[1]["value"]
+    before = [n["coordinate"] for k, _, n in model.calls
+              if k in ("coord", "search") and n.get("value") == value]
+    assert asked == before[:before.index(later[-1][1]["coordinate"],
+                                         len(asked))]
     assert all(entry["answer"] is not None for entry in held)
     # the follow-up of an answer that did not hold is an entry of its own
     assert [entry["asked"] for entry in held if "follow_up" in entry] \

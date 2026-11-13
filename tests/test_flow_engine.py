@@ -131,6 +131,7 @@ def test_the_search_before_the_pieces_beside_shows_its_supply_first():
 def test_a_box_switched_off_asks_nothing_of_its_kind():
     drawing = default()
     node(drawing, "search_sentence")["off"] = True
+    node(drawing, "search_anew")["off"] = True       # the new sentence of round 2 on
     node(drawing, "beside_round")["off"] = True
     model = Boxed(find=finding_table)
     read(drawing, model, TEXT, TABLE, *MANY[:12])
@@ -146,8 +147,8 @@ def test_a_box_switched_off_asks_nothing_of_its_kind():
 
 def test_a_box_that_is_off_is_not_there_for_the_check_of_the_drawing():
     drawing = default()
-    node(drawing, "own_place")["off"] = True
-    assert [p["id"] for p in flow.problems(drawing)] == ["after_own_place"]
+    node(drawing, "beside")["off"] = True
+    assert [p["id"] for p in flow.problems(drawing)] == ["beside_round"]
     drawing = default()
     node(drawing, "search")["off"] = True
     assert [p["id"] for p in flow.problems(drawing)] == ["search_round"]
@@ -163,10 +164,19 @@ def passed(drawing: list, ident: str) -> list:
     return drawing
 
 
+def answer_stops(drawing: list) -> list:
+    """*drawing* whose step after the own place stops where the request
+    before it got no answer: the shipped flows search on since 2026-11-13,
+    so the condition is put back here to read the answer it asks about."""
+    node(drawing, "after_own_place")["if"][0]["when"]["any"].insert(
+        0, {"of": "answer", "is": "answered", "not": True})
+    return drawing
+
+
 def test_a_condition_about_the_answer_reads_the_answer_of_its_own_item():
     model = Boxed(find=finding_table)
-    claims = [c for r in read(passed(default(), "own_place"), model, TEXT,
-                              TABLE) for c in r.claims]
+    claims = [c for r in read(passed(answer_stops(default()), "own_place"),
+                              model, TEXT, TABLE) for c in r.claims]
     assert claims and not [n for _, _, n in model.calls
                            if n.get("box") == "own_place"]
     # nothing came back for the coordinate: it is left unanswered, never
@@ -175,7 +185,7 @@ def test_a_condition_about_the_answer_reads_the_answer_of_its_own_item():
     assert not carrier_requests(model)
     # the failure by construction: asked, its answer leads into the search
     model = Boxed(find=finding_table)
-    claims = [c for r in read(default(), model, TEXT, TABLE)
+    claims = [c for r in read(answer_stops(default()), model, TEXT, TABLE)
               for c in r.claims]
     assert "unanswered" not in {c["carrier_state"] for c in claims}
     assert [one for one in carrier_requests(model) if one[0] == "search"]
