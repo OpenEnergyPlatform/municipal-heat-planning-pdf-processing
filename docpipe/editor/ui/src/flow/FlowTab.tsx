@@ -98,6 +98,16 @@ function FlowInner() {
   const [version, touch] = useReducer((x: number) => x + 1, 0);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const [lib, setLib] = useState<{ list: string; at: number; after: string | null } | null>(null);
+  /* the step menu closes on a press anywhere outside it: React Flow keeps the presses on its canvas to itself, so the
+     menu's own outside-click never heard them; listened to before anything else sees the press */
+  useEffect(() => {
+    if (!menu) return;
+    const away = (ev: PointerEvent) => {
+      if (!(ev.target instanceof Element && ev.target.closest('.fl-menu'))) setMenu(null);
+    };
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  }, [menu]);
   const flow = useReactFlow();
 
   const numbers = () => { const o: Record<string, number | string> = {}; for (const n of F.data!.numbers) o[n.name] = F.cur[n.name]; return o; };
@@ -512,7 +522,7 @@ function FlowInner() {
         onPick={p => { const l = lib; setLib(null); if (l) put(l.list, l.at, p); }} />
       <Menu opened={!!menu} onChange={o => { if (!o) setMenu(null); }} position="bottom-start" withinPortal shadow="md" width={240}>
         <Menu.Target><Box style={{ position: 'fixed', left: menu ? menu.x : 0, top: menu ? menu.y : 0, width: 1, height: 1 }} /></Menu.Target>
-        <Menu.Dropdown>
+        <Menu.Dropdown className="fl-menu">
           {menuStep && (<>
             <Menu.Label>{labelOf(d.library, menuStep.n)}</Menu.Label>
             <Menu.Item leftSection={<IconArrowUp size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === 0} onClick={() => act('up', menuStep.n.id)}>{t('Move up')}</Menu.Item>
