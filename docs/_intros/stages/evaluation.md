@@ -68,8 +68,8 @@ decided rows with two wrong are 95 percent, anywhere between 84 and 99, and a
 change that moves precision inside that range has shown nothing. What nobody
 decided is counted as undecided and is in no share. The numbers are split by
 parameter, by trust level and by where a value was read (text, table or
-figure), because whether level C may stay out of a graph is a question about
-the precision of level C.
+figure), because whether level D may stay out of a graph is a question about
+the precision of level D.
 
 Recall counts a row as found by its whole-row verdict, as precision counts
 it: a row with one wrong field is not found, so the right number under the
@@ -106,7 +106,7 @@ and one new, not one row with two readings. The report counts:
   it) and new (only this one has it);
 - coordinates, for the rows both harvests carry: how many kept their state
   and how many moved (read to unbacked, and so on);
-- rows, for how the trust levels A, B and C moved, and the level of the rows
+- rows, for how the trust levels A, B, C and D moved, and the level of the rows
   that are gone or new;
 - documents: in both, only in the old harvest, only in this one, and
   changed (any row that reads differently, moved a state or a level, is gone
@@ -148,7 +148,9 @@ and from nothing else: no setting of the shell, no project file and no `.env`
 reaches the harvest. The one exception is how a model is reached (provider,
 address and key, `REACHED`), which a recording takes from where it is run and
 a replay does not need. Both runs ask one request at a time
-(`ONE_AT_A_TIME`), because a request shows the model what earlier requests of
+(`ONE_AT_A_TIME`: the rules `limit_adaptive` off, `documents_in_flight` 1 and
+`compute_parallel` 1, named by their rules so that a renamed rule fails here),
+because a request shows the model what earlier requests of
 the same sweep found, and with several in flight its words would depend on
 which thread was faster. The harvest runs the package the benchmark command
 runs, wherever it is started. A replay counts the trust levels as `docpipe

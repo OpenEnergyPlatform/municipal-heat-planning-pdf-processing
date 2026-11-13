@@ -16,6 +16,9 @@ every coordinate, the class in `<axis>` and the document's own wording in
 files on disk. A new alias, a renamed label, or an option moved to another
 class is answered by running that function again, with no model, no GPU, and no
 index.
+A list a profile closes per document, such as the regions a paper names, is
+that document's own: the pass rebuilds it from the corpus database, opened
+read-only, so a wording is mapped onto the list its harvest was offered.
 
 Four cases stop the pass from settling a coordinate, and each is counted rather
 than silently dropped. No wording: the model never sent `<axis>_raw`, so there
@@ -136,20 +139,30 @@ def stamp_path_of(path: Path) -> Path
 ### remap_file
 
 ```python
-def remap_file(path: Path, spec: Spec, current: dict) -> Counter
+def remap_file(path: Path, spec: Spec, current: dict,
+               spec_for: Optional[Callable] = None) -> Counter
 ```
 
-Re-map one harvest file in place, then carry its stamp forward.
+Re-map one harvest file in place, then carry its stamp forward: the
+flow `remap` for this one file.
+
+*spec_for* gives a document its own spec, with the lists its harvest was
+offered: a dynamic list (the regions a document names) is
+there and in no other. A document whose lists cannot be closed is left
+alone and counted, as the recheck leaves it.
 
 ### run
 
 ```python
-def run(harvest_dir: Path, spec: Spec, current: dict) -> Counter
+def run(harvest_dir: Path, spec: Spec, current: dict,
+        spec_for: Optional[Callable] = None) -> Counter
 ```
 
-Re-map a whole harvest directory against the spec as it reads today.
+Re-map a whole harvest directory against the spec as it reads today:
+the flow `remap` (`passflow`).
 
 `current` is the stamp this run would write, so the pass can carry the
 keys it earned forward without knowing how a stamp is assembled.
+`spec_for` is each document's own spec (`remap_file`).
 
 [Back to the index](../README.md)

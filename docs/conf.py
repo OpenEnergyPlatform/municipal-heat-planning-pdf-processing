@@ -7,7 +7,7 @@ file imports nothing from the project, which is why the docs build needs
 neither the GPU stack nor the corpus.
 
 `autodoc` is deliberately absent for the same reason: importing
-`docpipe.preprocessing.stage2_layout` to render its docstring would pull in
+`docpipe.preprocessing.layout_model` to render its docstring would pull in
 OpenCV, PyMuPDF and torch. The docstrings reach the site through the
 generator, which reads them with `ast`.
 """
@@ -30,6 +30,10 @@ myst_heading_anchors = 4
 # sphinxcontrib-mermaid's directive instead of asking for a second, Sphinx
 # only spelling.
 myst_fence_as_directive = ["mermaid"]
+# Labels as SVG text, not HTML in <foreignObject>: a saved diagram then
+# shows its labels outside a browser too.
+mermaid_init_config = {"startOnLoad": False, "htmlLabels": False,
+                       "flowchart": {"htmlLabels": False}}
 
 source_suffix = {".md": "markdown"}
 master_doc = "index"
@@ -45,7 +49,10 @@ exclude_patterns = ["_build", "_intros", "requirements.txt",
 
 html_theme = "furo"
 html_title = "docpipe"
-html_static_path = []
+html_static_path = ["_static"]
+# Links under each drawn diagram that open or save it as SVG.
+html_js_files = ["diagram-links.js"]
+html_css_files = ["diagram-links.css"]
 
 # A link to a page that does not exist is a broken site, and the generated
 # index links every page there is. Warnings are errors in .readthedocs.yaml,

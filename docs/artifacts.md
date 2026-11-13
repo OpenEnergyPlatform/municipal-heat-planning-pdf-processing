@@ -7,7 +7,7 @@ Generated from `docpipe/artifacts.py` by `scripts/build_docs.py`: the names belo
 Preprocessing, refinement, visuals and chunking each run as their own
 command-line invocation (`docpipe/preprocessing/pipeline.py:659`,
 `docpipe/refinement/pipeline.py:312`, `docpipe/visuals/pipeline.py:611`,
-`docpipe/chunking/pipeline.py:424`, each its own `__main__` entry point).
+`docpipe/chunking/pipeline.py:454`, each its own `__main__` entry point).
 Nothing survives between invocations except what a stage writes to disk,
 so the files below let a later run resume or reuse an earlier one's work.
 
@@ -42,7 +42,7 @@ below a subfolder reaches stages 4 to 6 but shows and attaches no crops there.
 Layout detection, the second step of preprocessing, writes first: it
 crops every detected table and figure into `images/<block id>.png` and
 records that path on the block itself
-(`docpipe/preprocessing/stage2_layout.py:602, 718-727, 756-765`).
+(`docpipe/preprocessing/layout_blocks.py:310-329, 348-365`).
 Preprocessing's own JSON output follows in two files. `pages.json` is
 written only once Stage 1 (text extraction) and Stage 2 (layout
 detection) have both completed with no failed page; it caches their
@@ -61,7 +61,7 @@ see [preprocessing](stages/preprocessing.md)). A run that transcribed a page
 deletes the `sections.json` built before it, so that stage 3 is built again
 from the pages that now have text. Stage 3 reads only the
 in-memory pages object, whatever text it holds by then, and writes
-`sections.json` (`docpipe/preprocessing/stage3_structure.py:291`); it
+`sections.json` (`docpipe/preprocessing/sections.py:311`); it
 never opens `page_transcription_report.json` itself. That file is read
 later by chunking's `enrich_page_source`, backfilling a
 `page_text_transcribed` database column
@@ -96,7 +96,7 @@ backfill, chunking's merge and database insert, `estimate` and `status`. Each
 file carries its own version under the key `version` (`SECTIONS_VERSION` and
 `VISUALS_VERSION` in `docpipe/artifacts.py`, both 1), written first by the stage
 that writes the file; stage 5 replaces the version its input brought along. A
-file without the key is version 1. The schemas are documentation and tests: no
+file without the key is version 1. The schemas are documentation: no
 stage opens them and none refuses a file because it does not fit, so a file that
 breaks one is still read.
 

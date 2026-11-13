@@ -2,20 +2,50 @@
 
 `profiles/kwp/kg.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-kg.py: Serializes harvested tuples into MHPKG Turtle.
+kg.py: The bricks only the kwp profile's graph needs, and how the answer
+app asks that graph.
 
-The IRI policy is rebuilt from the schema repo's mint_slice.py and must stay
-a pure function of the data: two runs over the same plan mint byte-identical
-IRIs (tested against their published reference UUIDs). The value coordinates
-are the seven mint_slice.py lists: part, quantity, carrier, sector, year,
-aggregation and the sub-area.
+How the harvest of a heat plan becomes the MHPKG graph is the drawing in
+graph.json beside this file (`map`), written by the core's program
+(`docpipe/extraction/graph.py`). Here are the pieces only this profile has:
+what the register knows of a plan (its AGS, publication date and
+municipality), which numbers the graph takes and why the others stay in the
+harvest, the address of a number (the coordinate list of the IRI policy,
+mint_slice.py), its class and unit, the comment lines above it, and what the
+provenance file records of it.
 
-Serialized is what the graph can hold: a value whose scenario names one of
-the three plan parts of PARTS, whose scope is the municipality, whose
-indicator label is accepted and whose year is read. Everything else stays in
-the JSONL harvest and is counted here, not lost.
+The IRI policy must stay a pure function of the data: two runs over the
+same plan mint byte-identical IRIs.
+
+Author: Felix Vossel
 
 ## Functions
+
+### spec
+
+```python
+def spec()
+```
+
+The spec as the extraction stage loads it with the rules in effect
+now. The answer app's graph route reads its lists off it
+(`docpipe.inference.kg_route`).
+
+### drawing
+
+```python
+def drawing() -> dict
+```
+
+The drawing, as the graph file of this profile has it now.
+
+### prefix_iri
+
+```python
+def prefix_iri() -> dict
+```
+
+{prefix: IRI} of the header the drawing writes now.
 
 ### expand
 
@@ -23,11 +53,8 @@ the JSONL harvest and is counted here, not lost.
 def expand(name: str) -> str
 ```
 
-`mhpo:MHPO_00020007` -> the full IRI, from the header this graph writes.
-
-Two of the three plan parts are mhpo: and one is oeo:, so a query that
-assumed one namespace would bind IRIs no graph holds and return nothing,
-silently. An unbound prefix raises rather than defaults.
+`mhpo:MHPO_00020007` -> the full IRI, from the header this graph
+writes. An unbound prefix raises rather than defaults.
 
 ### is_class
 
@@ -35,13 +62,8 @@ silently. An unbound prefix raises rather than defaults.
 def is_class(value) -> bool
 ```
 
-True for a real OEO class, false for every deliberate non-class.
-
-The axes hold entries that say what a row IS when no class fits — a sum,
-a residual, a sector the source calls unknown. They are answers, not
-classes, and writing one as `oeo:out:total` mints an IRI that does not
-exist. Checked by shape rather than by prefix so a new entry cannot slip
-past by being spelled differently.
+True for a real OEO class, false for every deliberate non-class: the
+axes hold entries that say what a row IS when no class fits.
 
 ### qualified
 
@@ -51,52 +73,83 @@ def qualified(identifier: str) -> str
 
 A bare ontology id as this graph writes it.
 
-### year_iri
+### has_property
 
 ```python
-def year_iri(year) -> str
+def has_property(klass: str, prop: str) -> Optional[bool]
 ```
 
-The node a value points at for its year.
+Whether the MHPKG schema gives the class (a curie) the property (a
+curie); None where the schema has no such class.
 
-One node per calendar year for the whole graph, keyed by the year itself
-rather than minted from a uuid: two plans naming 2030 mean the same 2030,
-and a year is the one coordinate with no document in it.
-
-### normalise
+### target_of
 
 ```python
-def normalise(label: str) -> str
+def target_of(row: dict) -> Optional[str]
 ```
 
-The umlaut rule from the policy, applied in order.
+The unit this value's number was converted onto.
 
-### display_name
+### unit_of
 
 ```python
-def display_name(label: str) -> str
+def unit_of(row: dict) -> Optional[str]
 ```
 
-The name as the graph shows it: the document's own spelling, minus the
-legal form. `normalise` decides identity and casefolds for that; a label a
-reader sees must keep its capitals, and kassel_valid.ttl shows the
-stripped form.
+The unit the graph writes this value in, None outside the graph: the
+unit its number was converted onto, where that is an ontology term.
 
-### mint
+### totals
 
 ```python
-def mint(collection: str, name: str) -> str
+def totals(drawing: dict, box_id: str) -> dict
 ```
 
-Tier 3: UUIDv5 over the identifying name. Never v4 — v4 is random.
+{coordinate: class} the arrows of *box_id* write for out:total.
 
-### plan_iri
+### written
 
 ```python
-def plan_iri(ags: str, published: str) -> str
+def written(row: dict, axis: str, total: dict)
 ```
 
-Tier 2: the plan's register key and its full publication date.
+What the graph writes for this coordinate: the class read, or for a
+number the plan does not split by this axis (`out:total`) the class the
+drawing names for it, or nothing.
+
+### schema_class_of
+
+```python
+def schema_class_of(row: dict, table: dict) -> Optional[str]
+```
+
+The schema class this value is in its part: the class the model
+chose, or the schema's value class it falls under, or None.
+
+### strict_refusal
+
+```python
+def strict_refusal(row: dict, table: dict, total: dict) -> Optional[str]
+```
+
+Why this value has no place in the strict graph, or None: the strict
+graph holds what the schema's shapes take, a value class the part
+holds, every required slot, and every slot's answer from the schema's
+own closed list.
+
+### document_identity
+
+```python
+def document_identity(db_path: Path, name: str)
+```
+
+(ags, published, municipality name) or None.
+
+### facts_of
+
+```python
+def facts_of(identity) -> dict
+```
 
 ### heatplan_iri
 
@@ -104,74 +157,49 @@ Tier 2: the plan's register key and its full publication date.
 def heatplan_iri(db_path: Path, name: str) -> Optional[str]
 ```
 
-The plan node the serializer mints for this document, or None.
-
-One minting site for the graph and for whoever asks it. The app was one
-f-string away from building its own, and `_iso_date` is exactly where a
-second copy diverges: ingest stores YYYYMMDD, the policy wants
-YYYY-MM-DD, and that mismatch once produced an empty graph with every
-test green.
-
-### wording_key
-
-```python
-def wording_key(row: dict) -> str
-```
-
-The plan's words for the two coordinates that fold onto one class.
-
-"Wirtschaftlich genutzte Gebäude" and "Öffentliche Gebäude" are both
-OEO_00000405 and are not one number; the wording is what tells them
-apart, and it is what the node is named by when they collide.
-
-### settle
-
-```python
-def settle(iri: str, rows: list, part: str, *,
-           transcribed: bool = False) -> tuple
-```
-
-({iri: row} kept, Counter skipped, {iri: marks}) for one identity.
-
-One number several times is one node, marked as read twice. Different
-numbers are settled in this order (owner decision 2026-09-23): the plan's
-different wording splits them into a node each, named by that wording; a
-rounded statement of the other loses to the more precise one; a lower
-trust grade loses to the higher; and what is left is a question for a
-human, so nothing stays. Every winner says in its comment what it won
-over, so a curator can still audit the pick. The counts are per tuple
-that left the graph: a repeat of the winner is a `duplicate`, a repeat
-of a loser is one too, and the losers are `conflict:<rule>`.
+The plan node the drawing makes for this document, or None: one
+making for the graph and for whoever asks it.
 
 ### evidence_comment
 
 ```python
-def evidence_comment(row: dict, document: str, *,
-                     transcribed: bool = False,
-                     conflict: bool = False,
+def evidence_comment(row: dict, document: str, prose: dict, join: str, *,
+                     transcribed: bool = False, conflict: bool = False,
                      corroborated: bool = False,
                      resolved: Optional[str] = None,
                      named: Optional[str] = None) -> list
 ```
 
-Where this value was read, as comment lines above its node.
+Where this value was read, as comment lines above its node: the
+coordinates in English, the passage, the page, how it was aggregated,
+what was computed, and how far the run stands behind it.
 
-The prototype's evidence: the wording the document used, the passage it
-was read in, and the page it stands on. A comment rather than triples
-because the shapes are sh:closed and an extra triple on a value node
-invalidates it.
-
-### make_serializer
+### trust_prose
 
 ```python
-def make_serializer(db_path: Path)
+def trust_prose() -> dict
 ```
 
-(document name, accepted tuple rows) -> TTL string or None.
+The trust words of the comment above a number, for the answer app,
+as the drawing's value box has them now.
 
-What was written for a document is left in `serializer.claims[name]`:
-the plan's node, and for every value its node, its row and the node or
-class each coordinate became. The provenance file is written from that.
+### parts
+
+```python
+def parts() -> dict
+```
+
+{scenario: (class, folder, label)} of the plan parts the drawing's
+part box lists now.
+
+### value_query
+
+```python
+def value_query() -> str
+```
+
+The query, over the drawing the graph is written from now, so the
+two cannot drift.
 
 ### value_bindings
 
@@ -181,11 +209,9 @@ def value_bindings(coordinates: dict) -> tuple
 
 (constraint lines for ##CONSTRAINTS##, {variable: (kind, value)}).
 
-An unbound axis adds no line, which is why the constraints are text and
-not initBindings alone. The kinds are plain strings ("iri", "literal") so
-this module stays rdflib-free; the core wraps them. Gates: a quantity the
-graph does not hold and any `out:` entry are dropped here, because
-`oeo:out:potential` is an IRI that does not exist.
+An unbound axis adds no line. A quantity the graph does not hold and any
+`out:` entry are dropped here, because `oeo:out:share` is an IRI that
+does not exist.
 
 ### label_of
 
@@ -195,8 +221,5 @@ def label_of(identifier: str) -> str
 
 What a reader calls a class: the spec's first spelling for it, else
 the pinned vocabulary's label, else the identifier itself.
-
-Takes the full IRI the query returns, a qualified name or a bare id, so
-the display never carries a second table of German words.
 
 [Back to the index](../README.md)

@@ -1,7 +1,7 @@
 ## What it is for
 
 An extraction spec says which parameters to look for, which closed list each
-answer is chosen from, which node of the graph a value belongs to and, per
+answer is chosen from, and, per
 parameter, one real example. When the graph already has SHACL shapes and an
 ontology, most of that is written once already by whoever maintains the
 graph. `docpipe compile` reads them and drafts the spec instead of having it
@@ -18,10 +18,10 @@ docpipe compile diff --shapes shapes.ttl --profile mine
 
 | command | does |
 |---|---|
-| `spec` | one property shape becomes one parameter; the closed list, its labels and definitions, the datatype, the number of values and the graph node are carried over as they stand |
+| `spec` | one property shape becomes one parameter; the closed list, its labels and definitions, the datatype, the number of values are carried over as they stand, and the graph node, as a box and an arrow of a drawing beside the spec |
 | `check` | lists what the draft still lacks; exit 1 while anything is open |
 | `examples` | proposes the missing examples from a processed corpus into a review file; needs `--profile` (its prompt), the corpus and a model |
-| `apply` | carries the examples somebody accepted into the draft, and writes the spec once nothing is missing |
+| `apply` | carries the examples somebody accepted into the draft, and writes the spec once nothing is missing, with the draft's drawing as a `graph.json` beside it where there is none |
 | `diff` | holds a spec somebody wrote by hand against the shapes and changes nothing |
 
 What shapes and ontology cannot state is left open and listed: how a
@@ -49,7 +49,7 @@ factors and `unit_target` stay the author's to write. An entry listed without
 `names_period`, or with one that is no true or false, gets a line of its own,
 exactly where `spec.load` would refuse it, and `finished()` drops the suggestion
 from the spec. The units a shape lists are not written to the graph by the
-generic writer, which writes no unit statement for a number, so the draft's note
+drafted drawing, which writes no unit statement for a number, so the draft's note
 says that the has-unit triple a separate category parameter would have carried
 is the author's to provide. When a shape has several numeric properties the
 listed units hang on all of them, a year typed as an integer included.
@@ -75,10 +75,10 @@ that could be read is not counted as read, and the review counts it as
 number is held to its quote the way that profile's documents write one, and
 `apply` refuses to run under another.
 
-`diff` takes the class of a node from the `graph` block of the spec, and from
-the block of the parameter that mints the node only where the graph block does
-not say, and it reads the links from the same block: a property the graph
-block links is not asked for, and neither is a unit list a shape holds beside a
+`diff` takes the class of a node from the boxes of the drawing of the profile's
+graph file (`graph.json`, `map`), and it reads the links from the same
+drawing: a property an arrow of the drawing writes, or a box link, is not
+asked for, and neither is a unit list a shape holds beside a
 number the spec asks for. It reports a cardinality only where the shapes
 state one and the spec says something else (`differences` in `draft.py`). A
 `not_asked` row (and its `--json` entry) carries the `shape` the property belongs
@@ -102,7 +102,11 @@ and no unit family, since it has no ontology; `compile spec` and
 comment the draft carries names `docpipe compile spec` as its writer, which is
 not the command `init` ran.
 
-The `graph` block of a drafted spec is what lets
-[the generic graph writer](graph.md) serialize a harvest for a project that
-has no writer of its own. Reading shapes needs `rdflib` (the `kg` extra); the
+A draft carries its drawing (the `graph` key of the draft, `rules` with the base
+IRI and the `map` with a box for each shape and an arrow from each field to the
+box and property of its shape, one reading where the shapes allow one). It is
+no part of the spec: `finished` leaves it out, and `compile apply --out` writes
+it as a `graph.json` beside the spec where there is none, so
+[the graph writer](graph.md) can serialize a harvest for a project without any
+code of its own. Reading shapes needs `rdflib` (the `kg` extra); the
 command says so and names the extra where it is not installed.

@@ -20,13 +20,24 @@ Unlike `kg_route` this needs no graph and no query of the profile's: the
 harvest and the spec are enough, so it works for every profile that has
 both, across one document or all of them.
 
+Where the harvest has its vectors (`values_index.py`) the chat takes the
+other way in, `answer_from_index`: the values nearest to the question's
+search anchor are put before the model as a list, and it chooses. No word of
+the question has to land on a list entry, and the closed questions are not
+asked. The way in by closed questions stays for a harvest without vectors,
+and the exact filter behind it for the API and the export.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
+from ..extraction import trust
 from . import kg_route
+
+log = logging.getLogger(__name__)
 
 # The profile's prompt for one closed question, shared with the graph route.
 COORDINATE_PROMPT_ID = kg_route.COORDINATE_PROMPT_ID
@@ -75,6 +86,41 @@ def answer_from_values(task: str, store, *, ask,
     return {"route": "values", "reason": None, "values": found["values"],
             "total": found["total"], "parameter": parameter.uri,
             "coordinates": coordinates}
+
+
+def answer_from_index(task: str, index, *, embed, pick, count, budget: int,
+                      document: Optional[str] = None,
+                      level: Optional[str] = None) -> dict:
+    """The harvest's answer by meaning, or why there is none, in the shape
+    of `answer_from_values`.
+
+    *embed(task)* is the vector of the question's search anchor. The values
+    nearest to it become a list as long as it fits *budget*, in what
+    *count(line)* says a line costs: the first always does. *pick(task,
+    entries)* is the model's choice among them, by id. The values come back
+    in the order of the search, and each one still has to stand its check in
+    the answer: this says which passages are read and nothing about them.
+    *document* limits it to one document (its harvest name); *level* is the
+    worst trust level still shown.
+    """
+    levels = trust.LEVELS[:trust.LEVELS.index(level) + 1] if level else None
+    found = index.search(embed(task), document=document, levels=levels)
+    entries, values, spent = [], {}, 0
+    for value, line in found:
+        spent += count(line)
+        if entries and spent > budget:
+            break
+        name = f"E{len(entries) + 1}"
+        entries.append({"id": name, "text": line})
+        values[name] = value
+    chosen = pick(task, entries) if entries else []
+    log.info("values: %d nearest of %d shown, %d chosen", len(entries),
+             len(found), len(chosen))
+    if not chosen:
+        return _fallback("no_values")
+    return {"route": "values", "reason": None, "total": len(chosen),
+            "values": [values[name] for name in chosen], "parameter": None,
+            "coordinates": {}}
 
 
 def used_values(values: list, statements: list) -> list:

@@ -1,6 +1,6 @@
 # Documentation
 
-Every page here except the hand-written ones is generated from the code it describes by `scripts/build_docs.py`, and `tests/test_docs_build.py` fails when a checked-in page and a fresh render disagree. Edit the source, then run:
+Every page here except the hand-written ones is generated from the code it describes by `scripts/build_docs.py`, and `python scripts/build_docs.py --check` fails when a checked-in page and a fresh render disagree. Edit the source, then run:
 
 ```
 python scripts/build_docs.py --out docs
@@ -25,6 +25,7 @@ python scripts/build_docs.py --out docs
 - [The command and its settings](stages/command.md): The one command.
 - [Drafting a spec from shapes](stages/compile.md): An extraction spec drafted from the shapes and the ontology of a graph.
 - [The parts every stage uses](stages/core.md): Names the per-document result files under `<doc>/results/`, in the order the pipeline writes them, and finds the document directories that hold them.
+- [Editing a profile in the browser](stages/editor.md): docpipe.editor: `docpipe edit`, a profile's extraction spec, prompts, sentences and the numbers of its flow in the browser.
 - [The embedders](stages/embedding.md): Exposes one Embedder interface behind several backends.
 - [Measuring a harvest](stages/evaluation.md): What a person decided about harvested values, kept beside the harvest and never in it.
 - [7. Reading the values out](stages/extraction.md): Marks the extraction package as the OBIE stage.

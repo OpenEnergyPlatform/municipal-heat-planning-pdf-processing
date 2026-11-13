@@ -77,14 +77,18 @@ answer (str|None), answer_text (str|None), citations (list[dict]),
 n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
 as_json (bool), n_batches (int), compute (list), examined, recheck,
 n_excluded, requested (block ids), statements (list[dict]),
-statements_made / statements_shown / statements_dropped (int, counting
-statements), faults (list of {"request", "cause"}).
+statements_made / statements_shown / statements_dropped /
+statements_repeated (int, counting statements), faults (list of
+{"request", "cause"}).
 
 The answer is made of the statements the model wrote whose evidence
 stood in the source they cite (`statements.back`); the rest are counted
 in `statements_dropped`, never shown. Each batch is told the statements
 already checked and writes only new ones, so what was checked is carried
-forward as it was and the model cannot rewrite it. `answer_text` is the
+forward as it was and the model cannot rewrite it. Batches may be sent
+ahead of that (`pool.in_order`) and are taken in order all the same; what
+one of them says again is named by one request over the checked
+statements and leaves (`statements_repeated`). `answer_text` is the
 same statements without list marks and citation numbers, which is what a
 follow-up and a comparison read.
 

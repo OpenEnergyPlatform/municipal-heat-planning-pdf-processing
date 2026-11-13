@@ -28,7 +28,7 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
-import importlib
+import functools
 import json
 import sys
 from pathlib import Path
@@ -36,6 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import jsonl                                   # noqa: E402
+from docpipe.extraction import trace                        # noqa: E402
 from docpipe.extraction.spec import load as load_spec       # noqa: E402
 from docpipe.profile import active_profile                  # noqa: E402
 
@@ -47,6 +48,10 @@ UNIT_COLUMNS = ("parameter", "unit_as_written", "unit_chosen", "chosen_factor",
                 "example_plan", "example_page", "example_quote")
 ORG_COLUMNS = ("name_as_written", "iri_key", "names_sharing_key",
                "related_names", "tuples", "plans", "plan_list")
+
+# The class of the nodes an organisation parameter is read into (OEO:
+# organisation).
+ORGANISATION_CLASS = "OEO_00030022"
 
 # A cell has to fit a spreadsheet; the harvest keeps the whole quote.
 CELL = 300
@@ -63,27 +68,22 @@ def default_spec_path() -> Path:
     return (profile.package_dir / "extraction_spec.json") if profile else DEFAULT_SPEC
 
 
-def organisation_normaliser(spec_path: Path):
-    """The organisation-key function of the spec's own profile's `kg.py`.
-
-    Imported, not reimplemented: `profiles/<name>/kg.py` is what mints the
-    organisation IRI (`mint("organisation", normalise(name))`), so this is
-    the one function that decides which spellings share a node. It is a pure
-    string function with no rdflib or database import behind it.
-    """
-    name = spec_path.resolve().parent.name
-    try:
-        module = importlib.import_module(f"profiles.{name}.kg")
-    except ImportError:
+def organisation_normaliser(drawing: dict):
+    """The organisation-key function of the profile: the fold the graph
+    writer mints an organisation's IRI with (`graphkit.normalise` with the
+    legal forms of the drawing), so the spellings this list groups are the
+    ones that share a node. None without a drawing."""
+    if not drawing:
         return None
-    fn = getattr(module, "normalise", None)
-    return fn if callable(fn) else None
+    from docpipe.extraction import graphkit
+    return functools.partial(graphkit.normalise,
+                             legal=drawing.get("legal_forms") or "")
 
 
 def harvest_files(directory: Path) -> list:
     """One file per plan, newest-glob order excluded: sorted for stable output."""
     return sorted(p for p in directory.glob("*.jsonl")
-                  if not p.name.endswith(".trace.jsonl"))
+                  if not trace.is_trace(p))
 
 
 def read_rows(path: Path) -> list:
@@ -176,12 +176,29 @@ def unit_rows(files: list, spec) -> list:
     return out
 
 
-def organisation_parameters(spec) -> list:
-    """The spec's parameters that mint an organisation node, by `kg.node`."""
-    return [p for p in spec.parameters if (p.kg or {}).get("node") == "organisation"]
+def drawing_of(spec_path: Path) -> dict:
+    """The drawing (`map`) of the graph file beside the spec, {} where
+    there is none."""
+    path = Path(spec_path).resolve().parent / "graph.json"
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8")).get("map") or {}
 
 
-def organisation_rows(files: list, spec, normalise=None) -> list:
+def organisation_parameters(spec, drawing: dict) -> list:
+    """The spec's parameters that mint an organisation node: those an arrow
+    of the drawing reads into a box of the organisation class."""
+    from docpipe.extraction.graph import Drawing
+    drawn = Drawing(drawing)
+    boxes = {box["id"] for box in drawn.boxes
+             if str(box.get("class") or "").split(":")[-1]
+             == ORGANISATION_CLASS}
+    return [p for p in spec.parameters
+            if any(arrow["to"] in boxes for arrow in drawn.readers(p.uri))]
+
+
+def organisation_rows(files: list, spec, drawing: dict,
+                      normalise=None) -> list:
     """One row per organisation name as a plan writes it.
 
     `normalise` is the profile's own `kg.py` function; two names share
@@ -190,7 +207,7 @@ def organisation_rows(files: list, spec, normalise=None) -> list:
     not match but one contains the other, which is a spelling the profile
     still mints as two organisations.
     """
-    org_params = {p.uri for p in organisation_parameters(spec)}
+    org_params = {p.uri for p in organisation_parameters(spec, drawing)}
     if not org_params:
         return []
     keyer = normalise or (lambda s: " ".join(str(s).split()).casefold())
@@ -279,14 +296,11 @@ def main(argv=None) -> int:
         return 1
     spec = load_spec(spec_path)
 
-    normalise = organisation_normaliser(spec_path)
-    if normalise is None and organisation_parameters(spec):
-        print(f"warning: profiles/{spec_path.resolve().parent.name}/kg.py "
-              f"has no normalise(); iri_key falls back to a plain casefold",
-              file=sys.stderr)
+    drawing = drawing_of(spec_path)
+    normalise = organisation_normaliser(drawing)
 
     units = unit_rows(files, spec)
-    organisations = organisation_rows(files, spec, normalise)
+    organisations = organisation_rows(files, spec, drawing, normalise)
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     units_path = args.out_dir / "units.csv"

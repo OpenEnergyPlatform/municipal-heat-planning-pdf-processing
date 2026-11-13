@@ -39,7 +39,8 @@ Fields:
 - `label: str`: what the model answers
 - `uri: str`: what the label resolves to
 - `synonyms: tuple = ()`: the other spellings the spec knows
-- `definition: str = ""`: what the ontology says the term means
+- `definition: str = ""`: What the term means, as the request shows it: the spec's gloss where it has one, else the definition (owner decision 2026-11-05, ticket 26).
+- `group: str = ""`: The group the entry belongs to, by which a long list is asked first (`flow.Numbers.list_meanings`, owner decision 2026-11-08).
 
 ### Slot
 
@@ -58,6 +59,10 @@ Fields:
 - `question: Optional[str] = None`
 - `options: tuple = ()`
 - `derive: Optional[dict] = None`: {"from": "unit", "value": uri} when the spec decides this coordinate.
+- `merged: Optional[str] = None`: The kind of thing whose name the document gives here, such as "scenario" (`spec.Axis.merged`): a value stated for several of them is one row per name, and which of the document's names mean the same thing is asked while the document is read (`addressed.Names`).
+- `keeps_print: bool = False`: Whether an answer may be the print itself where the list has no entry for it: the unit, which is never refused (owner decision 2026-11-07, `pipeline.printed_only`).
+- `keep: Optional[str] = None`: The entry a value must have here to be a value of its parameter (`spec.Axis.keep`, owner decisions 2026-11-07, `kept`).
+- `several: bool = False`: Whether a value stated for several entries of the list is one row per entry (`spec.Axis.several`).
 
 #### Slot.is_closed
 
@@ -82,6 +87,26 @@ of reading a row.
 
 ## Functions
 
+### state_for
+
+```python
+def state_for(event: str) -> str
+```
+
+The state a coordinate or a parameter ends in for *event*, as the
+rule `state_rules` says (skipped, answered_not_stated, refused,
+parameter_refused, parameter_cut, parameter_silent).
+
+### open_states
+
+```python
+def open_states() -> tuple
+```
+
+The states that mean a coordinate is still open (rule
+`open_states`): what a condition "open" holds for and a top-up of open
+values reads again.
+
 ### reader_of
 
 ```python
@@ -95,6 +120,53 @@ of `producers`: that pass did (BY_PASS). A key that points at none:
 BY_UNKNOWN, and never the harvest. `--recheck` deletes the stamps, so a
 position can outlive the list it was written for; reading that as the
 harvest would put a top-up's answer under a model that never saw it.
+
+### beside_names
+
+```python
+def beside_names(slot: Slot) -> bool
+```
+
+Does a coordinate of names take entries beside them
+(`spec.Axis.beside`, owner decision 2026-11-07): a free-text slot with a
+list?
+
+### wording_asked
+
+```python
+def wording_asked(slot: Slot) -> bool
+```
+
+Is the printed wording (`value_raw`) asked beside a coordinate's
+answer? Only where the answer is not the print itself: an entry of a
+list or a number, and a coordinate of names that takes entries beside
+them, whose entry the wording backs. A free text answer is its own
+wording; the request does not ask it twice, and the row keeps it as its
+wording (`pipeline.merge_field`, owner decision 2026-11-06).
+
+### said
+
+```python
+def said() -> str
+```
+
+### year_word
+
+```python
+def year_word() -> str
+```
+
+### value_example
+
+```python
+def value_example(slot: Slot)
+```
+
+A coordinate's answer as the example of a request shows it, read: an
+entry of its list or a wording as a placeholder, a number as the
+placeholder of a year. Never UNSTATED: an example shows every coordinate
+read (owner decision 2026-11-06), and the prompt's rule line shows how
+an unstated one looks.
 
 ### parameter_slot
 
@@ -113,6 +185,24 @@ Asked instead of assumed, it is the same shape as every other coordinate:
 a finite list, one request, one quote. And it is a real question: a
 passage rarely says "this is an emission", it says "t CO2-Äq", so the
 evidence is the wording that makes it one.
+
+### holds
+
+```python
+def holds(parameter: Parameter, claim: dict) -> bool
+```
+
+Is the row's value one of this parameter's entries?
+
+A category parameter's value is an answer to its closed list (owner,
+2026-09-11). The value is read before the parameter, as the wording the
+passage prints, so a row whose parameter is read with a value its list
+does not hold has the value asked again, to that list (`value_choice`).
+The lookup is the one `verify._check_value` resolves the value with.
+
+A value left out with the wording beside it is the answer that no entry
+fits, and fits every category parameter. A text or numeric parameter
+holds any value here; its own checks are elsewhere.
 
 ### has_number
 
@@ -138,8 +228,8 @@ Which entry of units_accepted a number is in: a choice, with a passage.
 A coordinate like the parameter, and asked before it: the value request
 writes the unit as the passage prints it, and which entry that means is a
 reading, not a lookup. "450 kWh über das Jahr" is kWh/a and a storage
-capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a", "kWp"
-and "g/kWh" are in no list and the row is refused for saying so. A
+capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a" is in no
+list and the number keeps the unit as printed, unconverted. A
 spelling table stood in for this reading once, and measured on 641 plans
 of corpus_m5 it let 3,324 tuples carry an entry their wording
 contradicts.
@@ -176,7 +266,7 @@ first kind can be found once and then asked about; the second cannot.
 
 WHICH ones those are is the profile's business. The core never names a
 coordinate, so this takes a list of names and resolves it against the
-spec, exactly like `SLICE` does for the gate.
+spec.
 
 Read off the first parameter that has all of them, because a frame is one
 per document: a spec whose parameters disagreed about it would have two
@@ -249,13 +339,42 @@ ambiguous, because the kwp spec's two numeric unit lists share no
 spelling. They cost 178 of 853 field requests, 20.9 percent, and every
 one of the five answers they produced was refused afterwards anyway.
 
+### derived_by_unit
+
+```python
+def derived_by_unit(claim: dict, parameter) -> bool
+```
+
+Does the spec decide the coordinates it derives from the unit for this
+value: the unit question read an entry of the parameter's list that
+converts onto the parameter's own unit? Where it read the print without
+one, the model is asked them (owner decision 2026-11-07: "wo es nicht
+automatisch geht, soll es das LLM versuchen"); so is a value whose entry
+converts onto a unit of its own, an emission factor in g CO2/kWh being
+no annual amount.
+
+### derives
+
+```python
+def derives(slot, claim: dict, parameter) -> bool
+```
+
+May the spec set *slot* for this value from its unit: the unit
+decides it (`derived_by_unit`), and no request read the coordinate. It
+is asked first, and taken from the unit only where nothing read it
+(owner decision 2026-11-07: "Fragen wir trotzdem und nur im Fallback
+machen wir die Zuordnung").
+
 ### apply_derived
 
 ```python
 def apply_derived(rows: list, slot: Slot) -> int
 ```
 
-Write a derived coordinate onto every row that has none. Returns how many.
+Write a derived coordinate onto every row no request read it on: one
+never asked, and one asked and left open, whose answer, quote and state
+go (owner decision 2026-11-07: asked first, derived only where no answer
+is read). Returns how many.
 
 The wording it was derived from is kept, and so is the row's own passage:
 a derived coordinate is not evidence-free, it is evidenced by the unit the
@@ -269,6 +388,23 @@ def value_slot(parameter: Parameter) -> Slot
 
 The row maker: the one request that decides how many values there are.
 
+### value_choice
+
+```python
+def value_choice(parameter: Parameter) -> Slot
+```
+
+The value of a category parameter, asked again as one of its entries.
+
+The rows request reads a value before its parameter, so what it writes is
+the wording the passage prints: "includes only adopted policies" where
+the list holds the types of a scenario. Once the parameter is read, which
+entry that wording is becomes a question of its own, with a quote like
+every coordinate, and the wording stays in value_raw. Asking the
+parameter again instead left the model no answer that could pass: on one
+corpus run 8,810 rows were asked it in every window to the end of their
+document, and 5,636,615 answers were refused.
+
 ### axis_slots
 
 ```python
@@ -280,6 +416,39 @@ Every coordinate of this parameter, in spec order, as its own question.
 A dynamic axis whose list the profile could not fill for this document has
 no options left, so it degrades to a wording, the same rule verify.py
 follows one step later.
+
+### kept
+
+```python
+def kept(slot: Slot, claim: dict) -> Optional[bool]
+```
+
+Is the value of *claim* a value of its parameter by *slot*, a
+coordinate with an entry it must have (`Slot.keep`, owner decisions
+2026-11-07)? True where the coordinate was read as that entry, False
+where it was read as another, None where it is open or *slot* has no
+such entry. The answer is the entry's label, as `pipeline.merge_field`
+writes it, or its key.
+
+### closed
+
+```python
+def closed(slots: list, claim: dict) -> bool
+```
+
+Has a coordinate of *slots* read the value of *claim* as no value of
+its parameter (`kept` False), so that nothing after it is asked?
+
+### in_parameter
+
+```python
+def in_parameter(parameter: Parameter, claim: dict) -> bool
+```
+
+Is the value of *claim* a value of *parameter* on every coordinate
+with an entry it must have, each read as that entry? The graph takes
+only such a value; one read with another entry, or whose entry stayed
+open, stays in the harvest (owner decisions 2026-11-07).
 
 ### slots
 

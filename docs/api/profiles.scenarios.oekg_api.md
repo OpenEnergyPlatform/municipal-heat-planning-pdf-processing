@@ -28,7 +28,7 @@ reads the platform's public bundle list, a GET, to say which acronyms are
 taken: the acronym is unique over there and the only way to find a bundle
 again, because no identifier of ours is accepted.
 
-A body is not the Turtle in another syntax in four places, each on purpose:
+A body is not the Turtle in another syntax in three places, each on purpose:
 
   one bundle per project   Documents whose bundle has the same label are one
                            bundle with several study reports, as they are one
@@ -41,8 +41,6 @@ A body is not the Turtle in another syntax in four places, each on purpose:
   no IAM annotation        The Turtle types every factsheet an IAM scenario.
                            The platform's list does not hold that class yet
                            and refuses a create for it, so a body omits it.
-  study region             The Turtle writes the parent property, the API the
-                           one its closed scenario shape names.
 
 Exit 0 is a report, whatever it says. Exit 2 is a run that could not be
 made: no harvest, no database, no API description or no shapes.
@@ -81,6 +79,14 @@ def problems(self, payload: dict) -> list
 
 ## Functions
 
+### not_yet_listed
+
+```python
+def not_yet_listed() -> tuple
+```
+
+The scenario types of the graph rule as it stands now, as IRIs.
+
 ### refresh
 
 ```python
@@ -110,14 +116,16 @@ def merge(studies: list) -> list
 
 One study per bundle: the documents of one project, together.
 
-kg.py mints a bundle from its label, so two papers of one project already
-are one bundle with two reports in the Turtle. A create is one body per
-bundle, and the body of each paper alone would make several bundles of
-one study. The oldest paper leads: its spelling labels the bundle and
-its abstract is the bundle's, of which the shapes allow one. An acronym
-is the one most of the documents give.
+kg.py mints a bundle from its key, the project's name or else the
+title, so two papers of one project already are one bundle with two
+reports in the Turtle. A create is one body per bundle, and the body of
+each paper alone would make several bundles of one study. The oldest
+paper leads: its spelling of the project's name labels the bundle (no
+label where no paper prints one) and its abstract is the bundle's, of
+which the shapes allow one. An acronym is the one most of the documents
+give.
 
-The label alone decides, as it does in the Turtle. An acronym two
+The key alone decides, as it does in the Turtle. An acronym two
 documents share does not: a harvest pairs a project's name with another
 project's acronym often enough (a paper thanks two projects) that
 joining on it would chain unrelated papers into one bundle. Such a pair
@@ -172,7 +180,7 @@ refused; one they gained could never be chosen.
 ### graph
 
 ```python
-def graph(payload: dict, known: dict)
+def graph(payload: dict, known: dict, origin: Optional[dict] = None)
 ```
 
 The bundle as the platform would hold it after creating this body.
@@ -180,14 +188,37 @@ The bundle as the platform would hold it after creating this body.
 The model the module docstring names. Local IRIs stand in for the ones
 the server mints; nothing here is written anywhere. A key the model does
 not cover raises: a verdict over half a body would read as a verdict.
+*origin*, where given, is filled with {node: [the places of the body it
+was made from]}, a place a tuple of keys and positions:
+("scenarios", 2), ("study_reports", 0, "authors", 1), ("bundle",).
+
+### graph_file_on
+
+```python
+def graph_file_on(payload: dict, made, shapes, known: dict,
+                  context=()) -> tuple
+```
+
+(the body as the profile's graph file leaves it, None where it leaves
+the bundle out; what it did): the graph file asks of the bundle as the
+platform would hold it (`graph`) what it asks of the written graph
+(`docpipe.graphfile.finish`). A class it does not write takes the items
+of the body that are its nodes along; a constraint whose effect is to
+leave the value out takes the item at fault, the bundle where the fault
+is the bundle's; one that leaves the paper out takes the bundle, as the
+paper's leaving out takes every node of its document, the bundle's
+among them; one that stops is said, and nothing is left out for it.
+Addresses are the platform's to mint, so the address rules ask nothing
+here.
 
 ### shape_problems
 
 ```python
-def shape_problems(data, shapes, known: dict) -> list
+def shape_problems(data, shapes, known: dict, context=()) -> list
 ```
 
-What the shapes say against one bundle graph.
+What the shapes say against one bundle graph, held together with what
+the OEKG already holds about the nodes it points at (*context*).
 
 ### platform_acronyms
 
@@ -215,7 +246,7 @@ narrower; two bundles that differ in case alone are one study either way.
 
 ```python
 def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
-            known: dict, taken: Optional[dict] = None) -> tuple
+            known: dict, taken: Optional[dict] = None, made=None) -> tuple
 ```
 
 (entries, documents without a study) for a harvest directory.
@@ -224,6 +255,10 @@ An entry is one request as it would be sent, and every reason the
 platform would refuse it: {documents, formed, method, path, body,
 problems}. `documents` are the harvest files the bundle was read from,
 the leading one first; `formed` names what was made here and not read.
+*made* is the profile's graph file (`docpipe.graphfile`): what it leaves
+out of the graph it leaves out of the body (`graph_file_on`), an entry
+it leaves out whole has no body, and one it stops says so; the entry
+carries what it did (`graph_file`).
 
 ### report
 

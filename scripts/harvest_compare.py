@@ -45,7 +45,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import jsonl                                   # noqa: E402
-from docpipe.extraction import fields                       # noqa: E402
+from docpipe.extraction import fields, trace                # noqa: E402
 from docpipe.profile import load_profile                    # noqa: E402
 
 log = logging.getLogger("harvest_compare")
@@ -70,7 +70,7 @@ def read_harvest(path: Path) -> tuple:
     that is read off it is the one this whole report exists for. The same
     holds for the parameter_state lines, and there is one per parameter of
     the spec, so an `else` that swept them into the refusals would report
-    fourteen model errors per ar6 document that nobody made.
+    fourteen model errors per scenarios document that nobody made.
     """
     tuples, refusals, summary = [], [], None
     parameter_lines: list = []
@@ -96,19 +96,20 @@ def read_harvest(path: Path) -> tuple:
 def serialize_counts(serializer, name: str, tuples: list, records: list) -> dict:
     """Run the profile's serializer and pick the skip counts out of its log.
 
-    The counts live in a closure and reach the outside only as a log line, so
-    the line is captured rather than the function rewritten: the serializer
-    stays the one the corpus run uses, which is the whole point of measuring
-    with it.
+    The counts reach the outside only as the program's log line ("graph:
+    <document>: left out {reason: rows}"), so the line is captured rather
+    than the function rewritten: the serializer stays the one the corpus
+    run uses, which is the whole point of measuring with it.
     """
     before = len(records)
     ttl = serializer(name, tuples)
     skipped: dict = {}
     for record in records[before:]:
         message = record.getMessage()
-        if "skipped" not in message:
+        if not message.startswith(f"graph: {name}: ") \
+                or "left out " not in message:
             continue
-        start = message.find("{")
+        start = message.find("{", message.find("left out "))
         if start == -1:
             continue
         try:
@@ -136,17 +137,11 @@ def trace_costs(directory: Path, name: str) -> dict:
     """Requests, milliseconds and windows of one document's trace."""
     out = {"rows": 0, "field": 0, "ms": 0, "unparsable": 0, "drops": 0}
     # Where a run writes it, and where a hand-copied set of files has it.
-    path = next((p for p in (directory / "trace" / f"{name}.trace.jsonl",
-                             directory / f"{name}.trace.jsonl")
-                 if p.is_file()), None)
+    path = trace.path_of(directory / "trace", name) \
+        or trace.path_of(directory, name)
     if path is None:
         return out
-    for line in jsonl.lines(path.read_text(encoding="utf-8",
-                                           errors="replace")):
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for event in trace.lines(path):
         kind = event.get("t")
         if kind in ("rows", "field"):
             out[kind] += 1
@@ -236,13 +231,10 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     profile = load_profile(args.profile)
-    factory = profile.component("kg", "make_serializer")
-    if factory is None:
-        print(f"profiles/{profile.name}/kg.py has no make_serializer")
-        return 1
-    serializer = factory(args.db)
+    from docpipe.extraction import graph
+    serializer = graph.make_serializer(profile, args.db)
     collector = _Collect()
-    kg_log = logging.getLogger(f"profiles.{profile.name}.kg")
+    kg_log = logging.getLogger("docpipe.extraction.graph")
     kg_log.addHandler(collector)
     kg_log.setLevel(logging.INFO)
 
@@ -251,7 +243,7 @@ def main(argv=None) -> int:
     # A trace sits next to its harvest in a hand-copied set, and it is not a
     # document: counting it as one halves every per-document average.
     files = sorted(p for p in args.directory.glob("*.jsonl")
-                   if not p.name.endswith(".trace.jsonl"))
+                   if not trace.is_trace(p))
     if args.document:
         wanted = set(args.document)
         files = [f for f in files if f.stem in wanted]
@@ -346,13 +338,14 @@ def main(argv=None) -> int:
         print("\nTrust per value (harvest's own view, no conflict or second read)")
         print("  " + ", ".join("%s=%d (%.0f%%)" % (level, levels[level],
                                                    100.0 * levels[level] / total)
-                               for level in ("A", "B", "C")))
+                               for level in ("A", "B", "C", "D")))
         print("  reasons: " + (", ".join(f"{k}={v}" for k, v
                                          in reasons.most_common(8)) or "none"))
         shares = sorted(
-            ((s["levels"].get("C", 0) / (s["tuples"] or 1), name, s)
+            (((s["levels"].get("C", 0) + s["levels"].get("D", 0))
+              / (s["tuples"] or 1), name, s)
              for name, s in summaries), reverse=True)[:5]
-        print("  Plans with the highest C share")
+        print("  Plans with the highest share of C and D")
         for share, name, s in shares:
             print("      %s: %.0f%% of %d tuples" % (name, 100.0 * share,
                                                       s["tuples"]))

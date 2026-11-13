@@ -122,6 +122,16 @@ def get_values()
 (value store, harvest rows by document) of the configured harvest,
 or (None, {}) where none is configured.
 
+### get_values_index
+
+```python
+@st.cache_resource
+def get_values_index()
+```
+
+The vectors of the harvest's values, or None: no harvest, or none
+that is current. `values_index.load` says which in the log.
+
 ### get_coordinate_prompt
 
 ```python
@@ -169,7 +179,8 @@ Return the query vector, from cache or a fresh on-demand embed.
 ```python
 def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
              document_id: int | None, scopes: list[str], as_json: bool = False,
-             history: list | None = None)
+             history: list | None = None, corpus: answer.Corpus | None = None,
+             progress=None)
 ```
 
 One turn, with this app's resources and its spinners attached.
@@ -199,7 +210,8 @@ One question to the graph; `answer_from_graph` decides everything.
 ### run_values_turn
 
 ```python
-def run_values_turn(task: str, document_id: int | None) -> dict | None
+def run_values_turn(task: str, document_id: int | None,
+                    history: list | None = None) -> dict | None
 ```
 
 What the harvest holds for the question, or None: no harvest, or
@@ -209,18 +221,22 @@ document's harvest.
 ### values_outcome
 
 ```python
-def values_outcome(task: str, document_id: int | None) -> dict | None
+def values_outcome(task: str, document_id: int | None,
+                   history: list | None = None) -> dict | None
 ```
 
 The harvest's answer with its reason where it has none
 (`values_route.REASONS`), or None: no harvest, or a document the
-database does not know.
+database does not know. By meaning where the harvest has its vectors,
+else by closed questions.
 
 ### run_values_answer
 
 ```python
 def run_values_answer(task: str, got: dict, document_id: int | None,
-                      history: list | None = None) -> dict
+                      history: list | None = None,
+                      corpus: answer.Corpus | None = None,
+                      progress=None) -> dict
 ```
 
 The question answered from the passages the found values were read

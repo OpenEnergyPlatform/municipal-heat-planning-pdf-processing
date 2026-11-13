@@ -28,7 +28,7 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog="""\
 Examples:
 docpipe ingest --profile kwp --source kww.xlsx
-docpipe ingest --profile scenarios --source pdf_index.json --db data/ar6/ar6.db --data-dir data/ar6/pdf
+docpipe ingest --profile scenarios --source pdf_index.json --db data/scenarios/scenarios.db --data-dir data/scenarios/pdf
 docpipe ingest --profile default --source ~/reports
         """,
     )
@@ -36,7 +36,7 @@ docpipe ingest --profile default --source ~/reports
     # existing callers still say it.
     p.add_argument("--source", "--excel", dest="source",
                    help="The profile's document list (kwp: the KWW sheet, "
-                        "ar6: the crawl index), or for a profile that reads "
+                        "scenarios: the crawl index), or for a profile that reads "
                         "a folder, the folder of PDFs (default: the data "
                         "directory)")
     p.add_argument("--db", help="Path to the SQLite database "

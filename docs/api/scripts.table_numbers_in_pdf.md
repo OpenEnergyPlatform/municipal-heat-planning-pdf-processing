@@ -97,7 +97,8 @@ Which class a table with *found* of *numbers* distinct numbers is in.
 def numbers_of(text: str) -> set
 ```
 
-The distinct numbers of *text*, each in its one canonical spelling.
+The distinct numbers of *text*, each in its one canonical spelling and
+without its sign, which `numbers_in` lists beside the magnitude.
 
 ### frame_of
 

@@ -37,6 +37,7 @@ arguments, and that form keeps working:
 | `docpipe export` | `python -m docpipe.serve.export` |
 | `docpipe serve` | `python -m docpipe.serve` |
 | `docpipe lexical` | `python -m docpipe.inference.lexical` |
+| `docpipe values-index` | `python -m docpipe.inference.values_index` |
 | `docpipe sandbox` | `python -m docpipe.app.sandbox_service` |
 
 `docpipe chat` starts the chat, and `docpipe init`, `doctor`, `config` and
@@ -259,8 +260,8 @@ PDF, ignoring both caches; `--rebuild-stage3` reruns only section
 assembly, from a cached `pages.json`, with no PDF and no layout model;
 `--transcribe-missing-text` turns on a vision fallback for pages with no
 text layer (lines 573 to 577), reusing the visuals stage's client at
-`VLM_BASE_URL` (`docpipe/preprocessing/page_text_fallback.py` lines 392
-to 393). The stage writes `pages.json`, then `sections.json`.
+`VLM_BASE_URL` (`docpipe/preprocessing/page_text_without_layer.py` lines 391
+to 392). The stage writes `pages.json`, then `sections.json`.
 It resumes on those two files existing and loading cleanly; a run that
 dies partway through a document leaves no cache for it and starts that
 document over.
@@ -272,8 +273,8 @@ prompt, one page image and one reply, 9,260 tokens with the `kwp` profile and
 9,449 with `scenarios`) and take the page reply schema. A server that
 is not there, or refuses the schema, ends the run with exit 1 at that page;
 a run in which every page has its text asks no server and ends 0 as before.
-The profile's `reading.PHRASES` is checked first, and a profile without one of
-its sentences stops the run with a `LookupError`. A page the model gave no
+The profile's reading sentences (`prompts/reading/phrases.json`) are checked first, and a profile without one of
+them stops the run with a `LookupError`. A page the model gave no
 readable reply for keeps no text and is listed with its cause under
 `failed_pages` in `page_transcription_report.json`; that does not change the
 exit code, the run says in one line how many pages of how many documents could
@@ -315,7 +316,7 @@ beside it; the server at `LLM_BASE_URL` is checked first
 (`docpipe/llm_preflight.py`), for the needed context and for taking each reply
 schema of the stage as the `response_format` of a request, and a server that
 refuses one ends the run with exit 1 before the first document. The profile's
-`reading.PHRASES` is checked then too.
+reading sentences (`prompts/reading/phrases.json`) are checked then too.
 
 Every request sends its reply schema as the grammar, and the reply is read as
 exactly one JSON object (`docpipe/reading.py`); nothing is stripped, cut out or
@@ -371,7 +372,7 @@ the longer of the two system prompts, one image and one reply of
 `VLM_MAX_TOKENS` tokens (8,192 by default), 13,992 tokens with the `kwp` profile
 and 14,163 with `scenarios`. A vision server whose maximum context length is
 smaller is refused by the preflight. The preflight also puts the two
-reply schemas to the server, and a profile without a `reading.PHRASES` sentence
+reply schemas to the server, and a profile without a sentence of `prompts/reading/phrases.json`
 stops the run before the first request; neither is asked of a dry run.
 
 An image has no halves, so a reply cut off at its limit is asked once more,
@@ -515,6 +516,7 @@ docpipe benchmark benchmarks/kwp
 docpipe export data/kwp/extraction --out values.csv
 docpipe serve data/kwp/extraction --http
 docpipe lexical data/kwp/kwp.db
+docpipe values-index data/kwp/extraction
 docpipe compile spec --shapes shapes.ttl --out draft.json
 ```
 
@@ -538,8 +540,17 @@ docpipe compile spec --shapes shapes.ttl --out draft.json
 - `lexical` builds the word index beside the database that the chat searches
   with the vectors (`--check` says whether it is current); see [asking the
   corpus](stages/inference.md).
+- `values-index` builds the vectors the chat finds the harvest's values by, in
+  `<harvest>.values.db` beside the harvest (`--check` says whether it is
+  current; `--db` names the corpus database where the profile has none); see
+  [asking the corpus](stages/inference.md).
 - `compile` drafts an extraction spec from the shapes of a graph; see [the
   spec compiler](stages/compile.md).
+- `edit` shows a profile's extraction spec, its prompts and the sentences its
+  stages say outside their prompts, and the numbers of the reading's flow, as a
+  page in the browser; for the spec it says what an edit costs the next run
+  before it is saved, and for a prompt it shows the recorded requests the edit
+  reaches; see [editing a profile](stages/editor.md).
 
 ## Configuration reference
 
@@ -556,15 +567,14 @@ their values and where each value comes from.
 | Visuals | `VLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | served model name requested | `docpipe/visuals/config.py:43` |
 | Chunking | `EMBEDDING_BACKEND` | `local` | `local`, `api`, or an import path | `docpipe/embedding/config.py:19` |
 | Chunking | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF model id for every embedding | `docpipe/embedding/config.py:21` |
-| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py:94` |
-| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py:96` |
-| Extraction | `EXTRACT_MAX_RETRIES` | `3` | attempts per LLM request before giving up on it | `docpipe/extraction/runner.py:98` |
-| Extraction | `EXTRACT_RETRY_TIMEOUT` | `600` | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout | `docpipe/extraction/runner.py:103` |
-| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one rows request; lowered at the start where the rows prompt's `max_tokens` cannot hold the reply for that many | `docpipe/extraction/runner.py:253` |
-| Extraction | `EXTRACT_BATCH_DOCS` | `64` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py:5620` |
-| Extraction | `EXTRACT_FIELD_ROWS` | `32` | rows one field request answers at once | `docpipe/extraction/runner.py:412` |
-| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py:1307` |
-| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py:1336` |
+| Extraction | `LLM_BASE_URL` | `http://localhost:8000/v1` | harvesting model's endpoint | `docpipe/extraction/runner.py` (`LLM_BASE_URL`) |
+| Extraction | `LLM_MODEL` | `Qwen/Qwen3.5-122B-A10B-FP8` | harvesting model's name | `docpipe/extraction/runner.py` (`LLM_MODEL`) |
+| Extraction | `EXTRACT_MAX_RETRIES` | none (unset: the `replies` of the profile's `flow.json`) | replies out of their form a request takes before it is left unanswered; where set it wins over the flow file | `docpipe/extraction/runner.py`, `docpipe/extraction/flow.py` |
+| Extraction | `EXTRACT_RETRY_TIMEOUT` | none (unset: the rule `repeat_timeout_s`, `600`) | client timeout (seconds) a retry gets after a request timed out; a request refused at once keeps the client's own timeout; wins over the rule | `docpipe/extraction/runner.py` (`retry_timeout`) |
+| Extraction | `EXTRACT_BATCH_SOURCES` | `6` | sources sharing one rows request; lowered at the start where the rows prompt's `max_tokens` cannot hold the reply for that many | `docpipe/extraction/runner.py` (`BATCH_SOURCES`) |
+| Extraction | `EXTRACT_BATCH_DOCS` | `256` | documents kept in flight at once, largest first by section count, filename breaking a tie; one written and replaced by the next as soon as it finishes | `docpipe/extraction/runner.py` (`main`) |
+| Extraction | `EXTRACT_MAX_MODEL_LEN` | `32768` | fallback context window, used only where the server's own preflight reports none | `docpipe/extraction/runner.py` (`MAX_MODEL_LEN`, `set_model_len`) |
+| Extraction | `EXTRACT_LIMIT_ADAPTIVE` | `1` | off (`0`) disables the adaptive request limit; the thread pools alone bound concurrency | `docpipe/extraction/runner.py` (`start_limit`) |
 | Extraction | `EXTRACT_LIMIT_START` | `128` | requests the adaptive limit opens with | `docpipe/extraction/throttle.py:50` |
 | Extraction | `EXTRACT_LIMIT_MIN` | `16` | floor the limit backs off to | `docpipe/extraction/throttle.py:51` |
 | Extraction | `EXTRACT_LIMIT_MAX` | `512` | ceiling the limit grows to; the server's own max-num-seqs cap must be at least this, or requests queue there instead | `docpipe/extraction/throttle.py:52` |
@@ -574,8 +584,8 @@ their values and where each value comes from.
 | Extraction | `EXTRACT_LIMIT_KV_GROW` | `0.80` | KV cache fraction below which the limit may grow | `docpipe/extraction/throttle.py:57` |
 | Extraction | `EXTRACT_LIMIT_KV_HIGH` | `0.92` | KV cache fraction at or above which the limit steps down | `docpipe/extraction/throttle.py:58` |
 | Extraction | `EXTRACT_LIMIT_TPOT_MAX` | unset | seconds per output token above which a sample also counts as pressure; unset, token time never steps the limit down | `docpipe/extraction/throttle.py:61` |
-| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | `180` | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes | `docpipe/extraction/runner.py:1955` |
-| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py:282` |
+| Extraction | `EXTRACT_SERVER_DEAD_AFTER` | none (unset: the rule `server_dead_after_s`, `180`) | seconds without any reply to a `/models` probe before the harvest ends as if stopped, so a dead server is noticed in minutes; wins over the rule | `docpipe/extraction/runner.py` |
+| Extraction | `EXTRACT_LOCATE_CACHE_PAGES` | `512` | pages of words cached by `make_locate` across documents; a cache hit is a dict lookup and takes no lock | `docpipe/extraction/runner.py` (`make_locate`) |
 | Extraction | `EXTRACT_CONTENT_CACHE_OWNERS` | `300000` | passages (sections, tables, figures) whose text one run keeps in the store every thread shares, so each is read once; past it the oldest goes, `0` keeps all | `docpipe/extraction/runner.make_shared_content` |
 | App, serve | `INFERENCE_DB_PATH` | profile `db_path`, else `data/KWP.db` (the chat; `serve` has none) | SQLite corpus database, opened read-only; `docpipe serve` opens it for its passage search | `docpipe/app/config.py` |
 | App | `INFERENCE_PDF_ROOT` | profile `pdf_dir`, else `data/pdf` | folder of the source PDFs, which the cited page is drawn from | `docpipe/app/config.py` |
@@ -586,7 +596,7 @@ their values and where each value comes from.
 | App | `INFERENCE_KG_TTL_PATH` | profile `root/graph.ttl`, else `data/graph.ttl` | Turtle file from `--serialize` | `docpipe/app/config.py` |
 | App | `INFERENCE_HARVEST_DIR` | unset | harvest directory the chat shows values from and the review page reads; unset: neither | `docpipe/app/config.py` |
 | App | `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | file the review page appends decisions to | `docpipe/app/config.py` |
-| App | `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | unset, `20` | worst trust level of a value the chat still shows; how many it shows before the count of the rest | `docpipe/app/config.py` |
+| App | `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | unset, `20` | worst trust level of a value the chat still shows; how many the closed questions give before the count of the rest | `docpipe/app/config.py` |
 | App | `INFERENCE_LEXICAL` | `1` | search by word beside the search by meaning where a word index exists; `0` turns it off | `docpipe/app/config.py` |
 | App | `CODE_EXEC_URL` | `""` (off) | calculation sandbox endpoint | `docpipe/inference/config.py:65` |
 | Refinement, visuals, extraction, chat | `LLM_PROVIDER`, `VLM_PROVIDER`, `EMBEDDING_PROVIDER` | `openai-compatible` | the API behind a role: a server of one's own, `openai`, `anthropic` or `gemini` (embeddings: not `anthropic`) | `docpipe/providers/__init__.py` |
@@ -637,7 +647,7 @@ already-written harvest directory, instead of or before harvesting.
   second run asks nothing about a document that has the key. Traces go to
   `trace-topup/`; see [extraction](stages/extraction.md).
 - `--review`, bounded with `--review-limit N`, needs the model. It reads
-  every value nobody can stand behind a second time, over its own
+  every value of level C or D a second time, over its own
   passage and section, and records only a disagreement as a trust
   reason (`docpipe/extraction/runner.py` lines 5438 to 5489); see
   [the trust contract](contract/trust.md). Each document is read against
@@ -667,8 +677,10 @@ whole GPU. Optional:
   chat searches beside the vectors (`INFERENCE_LEXICAL=0` turns that off);
 - a harvest directory (`INFERENCE_HARVEST_DIR`): a question for a number then
   shows the values the harvest holds for it first, each with its quote, page
-  and trust level, and a review page offers the decisions that
-  `docpipe evaluate` counts against (`INFERENCE_GOLD_PATH`);
+  and trust level, found by meaning where `docpipe values-index` built their
+  vectors beside the harvest and by closed questions where it did not, and a
+  review page offers the decisions that `docpipe evaluate` counts against
+  (`INFERENCE_GOLD_PATH`);
 - the Turtle file a `--serialize` run wrote (`INFERENCE_KG_TTL_PATH`), which no
   route reads while the graph route is not offered;
 - a code-execution sandbox (`CODE_EXEC_URL`, run with `docpipe sandbox`);
@@ -716,8 +728,10 @@ python scripts/change_audit.py
 ```
 
 reports what a change touches beyond the lines it edits: a consumer, a
-sibling, an added function no test names; it takes an optional commit
-range, else compares the working tree against `HEAD`.
+sibling, an added function no test names, and a generated page of `docs/`
+that a fresh `scripts/build_docs.py --check` renders otherwise (DOCS; no test
+checks the generated pages); it takes an optional commit range, else compares
+the working tree against `HEAD`.
 
 ```bash
 python scripts/preflight_profiles.py

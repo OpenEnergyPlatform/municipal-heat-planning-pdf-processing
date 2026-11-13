@@ -65,17 +65,29 @@ TOKENS_PER_WORD = 3.0
 # exact count depends on the model's patch grid, and getting it wrong upwards
 # only costs KV cache, downwards costs the run.
 IMAGE_TOKENS = 4096
+# Each text a request shows beside its prompts is cut to this many characters
+# (process._truncate): the section's text, and for a table that may continue
+# the table before it, that table's head and what stands between the two
+# (continuation.BETWEEN_CHARS). Counted at two characters a token.
+SHOWN_CHARS = 800
 
 
 def max_request_tokens() -> int:
-    """Worst case for one vision request: the longer of the two system
-    prompts + one page image + the reply we ask for, once. A reply cut off at
-    its limit is asked once more with more room, but the room is bounded by
-    what the served window leaves beyond this number (vision.call_vision), so
-    no second reply is counted."""
-    words = max(len(table_system_prompt().split()),
-                len(figure_system_prompt().split()))
-    return int(words * TOKENS_PER_WORD + IMAGE_TOKENS + VLM_MAX_TOKENS)
+    """Worst case for one vision request: the longer of the two requests'
+    prompts with the texts they show, cut as they are cut, + one page image
+    + the reply we ask for, once. A table's request counts the part it gets
+    where it may continue the table before it. A reply cut off at its limit
+    is asked once more with more room, but the room is bounded by what the
+    served window leaves beyond this number (vision.call_vision), so no
+    second reply is counted."""
+    table = ((len(table_system_prompt().split())
+              + len(table_user_prompt().split())
+              + len(table_continued_prompt().split())) * TOKENS_PER_WORD
+             + 3 * SHOWN_CHARS / 2)
+    figure = ((len(figure_system_prompt().split())
+               + len(figure_user_prompt().split())) * TOKENS_PER_WORD
+              + SHOWN_CHARS / 2)
+    return int(max(table, figure) + IMAGE_TOKENS + VLM_MAX_TOKENS)
 
 # ---------------------------------------------------------------------------
 # Retry ladder
@@ -102,6 +114,15 @@ RETRY_PENALTIES = [None, 1.1, 1.3]
 TABLE_QA_MIN_COVERAGE      = 0.5
 TABLE_QA_MAX_DUPLICATION   = 0.4
 TABLE_QA_MIN_SOURCE_TOKENS = 8
+# A source text below the coverage is no measure where both hold (qa.unreadable):
+# under this share of the transcription stands in it, and under this share of
+# its words occurs in the rest of the document. Measured on the scenarios
+# rebuild of 2026-11-11: of 1,609 assessable tables 31 fell below the coverage.
+# 27 were sideways tables of a scanned book with an upside-down OCR layer
+# (shared <= 0.11, known <= 0.41), one a frame whose layer is a heading with
+# two links (0.04, 0.44); the 3 with a readable layer had >= 0.57 and >= 0.86.
+TABLE_QA_MAX_SHARED_UNREADABLE = 0.25
+TABLE_QA_MIN_KNOWN_WORDS       = 0.5
 # Used for the single retry on QA failure.
 TABLE_QA_RETRY_TEMPERATURE = 0.4
 TABLE_QA_RETRY_PENALTY     = 1.3
@@ -116,6 +137,7 @@ TABLE_QA_RETRY_PENALTY     = 1.3
 # ---------------------------------------------------------------------------
 
 PROMPT_IDS = ("visuals/table_system", "visuals/table_user",
+              "visuals/table_continued",
               "visuals/figure_system", "visuals/figure_user",
               "visuals/caption_keep", "visuals/caption_generate_table",
               "visuals/caption_generate_figure")
@@ -131,6 +153,13 @@ def table_system_prompt() -> str:
 @prompts.per_profile
 def table_user_prompt() -> str:
     return prompts.text("visuals/table_user")
+
+
+# Added to the user prompt of a table that may continue the table before it
+# (see continuation.py).
+@prompts.per_profile
+def table_continued_prompt() -> str:
+    return prompts.text("visuals/table_continued")
 
 
 # ── Caption instruction fragments (inserted into the two user prompts) ──

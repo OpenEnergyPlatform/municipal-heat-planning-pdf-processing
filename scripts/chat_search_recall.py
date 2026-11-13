@@ -46,7 +46,6 @@ from __future__ import annotations
 
 import argparse
 import collections
-import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,8 +53,8 @@ from typing import Callable, Iterable, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from docpipe import jsonl                                           # noqa: E402
 from docpipe.estimate import TRACE_DIR                              # noqa: E402
+from docpipe.extraction import trace                                # noqa: E402
 from docpipe.extraction.serialize import collect                    # noqa: E402
 from docpipe.profile import (add_profile_argument,                  # noqa: E402
                              bind_command_line, require_profile)
@@ -132,18 +131,11 @@ def read_plans(directory: Path, names: Iterable[str]) -> Plans:
     origins: dict = collections.defaultdict(set)
     traced: set = set()
     for name in names:
-        path = Path(directory) / TRACE_DIR / f"{name}.trace.jsonl"
-        if not path.is_file():
+        path = trace.path_of(Path(directory) / TRACE_DIR, name)
+        if path is None:
             continue
-        for line in jsonl.read(path):
-            if '"plan"' not in line:
-                continue
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(event, dict) or event.get("t") != "plan" \
-                    or not isinstance(event.get("doc"), int):
+        for event in trace.lines(path, kinds=("plan",)):
+            if not isinstance(event.get("doc"), int):
                 continue
             traced.add(event["doc"])
             origins[(event["doc"], event.get("kind"),

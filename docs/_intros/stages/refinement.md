@@ -15,6 +15,8 @@ example, a preprint's line numbers landing inside a sentence: a number
 counting up line after line is removed, one the sentence itself states
 stays.
 
+The front matter of the first page and of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on either. The first page is the lowest page any section carries; the title page is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json` (`_front_pages`). Both count because a cover can stand before the title page, and because the layout detection marks a heading far into a report as its title in 8 of the 164 documents of the scenarios corpus; a `sections.json` without the key protects the first page alone.
+
 Stage 4 also enforces the size limit the embedding step needs: a
 retrieval chunk is one section and one vector, so a section long enough
 that its embedding no longer represents one topic, or long enough to
@@ -62,7 +64,7 @@ asks for JSON in no other way, so a server that refuses a schema with a 4xx
 other than 429 would refuse every request of the run, and the run ends with
 exit 1 before the first document. A server that does not answer the probe
 (busy, down, a 5xx, a 429) gives no verdict, and the run goes on. `main`
-also reads the profile's `reading.PHRASES` before the first document
+also reads the profile's reading sentences (`prompts/reading/phrases.json`) before the first document
 (`reading.phrases()`, after `--print-context-budget`, which asks nothing of
 the model): a profile that lacks one of the sentences ends the run there
 with a `LookupError`, not in the middle of the first document.
@@ -154,7 +156,7 @@ attempts in all, with `_backoff` between them (`min(2 * attempt, 10)`
 seconds). The next request is the original one, then an assistant turn with
 a bounded echo of the bad reply (`_echo`, at most 400 leading and 200
 trailing characters; empty when the reply had no text), then a user turn
-that names the cause in the profile's words (`reading.PHRASES`) and repeats
+that names the cause in the profile's words (`prompts/reading/phrases.json`) and repeats
 the shape that was asked for. The cause is one of:
 
 | cause | the reply was |
@@ -324,8 +326,15 @@ home at the nearest surviving output.
 `_apply_actions` reads each section's `_action`, once its provenance is
 reattached. `remove` drops the section unless it still carries tables or
 figures, in which case the removal is refused and the section kept with a
-warning. `merge_into_previous` folds a section's content, tables,
-figures, and segments into the previous kept section, whether that
+warning. It is refused too for the text before the first heading (the
+profile's `FRONT_SECTION_TITLE`): the head of the first page, a journal line
+and often the title with it. The text of a removed section goes, its heading stays behind as
+a bare heading for the cleanup below to hand on, since a contents page or
+an authors' block can be headed by the document's title; the profile's
+`FRONT_SECTION_TITLE` is not a heading of the document and is not kept.
+`merge_into_previous` folds a section's content, tables,
+figures, and segments into the previous kept section (never into a heading
+left behind by a removal), whether that
 section came from the same window or, via `previous_kept`, the window
 before it. `keep` and `replace` pass the section through as is.
 
@@ -333,8 +342,25 @@ before it. `keep` and `replace` pass the section through as is.
 
 Once every window is assembled, `_reattach_media_bbox` restamps each
 table's and figure's `bbox` from the Stage 3 input, since the model
-re-emits those objects and may drop or alter the field. Sections left
-with no content, tables, or figures are dropped (`_is_empty_section`).
+re-emits those objects and may drop or alter the field. A section that
+is a heading and nothing else, such as a paper's title set apart from
+its authors, hands that heading to the next section, as the first line
+of its text and followed by that section's own heading
+(`_fold_bare_headings`), so the title stays readable and quotable and a
+title broken over several headings reads in its order. Sections left with no content, tables, or figures are then
+dropped (`_is_empty_section`); a heading with no text after it, or one
+before a literature list, goes with them.
+The model can undo the cut that came before it: it merges the parts of a
+split section back together, and it rewrites a literature list as BibTeX,
+which names every field and makes the list about half as long again. So
+`_hold_to_limit` holds every refined section to `SECTION_MAX_WORDS` once more,
+with no model (`split.cut_to_limit`): a literature list after whole entries,
+other text where a line ends, else where a sentence ends, else after a run of
+words, so that no word is changed or lost, aiming at half the limit as
+`_enforce_max` does. Each part keeps the title and the tables and figures its
+text marks. Its segments follow its text in order and at its share of the way
+through (`split._spread_segments`), a text segment across a cut being cut
+there as well, since the refined text no longer rebuilds them word for word.
 `_finalize_pages` recomputes each section's `pages` from its segments and
 media; `_backfill_empty_pages` gives a still-empty one its nearest
 neighbour's page rather than leaving it uncitable. With
@@ -486,7 +512,7 @@ over `SECTION_MAX_WORDS` is re-cut mechanically by `_enforce_max`.
 `run()`'s preflight (see Method) refuses to start before the first
 document rather than mid-run: an undersized or wrong server, and a server that
 refuses a reply schema of the stage, end the run with exit 1 there, and a
-profile without a `reading.PHRASES` sentence ends it with a `LookupError`. A document with no
+profile without a sentence of `prompts/reading/phrases.json` ends it with a `LookupError`. A document with no
 `results/sections.json`
 is not a `--batch`-mode candidate (`run_batch` lists the document directories
 that hold `sections.json` through `artifacts.document_dirs`). A killed `--force` run,
@@ -500,7 +526,7 @@ swallowed rather than failing an already-successful run.
 
 ## Measured behaviour
 
-Across 60 ar6 documents, 28% of sections came back byte-identical from a
+Across 60 documents of the scenarios corpus, 28% of sections came back byte-identical from a
 full rewrite, the median section was 99% unchanged, and only 166 of 4887
 sections were real conversions (`docpipe/refinement/corrections.py:6-8`,
 `docpipe/refinement/config.py:64-65`): the stage spent output tokens, a
@@ -524,190 +550,17 @@ reply naming only some of a window's sections cost one book 123 of its
 Before the context-size preflight existed, 42 windows silently kept raw
 text against a server whose `max_model_len` was smaller than a request
 could need (`docpipe/llm_preflight.py:8-9`). Under a flat, non-scaling
-reply budget, 24 of 1030 windows in one ar6 book run had their JSON reply
+reply budget, 24 of 1030 windows in one book run of the scenarios corpus had their JSON reply
 truncated mid-string, each an "Unterminated string" error
 (`docpipe/refinement/config.py:111`).
 
-Before segments could be subdivided, 51 sections in one ar6 run stayed
+Before segments could be subdivided, 51 sections in one run of the scenarios corpus stayed
 oversized however often the split was asked, up to 1409 words against the
 1000-word `SECTION_MAX_WORDS` limit, since their whole text sat in one
 segment with no boundary to cut on (`docpipe/refinement/split.py:333-334`).
 The model's proposed cut is a suggestion, not a bound: an 11596-word
 section came back as 10 parts, one still 2392 words, which is what
 `_enforce_max` exists to correct (`docpipe/refinement/split.py:363-364`).
-
-## Verification
-
-The retry and abandonment behaviour of `_call_llm`, and that a repair turn
-never resends the whole failed answer:
-`test_an_oversized_window_is_abandoned_not_retried`,
-`test_the_abandoned_window_is_named_out_loud`,
-`test_any_other_client_error_also_stops_at_once`,
-`test_a_busy_or_broken_server_is_still_retried`,
-`test_a_short_answer_is_echoed_whole`,
-`test_a_long_answer_is_bounded_before_it_goes_back`
-(`tests/test_textrefinement_refine.py`).
-
-A request asks inside its schema, a reply is read as exactly one object, and
-the cause of a bad one is said to the model in the profile's words:
-`test_call_llm_asks_inside_the_schema_on_its_own_server`,
-`test_the_corrections_mode_asks_inside_its_own_schema`,
-`test_the_cut_request_asks_inside_the_schema_too`,
-`test_a_reply_that_is_not_the_object_is_asked_again_with_its_cause`,
-`test_each_cause_is_named_to_the_model_in_the_profiles_words`,
-`test_the_answer_that_is_echoed_back_is_bounded`,
-`test_call_llm_exhausts_to_a_hole_with_its_cause`,
-`test_a_reply_that_breaks_in_our_own_code_is_a_hole_and_not_an_outage`,
-`test_the_name_of_the_old_reader_is_gone`
-(`tests/test_textrefinement_refine.py`).
-
-A reply that was cut off is never used or asked again as it stands: the
-window is asked in halves down to one section, which is asked once more with more
-room (twice what it asked where the window is not known), and a window is
-assembled part by part when a part is a hole:
-`test_a_cut_reply_is_a_hole_and_is_not_used_or_asked_again`,
-`test_a_cut_window_is_asked_in_halves`,
-`test_halves_are_asked_again_down_to_one_section`,
-`test_a_lone_section_that_is_cut_off_gets_twice_the_room_once_where_the_window_is_not_known_and_is_a_hole`,
-`test_the_extra_room_is_spent_once_on_a_section_that_then_fits`,
-`test_a_window_with_one_part_that_is_a_hole_is_assembled_by_parts`,
-`test_a_part_that_is_not_served_makes_the_whole_window_not_served`,
-`test_a_cut_request_for_one_segment_is_asked_again_with_twice_the_room_where_the_window_is_not_known`,
-`test_a_cut_request_for_one_segment_that_is_cut_off_twice_is_a_hole`
-(`tests/test_textrefinement_refine.py`).
-
-The room a unit that cannot be split is asked once more with is the smaller of
-twice what it asked and the reply the budget counts plus what the served window
-holds beyond the budget; where the window leaves no more room the unit is a hole
-at once and no second request is sent; the budget is the prompt, the largest
-input and one largest reply; and the window is kept for the role that asked:
-`test_a_cut_off_unit_is_asked_once_more_with_more_room_and_then_no_more`,
-`test_the_room_is_twice_what_was_asked_where_the_window_leaves_that_much`,
-`test_the_room_is_what_the_window_leaves_where_that_is_less_than_twice`,
-`test_the_room_is_the_smaller_of_twice_and_the_reply_plus_what_is_left`,
-`test_a_window_that_leaves_no_more_room_makes_the_unit_a_hole_at_once`,
-`test_one_token_of_room_is_room_and_the_second_request_is_sent`,
-`test_the_hole_of_a_lone_window_keeps_the_size_of_the_request_that_was_cut`,
-`test_a_window_of_two_sections_is_asked_in_halves_whatever_the_window_leaves`,
-`test_an_outline_of_two_segments_is_asked_in_halves_whatever_the_window_leaves`,
-`test_a_caller_that_asked_no_server_gives_twice_the_room`,
-`test_a_server_that_reports_no_window_gives_twice_the_room`,
-`test_the_budget_of_stage_four_is_the_prompt_the_largest_input_and_one_reply`,
-`test_a_longer_reply_moves_the_budget_of_stage_four_by_that_reply_once`,
-`test_stage_four_takes_a_server_that_serves_exactly_its_budget`,
-`test_stage_four_refuses_a_server_one_token_under_its_budget`,
-`test_the_command_hands_the_window_it_found_to_the_units_it_asks`,
-`test_the_log_of_the_further_attempt_says_both_sizes_in_tokens`
-(`tests/test_room.py`).
-
-A hole is written with its original text and named with its cause, and the next
-plain run asks exactly the windows the report lists:
-`test_a_hole_is_written_with_its_original_text_and_named_with_its_cause`,
-`test_every_cause_a_window_can_end_with_is_in_the_report`,
-`test_a_reply_with_no_section_in_it_is_a_hole_named_wrong_shape`,
-`test_the_next_plain_run_asks_exactly_the_windows_the_report_lists`,
-`test_a_resume_writes_what_a_single_pass_writes`,
-`test_a_window_that_stays_a_hole_is_asked_again_and_the_others_are_not`,
-`test_a_hole_does_not_make_the_next_run_ask_a_window_that_was_read`,
-`test_a_pass_that_is_not_served_after_a_hole_keeps_the_output_it_had`,
-`test_a_window_asked_in_halves_lists_only_the_part_that_is_a_hole`,
-`test_a_run_with_a_hole_exits_as_it_did_and_says_what_it_left_unread`,
-`test_a_request_the_server_did_not_serve_still_ends_the_run_non_zero`,
-`test_the_summary_counts_windows_sections_and_documents`,
-`test_a_cut_the_model_did_not_place_is_named_and_not_made_again`,
-`test_a_partial_file_from_before_the_cuts_were_recorded_is_still_read`
-(`tests/test_refinement_holes.py`).
-
-Page provenance survives a split, a merge across a window boundary, and a
-section a reply silently omitted: `test_thread_provenance_split_in_middle_of_window_keeps_siblings_exact`,
-`test_redistribute_drops_unanchored_text_orphan_no_phantom_page`,
-`test_omission_shrink_does_not_leak_removed_section_pages`,
-`test_cross_window_merge_spans_both_windows` (`tests/test_textrefinement_provenance.py`).
-
-A `remove` action never discards a section's tables or figures:
-`test_remove_is_refused_for_a_section_that_carries_media`
-(`tests/test_refinement_force_keeps_output.py`).
-
-Title cleanup strips numbering prefixes and de-shouts ALL-CAPS titles,
-sparing acronyms and `[LITERATURE]`: `test_numbering_prefix_is_stripped`,
-`test_all_caps_is_deshouted_keeping_acronyms`,
-`test_literature_sentinel_and_years_untouched`
-(`tests/test_stage_cleanup.py`). `_reattach_media_bbox` restamps `bbox`
-from the Stage 3 input by block id across a split, a no-op without
-geometry: `test_reattach_media_bbox_stamps_by_id_across_split`,
-`test_reattach_media_bbox_noop_without_geometry`
-(`tests/test_segment_bbox.py`).
-
-A window the server did not serve is not written as unchanged text, and
-the next run asks only for it: `test_a_window_nobody_answered_is_not_served`,
-`test_the_last_attempt_decides`,
-`test_a_reply_without_a_choice_was_served_and_is_an_empty_reply`,
-`test_a_refused_window_is_the_requests_fault`,
-`test_a_setting_nobody_can_read_is_not_an_outage`,
-`test_a_cut_nobody_answered_is_asked_again_and_then_not_served`,
-`test_a_cut_that_is_cut_off_is_asked_in_halves_not_again`,
-`test_a_refused_cut_is_not_asked_twice_and_is_a_hole`,
-`test_a_document_whose_cut_was_not_served_is_not_refined`,
-`test_an_outage_writes_nothing_as_refined`,
-`test_the_next_run_asks_only_for_what_was_not_served`,
-`test_a_forced_pass_that_is_not_served_keeps_the_old_output`,
-`test_an_unfinished_pass_over_another_input_is_not_resumed`,
-`test_an_unfinished_pass_asked_with_another_prompt_is_not_resumed`,
-`test_an_unfinished_pass_asked_of_another_model_is_not_resumed`,
-`test_an_unfinished_pass_with_another_window_size_is_not_resumed`,
-`test_a_setting_nobody_can_read_ends_the_run_before_the_first_document`,
-`test_a_batch_counts_an_unserved_document_as_failed` and
-`test_the_merge_names_the_documents_it_leaves_out`
-(`tests/test_refinement_unserved.py`).
-
-A forced re-refine never leaves a document with no refined output, and
-`refinement_report.json` tells "checked, nothing failed" apart from
-"nobody has looked": `test_a_forced_run_that_dies_leaves_the_previous_refinement`,
-`test_run_single_passes_force_through_instead_of_unlinking`,
-`test_a_clean_run_records_an_empty_list_not_a_missing_file`,
-`test_the_stage_records_which_windows_kept_their_originals`
-(`tests/test_refinement_force_keeps_output.py`).
-
-Every edit in correction mode is checked against the text the model
-actually saw: `test_edits_are_checked_against_the_text_the_model_was_given`,
-`test_two_corrections_to_one_sentence_keep_the_longer_one`,
-`test_a_wholesale_deletion_is_refused`, `test_a_whitespace_only_miss_is_named_as_such`
-(`tests/test_corrections.py`).
-
-Splitting a section keeps its text intact and each part's own media and
-pages, drops slivers, and leaves an unreproducible section untouched:
-`test_the_parts_together_are_the_original_text`,
-`test_each_part_keeps_only_its_own_media_and_pages`,
-`test_a_cut_that_would_leave_a_sliver_is_dropped`,
-`test_a_section_whose_segments_do_not_match_its_content_is_not_touched`,
-`test_a_section_that_cannot_be_cut_is_not_asked_about`,
-`test_the_split_calls_go_out_together` (`tests/test_split.py`). A cut-off
-outline is asked in halves with the numbers its segments have, a half that is a
-hole makes the whole cut one, and a hole is cut mechanically and named:
-`test_a_cut_off_outline_is_asked_in_halves_with_the_numbers_it_has`,
-`test_the_merged_cuts_are_the_two_halves_and_the_cut_between_them`,
-`test_a_half_that_is_a_hole_makes_the_whole_cut_a_hole`,
-`test_an_outline_of_one_segment_gets_more_room_once_and_then_is_a_hole`,
-`test_a_hole_is_cut_mechanically_and_named_with_its_cause`,
-`test_an_answer_of_no_cuts_is_an_answer_and_no_hole` (`tests/test_split.py`).
-Its cut
-never exceeds `SECTION_MAX_WORDS`; the context budget reacts to the
-knobs it names and covers the largest possible reply; and the preflight
-stops a run before the first document, not after a mid-run rejection:
-`test_split_holds_its_own_limit`,
-`test_one_huge_segment_is_subdivided_not_surrendered`,
-`test_budget_reacts_to_the_knobs_it_names`,
-`test_the_budget_covers_the_largest_reply_it_would_ask_for`,
-`test_the_budget_is_the_prompt_the_largest_input_and_one_largest_reply`,
-`test_preflight_rejects_a_server_with_too_little_context`,
-`test_preflight_rejects_a_server_serving_another_model`
-(`tests/test_context_budget.py`). The shapes the preflight is given are those the
-requests send, and a server that refuses one ends the run before the first
-document: `test_the_refinement_command_hands_the_preflight_its_own_shapes`,
-`test_the_refinement_entry_point_hands_it_over_too`,
-`test_a_server_that_refuses_the_cut_schema_ends_refinement_before_any_document`,
-`test_a_server_that_takes_every_schema_lets_refinement_go_on`
-(`tests/test_stage_preflight.py`).
 
 ## Modules
 

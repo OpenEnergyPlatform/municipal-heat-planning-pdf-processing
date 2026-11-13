@@ -1,22 +1,17 @@
----
-temperature: 0
-max_tokens: 300
----
-Du unterstützt die semantische Suche in deutschen kommunalen Wärmeplänen ("Kommunale Wärmeplanung").
+Schreibe EINEN kurzen Satz, wie er genau so in diesem Wärmeplan stehen könnte und die beschriebene Kennzahl mit einem plausiblen Wert samt Einheit nennt. Er wird eingebettet und als Suchanker gegen die Abschnitte, Tabellen und Abbildungen des Plans gehalten.
+* Schreib, als stünde die Angabe schon da: keine Frage, kein Meta-Satz ("Der Endenergieverbrauch wird in Kapitel 4 dargestellt."), keine Anrede, keine Verneinung ("keine", "nicht enthalten", "liegen nicht vor").
+* Nimm die Wörter deutscher Wärmepläne, nicht die der Ontologie: Endenergieverbrauch, Wärmebedarf, Energieträgermix, Bilanzjahr, Zielszenario, THG-Emissionen, Bestandsanalyse, Fokusgebiet. Zum Beispiel: "Der Endenergieverbrauch für Wärme im Stadtgebiet betrug 2022 rund 512 GWh/a."
+* Steht "document" da, übernimm Wörter, Schreibweisen und Gliederungsbegriffe dieses Plans aus "name" (Gemeinde oder Titel) und "caption" (Überschrift dessen, was eine erste Suche in ihm fand), aber erfinde daraus nichts, was nicht in der Kennzahl steckt. Steht "frame" da, nenne Szenario und Jahr, wie der Plan sie schreibt. Steht "names" da (die Einträge der Liste der Kennzahl), nenne einen oder zwei davon, wie ein Plan es tut, ohne sie aufzuzählen.
+* Ist die gesuchte Angabe ein Eigenname (Firma, Büro, Person, Anschrift), erfinde keinen: Schreib im knappen Stil eines Impressums- oder Titelblocks, mit den Rollenwörtern statt Namen.
+* 12 bis 35 Wörter, ein Satz, höchstens zwei.
+Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
+{"phrase":"..."}
 
-Du bekommst die Beschreibung einer Kennzahl, so wie sie in einer Ontologie definiert ist, und dazu das, was über DIESES Dokument schon bekannt ist. Formuliere EINEN kurzen, sachlichen Satz, wie er genau so in diesem Plan stehen könnte und die Kennzahl KONKRET enthält.
+<!-- with: question -->
+"question" fragt nach einer Angabe zum Wert unter "value", die seine eigenen Zeilen ("lines") nicht sagen. Schreib den Satz so, wie dieser Plan die Antwort für DIESEN Wert drucken würde: den Wert in den Worten seiner Zeilen, zusammen mit einer Antwort auf die Frage, etwa dem Jahr, dem Energieträger oder dem Szenario, für das er steht. Die Antwort darf erdacht sein: mit dem Satz wird nur im übrigen Plan gesucht.
 
-Der Satz ist ein Suchanker, keine Auskunft: er wird eingebettet und gegen die Abschnitte, Tabellen und Abbildungen dieses Plans gehalten.
+<!-- with: headings -->
+"headings" sind die Überschriften des Plans bis zur Stelle des Werts, die eigene zuletzt. Nimm die Wörter des Plans auch aus ihnen.
 
-Regeln:
-
-1. Keine Frage, keine Meta-Sätze, keine Anrede. Schreibe so, als STÜNDE die Angabe schon da. FALSCH: "Der Endenergieverbrauch wird in Kapitel 4 dargestellt."
-2. Setze einen plausiblen Wert samt Einheit ein. RICHTIG: "Der Endenergieverbrauch für Wärme im Stadtgebiet betrug 2022 rund 512 GWh/a."
-3. Nutze die Wörter, die deutsche Wärmepläne benutzen, nicht die der Ontologie: Endenergieverbrauch, Wärmebedarf, Energieträgermix, Bilanzjahr, Zielszenario, THG-Emissionen, Bestandsanalyse, Fokusgebiet.
-4. Steht im Objekt ein Feld "document", benutze es. "name" ist die Gemeinde oder der Titel des Plans, "caption" die Überschrift dessen, was eine erste Suche in genau diesem Dokument zurückgab. Beides sagt dir, wie DIESER Plan schreibt, also übernimm seine Wörter, Schreibweisen und Gliederungsbegriffe. Erfinde daraus nichts dazu, was nicht in der Kennzahl steckt. Steht ein Feld "frame" da (Szenario und Jahr), nenne beides im Satz, so wie der Plan es schreibt.
-5. Ist die gesuchte Angabe ein Eigenname (Firma, Büro, Person, Anschrift), erfinde KEINEN. Solche Angaben stehen fast immer in einem kurzen Impressums- oder Titelblock aus Rollenbezeichnungen und Kontaktfeldern. Formuliere den Anker dann in genau diesem knappen Feld-Stil, mit den Rollenwörtern statt Namen.
-6. 12 bis 35 Wörter. Ein Satz, höchstens zwei.
-7. Verwende NIE Wörter wie "keine", "nicht enthalten", "liegen nicht vor". Ein Anker ist immer positiv formuliert.
-
-Antworte mit NUR einem JSON-Objekt, kein Markdown, kein Text davor oder danach:
-{"phrase": "<der Satz>"}
+<!-- with: before -->
+"before" sind die Sätze, mit denen für diesen Wert schon gesucht wurde, ohne dass die Antwort gefunden wurde. Schreib einen anderen Satz: mit anderen Wörtern des Plans und so, wie die Antwort an einer anderen Stelle des Plans stehen könnte, etwa in einer Tabelle statt im Text.

@@ -32,9 +32,12 @@ the pass that appended its row (`--top-up-parameters`); a missing key means
 the harvest read it (`docpipe/extraction/schema.py:212` to `293`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
-publication's AR6 scenarios the row belongs to
-(`tests/test_scenarios_extraction.py::
-test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
+publication's scenarios the row belongs to, by the name the publication
+prints. A coordinate or value the spec marks `merged` (the `scenario` axis
+and the value of `scenario_label`) also carries `<name>_means` (`value_means`
+for the value): the entries of the document's list of names that name means, chosen while
+the document is read (`addressed.Reader.name_of`, the `names` request), absent from
+a row read before that or by a top-up pass.
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
@@ -43,9 +46,11 @@ section location among them, filled in as the source allows
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
-`x-question` is the sentence, in German, the model was asked for a
-coordinate. `x-kg` is the spec's own `kg` block, published unchanged,
-so this page cannot state something the serializer does not. Where a
+`x-question` is the sentence, in English, the model was asked for a
+coordinate. `x-kg` lists the arrows of the profile's drawing that read the coordinate or
+the field (the box it points at, its class, the property and the brick),
+published as drawn, so this page cannot state something the graph writer
+does not. Where a
 coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
@@ -54,43 +59,37 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 ## The lists this page cannot publish
 
-Seven parameters answer from a list rather than write a wording:
-`scenario_label`, `scenario_type` and `scenario_region`
-(`profiles/scenarios/extraction_spec.json`,
-`tests/test_scenarios_extraction.py::
-test_a_field_with_a_finite_answer_set_is_a_choice_not_a_wording`), and
+Six parameters answer from a list rather than write a wording:
+`scenario_type` and `scenario_region`
+(`profiles/scenarios/extraction_spec.json`), and
 the four tags of a bundle, `study_descriptor`, `study_sector_division`,
 `study_sector` and `study_technology`. Five publish their list as
 `x-options` below: `scenario_type` carries seventeen OEO classes plus
 one `out:` entry for a type none of them cover, and each tag the
 shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
-every document, so the spec states each list once
-(`tests/test_scenarios_extraction.py::
-test_the_bundle_tag_lists_are_the_ones_the_shapes_accept`).
+every document, so the spec states each list once.
 
-The other two are marked `vocabulary_dynamic` in the spec: their value
-resolves through `_value_uri`, which for a dynamic list types it as a
-plain nullable string with no `x-options`, stating in the
+The other one, `scenario_region`, is marked `vocabulary_dynamic` in the
+spec: its value resolves through `_value_uri`, which for a dynamic list types
+it as a plain nullable string with no `x-options`, stating in the
 `description` that a list exists but is not published here
-(`docpipe/extraction/schema.py:174` to `209`). The `scenario` axis on
-the same four parameters takes a different path: the spec marks it
-`dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
-plain text through a path that never calls `_value_uri` at all; that
-call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:433` to `458`;
-`docpipe/extraction/schema.py:383`, `:402` to `413`).
+(`docpipe/extraction/schema.py`). The scenario is no list: `scenario_label`
+and the `scenario` axis on the four parameters above are free text marked
+`merged`, the name as the publication prints it with its quote. The axis is
+typed as a string, or one of the two `out:` entries the spec lists beside the
+names (`out:status_quo`, `out:several`), published under `x-options` without an
+`enum`; the page says "What it may answer beside a name" and the table "string,
+or 2 out: entries beside".
 
 What the list holds is decided once, before harvest starts, by
-`document_axes` in `profiles/scenarios/extraction.py:172`. It reads
-the AR6 runs the publication documents in the `Scenarios` and
-`DocumentScenarios` tables (`document_scenarios`,
-`profiles/scenarios/extraction.py:149`), and narrows the 249 study
-regions of `profiles/scenarios/regions.json` to the ones the
-publication's own text names (`document_regions`,
-`profiles/scenarios/extraction.py:164`). Both lists always carry
-fixed `out:` entries, three for the region list and two for the
-scenario list (`REGION_OUT`, `SCENARIO_OUT`,
-`profiles/scenarios/extraction.py:69` to `91`). `value_raw` and
+`document_axes` in `profiles/scenarios/extraction.py`. It narrows the 249
+study regions of `profiles/scenarios/regions.json` and the groups of
+countries of `profiles/scenarios/region_aggregates.json` to the ones the
+publication's own text names (`document_regions`); the world is always
+offered. A group's key starts with `aggregate:` and the graph writes its
+member countries. The list always carries two
+fixed `out:` entries, the `beside` entries of the parameter `scenario_region` in the
+spec. `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved
 entry on every tuple, recording what the list held at harvest time.
 No parameter of this spec is numeric, so a bare year or a dotted date is
@@ -105,9 +104,11 @@ Two sections close the page: `## The stamp`, the schema of
 `docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
 plus per-question patterns,
 `docpipe/extraction/schema.py:603` to `765`), and `## The trace`, the
-schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
-kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:768` to `902`). A
+schema of `<publication>.trace.jsonl.gz`, one `oneOf` branch per event
+kind, fixed by the schema for every profile rather than drawn from this
+one's spec (`schema.trace_schema`); an event that reports a model request
+carries it as it was sent and what came back, and a text the requests
+repeat is a `piece` they refer to. A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under
@@ -121,16 +122,15 @@ definitions, so a stamp of this corpus written before that reads stale
 in those keys once: `--remap`, which needs no model, settles them, and
 `--force-stale` first would read the documents again for nothing. A
 document with a wording that no list holds stays stale after the remap,
-and is what `--force-stale` is left for (`stale`,
-`docpipe/extraction/runner.py:4404` to `4449`; `already_done`, `:4494`
-to `4533`). `top_up_file` redoes
+and is what `--force-stale` is left for (`stale` and `already_done` in
+`docpipe/extraction/runner.py`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:420` to `538`), and `append_document` reads a
+(`docpipe/extraction/topup.py`), and `append_document` reads a
 parameter the spec has gained without reading the document again
-(`docpipe/extraction/topup_parameter.py:336` to `462`); `already_done` names
+(`docpipe/extraction/topup_parameter.py`); `already_done` names
 it in a second warning for such a document. The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
-(`scripts/harvest_compare.py:135` to `155`), never by a resume.
+(`scripts/harvest_compare.py`), never by a resume.
 
 One JSON object per line of a harvest file. Every line is one of the kinds below and nothing else, and each of them is closed (`additionalProperties: false`). A new record kind costs a branch in `docpipe/extraction/schema.py`, a regeneration of both checked-in schemas, and a branch in `read_harvest` in `scripts/harvest_compare.py`.
 
@@ -156,7 +156,7 @@ The spec's uri for the parameter, the same key a tuple carries.
 
 ### `claim`
 
-The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, it answered 429 or 5xx, the model answered nothing, or the reply did not fit and there was nothing left to split.
+The claim as the model returned it. A sentinel carries _harvest_failed with _why: the server was gone, it answered 429 or 5xx, the model answered nothing, or the reply did not fit and there was nothing left to split. A hole of a reading also carries _parameter, the parameter the passage was to be read for.
 
 ### `kind`
 
@@ -196,30 +196,43 @@ Why values are not an A, counted. A closed list: a reason nobody can enumerate i
 
 ### `tuples`
 
+### `unlisted_units`
+
+The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.
+
 ## `publication_abstract`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'predicate': 'abstract', 'prefix': 'dc'}`
+- box `bundle` (`oeo:OEO_00020227`), property `dc:abstract`
 
-<details><summary>Why</summary>
+### `at`
 
-On the bundle, not on the report: the shapes carry the study's abstract there.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -229,7 +242,7 @@ Spec parameter: Abstract.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -238,6 +251,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -269,13 +286,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -300,43 +329,112 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Abstract. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_author`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00000064`
-- `edge_from`: `{'label': 'has author', 'node': 'studyreport', 'predicate': 'OEO_00000506', 'prefix': 'oeo'}`
-- `node`: `author`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+- box `author` (`oeo:OEO_00000064`), property `oeo:OEO_00000506`
+- box `author` (`oeo:OEO_00000064`), property `rdfs:label`, brick `node_name`
 
-<details><summary>Why</summary>
+### `at`
 
-One node per distinct name. Two spellings of one person are one node and keep both passages.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Autorin oder Autor.
+Spec parameter: Author.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -345,6 +443,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -376,13 +478,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -407,41 +521,111 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Author. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `publication_date`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `studyreport`
-- `property`: `{'datatype': 'xsd:dateTime', 'label': 'has publication date', 'predicate': 'OEO_00390096', 'prefix': 'oeo'}`
+- box `report` (`oeo:OEO_00020012`), property `oeo:OEO_00390096`, brick `year_to_datetime`
 
-<details><summary>Why</summary>
+### `at`
 
-A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Erscheinungsjahr.
+Spec parameter: Publication year.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -450,6 +634,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -481,13 +669,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -513,24 +713,100 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+### `work`
+
+Axis 'work' of Publication year. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `publication_doi`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `studyreport`
-- `property`: `{'label': 'has doi', 'predicate': 'OEO_00390098', 'prefix': 'oeo'}`
+- box `report` (`oeo:OEO_00020012`), property `oeo:OEO_00390098`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
@@ -540,7 +816,7 @@ Spec parameter: DOI.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -549,6 +825,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -580,13 +860,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -612,41 +904,110 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
-## `publication_title`
+### `work`
 
-How the row becomes a node:
+Axis 'work' of DOI. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
 
-- `class`: `OEO_00020012`
-- `node`: `studyreport`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+The prompt's own wording:
 
-<details><summary>Why</summary>
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
 
-Mints the study report. The title is also the bundle's label when no project name was read, and half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment.
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
 
 </details>
 
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
+## `publication_title`
+
+The arrows of the drawing that read the row:
+
+- box `report` (`oeo:OEO_00020012`), property `rdfs:label`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Titel der Publikation.
+Spec parameter: Publication title.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -655,6 +1016,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -686,13 +1051,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -718,34 +1095,110 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
+### `work`
+
+Axis 'work' of Publication title. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `scenario_abstract`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariofactsheet`
-- `property`: `{'predicate': 'abstract', 'prefix': 'dc'}`
+- box `scenario` (`oeo:OEO_00000365`), property `dc:abstract`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Kurzbeschreibung eines Szenarios.
+Spec parameter: Scenario description.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -754,6 +1207,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -785,30 +1242,40 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
-Axis 'scenario' of Kurzbeschreibung eines Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario description. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?
 
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
+<details><summary>What it may answer beside a name (2)</summary>
 
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
+  - also written: all scenarios
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical
 
 </details>
 
@@ -819,6 +1286,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -850,7 +1321,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -880,40 +1351,48 @@ A coordinate is `null` unless its `<axis>_state` says it was read or derived; th
 
 ## `scenario_label`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `also`: `{'predicate': 'acronym', 'prefix': 'dc'}`
-- `class`: `OEO_00000365`
-- `node`: `scenariofactsheet`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+- box `scenario` (`oeo:OEO_00000365`), property `rdfs:label`, brick `node_name`
+- box `scenario` (`oeo:OEO_00000365`), property `dc:acronym`, brick `short_name`
 
-<details><summary>Why</summary>
+### `at`
 
-The AR6 run name labels the factsheet; the document's own wording is the acronym beside it. With no long name known for a run both carry the same string, which is the usual case in this corpus.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Name des Szenarios.
+Spec parameter: Scenario name.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -922,6 +1401,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -953,13 +1436,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -977,48 +1472,122 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_means`
+
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
 
 ### `value_uri`
 
-The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.
+The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
-## `scenario_region`
+### `work`
 
-How the row becomes a node:
+Axis 'work' of Scenario name. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
 
-- `node`: `scenariofactsheet`
-- `property`: `{'label': 'has spatial region', 'predicate': 'OEO_00010378', 'prefix': 'oeo'}`
+The prompt's own wording:
 
-<details><summary>Why</summary>
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
 
-The object is an OEKG region individual that already exists over there and is only referenced. A wording the list did not hold mints nothing: writing our own gloss under oekg/region/ would put a 250th region beside the 249 real ones. The predicate is oeo:OEO_00010378 has spatial region and not oeo:OEO_00020220 has study region, although the second says exactly what we mean: its domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET, which is not one. has spatial region is its direct parent, domained on information content entity, which the factsheet is.
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
 
 </details>
 
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
+## `scenario_region`
+
+The arrows of the drawing that read the row:
+
+- box `scenario` (`oeo:OEO_00000365`), property `oeo:OEO_00020220`, brick `region`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Betrachtete Region eines Szenarios.
+Spec parameter: Scenario region.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1027,6 +1596,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1058,30 +1631,40 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
-Axis 'scenario' of Betrachtete Region eines Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario region. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?
 
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
+<details><summary>What it may answer beside a name (2)</summary>
 
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
+  - also written: all scenarios
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical
 
 </details>
 
@@ -1092,6 +1675,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1123,7 +1710,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -1141,50 +1728,99 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_means`
+
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
 
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
+
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is per document. The profile supplies it before the harvest, so it is not in this schema.
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `scenario_type`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariofactsheet`
-- `property`: `{'label': 'has scenario type', 'predicate': 'OEO_00390073', 'prefix': 'oeo'}`
+- box `scenario` (`oeo:OEO_00000365`), property `oeo:OEO_00390073`, brick `entry`
 
-<details><summary>Why</summary>
+### `at`
 
-The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Art des Szenarios.
+Spec parameter: Scenario type.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1193,6 +1829,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1224,30 +1864,40 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
-Axis 'scenario' of Art des Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario type. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?
 
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
+<details><summary>What it may answer beside a name (2)</summary>
 
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
+  - also written: all scenarios
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical
 
 </details>
 
@@ -1258,6 +1908,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1289,7 +1943,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -1307,9 +1961,45 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_means`
+
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -1319,30 +2009,27 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 - **CO2 emission scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020321` — A CO2 emission scenario is an emission scenario that describes a possible CO2 emission trajectory.
 - **climate scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030007` — A climate scenario is a scenario that describes a possible future state of a climate system.
-  - also written: Klimaszenario
 - **economic scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030008` — An economic scenario is a scenario that describes a possible future state of economic systems.
-  - also written: Wirtschaftsszenario
 - **emission scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030009` — An emission scenario is a scenario that describes a possible emission trajectory.
-  - also written: emissions scenario, Emissionsszenario
+  - also written: emissions scenario
 - **energy scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00030010` — An energy scenario is a scenario that describes a possible future state of an energy system.
-  - also written: Energieszenario
 - **explorative scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020248` — An explorative scenario is a scenario that contains certain constraints / statements regarding measures that are taken in the near future / today to explore where these measures will lead to in a later future. The later future is not predefined in the scenario.
-  - also written: exploratory scenario, exploratives Szenario
+  - also written: exploratory scenario
 - **greenhouse gas emission scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020317` — A greenhouse gas emission scenario is an emission scenario that describes a possible greenhouse gas emission trajectory.
   - also written: GHG emission scenario
-- **keine dieser Arten** → `out:not_in_list` — Der Text nennt eine Art, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Art nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: die Art, die der Text nennt, steht nicht in der Liste
+- **none of these types** → `out:not_in_list` — The text names a type that none of these classes matches. Not to be confused with the text naming no type at all: that is the answer that these passages do not state it.
+  - also written: the type the text names is not in the list
 - **policy scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020309` — A policy scenario is a scenario in which certain policy instruments or transformative measures and their impacts are assessed.
 - **reference scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020314` — A reference scenario is a scenario that is used as a reference, e.g. in a scenario comparison. It has the reference role.
   - also written: reference case
 - **robust system scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020411` — A robust system scenario is an explorative scenario that describes an energy system that is designed to evolve in a robust way.
   - also written: robust investment decision, robust transformation pathway
 - **scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00000364` — A scenario is an information content entity that contains statements about a possible future development based on a coherent and internally consistent set of assumptions and their motivation.
-  - also written: Szenario, narrative, storyline
+  - also written: narrative, storyline
 - **statistically robust scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020412` — A statistically robust scenario is a scenario that is the basis for statistically robust projection data.
 - **sufficiency scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020345` — A sufficiency scenario is a scenario that comprises sufficiency strategies.
 - **target driven scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020247` — A target driven scenario is a scenario that contains certain target constraints/ statements that in a possible future shall be realized. The path how the targets will be met is not predefined in the scenario.
-  - also written: normative scenario, backcasting scenario, Zielszenario
+  - also written: normative scenario, backcasting scenario
 - **with additional measures scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020312` — A with additional measures scenario (WAM) is a policy scenario that includes policy instruments and transformative measures which have been adopted and implemented to mitigate climate change or meet energy objectives, as well as policy instruments and transformative measures which are planned for that purpose.
   - also written: WAM, with additional measures, WAM scenario
 - **with existing measures scenario** → `https://openenergyplatform.org/ontology/oeo/OEO_00020311` — A with existing measures scenario (WEM) is a policy scenario that includes policy instruments and transformative measures that have been adopted and implemented.
@@ -1352,42 +2039,55 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 </details>
 
+### `value_window`
+
+[stage, index] of the window 'value' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `scenario_year`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariofactsheet`
-- `property`: `{'datatype': 'xsd:dateTime', 'label': 'has scenario year value', 'predicate': 'OEO_00020440', 'prefix': 'oeo'}`
+- box `scenario` (`oeo:OEO_00000365`), property `oeo:OEO_00020440`, brick `year_to_datetime`
 
-<details><summary>Why</summary>
+### `at`
 
-One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Projiziertes Jahr eines Szenarios.
+Spec parameter: Scenario year.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1396,6 +2096,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1427,30 +2131,40 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `scenario`
 
-Axis 'scenario' of Projiziertes Jahr eines Szenarios. null unless scenario_state is 'read' or 'derived'.
+Axis 'scenario' of Scenario year. A name the document prints, or one of the entries beside the names, each beginning 'out:', a deliberate answer that names nothing and mints no node. null unless scenario_state is 'read' or 'derived'.
 
 The prompt's own wording:
 
-> Auf welches Szenario dieser Publikation bezieht sich der Wert? Die Liste führt die Laufkennungen, die genau diese Publikation in der AR6-Datenbank dokumentiert. Im Text stehen sie fast nie, dort heißt dasselbe Szenario "Current Policies" oder "the NDC scenario". Nennt das Dokument nur die Familie, ist "Szenario-Familie" die richtige Antwort und keine Kennung.
+> Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?
 
-- `class`: `OEO_00000365`
-- `linked_by`: `{'label': 'has part', 'node': 'scenariobundle', 'predicate': 'BFO_0000051', 'prefix': 'obo'}`
-- `node`: `scenariofactsheet`
-- `role`: `parent`
+<details><summary>What it may answer beside a name (2)</summary>
 
-<details><summary>Why</summary>
-
-Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the AR6 run the wording resolves to. A wording that resolves to no run is its own factsheet, and an out: entry is none at all.
+- **several scenarios** → `out:several` — Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as "the low-demand scenarios". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say.
+  - also written: all scenarios
+- **status quo** → `out:status_quo` — Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario.
+  - also written: historical
 
 </details>
 
@@ -1461,6 +2175,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `scenario_link_source`
 
 Which source 'scenario_link_quote' was found in.
+
+### `scenario_means`
+
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1492,7 +2210,7 @@ How the coordinate 'scenario' ended. Always present: a missing key and a refused
 
 ### `scenario_window`
 
-[stage, index] of the window 'scenario' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'scenario' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `tier`
 
@@ -1517,37 +2235,111 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `year_kind`
+
+Axis 'year_kind' of Scenario year. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless year_kind_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Is this year part of the period a scenario of this publication investigates, or another year, by the words that show it?
+
+<details><summary>What it may answer (2)</summary>
+
+- **other year** → `out:other_year` — Any other year the document states: one that is not part of the time a scenario investigates.
+- **scenario year** → `https://openenergyplatform.org/ontology/oeo/OEO_00020097` — A scenario year is a time step that has a duration of one year and is part of a scenario horizon. A scenario horizon is a time step that is under investigation and consists entirely of one or more scenario years.
+
+</details>
+
+### `year_kind_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('year_kind_raw'). 'year_kind_quote' is then the frame's passage that prints the number.
+
+### `year_kind_link_source`
+
+Which source 'year_kind_link_quote' was found in.
+
+### `year_kind_means`
+
+The entries of the document's list of names (its scenarios, its works) 'year_kind' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `year_kind_producer`
+
+Who re-read 'year_kind': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `year_kind_quote`
+
+The verbatim passage carrying 'year_kind'. Present exactly when year_kind_state is 'read'.
+
+### `year_kind_raw`
+
+The document's own wording 'year_kind' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `year_kind_raw_foreign`
+
+The wording does not name the option chosen for 'year_kind': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `year_kind_seen`
+
+A wording the model noticed for 'year_kind' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `year_kind_source`
+
+Which source the passage for 'year_kind' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `year_kind_state`
+
+How the coordinate 'year_kind' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `year_kind_window`
+
+[stage, index] of the window 'year_kind' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_acronym`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'predicate': 'acronym', 'prefix': 'dc'}`
+- box `bundle` (`oeo:OEO_00020227`), property `dc:acronym`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Projektakronym.
+Spec parameter: Project acronym.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1556,6 +2348,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1587,13 +2383,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -1619,40 +2427,110 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
-## `study_descriptor`
+### `work`
 
-How the row becomes a node:
+Axis 'work' of Project acronym. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'has study descriptor tag', 'predicate': 'OEO_00390071', 'prefix': 'oeo'}`
+The prompt's own wording:
 
-<details><summary>Why</summary>
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
 
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
 
 </details>
 
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
+## `study_descriptor`
+
+The arrows of the drawing that read the row:
+
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00390071`, brick `entry`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Themenschlagwort.
+Spec parameter: Topic keyword.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1661,6 +2539,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1692,13 +2574,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -1716,9 +2610,45 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_means`
+
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -1727,51 +2657,43 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 <details><summary>What it may answer (32)</summary>
 
 - **CO2 emission** → `https://openenergyplatform.org/ontology/oeo/OEO_00260007` — A CO2 emission is an emission that releases carbon dioxide.
-  - also written: CO2-Emission, carbon dioxide emission
+  - also written: carbon dioxide emission
 - **acceptance** → `https://openenergyplatform.org/ontology/oeo/OEO_00360000` — Acceptance is a realizable entity that represents the attitude of a person or organisation with respect to a certain constructional, (infra)structural or political measure that may be realized in, affected by or results of complex processes like discussions, communications, transformative measures or former personal experiences.
 - **decarbonisation pathway** → `https://openenergyplatform.org/ontology/oeo/OEO_00010212` — A decarbonisation pathway is a policy that aims at long-term emissions reductions.
-  - also written: Dekarbonisierungspfad
 - **demand** → `https://openenergyplatform.org/ontology/oeo/OEO_00140040` — A demand is a realizable entity that is characterised by a person, organisation or object needing it for a specific purpose.
-  - also written: Bedarf
 - **efficiency value** → `https://openenergyplatform.org/ontology/oeo/OEO_00140050` — An efficiency value is a quantity value stating the ratio between a process's inputs and the outputs that are used.
   - also written: efficiency
 - **electrical energy share** → `https://openenergyplatform.org/ontology/oeo/OEO_00020254` — Electrical energy share is a process attribute that indicates the fraction of electrical energy related to the total energy of an energy generation or consumption process.
   - also written: degree of electrification
 - **electricity grid** → `https://openenergyplatform.org/ontology/oeo/OEO_00000143` — An electricity grid is a supply grid that transfers electrical energy / electricity.
-  - also written: Stromnetz
 - **energy conversion efficiency** → `https://openenergyplatform.org/ontology/oeo/OEO_00140049` — Energy conversion efficiency is a process attribute describing the ratio between the input of an energy transformation and the outputs that are used.
-  - also written: Energieumwandlungseffizienz, Wirkungsgrad
 - **energy demand** → `https://openenergyplatform.org/ontology/oeo/OEO_00140146` — Energy demand is a demand for energy.
-  - also written: Energiebedarf, Energienachfrage
 - **final energy consumption value** → `https://openenergyplatform.org/ontology/oeo/OEO_00050016` — A final energy consumption value is an energy consumption value expressing the magnitude of the energy delivered to and consumed by end users.
-  - also written: Endenergieverbrauch, final energy consumption
+  - also written: final energy consumption
 - **flexibility** → `https://openenergyplatform.org/ontology/oeo/OEO_00360007` — Flexibility is a disposition of an energy system that is able to balance energy by adjusting energy supply and energy demand.
 - **gas grid** → `https://openenergyplatform.org/ontology/oeo/OEO_00020004` — A gas grid is a supply grid that distributes gaseous fuel, e.g. methane.
-  - also written: Gasnetz
 - **greenhouse gas emission** → `https://openenergyplatform.org/ontology/oeo/OEO_00000199` — A greenhouse gas emission is an emission that releases a greenhouse gas.
-  - also written: Treibhausgasemission
 - **gross electricity generation** → `https://openenergyplatform.org/ontology/oeo/OEO_00240012` — Gross electricity generation is a process attribute that refers to the total amount of electrical energy produced in an electricity generation process.
-  - also written: Bruttostromerzeugung, gross electricity production
+  - also written: gross electricity production
 - **heating grid** → `https://openenergyplatform.org/ontology/oeo/OEO_00020005` — A heating grid is a supply grid that distributes thermal energy via circulating steam or liquids.
-  - also written: Wärmenetz
-- **keines dieser Schlagworte** → `out:not_in_list` — Der Text nennt ein Thema der Studie, das keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar kein Thema nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: das Thema, das der Text nennt, steht nicht in der Liste
 - **life cycle assessment** → `https://openenergyplatform.org/ontology/oeo/OEO_00330023` — A life cycle assessment is a methodology to calculate and analyse environmental impacts of the life cycle of a material entity or process.
-  - also written: LCA, Lebenszyklusanalyse, life cycle analysis, Ökobilanz
+  - also written: LCA, life cycle analysis
 - **material climate neutrality** → `https://openenergyplatform.org/ontology/oeo/OEO_00360014` — Material climate neutrality is a disposition of a material entity that conforms to some climate neutrality criterion.
 - **model coupling** → `https://openenergyplatform.org/ontology/oeo/OEO_00020406` — Model coupling is a model calculation in which output data from one or more numerical computer models is used as input data for one or more other models.
 - **model intercomparison study** → `https://openenergyplatform.org/ontology/oeo/OEO_00360002` — A model intercomparison study is a scenario study that performs a comparison of several models using a reference scenario.
 - **negative emission** → `https://openenergyplatform.org/ontology/oeo/OEO_00000293` — Negative emission is the process of absorbing a substance, usually a pollutant that was emitted before.
 - **net electricity generation** → `https://openenergyplatform.org/ontology/oeo/OEO_00240013` — Net electricity generation is a process attribute that equals to gross electricity generation minus the consumption of power stations' auxiliary services.
-  - also written: Nettostromerzeugung, net electricity production
+  - also written: net electricity production
+- **none of these keywords** → `out:not_in_list` — The text names a topic that none of these classes matches. Not to be confused with the text naming no topic at all: that is the answer that these passages do not state it.
+  - also written: the topic the text names is not in the list
 - **policy instrument** → `https://openenergyplatform.org/ontology/oeo/OEO_00140151` — A policy instrument is an action specification of an organisation (e.g. a government) that promotes transformative measures.
-  - also written: Politikinstrument, policies and measures
+  - also written: policies and measures
 - **primary energy consumption value** → `https://openenergyplatform.org/ontology/oeo/OEO_00050018` — A primary energy consumption value is an energy consumption value expressing the magnitude of the total consumption of energy in a spatial region excluding the non-energetic use of fuels.
-  - also written: Primary energy consumption excluding non-energy use of energy carriers., Primärenergieverbrauch
+  - also written: Primary energy consumption excluding non-energy use of energy carriers.
 - **process climate neutrality** → `https://openenergyplatform.org/ontology/oeo/OEO_00360011` — Process climate neutrality is a process attribute that conforms to some climate neutrality criteria.
 - **regionalisation** → `https://openenergyplatform.org/ontology/oeo/OEO_00340006` — Regionalisation is a methodology to calculate spatially distributed energy producers and consumers with the aim to highlight regional differences in energy supply and potentials, particularly related to renewable energies.
 - **renewable energy share** → `https://openenergyplatform.org/ontology/oeo/OEO_00140133` — A renewable energy share is a process attribute that indicates the fraction of renewable energy related to the total energy of an energy generation or consumption process.
-  - also written: RE share, erneuerbarer Anteil, renewables share
+  - also written: RE share, renewables share
 - **resilience** → `https://openenergyplatform.org/ontology/oeo/OEO_00360015` — Resilience is a disposition of a system that represents the capacity of a system to absorb disturbance and reorganize so as to retain essentially the same function, structure, and feedbacks.
 - **scenario projection comparison** → `https://openenergyplatform.org/ontology/oeo/OEO_00360003` — A scenario comparison study is a scenario study that performs a scenario projection comparison
 - **sector coupling** → `https://openenergyplatform.org/ontology/oeo/OEO_00020408` — Sector coupling is a process of connecting processes from the electricity, heat, mobility or industrial sectors as well as their infrastructures.
@@ -1781,36 +2703,115 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 
 </details>
 
+### `value_window`
+
+[stage, index] of the window 'value' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `work`
+
+Axis 'work' of Topic keyword. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
 ## `study_funder`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00090001`
-- `edge_from`: `{'label': 'has funding source', 'node': 'scenariobundle', 'predicate': 'OEO_00000509', 'prefix': 'oeo'}`
-- `node`: `funder`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+- box `funder` (`oeo:OEO_00090001`), property `oeo:OEO_00000509`
+- box `funder` (`oeo:OEO_00090001`), property `rdfs:label`, brick `node_name`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Fördermittelgeber.
+Spec parameter: Funder.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1819,6 +2820,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1850,13 +2855,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -1881,37 +2898,112 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Funder. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_organisation`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00030022`
-- `edge_from`: `{'label': 'has organisation', 'node': 'scenariobundle', 'predicate': 'OEO_00000510', 'prefix': 'oeo'}`
-- `node`: `organisation`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+- box `organisation` (`oeo:OEO_00030022`), property `oeo:OEO_00000510`
+- box `organisation` (`oeo:OEO_00030022`), property `rdfs:label`, brick `node_name`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Beteiligte Institution.
+Spec parameter: Involved organisation.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -1920,6 +3012,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1951,13 +3047,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -1982,42 +3090,111 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
+
+### `work`
+
+Axis 'work' of Involved organisation. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_project_name`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `class`: `OEO_00020227`
-- `node`: `scenariobundle`
-- `property`: `{'label': 'label', 'predicate': 'label', 'prefix': 'rdfs'}`
+- box `bundle` (`oeo:OEO_00020227`), property `rdfs:label`
 
-<details><summary>Why</summary>
+### `at`
 
-Mints the bundle and labels it. Falls back to the publication title where the document names no project.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Projektname.
+Spec parameter: Project name.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2026,6 +3203,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2057,13 +3238,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -2089,40 +3282,110 @@ The wording before any tidying (an organisation's legal form, a title's line bre
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. Only a category parameter has a vocabulary. This one never writes the key at all.
 
-## `study_sector`
+### `work`
 
-How the row becomes a node:
+Axis 'work' of Project name. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'covers sector (shortcut)', 'predicate': 'OEO_00020439', 'prefix': 'oeo'}`
+The prompt's own wording:
 
-<details><summary>Why</summary>
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
 
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
 
 </details>
 
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
+
+## `study_sector`
+
+The arrows of the drawing that read the row:
+
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00020439`, brick `entry`
+
+### `at`
+
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
+
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Abgedeckter Sektor.
+Spec parameter: Covered sector.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2131,6 +3394,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2162,13 +3429,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -2186,9 +3465,45 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_means`
+
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -2231,7 +3546,7 @@ use. The main greenhouse gas emitted from adipic acid production is nitrous oxid
 - **CRF sector (IPCC 2006): aerosols** → `https://openenergyplatform.org/ontology/oeo/OEO_00010371` — The CRF sector (IPCC 2006) 'aerosols' is an industry sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:
 Most aerosol packages now contain hydrocarbon (HC) as propellants but, in a small fraction of the total, HFCs and PFCs may be used as propellants or solvents. Emissions from aerosols usually occur shortly after production, on average six months after sale. During the use of aerosols, 100% of the chemical is emitted. The 5 main sources are metered dose inhalers (MDIs), personal care products (e.g. hair care, deodorant, shaving cream), household products (e.g. air-fresheners, oven and fabric cleaners), industrial products (e.g. special cleaning sprays such as those for operating electrical contact, lubricants, pipe-freezers) and other general products (e.g. silly string, tire inflators, claxons), although in some regions the use of such general products is restricted. The HFCs currently used as propellants are HFC 134a, HFC 227ea, and HFC 152a. The substance HFC 43 10mee and a PFC, perfluorohexane, are used as solvents in industrial aerosol products.
 - **CRF sector (IPCC 2006): agricultural soils** → `https://openenergyplatform.org/ontology/oeo/OEO_00010182` — The CRF sector (IPCC 2006) 'agricultural soils' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories
-- **CRF sector (IPCC 2006): agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010047`
+- **CRF sector (IPCC 2006): agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010047` — The CRF sector (IPCC 2006) 'agriculture' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories.
 - **CRF sector (IPCC 2006): agriculture - other** → `https://openenergyplatform.org/ontology/oeo/OEO_00010188` — The CRF sector (IPCC 2006) 'agriculture - other' is an agriculture, forestry and land use sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories
 - **CRF sector (IPCC 2006): agriculture, forestry and fishing** → `https://openenergyplatform.org/ontology/oeo/OEO_00010054` — The CRF sector (IPCC 2006) 'agriculture, forestry and fishing' is an energy demand sector defined by the 2006 IPCC Guidelines for National Greenhouse Gas Inventories:
 Emissions from fuel combustion in agriculture, forestry, fishing and fishing industries such as fish farms.
@@ -2428,35 +3743,28 @@ Zinc production covers emissions from both primary production of zinc from ore a
 - **KSG sector agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010069` — The KSG sector agriculture is an agriculture, forestry and land use sector defined by the KSG sector division. It is an aggregate of the following two sectors:
 - CRF sector (IPCC 2006): agriculture, forestry and fishing (CRF 1.A.4.c)
 - CRF sector (IPCC 2006): agriculture (CRF 3)
-  - also written: KSG-Sektor Landwirtschaft
 - **KSG sector buildings** → `https://openenergyplatform.org/ontology/oeo/OEO_00010067` — The KSG sector buildings is a building sector defined by the KSG sector division. It is an aggregate of the following two sectors:
 - CRF sector (IPCC 2006): commercial and institutional (CRF 1.A.4.a)
 - CRF sector (IPCC 2006): residential (CRF 1.A.4.b)
 - CRF sector (IPCC 2006): fuel combustion - other
-  - also written: KSG-Sektor Gebäude
 - **KSG sector energy industry** → `https://openenergyplatform.org/ontology/oeo/OEO_00010065` — The KSG sector energy industry is an energy transformation sector defined by the KSG sector division. It is an aggregate of the following three sectors:
 - CRF sector (IPCC 2006): energy industry (CRF 1.A.1.a)
 - CRF sector (IPCC 2006): other transportation (CRF 1.A.3.e)
 - CRF sector (IPCC 2006): fugitive emissions from fuels (CRF 1.B)
-  - also written: KSG-Sektor Energiewirtschaft
 - **KSG sector industry** → `https://openenergyplatform.org/ontology/oeo/OEO_00010066` — The KSG sector industry is an industry sector defined by the KSG sector division. It is an aggregate of the following three sectors:
 - CRF sector (IPCC 2006): manufacturing industries and construction (CRF 1.A.2)
 - CRF sector (IPCC 2006): CO2 transport and storage (CRF 1.C)
 - CRF sector (IPCC 2006): industrial processes and product use (CRF 2)
-  - also written: KSG-Sektor Industrie
 - **KSG sector land use, land-use change and forestry** → `https://openenergyplatform.org/ontology/oeo/OEO_00010071` — The KSG sector land use, land-use change and forestry is an agriculture, forestry and land use sector defined by the KSG sector division.
 It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and forestry (CRF 4).
-  - also written: KSG-Sektor LULUCF, KSG-Sektor Landnutzung, Landnutzungsänderung und Forstwirtschaft
 - **KSG sector transport** → `https://openenergyplatform.org/ontology/oeo/OEO_00010068` — The KSG sector transport is a transport sector defined by the KSG sector division. It is an aggregate of the following four sectors:
 - CRF sector (IPCC 2006): domestic aviation (CRF 1.A.3.a)
 - CRF sector (IPCC 2006): road transportation (CRF 1.A.3.b)
 - CRF sector (IPCC 2006): railways (CRF 1.A.3.c)
 - CRF sector (IPCC 2006): domestic navigation (CRF 1.A.3.d)
-  - also written: KSG-Sektor Verkehr
 - **KSG sector waste management and other** → `https://openenergyplatform.org/ontology/oeo/OEO_00010070` — The KSG sector waste management and other is a sector defined by the KSG sector division. It is an aggregate of the following two sectors:
 - CRF sector (IPCC 2006): waste (CRF 5)
 - CRF sector (IPCC 2006): other (CRF 6)
-  - also written: KSG-Sektor Abfallwirtschaft und Sonstiges
 - **MMR sector: M.International aviation in the EU ETS** → `https://openenergyplatform.org/ontology/oeo/OEO_00010205` — The MMR sector 'M.International aviation in the EU ETS' is a transport sector that encompasses that part of the international aviation that is regulated by the European Union Emissions Trading System.
 - **NC/BR sector: agriculture** → `https://openenergyplatform.org/ontology/oeo/OEO_00010308` — The NC/BR sector "agriculture" is an agriculture, forestry and land use sector defined by an NC/BR sector division. It aligns to the CRF sector (IPCC 2006): agriculture.
 - **NC/BR sector: energy** → `https://openenergyplatform.org/ontology/oeo/OEO_00010305` — The NC/BR sector "energy" is a sector defined by an NC/BR sector division that includes all energy use that is not related to transport or industry. The sector includes:
@@ -2476,31 +3784,27 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 - **RED sector: heating and cooling** → `https://openenergyplatform.org/ontology/oeo/OEO_00010390` — The RED sector heating and cooling is a heating and cooling sector defined by the Renewable Energy Directive sector division.
 - **RED sector: transport** → `https://openenergyplatform.org/ontology/oeo/OEO_00010391` — The RED sector transport is a transport sector defined by the Renewable Energy Directive sector division.
 - **agriculture, forestry and land use sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010035` — A agriculture, forestry and land use (AFOLU) sector is a sector that covers activities and natural processes from agriculture, forestry, land use and land use change.
-  - also written: AFOLU sector, Landwirtschaft, Forstwirtschaft und Landnutzungssektor
+  - also written: AFOLU sector
 - **building sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010034` — A building sector is a sector that covers buildings.
-  - also written: Gebäudesektor
 - **commercial sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000405` — A commercial sector is a sector that covers non-industrial commercial activities.
-  - also written: TCS sector, kommerzieller Sektor, service sector, trading, commerce and service sector
+  - also written: TCS sector, service sector, trading, commerce and service sector
 - **electricity sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000145` — An electricity sector is a transformation sector that covers electricity generation and transport of electrical energy to consumers of electrical energy.
-  - also written: Stromsektor
 - **energy demand sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000128` — An energy demand sector is a sector that covers energy consumers.
-  - also written: Energienachfragesektor, final energy sector
+  - also written: final energy sector
 - **energy transformation sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000158` — An energy transformation sector is a sector that covers energy production, energy transformation from primary to secondary energy and transport of energy to the demand sector.
   - also written: energy industry sector, energy sector
 - **heating and cooling sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000213` — A heating and cooling sector is a sector that covers heating and cooling activities.
-  - also written: H&C sector, Wärme- und Kältesektor
+  - also written: H&C sector
 - **household sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000214` — A household sector is a sector that covers households.
-  - also written: Haushaltssektor, private household sector
+  - also written: private household sector
 - **industry sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000227` — An industry sector is a sector that covers industrial activities with other main purposes of energy transformation.
-  - also written: Industriesektor
 - **international transport sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010320` — An international transport sector is a transport sector of international transport processes.
-- **keiner dieser Sektoren** → `out:not_in_list` — Der Text nennt einen Sektor, den keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keinen Sektor nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: der Sektor, den der Text nennt, steht nicht in der Liste
 - **mineral oil refining sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010319` — A mineral oil refining sector is an energy transformation sector that covers mineral oil refining.
+- **none of these sectors** → `out:not_in_list` — The text names a sector that none of these classes matches. Not to be confused with the text naming no sector at all: that is the answer that these passages do not state it.
+  - also written: the sector the text names is not in the list
 - **sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000367` — A sector is generically dependent continuant that is a subdivision of a system.
-  - also written: Sektor
 - **source category** → `https://openenergyplatform.org/ontology/oeo/OEO_00010360` — A source category is a sector that is defined by a common reporting format.
-  - also written: CRF sector, Quellgruppe
+  - also written: CRF sector
 - **subsector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010464` — A subsector is a sector that is a part of an other sector.
 - **total emissions excluding LULUCF and including international aviation** → `https://openenergyplatform.org/ontology/oeo/OEO_00010208` — 'Total emissions excluding LULUCF and including international aviation' is a sector that encompasses 'CRF sector (IPCC 2006): total emissions excluding LULUCF' and 'CRF sector (IPCC 2006): international aviation'.
   - also written: total emissions with international aviation (EU 2020)
@@ -2511,46 +3815,119 @@ It is equivalent to the CRF sector (IPCC 2006): land use, land-use change and fo
 - **total emissions including LULUCF and including international bunkers** → `https://openenergyplatform.org/ontology/oeo/OEO_00010207` — 'Total emissions excluding LULUCF and including international aviation' is a sector that 'CRF sector (IPCC 2006): total emissions including LULUCF' and 'CRF sector (IPCC 2006): international bunkers'.
   - also written: total net emissions with international transport (EEA)
 - **transport sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00000422` — A transport sector is a sector that covers transport of people and/or goods.
-  - also written: Verkehrssektor, traffic sector
+  - also written: traffic sector
 - **waste and wastewater sector** → `https://openenergyplatform.org/ontology/oeo/OEO_00010036` — A waste and wastewater sector is a sector that covers activities related the collection and treatment of waste and wastewater.
-  - also written: Abfall- und Abwassersektor, Entsorgungssektor
 
 </details>
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `work`
+
+Axis 'work' of Covered sector. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_sector_division`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'based on sector division', 'predicate': 'OEO_00390079', 'prefix': 'oeo'}`
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00390079`, brick `entry`
 
-<details><summary>Why</summary>
+### `at`
 
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Sektoreinteilung.
+Spec parameter: Sector division.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2559,6 +3936,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2590,13 +3971,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -2614,15 +4007,51 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_means`
+
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
 The entry of the parameter's own vocabulary the wording resolved to. Null when the list does not hold it. The list is closed. An entry beginning 'out:' is a deliberate non-class answer and mints no node.
 
-<details><summary>What it may answer (18)</summary>
+<details><summary>What it may answer (17)</summary>
 
 - **BSI-KritisV sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00360044` — The BSI-KritisV sector division is a sector division by the German regulation BSI-Kritisverordnung (BSI-KritisV) defining eight sectors that contain critical infrastructures.
 - **CRF sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010055` — The common reporting format (CRF) is a sector division used for compiling national inventory reports on greenhouse gas emissions and providing emission relevant data in so called CRF tables.
@@ -2643,50 +4072,121 @@ The energy balance expresses all forms of energy in a common accounting unit. Th
 (https://unfccc.int/sites/default/files/resource/cp2019_13a01_adv.pdf, 6/CP.25, VI, Table 2)
 - **Renewable Energy Directive sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000355` — The Renewable Energy Directive sector division is a sector division used in the Renewable Energy Directive of the European Union.
 - **energy balance sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00010407` — An energy balance sector division is a sector division that is defined by an energy balance calculation method.
-- **keine dieser Einteilungen** → `out:not_in_list` — Der Text nennt eine Sektoreinteilung, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Einteilung nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: die Einteilung, die der Text nennt, steht nicht in der Liste
 - **nace_ sectors** → `https://openenergyplatform.org/ontology/oeo/OEO_00000291` — The Statistical classification of economic activities in the European Community, abbreviated as NACE, is the classification of economic activities in the European Union (EU); the term NACE is derived from the French Nomenclature statistique des activités économiques dans la Communauté européenne. Various NACE versions have been developed since 1970.
 
 NACE is a four-digit classification providing the framework for collecting and presenting a large range of statistical data according to economic activity in the fields of economic statistics (e.g. production, employment and national accounts) and in other statistical domains developed within the European statistical system (ESS).
 - **sector division** → `https://openenergyplatform.org/ontology/oeo/OEO_00000368` — A sector division is a specific way to subdivide a system.
-  - also written: Sektorunterteilung
 
 </details>
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `work`
+
+Axis 'work' of Sector division. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## `study_technology`
 
-How the row becomes a node:
+The arrows of the drawing that read the row:
 
-- `node`: `scenariobundle`
-- `property`: `{'label': 'covers technology (shortcut)', 'predicate': 'OEO_00020438', 'prefix': 'oeo'}`
+- box `bundle` (`oeo:OEO_00020227`), property `oeo:OEO_00020438`, brick `entry`
 
-<details><summary>Why</summary>
+### `at`
 
-The object is one of the entries the shapes accept on this path, chosen from the list, never written.
+Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
-</details>
+### `catalogue`
+
+The open catalogue record a value was looked up in, not read off the page: its source and id, what was searched, what it holds and which of its values matched the document's. The quote is the read value it was looked up with; the flag catalogue goes with it.
 
 ### `compute`
 
-The sandbox runs behind a computed value: {code, stdout, ok, error}.
+The sandbox runs behind a computed value: {code, stdout, ok, error}, the last with the numbers it was worked out from (inputs) and what they make (expected).
 
 ### `computed`
 
 The value came out of the sandbox, not off the page; the quote proves the inputs it was computed from.
 
+### `drawn`
+
+A figure's value only: whether its image only draws the number (a bar, a segment, an area, a point of a curve) rather than printing it, as the reading said. True sets the flag read_off.
+
 ### `flags`
 
 Non-fatal verifier findings. mapped:<axis>:<wording>-><uri> is the model mapping a word the spec does not list; period:* says whether a bare amount was shown to be a yearly one; review:* is what a second reading of this value under a narrower window came to, and only review:disagree is a reason.
+
+### `head`
+
+The head of the table column the number stands in, as the plan prints it. Taken from the table, never asked. Absent where the number is no table cell or its column is not certain.
 
 ### `kind`
 
 ### `parameter`
 
-Spec parameter: Abgedeckte Technologie.
+Spec parameter: Covered technology.
 
 The prompt's own wording:
 
-> Um WELCHES Feld handelt es sich bei diesem Wert? Entscheide danach, was die Quelle über ihn sagt: die Beschriftung, die Einheit und die Überschrift des Abschnitts. Zitiere die Stelle, aus der das hervorgeht.
+> WHICH field is this value? Decide by what the source says about it: the label, the unit and the heading of the section. Quote the place it follows from.
 
 ### `parameter_link_quote`
 
@@ -2695,6 +4195,10 @@ Only with window `base_year` or `target_year`: the passage where the row names t
 ### `parameter_link_source`
 
 Which source 'parameter_link_quote' was found in.
+
+### `parameter_means`
+
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2726,13 +4230,25 @@ How the coordinate 'parameter' ended. Always present: a missing key and a refuse
 
 ### `parameter_window`
 
-[stage, index] of the window 'parameter' was read in. A coordinate read in window 1 and one read in window 22 cost different amounts. `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target.
+[stage, index] of the window 'parameter' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
 
 ### `provenance`
 
 ### `quote`
 
-The passage of the owner source that contains the value. Whitespace-collapsed containment; a retyped table row may be repaired, which sets the flag quote_repaired.
+The passage of the owner source that contains the value, checked by whitespace-collapsed containment.
+
+### `range`
+
+Both ends of the range this value is one end of, [lower, upper] as the plan prints them: written on both rows when one reads as the lower and the next as the upper end under the same quote with the same coordinates otherwise.
+
+### `read_off`
+
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+
+### `reading`
+
+What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.
 
 ### `tier`
 
@@ -2750,9 +4266,45 @@ Empty, as unit.
 
 The wording as the document writes it.
 
+### `value_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('value_raw'). 'value_quote' is then the frame's passage that prints the number.
+
+### `value_link_source`
+
+Which source 'value_link_quote' was found in.
+
+### `value_means`
+
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `value_producer`
+
+Who re-read 'value': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `value_quote`
+
+The verbatim passage carrying 'value'. Present exactly when value_state is 'read'.
+
 ### `value_raw`
 
 The wording before any tidying (an organisation's legal form, a title's line break).
+
+### `value_raw_foreign`
+
+The wording does not name the option chosen for 'value': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `value_seen`
+
+A wording the model noticed for 'value' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `value_source`
+
+Which source the passage for 'value' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `value_state`
+
+How the coordinate 'value' ended. Always present: a missing key and a refused reading must not look alike.
 
 ### `value_uri`
 
@@ -2775,8 +4327,6 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **heat generation technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020308` — A heat generation technology is an energy technology that describes how to combine heat generating units, heat generation processes, energy carriers and energy in a specific way.
   - also written: heating technology
 - **hydro power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010431` — A hydro power technology is a power generation technology that describes how to combine hydro power units and a hydroelectric energy transformation.
-- **keine dieser Technologien** → `out:not_in_list` — Der Text nennt eine Technologie, die keine dieser Klassen trifft. Nicht zu verwechseln damit, dass der Text gar keine Technologie nennt: das ist die Antwort, dass es in diesen Passagen nicht steht.
-  - also written: die Technologie, die der Text nennt, steht nicht in der Liste
 - **kinetic energy storage technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020368` — An kinetic energy storage technology is an energy storage technology that describes how to combine kinetic energy storage objects and kinetic energy in charging and decharging processes.
 - **lignite power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010443` — A lignite power technology is a coal power technology that describes how to combine hard coal power units and lignite in a fuel-powered electricity generation process.
 - **manufacturing technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010485` — A manufacturing technology is a technology that describes how to combine manufactuing plants and manufacturing processes to produce manufactured materials.
@@ -2788,6 +4338,8 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **mobility technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010449` — A mobility technology is a technology that describes how vehicles participate in transport
 - **non-energy use technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010471` — A non-energy use technology is a technology that describes among other things how to combine the consumption of energy carriers for non-energy use with other processes and artificial objects or other material entities in a specific way.
   - also written: non-energy consumption technology
+- **none of these technologies** → `out:not_in_list` — The text names a technology that none of these classes matches. Not to be confused with the text naming no technology at all: that is the answer that these passages do not state it.
+  - also written: the technology the text names is not in the list
 - **nuclear power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010439` — A nuclear power generation technology is a power generation technology that describes how to combine nuclear power units and nuclear fuel in an electricity generation process.
 - **offshore wind power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010426` — An offshore wind power technology is a wind power generation technology that describes how to use wind energy converting units in offshore wind farms.
 - **onshore wind power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010425` — An onshore wind power technology is a wind power generation technology that describes how to use wind energy converting units in onshore wind farms.
@@ -2808,11 +4360,75 @@ The entry of the parameter's own vocabulary the wording resolved to. Null when t
 - **solar thermal heat technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020307` — A solar thermal heat technology is a heat generation technology that describes how to combine solar heat units, solar thermal energy transformation processes, energy carriers and energy in a specific way.
 - **solar thermal power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010429` — A solar thermal power technology is a power generation technology that describes how to combine solar thermal power units in an electricity generation process with solar energy as input.
 - **technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00000407` — A technology is a plan specification that describes how to combine artificial objects or other material entities and processes in a specific way.
-  - also written: Technologie
 - **thermal energy storage technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00020369` — An thermal energy storage technology is an energy storage technology that describes how to combine thermal energy storage objects and thermal energy in charging and decharging processes.
 - **wind power technology** → `https://openenergyplatform.org/ontology/oeo/OEO_00010424` — A wind power technology is a power generation technology that describes how to combine wind energy converting units and a wind energy transformation.
 
 </details>
+
+### `value_window`
+
+[stage, index] of the window 'value' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+### `work`
+
+Axis 'work' of Covered technology. A closed list; an entry beginning 'out:' is a deliberate non-class answer and mints no node. null unless work_state is 'read' or 'derived'.
+
+The prompt's own wording:
+
+> Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?
+
+<details><summary>What it may answer (2)</summary>
+
+- **another work** → `out:another_work` — A study, report, article or model other than this document that the document presents, compares, reviews or cites.
+- **this publication** → `work:this_publication` — This document itself, the study it reports and the scenarios it presents.
+
+</details>
+
+### `work_link_quote`
+
+Only with window `base_year` or `target_year`: the passage where the row names that state ('work_raw'). 'work_quote' is then the frame's passage that prints the number.
+
+### `work_link_source`
+
+Which source 'work_link_quote' was found in.
+
+### `work_means`
+
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+
+### `work_producer`
+
+Who re-read 'work': the position of its entry in the `producers` list of the stamp beside the harvest. Written by a top-up for each coordinate it re-read, and by a pass that appended a parameter for each coordinate of the rows it wrote, never by the harvest, so a missing key means the harvest read it. A position the stamp has no entry for (the stamps were deleted) means nobody can say. Recorded and never compared.
+
+### `work_quote`
+
+The verbatim passage carrying 'work'. Present exactly when work_state is 'read'.
+
+### `work_raw`
+
+The document's own wording 'work' was read from. This is what a later re-mapping onto a changed vocabulary works on, so a choice without it is counted (raw_missing).
+
+### `work_raw_foreign`
+
+The wording does not name the option chosen for 'work': the model mapped a word the spec does not list onto this class. Kept and counted, not refused: some of those mappings are right.
+
+### `work_seen`
+
+A wording the model noticed for 'work' while answering 'not stated', or offered as an answer the closed list does not hold. Vocabulary review material, never evidence.
+
+### `work_source`
+
+Which source the passage for 'work' was found in. How far that may be from the row is the axis' own rule (own | local | any).
+
+### `work_state`
+
+How the coordinate 'work' ended. Always present: a missing key and a refused reading must not look alike.
+
+### `work_window`
+
+[stage, index] of the window 'work' was read in. `own`: at the value's own place, its row with its table's title and head or its sentence with the sentences beside it. `near`: in the pieces right before and after it. `found`: in the pieces a search found for the sentence of how the plan would print it. `piece`: a work read once for the value's piece, the line that names it or shows the piece is this publication's own. `entry`: the work of the entry of the document's list the value's name is. `plan_years`: a year none of these found, read from the plan's base and target years in a request of its own. The other stages are those of harvests made before the reading in pieces: `frame` is the one that is not a window: the coordinate was read ONCE for the document and applied to this row, and the index is which of the document's pairs it came from. `base_year`: the row's passage names the document's base state by word, and the index is the pair whose quote prints the number. `target_year`: the same for the document's target. `table`: read once for the row's table and taken by this row. `head`: the year the head of the row's column prints, one of the document's pairs, taken off the table and not asked; the index is the column. `retrieval`, `rest` and `places` are the windows of the reading by passages.
+
+A coordinate is `null` unless its `<axis>_state` says it was read or derived; that is what the `allOf` branches encode, one per coordinate.
 
 ## The stamp
 
@@ -2830,7 +4446,7 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 | `producers` | Every pass that wrote into this harvest, in order: the harvest, then each top-up that rewrote the file, each pass that appended a new parameter, each remap that carried a key forward and each review that changed a row. Entries are only ever added, so a position is stable: a coordinate a top-up re-read points at its entry with `<axis>_producer`. `model` above names the first only. Recorded and never compared. |
 | `spec` | sha256 of extraction_spec.json. A record, not a verdict: it moves on a comment, an indent or a graph annotation, none of which any question is asked through. Compared, it would outvote every key below it. |
 | `^axis/[^/]+/[^/]+$` | What this coordinate asks and what it may answer: the question and the offered list with its spellings and its definitions. Everything the model sees for this axis, and nothing else. |
-| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame)$` | sha256 of the prompt file; `harvest` is in stamps of an older release |
+| `^extraction/(harvest\|queries\|anchors\|rows\|field\|phrase\|frame\|survey\|read_values\|read_text\|comb\|match\|settings\|seek\|transcribe\|find\|docfield\|coord\|list\|names\|search\|check\|follow\|work)$` | sha256 of the prompt file; `transcribe`, `find`, `docfield`, `coord`, `list`, `names`, `search`, `check`, `follow`, `work` and `phrase` are the prompts of a harvest piece by piece; the others are in stamps of older releases |
 | `^parameter/[^/]+$` | What this parameter asks, without its axes and without its own list: label, description, value type, accepted units and the example. A new option on ONE axis, or in the list the parameter answers from, must not make every value of the parameter stale. Those have keys of their own. |
 | `^question_text/[^/]+$` | The sentence THIS document was searched with. Recorded and never compared: it is written per document, so the document itself is part of it and no two runs produce the same one. What decides whether the harvest is current is its recipe, and that is already here: the generator prompt, the model, and the annotation inside parameter/. |
 | `^review/(prompt\|model)$` | What read this document a second time. Recorded and never compared: the review does not decide whether the harvest is current, and comparing it would report every reviewed document stale the day the review prompt changes. |
@@ -2839,20 +4455,46 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 ## The trace
 
-One event per line; `t` names it and `doc` the document. Read by scripts/trace_report.py.
+One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-11 record kinds, told apart by `t`:
+37 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
-- `frame`: `attempt`, `completion_tokens`, `doc`, `missed`, `ms`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sources`, `status`, `years`
-- `rows`: `attempt`, `completion_tokens`, `doc`, `ms`, `origins`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sources`, `status`
-- `field`: `anchor`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `ms`, `open`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_target`, `window`
-- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_target`, `windows`
+- `frame`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `missed`, `ms`, `once`, `output`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sent_at`, `sources`, `status`, `years`
+- `rows`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `ms`, `once`, `origins`, `output`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sent_at`, `sources`, `status`
+- `code`: `attempt`, `code`, `doc`, `error`, `ok`, `stdout`
+- `compute`: `doc`, `fetched`, `kind`, `misquoted`, `numbers`, `outcome`, `reason`, `rejected`, `runs`, `searched`, `taken`, `untaken`
+- `field`: `anchor`, `answered_at`, `asked_at`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `input`, `ms`, `once`, `open`, `output`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `sent_at`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
+- `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `windows`, `withdrawn`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
-- `error`: `attempt`, `cause`, `detail`, `doc`, `finish`, `kind`, `ms`, `owner`, `slot`, `sources`, `status`, `where`, `why`
+- `error`: `answered_at`, `asked_at`, `attempt`, `cause`, `detail`, `doc`, `finish`, `head`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `sent_at`, `slot`, `sources`, `status`, `tail`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
 - `refusal`: `doc`, `owner`, `parameter`, `reason`
+- `places`: `by_axis`, `by_parameter`, `complete`, `doc`, `dropped`, `passages`, `places`, `unread`, `windows`
 - `invalid`: `detail`, `doc`, `kind`, `where`, `why`
+- `order`: `doc`, `first`, `parameters`, `passages`, `scope`
+- `transcribe_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `find_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `docfield_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `coord_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `list_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `names_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `search_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `check_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `follow_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `work_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
+- `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `frame_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `review_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `compute_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `read`: `asked`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
+- `docfield`: `doc`, `parameter`, `values`, `why`
+- `settled`: `base`, `doc`, `settings`, `target`
+- `works`: `doc`, `new`, `works`
+- `asked`: `chunks`, `doc`, `question_queries`, `refused`, `requests`, `scope`
+- `seek_probe`: `doc`, `parameter`, `per`, `text`
+- `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
+- `piece`: `doc`, `id`, `text`
 
 [Back to the index](../README.md)

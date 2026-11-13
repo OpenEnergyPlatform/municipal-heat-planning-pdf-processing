@@ -20,7 +20,9 @@ label where the spec has one (`<name>_label`) and how the reading ended
 (`<name>_state`). The columns of a file are the coordinates its values
 have, in alphabetical order after the fixed ones. After all of those come
 the passages the coordinates were read from (`<name>_quote`), appended so
-that a table written before they existed keeps its columns where they were.
+that a table written before they existed keeps its columns where they were,
+and last, for a file with a value read off a figure, what was read
+(`reading`), which backs a number no text states.
 
 Author: Felix Vossel
 

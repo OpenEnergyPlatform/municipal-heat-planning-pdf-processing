@@ -11,9 +11,9 @@ Author: Felix Vossel
 # docpipe.inference.kg_route.REASONS. Held against that tuple by
 # kg_route.hooks, which the app builds at start-up, so a token nobody worded
 # is a finding before the first turn and not a blank caption once in a
-# thousand turns. Not at import, the way kg.py checks TRUST_PROSE: the check
-# lives in docpipe.inference, and importing that package imports openai and
-# faiss -- a table of six sentences should not need either to load.
+# thousand turns. Not at import: the check lives in docpipe.inference, and
+# importing that package imports openai and faiss -- a table of six
+# sentences should not need either to load.
 ROUTE_NOTES = {
     "no_graph": "Kein Wissensgraph geladen.",
     "no_plan": ("Dieser Plan hat keinen Knoten im Wissensgraphen: ohne AGS "
@@ -30,6 +30,9 @@ ROUTE_NOTES = {
 # coordinates and the reasons of its level.
 AXIS_NAMES = {
     "quantity": "Größe",
+    "subject": "Bezug",
+    "head": "Spalte",
+    "whole": "Anteil von",
     "aggregation": "Art des Werts",
     "carrier": "Energieträger",
     "sector": "Sektor",
@@ -42,61 +45,9 @@ READOFF_MARKER = "abgelesen"
 READOFF_NOTE = ("(Hinweis: Werte teilweise aus Abbildungen abgelesen "
                 "– Schätzwerte, Ablesefehler möglich.)")
 
-PHRASES = {
-    "task_heading": "Auftrag des Nutzers",
-    "history_heading": ("Bisheriger Gesprächsverlauf (nutze ihn NUR, um Bezüge im "
-                        "aktuellen Auftrag aufzulösen — Pronomen, \"und …\", "
-                        "Auslassungen; KEINE Faktenquelle, Belege ausschließlich "
-                        "aus den Auszügen)"),
-    "history_task": "Frage",
-    "history_phrase": "Suchanker",
-    "history_answer": "Antwort",
-    "chat_parameter_question": ("Wonach fragt der Nutzer? Wähle den Eintrag "
-                                "der Liste, nach dem die Frage fragt, nach dem, "
-                                "was sie meint, nicht nach ihren Wörtern: wer "
-                                "einen Plan erstellt hat, ist das beauftragte "
-                                "Planungsbüro; wie viel Wärme gebraucht wird, "
-                                "ist ein Energieverbrauch. Fragt sie nach "
-                                "keinem davon, ist die Antwort out:unstated."),
 
-    "code_heading": "Ausgeführter Code",
-    "exec_stdout": "Ausführungsergebnis (stdout)",
-    "exec_empty": "(keine Ausgabe)",
-    "exec_failed": "Ausführung fehlgeschlagen",
-    "exec_unknown": "unbekannter Fehler",
-    "exec_recover": "Korrigiere den Code ODER antworte ohne Berechnung.",
-
-    "compute_heading": "Bereits ausgeführt",
-    "compute_guide": ("Gib die finale Antwort im vorgegebenen JSON-Format — oder, nur "
-                      "falls unbedingt nötig, eine weitere "
-                      '{"action":"python","code":...}.'),
-    "compute_guide_final": ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format "
-                            "(KEIN action-Objekt mehr)."),
-
-    "image_heading": "Angeforderte Abbildungen (siehe Bilder)",
-    "image_uncaptioned": "ohne Bildunterschrift",
-    "image_unavailable": "Bild nicht verfügbar",
-    "image_guide": ("Lies den Wert aus dem Bild ab und gib die finale Antwort — oder, "
-                    'nur falls wirklich nötig, eine weitere {"action":"image","id":"..."}.'),
-    "image_guide_final": ("Gib JETZT die finale Antwort im vorgegebenen JSON-Format "
-                          "(KEIN action-Objekt mehr)."),
-    "image_part": "Bild zum Auszug index={index}",
-
-    "readoff_heading": "Abzulesen (laut Vorprüfung)",
-
-    # The citation under the answer, which the model also reads as `source`.
-    "citation_quotes": ("„", "“"),
-    "citation_page": "Seite {page}",
-    "citation_page_unknown": "Seite unbekannt",
-    "citation_section": "Abschnitt",
-    "citation_table": "Tabelle",
-    "citation_figure": "Abbildung",
-
-    # What the loop splices into a reading, a failed run and an image part.
-    "readoff_value": "{reading} — abgelesener Wert: {value} {unit}",
-    "exec_none": "kein Ergebnis",
-    "image_requested": "Angefordertes Bild [{id}]: {title}",
-}
+# What the answer loop says around the prompts is a file beside them:
+# prompts/inference/phrases.json (docpipe/phrases.py).
 
 
 # The words of the chat app's pages (docpipe/app/app.py) and of the picker's
@@ -204,8 +155,9 @@ UI = {
     "reason_unbacked": "{axis}: das Zitat trägt die Angabe nicht",
     "reason_unanswered": "{axis}: das Modell hat nicht geantwortet",
     "reason_conflict": "eine andere Lesung desselben Werts weicht ab",
-    "reason_repaired": "das Zitat wurde nachträglich angeglichen",
     "reason_computed": "berechnet, nicht gelesen",
+    "reason_read_off": "aus der Abbildung abgelesen, ein Schätzwert",
+    "reason_catalogue": "aus einem Katalog nachgeschlagen, nicht gelesen",
     "reason_not_located": "das Zitat wurde auf seiner Seite nicht gefunden",
     "reason_review_disagree": "eine Prüfung widerspricht",
     "reason_page_transcribed": "aus einer vom Modell abgeschriebenen Seite",

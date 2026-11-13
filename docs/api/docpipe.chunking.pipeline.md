@@ -64,15 +64,22 @@ def run(
     *,
     step: Optional[str] = None,
     force: bool = False,
+    also: Sequence[str | Path] = (),
+    dry_run: bool = False,
 ) -> None
 ```
 
 Run the pipeline over the PDF subdirectories of `data_dir`.
 
 `step` limits the run to 'merge', 'db', 'embed' or the standalone
-'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
-merge → db → embed (the db step backfills the page source and the
-captions itself). `force` ignores caches and clears old embeddings.
+'enrich-bbox', 'enrich-page-source', 'enrich-caption', 'reembed' or
+'sync'; None runs merge → db → embed (the db step backfills the page
+source and the captions itself). `force` ignores caches and clears old
+embeddings. 'reembed' writes `index_path` as a new file (see
+chunking/reembed.py). 'sync' merges, then writes each document into the
+database under the numbers its entries have and takes the vectors whose
+input changed out of `index_path` and of every file in `also`
+(chunking/sync.py); with `dry_run` it only counts, without merging.
 
 The embed step raises IncompleteIndex when inputs were left without a
 vector, after it saved the index with the ones that have one.

@@ -61,7 +61,7 @@ SURROGATES = compile(r"[\uD800-\uDFFF]")
 # System prompt for the LLM
 # ---------------------------------------------------------------------------
 # Ask the model for the changes instead of the whole section. Measured over 60
-# ar6 documents: 28% of sections came back byte-identical, the median section
+# scenarios documents: 28% of sections came back byte-identical, the median section
 # was 99% unchanged, and only 166 of 4887 were real conversions — the stage was
 # paying output tokens, the expensive kind, to retype its own input.
 # Off by default: the two modes use different prompts, so switching marks every
@@ -108,7 +108,7 @@ TOKENS_PER_WORD = 3.0
 # The reply is the window handed back refined, so it is about as long as the
 # window plus JSON scaffolding — a refined sentence is rarely shorter than the
 # original. A flat max_tokens truncated the answer mid-string on big windows:
-# 24 of 1030 in the ar6 book run, every one "Unterminated string".
+# 24 of 1030 in the scenarios book run, every one "Unterminated string".
 REPLY_HEADROOM = 1.35
 # Ceiling, so one runaway window cannot demand a context nobody has. The
 # preflight checks the server against this, not against the flat default.

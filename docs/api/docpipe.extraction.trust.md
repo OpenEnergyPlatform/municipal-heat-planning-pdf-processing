@@ -21,12 +21,17 @@ threshold anybody tuned.
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  something is off: a coordinate the run gave up on or could not
-     back, a repaired quote, a computed number, a contested identity
+  C  open: a coordinate nobody read, or a number read off a figure's
+     image that no text prints, and nothing speaks against what was read
+  D  in doubt: a coordinate that could not be backed, a computed
+     number, a value looked up in a catalogue, a contested identity, a
+     second reading that came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
-is a reason nobody can count. What makes a value a C is what a curator
-should examine.
+is a reason nobody can count. C and D are told apart because they ask
+for different things: a C wants its gap filled, a D wants a person to
+look at what was read. A value that is both is a D. What makes a value
+a C or a D is what a curator should examine.
 
 Where in the document a coordinate's passage stands is not a reason.
 The harvest takes a reading whose quote stands in a shown passage and
@@ -34,10 +39,12 @@ carries the answer, and grading it again by that passage's distance
 from the row would be a check the harvest does not make.
 
 A value can be read a second time (`review.py`), and what that reading
-came to is recorded here as a mark. It never raises a level: the
+came to is recorded on the row as a flag. It never raises a level: the
 second reading uses the same model over a narrower window, so an
 agreement states that the reading is self-consistent, not that it is
-right.
+right. Nor does an agreement mark the value `corroborated`: it reads the
+same place again, and one place counts once (owner decision 2026-11-05).
+Only a second passage that prints the number confirms it.
 
 Measured on Kassel's 559 tuples, 527 came out of a table or figure
 image, so image origin alone separates nothing and is not by itself a
@@ -46,6 +53,34 @@ warning.
 Author: Felix Vossel
 
 ## Functions
+
+### review_levels
+
+```python
+def review_levels() -> tuple
+```
+
+The levels a curator should examine (rule `review_levels`).
+
+### unread_states
+
+```python
+def unread_states() -> tuple
+```
+
+The states the rule `trust_reason_levels` puts at the level C: a
+coordinate nobody read. Worked out when asked, so a changed rule
+changes it.
+
+### level_of
+
+```python
+def level_of(reason: str) -> str
+```
+
+The level the rule `trust_reason_levels` gives a reason: by the
+reason itself ("review:disagree"), else by the part before its colon
+("exhausted" for "exhausted:carrier").
 
 ### reasons
 
@@ -141,7 +176,7 @@ value IRI, and a second reading is a later pass: neither exists yet when
 this line is written, so neither is counted. `trust` takes them as
 arguments for exactly that reason, and the graph side recomputes the
 levels with them. The levels here are the floor: a value that is a C
-already will not become an A later.
+already will not become an A later, and an A or a C may become a D.
 
 A pass that appends a parameter to a file builds the line again over every
 tuple and refusal the file now holds. The refusals of the first pass are
@@ -155,7 +190,8 @@ harvest refused and not how many of those a later pass could read.
 def parameter_states(spec, tuples: list, refusals: list, *,
                      harvested: int = 0,
                      answered: Optional[int] = None,
-                     sources_of: Optional[dict] = None) -> list
+                     sources_of: Optional[dict] = None,
+                     uncombed=()) -> list
 ```
 
 One state per parameter of the spec, in spec order.
@@ -176,5 +212,10 @@ was once marked exhausted by a cut-off table request while its one
 candidate passage had been read in full, and its answer is "the plan
 does not say". Without `sources_of` for a parameter, or for a failed
 request that names no source, a cut anywhere counts for every parameter.
+
+A field of the document that found nothing while chunks of the
+document were never shown to it (*uncombed*) ends in the state of
+`parameter_uncombed`, not "the plan does not say" (owner decision
+2026-11-13, point 3).
 
 [Back to the index](../README.md)

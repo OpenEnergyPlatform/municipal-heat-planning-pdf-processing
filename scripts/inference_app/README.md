@@ -75,16 +75,29 @@ included, and the help text of the checkbox says so.
 ## Values from the harvest
 
 With `INFERENCE_HARVEST_DIR` set to a harvest directory (`docpipe extract`), a question is
-answered from the harvest before the documents are searched. The question is turned into the
-parameter it asks for (with the profile's question for a person's question) and the coordinates
-it names, one closed question each over the spec's own lists (`docpipe/inference/values_route.py`);
-the model then answers it from the passages the found values were read from, and every statement
-stands in the passage it cites, as in an answer from the documents. Its citations show their pages.
-Under the answer stand only the values it uses, one line each in words (number, coordinates,
-document and page, level), and their details (every coordinate by name, the reasons of the level)
-unfold below. An answer outside a list leaves that coordinate open, and a question that names no
-parameter gets nothing here. `INFERENCE_VALUES_LEVEL` (A, B or C) leaves out values below a trust
-level, and `INFERENCE_VALUES_LIMIT` caps how many values the answer is given.
+answered from the harvest before the documents are searched. The values are found by meaning
+(`docpipe/inference/values_route.py`, `values_index.py`). `docpipe values-index HARVEST` embeds one
+line of words per value (whose it is, what it is a number of, the number as the plan writes it, the
+title of its passage) into `<harvest>.values.db` beside the harvest; a line that stayed keeps its
+vector through a new harvest, a build that stopped goes on from `<index>.building`, and `--check`
+says whether the index is current. The chat embeds the question's search anchor, the sentence the
+documents are searched with too, and puts the values of the selected document (or of all) with the
+nearest lines before the model as a list, as long as `ANSWER_CONTEXT_TOKENS` allows. The model
+chooses among them by id; an id outside the list is asked again, and a reply is never cut down to
+the ids that are right. The model then answers from the passages the chosen values were read from,
+and every statement stands in the passage it cites, as in an answer from the documents. Its
+citations show their pages. Under the answer stand only the values it uses, one line each in words
+(number, coordinates, document and page, level), and their details (every coordinate by name, the
+reasons of the level) unfold below. A question for which the model chooses no value gets nothing
+here.
+
+An index that is missing or stale (a value without a vector, or vectors of another embedding model)
+is not asked, and the log says so; the chat then asks closed questions: the parameter the question
+asks for (with the profile's question for a person's question) and the coordinates it names, one
+closed question each over the spec's own lists. An answer outside a list leaves that coordinate
+open, and a question that names no parameter gets nothing. `INFERENCE_VALUES_LEVEL` (A, B, C or D)
+leaves out values below a trust level, and `INFERENCE_VALUES_LIMIT` caps how many values the closed
+questions give.
 
 ## The review page
 
@@ -124,8 +137,8 @@ is not asked. `INFERENCE_LEXICAL=0` turns the word search off.
 | `scripts/chat_search_recall.py` | How often the chat's search puts the passage and the page a harvested value was read from among its hits; it answers nothing. |
 
 Everything else is core: `docpipe.inference` (`answer`, `catalog`, `db`, `faiss_store`, `hybrid`,
-`lexical`, `values_route`, `chunker`, `llm_client`, `query_cache`, `request_log`, `code_exec`) and
-`docpipe.embedding`.
+`lexical`, `values_route`, `values_index`, `chunker`, `llm_client`, `query_cache`, `request_log`,
+`code_exec`) and `docpipe.embedding`.
 
 ## The embedding backend
 
@@ -182,8 +195,8 @@ comes from, and `docpipe.toml` takes them under `[chat]`.
 | `INFERENCE_PDF_ROOT` | `<profile>.pdf_dir` | Folder holding the source PDFs; the cited page is drawn from them. |
 | `INFERENCE_HARVEST_DIR` | unset | Harvest directory. Unset: no values step and no review page. |
 | `INFERENCE_GOLD_PATH` | `gold.jsonl` beside the harvest directory | File the review page appends decisions to. `docpipe extract --serialize` does not read this setting: it keeps decisions beside their values only from the file beside the harvest. |
-| `INFERENCE_VALUES_LEVEL` | unset | Worst trust level (A, B or C) of a harvested value the chat still shows. Unset: every value. |
-| `INFERENCE_VALUES_LIMIT` | `20` | Harvested values one answer shows before it says how many more there are. |
+| `INFERENCE_VALUES_LEVEL` | unset | Worst trust level (A, B, C or D) of a harvested value the chat still shows. Unset: every value. |
+| `INFERENCE_VALUES_LIMIT` | `20` | Harvested values the closed questions give one answer before it says how many more there are. By meaning the list is as long as `ANSWER_CONTEXT_TOKENS` allows. |
 | `INFERENCE_LEXICAL` | `1` | Search by word beside the search by meaning where a word index exists. `0`: by meaning only. |
 | `INFERENCE_KG_TTL_PATH` | `<profile>.root/graph.ttl` | The Turtle `--serialize` wrote, read by the knowledge-graph route. Without it the route is not offered. |
 | `EMBEDDING_MODEL` | `Qwen/Qwen3-VL-Embedding-8B` | HF id of the embedding model. |

@@ -14,7 +14,9 @@ other end. That is mechanical, so it is done here rather than remembered:
 
   siblings   a name this change touches that other places also use
   consumers  a literal this change writes that other files read
-  untested   a function this change adds or moves that no test names
+  docs       a generated page of docs/ that its sources now render
+             otherwise (`scripts/build_docs.py --check`), which no test
+             checks
 
 What it cannot check is the shape that needs judgement — a guarantee written
 in a docstring and half implemented. "The quote sits in the source AND carries
@@ -45,7 +47,6 @@ MIN_NAME = 4
 
 _NAME = re.compile(r"\b[a-z_][a-z0-9_]{%d,}\b" % (MIN_NAME - 1))
 _STRING = re.compile(r"""["']([^"'\n]{4,80})["']""")
-_DEF = re.compile(r"^\s*(?:async\s+)?def\s+([a-z_][a-z0-9_]*)")
 # A line with no code punctuation in it is a docstring line.
 _PROSE = re.compile(r"^\s*[A-Za-zÄÖÜäöü\"'][^=(){}\[\]:]*$")
 _SKIP = re.compile(r"^(self|None|True|False|return|import|from|print|value|"
@@ -132,19 +133,23 @@ def consumers(written: set, added: list) -> dict:
     return out
 
 
-def untested(added: list) -> list:
-    """Functions this change adds that no test file names."""
-    out = []
-    for _path, line in added:
-        match = _DEF.match(line)
-        if not match:
-            continue
-        name = match.group(1)
-        if name.startswith("_") or name.startswith("test"):
-            continue
-        if not _git("grep", "-l", "-w", name, "--", "tests/").strip():
-            out.append(name)
-    return out
+def docs_drift() -> list:
+    """The generated pages of docs/ a fresh build renders otherwise than
+    they stand (`scripts/build_docs.py --check`, two seconds). [] where
+    they agree; the check's own words where it could not run."""
+    run = subprocess.run([sys.executable, str(ROOT / "scripts" /
+                                               "build_docs.py"), "--check"],
+                         cwd=ROOT, capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
+    if run.returncode == 0:
+        return []
+    lines = run.stdout.splitlines()
+    pages = [line[len("--- "):].split("\t")[0].strip() for line in lines
+             if line.startswith("--- docs/")]
+    pages += [line.split(":", 1)[0] for line in lines
+              if line.endswith("its module is gone")
+              or line.endswith("no manifest entry renders this page any more")]
+    return pages or [(run.stderr or run.stdout).strip()[-300:]]
 
 
 def report(spec: str | None = None) -> int:
@@ -176,13 +181,17 @@ def report(spec: str | None = None) -> int:
                 print(f"      ... {len(rows) - 6} more")
             findings += 1
         print()
-    blank = untested(added)
-    if blank:
-        print("UNTESTED — added and named in no test:")
-        for name in blank:
-            print(f"  {name}")
-        findings += len(blank)
+    drift = docs_drift()
+    if drift:
+        print("DOCS — a generated page its sources now render otherwise. "
+              "Re-run `python scripts/build_docs.py --out docs` and commit "
+              "the pages with the change.")
+        for page in drift[:20]:
+            print(f"  {page}")
+        if len(drift) > 20:
+            print(f"  ... {len(drift) - 20} more")
         print()
+        findings += 1
     if not findings:
         print("nothing outside the changed files looks touched")
     return 0

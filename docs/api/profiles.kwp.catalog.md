@@ -48,6 +48,12 @@ document id -> {gemeinde, bundesland_lang, jahr}.
 def label(self, row, facets: Optional[dict] = None) -> str
 ```
 
+#### KwpCatalog.name
+
+```python
+def name(self, row, facets: Optional[dict] = None) -> str
+```
+
 #### KwpCatalog.detail
 
 ```python

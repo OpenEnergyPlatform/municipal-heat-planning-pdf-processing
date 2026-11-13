@@ -1,0 +1,64 @@
+{
+  "flow": [
+    {
+      "id": "top_up_open_stored",
+      "box": "stored",
+      "set": {
+        "files": "to_harvest",
+        "parallel": true,
+        "trace": "trace-open",
+        "archive": "top-up-open",
+        "label": "top-up-open"
+      }
+    },
+    {
+      "id": "top_up_open_open",
+      "box": "open"
+    },
+    {
+      "id": "top_up_open_each_dimension",
+      "each": "dimension",
+      "steps": [
+        {
+          "id": "top_up_open_take_back",
+          "box": "take_back"
+        },
+        {
+          "id": "top_up_open_better",
+          "box": "better"
+        }
+      ]
+    },
+    {
+      "id": "top_up_open_demote",
+      "box": "demote"
+    },
+    {
+      "id": "top_up_open_summary",
+      "box": "summary"
+    },
+    {
+      "id": "top_up_open_replace",
+      "box": "replace",
+      "set": {
+        "producer": "top-up-open"
+      }
+    },
+    {
+      "id": "top_up_open_unread",
+      "box": "unread",
+      "set": {
+        "trace": "trace-rest",
+        "label": "top-up-rest"
+      }
+    },
+    {
+      "id": "top_up_open_append",
+      "box": "replace",
+      "set": {
+        "how": "append",
+        "producer": "rest"
+      }
+    }
+  ]
+}

@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Iterable, Optional, Sequence
 
 from ..store.schema import readonly_uri
+from .db import PerThread
 
 log = logging.getLogger(__name__)
 
@@ -171,8 +172,8 @@ def connect(db_path, index_path: Optional[Path] = None
                     "meaning only. `docpipe lexical %s` builds it.",
                     index_path, found, db_path)
         return None
-    return sqlite3.connect(readonly_uri(index_path), uri=True,
-                           check_same_thread=False)
+    return PerThread(lambda: sqlite3.connect(
+        readonly_uri(index_path), uri=True, check_same_thread=False))
 
 
 def words(text: str) -> list:

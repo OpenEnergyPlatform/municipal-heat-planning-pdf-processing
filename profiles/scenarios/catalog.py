@@ -1,6 +1,6 @@
 """
-catalog.py – How AR6 publications present themselves in the picker: by title
-and year, filtered by year, venue and the scenarios they document.
+catalog.py – How the publications present themselves in the picker: by title
+and year, filtered by year and venue.
 
 Author: Felix Vossel
 """
@@ -13,7 +13,7 @@ from typing import Optional
 from docpipe.inference.catalog import Catalog
 
 
-class Ar6Catalog(Catalog):
+class ScenarioCatalog(Catalog):
     """The bibliographic view of the corpus."""
 
     def rows(self, conn: sqlite3.Connection,
@@ -34,8 +34,7 @@ class Ar6Catalog(Catalog):
                    m.title,
                    m.year,
                    m.venue,
-                   m.is_oa,
-                   m.scenario_count
+                   m.is_oa
             FROM Documents d
             LEFT JOIN DocumentMeta m ON m.document = d.id
             {where}
@@ -43,11 +42,10 @@ class Ar6Catalog(Catalog):
         """).fetchall()
 
     def facet_values(self, conn: sqlite3.Connection, rows) -> dict:
-        """document id -> {year, venue, scenario}."""
-        scenarios = _scenarios_by_document(conn)
+        """document id -> {year, venue}."""
         out = {}
         for row in rows:
-            values = {"scenario": scenarios.get(row["id"], [])}
+            values = {}
             if row["year"]:
                 values["year"] = [str(row["year"])]
             if row["venue"]:
@@ -55,13 +53,16 @@ class Ar6Catalog(Catalog):
             out[row["id"]] = values
         return out
 
+    def name(self, row, facets: Optional[dict] = None) -> str:
+        return str(row["title"] or row["doi"]
+                   or Path(row["filename"] or "").stem
+                   or row["external_id"] or f"#{row['id']}")
+
     def label(self, row, facets: Optional[dict] = None) -> str:
         """Title and year — the DOI, then the crawl slug, while the title is
         unknown. No current/old tag: every publication is its own version
         group, so it would be on every entry."""
-        name = (row["title"] or row["doi"] or Path(row["filename"] or "").stem
-                or row["external_id"] or f"#{row['id']}")
-        parts = [str(name)]
+        parts = [self.name(row, facets)]
         if row["year"]:
             parts.append(str(row["year"]))
         return " · ".join(parts)
@@ -69,26 +70,8 @@ class Ar6Catalog(Catalog):
     def detail(self, row, facets: Optional[dict] = None):
         lines = []
         if row["venue"]:
-            lines.append(f"Erschienen in: {row['venue']}")
-        # The stored count is what the index claimed; the links are what was
-        # imported. They agree, unless the corpus predates the link table.
-        count = row["scenario_count"] or len((facets or {}).get("scenario", ()))
-        if count:
-            lines.append(f"Dokumentierte AR6-Szenarien: {count}")
-        return (("📄 Publikation", lines),) if lines else ()
+            lines.append(f"Published in: {row['venue']}")
+        return (("📄 Publication", lines),) if lines else ()
 
 
-CATALOG = Ar6Catalog
-
-
-def _scenarios_by_document(conn: sqlite3.Connection) -> dict:
-    """document id -> the names of the AR6 scenarios it documents."""
-    out: dict = {}
-    for row in conn.execute("""
-        SELECT ds.document AS document, s.name AS name
-        FROM DocumentScenarios ds
-        JOIN Scenarios s ON s.id = ds.scenario
-        ORDER BY s.name
-    """):
-        out.setdefault(row["document"], []).append(row["name"])
-    return out
+CATALOG = ScenarioCatalog

@@ -92,12 +92,13 @@ def coordinates(row: dict) -> list:
 
 
 def fields_of(row: dict) -> list:
-    """Every field of a row a person can decide: the value, its unit where
-    it has one, and each coordinate."""
+    """Every field of a row a person can decide, each once: the value, its
+    unit where it has one, and each coordinate. The unit is read with a
+    quote like a coordinate, so it is one of those too."""
     found = [VALUE]
     if row.get(UNIT) not in (None, ""):
         found.append(UNIT)
-    return found + coordinates(row)
+    return found + [name for name in coordinates(row) if name not in found]
 
 
 def row_key(document: str, row: dict) -> tuple:

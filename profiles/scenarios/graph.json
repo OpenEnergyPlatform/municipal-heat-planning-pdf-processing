@@ -1,0 +1,456 @@
+{
+  "classes": {},
+  "constraints": {},
+  "rules": {
+    "base": "https://openenergyplatform.org/ontology/oekg/",
+    "scenario_types_always": [
+      "OEO_00020517"
+    ],
+    "evidence_as": "comment",
+    "front_first_fields": [
+      "publication_title",
+      "publication_author",
+      "publication_date",
+      "publication_doi"
+    ],
+    "front_pages_rule": "first page and title page",
+    "front_pages_extra": 0,
+    "front_order": [
+      "front",
+      "catalogue",
+      "any"
+    ],
+    "pick_one_order": [
+      "not_contained",
+      "most_sources",
+      "located",
+      "longer"
+    ],
+    "settle_order": [
+      "wording",
+      "rounding",
+      "trust",
+      "contested"
+    ],
+    "corroborated_by_place": true
+  },
+  "map": {
+    "prefixes": {
+      "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+      "xsd": "http://www.w3.org/2001/XMLSchema#",
+      "dc": "http://purl.org/dc/terms/",
+      "obo": "http://purl.obolibrary.org/obo/",
+      "oeo": "https://openenergyplatform.org/ontology/oeo/",
+      "oekgprov": "https://openenergyplatform.org/ontology/oekg/provenance/"
+    },
+    "prefix_width": 5,
+    "legal_forms": "(gmbh|mbh|ag|kg|ohg|e\\.?\\s*v\\.?|gbr|se|ug|inc|ltd|llc)",
+    "document": {
+      "admit": [
+        {
+          "brick": "kept_coordinates"
+        }
+      ],
+      "front_pages": "publication_title",
+      "check": [
+        {
+          "brick": "crawl_crosscheck",
+          "settings": {
+            "fields": [
+              "publication_title",
+              "publication_date",
+              "publication_doi"
+            ]
+          }
+        }
+      ],
+      "decisions": true
+    },
+    "evidence": {
+      "prose": {
+        "level": "confidence: {level}",
+        "image_origin": "read off an image, not the running text",
+        "image_origin_named": "read off an image, not the running text ({image})",
+        "corroborated": "a second passage says the same",
+        "reasons": "{reasons}",
+        "review": "worth checking"
+      },
+      "join": ", ",
+      "nodes": {
+        "folder": "evidence",
+        "key": "evidence"
+      }
+    },
+    "boxes": [
+      {
+        "id": "report",
+        "class": "oeo:OEO_00020012",
+        "count": "per_document",
+        "required": true,
+        "same_node": "warn",
+        "address": {
+          "folder": "publication",
+          "key": "studyreport",
+          "from": [
+            "publication_title"
+          ],
+          "fold": true
+        },
+        "uuid": "oeo:OEO_00390095"
+      },
+      {
+        "id": "bundle",
+        "class": "oeo:OEO_00020227",
+        "count": "per_document",
+        "same_node": "warn",
+        "address": {
+          "folder": "",
+          "key": "scenariobundle",
+          "from": [
+            "study_project_name",
+            "publication_title"
+          ],
+          "first_present": true,
+          "fold": true
+        }
+      },
+      {
+        "id": "scenario",
+        "class": "oeo:OEO_00000365",
+        "count": "per_name",
+        "of": [
+          "scenario_label",
+          "scenario_type",
+          "scenario_abstract",
+          "scenario_region",
+          "scenario_year"
+        ],
+        "names": {
+          "brick": "scenario_names",
+          "settings": {
+            "name_in_quote": true
+          }
+        },
+        "address": {
+          "folder": "scenario",
+          "key": "scenariofactsheet",
+          "from": [
+            "publication_title",
+            "@name"
+          ],
+          "fold": true
+        },
+        "uuid": "oeo:OEO_00390095"
+      },
+      {
+        "id": "author",
+        "class": "oeo:OEO_00000064",
+        "count": "per_distinct",
+        "of": "publication_author",
+        "address": {
+          "folder": "",
+          "key": "author",
+          "from": [
+            "@name"
+          ],
+          "fold": true
+        }
+      },
+      {
+        "id": "organisation",
+        "class": "oeo:OEO_00030022",
+        "count": "per_distinct",
+        "of": "study_organisation",
+        "address": {
+          "folder": "",
+          "key": "organisation",
+          "from": [
+            "@name"
+          ],
+          "fold": true
+        }
+      },
+      {
+        "id": "funder",
+        "class": "oeo:OEO_00090001",
+        "count": "per_distinct",
+        "of": "study_funder",
+        "address": {
+          "folder": "",
+          "key": "funder",
+          "from": [
+            "@name"
+          ],
+          "fold": true
+        }
+      },
+      {
+        "id": "described",
+        "count": "per_object",
+        "once": "per_file",
+        "of": [
+          {
+            "box": "scenario",
+            "from": [
+              "scenario_region",
+              "scenario_type",
+              "scenario"
+            ]
+          },
+          {
+            "box": "bundle",
+            "from": [
+              "study_descriptor",
+              "study_sector_division",
+              "study_sector",
+              "study_technology"
+            ]
+          }
+        ],
+        "class_by": {
+          "scenario_region": "oeo:OEO_00020032"
+        },
+        "note": "The nodes the graph points at and does not make, each described once per file (OEKG team, 2026-11-04): a region by the class the shapes require at the end of its edge and the name LCC gives it, an OEO term by its label in the pinned release."
+      }
+    ],
+    "arrows": [
+      {
+        "from": "publication_title",
+        "to": "report",
+        "property": "rdfs:label",
+        "pick": "one_reading",
+        "single": true,
+        "first_in_file": "skip_other",
+        "evidence": true,
+        "label": "label",
+        "note": "Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
+      },
+      {
+        "from": "report",
+        "to": "author",
+        "property": "oeo:OEO_00000506",
+        "objects": "joined",
+        "label": "has author"
+      },
+      {
+        "from": "publication_date",
+        "to": "report",
+        "property": "oeo:OEO_00390096",
+        "pick": "one_reading",
+        "single": true,
+        "first_in_file": "skip_other",
+        "brick": "year_to_datetime",
+        "evidence": true,
+        "label": "has publication date",
+        "note": "A PDF states a year; the serializer pads it to YYYY-01-01T00:00:00, which the document does not say. The day and the month are the datatype's, not the paper's."
+      },
+      {
+        "from": "publication_doi",
+        "to": "report",
+        "property": "oeo:OEO_00390098",
+        "pick": "one_reading",
+        "single": true,
+        "first_in_file": "skip_other",
+        "evidence": true,
+        "label": "has doi"
+      },
+      {
+        "from": "study_project_name",
+        "to": "bundle",
+        "property": "rdfs:label",
+        "pick": "one_reading",
+        "single": true,
+        "first_in_file": "skip_other",
+        "label": "label",
+        "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07)."
+      },
+      {
+        "from": "study_acronym",
+        "to": "bundle",
+        "property": "dc:acronym",
+        "pick": "one_reading",
+        "single": true,
+        "first_in_file": "skip_other"
+      },
+      {
+        "from": "publication_abstract",
+        "to": "bundle",
+        "property": "dc:abstract",
+        "pick": "one_reading",
+        "single": true,
+        "first_in_file": "skip_other",
+        "evidence": true,
+        "note": "On the bundle, not on the report: the shapes carry the study's abstract there."
+      },
+      {
+        "from": "bundle",
+        "to": "organisation",
+        "property": "oeo:OEO_00000510",
+        "objects": "joined",
+        "label": "has organisation"
+      },
+      {
+        "from": "bundle",
+        "to": "funder",
+        "property": "oeo:OEO_00000509",
+        "objects": "joined",
+        "label": "has funding source"
+      },
+      {
+        "from": "study_descriptor",
+        "to": "bundle",
+        "property": "oeo:OEO_00390071",
+        "brick": "entry",
+        "evidence": true,
+        "label": "has study descriptor tag",
+        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
+      },
+      {
+        "from": "study_sector_division",
+        "to": "bundle",
+        "property": "oeo:OEO_00390079",
+        "brick": "entry",
+        "evidence": true,
+        "label": "based on sector division",
+        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
+      },
+      {
+        "from": "study_sector",
+        "to": "bundle",
+        "property": "oeo:OEO_00020439",
+        "brick": "entry",
+        "evidence": true,
+        "label": "covers sector (shortcut)",
+        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
+      },
+      {
+        "from": "study_technology",
+        "to": "bundle",
+        "property": "oeo:OEO_00020438",
+        "brick": "entry",
+        "evidence": true,
+        "label": "covers technology (shortcut)",
+        "note": "The object is one of the entries the shapes accept on this path, chosen from the list, never written."
+      },
+      {
+        "from": "bundle",
+        "to": "report",
+        "property": "obo:BFO_0000051",
+        "label": "has part"
+      },
+      {
+        "from": "bundle",
+        "to": "scenario",
+        "property": "obo:BFO_0000051",
+        "label": "has part",
+        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
+      },
+      {
+        "from": "scenario_label",
+        "to": "scenario",
+        "property": "rdfs:label",
+        "brick": "node_name",
+        "first_in_file": "skip_other",
+        "evidence": true,
+        "label": "label",
+        "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. A name is the entry of the publication's list of scenarios it was asked to be, and labels that entry's factsheet (`value_means`, docpipe/extraction/addressed.py)."
+      },
+      {
+        "from": "scenario_label",
+        "to": "scenario",
+        "property": "dc:acronym",
+        "brick": "short_name",
+        "first_in_file": "skip_other",
+        "evidence": true
+      },
+      {
+        "from": "scenario_type",
+        "to": "scenario",
+        "property": "oeo:OEO_00390073",
+        "brick": "entry",
+        "evidence": true,
+        "label": "has scenario type",
+        "note": "The object is one of the classes the shapes accept, chosen from the list, never written. Every factsheet additionally carries OEO_00020517 IAM scenario, which is not behind a harvested value and stands in the serializer."
+      },
+      {
+        "from": "scenario",
+        "to": "scenario",
+        "property": "oeo:OEO_00390073",
+        "brick": "fixed",
+        "settings": {
+          "rule": "scenario_types_always",
+          "prefix": "oeo"
+        },
+        "note": "Every factsheet carries the classes the rule scenario_types_always lists (Mirjam: all IAM scenarios get the annotation for now)."
+      },
+      {
+        "from": "scenario_abstract",
+        "to": "scenario",
+        "property": "dc:abstract",
+        "pick": "one_reading",
+        "first_in_file": "skip_other",
+        "evidence": true
+      },
+      {
+        "from": "scenario_region",
+        "to": "scenario",
+        "property": "oeo:OEO_00020220",
+        "brick": "region",
+        "settings": {
+          "unlisted": {
+            "folder": "region",
+            "key": "studyregion"
+          }
+        },
+        "cite_once": true,
+        "evidence": true,
+        "label": "has study region",
+        "accepted": "the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)",
+        "note": "The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle."
+      },
+      {
+        "from": "scenario_year",
+        "to": "scenario",
+        "property": "oeo:OEO_00020440",
+        "brick": "year_to_datetime",
+        "order": "sorted",
+        "label": "has scenario year value",
+        "note": "One triple per distinct four-digit year on the factsheet, padded to the first of January as the datatype demands."
+      },
+      {
+        "from": "publication_author",
+        "to": "author",
+        "property": "rdfs:label",
+        "brick": "node_name",
+        "first_in_file": "keep_first",
+        "evidence": true,
+        "label": "label",
+        "note": "One node per distinct name. Two spellings of one person are one node and keep both passages."
+      },
+      {
+        "from": "study_organisation",
+        "to": "organisation",
+        "property": "rdfs:label",
+        "brick": "node_name",
+        "first_in_file": "keep_first",
+        "evidence": true,
+        "label": "label"
+      },
+      {
+        "from": "study_funder",
+        "to": "funder",
+        "property": "rdfs:label",
+        "brick": "node_name",
+        "first_in_file": "keep_first",
+        "evidence": true,
+        "label": "label"
+      },
+      {
+        "from": "described",
+        "to": "described",
+        "property": "rdfs:label",
+        "brick": "known_name"
+      }
+    ]
+  }
+}

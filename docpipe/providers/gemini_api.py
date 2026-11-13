@@ -12,12 +12,13 @@ from __future__ import annotations
 
 import http.client
 import json
-import os
 import socket
 import urllib.error
 import urllib.request
 from types import SimpleNamespace
 from typing import Optional
+
+from docpipe import rules
 
 from . import base
 
@@ -25,10 +26,6 @@ NAME = "gemini"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 STOPS = {"STOP": base.STOP, "MAX_TOKENS": base.LENGTH}
 ROLES = {"assistant": "model", "user": "user"}
-EMBED_BATCH = 100
-# For a request nobody gave a time: an answer that never comes must not hold
-# a thread for good.
-TIMEOUT = 600.0
 
 
 def _parts(parts) -> list:
@@ -66,8 +63,8 @@ class GeminiChat:
                            embeddings=self.embeddings)
 
     def _key(self) -> str:
-        key = (self.endpoint.api_key or os.environ.get("GEMINI_API_KEY")
-               or os.environ.get("GOOGLE_API_KEY"))
+        key = (self.endpoint.api_key or rules.get("gemini_api_key")
+               or rules.get("google_api_key"))
         if not key:
             raise base.ProviderError(
                 "no API key for Gemini: set the role's API key or "
@@ -83,7 +80,7 @@ class GeminiChat:
                      "Content-Type": "application/json"})
         try:
             with self._open(request, timeout=timeout or self.endpoint.timeout
-                            or TIMEOUT) as got:
+                            or rules.get("gemini_timeout_s")) as got:
                 return json.loads(got.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             raw = exc.read()
@@ -114,13 +111,14 @@ class GeminiChat:
 
     def create(self, *, model, messages, max_tokens=None, temperature=None,
                response_format=None, extra_body=None, timeout=None):
-        _, schema, decode = base.enforced(response_format,
-                                          base.schemas.OPTIONAL)
+        _, schema, decode = base.enforced(
+            response_format, base.schema_dialect(base.schemas.OPTIONAL))
         system, turns = base.split_messages(messages)
         generation: dict = {}
         if max_tokens is not None:
             generation["maxOutputTokens"] = (int(max_tokens)
-                                             + self.endpoint.thinking_room)
+                                             + base.thinking_room(
+                                                 self.endpoint))
         if temperature is not None:
             generation["temperature"] = temperature
         if schema is not None:
@@ -133,7 +131,7 @@ class GeminiChat:
         }
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}
-        base.merge(body, self.endpoint.options)
+        base.merge(body, base.options_of(self.endpoint))
         got = self._call("POST", f"models/{model}:generateContent", body,
                          timeout)
         candidates = got.get("candidates") or ()
@@ -158,10 +156,11 @@ class GeminiChat:
     def embeddings(self, *, model, input):
         texts = [input] if isinstance(input, str) else list(input)
         vectors = []
-        for start in range(0, len(texts), EMBED_BATCH):
+        batch = rules.get("gemini_embed_batch")
+        for start in range(0, len(texts), batch):
             requests = [{"model": f"models/{model}",
                          "content": {"parts": [{"text": text}]}}
-                        for text in texts[start:start + EMBED_BATCH]]
+                        for text in texts[start:start + batch]]
             got = self._call("POST", f"models/{model}:batchEmbedContents",
                              {"requests": requests})
             vectors.extend(item.get("values") or ()

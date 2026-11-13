@@ -11,8 +11,8 @@ reads back an answer made of statements, each grounded in a quote, with
 citations that trace to a page and, where possible, to the passage on it. It has
 two pages:
 
-- the chat, over one document, several (each asked by itself, then compared)
-  or the whole corpus;
+- the chat, over one document, several (each asked by itself, side by side, then
+  compared) or the whole corpus;
 - the review page, where a person decides whether harvested values are what
   the documents say (see below). It is offered only where a harvest is
   configured.
@@ -37,7 +37,7 @@ a real run on the wrong prompts. A profile that is named is never replaced.
 
 | | |
 |---|---|
-| In | One profile's corpus, read-only: the database and the FAISS index (chunking), the image root and the PDF folder for table, figure and PDF paths. Optionally the word index (`docpipe lexical`) and a harvest directory (`docpipe extract`). One chat turn: a task, an optional image, a selection. |
+| In | One profile's corpus, read-only: the database and the FAISS index (chunking), the image root and the PDF folder for table, figure and PDF paths. Optionally the word index (`docpipe lexical`), a harvest directory (`docpipe extract`) and the vectors of its values beside it (`docpipe values-index`). One chat turn: a task, an optional image, a selection. |
 | Out | Nothing written to the corpus. Two SQLite files on first use, the query cache and the request log; and, from the review page, decisions appended to `gold.jsonl`. History lives only in Streamlit's session state. |
 | Resumes on | Nothing: one question is one turn. An identical query skips only the embedding, from the query cache; the model calls always run. |
 | Needs | A model endpoint for the search phrase, the answer and the comparison (`LLM_PROVIDER`, `LLM_BASE_URL`), the embedding backend `docpipe.embedding.get_embedder()` returns, and a corpus chunking already wrote. A code sandbox is optional. |
@@ -72,11 +72,19 @@ real model differs from that name is not noticed. Changing the selection
 resets the history. A turn then runs in this order:
 
 1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
-   not only an image, the harvest answers first. `values_route` finds the
-   values the question asks for (`docpipe/serve/values.py`; the parameter is
-   chosen with the profile's own question for a person's question,
+   not only an image, the harvest answers, side by side with step 2 and shown
+   above its answer. `values_route` finds the values the question asks for.
+   Where the harvest has its vectors (`docpipe values-index`, a file beside
+   the harvest), it finds them by meaning: the values of the selected
+   document, or of all, whose line of words (whose it is, what it is a number
+   of, the number, the title of its passage) is nearest to the question's
+   search anchor become a list as long as `ANSWER_CONTEXT_TOKENS` allows, and
+   the model chooses among them by id (`answer_from_index`; see [Asking the
+   corpus](inference.md)). Without a current index, which the log says once,
+   it asks closed questions instead (`docpipe/serve/values.py`; the parameter
+   is chosen with the profile's own question for a person's question,
    `chat_parameter_question`, and not with the extraction's question about a
-   number), and `answer.answer_from_values` answers the question from the
+   number). `answer.answer_from_values` then answers the question from the
    passages those values were read from, each passage once. The model decides
    which of their numbers answer it (the total or a carrier, which variant),
    and every statement stands its check against its passage as in a document
@@ -85,12 +93,19 @@ resets the history. A turn then runs in this order:
    value's quote, or a part of it that names the value as the plan writes
    it), one line each in the profile's words (number, coordinates, document
    and page, level), with their coordinates by name and the reasons of their
-   level, in words (`AXIS_NAMES`, `reason_*`), in an expander. A question that
-   names no parameter gets nothing here. `INFERENCE_VALUES_LEVEL` leaves out
-   values below a trust level and `INFERENCE_VALUES_LIMIT` caps how many
-   values, and so passages, the answer is given.
-2. The answer from the documents follows: a search anchor, the query
-   embedding, retrieval, and the answer across token-budgeted batches.
+   level, in words (`AXIS_NAMES`, `reason_*`), in an expander. A question for
+   which the model chooses no value, or that names no parameter, gets nothing
+   here. `INFERENCE_VALUES_LEVEL` leaves out values below a trust level and
+   `INFERENCE_VALUES_LIMIT` caps how many values, and so passages, the closed
+   questions give the answer.
+2. The answer from the documents, asked at the same time: a search anchor, the
+   query embedding, retrieval, and the answer across token-budgeted batches.
+   Where the model has more than one place for requests, the next batch is sent
+   ahead onto a free place, and one more request drops what a batch sent ahead
+   said again; the batches are taken in their order all the same (see [Asking
+   the corpus](inference.md)). The two steps are two threads that read the app's
+   cached resources and show no stage of their own (`_in_this_run`), so one
+   spinner stands for both; the query embedding stays one at a time.
    Retrieval is by meaning and, where a word index exists beside the database
    and is current, also by word, and the two rankings are merged
    (`docpipe/inference/hybrid.py`). `INFERENCE_LEXICAL=0` turns the word
@@ -106,7 +121,8 @@ resets the history. A turn then runs in this order:
      were removed because their quote does not stand in the source they cite,
      "2 of 5 statement(s) removed". It does not say which or why: the cause per
      statement goes to the log. It stands also where every statement was
-     removed.
+     removed. The number made includes the statements a repeats request took
+     out, which the sentence does not count as removed.
    - Where sources were found and no statement stood there is no answer, and the
      page says one of two things. `nothing_backed` says the examined sources hold nothing that backs
      an answer: statements were made and none stood, or the model's replies were
@@ -128,8 +144,8 @@ resets the history. A turn then runs in this order:
      (`run_label`, "Run 1", "Run 2"), so that the number in the caption can be
      found. A value read off a figure keeps its own caption.
 3. With several documents selected there is no values step and no joint
-   search: `run_comparison` asks each document by itself and one more call
-   compares the finished answers, since one top-k over several plans would
+   search: `run_comparison` asks each document by itself, all of them side by
+   side under one spinner, and one more call compares the finished answers, since one top-k over several plans would
    give the longest chapter most of the slots. The comparison is given only
    the statements that stood, as plain text. Each document's own row carries its
    own caption of removed statements and its own warning of unreadable requests,
@@ -147,8 +163,8 @@ harvested document, older versions included, and the help text of the
 checkbox (`whole_corpus_help` of the profile) says so.
 
 The answer route (`route` of the profile's UI words) chooses where an answer
-comes from. Automatic is the order above: the harvest's answer, then the
-answer from the documents. Harvest answers from the harvest alone, and where
+comes from. Automatic is both of the steps above at once: the harvest's answer
+above the answer from the documents. Harvest answers from the harvest alone, and where
 it holds nothing it says why in the profile's words (`values_no_parameter`,
 `values_no_values`, one per reason of `values_route.REASONS`); the
 documents are not asked, because a silent fallback would hide that the
@@ -262,20 +278,22 @@ the profile's own.
 | setting | what it is |
 |---|---|
 | `INFERENCE_DB_PATH`, `INFERENCE_INDEX_PATH`, `INFERENCE_IMAGE_ROOT`, `INFERENCE_PDF_ROOT` | the corpus database (read-only; `docpipe serve` reads it too, for its passage search, and has no default), the FAISS index, the root of table and figure images, the folder of source PDFs the cited page is drawn from |
-| `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file the review page appends to (`--serialize` reads the one beside the harvest and ignores this setting), how many and how trustworthy a value must be to be shown |
+| `INFERENCE_HARVEST_DIR`, `INFERENCE_GOLD_PATH`, `INFERENCE_VALUES_LEVEL`, `INFERENCE_VALUES_LIMIT` | the harvest the values and the review page read, the decisions file the review page appends to (`--serialize` reads the one beside the harvest and ignores this setting), how trustworthy a value must be to be shown, and how many the closed questions give |
 | `INFERENCE_LEXICAL` | search by word beside the search by meaning where a word index exists |
+| `INFERENCE_REVIEW` | 0 does not offer the review page, also where a harvest is set |
 | `INFERENCE_KG_TTL_PATH` | the Turtle file the knowledge-graph route reads; the route is offered only where it exists |
 | `QUERY_CACHE_PATH`, `REQUEST_LOG_PATH` | the two files of the app's own |
 | `PDF_URL_PREFIX`, `PDF_VIEWER_PREFIX` | where the PDFs and a pdf.js viewer are served from the app's own origin; with both set the button beside every drawn page opens the PDF in pdf.js with the quote boxed, with only the first in the browser's own viewer; both are empty by default |
 | `COMPARE_MAX_DOCUMENTS`, `TOP_K`, `MAX_CHUNK_ATTEMPTS`, `ANSWER_CONTEXT_TOKENS` | how many documents one comparison asks, and the retrieval and answer budgets |
+| `LLM_MODELS`, `LLM_SLOTS_PER_MODEL` | the model names at the endpoint that requests are spread over (empty is `LLM_MODEL` alone) and how many requests each takes at once; the default is one place in all, the plain client and one request after the other |
 | `CODE_EXEC_URL`, `CODE_EXEC_TOKEN`, `CODE_EXEC_MAX_ROUNDS`, `CODE_EXEC_TIMEOUT` | the calculation sandbox; an empty URL turns the feature off |
 
 `config.py` re-exports every retrieval and model setting it shares with
 `docpipe.inference.config` and does not redefine one: two copies of a value
 like `LLM_BASE_URL` are how a deployment ends up talking to the wrong endpoint.
 
-The model requests of a turn carry the reasoning fields the other stages send,
-`LLM_ENABLE_THINKING` and `LLM_REASONING_EFFORT`, and always send their reply
+The model requests of a turn carry the fields the other stages send,
+`LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT` and `LLM_TOOL_CHOICE`, and always send their reply
 schema as the grammar of the request. `LLM_MAX_RETRIES` is the number of
 attempts one request gets after a reply that could not be read or a failed call,
 and `LLM_SCHEMA` decides only whether a JSON answer in the user's own shape is
@@ -330,7 +348,9 @@ the turn's own result.
 - `sandbox_service.py` refuses to start without `KWP_SANDBOX_TOKEN` and
   answers a wrong bearer token with 401. A container or backend error comes
   back as a structured error, so an outage costs a turn its calculation and
-  not its answer.
+  not its answer. The service keeps its containers and clears each after a
+  run; nothing is installed into them, so everything a run imports has to be
+  in the image (`Containerfile`).
 - The `.env` is loaded in `docpipe/__init__.py`, before any module captures
   its settings. Loaded later, in the app's config, the model key stayed at its
   placeholder and every call failed with 401.
@@ -348,7 +368,7 @@ imported by the app, that a deployment runs and points `CODE_EXEC_URL` at
 container with no network, every capability dropped and a memory limit.
 `scripts/inference_app_smoketest.py` checks a deployment's embedding backend
 by hand: vector dimension, normalisation, image and image-and-text queries,
-and batch against single. It is run by a person, not by pytest.
+and batch against single. It is run by a person.
 
 ## Module reference
 
@@ -432,11 +452,13 @@ reads live in `db.py`.
 
 sandbox_service.py: Localhost HTTP wrapper around llm-sandbox.
 
-Each request runs the submitted code in a fresh, ephemeral container with
-no network, resource limits, every capability dropped and an execution
+The service keeps KWP_SANDBOX_PARALLEL containers for as long as it runs,
+with no network, resource limits, every capability dropped and an execution
 timeout, so untrusted, possibly prompt-injected LLM code cannot reach the
-host or the network. The server binds loopback only and is guarded by a
-bearer token; it must not be exposed directly.
+host or the network. Each request runs in one of them, and what the run left
+behind, its processes and its files, is cleared before that container serves
+the next one. The server binds loopback only and is guarded by a bearer
+token; it must not be exposed directly.
 
     POST /run   Authorization: Bearer <KWP_SANDBOX_TOKEN>
        body: {"code": "<python>", "context": {"var": <json-value>, ...},

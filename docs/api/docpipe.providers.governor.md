@@ -11,9 +11,9 @@ together. The gate is shared by every request to one endpoint: the first
 answer that says wait closes it for all of them, and each request passes it
 before it is sent.
 
-Without a number from the API the wait doubles from HOLD_START up to
-HOLD_MAX with every round of refusals, and starts over with the first
-request that is served. A round is what finds the gate open: the requests
+Without a number from the API the wait doubles from `rate_hold_start_s` up
+to `rate_hold_most_s` with every round of refusals, and starts over with the
+first request that is served. A round is what finds the gate open: the requests
 that were already under way when it closed come back refused too, and they
 say nothing new.
 
@@ -51,7 +51,8 @@ Call *callback()* whenever the API says to wait.
 def wait(self) -> None
 ```
 
-Return once the gate is open.
+Return once the gate is open (at once where the rule `rate_gate`
+is off: each request then waits on its own).
 
 #### Gate.closed
 
@@ -102,6 +103,15 @@ def embeddings(self)
 ```
 
 ## Functions
+
+### limited_statuses
+
+```python
+def limited_statuses() -> tuple
+```
+
+The statuses that mean "not now" rather than "not like this" (rule
+`rate_limited_statuses`).
 
 ### status_of
 

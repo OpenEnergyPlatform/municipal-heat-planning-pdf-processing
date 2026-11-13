@@ -1,0 +1,63 @@
+{
+  "flow": [
+    {
+      "id": "top_up_stored",
+      "box": "stored",
+      "set": {
+        "files": "all",
+        "trace": "trace-topup",
+        "archive": "top-up",
+        "label": "top-up"
+      }
+    },
+    {
+      "id": "top_up_changed",
+      "box": "changed"
+    },
+    {
+      "id": "top_up_movable",
+      "box": "movable"
+    },
+    {
+      "id": "top_up_each_dimension",
+      "each": "dimension",
+      "steps": [
+        {
+          "id": "top_up_take_back",
+          "box": "take_back"
+        },
+        {
+          "id": "top_up_better",
+          "box": "better"
+        },
+        {
+          "id": "top_up_derive",
+          "box": "derive"
+        }
+      ]
+    },
+    {
+      "id": "top_up_reopen_closed",
+      "box": "reopen_closed"
+    },
+    {
+      "id": "top_up_demote",
+      "box": "demote"
+    },
+    {
+      "id": "top_up_summary",
+      "box": "summary"
+    },
+    {
+      "id": "top_up_replace",
+      "box": "replace",
+      "set": {
+        "producer": "top-up"
+      }
+    },
+    {
+      "id": "top_up_carry_stamp",
+      "box": "carry_stamp"
+    }
+  ]
+}

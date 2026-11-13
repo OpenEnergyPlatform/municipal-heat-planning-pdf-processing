@@ -38,7 +38,7 @@ INSTRUCTIONS = (
     "Values read from a corpus of documents, each with the quote it stands "
     "in, its page and a trust level. Call list_parameters first: it shows "
     "what can be asked for. Quote the document and the page with every "
-    "value you pass on, and say so when a value is of level C. A parameter "
+    "value you pass on, and say so when a value is of level C or D. A parameter "
     "with no value is not a miss: get_states says whether the document does "
     "not state it (unstated), the run ended before it was read (exhausted), "
     "a value was refused (unbacked), or nobody asked (never_asked), and "

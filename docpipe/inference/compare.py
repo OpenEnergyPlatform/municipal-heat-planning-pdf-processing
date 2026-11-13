@@ -31,21 +31,8 @@ from __future__ import annotations
 
 from typing import Callable, Optional, Sequence
 
-from . import config, llm_client
+from . import config, llm_client, pool
 from .answer import Corpus, _silent, answer_question
-
-
-def _labelled(progress: Callable, label: str) -> Callable:
-    """The turn's own progress stages, prefixed with the document they run for.
-
-    Not a second spinner around them: a stage nested inside a stage tells the
-    reader less than "Kassel · Retrieval", and one of the two would have to be
-    silent anyway.
-    """
-    def _stage(text: str):
-        return progress(f"{label} · {text}")
-
-    return _stage
 
 
 def summary(row: dict, limit: int = 300) -> str:
@@ -99,20 +86,25 @@ def compare_documents(task: str, corpus: Corpus, documents: Sequence,
               "as_json": as_json, "faults": [],
               "dropped": [label for _id, label in wanted[len(kept):]]}
 
-    for document_id, label in kept:
-        turn = answer_question(task, corpus, document_id, scopes,
-                               as_json=as_json,
-                               history=(histories or {}).get(document_id),
-                               progress=_labelled(progress, label))
-        result["rows"].append({**turn, "document_id": document_id,
-                               "label": label})
+    def asked(document_id, label) -> Callable:
+        return lambda: {**answer_question(
+            task, corpus, document_id, scopes, as_json=as_json,
+            history=(histories or {}).get(document_id)),
+            "document_id": document_id, "label": label}
+
+    # The documents run side by side, so no stage of one of them can be
+    # shown: the one spinner stands for all of them.
+    with pool.turn(), progress(f"📄 {len(kept)}"):
+        result["rows"] = llm_client.together(
+            [asked(*document) for document in kept])
 
     answers = plan_answers(result["rows"])
     result["answered"] = sum(1 for p in answers if p["answer"])
     # One answer is not a comparison: the table already shows it, and the other
     # plans' emptiness with it. Below two, the call would only paraphrase.
     if result["answered"] >= 2:
-        with progress("⚖️ Comparison"), llm_client.collecting() as faults:
+        with pool.turn(), progress("⚖️ Comparison"), \
+                llm_client.collecting() as faults:
             result["comparison"] = llm_client.compare_answers(task, answers)
         result["faults"] = list(faults)
     return result

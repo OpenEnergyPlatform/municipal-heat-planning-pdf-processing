@@ -16,3 +16,5 @@ class MergeStats:
     figures_merged: int = 0
     tables_missing: int = 0
     figures_missing: int = 0
+    # Table parts joined to the table they continue (visuals.continuation).
+    tables_joined: int = 0

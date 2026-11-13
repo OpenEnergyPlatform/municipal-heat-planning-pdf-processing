@@ -43,6 +43,8 @@ def build_embedding_inputs(
     merged_data: dict,
     pdf_name: str,
     output_dir: Path,
+    *,
+    log_counts: bool = True,
 ) -> list[EmbeddingInput]
 ```
 
@@ -50,5 +52,7 @@ Build the section/table/figure embedding inputs (text + VL) for one PDF.
 
 `output_dir` is the base for resolving each item's image path; VL inputs are
 only emitted for images that exist on disk. Returns [] if nothing qualifies.
+`log_counts` False leaves out the line that counts them, for a caller that
+builds them only to compare (chunking/sync.py).
 
 [Back to the index](../README.md)

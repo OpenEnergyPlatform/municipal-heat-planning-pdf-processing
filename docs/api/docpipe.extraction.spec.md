@@ -20,6 +20,14 @@ against these keys rather than against the whole file's hash, so an edit that
 touches no question a document was asked through, such as a graph block or a
 comment, costs nothing on the next run.
 
+Three kinds of text a model is shown stand in the spec beside its parameters
+(owner decision 2026-11-10; they stood in each profile's Python before): what a
+document settles once for all its values (`plan_fields`), the other works a
+document presents and what is asked of each (`works`), and the fixed entries of
+a list the profile closes per document (`beside` of such a parameter). They
+are loaded as strictly as a parameter and are in no fingerprint: a reworded
+one leaves a harvest current, as a reworded prompt does.
+
 Author: Felix Vossel
 
 ## Classes
@@ -43,7 +51,7 @@ One dimension of a value: a closed vocabulary, an int, an enum — or a
 vocabulary that only exists per document (`dynamic`).
 
 Dynamic is for a coordinate whose closed list is real but not corpus-wide:
-the AR6 scenarios of ONE publication, for instance. The profile supplies
+the countries ONE publication names, for instance. The profile supplies
 that list per document and the runner fills `vocabulary` in before the
 harvest; where no profile does, the axis behaves like a text axis and the
 wording is simply carried through.
@@ -53,13 +61,18 @@ Fields:
 - `name: str`
 - `vocabulary: Optional[dict] = None`: target URI -> corpus labels
 - `definitions: dict = field(default_factory=dict)`: target URI -> what the ontology says the term means, one sentence. The field prompt has promised since the first run that the question names what each entry means, and nothing did: the model was given a class identifier and a list of German words and asked to decide by meaning.
+- `glosses: dict = field(default_factory=dict)`: target URI -> one line in the profile's language saying what the entry means, shown instead of its definition (owner decision 2026-11-05, ticket 26): the ontology's English sentences were a third of every list a classification request showed. Written once by the model from the definition, which stays beside it to say when the line is due again.
 - `type: Optional[str] = None`: "int" for years, "text" for wording
 - `enum: Optional[tuple] = None`
 - `required: bool = False`
 - `dynamic: bool = False`
+- `merged: Optional[str] = None`: A free-text coordinate whose answer is the name the document gives a thing, the kind of thing named here ("scenario", owner decisions 2026-11-06): a value stated for several of them is one row per name, and which of the document's names of that kind mean the same thing is asked while it is read (`addressed.Names`).
+- `beside: Optional[dict] = None`: What such an axis answers instead of a name, uri -> labels like a vocabulary, each an out: entry with its meaning in `definitions` (owner decision 2026-11-07): "status quo" for a value of a past or the current year, which belongs to no scenario, as KWP's closed list has "Bestand". Read with its wording like an entry of a list, and never a name.
 - `question: Optional[str] = None`: The one line the field request asks. It lives on the axis because the harvest asks per field: a rule buried in a prompt that covers sixteen fields at once is a rule the model can skip, and skipping is what cost the corpus run 63.5% of its years.
 - `derive: Optional[dict] = None`: A coordinate the SPEC already decides, so no request asks for it: {"from": "unit", "value": "\<a key of this axis' vocabulary>"}.  Principle one, applied one step further. The structure of a tuple is deterministic, and so is a coordinate every accepted unit of the parameter fixes: measured over Kassel, all 452 aggregations the model answered were `integral`, every one of them evidenced by the unit string it had just been handed. Asking cost a fifth of the reply of every five-field request for a coordinate the spec knew. What the unit does NOT fix stays a question — the profile decides which is which.
-- `kg: Optional[dict] = None`: What this coordinate becomes in the graph: {"role": "type"|"edge"| "parent"|"comment", ...}. The serializer reads the predicate from here and the JSON schema publishes it, so the two cannot drift: a predicate changed in one place used to leave the other describing a graph nobody was writing.
+- `keep: Optional[str] = None`: The entry of this coordinate's list a value must have to be a value of its parameter at all (owner decisions 2026-11-07): "scenario year" for a year, "this publication" for an author. Asked before the coordinates after it; a value read with another entry is asked for its parameter once more, told it was read wrongly, is asked nothing further, and stays out of the graph, as does one whose entry stays open (`fields.kept`).
+- `several: bool = False`: Whether a value the plan states for several entries of this list is one row per entry (owner decision 2026-11-07: "Fernwärme + Gas-NT" is the value once with Fernwärme and once with Gas), as a value stated for several names is (`merged`).
+- `groups: dict = field(default_factory=dict)`: uri -> the group an entry belongs to ("group" of an entry object, owner decision 2026-11-08): a list longer than a request shows with what each entry means is asked group first (`flow.Numbers.list_meanings`).
 
 #### Axis.label_to_uri
 
@@ -88,10 +101,17 @@ Fields:
 - `units_accepted: dict = field(default_factory=dict)`: unit -> factor
 - `integrated: bool = True`: Whether this parameter's unit is an amount over a span or a rate. A consumption in MWh/a is integrated over a year and a plan that states one without saying over what has left something out; a power in MW is not, and has no period to leave out. The verifier flags the first and must not flag the second, or the flag fires on every row of one parameter and means nothing.
 - `unit_names_period: dict = field(default_factory=dict)`: unit -> bool
+- `unit_targets: dict = field(default_factory=dict)`: unit -> target
 - `vocabulary: Optional[dict] = None`: category parameters: uri -> labels
 - `definitions: dict = field(default_factory=dict)`
+- `glosses: dict = field(default_factory=dict)`: as on an axis
+- `brief: Optional[str] = None`: What a value of this parameter is, in one paragraph (owner decision 2026-11-05, ticket 26). The requests that find values and the groups that do not classify them show this; a group whose spec entry says "definition": "full" shows `description`, and so does every request where it is None.
 - `vocabulary_dynamic: bool = False`: A category whose closed list is real but per document, filled in by the profile before the harvest. Same rule as a dynamic axis, one level up.
-- `kg: Optional[dict] = None`: What a row of this parameter becomes in the graph: which node, which class, which predicate carries the number and which the unit. Read by the serializer and published by the JSON schema, so neither can drift from the other.
+- `merged: Optional[str] = None`: A free-text value that is the name the document gives a thing, merged with the document's other names for it as on an axis.
+- `once_per_document: bool = False`: Asked once per document, with its title page and the pieces a search finds best, never in every piece (owner decision 2026-11-08): a field the document has once, its title, its authors, its organisation.
+- `takes_group: Optional[bool] = None`: Whether a value whose scenario is the words of a group of scenarios ("all scenarios") takes the members the document names, one row each (owner decision 2026-11-08, i): years, regions, types do, a description does not. None where the spec says nothing: the rule `default_takes_group` decides, as the step that reads it has it (`group_taken`).
+- `groups: dict = field(default_factory=dict)`: uri -> the group an entry of the value's list belongs to, as on an axis.
+- `beside: Optional[dict] = None`: The entries a list closed per document always has beside the document's own, uri -> labels like a vocabulary, each an out: entry (spec: "beside", for a parameter with vocabulary_dynamic): "several regions" and "other region" beside the regions one publication names, so the list exists where a document names none. In no fingerprint.
 
 #### Parameter.is_numeric
 
@@ -111,6 +131,15 @@ Factor onto unit_target for one entry of units_accepted, as listed.
 Exact and nothing else. Which entry a document's wording means is
 read by the model with its own passage (`fields.unit_slot`); a
 spelling table here would be a second reader that nothing checks.
+
+#### Parameter.target_of
+
+```python
+def target_of(self, unit) -> Optional[str]
+```
+
+The unit one entry of units_accepted converts onto: its own
+target, else unit_target; None for no entry.
 
 #### Parameter.names_period
 
@@ -132,6 +161,52 @@ def value_to_uri(self) -> dict
 
 Corpus label (folded) -> URI, for a category parameter.
 
+### Group
+
+```python
+@dataclass
+class Group
+```
+
+Coordinates a plan prints together, and the step that reads them.
+
+The ontology says what a value is; it does not say where a plan writes
+it. A number and its unit stand in one cell or one sentence, a scenario
+and its year in a title or a heading above a whole table. Asked one
+coordinate per request, the same passage went out once for each of them:
+245,762 field requests for 100 plans in corpus_m8_100. A group is asked
+in one request, each coordinate still answered and quoted for itself.
+
+Fields:
+
+- `name: str`
+- `coordinates: tuple`
+- `read_in: str`
+- `where: str`: Where a plan prints the group, in the words the prompts show.
+- `full_definition: bool = False`: Whether its requests show a parameter's full definition rather than its `brief` (spec: "definition": "full"): the group that classifies a value needs every distinction the definition draws, the others only what a value of the parameter is (owner decision 2026-11-05, ticket 26).
+- `own_passage: tuple = ()`: Coordinates only the value's own passage states, such as what the number counts: asked again with the passages around it, never searched for in the rest of the plan (spec: "own_passage", owner decision 2026-11-06).
+- `own_value: tuple = ()`: Coordinates printed with the number itself, such as "ca." or "bis zu": read once with the value, its "not stated" an answer that nothing qualifies the number, never asked again (spec: "own_value", owner decision 2026-11-06).
+- `pair: tuple = ()`: The plan's frame (spec: "pair"): the scenario and the year, which the plan's base and target years date a value by (`addressed.Plan`). The reading asks them per value (owner decision 2026-11-07: each value is asked its own scenario and year, none takes its passage's).
+
+#### Group.paired
+
+```python
+@property
+def paired(self) -> tuple
+```
+
+The coordinates of the frame: its pair, else all of the group's
+coordinates.
+
+#### Group.asked_near
+
+```python
+def asked_near(self, slots: list) -> list
+```
+
+The slots the second reading asks again with the passages around
+a value: all but those printed with the number itself.
+
 ### Spec
 
 ```python
@@ -144,7 +219,16 @@ Fields:
 - `parameters: list`
 - `parameter_question: Optional[str] = None`: The one line that asks which parameter a value belongs to. The harvest reads a passage once and finds the numbers in it; WHICH quantity each number is, is a coordinate like any other and is asked for like any other, with its own closed list and its own evidence. Reading the same table once per parameter is how the plan came to be three times the document.
 - `unit_question: Optional[str] = None`: The one line that asks which entry of units_accepted a number is in. A coordinate like the parameter, asked before it and with the lists of every numeric parameter, because the entry is what settles the parameter. Only a spec with a numeric parameter has a use for it.
+- `groups: dict = field(default_factory=dict)`: name -> Group; empty for a spec read the old way only.
 - `by_uri: dict = field(default_factory=dict)`
+- `plan_fields: dict = field(default_factory=dict)`: What a document settles once for all its values, each asked once in the form of a document's field (spec: "plan_fields", owner decision 2026-11-08): key of `PLAN_FIELDS` -> {"name", "means", "sentence"}. The settings' lines stand beside every value's coordinates, the years are the document's own base and target years. A year may say which pairs of the document's frame are that state of it (`of`, coordinate -> the key of an entry of its list: {"scenario": "status_quo"}, owner decision 2026-11-10): a pass over a stored harvest, which asks no document its years, takes them from the stored pairs by it (`pipeline.state_years`); a run that reads a document asks them and does not read it. Empty where a spec asks none. In no fingerprint.
+- `works: Optional[dict] = None`: The works a document presents, compares, reviews or cites beside itself (spec: "works", owner decision 2026-11-08, h): {"name", "means", "fields": {parameter uri: the question asked at a new work's line}}. None where a spec keeps no list of works. In no fingerprint.
+
+#### Spec.groups_read_in
+
+```python
+def groups_read_in(self, step: str) -> list
+```
 
 ## Functions
 
@@ -167,6 +251,16 @@ at all.
 Word order, hyphens and plurals stay distinct. Those are real differences
 between two labels, and folding them would map "CO2-Emissionen je Kopf"
 onto "CO2-Emissionen".
+
+### group_taken
+
+```python
+def group_taken(parameter) -> bool
+```
+
+Does a value of *parameter* take the members of a group of entries
+("all scenarios")? The spec's `takes_group` of the field, else the
+rule `default_takes_group` as the step that asks has it.
 
 ### load
 
@@ -280,26 +374,13 @@ def fingerprints(spec: "Spec") -> dict
 Flat, and the keys read as what they are: the stamp is compared key by
 key, and "parameter/\<uri>" or "axis/\<uri>/\<name>" is what a run should be
 able to say changed. One nested block would only ever report that
-something inside it moved.
+something inside it moved. The rule `stale_keys` says which kinds of
+keys there are.
 
 Together they have to cover everything a document is asked through, or
 `runner.stale` -- which ignores the whole-file sha once these are present
 -- would call a document current over a changed question. That is what
 "slot/parameter" is doing here: without it the spec's own question and
 the list it offers would be in no key at all.
-
-### kg_name
-
-```python
-def kg_name(block: dict, prefixes: str) -> str
-```
-
-`{"prefix": "oeo", "predicate": "OEO_00000506"}` -> "oeo:OEO_00000506".
-
-Qualified from the spec rather than from an f-string in a serializer, and
-only against a prefix the profile's own Turtle header binds: the scenarios
-graph writes four namespaces where kwp writes five, and the same block is
-legal in one profile and unwritable in the other. `dc:abstract` in a kwp
-block would look right in the diff and produce a file no reader can load.
 
 [Back to the index](../README.md)

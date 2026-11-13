@@ -2,12 +2,12 @@
 upstream.py: Pulls the files a profile is written against, at the version
 upstream currently calls its own.
 
-A profile names its sources in `profiles/<name>/vocabulary.py: SOURCES`. This
+A profile names its sources in `profiles/<name>/sources.json` (`docpipe.sources`). This
 module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.
 
-Four kinds:
+Six kinds:
 
   release_asset  An asset of the repository's latest GitHub release. A
                  repository without a release is an error, unless the source
@@ -19,10 +19,18 @@ Four kinds:
                  their bytes. A source may name the commit its profile was
                  `reviewed` against, and the record then lists every file that
                  differs from that commit.
+  repo_tree      Every file under some folders at the head of a branch, taken
+                 from the branch's archive, for a tree a profile cannot name
+                 file by file without the API. The version is a digest over
+                 the files taken.
   sparql         A query against the OEKG endpoint. The token comes from the
                  environment variable `token_env` names and is written nowhere.
+  url            One file at a fixed address, for a publisher that is not a
+                 repository. Fetched again on every refresh; the version is a
+                 digest over its bytes.
 
-Only github.com and raw.githubusercontent.com are asked, never
+Of GitHub, only github.com (which redirects an archive to
+codeload.github.com) and raw.githubusercontent.com are asked, never
 api.github.com: the API allows 60 unauthenticated requests an hour per
 address, and every user of a shared machine shares one address.
 
@@ -37,8 +45,10 @@ from __future__ import annotations
 import datetime
 import hashlib
 import http.client
+import io
 import json
 import os
+import tarfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -202,6 +212,52 @@ def _repo_files(name: str, source: dict, cache: Path) -> dict:
     return out
 
 
+def tree_members(body: bytes, paths, suffix: str = "") -> list:
+    """[(path, data)] by path, for the regular files of a gzipped tar branch
+    archive that sit under one of `paths` and end in `suffix`.
+
+    GitHub puts every member under one top folder; a path is the name below
+    it. A member that is absolute or climbs out with `..` is refused, so no
+    name an archive carries can place a file outside the cache.
+    """
+    paths = tuple(paths)
+    found = {}
+    with tarfile.open(fileobj=io.BytesIO(body), mode="r:gz") as archive:
+        for member in archive:
+            parts = member.name.replace("\\", "/").split("/")
+            if member.name.startswith(("/", "\\")) or ".." in parts \
+                    or (len(parts[0]) == 2 and parts[0][1] == ":"):
+                raise UpstreamError(f"archive member {member.name!r} leaves "
+                                    f"its folder")
+            if not member.isreg():
+                continue
+            path = "/".join(parts[1:])
+            if path.startswith(paths) and path.endswith(suffix):
+                found[path] = archive.extractfile(member).read()
+    return sorted(found.items())
+
+
+def _repo_tree(name: str, source: dict, cache: Path) -> dict:
+    repo, ref = source["repo"], source["ref"]
+    body = _get(f"{GITHUB}/{repo}/archive/refs/heads/{ref}.tar.gz")
+    members = tree_members(body, source["paths"], source.get("suffix", ""))
+    if not members:
+        raise UpstreamError(f"{repo} {ref} has no file under "
+                            f"{list(source['paths'])}")
+    files, digest = [], hashlib.sha256()
+    for path, data in members:
+        target = cache / name / "head" / ref / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        partial = target.with_name(target.name + ".part")
+        partial.write_bytes(data)
+        partial.replace(target)
+        record = {"repo_path": path, "path": str(target),
+                  "sha256": sha256(target), "bytes": target.stat().st_size}
+        files.append(record)
+        digest.update(f"{path}\0{record['sha256']}\n".encode())
+    return {"version": digest.hexdigest()[:12], "ref": ref, "files": files}
+
+
 def sparql(endpoint: str, query: str, token: str) -> list:
     """[{variable: value}] from the OEKG endpoint.
 
@@ -235,8 +291,14 @@ def _sparql(name: str, source: dict, cache: Path) -> dict:
                        "bytes": target.stat().st_size}]}
 
 
+def _url(name: str, source: dict, cache: Path) -> dict:
+    record = _store(source["url"], cache / name / source["file"], reuse=False)
+    return {"version": record["sha256"][:12], "files": [record]}
+
+
 KINDS = {"release_asset": _release_asset, "release_file": _release_file,
-         "repo_files": _repo_files, "sparql": _sparql}
+         "repo_files": _repo_files, "repo_tree": _repo_tree,
+         "sparql": _sparql, "url": _url}
 
 
 def fetch(sources: dict, cache: Path = CACHE) -> dict:

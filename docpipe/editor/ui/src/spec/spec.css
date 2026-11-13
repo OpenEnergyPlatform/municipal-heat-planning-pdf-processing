@@ -1,0 +1,27 @@
+/* The Spec tab: the tree, the marked rows. Colours from Mantine's variables, so both schemes hold. */
+.dp-spec-tree {
+  width: 320px; flex: none; min-height: 0; overflow: auto; padding: 8px;
+  border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+.dp-spec-head {
+  margin: 14px 6px 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--mantine-color-dimmed);
+}
+.dp-spec-node {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; border: 0; background: none;
+  border-radius: var(--mantine-radius-md); text-align: left; color: inherit; cursor: pointer; font: inherit; font-size: 15px;
+}
+.dp-spec-node:hover { background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6)); }
+.dp-spec-node[data-sel="true"] {
+  background: var(--mantine-primary-color-light); color: var(--mantine-primary-color-light-color); font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled);
+}
+.dp-spec-node.l1 { padding-left: 38px; }
+.dp-spec-node.add { color: var(--mantine-color-dimmed); font-style: italic; }
+.dp-spec-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dp-spec-sub { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 400; color: var(--mantine-color-dimmed); }
+.dp-spec-caret { flex: none; width: 18px; display: inline-flex; justify-content: center; color: var(--mantine-color-dimmed); }
+
+.dp-spec-row[data-sel="true"] > td { background: var(--mantine-primary-color-light); }
+.dp-spec-table td, .dp-spec-table th { vertical-align: top; }
+.dp-spec-panel { max-height: 42vh; overflow: auto; }

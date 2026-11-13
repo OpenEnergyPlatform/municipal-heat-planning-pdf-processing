@@ -38,6 +38,14 @@ MAX_TOTAL_PIXELS = 10 * FRAME_MAX_PIXELS
 PAD_TOKEN = "<|endoftext|>"
 
 
+def dtype_for(device: Union[str, torch.device]) -> torch.dtype:
+    """The precision a replica computes in on *device*: bf16 on a GPU, fp32
+    on the CPU, where bf16 matmuls are slow or missing. A CPU without bf16
+    instructions embedded about 11 tokens per second in bf16, ten hours for
+    one plan of 432 inputs."""
+    return torch.bfloat16 if torch.device(device).type == "cuda" else torch.float32
+
+
 @dataclass
 class Qwen3VLForEmbeddingOutput(ModelOutput):
     """Output structure for the embedding model forward pass."""
@@ -184,9 +192,8 @@ class Qwen3VLEmbedder:
         self.default_instruction = default_instruction
         self.model_name = model_name_or_path
 
-        # bf16 on GPU; fp32 on CPU, where bf16 matmuls are slow/unsupported.
         if torch_dtype is None:
-            torch_dtype = torch.bfloat16 if device.type == "cuda" else torch.float32
+            torch_dtype = dtype_for(device)
 
         self.model = Qwen3VLForEmbedding.from_pretrained(
             model_name_or_path, trust_remote_code=True, torch_dtype=torch_dtype, **kwargs
@@ -358,8 +365,13 @@ class Qwen3VLEmbedder:
         """
         Embed a batch of inputs — dicts with 'text' and optionally
         'image'/'video' — into a (batch_size, hidden_dim) tensor, L2-normalized
-        unless `normalize` is False.
+        unless `normalize` is False. The inputs run in groups of similar
+        length, each padded to its own longest (`in_groups`).
         """
+        return in_groups(inputs, lambda items: self._embed(items, normalize))
+
+    def _embed(self, inputs: List[Dict[str, Any]], normalize: bool) -> torch.Tensor:
+        """One forward over *inputs*, every one padded to the longest."""
         conversations = [self.format_model_input(
             text=ele.get('text'),
             image=ele.get('image'),
@@ -390,7 +402,7 @@ class Qwen3VLEmbedder:
 
 
 def _input_size(item: Dict[str, Any]) -> int:
-    """Rough token cost of one item, for balancing shards.
+    """Rough token cost of one item, for balancing shards and grouping a call.
 
     Text length stands in for tokens: the ratio is near enough constant
     within a corpus, and only the ORDER matters here. An image is worth a
@@ -398,6 +410,42 @@ def _input_size(item: Dict[str, Any]) -> int:
     """
     size = len(item.get("text") or "")
     return size + (4000 if item.get("image") is not None else 0)
+
+
+# Groups a call's inputs run in (owner decision 2026-11-07). One forward pads
+# every input to the longest of the call: the 240 scenario names of one paper,
+# 116 characters on average and 403 at most, cost 2.3 times their tokens, and
+# on a CPU that was the hour a probe ran out of time in.
+PAD_GROUPS = 10
+
+
+def pad_groups(sizes: List[int], many: int = PAD_GROUPS) -> List[List[int]]:
+    """[[indices]] of the inputs of *sizes*: sorted by size and cut into
+    *many* groups of neighbouring sizes, fewer where there are fewer inputs,
+    their counts as even as the cut allows. Every index stands in one group."""
+    order = sorted(range(len(sizes)), key=lambda at: sizes[at])
+    count = min(many, len(order))
+    groups: List[List[int]] = []
+    start = 0
+    for made in range(count):
+        end = start + (len(order) - start) // (count - made)
+        groups.append(order[start:end])
+        start = end
+    return groups
+
+
+def in_groups(inputs: List[Dict[str, Any]], run, many: int = PAD_GROUPS) -> torch.Tensor:
+    """*run(items)* -> a tensor of one row per item, once per group of
+    *inputs* (`pad_groups` over `_input_size`), so each group is padded only
+    to its own longest; the rows come back in the order of *inputs*."""
+    groups = pad_groups([_input_size(item) for item in inputs], many)
+    if len(groups) <= 1:
+        return run(list(inputs))
+    parts = [run([inputs[at] for at in group]) for group in groups]
+    result = parts[0].new_empty((len(inputs), parts[0].shape[1]))
+    for group, part in zip(groups, parts):
+        result[torch.tensor(group, dtype=torch.long, device=part.device)] = part
+    return result
 
 
 class MultiGPUEmbedder:
@@ -409,13 +457,15 @@ class MultiGPUEmbedder:
 
     Exposes the same ``process(inputs, normalize=True) -> Tensor`` interface as
     :class:`Qwen3VLEmbedder`; with a single device it degenerates to one replica.
+    Each replica computes in the precision of its device (`dtype_for`) unless
+    *dtype* asks for one.
     """
 
     def __init__(
         self,
         model_name_or_path: str,
         max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
-        dtype: torch.dtype = torch.bfloat16,
+        dtype: Optional[torch.dtype] = None,
         devices: Optional[List[str]] = None,
         **kwargs,
     ):
@@ -425,14 +475,15 @@ class MultiGPUEmbedder:
         if not devices:
             devices = ["cpu"]
 
+        dtypes = [dtype or dtype_for(dev) for dev in devices]
         logger.info("Loading %d embedder replica(s) on %s (dtype=%s)",
-                    len(devices), devices, dtype)
+                    len(devices), devices, sorted({str(d) for d in dtypes}))
         self.replicas: List[Qwen3VLEmbedder] = []
-        for dev in devices:
+        for dev, dev_dtype in zip(devices, dtypes):
             self.replicas.append(
                 Qwen3VLEmbedder(
                     model_name_or_path, max_length=max_length,
-                    device=dev, torch_dtype=dtype, **kwargs,
+                    device=dev, torch_dtype=dev_dtype, **kwargs,
                 )
             )
         self.devices = devices

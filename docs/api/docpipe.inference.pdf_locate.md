@@ -15,7 +15,9 @@ The match is fuzzy on purpose. The corpus text has passed through
 extraction and refinement, so it is never byte-identical to what
 PyMuPDF reads off the page: ligatures, hyphenation, running heads and
 column order all differ. Alignment finds the passage anyway; the
-score floor keeps it from pointing at something else.
+score floor keeps it from pointing at something else (rules
+`locate_min_score`, `locate_max_lines` and `locate_match`, read when a quote
+is placed).
 
 Author: Felix Vossel
 
@@ -25,8 +27,8 @@ Author: Felix Vossel
 
 ```python
 def quote_rects(pdf_path, page_number: int, quote: str,
-                min_score: float = MIN_SCORE,
-                max_lines: int = MAX_LINES) -> Optional[list]
+                min_score: Optional[float] = None,
+                max_lines: Optional[int] = None) -> Optional[list]
 ```
 
 Highlight rects for *quote* on a (1-based) PDF page, one box per text LINE
@@ -35,7 +37,7 @@ the matched span touches, capped at *max_lines*.
 Rects are [x0, y0, x1, y1] in PDF points, top-left origin (fitz) — the
 convention `pdfjs_overlay.js` draws. Returns None if PyMuPDF/rapidfuzz are
 missing, the file or page is unavailable, or the best match scores under
-*min_score*.
+*min_score* (the rule `locate_min_score` where not given).
 
 ### page_words
 
@@ -54,10 +56,12 @@ matching does.
 
 ```python
 def rects_from_words(words: list, quote: str,
-                     min_score: float = MIN_SCORE,
-                     max_lines: int = MAX_LINES) -> Optional[list]
+                     min_score: Optional[float] = None,
+                     max_lines: Optional[int] = None) -> Optional[list]
 ```
 
 The matching itself: no file access, only the page's words and a quote.
+*min_score* and *max_lines* are the rules `locate_min_score` and
+`locate_max_lines` where not given.
 
 [Back to the index](../README.md)

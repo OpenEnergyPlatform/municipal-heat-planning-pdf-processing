@@ -5,7 +5,7 @@
 Stage 2 of preprocessing crops every table and figure it detects on a page
 into its own PNG under a document's `images/` directory, and Stage 3 leaves a
 placeholder token, such as `[p12_tbl0]`, in the section's prose wherever one
-of those crops was located (`docpipe/preprocessing/stage2_layout.py` assigns
+of those crops was located (`docpipe/preprocessing/layout_blocks.py` assigns
 the id and file name; see [preprocessing](preprocessing.md)). A placeholder
 token is not text a retrieval system can search or a model can answer from.
 This stage, implemented as `docpipe.visuals`, supplies that text: it sends
@@ -61,16 +61,17 @@ it.
 (`require_profile`), falls back to the profile's `processed_dir` when no
 input path is given, and, on `--print-context-budget`, prints
 `max_request_tokens()` and exits early: the longer, by word count, of the
-two system prompts, times `TOKENS_PER_WORD`, plus `IMAGE_TOKENS` for a
-full-page crop, plus `VLM_MAX_TOKENS` for the one reply, all over-estimated:
-13,992 tokens with the `kwp` profile and 14,163 with `scenarios`. No second
+two requests' prompts, system and user (the table's with the continuation
+prompt), times `TOKENS_PER_WORD`, plus the texts they show at `SHOWN_CHARS`,
+plus `IMAGE_TOKENS` for a full-page crop, plus `VLM_MAX_TOKENS` for the one reply, all over-estimated:
+15,144 tokens with the `kwp` profile and 15,300 with `scenarios`. No second
 reply is counted. `assert_serving` keeps the window the server reported
 (`llm_preflight.served_window`, role `vlm`), and what it holds beyond this
 budget is what a reply that was cut off is asked once more with (see The vision
 call, its retries and a hole).
 
-Unless `--dry-run` is set, `main` then reads the profile's `reading.PHRASES`
-(`reading.phrases()`; a profile that lacks a sentence ends the run with a
+Unless `--dry-run` is set, `main` then reads the profile's reading sentences
+(`prompts/reading/phrases.json`, `reading.phrases()`; a profile that lacks a sentence ends the run with a
 `LookupError` before the first request, and a dry run or the budget needs none)
 and calls `assert_serving` (`docpipe/llm_preflight.py`; see [core](core.md))
 before `run_single` or `run_batch` runs. A smaller `max_model_len` raises
@@ -86,7 +87,7 @@ goes on.
 
 `_resolve_input` tries `sections_refined.json` first and `sections.json`
 second, returning `None` if neither exists. If `visuals.json` already
-exists, `prompts.check` compares the seven `PROMPT_IDS` against the
+exists, `prompts.check` compares the eight `PROMPT_IDS` against the
 sha256s in `.prompt_versions.json`; a mismatch is only logged unless
 `--force-stale` is set, which then behaves like `--force`. Reading the
 cache keeps, by id, every table carrying `markdown` and every figure
@@ -129,7 +130,15 @@ which fails a table with no data rows, duplicate rows over
 tokens, numbers and words of two or more letters, also found in the Markdown
 (`qa.coverage`); it is `None`, reported as unknown rather than a pass, when
 the source has fewer than `TABLE_QA_MIN_SOURCE_TOKENS` salient tokens (an
-image-only table with no PyMuPDF text layer). A gate failure triggers exactly one retry, with a correction hint, higher
+image-only table with no PyMuPDF text layer). It is also `None` where the PDF text in
+the table's frame cannot be read as the table (`qa.unreadable`): coverage
+fell below `TABLE_QA_MIN_COVERAGE`, less than `TABLE_QA_MAX_SHARED_UNREADABLE`
+of the transcription's salient tokens stand in that text, and less than
+`TABLE_QA_MIN_KNOWN_WORDS` of its words (three letters or more) occur in the
+document's section titles and texts (`_document_words`). The case is a scanned
+book whose OCR layer reads a sideways table upside down ("Ayjiqixayy" for
+"flexibility"). The table then passes or fails on rows and duplication alone,
+and `qa.source_unreadable` is true. A gate failure triggers exactly one retry, with a correction hint, higher
 temperature and penalty; a pass beats a fail, otherwise the
 higher-coverage attempt is kept, and an unassessable coverage never
 displaces the first attempt. Only a table still failing the retry has its consecutive duplicate
@@ -140,7 +149,7 @@ model returned one.
 
 The result of the check is kept. For every table the model transcribed,
 `process_table` leaves `qa` on it: `{passed, coverage, coverage_assessed,
-duplication, has_rows}`, the metrics of the attempt that was kept, measured on
+duplication, has_rows, source_unreadable}`, the metrics of the attempt that was kept, measured on
 what the model wrote (a failing table has its repeated neighbouring rows
 collapsed afterwards, which the metrics do not see), and whether it passed.
 `qa_warning` stays and says the same on a failure. A table the model gave no
@@ -148,6 +157,43 @@ object for (it has a `vlm_why`) has no `qa`, and none means not checked, never
 passed; so has a table of a `visuals.json` written before this, whose failures carry
 `qa_warning` and no `qa`. The merge hands it on and chunking stores it in
 `Tables.qa` (see [chunking](chunking.md)).
+
+The table prompts ask for exactly one header row in which every column
+carries its full heading. A heading over several columns is written in front of
+each column heading below it ("Energy supply (EJ) 2030"), and a title inside
+the table frame goes into the caption; merged cells below the header follow
+the prompt's own rule. In a header spread over several rows the model writes
+empty filler cells before it has written the row below, and loses that row's
+end until the reply is cut off.
+
+The model answers a table with `rows`, one string per line of the table in
+order (`replies.TABLE`, built from `replies.LINES`), and a `caption`; it writes
+no line break of its own. `_table_text` joins the rows with line breaks into the
+table's Markdown, and everything after it (the check, the `markdown` key of the
+output, the merge) works on that text. A reply whose rows come as one string
+instead of a list is in the wrong shape and is asked again with that cause named
+(see below).
+
+### A table that continues the table before it
+
+A table the layout cut in parts, over a page break or within a page, used to
+come out as parts with a caption and head of their own, invented where the
+part prints none (`continuation.py`, owner decision 2026-11-06). A table may
+continue the table right before it in reading order when that table stands on
+its page or the page before (`continuation.links`, `runs`) and has a
+transcribed head (`head_lines`); whatever stands between them, a heading
+included, is shown and the model decides (owner decision 2026-11-07). The
+reading takes the same tables by the same rule (see
+[extraction](extraction.md)). Such a table is asked after the table before
+it with prompt `visuals/table_continued`: that table's caption and head and
+the text between the two (`BETWEEN_CHARS`), and the reply says whether it
+`continues` it; where it does, its rows are written under that head and it
+gets no caption (`table_continued_reply`). Its reply is `{rows, caption,
+continues}` (`replies.TABLE_CONTINUED`), and the prompt tells the model that the
+head lines shown above are the first rows of the table. The item keeps `after` (the id of
+the table before it) and `continues`. A cached table not asked against its
+current predecessor is asked again. The count of such tables is
+`continued_tables`; the merge in [chunking](chunking.md) joins them.
 
 ### Describing a figure
 
@@ -190,15 +236,18 @@ prompt, and the image as a base64 `data:` URL. The reply schema of the item
 request, on every provider (`providers.grammar`), and the request carries the
 reasoning settings (`request_extras`; thinking is off unless
 `LLM_ENABLE_THINKING` is set) so a `<think>` block cannot spend the answer's
-budget. The reply is read as
-exactly one JSON object whose one required key (`markdown`, `description`) is
-text (`reading.read`; see [core](core.md)). Nothing is stripped, cut out,
+budget, and `tool_choice` none so an agent endpoint does not hand the image to
+a tool of its own. The reply is read as
+exactly one JSON object whose first required key (`rows` for a table, a list
+of strings; `description` for a figure, text) is of the type `reply_type` names
+for the item's schema: a list where the schema holds an array, else text
+(`reading.read`; see [core](core.md)). Nothing is stripped, cut out,
 closed or salvaged, and no second request without a schema fills in for a
 reply that could not be read.
 
 A reply that is not that object is asked again, up to `MAX_RETRIES` attempts
 in all: the failed answer is echoed back with the cause named in the profile's
-words (`reading.PHRASES`) and the shape that was asked for. A reply that
+words (`prompts/reading/phrases.json`) and the shape that was asked for. A reply that
 cannot be read comes back within the second, so this retry does not wait. A
 timeout, a 429, a 5xx or any other exception waits `5 * attempt` seconds
 (not after the last attempt) and, for a timeout, also escalates the
@@ -270,9 +319,10 @@ Stage 2 and Stage 3 (`bbox` is a list of one `[x0, y0, x1, y1]` rect in PDF
 points, unused by this stage). It loses `source_text`,
 present only in `sections.json` and stripped before every write. It gains
 `markdown` (absent when the model gave no object for it), optionally
-`caption`, optionally `qa_warning`, a
+`caption`, optionally `qa_warning`, `after` and `continues` (only on a table that may continue the
+table before it), a
 `{"coverage": float or null, "coverage_assessed": bool, "duplication":
-float, "has_rows": bool}` dict present only when the kept attempt did not
+float, "has_rows": bool, "source_unreadable": bool}` dict present only when the kept attempt did not
 pass the QA gate, and `qa`, the same metrics plus `"passed": bool`, present for
 every table the model transcribed. An item without content has instead
 `vlm_why`, one of the twelve causes of `reading.HOLE_CAUSES` (`cut_off`,
@@ -311,8 +361,10 @@ partial, tested shape rather than objects the code builds.
 | `VLM_MAX_TOKENS` | constant | `8192` | reply token budget; a reply cut off at it is asked once more with more room, and the context budget counts one reply of this size | `config.py` |
 | `RETRY_PENALTIES` | constant | `[None, 1.1, 1.3]` | penalty after the indexed attempt failed (a timeout, or a reply cut off) | `config.py` |
 | `TABLE_QA_MIN_COVERAGE`/`MAX_DUPLICATION`/`MIN_SOURCE_TOKENS` | constant | `0.5`/`0.4`/`8` | QA gate pass thresholds | `config.py`, `qa.py` |
+| `TABLE_QA_MAX_SHARED_UNREADABLE`/`MIN_KNOWN_WORDS` | constant | `0.25`/`0.5` | a coverage below the minimum is not assessed where both hold: under the first share of the transcription's salient tokens stand in the PDF text, and under the second share of its words occur in the document's text | `config.py`, `qa.py` |
 | `TABLE_QA_RETRY_TEMPERATURE`/`RETRY_PENALTY` | constant | `0.4`/`1.3` | sampling for the QA-failure retry | `config.py` |
 | `TOKENS_PER_WORD` | constant | `3.0` | word-to-token factor in the context budget estimate | `config.py` |
+| `SHOWN_CHARS` | constant | `800` | characters of each text a request shows beside its prompts, counted at two a token in the context budget | `config.py` |
 | `IMAGE_TOKENS` | constant | `4096` | tokens charged per image crop in the context budget estimate | `config.py` |
 | `--batch` | CLI flag | off | input path is a root of output directories | `pipeline.py` |
 | `--dry-run` | CLI flag | off | report counts only, no server call | `pipeline.py` |
@@ -335,7 +387,7 @@ unreachable endpoint, or one not serving the named model, is caught by
 is smaller than `max_request_tokens()` never gets a document: the preflight
 check, skipped only on `--dry-run`, refuses to start the run; so does a server
 that refuses a reply schema of the stage, and a profile without a
-`reading.PHRASES` sentence stops the run with a `LookupError` before the
+sentence of `prompts/reading/phrases.json` stops the run with a `LookupError` before the
 first request.
 
 Inside one item's retries, a 4xx fails at once with no wait; a timeout,
@@ -349,7 +401,8 @@ code. The run says so once, in the units each number counts, where it ends:
 `Stage 5: 4 table(s) and 1 figure(s) in 2 document(s) have no content; item(s)
 by cause: cut_off 3, syntax 2; the next run asks only for those`. The stats
 block of each document counts them too, on the line `Items without content`,
-with the causes. A worker's exception is caught in `_enrich`
+with the causes. The `Tables:` line also counts, as `qa_unreadable_sources`,
+the tables whose PDF text could not be read as the table. A worker's exception is caught in `_enrich`
 and the item is kept unenriched, as a hole named `error`, rather than aborting
 the document;
 the same holds one level up for a directory's exception under `--batch`. A
@@ -369,98 +422,10 @@ ladder goes by `finish_reason` and not by what the text looks like; the detector
 of empty-cell runs, `VLM_RUNAWAY_CELL_RUN`, was removed. A harder penalty
 ladder, 1.4 then 1.8, was tried and reverted: at 1.8 the pipe token is
 penalised so hard that a table is barely writable (`config.py`, comment above
-`RETRY_PENALTIES`); `test_no_stop_sequence_is_sent` holds that no stop sequence
+`RETRY_PENALTIES`) holds that no stop sequence
 is sent. Every profile
 that ships a `profile.py` states a positive context budget when its config
-module is imported in a subprocess and asked for it
-(`test_a_profile_states_a_usable_context_budget`,
-`tests/test_every_profile_loads.py`).
-
-## Verification
-
-`tests/test_qa.py` pins the QA gate: salient tokens, coverage on a full and
-partial match, coverage reported as unknown when it cannot be assessed,
-duplication, consecutive-row dedup leaving non-adjacent duplicates alone,
-and `assess`'s pass and fail boundaries. `tests/test_vision.py` pins base64
-image encoding, the model-availability check, `call_vision`'s happy path, and
-that the schema goes out as the grammar under its own name
-(`test_call_vision_sends_base64_image_and_the_schema_as_grammar`,
-`test_every_reply_is_sent_under_its_own_name`,
-`test_a_request_without_its_reply_schema_is_not_made`). It pins the strict
-reading too: a reply wrapped in prose is asked again with its cause, a fence, a
-think block or a second object is not unwrapped, a missing or non-text key is
-`missing_key` and not empty content, an empty string is an answer, four
-plain-text answers end as a hole with no second request, a cut envelope is
-never content, and an error of the stage's own after the reply is a hole named
-`error` and not an outage (`test_a_reply_wrapped_in_prose_is_asked_again_with_its_cause`,
-`test_a_fence_a_think_block_or_a_second_object_is_not_unwrapped`,
-`test_a_reply_object_without_its_key_is_a_missing_key_not_empty_content`,
-`test_an_empty_string_is_an_answer`,
-`test_four_plain_text_answers_end_as_a_hole_and_no_second_request_is_made`,
-`test_a_cut_envelope_is_never_content`,
-`test_an_error_of_our_own_after_the_reply_is_a_hole_and_not_an_outage`;
-`test_the_old_readers_and_the_plain_text_request_are_gone` holds that the
-removed names are gone). `tests/test_vision_retry.py` pins the retry wait and
-what the last attempt makes of the item: a refused 4xx does not sleep and is not
-retried, a busy or broken server is waited out on 429, 500 and 503 and ends as
-a hole that says it did not serve, the last attempt decides the cause, and a
-reply that cannot be read retries at once. `tests/test_vision_cut_off.py`
-covers the cut-off reply: it restarts from the original prompt with the next
-penalty and, where the window is not known, a limit of twice what the request
-asked for, a second cut-off and a cut-off on the last attempt are a hole, a cut reply is never content whatever it
-holds, a closed object with empty cells that ended normally is read and not
-retried, and the context budget counts one reply
-(`test_the_retry_after_a_cut_gets_twice_the_room_where_the_window_is_not_known`,
-`test_the_context_budget_counts_one_reply`). `tests/test_room.py` pins the room
-itself: the smaller of twice and the reply plus what the window leaves, a hole at
-once where the window leaves no more room, twice where the window is not known,
-a hosted model that reports its window held to it, the budget of stage 5 as the
-prompt, the image and one reply, a server that serves exactly the budget taken
-and one token under it refused, the log of the further attempt naming both sizes
-in tokens, the `vlm_why` description in the schema allowing for a hole after a
-smaller request or none, and every request of the stage carrying its budget
-(`test_the_room_is_the_smaller_of_twice_and_the_reply_plus_what_is_left`,
-`test_a_window_that_leaves_no_more_room_makes_the_unit_a_hole_at_once`,
-`test_a_server_that_reports_no_window_gives_twice_the_room`,
-`test_a_hosted_model_that_reports_its_window_is_held_to_it`,
-`test_the_budget_of_stage_five_is_the_prompt_the_image_and_one_reply`,
-`test_stage_five_takes_a_server_that_serves_exactly_its_budget`,
-`test_stage_five_refuses_a_server_one_token_under_its_budget`,
-`test_the_log_of_the_further_attempt_says_both_sizes_in_tokens`,
-`test_the_schema_does_not_say_a_cut_off_item_had_twice_the_room`,
-`test_every_request_of_the_visuals_stage_carries_the_budget_of_that_stage`).
-`tests/test_visuals_holes.py` covers the hole end to end: a table or a figure
-that could not be read is an item with its cause and no second request fills
-it in, a QA retry that is a hole keeps the first attempt, the summary line says
-what has no content, a document with holes is written and the next run asks
-only those, a crash of our own is counted as a hole named `error`, a run with
-holes exits as it did, and an item an older run stored as plain text is said
-once and asked again only with `--force-stale`. `tests/test_process.py` pins
-the workers: a missing image
-counted as skipped rather than failed, a QA retry that recovers, a
-persistent QA failure
-flagged, a coverage failure the retry fixes, adjacent duplicates left
-untouched on a pass, `source_text` stripped, and which caption
-instruction is chosen. `tests/test_imageprocessing_pipeline.py` pins the
-concurrent run end to end: every item enriched, the cache reused with the
-client never created, `source_text` never leaking on a worker crash, and a
-dry run writing nothing. `tests/test_imageprocessing_config.py` pins that
-the system prompts are injection-hardened and that a table's temperature is
-lower than a figure's. `tests/test_imageprocessing_models.py` pins the
-`EnrichedTable`, `EnrichedFigure` and `ProcessingStats` shapes.
-`tests/test_stage_preflight.py` pins that the visuals command hands the
-preflight its own two schemas, that a server that refuses the figure schema
-ends the run before the first document, and that a dry run asks the server
-nothing. `tests/test_prompts.py` checks that `visuals/table_system`, one of this
-stage's prompt ids, resolves for the kwp profile, and that a prompt id a
-profile lacks fails by name rather than falling back to another project's
-text. All seven of the stage's `PROMPT_IDS` are exercised through their readers
-instead: `config.py` reads each through a `prompts.per_profile` function on
-first use, and `tests/test_every_profile_loads.py` asks a subprocess for
-every one of them per profile, in `test_a_profile_loads_every_config_module`
-and `test_a_profile_states_a_usable_context_budget`. `tests/test_segment_bbox.py`'s
-`test_imageprocessing_passthrough_preserves_bbox` checks that a `bbox`
-survives this stage unchanged.
+module is imported in a subprocess and asked for it.
 
 ## Modules
 
@@ -543,7 +508,8 @@ qa.py: Quality checks for vision model table extraction.
 Pure helper functions that judge a vision model's Markdown
 transcription of a table. Coverage compares it against the PyMuPDF
 source text and catches truncation; duplication counts repeated rows
-and catches repetition loops.
+and catches repetition loops. A source text that cannot be read as the
+table (see `unreadable`) is no measure, so coverage is then unknown.
 
 Author: Felix Vossel
 
@@ -573,9 +539,9 @@ replies.py: The reply each vision request asks for, as a JSON schema.
 
 The grammar of every request of this stage and of page transcription, on
 every provider (see `docpipe.providers.grammar`). The prompts state the same
-shapes in words; nothing here is a check beyond the one required key, which
-`vision.call_vision` reads as text. The key is the single entry of `required`
-in each schema.
+shapes in words; nothing here is a check beyond the required keys, the first
+of which `vision.call_vision` reads as text, or as a list where its schema is
+an array. The first entry of `required` in each schema is that key.
 
 Author: Felix Vossel
 

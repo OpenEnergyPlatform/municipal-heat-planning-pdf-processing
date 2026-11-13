@@ -8,9 +8,9 @@ together. The gate is shared by every request to one endpoint: the first
 answer that says wait closes it for all of them, and each request passes it
 before it is sent.
 
-Without a number from the API the wait doubles from HOLD_START up to
-HOLD_MAX with every round of refusals, and starts over with the first
-request that is served. A round is what finds the gate open: the requests
+Without a number from the API the wait doubles from `rate_hold_start_s` up
+to `rate_hold_most_s` with every round of refusals, and starts over with the
+first request that is served. A round is what finds the gate open: the requests
 that were already under way when it closed come back refused too, and they
 say nothing new.
 
@@ -26,14 +26,31 @@ import threading
 import time
 from typing import Callable, Optional
 
+from docpipe import rules
+
 log = logging.getLogger(__name__)
 
-# The statuses that mean "not now" rather than "not like this".
-LIMITED = (429, 503, 529)
-HOLD_START = 2.0
-HOLD_MAX = 120.0
-# Doublings counted; more of them would not lengthen a wait HOLD_MAX bounds.
-STREAK_MAX = 16
+
+def limited_statuses() -> tuple:
+    """The statuses that mean "not now" rather than "not like this" (rule
+    `rate_limited_statuses`)."""
+    out = []
+    for said in rules.get("rate_limited_statuses"):
+        try:
+            out.append(int(said))
+        except ValueError:
+            raise ValueError(f"rate_limited_statuses: {said!r} is no "
+                             f"status, a whole number such as 429") from None
+    return tuple(out)
+
+
+def _streak_most(start: float, most: float) -> int:
+    """Doublings counted: more of them would not lengthen a wait that
+    `rate_hold_most_s` bounds."""
+    count, hold = 1, max(start, 0.001)
+    while hold < most and count < 64:
+        hold, count = hold * 2, count + 1
+    return count
 
 
 class Gate:
@@ -53,7 +70,10 @@ class Gate:
         self._listeners.append(callback)
 
     def wait(self) -> None:
-        """Return once the gate is open."""
+        """Return once the gate is open (at once where the rule `rate_gate`
+        is off: each request then waits on its own)."""
+        if not rules.get("rate_gate"):
+            return
         while True:
             with self._lock:
                 left = self._until - self._clock()
@@ -67,17 +87,21 @@ class Gate:
 
     def limited(self, retry_after: Optional[float] = None) -> float:
         """The API said to wait; returns the seconds the gate stays closed."""
+        start = rules.get("rate_hold_start_s")
+        most = rules.get("rate_hold_most_s")
         with self._lock:
             now = self._clock()
             opened = self._until <= now
             if retry_after is not None:
-                hold = min(max(0.0, retry_after), HOLD_MAX * 5)
+                hold = min(max(0.0, retry_after),
+                           most * rules.get("rate_hold_server_factor"))
             elif opened:
-                hold = min(HOLD_START * 2 ** self._streak, HOLD_MAX)
+                hold = min(start * 2 ** self._streak, most)
             else:
                 hold = 0.0          # one more of a round that already waits
             if opened:
-                self._streak = min(self._streak + 1, STREAK_MAX)
+                self._streak = min(self._streak + 1,
+                                   _streak_most(start, most))
             self._until = max(self._until, now + hold)
             self.holds += 1
             self.last_limited = now
@@ -151,7 +175,7 @@ class Governed:
         try:
             answer = send(**kwargs)
         except Exception as exc:
-            if status_of(exc) in LIMITED:
+            if status_of(exc) in limited_statuses():
                 self.gate.limited(retry_after(exc))
             raise
         self.gate.served()
@@ -170,3 +194,4 @@ def gate_for(provider: str, base_url: Optional[str]) -> Gate:
             _GATES[key] = Gate(provider if not base_url
                                else f"{provider} {base_url}")
         return _GATES[key]
+

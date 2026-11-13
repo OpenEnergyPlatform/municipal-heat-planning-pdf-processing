@@ -3,8 +3,9 @@
 ## Purpose
 
 `docpipe/artifacts.py`, `docpipe/profile.py`, `docpipe/prompts.py`,
-`docpipe/llm_preflight.py`, `docpipe/reading.py`, `docpipe/captions.py`,
-`docpipe/usage.py` and `docpipe/jsonl.py` are the eight modules this page
+`docpipe/llm_preflight.py`, `docpipe/reading.py`, `docpipe/phrases.py`,
+`docpipe/captions.py`, `docpipe/usage.py`, `docpipe/jsonl.py`, `docpipe/rules.py`,
+`docpipe/sources.py` and `docpipe/graphfile.py` are the twelve modules this page
 documents together (the
 `SOURCES` manifest of `scripts/build_docs.py` groups them under this page).
 Each is imported by a different subset of
@@ -21,35 +22,30 @@ file a stage writes is called so the next stage can find it
 (`artifacts.py`), whether the model server a stage is about to call can
 do what is asked (`llm_preflight.py`), what a model's reply is when it was
 asked to be one JSON object and why it is none when it is not (`reading.py`),
+which file holds the sentences a stage says to the model outside its prompts
+and how a profile's file is laid over the one it extends (`phrases.py`),
 once a caption-linking rule
 elsewhere attaches the wrong sentence to a table, where the real title
 sits (`captions.py`), how many tokens a run spent, summed across
 processes that come and go (`usage.py`), and where one line of a JSON
 Lines file ends (`jsonl.py`).
 
-The eight files share a property none of the numbered stages needs: a
+The twelve files share a property none of the numbered stages needs: a
 profile never appears inside them by name. `docpipe/profile.py` states
 the rule in its own docstring, "The core never imports a profile; it
-receives one" (`docpipe/profile.py:6`), and
-`test_core_imports_neither_profiles_nor_streamlit`
-(`tests/test_architecture.py`) holds it mechanically, parsing the AST of
-every file under `docpipe/` for a top-level `import profiles` or `import
-streamlit`. Three further checks in the same file hold the reverse:
+receives one" (`docpipe/profile.py:6`). Three further checks in the same file hold the reverse:
 every prompt id the core loads is something each profile with prompts
-on disk supplies
-(`test_a_profile_provides_every_prompt_the_core_loads`), every
+on disk supplies, every
 component or attribute pair the core requires is something each
-profile supplies
-(`test_a_profile_provides_every_component_the_core_requires`), and no
+profile supplies, and no
 profile carries a prompt file that neither the core nor the profile's
-own code ever requests
-(`test_a_profile_carries_no_prompt_nobody_loads`). What a profile itself
+own code ever requests. What a profile itself
 contributes is on [profiles](../profiles.md); this chapter documents the
 receiving side.
 
 ## Position in the pipeline
 
-None of these eight modules sits between an upstream and downstream step;
+None of these nine modules sits between an upstream and downstream step;
 each is imported by whichever stage is running, none writes its own
 `results/` file, and none runs from the command line by itself. In
 place of an In/Out table, what each module supplies and who reaches for
@@ -61,17 +57,18 @@ it is:
 | `prompts.py` | a prompt's text and sha256, composed from the core's template and the profile's parts where a profile's file names a template, plus a staleness check against `.prompt_versions.json` | preprocessing, refinement, visuals, extraction, inference load; refinement and visuals record/check |
 | `artifacts.py` | the filename of every per-document result file, spelled out once, and the one listing of the document directories that hold them (`document_dirs`) | preprocessing, refinement, visuals, chunking |
 | `llm_preflight.py` | a check, before a stage's first document, that its server can do what is asked, reply schemas included; the window the server reported, and the room a cut-off unit is asked once more with | refinement, visuals, page transcription (preprocessing), extraction |
-| `reading.py` | the one JSON object a reply was asked to be, or the cause it is not one; the profile's sentences that name the cause (`reading.PHRASES`) | refinement, visuals, page transcription, and the chat (`inference/llm_client.py`) |
+| `reading.py` | the one JSON object a reply was asked to be, or the cause it is not one; the profile's sentences that name the cause (`prompts/reading/phrases.json`) | refinement, visuals, page transcription, and the chat (`inference/llm_client.py`) |
+| `phrases.py` | the sentences a stage says outside its prompts, read from `prompts/<module>/phrases.json` of the profile and laid over those of the profiles it extends (`phrases.table`) | `reading.py`, `extraction/wording.py`, `inference/wording.py`, and the sentence page of [the editor](editor.md) |
 | `captions.py` | the rule for where a table's or figure's real title sits, with the patterns that open a caption read from the profile in force | preprocessing (write time); chunking, inference (read time) |
 | `usage.py` | token/request counting, on once a process calls `begin(stage)` | refinement, visuals, chunking and extraction call `begin()`; every reply or embedding call in those four books through `add()`/`reply()` |
 | `jsonl.py` | the lines of a JSON Lines text or file, split at the line feed and nowhere else | extraction (the harvest reader, the decisions file, review, remap, top-up, recheck, identity) and the cassette of [the provider layer](providers.md) |
 
-The closest thing any of the eight holds to a resume rule is
+The closest thing any of the nine holds to a resume rule is
 `prompts.py`'s staleness check (Method). `profile.py` also memoizes
 `profile_value()` in memory for one process, not a resume rule;
 `artifacts.py`, `llm_preflight.py` and `jsonl.py` keep no state of their own,
 and `captions.py` and `reading.py` keep only what they compiled or checked once
-per profile (the patterns, the table of sentences);
+per profile (the patterns, the table of sentences it got from `phrases.py`);
 `usage.py` keeps counts in memory and periodically flushes
 them, not a resume rule either since a flush always overwrites the same
 row.
@@ -235,7 +232,7 @@ The result is None where it is no more than *asked*: the unit is a hole `cut_off
 then and nothing is sent. Where the window is not known, or the caller states no
 budget, the room is twice *asked*. Each stage's budget is one largest reply
 (`refinement.config.max_request_tokens`, `visuals.config.max_request_tokens`,
-`page_text_fallback.page_request_tokens`).
+`page_text_without_layer.page_request_tokens`).
 
 ### Reading a model's reply as one JSON object
 
@@ -263,7 +260,7 @@ which no complete object can be read, with the position of the break),
 label a stage gives an object that was read well and is no use to it (a window
 whose list holds no section); `read` never gives it. The names and their order
 are the harvest's (`extraction.runner._reply_fault`), which keeps its own reader
-and its own sentences; a test holds the two against each other. The sentence
+and its own sentences. The sentence
 is empty for `cut_off`: that reply is never asked again as it stands, the stage
 splits the request or gives the unit more room.
 
@@ -274,24 +271,44 @@ failure of the stage's own after the reply arrived); they are
 `reading.HOLE_CAUSES`, and a hole with another cause raises `ValueError`.
 `detail` is for the log and decides nothing.
 
-The sentences the model hears are the profile's. `profiles/<name>/reading.py`
-carries a table `PHRASES`, in the language of the profile's prompts for these
-stages; `reading.phrases()` lays it over the tables of the profiles it extends,
-entry by entry (`profile.layers`), and checks the result against
+The sentences the model hears are the profile's. `profiles/<name>/prompts/reading/phrases.json`
+carries them, in the language of the profile's prompts for these
+stages; `reading.phrases()` takes the table `phrases.table` makes of it, laid over the
+files of the profiles it extends entry by entry, and checks the result against
 `reading.REQUIRED`, ten names: `shape_rule` (what is said back whatever went
 wrong: the shape that was asked for, appended to every cause), `reasoning_only`,
 `empty`, `no_object`, `syntax`, `outside_text`, `not_an_object`, and
 `key_missing`, `key_not_a_list`, `key_not_text`, the three the key check says.
-A profile that lacks one raises `LookupError` naming it, and the three stages
+A profile that lacks one raises `LookupError` naming it and the file, and the three stages
 call `reading.phrases()` in their `main` before the first request, so the gap is
 found there and not in the middle of the first document. The built-in
 `default`, `kwp` and `scenarios` profiles each provide all ten, in English,
 because the prompts of these stages are English in all three (the scenarios
-profile's extraction prompts are German, and `extraction.PHRASES` is a
-different table: the harvest's own). `reading.say(name, **values)` fills in a
+profile's extraction prompts are German, and `prompts/extraction/phrases.json` is a
+different file: the harvest's own). `reading.say(name, **values)` fills in a
 sentence of the profile in force, and `reading.speaking(profile)` makes the
 sentences a given profile's inside a block, which the chat uses when it answers
 on the built-in profile because none is in force.
+
+### Reading the sentences a stage says outside its prompts
+
+A prompt is a file of the profile, and so is every sentence a stage writes
+itself: why an answer was not taken, what was wrong with a reply that could not
+be read, the heading over a task. `docpipe/phrases.py` reads them from
+`profiles/<name>/prompts/<module>/phrases.json`, one file for each of the
+modules `extraction`, `inference` and `reading` (`MODULES`; `path_of` names the
+file). A file is one JSON object, a sentence's name to its words, or to a list
+of words where the stage takes several (the two marks around a citation); a
+list reaches the stage as a tuple. `parse` reads it strictly: one object, every
+name once, every value a string or a non-empty list of strings, and a
+`PhrasesError` names the file otherwise. `own` is what a profile words itself
+(None where it has no file, which is no error), `layers` the files along the
+line of profiles, and `table` the sentences a profile gets: those of the
+profiles it extends, the farthest first, and its own laid over them entry by
+entry, `LookupError` where no profile of the line has a file. What a sentence is
+filled with, and which ones a stage cannot run without, is the stage's to say
+(`REQUIRED` and `NOTES` in `extraction/wording.py`, `inference/wording.py` and
+`reading.py`).
 
 ### Rendering a prompt for one request
 
@@ -343,7 +360,7 @@ profile, named as the stages name it, and with a `[prices]` table in the
 project file the report ends with a cost, where `cost(row, prices, cached)`
 prices a cached input token at the model's `cached` price and, without one,
 at its `input` price. A process that never
-calls `begin()` counts nothing: the inference app, the tests, and
+calls `begin()` counts nothing: the inference app and
 library use are silent by design, as is the 1-token preflight probe in
 `llm_preflight.py`. A database that cannot be written is logged once and
 never stops the run. A ledger already upgraded to the new columns cannot be
@@ -356,8 +373,8 @@ As `build_sections` appends a table's or a figure's placeholder to the
 section text it is assembling, it calls `resolve_title(ref.caption,
 current_section.content, block.id)` before the next block, settling the
 caption the moment the section is written
-(`docpipe/preprocessing/stage3_structure.py:418-420` for a table,
-`:441-443` for a figure). What opens a caption is the profile's:
+(`docpipe/preprocessing/sections.py:438-440` for a table,
+`:461-463` for a figure). What opens a caption is the profile's:
 `captions.py` holds no pattern and reads the list `preprocessing.CAPTION_START`
 of the profile in force (the built-in `default` profile where none is named),
 joins it into one pattern and compiles it once per profile
@@ -393,15 +410,7 @@ of the profile, else of the nearest profile it extends (`:157-174`), and
 words itself), the `omitted` blocks and `what_if`, the text with one omitted
 block put back for each of them, made the first time it is read
 (`:795-814`). `owner_of()` gives the profile whose file the prompt is
-(`:177-180`). That is
-how a profile that extends the built-in one writes every prompt itself except
-those that are the built-in file byte for byte: `kwp` inherits one
-(`visuals/caption_keep`) and `scenarios` two (that one and the chat's
-`inference/json_format`),
-so the text read and its sha256 are the ones its own copy had, and
-`tests/test_default_profile.py` holds the list (see [profiles](../profiles.md));
-`placeholders` extracts the
-`{{name}}` tokens in `text` by regex (`:139-141`). `.prompt_versions.json`
+(`:177-180`).  `.prompt_versions.json`
 is a JSON object mapping each prompt id to its current sha256, written
 by `record()` next to a stage's output and read back by
 `check()`/`stale()`.
@@ -458,7 +467,7 @@ no `CAPTION_START` at all is a `LookupError`.
 | `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:141` |
 | `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `CONTEXT_FLAG` (`"--max-model-len"`) | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:305-306`, `:47-48` |
 | `shapes` (`assert_serving`) | function parameter | none | `{name: schema}`, the reply schemas a stage sends as the grammar of every request; each is put to the server once before the first document | `docpipe/llm_preflight.py:308` |
-| `reading.PHRASES` | profile component (`reading.py`) | none; required, ten names (`reading.REQUIRED`) | the sentences a stage says to the model when its reply was not the one JSON object; checked before the first request | `docpipe/reading.py:60-64`, `:87-105` |
+| the sentences of `reading` | profile file (`prompts/reading/phrases.json`) | none; required, ten names (`reading.REQUIRED`) | the sentences a stage says to the model when its reply was not the one JSON object; checked before the first request | `reading.phrases`, `phrases.table` |
 | `preprocessing.CAPTION_START` | profile component | none; each profile lists its own | the non-empty list of regular expressions, each carrying its own anchor, that open a caption | `docpipe/captions.py:40-71` |
 | `_CAPTION_LIMIT` | module constant | 300 characters | caps the length of a title `resolve_title()` returns | `docpipe/captions.py:31` |
 | `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:91-92` |
@@ -517,11 +526,15 @@ raises `PreflightError` only for a 4xx other than 429 on one of them, and
 otherwise returns `None` or a sentence naming the schemas it could not ask.
 
 `reading.py`: `phrases()` with no profile passed and none in force raises
-`LookupError` naming the variable to set; a profile that provides no
-`reading.PHRASES` raises it through `profile.require`, and one whose table
-lacks a name of `REQUIRED` raises `LookupError` listing the names missing
-(`docpipe/reading.py:87-105`). A `Hole` with a cause outside `HOLE_CAUSES`
-raises `ValueError` (`:52-55`). `read()` raises nothing for a reply it cannot
+`LookupError` naming the variable to set; a line of profiles in which none has a
+`prompts/reading/phrases.json` raises it from `phrases.table`, and one whose
+sentences lack a name of `REQUIRED` raises `LookupError` listing the names missing
+and the file that should hold them.
+
+`phrases.py`: a file that is not one JSON object, that has a name twice, or
+whose value is neither a string nor a non-empty list of strings raises
+`PhrasesError`, naming the file and the sentence. A `Hole` with a cause outside `HOLE_CAUSES`
+raises `ValueError` (`Hole.__post_init__`). `read()` raises nothing for a reply it cannot
 read: it returns the cause. Every sentence is checked when `phrases()` is first
 called for a profile, which the three stages do at the start of the run, so a
 missing one is found there and not when `read()` first needs it.
@@ -533,157 +546,24 @@ what leaves `caption` unchanged.
 
 Over one plan (Kassel), Stage 2's nearest-block caption linking attached
 a rounding-note footnote to 15 of 89 tables in place of the sentence
-naming the table (`docpipe/captions.py:8,83-85`; pinned by
-`tests/test_table_title.py`). Because the caption is the only line of a
+naming the table (`docpipe/captions.py:8,83-85`; pinned by). Because the caption is the only line of a
 table a model can quote for its own year, that mislinking propagated to
 240 of 379 tuples read off the twelve titled target tables' captions,
 and to 88 of Kassel's 100 contested value identities
 (`docpipe/captions.py:89-91`).
-
-Over three of the corpus's eleven textless plans
-`tests/test_table_title.py` measures by name (documents 795 Leipzig,
-1082 Grevesmuehlen, 210 VG Maikammer), Stage 2's linking matched none of
-169 tables, while 23 had a numbered sentence in the model-transcribed
-text that `resolve_title()` could resolve; one carried 60 characters of
-the following paragraph before the trim rule was added
-(`docpipe/captions.py:114-121`). The figure covers only these three
+ The figure covers only these three
 plans, not all eleven.
 
 A `--max-model-len` set too small for a stage's worst-case request was
 not reported as one error at the start: truncated replies accumulated
 across windows (42 of them, keeping their raw text, in the run
 measured) before the preflight check existed
-(`docpipe/llm_preflight.py:6-9`; the same figure opens
-`tests/test_context_budget.py`).
+(`docpipe/llm_preflight.py:6-9`; the same figure opens).
 
 Re-preprocessing the corpus's 1,082 documents so Stage 3 could settle
 every caption at write time is stated as costing GPU days, so
 `enrich_caption` runs instead as a one-time, additive backfill over the
 finished database (`docpipe/chunking/database.py:222`).
-
-## Verification
-
-The boundary holds both directions: `test_core_imports_neither_profiles_nor_streamlit`,
-`test_a_profile_provides_every_prompt_the_core_loads`,
-`test_a_profile_carries_no_prompt_nobody_loads`,
-`test_a_profile_provides_every_component_the_core_requires`
-(`tests/test_architecture.py`).
-
-A profile resolves to the right paths and identity, and a malformed one
-raises a named exception: `test_kwp_profile_loads_and_names_itself`,
-`test_paths_are_profile_scoped`, `test_data_root_default_follows_env`,
-`test_unknown_profile_lists_the_available_ones`,
-`test_no_profile_is_an_explicit_error`,
-`test_ambient_profile_comes_from_the_environment`,
-`test_rejects_unusable_names`, `test_rejects_unknown_column_layout`,
-`test_facet_defaults_to_multiselect`, `test_components_are_optional`,
-`test_a_broken_component_is_an_error_not_an_absence`,
-`test_late_profile_is_refused_when_it_overrides_prompts`,
-`test_late_profile_is_fine_without_prompts` (`tests/test_profile.py`).
-
-A prompt loads, hashes and renders correctly, and a missing or stale one
-is caught: `test_a_profile_ships_the_prompts_its_stages_load`,
-`test_front_matter_becomes_meta_and_leaves_the_body_alone`,
-`test_body_is_passed_through_byte_for_byte`,
-`test_a_prompt_the_profile_does_not_have_is_an_error`,
-`test_without_a_profile_there_is_no_prompt`,
-`test_render_substitutes_and_catches_typos`,
-`test_hash_changes_with_the_file`,
-`test_stale_reports_changed_and_unversioned_results`,
-`test_record_then_check_is_clean`, `test_check_flags_a_changed_prompt`,
-`test_check_flags_results_without_a_version_file`,
-`test_unusable_prompt_id` (`tests/test_prompts.py`).
-
-A prompt written in parts is composed as described, and one that does not fit
-its template is refused, in `tests/test_prompt_parts.py`, against templates made
-up in a temporary folder, each promise with a case built to break it:
-`test_the_prompt_is_the_template_with_the_parts_put_in_and_nothing_else`,
-`test_a_part_with_an_open_placeholder_is_refused`,
-`test_a_missing_required_part_names_the_prompt_the_part_the_profile_and_both_files`,
-`test_a_part_with_the_name_of_a_block_replaces_the_block`,
-`test_a_rule_that_is_left_out_moves_the_rules_after_it_and_what_points_at_them`,
-`test_a_part_whose_place_was_left_out_is_refused`,
-`test_the_fingerprint_is_the_sha_of_the_monolithic_file_with_the_same_text` and
-`test_a_stamp_from_before_the_prompts_were_composed_is_current`. The templates
-of the core are held to one shape in both languages by
-`tests/test_contract_templates.py`
-(`test_every_template_there_is_has_both_languages_and_the_same_shape`,
-`test_no_template_of_the_core_types_a_fact`), and the five composed prompts of
-each shipped profile by `tests/test_prompts_composed.py`
-(`test_the_five_prompts_of_a_profile_are_composed_in_its_language`).
-
-The preflight stops a run before the first document, not after a
-mid-run rejection: `test_preflight_rejects_a_server_with_too_little_context`,
-`test_preflight_rejects_a_server_serving_another_model`,
-`test_preflight_passes_when_the_context_fits`,
-`test_preflight_reports_an_unreachable_server_as_such`
-(`tests/test_context_budget.py`).
-
-The reader takes exactly one object and nothing else, names the cause the way
-the harvest does, and has no sentence for a cut-off reply:
-`test_only_the_one_object_is_read`, `test_it_reads_what_the_harvest_reads`,
-`test_a_reply_is_not_made_right_by_what_surrounds_it`,
-`test_a_reply_is_classified_like_the_harvests`,
-`test_the_guard_against_drift_sees_a_cause_that_changed`,
-`test_a_response_without_a_choice_is_an_empty_reply`,
-`test_the_key_has_to_be_of_the_type_asked_for`,
-`test_a_key_of_any_kind_still_has_to_be_there`,
-`test_a_cut_reply_has_no_sentence_for_the_retry`,
-`test_the_retry_names_the_cause`, `test_a_hole_names_only_known_causes`,
-`test_a_hole_is_a_value_that_cannot_be_changed`,
-`test_a_caller_with_a_profile_of_its_own_speaks_through_it`,
-`test_a_profile_in_force_speaks_unless_a_block_names_another`
-(`tests/test_reading.py`). Every profile carries every sentence, and none of the
-stages that read a reply softens one: `test_no_stage_repairs_a_reply`
-(`tests/test_architecture.py`, one case per module of refinement, the visuals
-stage and page transcription, with
-`test_the_stages_scanned_are_the_ones_that_read_a_reply` holding the list). The
-preflight puts each reply schema to the server, and only a 4xx other than 429
-refuses one: `test_a_server_that_refuses_the_cut_schema_ends_refinement_before_any_document`,
-`test_a_server_that_takes_every_schema_lets_refinement_go_on`
-(`tests/test_stage_preflight.py`) and the cases of `tests/test_llm_preflight.py`. The window the preflight
-found is kept for the role that asked, a later preflight that finds none replaces
-it, a replay keeps the window of the recorded run, and the room of a cut-off
-unit follows from it: `test_the_window_a_server_reports_is_kept_for_the_role_that_asked`,
-`test_each_role_keeps_the_window_of_its_own_server`,
-`test_a_later_preflight_that_finds_no_window_replaces_the_one_found_before`,
-`test_a_server_that_was_refused_leaves_no_window`,
-`test_a_hosted_api_that_reports_a_window_has_it_kept`,
-`test_a_replay_keeps_the_window_of_the_recorded_run`,
-`test_the_room_is_the_smaller_of_twice_and_the_reply_plus_what_is_left`,
-`test_a_hosted_model_that_reports_its_window_is_held_to_it`
-(`tests/test_room.py`).
-
-A title resolves to the sentence that names it, not a linked footnote, a
-neighbour's caption, or past its own end:
-`test_each_table_of_a_run_gets_its_own_caption`,
-`test_three_appendix_tables_of_one_quantity_keep_their_years_apart`,
-`test_a_caption_stage_two_did_link_is_never_replaced`,
-`test_a_table_with_no_caption_of_its_own_does_not_borrow_the_last_one`,
-`test_the_caption_taken_is_the_one_nearest_the_placeholder`,
-`test_a_note_is_not_a_caption_and_a_numbered_phrase_is`,
-`test_nothing_to_resolve_leaves_the_caption_alone`,
-`test_the_table_a_run_reads_carries_the_resolved_title`,
-`test_a_transcribed_page_still_yields_the_documents_own_caption`,
-`test_a_caption_followed_by_prose_ends_where_the_caption_ends`
-(`tests/test_table_title.py`).
-
-The `.env` load precedes everything else, and an explicit environment
-variable is never overwritten by the file: `test_it_reads_key_value_lines`,
-`test_an_explicit_environment_variable_wins`,
-`test_comments_blanks_and_quotes`, `test_a_missing_file_is_not_an_error`,
-`test_the_value_reaches_the_config_that_reads_it`
-(`tests/test_dotenv.py`).
-
-A record whose quote carries U+2028, U+2029 or U+0085 stays one record, read
-and written back: `test_a_line_ends_at_a_line_feed_and_nowhere_else`,
-`test_reading_a_file_folds_the_carriage_return`,
-`test_the_harvest_reader_keeps_a_row_whose_quote_carries_one`,
-`test_a_decision_with_one_in_its_note_is_read`,
-`test_a_recorded_answer_with_one_is_replayed`,
-`test_a_file_written_back_keeps_such_a_row_whole`,
-`test_no_reader_splits_a_files_text_at_more_than_the_line_feed`
-(`tests/test_jsonl.py`).
 
 ## Modules
 
@@ -698,7 +578,7 @@ the standalone `migrate_artifact_names.py`, which renames old filenames.
 and provides the `component()`/`require()`/`profile_value()` lookup the
 core uses to pull the Python objects a profile contributes. Imported
 throughout, including `prompts.py`, `refinement/config.py`,
-`preprocessing/stage3_structure.py` and `extraction/runner.py`
+`preprocessing/sections.py` and `extraction/runner.py`
 (Position in the pipeline, above, names the rest).
 
 `prompts.py` loads a profile's Markdown prompt files, splits optional
@@ -707,7 +587,7 @@ YAML front matter from the body, hashes the raw file, substitutes
 `per_profile` defers a stage's read of its prompts to first use. Called on
 first use by the refinement (`config.py`, `split.py`) and visuals
 (`config.py`) modules, at import time by `inference/llm_client.py`, and at
-request time by `preprocessing/page_text_fallback.py`,
+request time by `preprocessing/page_text_without_layer.py`,
 `extraction/runner.py` and `inference/kg_route.py`;
 `record()`/`check()` run from the refinement and visuals pipelines.
 
@@ -729,8 +609,14 @@ none (`read`, `loads_object`, `first`), names the causes (`CAUSES`,
 `HOLE_CAUSES`, `Hole`), and holds the profile's sentences that say the cause back
 to the model (`phrases`, `say`, `speaking`, `REQUIRED`). Called by the
 refinement, visuals and page-transcription stages and by the chat's reader
-(`inference/llm_client.py`); the harvest does not call it. Each profile's table
-is its own `reading.py`.
+(`inference/llm_client.py`); the harvest does not call it. Each profile's
+sentences are its own `prompts/reading/phrases.json`.
+
+`phrases.py` reads the sentences a stage says to the model outside its prompts
+from a profile's `prompts/<module>/phrases.json` (`parse`, `own`, `layers`,
+`table`, `path_of`, `MODULES`). Called by the three modules that hold a stage's
+sentences (`reading.py`, `extraction/wording.py`, `inference/wording.py`) and by the
+sentence page of [the editor](editor.md).
 
 `captions.py` decides whether a stored caption already looks like one
 (`looks_like_a_caption`) and, if not, resolves the real title from the
@@ -755,8 +641,42 @@ folds a carriage return before the line feed into the line feed).
 from a PDF can carry one of them, which `json.dumps(ensure_ascii=False)` writes
 as it is: read with `splitlines()`, that record would become two broken ones.
 Every reader of a harvest, of the decisions file and of a cassette goes through
-it, and a test holds that no reader in the package splits a file's text with
-`splitlines()`.
+it.
+
+`rules.py` gathers every value a run follows (quote minimum length, decimal
+mark, year range, span words, request letters, retry waits, image size, country
+groups, `not_extracted`, compute parts, and the rest) as rules. A rule is
+declared in code (what a rule is: `docpipe/ruleset/kit.py`; the core's rules in
+`docpipe/ruleset/*.py`): its name, tab, kind, bounds, help and the kinds of
+steps that read it (`steps`). Its value stands in the profile's `rules.json`;
+that file is laid over the default's rule by rule, and a setting from the
+environment or the project file (`Rule.env`) is laid over the files. A profile
+declares its own rules in `profiles/<name>/rules.py` (`RULES`, and `GRAPH` for
+the graph writer's rules) and sets their values in its `rules.json`.
+`rules.get(name)` reads a value where it is used, never while a module loads,
+and a step or frame of the flow may set a value of its own for a rule that
+names its kind in `steps`; that value wins over the files (see
+[the extraction stage](extraction.md)). A rule without `steps` is the run's
+only. A value of the machine (`Rule.machine`: a model's address, the slots per
+model, the connections) is set only in the project file `docpipe.toml`, a key
+(`Rule.secret`) only in `.env` or the environment, never in a rules file and
+never at a step. No rule makes a harvest stale; the stamp's producer entry names
+the sha of the rules. It replaced constants such as `verify.MIN_QUOTE_CHARS`
+(now `verify.min_quote_chars()`) and `reading.SHOWN` (now
+`reading.shown_counts()`).
+
+`sources.py` reads `sources.json`: the ontology, shapes and knowledge graph
+queries a profile is written against (`sources`), the lists drawn from them
+(`lists`) and which coordinate answers from which list (`axis_lists`). The
+profile's `vocabulary.py` reads them through `sources()`, `sets()` and
+`axis_sets()`, which replaced its `SOURCES`, `SETS` and `AXIS_SETS`.
+`refresh(cache, out=None)` can write into another folder and `WRITES` names the
+files a refresh writes. A token is never in the file, only the name of the
+setting that holds it.
+
+`graphfile.py` reads `graph.json`: the classes the graph does not write, the
+address rules, the effect of each constraint and the writer rules (see
+[the graph](graph.md)).
 
 ## Module reference
 
@@ -902,7 +822,9 @@ room as the window leaves (`further_room`), and the stage that asks has the
 number from here and not from a second request to the server.
 
 And one thing every stage agrees with the server about before it asks
-anything: `request_extras`, the reasoning settings. They live here because
+anything: `request_extras`, the reasoning settings and the tool choice
+(none: an agent endpoint must not hand a request to its own tools). They
+live here because
 they are the same for every stage and because getting them wrong fails the
 same way a window set too small does: hours in, as replies whose JSON was
 truncated by the think block in front of it.
@@ -929,7 +851,38 @@ a test holds the two against each other, so neither can drift. The harvest does
 not call this module: it keeps its own reader and its own sentences.
 
 The sentences the model hears are the profile's, in the language of that
-profile's prompts for these stages (`profiles/<name>/reading.py: PHRASES`).
+profile's prompts for these stages
+(`profiles/<name>/prompts/reading/phrases.json`, `docpipe/phrases.py`; a
+table in its `reading.py` until 2026-11-10).
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/phrases.py</code></summary>
+
+phrases.py: The sentences a stage says to the model outside its prompts, read
+from a file beside the profile's prompts.
+
+A prompt is a file of the profile, and so is every sentence a stage writes
+itself: why an answer was not taken, what was wrong with a reply that could
+not be read, the heading over the user's task. They stood as tables in the
+profiles' Python modules (`PHRASES`); since 2026-11-10 they are files, so
+that they are edited where the prompts are (`docpipe edit`):
+
+    profiles/<name>/prompts/<module>/phrases.json
+
+one per module that speaks (`MODULES`). A file is one JSON object, the name
+of a sentence -> its words, or a list of words where the stage takes several
+(the two marks around a citation). A profile that extends another one writes
+only the sentences it words differently: its file is laid over those of the
+profiles it extends, entry by entry (`table`).
+
+A file is read strictly: one object, every name once, every value a string
+or a list of strings. What a sentence is filled with and which ones a stage
+cannot run without is the stage's to say (`extraction.wording`,
+`inference.wording`, `reading`).
 
 Author: Felix Vossel
 
@@ -1003,6 +956,131 @@ One record is one line, and a line ends at a line feed and nowhere else.
 `json.dumps(ensure_ascii=False)` writes those three as they are. A quote
 that carries one would be read as two broken records, and a file that is
 read that way and written back would keep them broken.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/rules.py</code></summary>
+
+rules.py: The rules a run follows, read from a file of the profile.
+
+Every rule of the reading that is a value stood in the code until
+2026-11-10: a number ("a quote has at least 8 characters"), a switch, a
+choice ("the documents write the decimal with a comma"), a list of words or
+characters ("the abbreviations whose point ends no sentence"), a table. Since
+then each stands in a file of the profile, beside its spec, its prompts and
+its flow, so that `docpipe edit` shows and sets it in the tab it belongs to
+(owner, 2026-11-10: "Alle Regeln etc. sollen auch immer über die GUI
+Editierbar sein"):
+
+    <profile folder>/rules.json
+
+The code knows of each rule its name, its kind, its bounds and what it does
+with it (`RULES`); its value stands in the file and nowhere in the code. The
+default profile's file names every rule of the core. A profile that extends
+it writes only the rules it sets differently, laid over the default's rule by
+rule, as the numbers of its flow are (`flow.py`). A profile whose own code
+follows rules the core does not know declares them (`profiles/<name>/
+rules.py: RULES`), and its file is the one they start from. A rule that has
+a setting (`Rule.env`) is set by it where it is set: the environment, then
+the project file, then the file.
+
+A run reads with the rules of its profile (`use`; `current` takes the
+ambient profile's where no run said which). A step of the flow and the
+frames around it may set a rule for themselves (`"rules"` of a box or frame
+in `flow.json`, owner 2026-11-11: "alles soll anpassbar sein"): while the
+step runs, its values lie over the run's (`STEP`, set by
+`engine.Engine.step`), the innermost frame's over the outer ones', so a
+value is read in this order: the step, its frames from the inside out, the
+setting of the start, the file. `get` is the one way a rule is read.
+Nothing here decides whether a harvest is current: a pass names the sha256
+of its rules in its entry of the stamp for a reader, as it names its
+prompts and its flow (owner decision 2026-09-10: a stamp rests on the
+questions of the spec alone).
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/sources.py</code></summary>
+
+sources.py: Where a profile's ontology, shapes and graph come from, read
+from a file of the profile.
+
+A profile's lists are drawn from an ontology, its graph is written to the
+shapes of a knowledge graph, and some of its lists are what that graph
+already holds. Until 2026-11-10 the addresses stood in the profile's Python
+(`vocabulary.py: SOURCES`, the roots of its lists in `SETS`); since then they
+stand beside its spec, so that `docpipe edit` shows them and can fetch them
+(owner, 2026-11-10: "einfach die URLs angeben für Ontologie und KG"):
+
+    <profile folder>/sources.json
+
+    {"sources": {name: {"kind": ..., ...}},     what `upstream.fetch` pulls
+     "lists": {name: {"kind": "class" | "individual", "root": IRI}},
+     "axis_lists": {coordinate: list name}}     which list a coordinate
+                                                answers from
+
+A source is one of the kinds `upstream` fetches, with the keys that kind
+reads (`KEYS`); a token is never in the file, only the name of the setting
+that holds it (`token_env`). The file is read strictly: an unknown kind, a
+missing key, a key no kind reads, a list without its root is refused with
+the file and the source named. Nothing here fetches anything.
+
+Author: Felix Vossel
+
+</details>
+
+<details>
+<summary><code>docpipe/graphfile.py</code></summary>
+
+graphfile.py: How a harvest becomes the graph, read from a file of the
+profile (owner, 2026-11-10: "sodass man steuern kann, wie die Ernte in den
+Graphen aufgenommen wird und welche constraints erfüllt sein müssen").
+
+    <profile folder>/graph.json
+
+    {"map": {"boxes": [...], "arrows": [...]},
+     "classes": {class: {"written": false} |
+                        {"address": {"folder": ..., "key": [property, ...],
+                                     "base": ...}}},
+     "constraints": {"<constraint> <property> <class>": effect},
+     "rules": {name: value}}
+
+What the writer does stays code (`docpipe/extraction/graph.py` and the
+bricks of `profiles/<name>/kg.py`); the drawing (`map`) says which node
+each field becomes, and the rest of the file what the writer is to do:
+
+- a class that is not written: its nodes, and every triple that names them,
+  leave the written graph;
+- an address rule: the nodes of the class are named anew, the folder under
+  the writer's base and a UUID over the values of the named properties, and
+  every triple that names them follows;
+- a constraint's effect, after the written graph is held to the shapes:
+  `report` (what every constraint does where the file says nothing),
+  `leave_out_value` (the node the violation is about leaves the graph),
+  `leave_out_paper` (every node of its document does) or `stop` (the gate,
+  `docpipe.extraction.gate`, shuts before a job starts its model);
+- the rules a profile's writer declares (`rules.py: GRAPH`), each read by the
+  writer where it applies it (`get`, the value of a step of the flow first).
+
+A class is named by its identifier (`OEO_00030022`), a property by its
+identifier or `prefix:name`, a constraint by the words the validation
+reports it with (`MinCount OEO_00390079 OEO_00020227`: the constraint, the
+property, the class of the node). The file of the default profile has no
+entry; a profile writes what its writer reads and what it sets otherwise,
+laid over the files it extends entry by entry. A file named by
+`DOCPIPE_GRAPH_FILE` is laid over all of them: what `docpipe edit` writes a
+probe with before anything is saved.
+
+With nothing set, the written graph is the writer's, byte for byte: no file
+is rewritten. Where something is set, the graph is edited as text, block by
+block, so the writer's comments stay; a block the edit cannot read is
+written anew by rdflib, and the result is held against the graph the rule
+asks for before it is written.
 
 Author: Felix Vossel
 

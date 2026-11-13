@@ -14,12 +14,16 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import threading
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
 from docpipe.embedding import config as embedding_config
+
+# One connection, and the documents of a comparison ask it from their threads.
+_LOCK = threading.Lock()
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS query_cache (
@@ -50,22 +54,32 @@ def connect(path: Path, create: bool = True) -> sqlite3.Connection:
 
 def make_key(mode: str, text: Optional[str] = None,
              image_bytes: Optional[bytes] = None, *,
-             model: Optional[str] = None, dim: Optional[int] = None) -> str:
+             model: Optional[str] = None, dim: Optional[int] = None,
+             form: Optional[str] = None) -> str:
     """
     Deterministic key over the effective query input. `mode` distinguishes
     text-only / image-only / image+text so the same phrase embedded differently
     does not collide.
 
-    `model` and `dim` are the embedding model and the size of its vectors;
-    left out, they are the configured ones, read now. Entries written under
-    keys without them match nothing and are embedded again.
+    `model` and `dim` are the embedding model and the size of its vectors,
+    `form` how a vector is made: the backend, and for the api backend the
+    form of its request (the same model in this process and behind a vLLM
+    server gives different vectors). Left out, they are the configured ones,
+    read now. Entries written under keys without them match nothing and are
+    embedded again.
     """
     if model is None:
         model = embedding_config.EMBEDDING_MODEL
     if dim is None:
         dim = embedding_config.EMBEDDING_DIM
+    if form is None:
+        form = embedding_config.BACKEND.strip().lower()
+        if form == "api":
+            form += ":" + embedding_config.EMBEDDING_API_FORMAT
     h = hashlib.sha256()
     h.update(str(model).encode("utf-8"))
+    h.update(b"\x00")
+    h.update(str(form).encode("utf-8"))
     h.update(b"\x00")
     h.update(str(dim).encode("utf-8"))
     h.update(b"\x00")
@@ -81,9 +95,10 @@ def make_key(mode: str, text: Optional[str] = None,
 
 def get(conn: sqlite3.Connection, key: str) -> Optional[np.ndarray]:
     """Return the cached (float32) vector for `key`, or None on a miss."""
-    row = conn.execute(
-        "SELECT vector FROM query_cache WHERE query_key = ?", (key,)
-    ).fetchone()
+    with _LOCK:
+        row = conn.execute(
+            "SELECT vector FROM query_cache WHERE query_key = ?", (key,)
+        ).fetchone()
     if row is None:
         return None
     return np.frombuffer(row[0], dtype="float32").copy()
@@ -100,8 +115,9 @@ def put_many(conn: sqlite3.Connection, pairs) -> None:
             for key, vector in pairs]
     if not rows:
         return
-    conn.executemany(
-        "INSERT OR REPLACE INTO query_cache (query_key, vector) VALUES (?, ?)",
-        rows,
-    )
-    conn.commit()
+    with _LOCK:
+        conn.executemany(
+            "INSERT OR REPLACE INTO query_cache (query_key, vector) VALUES (?, ?)",
+            rows,
+        )
+        conn.commit()

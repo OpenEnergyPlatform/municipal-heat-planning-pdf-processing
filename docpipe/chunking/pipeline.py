@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from typing import Optional, Sequence
 
 from docpipe import usage
 from docpipe.artifacts import document_dirs
@@ -129,14 +129,21 @@ def run(
     *,
     step: Optional[str] = None,
     force: bool = False,
+    also: Sequence[str | Path] = (),
+    dry_run: bool = False,
 ) -> None:
     """
     Run the pipeline over the PDF subdirectories of `data_dir`.
 
     `step` limits the run to 'merge', 'db', 'embed' or the standalone
-    'enrich-bbox', 'enrich-page-source' or 'enrich-caption'; None runs
-    merge → db → embed (the db step backfills the page source and the
-    captions itself). `force` ignores caches and clears old embeddings.
+    'enrich-bbox', 'enrich-page-source', 'enrich-caption', 'reembed' or
+    'sync'; None runs merge → db → embed (the db step backfills the page
+    source and the captions itself). `force` ignores caches and clears old
+    embeddings. 'reembed' writes `index_path` as a new file (see
+    chunking/reembed.py). 'sync' merges, then writes each document into the
+    database under the numbers its entries have and takes the vectors whose
+    input changed out of `index_path` and of every file in `also`
+    (chunking/sync.py); with `dry_run` it only counts, without merging.
 
     The embed step raises IncompleteIndex when inputs were left without a
     vector, after it saved the index with the ones that have one.
@@ -144,6 +151,14 @@ def run(
     data_dir = Path(data_dir)
     db_path = Path(db_path)
     index_path = Path(index_path)
+
+    if step == "sync":
+        from .sync import run_sync
+        if not dry_run:
+            merge_batch(data_dir, force=force)
+        run_sync(data_dir, db_path, [index_path, *[Path(p) for p in also]],
+                 dry_run=dry_run)
+        return
 
     # Standalone maintenance step: never part of the default merge→db→embed run.
     if step == "enrich-page-source":
@@ -166,6 +181,14 @@ def run(
         log.info("Additive bbox backfill (non-destructive; no re-embed)")
         log.info(sep)
         enrich_bbox(db_path, data_dir, force=force)
+        return
+
+    if step == "reembed":
+        # Every item again, into a NEW index file under the ids the database
+        # already gives them; neither the database nor the old file is
+        # written (chunking/reembed.py).
+        from .reembed import run_reembed
+        run_reembed(data_dir, db_path, index_path)
         return
 
     steps = [step] if step else ["merge", "db", "embed"]
@@ -346,6 +369,8 @@ Examples:
   python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --step merge
   python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --step embed
   python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --force
+  python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss_new.index --step reembed
+  python -m docpipe.chunking ./data/processed/ ./KWP.db ./faiss.index --step sync --also ./faiss_vllm.index
         """,
     )
     p.add_argument("data_dir", nargs="?", default=None,
@@ -357,7 +382,9 @@ Examples:
                    help="FAISS index (default: the profile's)")
     p.add_argument(
         "--step", choices=["merge", "db", "embed", "enrich-bbox",
-                           "enrich-page-source", "enrich-caption"], default=None,
+                           "enrich-page-source", "enrich-caption", "reembed",
+                           "sync"],
+        default=None,
         help="Run only a specific step (default: merge, db, embed). "
              "'enrich-bbox' additively backfills segment/table/image bbox from "
              "re-run Stage-3 outputs without re-embedding (index_path is ignored). "
@@ -365,8 +392,25 @@ Examples:
              "document a model transcribed, from the preprocessing report. "
              "'enrich-caption' additively replaces a table/figure caption that "
              "does not open like one with the sentence before its placeholder "
-             "in the section text (no model, data_dir is ignored).",
+             "in the section text (no model, data_dir is ignored). "
+             "'reembed' embeds every item the database maps again, with the "
+             "configured embedder, into index_path as a NEW file under the "
+             "ids it already has; the database and the old index are not "
+             "written, and an existing file is continued only when an "
+             "earlier reembed wrote it. "
+             "'sync' merges, then writes each document into the database "
+             "under the numbers its sections, tables and figures already "
+             "have, and takes every vector whose input changed out of "
+             "index_path and the --also files; the embed step and a reembed "
+             "of each --also file then embed what is missing.",
     )
+    p.add_argument("--also", action="append", default=[], metavar="INDEX",
+                   help="With --step sync: a further index built under the "
+                        "database's ids (a reembed's file) to take the same "
+                        "vectors out of; may be given more than once")
+    p.add_argument("--dry-run", action="store_true",
+                   help="With --step sync: count what would change, without "
+                        "merging and without writing")
     add_profile_argument(p)
     p.add_argument("--force", action="store_true", help="Force re-processing")
     p.add_argument(
@@ -404,6 +448,8 @@ def main() -> None:
             index_path=args.index_path,
             step=args.step,
             force=args.force,
+            also=args.also,
+            dry_run=args.dry_run,
         )
         sys.exit(0)
     except IncompleteIndex as e:

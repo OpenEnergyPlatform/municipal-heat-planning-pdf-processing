@@ -42,7 +42,8 @@ def recheck_file(path: Path, spec: Spec,
                  spec_for: Optional[Callable] = None) -> Counter
 ```
 
-Rewrite one harvest file in place. Returns what it dropped and why.
+Rewrite one harvest file in place, as the flow `recheck` does for a
+file. Returns what it dropped and why.
 
 The summary line is recomputed rather than carried over: it counts the
 trust levels of the tuples above it, and this pass is in the business of
@@ -56,16 +57,19 @@ against the run's spec the entry is a bare identifier no quote prints.
 ### run
 
 ```python
-def run(harvest_dir: Path, spec: Spec, *, drop_stamps: bool = True,
+def run(harvest_dir: Path, spec: Spec, *,
+        drop_stamps: Optional[bool] = None,
         spec_for: Optional[Callable] = None) -> Counter
 ```
 
-Recheck a whole harvest directory.
+Recheck a whole harvest directory: the flow `recheck`
+(`passflow`).
 
 The stamps go with it. A file rewritten by a rule the harvest did not
 apply is not the output of the run its stamp names, and leaving the stamp
-would make the next run skip the document — which is exactly how 205 plans
+would make the next run skip the document -- which is exactly how 205 plans
 kept an old harvest through a corpus run meant to redo them. A file left
-alone keeps its stamp: it still is that run's output.
+alone keeps its stamp: it still is that run's output. *drop_stamps* None
+leaves it to the rule `recheck_clear_stamps`.
 
 [Back to the index](../README.md)

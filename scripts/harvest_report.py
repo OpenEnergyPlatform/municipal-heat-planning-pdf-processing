@@ -3,7 +3,7 @@
 harvest_report.py - The numbers a curator pulls by hand after every run.
 
 Reads every plan of a harvest directory (one <plan>.jsonl per document, e.g.
-data/extraction/corpus_m5; *.trace.jsonl and *.stamp.json are not a plan and
+data/extraction/corpus_m5; a trace and *.stamp.json are not a plan and
 are skipped) and prints the distributions a corpus run is judged by: how many
 tuples a plan carries, how many of them came off an image, how trustworthy
 they are, why a claim was refused, what state every coordinate and every
@@ -29,9 +29,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import usage                                     # noqa: E402
-from docpipe.extraction import fields                          # noqa: E402
+from docpipe.extraction import fields, trace                   # noqa: E402
 from docpipe.extraction.schema import REFUSAL_REASONS           # noqa: E402
-from docpipe.extraction.trust import (LEVEL_A, LEVEL_B, LEVEL_C,  # noqa: E402
+from docpipe.extraction.trust import (LEVELS,  # noqa: E402
                                       PARAMETER_STATES)
 from docpipe.extraction.verify import TIER_TEXT                 # noqa: E402
 
@@ -75,7 +75,7 @@ def refusal_family(reason: str) -> str:
 def harvest_files(directory: Path) -> list:
     """Every plan of the harvest, sorted; a trace file is not a plan."""
     return sorted(p for p in directory.glob("*.jsonl")
-                  if not p.name.endswith(".trace.jsonl"))
+                  if not trace.is_trace(p))
 
 
 def read_plan(path: Path):
@@ -212,7 +212,7 @@ def build_stats(files: list, scanned: dict, usage_rows: list,
         tokens = {"available": False, "path": str(usage_db)}
 
     levels = {lvl: scanned["trust_levels"].get(lvl, 0)
-              for lvl in (LEVEL_A, LEVEL_B, LEVEL_C)}
+              for lvl in LEVELS}
 
     return {
         "plans": {"total": n, "distribution": distribution, "under": under},
@@ -283,7 +283,7 @@ def render_report(stats: dict) -> str:
     total_levels = sum(levels.values()) or 1
     lines.append("  " + ", ".join(
         "%s=%d (%.0f%%)" % (lvl, levels[lvl], 100.0 * levels[lvl] / total_levels)
-        for lvl in (LEVEL_A, LEVEL_B, LEVEL_C)))
+        for lvl in LEVELS))
     top_reasons = stats["trust"]["top_reasons"]
     lines.append("  top reasons: " + (
         ", ".join(f"{k}={v}" for k, v in top_reasons.items()) or "none"))

@@ -7,11 +7,11 @@ what is genuinely about heat plans: which roots this profile's lists draw
 from, where its ontology files live, and the one rule that is about its own
 carrier axis.
 
-    python -m profiles.kwp.vocabulary --refresh    # SOURCES, latest, then check
+    python -m profiles.kwp.vocabulary --refresh    # sources.json, latest, then check
     python -m profiles.kwp.vocabulary --closure oeo-closure.owl --write
     python -m profiles.kwp.vocabulary --check      # spec against the pin
 
-`--refresh` is what a run calls first. It pulls every source in SOURCES at
+`--refresh` is what a run calls first. It pulls every source of sources.json at
 the version upstream currently calls its own, rebuilds vocabulary.json from
 it, writes the lock under data/upstream, and then holds the spec against the
 new snapshot. A spec the current ontology no longer agrees with stops the run.
@@ -29,9 +29,11 @@ import io
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
+from docpipe import sources as docpipe_sources
 from docpipe import ontology, upstream                        # noqa: E402
 from docpipe.profile import load_profile                      # noqa: E402
 
@@ -44,72 +46,118 @@ OEO = "https://openenergyplatform.org/ontology/oeo/"
 OBO = "http://purl.obolibrary.org/obo/"
 
 # What this profile is written against, always at upstream's current version.
-# MHPO attaches nothing to its releases: its mhpo.owl is in the repository,
-# and is read at the tag of the latest release. `reviewed` is the MHPKG
-# commit kg.py was last read against: a newer schema is reported with the
-# files that changed, because kg.py mirrors it by hand.
-SOURCES = {
-    "oeo": {"kind": "release_asset", "repo": "OpenEnergyPlatform/ontology",
-            "asset": "oeo-closure.owl"},
-    "mhpo": {"kind": "release_file",
-             "repo": "OpenEnergyPlatform/municipal-heat-planning-ontology",
-             "file": "mhpo.owl"},
-    "mhpkg": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
-              "ref": "production",
-              "reviewed": "c18860c373eefc0ff38fb7f01a6ff0a230ef1e0d",
-              "files": ["mhpkg/schema/generated/mhpkg_target_scenario.shacl.ttl",
-                        "mhpkg/schema/mhpkg_iri_policy.shacl.ttl",
-                        "mhpkg/schema/mhpkg_target_scenario.yaml",
-                        "mhpkg/schema/mint_slice.py"]},
-}
-
-# The roots each list draws from. A list is only checkable against a set, and
-# a set is only honest if it is the ontology's own: "OEO_00000132 district
-# heat is not an energy carrier" is a fact of the closure, not an opinion.
-SETS = {
-    "energy_carrier": ("class", OEO + "OEO_00020039"),
-    "sector": ("class", OEO + "OEO_00000367"),
-    "quantity_value": ("class", OEO + "OEO_00000350"),
-    "energy_unit": ("class", OBO + "UO_0000111"),
-    "mass_unit": ("class", OBO + "UO_0000002"),
-    "aggregation_type": ("individual", OEO + "OEO_00140068"),
-}
-
-# Which axis of this spec answers from which of those roots.
-AXIS_SETS = {"sector": "sector", "aggregation": "aggregation_type",
-             "quantity": "quantity_value"}
+# OEO at its latest release: the closure is reasoned, and its development
+# state is Manchester sources whose class hierarchy only a reasoner completes
+# (read without one, 5 of the release's 126 energy carriers stay carriers).
+# MHPO at the head of develop, where the team builds mhpo.owl from its edit
+# file (owner decision 2026-11-03). The MHPKG schema is read at its branch's
+# head and kept as mhpkg_schema.yaml (mhpkg.py), which kg.py takes its terms
+# from; `reviewed` only names the commit the report of changed files starts
+# from.
+# The sources this profile pulls, the roots each list draws from (a list is
+# only checkable against a set, and a set is only honest if it is the
+# ontology's own: "OEO_00000132 district heat is not an energy carrier" is a
+# fact of the closure, not an opinion) and which coordinate answers from
+# which of them stand in sources.json beside this file (`docpipe.sources`),
+# where `docpipe edit` shows and fetches them.
+def sources() -> dict:
+    return docpipe_sources.of(PROFILE).sources
 
 
-def build(closure: Path, mhpo: Path = None) -> dict:
+def sets() -> dict:
+    return docpipe_sources.of(PROFILE).sets()
+
+
+def axis_sets() -> dict:
+    return docpipe_sources.of(PROFILE).axis_lists
+
+
+def build(closure: Path, mhpo: Path = None, shape=None) -> dict:
+    """The snapshot: this profile's lists, every term its graph writes --
+    the schema's included, so `mhpkg.missing_terms` can say which of them
+    the pin lacks -- and for every value class of the schema the classes
+    under it (`mhpkg:<class>`), which is what decides that a CO2-equivalent
+    value IS a greenhouse gas emission value without a reasoner. *shape* is
+    the schema to build from, the profile's own where not given."""
+    from profiles.kwp import mhpkg
     spec_raw = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
+    shape = shape if shape is not None else mhpkg.load()
+    sets = dict(globals()['sets']())
+    for name in value_classes(shape):
+        prefix, _, local = shape.cls(name).partition(":")
+        if prefix == "oeo":
+            sets[f"mhpkg:{name}"] = ("class", OEO + local)
+    named = {curie.partition(":")[2] for curie in shape.curies()
+             if curie.partition(":")[0] in ("oeo", "mhpo")}
+    from docpipe import graphfile
     return ontology.build(
-        closure, SETS, spec_raw, extra=[mhpo] if mhpo else None, base=OEO,
-        also=edge_terms(spec_raw),
+        closure, sets, spec_raw, extra=[mhpo] if mhpo else None, base=OEO,
+        also=tuple(sorted(set(edge_terms(spec_raw, shape)) | named)),
+        drawing=graphfile.load(load_profile(PROFILE)).map,
         language=load_profile(PROFILE).require("extraction",
                                                "ALT_LABEL_LANGUAGE"))
+
+
+def value_classes(shape) -> list:
+    """The schema classes a plan part holds values of."""
+    from profiles.kwp import kg
+    out = []
+    for container in kg.CONTAINERS:
+        for name in shape.value_classes(container, kg.CONTAINER_SLOT):
+            if name not in out:
+                out.append(name)
+    return out
 
 
 def load(path: Path = VOCABULARY_PATH) -> dict:
     return ontology.load(path)
 
 
-def refresh(cache: Path = upstream.CACHE) -> dict:
-    """Pull SOURCES, rebuild vocabulary.json from them, write the lock.
+def refresh(cache: Path = upstream.CACHE, out: Optional[Path] = None) \
+        -> dict:
+    """Pull the sources, rebuild vocabulary.json from them, write the lock.
 
     Returns the records. The snapshot's pin names every source's version, so
-    vocabulary.json changes exactly when something upstream did.
+    vocabulary.json changes exactly when something upstream did. *out* is
+    the folder the profile's files are written to, its own where not given
+    (`docpipe edit` fetches into a folder of its own first).
     """
-    records = upstream.fetch(SOURCES, cache)
+    out = Path(out) if out is not None else HERE
+    records = upstream.fetch(sources(), cache)
+    from profiles.kwp import mhpkg
+    schema = [path for path in upstream.files(records["mhpkg"], ".yaml")
+              if Path(path).as_posix().endswith(mhpkg.SCHEMA_FILE)]
+    if not schema:
+        raise upstream.UpstreamError(f"{mhpkg.SCHEMA_FILE} not in the "
+                                     f"MHPKG files pulled")
+    text = Path(schema[0]).read_text(encoding="utf-8")
+    with io.open(out / mhpkg.SCHEMA_PATH.name, "w", encoding="utf-8",
+                 newline="\n") as handle:
+        handle.write(text)
+    if out == HERE:
+        mhpkg._SHAPE.clear()
     closure = upstream.files(records["oeo"], ".owl")[0]
     mhpo = next(iter(upstream.files(records["mhpo"])), None)
-    snapshot = build(closure, mhpo)
+    snapshot = build(closure, mhpo,
+                     mhpkg.load(out / mhpkg.SCHEMA_PATH.name))
     snapshot["pin"]["sources"] = {name: record["version"]
                                   for name, record in records.items()}
-    with io.open(VOCABULARY_PATH, "w", encoding="utf-8",
+    with io.open(out / VOCABULARY_PATH.name, "w", encoding="utf-8",
                  newline="\n") as handle:
         handle.write(ontology.serialize(snapshot))
     upstream.write_lock(PROFILE, records, cache)
     return records
+
+
+# The files a refresh writes into the profile's folder.
+WRITES = ("vocabulary.json", "mhpkg_schema.yaml")
+
+
+def forget() -> None:
+    """Drop what this process has read of the profile's files, after
+    `docpipe edit` applied a fetch: the schema is read anew."""
+    from profiles.kwp import mhpkg
+    mhpkg._SHAPE.clear()
 
 
 def shapes(cache: Path = upstream.CACHE) -> list:
@@ -122,7 +170,8 @@ def spec_terms(spec_raw: dict) -> dict:
     return ontology.spec_terms(spec_raw)
 
 
-def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
+def carrier_problems(spec_raw: dict, snapshot: dict,
+                     drawing: dict) -> list:
     """A carrier the ontology does not call a carrier, undeclared.
 
     This profile is allowed to offer a heat source under `carrier` -- district
@@ -132,13 +181,20 @@ def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
     that is not one and nobody decided.
 
     Stays in the profile because `outside_root` is this profile's answer to a
-    question the other one does not have.
+    question the other one does not have. It is declared in the settings of
+    the arrow of the *drawing* (the `map` of its graph file) that reads the
+    carrier.
     """
+    from docpipe.extraction.graph import Drawing
     terms, sets = snapshot["terms"], snapshot["sets"]
     problems: list = []
+    drawn = Drawing(drawing)
     for parameter in spec_raw.get("parameters", []):
         carrier = (parameter.get("axes") or {}).get("carrier") or {}
-        declared = set((carrier.get("kg") or {}).get("outside_root") or {})
+        declared = {uri for arrow in drawn.readers(parameter.get("uri"),
+                                                   "carrier")
+                    for uri in (arrow.get("settings") or {}).get(
+                        "outside_root") or {}}
         allowed = set(sets.get("energy_carrier") or ())
         for uri in (carrier.get("vocabulary") or {}):
             name = ontology.identifier(uri)
@@ -152,36 +208,78 @@ def carrier_problems(spec_raw: dict, snapshot: dict) -> list:
                 label = (terms.get(name) or {}).get("label", "?")
                 problems.append(
                     f"{parameter.get('uri')}.carrier: {uri} ({label}) is not "
-                    f"an energy carrier and is not declared in kg.outside_root")
+                    f"an energy carrier and is not declared in outside_root")
     return problems
 
 
-def edges(spec_raw: dict) -> list:
-    """Every triple shape this profile emits, the spec's and the writer's.
+def edges(spec_raw: dict, shape=None) -> list:
+    """Every triple shape this profile emits: the drawing of its graph file
+    (`map`), so the pin can be asked about all of it. *shape* is unused and
+    stays for the callers that pass the schema."""
+    from docpipe import graphfile
+    from docpipe.extraction.bricks import registry
+    from docpipe.profile import load_profile
+    profile = load_profile(PROFILE)
+    return ontology.drawing_edges(graphfile.load(profile).map, spec_raw,
+                                  registry(profile))
 
-    The `kg` blocks carry most of them and `kg.py` declares the handful that
-    sit behind no parameter, so the two together are the whole output and the
-    pin can be asked about all of it.
-    """
-    from profiles.kwp import kg          # here: kg reads the spec at import
-    return list(ontology.spec_edges(spec_raw)) + list(kg.EDGES)
+
+def schema_predicates() -> set:
+    """The predicates the MHPKG schema prescribes, bare."""
+    from profiles.kwp import mhpkg
+    shape = mhpkg.load()
+    return {ontology.identifier(shape.slot(name).partition(":")[2])
+            for name in shape.slots
+            if (shape.slots.get(name) or {}).get("slot_uri")} - {None}
 
 
-def edge_terms(spec_raw: dict) -> tuple:
+def schema_notes(spec_raw: dict, snapshot: dict) -> list:
+    """What the pin says against the schema's own terms: the edges it
+    prescribes that the ontology's domains or ranges contradict, and the
+    terms the pin does not have yet. The schema is a draft with open term
+    requests; these are reported with every run and stop none."""
+    from profiles.kwp import mhpkg
+    prescribed = schema_predicates()
+    notes = ontology.edge_problems(
+        [e for e in edges(spec_raw)
+         if ontology.identifier(e.get("predicate")) in prescribed], snapshot)
+    notes += [f"MHPKG names {curie}, which the pinned ontology does not have"
+              for curie in mhpkg.missing_terms(mhpkg.load(),
+                                               snapshot["terms"])]
+    return notes
+
+
+def edge_terms(spec_raw: dict, shape=None) -> tuple:
     """Every identifier those triple shapes name, for the snapshot to carry."""
     named = {ontology.identifier(edge.get(part))
-             for edge in edges(spec_raw)
+             for edge in edges(spec_raw, shape)
              for part in ("subject", "predicate", "object") if edge.get(part)}
     return tuple(sorted(named - {None}))
 
 
 def check(spec_raw: dict, snapshot: dict) -> list:
-    """Every complaint the pinned ontology has about this spec."""
+    """Every complaint the pinned ontology has about this spec; about the
+    terms the MHPKG schema prescribes, `schema_notes`."""
+    # The spec as written: a slot it names is the schema's term and is held
+    # to the pin in `schema_notes`, not here; so is a term of the schema the
+    # pin does not have yet, which the drawing writes as the schema says.
+    from profiles.kwp import mhpkg
+    prescribed = schema_predicates()
+    from docpipe import graphfile
+    from docpipe.profile import load_profile
+    drawing = graphfile.load(load_profile(PROFILE)).map
+    open_requests = [curie.partition(":")[2] for curie in
+                     mhpkg.missing_terms(mhpkg.load(), snapshot["terms"])]
     return (ontology.term_problems(spec_raw, snapshot)
-            + ontology.kind_problems(spec_raw, snapshot)
-            + ontology.edge_problems(edges(spec_raw), snapshot)
-            + carrier_problems(spec_raw, snapshot)
-            + ontology.set_problems(spec_raw, snapshot, AXIS_SETS))
+            + ontology.drawing_term_problems(drawing, snapshot,
+                                             open_requests)
+            + ontology.kind_problems(drawing, snapshot)
+            + ontology.edge_problems(
+                [e for e in edges(spec_raw)
+                 if ontology.identifier(e.get("predicate")) not in prescribed],
+                snapshot)
+            + carrier_problems(spec_raw, snapshot, drawing)
+            + ontology.set_problems(spec_raw, snapshot, axis_sets()))
 
 
 def foreign_labels(spec_raw: dict, snapshot: dict) -> list:
@@ -196,7 +294,7 @@ def main(argv=None) -> int:
     parser.add_argument("--write", action="store_true",
                         help="rebuild vocabulary.json from those files")
     parser.add_argument("--refresh", action="store_true",
-                        help="pull SOURCES at their latest version, rebuild "
+                        help="pull the sources of sources.json at their latest version, rebuild "
                              "vocabulary.json, then check")
     parser.add_argument("--check", action="store_true",
                         help="hold the spec against the checked-in snapshot")
@@ -235,6 +333,8 @@ def main(argv=None) -> int:
         problems = check(spec_raw, load())
         for problem in problems:
             print(problem)
+        for note in schema_notes(spec_raw, load()):
+            print(f"  note mhpkg: {note}")
         seen = set()
         for where, uri, label, own in foreign_labels(spec_raw, load()):
             if uri in seen:

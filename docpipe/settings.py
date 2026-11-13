@@ -67,6 +67,13 @@ class Setting:
     off: str = "0"
     sep: str = ","              # what joins this list in the environment
     stages: tuple = ()          # the commands that read it
+    # The numbers of the profile's flow file this setting wins over
+    # (`extraction.flow`): unset, the file says them, so there is no default
+    # here.
+    flow: tuple = ()
+    # The rule of the profile's rules file this setting wins over
+    # (`docpipe.rules`): unset, the file says it, so there is no default here.
+    rule: Optional[str] = None
 
 
 def S(env: str, key: str, kind: str, default: Optional[str], help: str,
@@ -116,6 +123,10 @@ SETTINGS = (
     S("INFERENCE_HARVEST_DIR", "chat.harvest_dir", "path", None,
       "Harvest directory the chat takes verified values from and the review "
       "page reads; unset: neither.",
+      stages=("chat",)),
+    S("INFERENCE_REVIEW", "chat.review", "flag", "1",
+      "Offer the review page where a harvest is set; 0 offers the chat "
+      "alone.",
       stages=("chat",)),
     S("INFERENCE_IMAGE_ROOT", "chat.image_root", "path", None,
       "Folder that stored table and figure image paths are relative to; "
@@ -170,12 +181,13 @@ SETTINGS = (
       "Passages kept per retrieval in chat.",
       stages=("chat",)),
     S("INFERENCE_VALUES_LEVEL", "chat.values_level", "str", None,
-      "Worst trust level (A, B or C) of a harvested value the chat still "
+      "Worst trust level (A, B, C or D) of a harvested value the chat still "
       "shows; unset: every value.",
       stages=("chat",)),
     S("INFERENCE_VALUES_LIMIT", "chat.values_limit", "int", "20",
-      "Harvested values one answer shows before it says how many more there "
-      "are.",
+      "Harvested values the closed questions give one answer before it says "
+      "how many more there are; the search by meaning ends with its budget "
+      "(`ANSWER_CONTEXT_TOKENS`).",
       stages=("chat",)),
     S("DOCPIPE_CONFIG", "config", "path", None,
       "The project file to read instead of the nearest docpipe.toml; empty "
@@ -185,11 +197,27 @@ SETTINGS = (
       "Base folder of all profile data, one subfolder per profile; default: "
       "<repo>/data.",
       stages=("preprocess", "refine", "visuals", "chunk", "extract", "chat")),
+    S("EDIT_TRY_API_KEY", "edit.try_api_key", "str", "EMPTY",
+      "API key of the endpoint `docpipe edit` tries a changed prompt at.",
+      secret=True, stages=("edit",)),
+    S("EDIT_TRY_BASE_URL", "edit.try_base_url", "str", None,
+      "OpenAI-compatible endpoint `docpipe edit` sends a recorded request "
+      "to once more with a changed prompt; without it the text model of "
+      "the run (LLM_BASE_URL) where one is set, else nothing is sent.",
+      stages=("edit",)),
+    S("EDIT_TRY_MODEL", "edit.try_model", "str", None,
+      "Model name at EDIT_TRY_BASE_URL; without it LLM_MODEL.",
+      stages=("edit",)),
     S("EMBEDDING_ALLOW_MIXED_INDEX", "embedding.allow_mixed_index", "flag",
       "0",
       "Append to an index of another embedding model (both recorded); 0 "
       "stops before a vector is written.",
       stages=("chunk",)),
+    S("EMBEDDING_API_FORMAT", "embedding.api_format", "str", "input",
+      "How an item reaches the embedding endpoint (api backend only): "
+      "input, the OpenAI request, text only; messages, the chat form a vLLM "
+      "server takes, with the picture and the model's own instruction.",
+      stages=("chunk", "extract", "chat")),
     S("EMBEDDING_API_KEY", "embedding.api_key", "str", "EMPTY",
       "API key of the embedding endpoint (api backend only).",
       secret=True, stages=("extract", "chat")),
@@ -229,204 +257,177 @@ SETTINGS = (
       "The one .env-style file to load before anything else; default: .env "
       "in the working folder.",
       bootstrap=True, stages=ALL),
-    S("EXTRACT_ANCHORS", "extract.anchors", "flag", "1",
-      "Ask the model once per question for a search anchor; 0 searches "
-      "without anchors.",
-      stages=("extract",)),
-    S("EXTRACT_ATTACH_IMAGES", "extract.attach_images", "flag", "1",
+    S("EXTRACT_ATTACH_IMAGES", "extract.attach_images", "flag", None,
       "Send table and figure crops along with extraction requests; 0 sends "
       "text only.",
-      stages=("extract",)),
-    S("EXTRACT_BATCH_CHARS", "extract.batch_chars", "int", "14000",
+      stages=("extract",),
+      rule="attach_images"),
+    S("EXTRACT_BATCH_CHARS", "extract.batch_chars", "int", None,
       "Characters of passage text one value request may carry in total.",
-      stages=("extract",)),
-    S("EXTRACT_BATCH_DOCS", "extract.batch_docs", "int", "64",
-      "Documents kept in flight at once during extraction.",
-      stages=("extract",)),
-    S("EXTRACT_BATCH_SOURCES", "extract.batch_sources", "int", "6",
+      stages=("extract",),
+      rule="batch_chars"),
+    S("EXTRACT_BATCH_DOCS", "extract.batch_docs", "int", None,
+      "Most documents in flight at once during extraction; within it a "
+      "document starts while the model requests stay below the adaptive "
+      "limit.",
+      stages=("extract",),
+      rule="documents_in_flight"),
+    S("EXTRACT_BATCH_SOURCES", "extract.batch_sources", "int", None,
       "Passages sharing one value request; lowered at start if the context "
       "window is small.",
-      stages=("extract",)),
-    S("EXTRACT_CODE_ROUNDS", "extract.code_rounds", "int", "2",
-      "Sandbox calculation rounds one value request may use.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="batch_sources"),
+    S("EXTRACT_CODE_ROUNDS", "extract.code_rounds", "int", None,
+      "Sandbox calculation rounds one value request may use. "
+      "Unset: the profile's rules file says it (code_rounds).",
+      stages=("extract",), rule="code_rounds"),
     S("EXTRACT_CONTENT_CACHE_OWNERS", "extract.content_cache_owners", "int",
-      "300000",
+      None,
       "Passages (sections, tables, figures) whose text one run keeps, shared "
       "by every thread; 0 keeps all.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_ATTEMPTS", "extract.field_attempts", "int", "3",
-      "Times one window is asked again when its answers could not be backed "
-      "by a quote.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_MAX_WINDOWS", "extract.field_max_windows", "int", "24",
-      "Most windows one coordinate may cost (own plus retrieval) before it "
-      "counts as exhausted.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_OVERLAP", "extract.field_overlap", "int", "1",
-      "Passages of one rest-stage window repeated at the start of the next.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_PARALLEL", "extract.field_parallel", "int", "192",
+      stages=("extract",),
+      rule="content_cache_owners"),
+    S("EXTRACT_FIELD_PARALLEL", "extract.field_parallel", "int", None,
       "Field-sweep threads under the row requests; a ceiling for the "
       "adaptive request limit.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_RE_ENTRY", "extract.field_re_entry", "int", "3",
-      "Already-read passages carried to the front of a coordinate's next "
-      "window.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_ROUNDS", "extract.field_rounds", "int", "4",
-      "Retrieval rounds of a coordinate's sweep before it falls back to the "
-      "rest stage.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_ROWS", "extract.field_rows", "int", "32",
-      "Most rows one field request answers at once.",
-      stages=("extract",)),
-    S("EXTRACT_FIELD_WINDOW", "extract.field_window", "int", "2",
-      "Passages in one window of the field sweep.",
-      stages=("extract",)),
-    S("EXTRACT_FOLLOWUP_ROUNDS", "extract.followup_rounds", "int", "1",
-      "Times the model may ask for more passages on a topic and receive "
-      "them.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_CHARS", "extract.frame_chars", "int", None,
-      "Characters of passage text per frame request; default: the "
-      "batch_chars value.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_ROUNDS", "extract.frame_rounds", "int", "3",
-      "Rounds the frame search (which scenarios and years a document has) "
-      "may ask for more.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_SOURCES", "extract.frame_sources", "int", "12",
-      "Passages one frame request reads.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_YEAR_MAX", "extract.frame_year_max", "int", "2100",
-      "Latest number the frame cross-check counts as a calendar year.",
-      stages=("extract",)),
-    S("EXTRACT_FRAME_YEAR_MIN", "extract.frame_year_min", "int", "1990",
-      "Earliest number the frame cross-check counts as a calendar year.",
-      stages=("extract",)),
-    S("EXTRACT_IMAGE_MAX_SIDE", "extract.image_max_side", "int", "1280",
-      "Longest side in pixels of a crop attached to an extraction request.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_ADAPTIVE", "extract.limit_adaptive", "flag", "1",
+      stages=("extract",),
+      rule="compute_parallel"),
+    S("EXTRACT_IMAGE_MAX_SIDE", "extract.image_max_side", "int", None,
+      "Longest side in pixels of a crop attached to an extraction request. "
+      "Unset: the profile's rules file says it (image_max_side).",
+      stages=("extract",), rule="image_max_side"),
+    S("EXTRACT_LIMIT_ADAPTIVE", "extract.limit_adaptive", "flag", None,
       "Steer the open requests by the server's queue; 0 turns the adaptive "
       "limit off.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_BACKOFF", "extract.limit_backoff", "float", "0.8",
+      stages=("extract",),
+      rule="limit_adaptive"),
+    S("EXTRACT_LIMIT_BACKOFF", "extract.limit_backoff", "float", None,
       "Factor the request limit is multiplied by on a step down.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_KV_GROW", "extract.limit_kv_grow", "float", "0.80",
+      stages=("extract",),
+      rule="limit_backoff"),
+    S("EXTRACT_LIMIT_KV_GROW", "extract.limit_kv_grow", "float", None,
       "Server cache fraction below which the request limit may grow.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_KV_HIGH", "extract.limit_kv_high", "float", "0.92",
+      stages=("extract",),
+      rule="limit_kv_grow"),
+    S("EXTRACT_LIMIT_KV_HIGH", "extract.limit_kv_high", "float", None,
       "Server cache fraction at or above which the request limit steps "
       "down.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_MAX", "extract.limit_max", "int", "512",
+      stages=("extract",),
+      rule="limit_kv_high"),
+    S("EXTRACT_LIMIT_MAX", "extract.limit_max", "int", None,
       "Most requests the adaptive limit may open at once.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_MIN", "extract.limit_min", "int", "16",
+      stages=("extract",),
+      rule="limit_most"),
+    S("EXTRACT_LIMIT_MIN", "extract.limit_min", "int", None,
       "Fewest requests the adaptive limit backs off to.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_POLL", "extract.limit_poll", "float", "5",
+      stages=("extract",),
+      rule="limit_least"),
+    S("EXTRACT_LIMIT_POLL", "extract.limit_poll", "float", None,
       "Seconds between samples of the server's queue.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_START", "extract.limit_start", "int", "128",
+      stages=("extract",),
+      rule="limit_poll_s"),
+    S("EXTRACT_LIMIT_START", "extract.limit_start", "int", None,
       "Requests the adaptive limit opens with.",
-      stages=("extract",)),
-    S("EXTRACT_LIMIT_STEP", "extract.limit_step", "int", "8",
+      stages=("extract",),
+      rule="limit_start"),
+    S("EXTRACT_LIMIT_STEP", "extract.limit_step", "int", None,
       "Requests added on each growth step of the adaptive limit.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="limit_step"),
     S("EXTRACT_LIMIT_TPOT_MAX", "extract.limit_tpot_max", "float", None,
       "Seconds per output token above which the limit steps down; unset: "
       "never.",
-      stages=("extract",)),
-    S("EXTRACT_LLM_PARALLEL", "extract.llm_parallel", "int", "128",
-      "Model requests in flight at once over the whole extraction run.",
-      stages=("extract",)),
-    S("EXTRACT_LOCATE", "extract.locate", "flag", "1",
+      stages=("extract",),
+      rule="limit_token_time_s"),
+    S("EXTRACT_LOCATE", "extract.locate", "flag", None,
       "Place each quote on its PDF page for highlighting; 0 skips it and "
       "needs no PDFs.",
-      stages=("extract",)),
-    S("EXTRACT_LOCATE_CACHE_PAGES", "extract.locate_cache_pages", "int", "512",
+      stages=("extract",),
+      rule="locate_quotes"),
+    S("EXTRACT_LOCATE_CACHE_PAGES", "extract.locate_cache_pages", "int", None,
       "Pages of words kept in memory for placing quotes, across documents.",
-      stages=("extract",)),
-    S("EXTRACT_LOCATE_MAX_PAGES", "extract.locate_max_pages", "int", "3",
+      stages=("extract",),
+      rule="locate_cache_pages"),
+    S("EXTRACT_LOCATE_MAX_PAGES", "extract.locate_max_pages", "int", None,
       "Pages of a section tried when placing a quote before giving up.",
-      stages=("extract",)),
-    S("EXTRACT_MAX_MODEL_LEN", "extract.max_model_len", "int", "32768",
+      stages=("extract",),
+      rule="locate_max_pages"),
+    S("EXTRACT_MAX_MODEL_LEN", "extract.max_model_len", "int", None,
       "Context window assumed when the server does not report one.",
-      stages=("extract",)),
-    S("EXTRACT_MAX_RETRIES", "extract.max_retries", "int", "3",
-      "Attempts per extraction request before it is given up.",
-      stages=("extract",)),
-    S("EXTRACT_MAX_SOURCE_CHARS", "extract.max_source_chars", "int", "16000",
-      "Longest passage one request carries; longer sections are split into "
-      "windows.",
-      stages=("extract",)),
-    S("EXTRACT_PARENT_CHARS", "extract.parent_chars", "int", "4000",
+      stages=("extract",),
+      rule="model_window_tokens"),
+    S("EXTRACT_MAX_RETRIES", "extract.max_retries", "int", None,
+      "Replies out of their form an extraction request takes before it is "
+      "left unanswered; a server's failure is asked again until the run "
+      "halts. Unset: the profile's flow file says it (replies).",
+      stages=("extract",), flow=("replies",)),
+    S("EXTRACT_PARENT_CHARS", "extract.parent_chars", "int", None,
       "Characters of a table's parent section sent along with the table.",
-      stages=("extract",)),
-    S("EXTRACT_PLAN_PARALLEL", "extract.plan_parallel", "int", "8",
-      "Threads for retrieval planning and quote verification.",
-      stages=("extract",)),
-    S("EXTRACT_PLAN_TOP", "extract.plan_top", "int", "100",
-      "Passages (tables, figures and prose) a document's plan keeps, in "
-      "rank order.",
-      stages=("extract",)),
-    S("EXTRACT_PRIOR_MAX", "extract.prior_max", "int", "24",
-      "Earlier values listed to the model so that it does not repeat them.",
-      stages=("extract",)),
-    S("EXTRACT_PROSE_TOP", "extract.prose_top", "int", "200",
-      "Prose cap of an older plan rule; the normal run plans by plan_top "
-      "and ignores it.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="review_parent_chars"),
     S("EXTRACT_PROVENANCE", "extract.provenance", "flag", "1",
       "Write the provenance of every value beside the graph "
       "(<graph>.prov.ttl); 0 writes the graph only.",
       stages=("extract",)),
-    S("EXTRACT_REST_MAX_WINDOWS", "extract.rest_max_windows", "int", "12",
-      "Windows the last search stage may spend per coordinate.",
-      stages=("extract",)),
     S("EXTRACT_RETRY_TEMPERATURE_STEP", "extract.retry_temperature_step",
-      "float", "0.1",
+      "float", None,
       "Temperature added per unreadable reply on the next attempt, capped "
-      "at 1.0.",
-      stages=("extract",)),
-    S("EXTRACT_RETRY_TIMEOUT", "extract.retry_timeout", "int", "600",
-      "Seconds a retry may wait for a reply after a request timed out.",
-      stages=("extract",)),
-    S("EXTRACT_RETRY_WAIT", "extract.retry_wait", "float", "2",
-      "Seconds per attempt to wait after a bad reply, up to retry_wait_max.",
-      stages=("extract",)),
-    S("EXTRACT_RETRY_WAIT_MAX", "extract.retry_wait_max", "float", "6",
-      "Longest wait in seconds after a bad reply.",
-      stages=("extract",)),
-    S("EXTRACT_SERVER_DEAD_AFTER", "extract.server_dead_after", "float", "180",
-      "Seconds without any reply from the server before the run ends.",
-      stages=("extract",)),
-    S("EXTRACT_SHOW_UNPARSABLE", "extract.show_unparsable", "int", "20",
+      "by the rule retry_temperature_most. "
+      "Unset: the profile's rules file says it (retry_temperature_step).",
+      stages=("extract",), rule="retry_temperature_step"),
+    S("EXTRACT_RETRY_TIMEOUT", "extract.retry_timeout", "int", None,
+      "Seconds a retry may wait for a reply after a request timed out. "
+      "Unset: the profile's rules file says it (repeat_timeout_s).",
+      stages=("extract",), rule="repeat_timeout_s"),
+    S("EXTRACT_RETRY_WAIT", "extract.retry_wait", "float", None,
+      "Seconds per attempt to wait after a bad reply, up to retry_wait_max. "
+      "Unset: the profile's rules file says it (retry_wait_s).",
+      stages=("extract",), rule="retry_wait_s"),
+    S("EXTRACT_RETRY_WAIT_MAX", "extract.retry_wait_max", "float", None,
+      "Longest wait in seconds after a bad reply. "
+      "Unset: the profile's rules file says it (retry_wait_most_s).",
+      stages=("extract",), rule="retry_wait_most_s"),
+    S("EXTRACT_SEARCH_CHUNKS", "extract.search_chunks", "int", None,
+      "Pieces one request of a search shows. Unset: the profile's flow "
+      "file says it (search_per_request).",
+      stages=("extract",), flow=("search_per_request",)),
+    S("EXTRACT_SEARCH_PIECES", "extract.search_pieces", "int", None,
+      "Pieces a search for an open coordinate or a field the document has "
+      "once shows; a field with a list reads a multiple of them. Unset: "
+      "the profile's flow file says it (search_pieces).",
+      stages=("extract",), flow=("search_pieces",)),
+    S("EXTRACT_SEARCH_SHARES", "extract.search_shares", "str", None,
+      "How many of a search's pieces come first from tables, figures and "
+      "text, scaled to its pieces; the rest are the best of any kind. "
+      "Unset: the profile's flow file says them (search_tables, "
+      "search_figures, search_text).",
+      stages=("extract",),
+      flow=("search_tables", "search_figures", "search_text")),
+    S("EXTRACT_SERVER_DEAD_AFTER", "extract.server_dead_after", "float",
+      None,
+      "Seconds without any reply from the server before the run ends. "
+      "Unset: the profile's rules file says it (server_dead_after_s).",
+      stages=("extract",), rule="server_dead_after_s"),
+    S("EXTRACT_SHOW_UNPARSABLE", "extract.show_unparsable", "int", None,
       "How many unreadable model replies are shown in the log.",
-      stages=("extract",)),
+      stages=("extract",),
+      rule="show_unparsable"),
     S("EXTRACT_SPLIT_DEPTH", "extract.split_depth", "int", "3",
       "Times a request that keeps failing may be halved.",
       stages=("extract",)),
-    S("EXTRACT_TRACE", "extract.trace", "flag", "1",
-      "Write a per-document event trace beside the harvest; 0 turns tracing "
-      "off.",
-      stages=("extract",)),
-    S("EXTRACT_TRANSPORT_WAIT", "extract.transport_wait", "float", "15",
+    S("EXTRACT_TRACE", "extract.trace", "flag", None,
+      "Write a per-document event trace beside the harvest; 0 turns "
+      "tracing off. Unset: the rule trace_on says it.",
+      stages=("extract",), rule="trace_on"),
+    S("EXTRACT_TRANSPORT_WAIT", "extract.transport_wait", "float", None,
       "Seconds before retrying a request that never reached the server; "
-      "doubles each time.",
-      stages=("extract",)),
+      "doubles each time. Unset: the profile's rules file says it (transport_wait_s).",
+      stages=("extract",), rule="transport_wait_s"),
     S("EXTRACT_TRANSPORT_WAIT_MAX", "extract.transport_wait_max",
-      "float", "120",
-      "Longest wait in seconds between retries to an unreachable server.",
-      stages=("extract",)),
-    S("EXTRACT_VISUAL_SHARE", "extract.visual_share", "float", "0.5",
-      "Share of a document's plan held for tables and figures before prose "
-      "fills the rest.",
-      stages=("extract",)),
+      "float", None,
+      "Longest wait in seconds between retries to an unreachable server. "
+      "Unset: the profile's rules file says it (transport_wait_most_s).",
+      stages=("extract",), rule="transport_wait_most_s"),
     S("GEMINI_API_KEY", "gemini.api_key", "str", None,
       "Key of the Gemini API, for a role that has no key of its own.",
       secret=True,
@@ -476,6 +477,10 @@ SETTINGS = (
     S("LLM_MODEL", "llm.model", "str", "Qwen/Qwen3.5-122B-A10B-FP8",
       "Name the text model is served under.",
       stages=("refine", "extract", "chat")),
+    S("LLM_MODELS", "llm.models", "str", None,
+      "Chat only: the model names the requests are spread over, "
+      "comma-separated; empty is LLM_MODEL alone.",
+      stages=("chat",)),
     S("LLM_NUM_PARALLEL", "llm.num_parallel", "int", "8",
       "Refinement only: windows sent to the model at once per document.",
       stages=("refine",)),
@@ -507,24 +512,31 @@ SETTINGS = (
       "Tokens a hosted model may think in, on top of the answer room of "
       "each request.",
       stages=("preprocess", "refine", "visuals", "extract", "chat")),
+    S("LLM_SLOTS_PER_MODEL", "llm.slots_per_model", "int", "1",
+      "Requests each model of LLM_MODELS takes at once.",
+      stages=("extract", "chat")),
     S("LLM_TIMEOUT", "llm.timeout", "int", "180",
       "Seconds before one text model request is given up.",
       stages=("refine", "extract", "chat")),
     S("LLM_TOKENIZER_ID", "llm.tokenizer_id", "str", None,
       "Tokenizer that counts chat prompt tokens; default: the model name.",
       stages=("chat",)),
+    S("LLM_TOOL_CHOICE", "llm.tool_choice", "str", "none",
+      "Tool choice sent with every request; none keeps an agent endpoint "
+      "from calling its own tools, empty or off sends none.",
+      stages=("preprocess", "refine", "visuals", "extract", "chat")),
     S("OEP_API_TOKEN", "oekg.api_token", "str", None,
       "Token for the OEKG SPARQL endpoint; the scenarios vocabulary refresh "
       "stops without it.",
       secret=True, stages=("extract",)),
-    S("OEKG_EVIDENCE", "oekg.evidence", "flag", "0",
+    S("OEKG_EVIDENCE", "oekg.evidence", "flag", None,
       "scenarios profile: write each passage as a provenance node instead "
-      "of a comment.",
+      "of a comment. Unset: the profile's graph file says it (evidence_as).",
       stages=("extract",)),
-    S("OEKG_ID_BASE", "oekg.id_base",
-      "str", "https://openenergyplatform.org/ontology/oekg/",
+    S("OEKG_ID_BASE", "oekg.id_base", "str", None,
       "scenarios profile: IRI prefix of every graph node; changing it "
-      "changes all identifiers.",
+      "changes all identifiers. Unset: the profile's graph file says it "
+      "(base).",
       stages=("extract",)),
     S("PAGE_RENDER_WORKERS", "preprocess.page_render_workers", "int", "4",
       "Pages rendered at once when pages without a text layer are "
@@ -554,15 +566,43 @@ SETTINGS = (
       "Sections per refinement request; default: the profile's setting, "
       "else 3.",
       stages=("refine",)),
+    S("RERANK_API_KEY", "rerank.api_key", "str", None,
+      "API key of the reranker's server.",
+      secret=True, stages=("extract",), rule="rerank_api_key"),
+    S("RERANK_BASE_URL", "rerank.base_url", "str", None,
+      "The vLLM server whose /rerank orders every passage search of a "
+      "harvest; empty leaves the vector search's order.",
+      stages=("extract",), rule="rerank_base_url"),
+    S("RERANK_MODEL", "rerank.model", "str", None,
+      "The model the reranker's server serves.",
+      stages=("extract",), rule="rerank_model"),
+    S("RERANK_POOL", "rerank.pool", "int", None,
+      "Passages of each kind (section, table, figure) a search hands the "
+      "reranker, the best of the vector search, besides those it draws "
+      "(RERANK_DRAWN); the rest follow in its order.",
+      stages=("extract",), rule="rerank_pool"),
+    S("RERANK_DRAWN", "rerank.drawn", "int", None,
+      "Passages of each kind a search hands the reranker besides the best, "
+      "drawn at random from the places after them up to "
+      "RERANK_DRAWN_FROM.",
+      stages=("extract",), rule="rerank_drawn"),
+    S("RERANK_DRAWN_FROM", "rerank.drawn_from", "int", None,
+      "The last place of each kind of the vector search the passages of "
+      "RERANK_DRAWN are drawn from.",
+      stages=("extract",), rule="rerank_drawn_from"),
     S("DOC_PARALLEL", "run.doc_parallel", "int", "8",
       "Documents processed at once in batch mode of refinement and visuals.",
       stages=("refine", "visuals")),
     S("CODE_EXEC_MAX_ROUNDS", "sandbox.code_exec_max_rounds", "int", "2",
       "Chat: code runs the model may request while answering one batch.",
       stages=("chat",)),
-    S("CODE_EXEC_TIMEOUT", "sandbox.code_exec_timeout", "float", "45",
+    S("CODE_EXEC_PARALLEL", "sandbox.code_exec_parallel", "int", None,
+      "Code runs one extraction run has out at the sandbox at a time.",
+      stages=("sandbox", "extract"),
+      rule="code_slots"),
+    S("CODE_EXEC_TIMEOUT", "sandbox.code_exec_timeout", "float", None,
       "Seconds the client waits for one sandbox run.",
-      stages=("extract", "chat")),
+      stages=("extract", "chat"), rule="code_timeout_s"),
     S("CODE_EXEC_TOKEN", "sandbox.code_exec_token", "str", None,
       "Token sent to the sandbox service; default: the sandbox token "
       "(KWP_SANDBOX_TOKEN).",
@@ -583,6 +623,12 @@ SETTINGS = (
       stages=("sandbox",)),
     S("KWP_SANDBOX_MEM", "sandbox.mem", "str", "512m",
       "Memory limit of each sandbox container.",
+      stages=("sandbox",)),
+    S("KWP_SANDBOX_PARALLEL", "sandbox.parallel", "int", "1",
+      "Containers the sandbox service runs at a time.",
+      stages=("sandbox",)),
+    S("KWP_SANDBOX_READY_TIMEOUT", "sandbox.ready_timeout", "int", "900",
+      "Seconds the service may take to make its containers before it answers.",
       stages=("sandbox",)),
     S("KWP_SANDBOX_PORT", "sandbox.port", "int", "8600",
       "Port the sandbox service listens on.",
@@ -868,16 +914,177 @@ def origin(env: str) -> str:
     return "default"
 
 
+def from_flow(setting: Setting) -> Optional[tuple]:
+    """(value as the environment would spell it, where it comes from) of a
+    setting that is not set and wins over numbers of the flow or a rule:
+    what the flow file or the rules file of the ambient profile says, the
+    default profile's where there is none. None for any other setting, and
+    where the file cannot be read."""
+    if setting.env in os.environ:
+        return None
+    if setting.rule:
+        try:
+            from . import rules
+            from .profile import active_profile
+            said = rules.load(active_profile(), environ={})
+        except Exception:
+            return None
+        return str(said[setting.rule]), said.owners[setting.rule]
+    if not setting.flow:
+        return None
+    try:
+        from .extraction import flow
+        from .profile import active_profile
+        numbers = flow.in_effect(active_profile())
+    except Exception:
+        return None
+    return (setting.sep.join(str(getattr(numbers, name))
+                             for name in setting.flow),
+            numbers.origin[setting.flow[0]])
+
+
 def rows(stage: Optional[str] = None) -> list:
     """[(setting, value in effect or None, origin, what the file says or
-    None)], for the settings one command reads or for all of them."""
+    None)], for the settings one command reads or for all of them. A
+    setting that wins over numbers of the flow and is not set shows what
+    the flow file says, and that file as its origin (`from_flow`)."""
     out = []
     for setting in SETTINGS:
         if stage and stage not in setting.stages:
             continue
         value = os.environ.get(setting.env, setting.default)
+        where = origin(setting.env)
         shadowed = _said.get(setting.env)
-        if origin(setting.env) == PROJECT_FILE:
+        if where == PROJECT_FILE:
             shadowed = None
-        out.append((setting, value, origin(setting.env), shadowed))
+        said = from_flow(setting)
+        if said is not None:
+            value, where = said
+        out.append((setting, value, where, shadowed))
     return out
+
+
+# -- writing the project file (the machine values of `docpipe edit`) -------
+
+def git_refusal(path) -> Optional[str]:
+    """Why *path* may not be written, or None: a file inside a git
+    repository has to be ignored by it and not tracked, so that the values
+    of a machine (a server's address, a folder) never reach a commit. A
+    file outside every repository is free."""
+    import subprocess
+    path = Path(path).resolve()
+    folder = path.parent
+    while not folder.is_dir() and folder != folder.parent:
+        folder = folder.parent
+
+    def git(*args) -> int:
+        return subprocess.run(["git", "-C", str(folder), *args],
+                              capture_output=True).returncode
+    try:
+        if git("rev-parse", "--show-toplevel") != 0:
+            return None
+        if git("ls-files", "--error-unmatch", "--", str(path)) == 0:
+            return (f"{path.name} is tracked by git, so a value of the "
+                    f"machine written there would be committed. To change "
+                    f"it: untrack the file (git rm --cached) and list it "
+                    f"in .gitignore.")
+        if git("check-ignore", "-q", "--", str(path)) == 0:
+            return None
+    except OSError:
+        return (f"git cannot be run here, so it is not known whether "
+                f"{path.name} is ignored by it. To change it: install git.")
+    return (f"{path.name} lies inside a git repository and is not ignored "
+            f"by it, so a value of the machine written there could be "
+            f"committed. To change it: list the file in .gitignore.")
+
+
+def _literal(value) -> str:
+    import json
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, (list, tuple)) and all(
+            isinstance(one, str) for one in value):
+        return "[" + ", ".join(_literal(one) for one in value) + "]"
+    raise ConfigError(f"{value!r} cannot be written to the project file")
+
+
+def _put(lines: list, key: str, value, eol: str) -> list:
+    """*lines* of a project file with `section.name = value` set (or a
+    top-level name), the rest as it stands."""
+    section, _dot, name = key.rpartition(".")
+    head = re.compile(r"^\s*\[([^\[\]]+)\]\s*(#.*)?$")
+    mine = re.compile(rf"^\s*{re.escape(name)}\s*=")
+    new = f"{name} = {_literal(value)}{eol}"
+    start, end = (-1 if section == "" else None), len(lines)
+    for at, line in enumerate(lines):
+        found = head.match(line.rstrip("\r\n"))
+        if found:
+            if start is not None:
+                end = at
+                break
+            if found.group(1).strip() == section:
+                start = at
+        elif start is not None and mine.match(line):
+            lines[at] = new
+            return lines
+    if start is None:                       # no such table yet
+        if lines and not lines[-1].endswith(("\n", "\r")):
+            lines[-1] += eol
+        return lines + ([eol] if lines else []) + [f"[{section}]{eol}", new]
+    last = start                            # after the table's last line
+    for at in range(start + 1, end):
+        if lines[at].strip():
+            last = at
+    if last >= 0 and not lines[last].endswith(("\n", "\r")):
+        lines[last] += eol
+    lines.insert(last + 1, new)
+    return lines
+
+
+def write_project(path, values: dict) -> str:
+    """Set {key of a setting ("llm.base_url"): value} in the project file
+    *path*, created where it is missing, every other line as it stands:
+    "created" or "changed". A key is never written (`Setting.secret`); a
+    file that does not read back as the values is not written."""
+    path = Path(path)
+    for key in values:
+        setting = BY_KEY.get(key)
+        if setting is None:
+            raise ConfigError(f"{key} is no setting{_nearest(key)}")
+        if setting.secret or setting.bootstrap:
+            raise ConfigError(f"{key} is not written to the project file: "
+                              f"set {setting.env} in .env or in the "
+                              f"environment")
+    existed = path.is_file()
+    text = path.read_bytes().decode("utf-8-sig") if existed else ""
+    eol = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines(keepends=True)
+    for key, value in values.items():
+        lines = _put(lines, key, value, eol)
+    new = "".join(lines)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".editing")
+    try:
+        with open(temporary, "wb") as handle:
+            handle.write(new.encode("utf-8"))
+        read(temporary)         # a line that does not parse is refused
+        said = _parse(temporary)
+        for key, value in values.items():
+            section, _dot, name = key.rpartition(".")
+            got = said.get(section, {}).get(name) if section \
+                else said.get(name)
+            if got != (list(value) if isinstance(value, tuple) else value):
+                raise ConfigError(f"{path.name}: {key} did not read back "
+                                  f"as {value!r}")
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
+    return "changed" if existed else "created"

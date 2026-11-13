@@ -1,0 +1,18 @@
+{
+  "flow": [
+    {
+      "id": "start_at_places",
+      "box": "places",
+      "set": {
+        "archive": "harvest-found"
+      }
+    },
+    {
+      "id": "start_at_main_flow",
+      "box": "main_flow",
+      "set": {
+        "trace": "trace"
+      }
+    }
+  ]
+}

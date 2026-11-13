@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from docpipe.extraction.preflight import (  # noqa: E402,F401
-    SHRUGS, audit, main as _main, report, silent_parameters)
+    audit, main as _main, report, silent_parameters)
 
 OURS = ["kwp", "scenarios"]
 

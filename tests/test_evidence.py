@@ -1,0 +1,382 @@
+"""The owner's two checks, for a value and for every coordinate: the quote
+stands in a passage that was shown, and the answer stands in the quote; and a
+quote long enough to name a place. Plus the closed-list rule (`not_an_option`)
+and the base year read by the plan's word for it.
+
+A value read before its coordinates is checked as the fold will check it
+(`verify.value_refused`): what the fold refuses of the value and its quote it
+refuses for the same reason, AND it takes what the fold takes, AND a number
+is not refused for its unit, which is read after it. A quote that does not
+stand in its passage is refused by both, AND never rebuilt from the passage
+(owner decision 2026-11-05)."""
+import json
+from pathlib import Path
+
+import pytest
+
+from docpipe.extraction import fields
+from docpipe.extraction.pipeline import Row, Source, answer_in_quote, merge_field
+from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.verify import (QUOTE_NOT_FOUND, Refusal, Verified,
+                                       canonical_number, not_in_quote,
+                                       numbers_in, quote_in, value_refused,
+                                       verify_tuple)
+
+SPEC = load_spec(json.loads(
+    (Path(__file__).resolve().parent.parent / "profiles" / "kwp"
+     / "extraction_spec.json").read_text(encoding="utf-8")))
+PARAMETER = SPEC.by_uri["energy_consumption"]
+SLOTS = {slot.name: slot for slot in fields.axis_slots(PARAMETER)}
+CARRIER, YEAR = SLOTS["carrier"], SLOTS["year"]
+UNIT = next(iter(PARAMETER.units_accepted))
+
+
+# ---------------------------------------------------------------------------
+# Numbers
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("written, decimal, read", [
+    ("1.036.767,8", ",", "1036767.8"),
+    ("1,036,767.8", ".", "1036767.8"),
+    ("1.234", ",", "1234"),
+    ("3,251", ",", "3.251"),
+    ("3,251", ".", "3251"),
+    ("126 656 132", ",", "126656132"),
+    (126656132, ",", "126656132"),
+    (0.5, ",", "0.5"),
+    (52678423.38, ",", "52678423.38"),
+    (0.1 + 0.2, ",", "0.3"),
+    (1e20, ",", "100000000000000000000"),
+    ("12a", ",", None),
+    ("-1.155", ",", "-1155"),
+    ("\u22121.155", ",", "-1155"),
+    (-1155, ",", "-1155"),
+    ("-", ",", None),
+    ("--5", ",", None),
+])
+def test_a_number_has_one_spelling_whatever_wrote_it(written, decimal, read):
+    assert canonical_number(written, decimal) == read
+
+
+def test_a_dated_year_is_in_its_quote():
+    assert "2025" in numbers_in("Stand 09.12.2025")
+
+
+@pytest.mark.parametrize("quote", [
+    "| Picher | -1.155 | -40,8% |",
+    "| Picher | \u22121.155 |",
+    "| Picher | \u20131.155 |",
+    "| Picher | - 1.155 |",
+])
+def test_a_printed_sign_is_part_of_the_number(quote):
+    assert "-1155" in numbers_in(quote)
+
+
+@pytest.mark.parametrize("quote", [
+    "| Picher | 1.155 |",
+    "Szenario KWP-1155",
+    "die Jahre 2020-1155",
+])
+def test_a_dash_that_is_no_sign_makes_no_negative_number(quote):
+    assert "-1155" not in numbers_in(quote)
+
+
+def test_a_group_of_digits_keeps_its_sign():
+    assert "-45000" in numbers_in("Einsparung -45 000 MWh")
+
+
+# ---------------------------------------------------------------------------
+# The value: verify_tuple
+# ---------------------------------------------------------------------------
+
+SOURCE = ("Endenergieverbrauch nach Energieträgern\n"
+          "| Erdgas | 126.656.132 | 520.465.057 |")
+QUOTE = "| Erdgas | 126.656.132 | 520.465.057 |"
+
+
+def claim(**over):
+    return {"value": 126656132, "unit": UNIT, "unit_raw": UNIT,
+            "quote": QUOTE, **over}
+
+
+def test_a_value_whose_quote_stands_in_its_source_and_holds_it_is_kept():
+    got = verify_tuple(claim(), PARAMETER, SOURCE, owner_kind="table")
+    assert isinstance(got, Verified)
+    assert got.tuple["parameter"] == "energy_consumption"
+
+
+def test_a_negative_value_is_kept_where_its_quote_prints_the_sign():
+    quote = "| Erdgas | -2.463 | -40,8% |"
+    got = verify_tuple(claim(value=-2463, quote=quote), PARAMETER,
+                       "Einsparung\n" + quote, owner_kind="table")
+    assert isinstance(got, Verified)
+
+
+def test_a_negative_value_is_refused_where_its_quote_has_no_sign():
+    quote = "| Erdgas | 2.463 | 40,8% |"
+    got = verify_tuple(claim(value=-2463, quote=quote), PARAMETER,
+                       "Einsparung\n" + quote, owner_kind="table")
+    assert isinstance(got, Refusal)
+
+
+def test_typographic_marks_and_spacing_do_not_make_a_second_sentence():
+    assert quote_in("Der „Bestand“ – 2020", 'Der "Bestand" - 2020')
+    assert quote_in("holzige<br>Festbrennstoffe  12", "holzige Festbrennstoffe 12")
+    assert quote_in("| **Bedarf Bestand**<br>122,3 GWh |",
+                    "Bedarf Bestand 122,3 GWh")
+    assert not quote_in("Der Bestand 2020", "Der Bestand 2021")
+    assert not quote_in("| **Bedarf Bestand**<br>122,3 GWh |",
+                        "Bedarf Bestand 123,3 GWh")
+
+
+@pytest.mark.parametrize("over", [
+    {"value": 999},                                   # not in the quote
+    {"quote": "| Erdgas |"},                          # too short
+    {"quote": "| Heizöl | 126.656.132 | 520.465.057 |",  # not in the source
+     "value": 777},
+    {"value": "viel"},                                # not a number
+])
+def test_a_value_that_fails_either_check_is_refused(over):
+    assert isinstance(verify_tuple(claim(**over), PARAMETER, SOURCE,
+                                   owner_kind="table"), Refusal)
+
+
+def test_a_unit_no_list_holds_is_kept_as_printed_and_never_refused():
+    # Owner decision 2026-11-07: a unit is never refused. The number stays
+    # with the unit the plan prints and without a converted value; by
+    # construction, an entry of the list is converted.
+    got = verify_tuple(claim(unit="Liter", unit_raw="Liter"), PARAMETER,
+                       SOURCE, owner_kind="table")
+    assert isinstance(got, Verified)
+    assert got.tuple["unit"] is None and got.tuple["unit_raw"] == "Liter"
+    assert "value_target" not in got.tuple
+    assert "unmapped:unit:Liter" in got.flags
+    listed = verify_tuple(claim(), PARAMETER, SOURCE, owner_kind="table")
+    assert isinstance(listed, Verified)
+    assert listed.tuple.get("value_target") is not None
+
+
+def test_a_computed_value_needs_the_run_that_printed_it():
+    """The quote proves the inputs; the sandbox output proves the result."""
+    computed = claim(value=647121189, computed=True,
+                     compute=[{"stdout": "647121189\n"}])
+    assert isinstance(verify_tuple(computed, PARAMETER, SOURCE,
+                                   owner_kind="table"), Verified)
+    unprinted = dict(computed, compute=[{"stdout": "1\n"}])
+    assert isinstance(verify_tuple(unprinted, PARAMETER, SOURCE,
+                                   owner_kind="table"), Refusal)
+    said = dict(computed, computed="ja")
+    assert isinstance(verify_tuple(said, PARAMETER, SOURCE,
+                                   owner_kind="table"), Refusal)
+
+
+def test_the_run_is_read_as_python_prints_a_number():
+    """The point is the decimal mark of the sandbox's output, whatever the
+    plan writes: the 0.974 that round(x, 3) prints is no 974."""
+    computed = claim(value=0.974, computed=True,
+                     compute=[{"stdout": "0.974\n"}])
+    assert isinstance(verify_tuple(computed, PARAMETER, SOURCE,
+                                   owner_kind="table"), Verified)
+    grouped = dict(computed, value=974)
+    assert isinstance(verify_tuple(grouped, PARAMETER, SOURCE,
+                                   owner_kind="table"), Refusal)
+
+
+# ---------------------------------------------------------------------------
+# A coordinate: answer_in_quote
+# ---------------------------------------------------------------------------
+
+def test_a_year_is_its_own_digits_and_not_a_grouped_magnitude():
+    assert answer_in_quote(YEAR, 2022, None, "Bilanzjahr 2022: 450 MWh")
+    assert not answer_in_quote(YEAR, 2022, None, "Verbrauch 2.022 MWh")
+    assert answer_in_quote(YEAR, 2022, None, "Stand 31.12.2022")
+
+
+def test_a_choice_stands_in_its_quote_under_any_listed_spelling():
+    option = next(o for o in CARRIER.options if o.synonyms)
+    spelling = option.synonyms[0]
+    assert answer_in_quote(CARRIER, option.label, None,
+                           f"Verbrauch {spelling} 12 MWh")
+    assert not answer_in_quote(CARRIER, option.label, None, "Verbrauch 12 MWh")
+
+
+def test_a_given_wording_must_stand_in_the_quote_itself():
+    option = CARRIER.options[0]
+    assert not answer_in_quote(CARRIER, option.label, "Kohlekraft",
+                               "Verbrauch Erdgas 12 MWh")
+
+
+# ---------------------------------------------------------------------------
+# A coordinate: merge_field
+# ---------------------------------------------------------------------------
+
+SHOWN = [Source("table", 1, "Tabelle 3: Endenergie im Bilanzjahr 2022\n"
+                            "| Erdgas | 12 | MWh |", {"document_id": 7}),
+         Source("section", 2, "Das Basisjahr der Planung ist 2021.",
+                {"document_id": 7})]
+
+
+def rows(*labels):
+    return [Row(label=label, item_index=0, claim={"value": 12})
+            for label in labels]
+
+
+def state(row, slot):
+    return row.claim.get(f"{slot.name}_state")
+
+
+def test_a_backed_answer_is_read_with_its_quote_and_source():
+    got = rows("R1")
+    merge_field(got, SHOWN, YEAR, {"answers": {"R1": {
+        "value": 2022, "quote": "Endenergie im Bilanzjahr 2022"}}})
+    assert state(got[0], YEAR) == fields.READ
+    assert got[0].claim["year"] == 2022
+    assert got[0].claim["year_source"] == ["table", 1]
+
+
+@pytest.mark.parametrize("answer", [
+    {"value": 2022, "quote": "Endenergie im Bilanzjahr 2022 laut Anhang"},
+    {"value": 2030, "quote": "Endenergie im Bilanzjahr 2022"},
+    {"value": 2022, "quote": "2022"},
+    {"value": "2020-2022", "quote": "Endenergie im Bilanzjahr 2022"},
+])
+def test_an_answer_that_fails_a_check_is_never_read(answer):
+    got = rows("R1")
+    merge_field(got, SHOWN, YEAR, {"answers": {"R1": answer}})
+    assert state(got[0], YEAR) == fields.UNBACKED
+    assert "year" not in got[0].claim
+
+
+def test_an_answer_off_a_closed_list_is_never_read_and_keeps_its_wording():
+    got = rows("R1")
+    merge_field(got, SHOWN, CARRIER, {"answers": {"R1": {
+        "value": "Teilgebiet", "quote": "| Erdgas | 12 | MWh |"}}})
+    assert state(got[0], CARRIER) == fields.UNBACKED
+    assert got[0].claim["carrier_seen"] == "Teilgebiet"
+
+
+def test_unstated_needs_no_passage():
+    got = rows("R1")
+    merge_field(got, SHOWN, CARRIER, {"answers": {"R1": {
+        "value": fields.UNSTATED}}})
+    assert state(got[0], CARRIER) == fields.SAID_UNSTATED
+
+
+def test_one_group_answers_many_rows_and_a_read_coordinate_stays_read():
+    got = rows("R1", "R2")
+    got[1].claim.update(year=2021, year_state=fields.READ)
+    merge_field(got, SHOWN, YEAR, {"groups": [{
+        "rows": ["R1", "R2", "R9"], "value": 2022,
+        "quote": "Endenergie im Bilanzjahr 2022"}]})
+    assert got[0].claim["year"] == 2022
+    assert got[1].claim["year"] == 2021, "the first backed reading stands"
+
+
+@pytest.mark.parametrize("wording, read", [
+    (None, fields.READ),
+    ("%", fields.READ),
+    ("Anteil", fields.UNBACKED),
+])
+def test_a_percent_sign_is_a_spelling_of_a_share_and_a_word_must_be_printed(
+        wording, read):
+    """Without a wording, the printed sign backs the entry; a wording the
+    quote does not print fails, though the entry itself is right."""
+    slot = next(s for s in fields.axis_slots(SPEC.by_uri["share"])
+                if s.name == "quantity")
+    table = [Source("table", 3, "Hiervon entfallen ca. 83% auf die Wohnbebauung.",
+                    {"document_id": 7})]
+    got = rows("R1")
+    answer = {"value": "fraction value",
+              "quote": "Hiervon entfallen ca. 83% auf die Wohnbebauung."}
+    if wording:
+        answer["value_raw"] = wording
+    merge_field(got, table, slot, {"answers": {"R1": answer}})
+    assert state(got[0], slot) == read
+
+
+def test_a_year_named_by_the_plans_word_is_read_from_the_frame():
+    """'Basisjahr' without its number: read when the number is a base year
+    of the frame, cited from the frame and linked to the row's passage."""
+    base = [{"axis": "year", "year": 2021, "state": "base", "index": 0,
+             "quote": "Das Basisjahr der Planung ist 2021.",
+             "source": ["section", 2]}]
+    got = rows("R1")
+    merge_field(got, SHOWN, YEAR, {"answers": {"R1": {
+        "value": 2021, "value_raw": "Basisjahr",
+        "quote": "Das Basisjahr der Planung ist 2021."}}}, bases=base)
+    assert state(got[0], YEAR) == fields.READ
+
+    table = [Source("table", 3, "Wärmebedarf im Basisjahr | 12 | MWh |",
+                    {"document_id": 7})]
+    linked = rows("R1")
+    merge_field(linked, table, YEAR, {"answers": {"R1": {
+        "value": 2021, "value_raw": "Basisjahr",
+        "quote": "Wärmebedarf im Basisjahr"}}}, bases=base)
+    assert state(linked[0], YEAR) == fields.READ
+    assert linked[0].claim["year_source"] == ["section", 2]
+    assert linked[0].claim["year_link_source"] == ["table", 3]
+
+    other = rows("R1")
+    merge_field(other, table, YEAR, {"answers": {"R1": {
+        "value": 2019, "value_raw": "Basisjahr",
+        "quote": "Wärmebedarf im Basisjahr"}}}, bases=base)
+    assert state(other[0], YEAR) == fields.UNBACKED, "2019 is no base year"
+
+
+# ---------------------------------------------------------------------------
+# A value checked while the model can still answer
+# ---------------------------------------------------------------------------
+
+SCENARIOS = load_spec(json.loads(
+    (Path(__file__).resolve().parent.parent / "profiles" / "scenarios"
+     / "extraction_spec.json").read_text(encoding="utf-8")))
+SECTOR, TITLE = SCENARIOS.by_uri["study_sector"], SCENARIOS.by_uri["publication_title"]
+SCOPE = "Scope\nThe model covers the building, transport and industry sectors."
+NAMED = "covers the building, transport and industry"
+
+
+def test_a_value_is_checked_before_its_coordinates_as_the_fold_checks_it():
+    for given, parameter in (
+            ({"value": "bioenergy", "quote": NAMED}, SECTOR),     # off its list
+            ({"value": "industry sector", "quote": NAMED}, SECTOR),  # unquoted
+            ({"value": "industry sector", "value_raw": "industry",
+              "quote": "covers"}, SECTOR),                          # too short
+            ({"value": "", "quote": NAMED}, TITLE),                 # no text
+            ({"value": "Net zero", "quote": NAMED}, TITLE)):        # unquoted
+        refusal = verify_tuple(given, parameter, SCOPE)
+        assert isinstance(refusal, Refusal)
+        assert value_refused(given, parameter, SCOPE) == refusal.reason
+    # the failure by construction: what the fold takes is taken here too
+    for given, parameter in (
+            ({"value": "industry sector", "value_raw": "industry",
+              "quote": NAMED}, SECTOR),
+            ({"value": "covers the building", "quote": NAMED}, TITLE)):
+        assert isinstance(verify_tuple(given, parameter, SCOPE), Verified)
+        assert value_refused(given, parameter, SCOPE) is None
+
+
+def test_a_number_is_not_refused_for_the_unit_read_after_it():
+    text = "Im Jahr 2022 wurden rund 300 GWh Erdgas verbraucht."
+    number = {"value": 300, "quote": "rund 300 GWh Erdgas"}
+    # No unit read is no refusal either (owner decision 2026-11-07): the
+    # number stays, unconverted.
+    kept = verify_tuple(number, PARAMETER, text)
+    assert isinstance(kept, Verified) and kept.tuple["unit"] is None
+    assert "value_target" not in kept.tuple
+    assert value_refused(number, PARAMETER, text) is None
+    # the failure by construction: a number its quote does not print
+    wrong = dict(number, value=301)
+    assert value_refused(wrong, PARAMETER, text) == not_in_quote(wrong)
+
+
+def test_a_quote_not_in_its_passage_is_refused_and_never_rebuilt():
+    # The number stands in the source exactly once, so a quote rebuilt
+    # around it would have had no choice; none is rebuilt.
+    abridged = claim(quote="Erdgas: 126.656.132 kWh")
+    refused = verify_tuple(abridged, PARAMETER, SOURCE, owner_kind="table")
+    assert isinstance(refused, Refusal) and refused.reason == QUOTE_NOT_FOUND
+    assert value_refused(abridged, PARAMETER, SOURCE) == QUOTE_NOT_FOUND
+    # the failure by construction: the same value quoted as printed is kept
+    assert isinstance(verify_tuple(claim(), PARAMETER, SOURCE,
+                                   owner_kind="table"), Verified)
+    assert value_refused(claim(), PARAMETER, SOURCE) is None

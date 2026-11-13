@@ -2,174 +2,184 @@
 
 `profiles/scenarios/kg.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-kg.py – Harvested publication metadata to OEKG Turtle.
+kg.py: The bricks only the scenarios profile's graph needs.
 
-What the shapes ask of a scenario bundle, its study report and its scenario
-factsheets — plus the evidence for every value.
+How the harvest of a publication becomes the OEKG graph is the drawing in
+graph.json beside this file (`map`), written by the core's program
+(`docpipe/extraction/graph.py`). Here are the pieces of it that only this
+profile has: which scenarios a row names, the short name of a scenario, the
+regions a region answer stands for, the names of the nodes the graph points
+at without making them, the cross-check against the crawl, and `study`, the
+same decisions as plain data for the OEKG API body (`oekg_api.py`).
 
-That last part is PROVISIONAL. The shapes are `sh:closed true` today, which
-would make an evidence triple invalidate the node; whether they stay closed
-is being decided on the ontology side, and this is written as if they will
-not. The whole point of reading metadata out of the PDF rather than taking
-the crawl's copy is that each value can name the passage it came from, so a
-graph that drops the passage gives up the reason it was built this way. One
-By default every passage is a Turtle comment above the triple it belongs to,
-which survives sh:closed; OEKG_EVIDENCE=1 emits one `oekgprov:ExtractionEvidence`
-node per value instead, linked with `oekgprov:hasEvidence` — the same content as
-triples, and knowingly ahead of the shapes.
+The passages of every value are Turtle comments above the triple by default
+(the shapes are sh:closed); the rule `evidence_as` of graph.json writes one
+`oekgprov:ExtractionEvidence` node per value instead, linked with
+`oekgprov:hasEvidence`, knowingly ahead of the shapes.
 
-Cardinality is enforced here rather than in the verifier, because the
-verifier sees one claim at a time and `exactly one title` is a property of a
-document's whole harvest. Where the shape says maxCount 1 and the harvest
-offers several, the one the most sources agree on wins; the rest are counted,
-not dropped silently.
-
-The crawl's DocumentMeta (title, year, doi) is not the source here — it comes
-with the crawl's licence. It is the cross-check: a disagreement between what
-the PDF says and what the crawl said is logged, because one of the two is
-wrong and neither should find that out in production.
+Author: Felix Vossel
 
 ## Functions
 
-### edges
+### node_names
 
 ```python
-def edges() -> list
+def node_names(regions: Path = REGION_NAMES_PATH,
+               snapshot: Path = SNAPSHOT_PATH) -> dict
 ```
 
-The triple shapes this serializer writes that no `kg` block carries.
+{IRI: name} of every node this graph may point at without making
+it: a region by the English short name LCC gives it, an OEO term by its
+label in the release the snapshot is pinned to. A file no refresh has
+written names nothing.
 
-`ontology.edge_problems` holds the rest of the output to the pinned
-ontology through the spec; without this the writer's own literals are the
-part nobody checks, which is where three of kwp's defects lived.
+### default_model
+
+```python
+def default_model()
+```
+
+The OEKG shapes of the last refresh, or SchemaError without one.
+
+### has_property
+
+```python
+def has_property(klass: str, prop: str) -> Optional[bool]
+```
+
+Whether the OEKG shapes give the class (a curie) the property (a
+curie); None where no shape targets the class, or there are no shapes
+from a refresh.
+
+### context
+
+```python
+def context(db_path=None) -> dict
+```
+
+What the bricks of this profile share while a graph is written: the
+groups of countries a region answer may name and the names of the nodes
+the graph points at.
+
+### printed_region
+
+```python
+def printed_region(row: dict) -> Optional[str]
+```
+
+The name of a study region the list did not carry, as the row's
+document prints it (`value_raw`); None for any other row.
+
+### region_members
+
+```python
+def region_members(value, groups: dict) -> list
+```
+
+The OEKG regions a region answer stands for: a country is itself, a
+group its members, an out: entry none.
+
+### scenario_names
+
+```python
+def scenario_names(row: dict, name_in_quote: bool = True) -> list
+```
+
+The names of the scenarios a row belongs to.
+
+A scenario_label row names one by its value, any other row by its
+`scenario` coordinate, both as the publication prints them. Which entry
+of the publication's list of scenarios a name is was asked while it was
+read (`value_means`, `scenario_means`, owner decisions 2026-11-08): a
+name means the entry it is, the words of a group of scenarios each
+member, and words found to name no scenario (an empty list) none (owner
+decision 2026-11-09). With *name_in_quote* a name the publication's
+passage does not print names nothing.
+
+### study_of
+
+```python
+def study_of(written) -> dict
+```
+
+What the drawing decided for one document, as plain data: the bundle,
+its one study report and its scenarios, each value as the graph carries
+it (`oekg_api.py` builds the platform's request body from it).
+
+### drawing
+
+```python
+def drawing() -> dict
+```
+
+The drawing, as the graph file of this profile has it now.
+
+### prefix_iri
+
+```python
+def prefix_iri() -> dict
+```
+
+{prefix: IRI} of the header the drawing writes now.
+
+### always_types
+
+```python
+def always_types() -> tuple
+```
+
+The scenario types every factsheet carries (graph rule
+`scenario_types_always`), as it stands now.
+
+### box_class
+
+```python
+def box_class(box_id: str) -> str
+```
+
+The bare class of a box of the drawing.
+
+### property_of
+
+```python
+def property_of(source: str, to: str, brick: Optional[str] = None) -> str
+```
+
+The property of the drawing's arrow from *source* to *to*.
 
 ### normalise
 
 ```python
-def normalise(label: str) -> str
+def normalise(name: str) -> str
 ```
 
-One spelling for a name, so two writings of it mint one IRI.
+One spelling for a name, as the drawing folds it.
 
-### mint
+### terms
 
 ```python
-def mint(collection: str, name: str) -> str
+def terms() -> SimpleNamespace
 ```
 
-UUIDv5 over the identifying name, folded by `normalise`. Never v4: two
-runs over one document must mint the same IRI.
+The classes and properties a body names its nodes and edges with,
+as the drawing has them now.
 
-### uuid_of
+### tag_property
 
 ```python
-def uuid_of(iri: str) -> str
+def tag_property(key: str) -> str
 ```
 
-### in_graph
-
-```python
-def in_graph(value) -> bool
-```
-
-Is this answer something the graph takes, or one of the out: entries?
-
-### graph_value
-
-```python
-def graph_value(row: dict)
-```
-
-What this row actually put in the graph.
-
-For an out: entry the model's `value` is that entry's own label — a
-description of why nothing fitted, not a reading of the document. The
-graph carries the wording instead, so the evidence has to name the wording
-too, or it would cite a passage for a string that is nowhere in it.
-
-### ambiguous
-
-```python
-def ambiguous(wording, known: dict) -> bool
-```
-
-Does this wording fit more than one AR6 run of this publication?
-
-Measured on the 146-scenario pilot document: the paper writes "NPi" and
-"NDC", and the database has EN_NPi2020_300f, EN_NPi2020_400 and
-EN_NPi2020_3000. Those are three runs, and "NPi" names the family, not one
-of them. A model handed the list picks one anyway, which is a guess
-dressed as a link — so a wording that fits several is treated as fitting
-none, and the wording alone survives.
-
-### resolve_wording
-
-```python
-def resolve_wording(wording, known: Optional[dict] = None) -> Optional[str]
-```
-
-The run this wording names, when the list settles it without a guess.
-
-The mirror of `ambiguous()`. That one refuses the link where several runs
-fit and none matches exactly; this one MAKES the link where exactly one
-does. Both read the same list, and between them the model's own choice is
-only consulted where the list is genuinely undecided.
-
-Measured on the corpus run: the model answered with an out: entry 1171
-times for a wording its own list resolved unambiguously — 347 of them a
-character-for-character match of a run name, one document refusing "BaU"
-against a list whose single entry is "BaU".
-
-Short wordings are exact-match only. "NPi" is three characters and sits
-inside a dozen run names; a containment hit that short is a coincidence,
-not a reading.
-
-### scenario_key
-
-```python
-def scenario_key(row: dict, known: Optional[dict] = None,
-                 synonyms: Optional[dict] = None) -> tuple
-```
-
-(identity, label) for the scenario a row belongs to.
-
-The model picks the AR6 run from this publication's own list and keeps the
-document's wording beside it. The run identifier is the identity whenever
-there is one, because that is what links to the AR6 database; the wording
-is what a reader recognises. With no match, and with a wording that fits
-several runs equally, the wording is both.
-
-### decision_text
-
-```python
-def decision_text(decision: dict) -> str
-```
-
-What a person decided about one field of a value, as a comment line:
-the verdict, who made it and when, and the note.
-
-### make_serializer
-
-```python
-def make_serializer(db_path: Path)
-```
-
-(document name, accepted tuple rows) -> TTL string or None.
-
-What people decided about the rows is left in `serializer.decisions` by
-`serialize.run`, {document: {tuple name: [decision]}}, and goes into the
-Turtle as comment lines above the value each concerns.
+The property a tag field of the bundle is written under.
 
 ### make_study_reader
 
 ```python
-def make_study_reader(db_path: Path)
+def make_study_reader(db_path: Path, extra: Optional[dict] = None)
 ```
 
-(document name, accepted tuple rows) -> study dict or None.
-
-What the serializer decided for one document, without the Turtle: the
-bundle, its one study report and its scenarios, each value as the graph
-carries it. A document with no title has no study, as it has no graph.
+(document name, accepted tuple rows) -> study dict or None: what the
+drawing decides for one document, without the Turtle. A document
+without a title has no study, as it has no graph.
 
 [Back to the index](../README.md)

@@ -32,18 +32,46 @@ import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Callable, Optional
 
-from ..profile import ENV_VAR, active_profile
-from .fields import DERIVED, READ, UNBACKED
+from .. import rules
+from .fields import DERIVED, READ, state_for
 from .spec import Parameter, fold_label
 
 TIER_TEXT = "text_located"
 TIER_VISUAL = "visual_source"
 
-# The owner kinds whose text is the document's own prose. Everything else is
-# a model's reading of a picture.
-TEXT_KINDS = ("section",)
+
+
+def tier_of(owner_kind: str) -> str:
+    """How well a place of this kind backs a value (rule `evidence_tiers`):
+    the document's own prose, or a model's reading of a picture, which is
+    what a kind the rule does not list is."""
+    tier = rules.get("evidence_tiers").get(owner_kind, TIER_VISUAL)
+    if tier not in (TIER_TEXT, TIER_VISUAL):
+        raise ValueError(f"evidence_tiers: {owner_kind!r} is {tier!r}, "
+                         f"not {TIER_TEXT} or {TIER_VISUAL}")
+    return tier
+
+# A number a figure only draws, as a bar, a segment, an area or a point of a
+# curve, is a value of the plan and an estimate (owner decisions 2026-11-05
+# and 2026-11-07: the model may and should read it off the image where no
+# text states it, trust level C). Its flag is a reason of its own
+# (`trust.FLAG_REASONS`), set on a value read off the image and on one whose
+# quoted number the image only draws.
+READ_OFF = "read_off"
+
+
+def read_off(raw: dict, owner_kind: str) -> bool:
+    """Is this a figure's value read off its image: the switch the reading
+    sets where its request sent the image (`read_off`), and the sentence of
+    what was read (`reading`)? Then that sentence is the evidence of the
+    number, and neither quote check applies to it."""
+    reading = raw.get("reading") if isinstance(raw, dict) else None
+    return (owner_kind == "figure" and rules.get("read_off_figures")
+            and raw.get("read_off") is True
+            and isinstance(reading, str) and bool(reading.strip()))
 
 _WS = re.compile(r"\s+")
 # A number as it appears in running text: digits with optional grouping and
@@ -53,32 +81,55 @@ _WS = re.compile(r"\s+")
 _NUMBER = re.compile(r"\d(?:[\d.,]*\d)?")
 # DD.MM.YYYY and MM.YYYY: the year at the end of a German date.
 _DATED_YEAR = re.compile(r"(?<![\d.,])(?:\d{1,2}\.){1,2}((?:19|20)\d{2})(?!\d|[.,]\d)")
-_SPACE_GROUPED = re.compile(r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?")
+
+
+def _space_grouped():
+    """A number grouped by spaces, "45 000" (rule `thousands_spaces`);
+    with no such space, a pattern that matches nothing."""
+    def build():
+        spaces = rules.get("thousands_spaces")
+        if not spaces:
+            return re.compile(r"(?!)")
+        return re.compile(rf"\d{{1,3}}(?:[{re.escape(spaces)}]\d{{3}})+"
+                          rf"(?:[.,]\d+)?")
+    return rules.derived("verify.space_grouped", build)
+
+
+def _minus() -> str:
+    """The signs of a negative number, as a PDF prints them and a model
+    retypes them (rule `minus_signs`)."""
+    return rules.get("minus_signs")
+
+
+def _signed():
+    """A number with its sign in front. After a letter, a digit or a
+    separator the dash joins two things ("KWP-2030", "2020-2030") and is no
+    sign."""
+    return rules.derived("verify.signed", lambda: re.compile(
+        rf"(?<![\w.,])[{re.escape(_minus())}]\s?"
+        rf"({_space_grouped().pattern}|{_NUMBER.pattern})"))
+
+
+def _dated_years(text: str) -> list:
+    """The years at the end of the dotted dates of *text*, where the rule
+    `dotted_date_year` takes them."""
+    if not rules.get("dotted_date_year"):
+        return []
+    return [m.group(1) for m in _DATED_YEAR.finditer(text or "")]
 
 
 MARKS = (",", ".")
-_marks: dict = {}
 
 
 def decimal_mark() -> str:
     """How the documents of the ambient profile write the decimal: "," or
-    ".". The profile says it (`extraction.py: DECIMAL_MARK`); one that does
-    not is read with the comma, as every corpus was before this was asked.
+    "." (rule `decimal_mark`).
 
     It decides only what the digits leave open. '1.036.767,8' reads the same
     under both. '3,251' is 3.251 where the comma is the decimal mark and
     3251 where the point is, and no rule about digits can tell which.
     """
-    name = os.environ.get(ENV_VAR)
-    if name not in _marks:
-        profile = active_profile()
-        mark = profile.component("extraction", "DECIMAL_MARK") \
-            if profile is not None else None
-        if mark is not None and mark not in MARKS:
-            raise ValueError(f"extraction.DECIMAL_MARK of profile {name!r} "
-                             f"is {mark!r}; it is one of {MARKS}")
-        _marks[name] = mark or ","
-    return _marks[name]
+    return rules.get("decimal_mark")
 
 
 def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
@@ -91,12 +142,23 @@ def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
     *decimal* is the mark the documents write the decimal with; without it,
     the ambient profile's (`decimal_mark`).
     """
-    if isinstance(raw, (int, float)):
-        raw = f"{raw:.10f}".rstrip("0").rstrip(".") if isinstance(raw, float) else str(raw)
-        return raw
+    if isinstance(raw, float):
+        # Fifteen significant digits, what a double holds of any number
+        # written: ten fixed places showed the binary noise of a large one,
+        # 52678423.38 was 52678423.3800000027 and never in its quote.
+        text = format(Decimal(format(raw, ".15g")), "f")
+        return text.rstrip("0").rstrip(".") if "." in text else text
+    if isinstance(raw, int):
+        return str(raw)
     if not isinstance(raw, str):
         return None
-    s = raw.strip().replace(" ", "").replace(" ", "").replace(" ", "")
+    s = raw.strip()
+    for space in rules.get("thousands_spaces"):
+        s = s.replace(space, "")
+    if s[:1] and s[:1] in _minus():
+        magnitude = canonical_number(s[1:], decimal)
+        return ("-" + magnitude
+                if magnitude and not magnitude.startswith("-") else None)
     if not s or not re.fullmatch(r"[\d.,]+", s):
         return None
     # Mixed separator kinds are unambiguous: the rightmost kind is the
@@ -126,15 +188,36 @@ def canonical_number(raw, decimal: Optional[str] = None) -> Optional[str]:
     return re.sub(r"[.,]", "", s)
 
 
-def numbers_in(text: str) -> set:
-    found = {canonical_number(m.group(0)) for m in _NUMBER.finditer(text or "")}
-    found.update(canonical_number(m.group(0))
-                 for m in _SPACE_GROUPED.finditer(text or ""))
+def numbers_in(text: str, decimal: Optional[str] = None) -> set:
+    """The numbers *text* prints, each in `canonical_number`'s spelling.
+    *decimal* is the mark the text writes the decimal with: the documents'
+    by default."""
+    found = {canonical_number(m.group(0), decimal)
+             for m in _NUMBER.finditer(text or "")}
+    found.update(canonical_number(m.group(0), decimal)
+                 for m in _space_grouped().finditer(text or ""))
     # The year of a dotted date. "Stand 09.12.2025" is one token to _NUMBER
     # and reads as the grouped number 09122025, so the 2025 it plainly prints
     # was not in the quote: 12 years on the corpus_m5 canary were dropped so.
-    found.update(m.group(1) for m in _DATED_YEAR.finditer(text or ""))
+    found.update(_dated_years(text))
+    # A printed sign is part of the number: "-1.155" holds -1155, and a table
+    # of savings lost all its values while the sign stayed outside this set.
+    # The magnitude stays in too: the dash of "2020 - 2030" may be no sign.
+    if rules.get("sign_belongs") == "on":
+        found.update("-" + canonical_number(m.group(1), decimal)
+                     for m in _signed().finditer(text or ""))
     return found
+
+
+def compared(wanted: Optional[str]) -> Optional[str]:
+    """The spelling of a wanted number to look for among `numbers_in`: with
+    its sign where the rule `sign_belongs` is on, else its magnitude, so
+    that the sign stays outside the number and either sign is backed by
+    the printed magnitude."""
+    if wanted and wanted.startswith("-") \
+        and rules.get("sign_belongs") != "on":
+        return wanted[1:]
+    return wanted
 
 
 # A table transcription breaks a long cell label with <br>: "holzige<br>
@@ -142,20 +225,20 @@ def numbers_in(text: str) -> set:
 # and read as text it kept "holzige Festbrennstoffe" out of its own quote:
 # on Kassel six carriers stayed open and three value pairs collided.
 _BR = re.compile(r"<br\s*/?>", re.I)
+# Bold in a transcribed table is markup of the transcription too: on
+# Rendsburg a measure sheet printed "**Bedarf Bestand**<br>122,3 GWh" and its
+# quote "Bedarf Bestand 122,3 GWh" was refused twice. `flat` drops the `**`.
 
 
 # Quotation marks and dashes a PDF prints and a model retypes. The model is
 # shown the transcription and writes its quote from it, but the two go through
 # different encoders, and a passage that says „Bestand" against a quote that
-# says "Bestand" is the same sentence twice under two code points.
-_SAME = str.maketrans({
-    "„": '"', "“": '"', "”": '"', "‟": '"',  # „ “ ” ‟
-    "«": '"', "»": '"',                                # « »
-    "‘": "'", "’": "'", "‚": "'", "‛": "'",  # ‘ ’ ‚ ‛
-    "–": "-", "—": "-", "−": "-",                 # – — −
-    " ": " ", " ": " ", " ": " ",                 # the thin spaces
-    "­": "",                                                # the soft hyphen
-})
+# says "Bestand" is the same sentence twice under two code points. Which
+# characters are one is the rule `same_characters`.
+def _same() -> dict:
+    return rules.derived("verify.same", lambda: str.maketrans(
+        {key: value for key, value in rules.get("same_characters").items()
+         if len(key) == 1}))
 
 
 def flat(text: str) -> str:
@@ -167,8 +250,8 @@ def flat(text: str) -> str:
     two different sentences. This is not a check, it is the form both sides
     are brought into before the one check that exists runs.
     """
-    same = unicodedata.normalize("NFKC", text or "").translate(_SAME)
-    return _WS.sub(" ", _BR.sub(" ", same)).strip()
+    same = unicodedata.normalize("NFKC", text or "").translate(_same())
+    return _WS.sub(" ", _BR.sub(" ", same.replace("**", ""))).strip()
 
 
 def quote_in(source: str, quote: str) -> bool:
@@ -176,6 +259,73 @@ def quote_in(source: str, quote: str) -> bool:
     if not quote or not source:
         return False
     return flat(quote) in flat(source)
+
+
+# What joins a name or a number to more of itself: "SSP5-3.4-OS",
+# "non-OECD", "11.109", "1.109,5". A stretch with a letter or a digit right
+# beside it, or one of these and then a letter or a digit, is part of a
+# longer name or number, not the thing itself (rule `word_joiners`).
+
+
+def _alone(text: str, start: int, end: int) -> bool:
+    """Does text[start:end] stand for itself, not as part of a longer name or
+    number? Only an end that is a letter or a digit can run on."""
+    joiners = rules.get("word_joiners")
+
+    def runs_on(at: int, step: int) -> bool:
+        if not 0 <= at < len(text):
+            return False
+        if text[at].isalnum():
+            return True
+        beyond = at + step
+        return (text[at] in joiners and 0 <= beyond < len(text)
+                and text[beyond].isalnum())
+    first, last = text[start:start + 1], text[end - 1:end]
+    return not ((first.isalnum() and runs_on(start - 1, -1))
+                or (last.isalnum() and runs_on(end, 1)))
+
+
+def _times_alone(text: str, needle: str) -> int:
+    """How often *needle* stands in *text* for itself (`_alone`)."""
+    if not needle:
+        return 0
+    count, at = 0, text.find(needle)
+    while at != -1:
+        if _alone(text, at, at + len(needle)):
+            count += 1
+        at = text.find(needle, at + 1)
+    return count
+
+
+def _times_number(quote: str, value) -> int:
+    """How often the number *value* stands in *quote* as a number of its
+    own: each printed number once, a longer one ("11.109", "1.109,5") not
+    this one, a sign part of the number (owner decision 2026-11-01)."""
+    wanted = None if isinstance(value, bool) else canonical_number(value)
+    if wanted is None:
+        return 0
+    text = flat(quote or "")
+    wanted = compared(wanted)
+    if wanted.startswith("-"):
+        return sum(1 for m in _signed().finditer(text)
+                   if canonical_number(m.group(1)) == wanted[1:])
+    count = sum(1 for m in _NUMBER.finditer(text)
+                if canonical_number(m.group(0)) == wanted)
+    count += sum(1 for m in _space_grouped().finditer(text)
+                 if canonical_number(m.group(0)) == wanted)
+    count += sum(1 for year in _dated_years(text) if year == wanted)
+    return count
+
+
+def times_stated(raw: dict, parameter: Parameter, quote: str) -> int:
+    """How often a value stands in its quote for itself: a number as a number
+    of its own, a wording where no letter or digit runs on from it ("OECD"
+    in "non-OECD" is no second one). The same split `value_in_quote` makes."""
+    if parameter.is_numeric:
+        return _times_number(quote, raw.get("value"))
+    wording = wording_of(raw, parameter)
+    return _times_alone(flat(quote or "").casefold(),
+                        flat(str(wording or "")).casefold())
 
 
 @dataclass
@@ -192,19 +342,23 @@ class Refusal:
     reason: str
 
 
-def _check_value(raw: dict, parameter: Parameter, flags: list):
-    """The value itself: type, unit, vocabulary. Returns (resolved, refusal)."""
+def _check_value(raw: dict, parameter: Parameter, flags: list, *,
+                 with_unit: bool = True):
+    """The value itself: type, unit, vocabulary. Returns (resolved, refusal).
+    Without *with_unit* not the unit, which a reading asks after the value."""
     value = raw.get("value")
     out: dict = {}
 
     if parameter.is_numeric:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             return None, Refusal(raw, "value is not a number")
-        # units_accepted is a closed list, so the unit is a choice: one entry,
-        # read by the unit question with its own passage, and the document's
-        # own spelling beside it. The spelling is evidence and is never
-        # looked up -- a spelling table stood here once and let 3,324 tuples
-        # of corpus_m5 carry an entry their wording contradicts.
+        if not with_unit:
+            return out, None
+        # The unit as the plan prints it, and the entry of units_accepted the
+        # unit question chose for it by its meaning, with its own passage.
+        # The spelling is evidence and is never looked up -- a spelling table
+        # stood here once and let 3,324 tuples of corpus_m5 carry an entry
+        # their wording contradicts.
         chosen = raw.get("unit")
         wording = raw.get("unit_raw")
         wording = (wording.strip() if isinstance(wording, str)
@@ -212,17 +366,22 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
         unit = chosen if isinstance(chosen, str) and chosen.strip() else None
         factor = parameter.unit_factor(unit)
         if factor is None:
-            # No entry, or one this parameter does not list. The reason names
-            # the wording the document wrote, because that is what a reader
-            # of the refusals is after: which units the plans use that no
-            # list holds.
+            # No entry, or one this parameter does not list: no unit is
+            # refused (owner decision 2026-11-07). The number stays with the
+            # unit as the plan prints it and without a converted value; the
+            # conversions are completed before the graph is written, and the
+            # flag counts which units the plans use that no list holds.
             named = wording or raw.get("unit_seen") or unit
-            return None, Refusal(raw, f"unit {named!r} not in units_accepted "
-                                      f"({', '.join(parameter.units_accepted)})")
+            if named:
+                out["unit_raw"] = named
+                flags.append(f"unmapped:unit:{named}")
+            out["unit"] = None
+            return out, None
         if wording and wording != unit:
             out["unit_raw"] = wording
         out["unit"] = unit
-        out["value_target"] = round(float(value) * float(factor), 6)
+        out["value_target"] = round(float(value) * float(factor),
+                                    rules.get("unit_factor_places"))
         return out, None
 
     wording = raw.get("value_raw")
@@ -240,10 +399,13 @@ def _check_value(raw: dict, parameter: Parameter, flags: list):
     if parameter.value_type == "category":
         uri = parameter.value_to_uri().get(fold_label(value.strip()))
         if uri is None:
-            # The model was handed the closed class list and still found
-            # nothing that fits. That is a mapping gap to review, not a
-            # reason to drop the finding: the wording stays on the tuple.
-            flags.append(f"unmapped:value:{value.strip()}")
+            # An answer to a closed list that is none of its entries, never
+            # read (owner, 2026-09-11). It was kept with a flag, and 2,234
+            # tuples of one corpus run said "read" with no class at all. The
+            # claim stays on the refusal, wording included; the no-class
+            # answer above is how a value says the list lacks it.
+            return None, Refusal(raw, f"value {value.strip()!r} not in "
+                                      f"vocabulary")
         out["value_uri"] = uri
         if wording:
             out["value_raw"] = wording
@@ -263,75 +425,87 @@ def computed_in_output(raw: dict, parameter: Parameter) -> bool:
     is still required and still checked: it proves the inputs are in the
     document.
     """
-    wanted = canonical_number(raw.get("value"))
+    wanted = compared(canonical_number(raw.get("value")))
     if wanted is None:
         return False
+    # The output is read as Python prints, the point the decimal mark and no
+    # grouping, whatever the plan writes: read as the plan, the "0.974" that
+    # round(x, 3) printed was 974, and on one plan 17 of 26 shares were lost.
     for run in raw.get("compute") or ():
-        if isinstance(run, dict) and wanted in numbers_in(run.get("stdout") or ""):
+        if isinstance(run, dict) and wanted in numbers_in(
+                run.get("stdout") or "", decimal="."):
             return True
     return False
+
+
+def printed_rounding(value: float) -> float:
+    """Half a unit of the last digit a number is written with: 116.1 stands
+    for anything from 116.05 to 116.15, and 38892.0 for 38891.5 to 38892.5
+    (the share of the unit is the rule `computed_rounding_half_units`)."""
+    mantissa, _, exponent = repr(float(value)).lower().partition("e")
+    decimals = len(mantissa.partition(".")[2].rstrip("0"))
+    return (rules.get("computed_rounding_half_units")
+            * 10.0 ** (int(exponent or 0) - decimals))
+
+
+def computed_from_inputs(raw: dict) -> bool:
+    """Is the number what the numbers it was worked out from make?
+
+    The output proves the code printed the number, not that the code worked
+    with the numbers the answer names: one summed a column of its table and
+    printed 1,948 t/a beside inputs of 20,345 and 1,399. What the inputs make
+    stands on the last run (`expected`, from the question: a share times its
+    whole, the sum of the parts), and the number has to be it, to the rounding
+    it is written with (owner decision 2026-11-03). A number the rows request
+    worked out names no inputs and is held to its output alone.
+    """
+    runs = raw.get("compute") or ()
+    last = runs[-1] if runs and isinstance(runs[-1], dict) else {}
+    if "inputs" not in last:
+        return True
+    value, expected = raw.get("value"), last.get("expected")
+    if not all(isinstance(number, (int, float)) and not isinstance(number, bool)
+               for number in (value, expected)):
+        return False
+    # Float noise: the code may add the parts in another order than the check.
+    noise = rules.get("computed_float_noise") * max(abs(value),
+                                                    abs(expected))
+    return abs(value - expected) <= printed_rounding(value) + noise
+
+
+def wording_of(raw: dict, parameter: Parameter):
+    """The words a value's quote has to hold.
+
+    For a category the tuple carries two things: the class the model mapped
+    to and, in *_raw, how the document worded it. The evidence check is
+    about the document, so it runs against the wording, never against the
+    class name the mapping produced. Any other value is its own wording: a
+    value_raw beside it vouches for nothing but itself (owner decision
+    2026-11-04).
+    """
+    if parameter.value_type == "category":
+        return raw.get("value_raw") or raw.get("value")
+    return raw.get("value")
 
 
 def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
     if parameter.is_numeric:
-        return canonical_number(raw.get("value")) in numbers_in(quote)
-    # For a category the tuple carries two things: the class the model mapped
-    # to and, in *_raw, how the document worded it. The evidence check is
-    # about the document, so it runs against the wording, never against the
-    # class name the mapping produced.
-    wording = raw.get("value_raw") or raw.get("value")
+        return compared(canonical_number(raw.get("value"))) \
+            in numbers_in(quote)
+    wording = wording_of(raw, parameter)
     return flat(str(wording)).casefold() in flat(quote).casefold()
 
 
-# A full stop, not a list separator. Figure descriptions separate items with
-# semicolons and colons ("EWS: 41; EWK: 20"), and cutting the passage there
-# leaves a fragment that proves nothing.
-_TERMINATOR = re.compile(r"[.!?\n]")
-# Below this a passage is not evidence. A table cell and a figure description
-# are each one long sentence, so falling back to the plain window is right.
-_MIN_PASSAGE = 40
-
-
-def _occurrences(raw: dict, parameter: Parameter, source: str) -> list:
-    """Every place in the source this value could be read, as (start, end)."""
-    if parameter.is_numeric:
-        wanted = canonical_number(raw.get("value"))
-        if wanted is None:
-            return []
-        spans = [m.span() for m in _NUMBER.finditer(source)
-                 if canonical_number(m.group(0)) == wanted]
-        spans += [m.span() for m in _SPACE_GROUPED.finditer(source)
-                  if canonical_number(m.group(0)) == wanted]
-        return sorted(set(spans))
-    wording = raw.get("value_raw") or raw.get("value")
-    if not isinstance(wording, str) or len(wording.strip()) < 2:
-        return []
-    needle, hay = wording.strip().casefold(), source.casefold()
-    spans, at = [], hay.find(needle)
-    while at != -1:
-        spans.append((at, at + len(needle)))
-        at = hay.find(needle, at + 1)
-    return spans
-
-
-def _sentence_around(source: str, start: int, end: int, span: int = 320) -> str:
-    """The passage the value stands in, cut at sentence ends where there are any.
-
-    A cut that leaves less than _MIN_PASSAGE characters is no evidence, so the
-    window is kept instead: a table cell is a whole "sentence" and a figure
-    description is one long one.
-    """
-    lo, hi = max(0, start - span), min(len(source), end + span)
-    cut_lo, cut_hi = lo, hi
-    before = list(_TERMINATOR.finditer(source, lo, start))
-    if before:
-        cut_lo = before[-1].end()
-    after = _TERMINATOR.search(source, end, hi)
-    if after:
-        cut_hi = after.end()
-    passage = source[cut_lo:cut_hi].strip()
-    return passage if len(passage) >= _MIN_PASSAGE else source[lo:hi].strip()
+def number_outside_quote(claim: dict) -> bool:
+    """A number the quote it stands under does not print. What
+    `value_in_quote` refuses, asked before the parameter of a row is known."""
+    value, quote = claim.get("value"), claim.get("quote")
+    if (isinstance(value, bool) or not isinstance(quote, str)
+            or claim.get("computed") is True):
+        return False
+    wanted = compared(canonical_number(value))
+    return wanted is not None and wanted not in numbers_in(quote)
 
 
 # A passage shorter than this identifies nothing. "2030" sits in every plan
@@ -339,33 +513,25 @@ def _sentence_around(source: str, start: int, end: int, span: int = 320) -> str:
 # nothing about where it read THIS one. The value quote has been held to it
 # since the first corpus run; the coordinate quotes were not, although
 # field.md rule 3 promises the same, and three of Kassel's year readings were
-# the bare year.
-MIN_QUOTE_CHARS = 8
+# the bare year. How many characters is the rule `quote_min_chars`.
+def min_quote_chars() -> int:
+    return rules.get("quote_min_chars")
 
 
-def _repair_quote(raw: dict, parameter: Parameter, source: str) -> Optional[str]:
-    """The passage the source itself gives for this value, or None.
+# Why the fold refuses a value's quote, said once for `verify_tuple` and for
+# `value_refused`, which asks the same while the model can still answer.
+QUOTE_TOO_SHORT = "quote missing or too short to identify anything"
+QUOTE_NOT_FOUND = "quote not found in the source it cites"
 
-    A model that abridges its quote — "...zeigen sukzessive sinkende Werte:
-    79.499.951 kWh (2035)" for a sentence that also lists 2030 and 2040 — has
-    stated something true and cited it wrongly. Refusing that loses the
-    finding; taking the model's wording on trust loses the guarantee that the
-    evidence is literally in the document. So the quote is rebuilt from the
-    source, and only where the source leaves no choice: the value has to occur
-    in it exactly once. Measured on the 16-document pilot, that is 303 of 377
-    such refusals, against 8 where the value was not in the source at all.
-    """
-    spans = _occurrences(raw, parameter, source)
-    if len(spans) != 1:
-        return None
-    passage = _sentence_around(source, *spans[0])
-    return passage if len(passage) >= MIN_QUOTE_CHARS else None
+
+def not_in_quote(raw: dict) -> str:
+    """Why the fold refuses a value its quote does not hold."""
+    return f"value {raw.get('value')!r} does not occur in the quote"
 
 
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                  owner_kind: str = "section",
-                 locate: Optional[Callable[[str], Optional[list]]] = None,
-                 repair_text: Optional[str] = None):
+                 locate: Optional[Callable[[str], Optional[list]]] = None):
     """One claimed tuple against everything the model does not control.
 
     Returns Verified or Refusal. *owner_kind* decides the tier: prose gets
@@ -374,10 +540,8 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
     because opening the PDF is the expensive step and a claim refused earlier
     never needs it.
 
-    *repair_text* is what a missing quote is rebuilt from, when the heading
-    prefixed into *source_text* is not part of it. The repair rests on the
-    value occurring exactly once, and 1.9% of this corpus's table numbers
-    also stand in their own caption.
+    A quote that does not stand in *source_text* is refused, and nothing
+    rebuilds it from the source (owner decision 2026-11-05).
     """
     if not isinstance(raw, dict):
         return Refusal(raw={}, reason="tuple is not an object")
@@ -480,30 +644,45 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                                     f"{list(axis.enum or ())}")
 
     quote = raw.get("quote")
-    if not isinstance(quote, str) or len(quote) < MIN_QUOTE_CHARS:
-        return Refusal(raw, "quote missing or too short to identify anything")
-    if not quote_in(source_text, quote):
-        repaired = _repair_quote(
-            raw, parameter,
-            repair_text if repair_text is not None else source_text)
-        if repaired is None:
-            return Refusal(raw, "quote not found in the source it cites")
-        raw = dict(raw, quote=repaired)
-        quote = repaired
-        flags.append("quote_repaired")
-    if not value_in_quote(raw, parameter, quote):
-        # `is True`, not truthy: "computed" is a switch that decides WHICH
-        # evidence check applies, and the string "nein" would have opened the
-        # door it exists to keep shut.
-        if raw.get("computed") is True and computed_in_output(raw, parameter):
-            # The document prints the inputs and the sandbox printed the
-            # result. Both halves of the evidence are on the tuple.
-            flags.append("computed")
-        else:
-            return Refusal(raw, f"value {raw.get('value')!r} does not occur "
-                                f"in the quote")
+    if read_off(raw, owner_kind):
+        # No text states the number: the sentence of what was read off the
+        # figure is its evidence, and the flag says it is an estimate.
+        flags.append(READ_OFF)
+    else:
+        if not isinstance(quote, str) or len(quote) < min_quote_chars():
+            return Refusal(raw, QUOTE_TOO_SHORT)
+        # Whatever the rule `check_quote_shown` says: it decides where a
+        # quote may stand, what was shown or the whole document, and the
+        # reading gives the value the place it stands in (`pipeline.place_of`,
+        # owner decision 2026-11-12). A quote that does not stand at its
+        # place stands nowhere the reading found it, and falls.
+        if not quote_in(source_text, quote):
+            return Refusal(raw, QUOTE_NOT_FOUND)
+        if rules.get("check_answer_in_quote") \
+                and not value_in_quote(raw, parameter, quote):
+            # `is True`, not truthy: "computed" is a switch that decides
+            # WHICH evidence check applies, and the string "nein" would have
+            # opened the door it exists to keep shut.
+            if raw.get("computed") is True \
+                    and computed_in_output(raw, parameter):
+                # The document prints the inputs and the sandbox printed the
+                # result. Both halves of the evidence are on the tuple.
+                if rules.get("computed_from_inputs") == "on" \
+                    and not computed_from_inputs(raw):
+                    return Refusal(raw, f"value {raw.get('value')!r} does "
+                                        f"not follow from its inputs")
+                flags.append("computed")
+            else:
+                return Refusal(raw, not_in_quote(raw))
+        if (raw.get("drawn") is True and owner_kind == "figure"
+                and rules.get("read_off_figures")):
+            # The figure description estimated a number the image only
+            # draws, and the quote holds that estimate.
+            flags.append(READ_OFF)
 
     if (parameter.is_numeric and parameter.integrated
+            and rules.get("flag_missing_period")
+            and value_fields.get("unit") is not None
             and not parameter.names_period(value_fields.get("unit"))):
         # The entry the unit question chose says in the spec that it names no
         # period. The period is part of that reading, because a passage
@@ -519,8 +698,8 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         flags.append("period:unstated")
 
     rects = None
-    if owner_kind in TEXT_KINDS:
-        tier = TIER_TEXT
+    tier = tier_of(owner_kind)
+    if tier == TIER_TEXT:
         if locate is not None:
             rects = locate(quote)
             if not rects:
@@ -528,8 +707,6 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                 # placed on the page — the reader gets the page, not the
                 # highlight. Worth counting, not worth dropping a finding for.
                 flags.append("not_located")
-    else:
-        tier = TIER_VISUAL
 
     out = dict(raw)
     out.update(resolved)
@@ -542,11 +719,46 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
         if settled is not None or out.get(f"{name}_state") not in (READ,
                                                                   DERIVED):
             continue
-        out[f"{name}_state"] = UNBACKED
-        for suffix in ("_quote", "_source", "_window", "_link_quote",
-                       "_link_source"):
+        out[f"{name}_state"] = state_for("refused")
+        # The rule `refused_keeps_quote` leaves the quote and its source.
+        gone = ("_window", "_link_quote", "_link_source", "_means")
+        if rules.get("refused_keeps_quote") != "kept":
+            gone = ("_quote", "_source") + gone
+        for suffix in gone:
             out.pop(f"{name}{suffix}", None)
         flags.append(f"unbacked:{name}")
     out.update(value_fields)
     out["parameter"] = parameter.uri
     return Verified(tuple=out, tier=tier, flags=flags, rects=rects)
+
+
+def value_refused(raw: dict, parameter: Parameter, source_text: str,
+                  owner_kind: str = "section") -> Optional[str]:
+    """Why the fold would refuse a value read before its coordinates, or
+    None: what `verify_tuple` checks of the value itself (its type, its
+    entry of a closed list) and of its quote (long enough, standing in
+    *source_text*, holding the value), in its words; of a value read off a
+    figure of *owner_kind* (`read_off`) only the value itself. Not the unit
+    and not the axes, which a reading asks after the value and checks as it
+    reads them (`pipeline.merge_field`). A reading asks it of each value
+    while the model can still answer (`reading.round_failure`), so it holds
+    a value to the check the fold applies (owner decisions 2026-11-05)."""
+    if not isinstance(raw, dict):
+        return "tuple is not an object"
+    _resolved, refusal = _check_value(raw, parameter, [], with_unit=False)
+    if refusal is not None:
+        return refusal.reason
+    if read_off(raw, owner_kind):
+        return None
+    quote = raw.get("quote")
+    if not isinstance(quote, str) or len(quote) < min_quote_chars():
+        return QUOTE_TOO_SHORT
+    # As in `verify_tuple`: *source_text* is the value's place, which the
+    # rule `check_quote_shown` lets the reading find in what was shown or
+    # in the whole document (`pipeline.place_of`).
+    if not quote_in(source_text or "", quote):
+        return QUOTE_NOT_FOUND
+    if rules.get("check_answer_in_quote") \
+            and not value_in_quote(raw, parameter, quote):
+        return not_in_quote(raw)
+    return None

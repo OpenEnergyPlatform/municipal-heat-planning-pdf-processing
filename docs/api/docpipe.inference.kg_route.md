@@ -49,7 +49,7 @@ Fields:
 - `plan_iri: Callable`: (db_path, document name) -> str | None
 - `bindings: Callable`: ({axis: uri | int}) -> (constraint text, {var: (kind, value)})
 - `label: Callable`: (IRI or bare id) -> what a reader calls it
-- `prose: dict`: the profile's trust wording, kg.TRUST_PROSE
+- `prose: dict`: the profile's trust wording, kg.trust_prose
 - `notes: dict`: reason token -> sentence, inference.ROUTE_NOTES
 - `prompt: Any`: the coordinate prompt, a docpipe.prompts.Prompt
 

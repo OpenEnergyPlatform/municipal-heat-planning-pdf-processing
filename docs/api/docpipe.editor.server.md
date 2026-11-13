@@ -1,0 +1,219 @@
+# docpipe.editor.server
+
+`docpipe/editor/server.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
+
+server.py: The local server of `docpipe edit` and the one file guard.
+
+`App` answers a request as plain data (method, path, query and body in, a
+status and an object out), so every promise of the endpoints can be held to
+without a socket. What an endpoint says comes from the logic beside it
+(`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
+module only reads the file, asks the logic and, where the logic says so,
+writes.
+
+`Files` is the one place the editor touches a file: it may write, and take a
+file away, only inside the profile's own folder and read only inside the
+folders of the profiles in
+effect, the harvest it was given, the page itself, the generated
+documentation and the folder the prompt review writes into
+(`<temp>/docpipe-prompt-review`). One more guard writes the upstream cache
+and nothing else: "Apply" of a fetch puts the fetched files and the lock
+there (`sourcespage.apply`); a fetch itself writes only into a folder of its
+own in the temp directory (`<temp>/docpipe-sources-fetch`). A path is
+resolved first, so `..` and links cannot lead out. A trace is read by the run's own reader after the guard has
+checked its path (`Files.checked`). A server that `docpipe edit` started
+(start.py) has one more guard, which writes the note of a switch of the
+profile and nothing else, into the temporary folder the command made for it.
+
+A server runs on one profile. Where `docpipe edit` started it, the head of
+the page offers every profile the installation finds; a switch to another
+writes that profile and the server's port into the note and ends the server
+once its answer is sent, and the command starts it again with that profile
+(start.py). A server started otherwise offers only its own profile.
+
+The HTTP layer binds 127.0.0.1 only, answers only a `Host` it knows (a page
+of another site cannot reach the server by a name of its own) and takes a
+POST only with the header the page sends (a form on another site cannot send
+it). A request it answers without having read it to the end, a refusal, is
+read off before the connection closes, so that the answer arrives. The
+standard library is all this needs.
+
+Author: Felix Vossel
+
+## Classes
+
+### Files
+
+```python
+class Files
+```
+
+Every byte the editor reads or writes itself goes through `open`.
+
+#### Files.\_\_init\_\_
+
+```python
+def __init__(self, write_root: Path, read_roots: Sequence[Path])
+```
+
+#### Files.checked
+
+```python
+def checked(self, path) -> Path
+```
+
+*path* resolved, for a reader that opens the file itself;
+PermissionError where `open` would refuse it.
+
+#### Files.open
+
+```python
+def open(self, path, mode: str = "rb")
+```
+
+#### Files.read
+
+```python
+def read(self, path) -> bytes
+```
+
+#### Files.write
+
+```python
+def write(self, path, data: bytes) -> None
+```
+
+The whole file or the old one: written beside it, then put in its
+place.
+
+#### Files.remove
+
+```python
+def remove(self, path) -> None
+```
+
+A file of the profile's own folder is taken away; one that is
+not there is left as it is.
+
+#### Files.digest
+
+```python
+def digest(self, path) -> str
+```
+
+The sha256 of a file's bytes, as hex.
+
+#### Files.stamps
+
+```python
+def stamps(self, folder) -> list
+```
+
+The stamp files directly in a folder, sorted.
+
+#### Files.tree
+
+```python
+def tree(self, folder) -> list
+```
+
+Every file below a folder, sorted; [] where there is none.
+
+### App
+
+```python
+class App
+```
+
+The endpoints of CONTRACT section 3, without a socket.
+
+#### App.\_\_init\_\_
+
+```python
+def __init__(self, profile, harvest: Optional[Path] = None,
+             root: Optional[Path] = None, cache: Optional[Path] = None,
+             fetch_root: Optional[Path] = None,
+             switch: Optional[Callable[[str], None]] = None)
+```
+
+#### App.shown
+
+```python
+def shown(self, path) -> str
+```
+
+A path as the user sees it: relative to the repository with
+forward slashes where it lies under it, else absolute.
+
+#### App.snapshot
+
+```python
+def snapshot(self) -> Optional[dict]
+```
+
+The ontology snapshot of the profile, loaded once; None where the
+profile has none.
+
+#### App.call
+
+```python
+def call(self, method: str, path: str, query: dict,
+         body) -> tuple
+```
+
+(status, object) of a request: nothing is raised.
+
+## Functions
+
+### page_file
+
+```python
+def page_file(path: str) -> Optional[tuple]
+```
+
+The file of the page a GET of *path* is answered with, as (its name
+in WEB, its content type); None where the page has no such file.
+
+### sha256
+
+```python
+def sha256(data: bytes) -> str
+```
+
+### serve
+
+```python
+def serve(app: App, port: int) -> ThreadingHTTPServer
+```
+
+The server bound to 127.0.0.1 (port 0: a free one), not yet
+running.
+
+### stop_when_closed
+
+```python
+def stop_when_closed(stream, stop: Callable[[], None]) -> None
+```
+
+Call *stop* once *stream* ends. The standard input of a server that
+`docpipe edit` started is a pipe the command holds, so it ends with the
+command, also one that was killed; where there is no stream, or one
+that is no pipe, nothing ends.
+
+On Windows the pipe is looked at every WATCH seconds and read only where
+it holds bytes: a read that waits on it would hold up every process the
+server starts (git, the generating commands), which is handed the same
+standard input, until the read returns.
+
+### serve_one
+
+```python
+def serve_one(args) -> int
+```
+
+One server of `docpipe edit` (start.py) on the profile the
+environment names, until Ctrl+C. With a switch file the server can
+switch the profile: it then ends with `start.RESTART` after a switch,
+and by itself once the command that started it is gone.
+
+[Back to the index](../README.md)

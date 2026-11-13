@@ -101,6 +101,12 @@ class Catalog:
                      else T["version_old"])
         return " · ".join(parts)
 
+    def name(self, row, facets: Optional[dict] = None) -> str:
+        """What a document is called in a line about it: no date and no
+        version, which change while the document stays the one it is."""
+        return str(Path(row["filename"] or "").stem or row["external_id"]
+                   or f"#{row['id']}")
+
     def detail(self, row, facets: Optional[dict] = None) -> Sequence:
         return ()
 

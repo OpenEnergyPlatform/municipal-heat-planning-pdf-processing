@@ -49,6 +49,14 @@ def local(iri: str) -> str:
     return str(iri).rsplit("/", 1)[-1].rsplit("#", 1)[-1]
 
 
+def path_name(predicate: str) -> str:
+    """The end of a property's IRI, from the IRI or a prefixed name."""
+    text = str(predicate)
+    if "://" not in text and ":" in text:
+        return text.split(":", 1)[1]
+    return local(text)
+
+
 def slug(text: str) -> str:
     plain = unicodedata.normalize("NFKD", str(text))
     plain = "".join(char for char in plain if not unicodedata.combining(char))
@@ -181,8 +189,10 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
     targets = {shape.target_class: shape for shape in shapes
                if shape.target_class}
     by_iri = {shape.iri: shape for shape in shapes if shape.iri}
-    nodes: dict = {}
-    links: list = []
+    boxes: dict = {}        # box id -> box of the drawing
+    box_of: dict = {}       # shape name -> its box id
+    links: list = []        # (shape name, shape name, property) to resolve
+    arrows: list = []
     parameters: list = []
     notes: list = []
     taken: set = set()
@@ -194,13 +204,27 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
         taken.add(name)
         return name
 
+    def box_id(wanted: str) -> str:
+        wanted = slug(wanted) or "node"
+        wanted = wanted if wanted[0].isalpha() else f"node_{wanted}"
+        name, number = wanted, 2
+        while name in boxes:
+            name, number = f"{wanted}_{number}", number + 1
+        return name
+
     for shape in shapes:
         if not shape.target_class:
             notes.append(f"{shape.name}: a shape without sh:targetClass "
                          f"names no node of the graph and was left out")
             continue
-        nodes[shape.name] = {"class": names.curie(shape.target_class),
-                             "per": "document"}
+        here = box_of[shape.name] = box_id(shape.name)
+        boxes[here] = {
+            "id": here, "class": names.curie(shape.target_class),
+            "count": "per_document",
+            "address": {"folder": here, "key": here, "from": []},
+            "note": f"Drafted from the shape {shape.name}. What its nodes "
+                    f"are named after is the author's: `address.from` "
+                    f"lists the fields or facts the address is made of."}
         notes += [f"{shape.name}: {note}" for note in shape.notes]
         listing, numbers = unit_listing(shape, unit_properties)
         families = _family_suggestions(shape, terms, unit_properties) \
@@ -225,8 +249,8 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
                 linked.append(by_iri[prop.node])
             if linked:
                 for other in linked:
-                    links.append({"from": shape.name, "to": other.name,
-                                  **_predicate(prop, label, names)})
+                    links.append((shape.name, other.name,
+                                  names.curie(prop.path)))
                 if len(linked) == len(prop.classes) + bool(prop.node):
                     continue
             raw: dict = {
@@ -236,19 +260,20 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
                 "value_type": "text",
                 "axes": {},
             }
-            kg: dict = {"node": shape.name,
-                        "property": _predicate(prop, label, names)}
+            # What the field becomes in the graph is an arrow of the drawing,
+            # from the field to the box of its shape.
+            arrow: dict = {"from": raw["uri"], "to": box_of[shape.name],
+                           "property": names.curie(prop.path)}
             free = [klass for klass in prop.classes if klass not in targets]
             if prop.choices:
                 raw["value_type"] = "category"
                 if prop.choices_are_terms:
                     raw["vocabulary"] = {iri: _entry(iri, terms)
                                          for iri in prop.choices}
-                    kg["object"] = "term"
+                    arrow["brick"] = "entry"
                 else:
                     raw["vocabulary"] = {text: [text]
                                          for text in prop.choices}
-                    kg["object"] = "literal"
             elif free:
                 individuals = sorted({iri for klass in free
                                       for iri in terms.individuals(klass)})
@@ -257,20 +282,22 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
                     raw["value_type"] = "category"
                     raw["vocabulary"] = {iri: _entry(iri, terms)
                                          for iri in individuals}
-                    kg["object"] = "term"
+                    arrow["brick"] = "entry"
                 else:
                     # A thing the document names, of a class the ontology
                     # has: its own node, labelled with the wording.
                     klass = free[0]
-                    entity = slug(terms.label(klass) or local(klass))
-                    nodes.setdefault(entity, {"class": names.curie(klass),
-                                              "per": "value"})
-                    kg = {"node": entity,
-                          "property": {**dict(zip(
-                              ("prefix", "predicate"),
-                              names.split(RDFS_LABEL))), "label": "label"},
-                          "edge_from": {"node": shape.name,
-                                        **_predicate(prop, label, names)}}
+                    entity = box_id(terms.label(klass) or local(klass))
+                    boxes[entity] = {
+                        "id": entity, "class": names.curie(klass),
+                        "count": "per_distinct", "of": raw["uri"],
+                        "address": {"folder": entity, "key": entity,
+                                    "from": ["@name"], "fold": True}}
+                    arrows.append({"from": box_of[shape.name], "to": entity,
+                                   "property": names.curie(prop.path)})
+                    arrow = {"from": raw["uri"], "to": entity,
+                             "property": names.curie(RDFS_LABEL),
+                             "brick": "node_name"}
                     if len(free) > 1:
                         notes.append(f"{where}: several classes are allowed "
                                      f"and the first one was taken")
@@ -281,15 +308,17 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
                     raw["value_type"] = kind
                     raw["unit_target"] = None
                     raw["units_accepted"] = {}
-                kg["property"]["datatype"] = (
-                    "xsd:" + local(prop.datatype)
-                    if prop.datatype.startswith(XSD)
-                    else names.curie(prop.datatype))
-            if prop.min_count:
-                kg["min"] = prop.min_count
-            if prop.max_count is not None:
-                kg["max"] = prop.max_count
-            raw["kg"] = kg
+                    arrow["brick"] = ("decimal" if kind == "float"
+                                      else "whole_number")
+                else:
+                    arrow["note"] = (
+                        f"The shape asks for "
+                        f"{names.curie(prop.datatype)}; the reading is "
+                        f"written as a text until a brick says otherwise.")
+            if prop.max_count == 1 and arrow["to"] == box_of[shape.name]:
+                # The shapes allow one value: one reading is written.
+                arrow.update({"pick": "one_reading", "single": True})
+            arrows.append(arrow)
             raw["_drafted"] = {"label_from_ontology": said}
             unnamed = [iri for iri, entry in (raw.get("vocabulary")
                                               or {}).items()
@@ -312,6 +341,10 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
                 f"{', '.join(raw['uri'] for raw in made)} and are no "
                 f"parameter of their own; the generic graph writer writes no "
                 f"unit statement for a number")
+    for one, other, predicate in links:
+        if one in box_of and other in box_of:
+            arrows.append({"from": box_of[one], "to": box_of[other],
+                           "property": predicate})
     out = {
         "_comment": (
             "Drafted by `docpipe compile spec`"
@@ -319,9 +352,15 @@ def draft(shapes: list, prefixes: dict, terms: Optional[Terms] = None, *,
             + ". It says what the shapes and the ontology say. What only "
               "the author knows is open: `docpipe compile check` lists it, "
               "and the file is a spec once that list is empty."),
-        "graph": {"base": base or PLACEHOLDER_BASE,
-                  "prefixes": dict(sorted(names.used.items())),
-                  "nodes": nodes, "links": links},
+        # What the project's graph file (graph.json) holds: where the nodes
+        # live (rule `base`) and the drawing of what the fields become there.
+        "graph": {"rules": {"base": base or PLACEHOLDER_BASE},
+                  "map": {"prefixes": dict(sorted(names.used.items())),
+                          "prefix_width": max(
+                              (len(one) for one in names.used),
+                              default=0) + 2,
+                          "boxes": list(boxes.values()),
+                          "arrows": arrows}},
         "parameter_question": PARAMETER_QUESTION,
         "parameters": parameters,
     }
@@ -334,11 +373,20 @@ def finished(raw: dict) -> dict:
     """The draft as a spec: without the marks only the drafting needs."""
     out = copy.deepcopy(raw)
     out.pop("_notes", None)
+    out.pop("graph", None)      # the project's graph file, `graph_file`
     for parameter in out.get("parameters") or ():
         parameter.pop("_drafted", None)
         if parameter.get("example") is None:
             parameter.pop("example", None)
     return out
+
+
+def graph_file(raw: dict) -> dict:
+    """What the draft says for the project's graph file (graph.json): the
+    rule `base` and the drawing, {} where it says nothing."""
+    graph = raw.get("graph") or {}
+    return {key: copy.deepcopy(graph[key]) for key in ("rules", "map")
+            if graph.get(key)}
 
 
 UNITS_SHOWN = 8         # units named in one line of `todo`; the draft has all
@@ -379,10 +427,11 @@ def todo(raw: dict) -> list:
     it has nothing left to say.
     """
     lines = []
-    graph = raw.get("graph") or {}
+    graph = (raw.get("graph") or {}).get("rules") or {}
     if graph.get("base") == PLACEHOLDER_BASE:
-        lines.append(f"graph.base: still the placeholder {PLACEHOLDER_BASE}; "
-                     f"say where the nodes of this graph live")
+        lines.append(f"graph.rules.base: still the placeholder "
+                     f"{PLACEHOLDER_BASE}; say where the nodes of this "
+                     f"graph live")
     for parameter in raw.get("parameters") or ():
         name = parameter.get("uri")
         drafted = parameter.get("_drafted") or {}
@@ -441,147 +490,238 @@ def todo(raw: dict) -> list:
     return lines
 
 
-# -- an existing spec against the shapes --------------------------------------
+# -- an existing spec and its drawing against the shapes ----------------------
 
-def _predicates(block, found=None) -> list:
-    """Every predicate a `kg` block names, at any depth."""
-    found = [] if found is None else found
-    if isinstance(block, dict):
-        if isinstance(block.get("predicate"), str):
-            found.append(block["predicate"])
-        for value in block.values():
-            _predicates(value, found)
-    return found
+ROW_KEYS = ("value", "value_raw", "value_uri", "value_short", "value_target",
+            "unit", "unit_raw", "unit_target")
 
 
-def _classes(block, found=None) -> list:
-    found = [] if found is None else found
-    if isinstance(block, dict):
-        if isinstance(block.get("class"), str):
-            found.append(local(block["class"].split(":")[-1]))
-        for value in block.values():
-            _classes(value, found)
-    return found
+def _listed(parameter: dict, source: Optional[str]) -> dict:
+    """What an arrow from *source* writes as its object for *parameter*, as
+    a list to hold against the shapes': a value the spec fixes (a key of
+    the parameter that holds one identifier, the unit a value is converted
+    to), else the list of the coordinate the arrow starts at, else the
+    parameter's own list."""
+    axes = parameter.get("axes") or {}
+    said = parameter.get(source) if source and source not in axes \
+        and source != parameter.get("uri") else None
+    owner = axes.get(source) if source in axes else parameter
+    owner = owner if isinstance(owner, dict) else {}
+    return {"fixed": said if isinstance(said, str) else None,
+            "from": source if isinstance(said, str) else None,
+            "axis": source if source in axes else None,
+            "vocabulary": owner.get("vocabulary"),
+            "dynamic": bool(owner.get("vocabulary_dynamic")),
+            "edgeless": set()}
 
 
-def _node_classes(spec_raw: dict) -> dict:
-    """{node name: class}. A spec with a `graph` block says each node's
-    class there, once. One without says it in the block of the parameter
-    that mints the node; the others only name the node."""
-    out: dict = {}
-    nodes = (spec_raw.get("graph") or {}).get("nodes")
-    for node, said in (nodes.items() if isinstance(nodes, dict) else ()):
-        if isinstance(said, dict) and isinstance(said.get("class"), str):
-            out[node] = local(said["class"].split(":")[-1])
+def drawn(drawing: Optional[dict], spec_raw: dict) -> tuple:
+    """What a drawing (`map` of a graph file) writes, as `differences`
+    holds it to the shapes: ({field: [(predicate, listed)]}, {field: the
+    local names of the classes of its nodes}, {(class, predicate)} every
+    arrow writes, {field: whether its node takes its class from a
+    coordinate}).
 
-    def walk(block):
-        if not isinstance(block, dict):
-            return
-        if isinstance(block.get("node"), str) and \
-                isinstance(block.get("class"), str):
-            out.setdefault(block["node"],
-                           local(block["class"].split(":")[-1]))
-        for value in block.values():
-            walk(value)
+    An arrow from a field, from one of its coordinates or from a key of its
+    reading is the field's; an arrow from a box to a box of one node per
+    distinct reading is the field's whose readings those are; any other
+    arrow between boxes, and an arrow from a box to itself, is the
+    drawing's structure and no field's: it only says the property is
+    written."""
+    drawing = drawing or {}
+    parameters = {one["uri"]: one for one in spec_raw.get("parameters") or ()
+                  if isinstance(one, dict) and one.get("uri")}
+    boxes = {box["id"]: box for box in drawing.get("boxes") or ()
+             if isinstance(box, dict) and box.get("id")}
 
-    for parameter in spec_raw.get("parameters") or ():
-        walk(parameter.get("kg"))
-    return out
+    def fields_of(box: dict, seen=()) -> list:
+        of = box.get("of")
+        names = [of] if isinstance(of, str) else [
+            one for one in of if isinstance(one, str)] \
+            if isinstance(of, list) else []
+        out = [one for one in names if one in parameters]
+        among = box.get("among")
+        if among in boxes and among not in seen:
+            out += [one for one in fields_of(boxes[among], seen + (among,))
+                    if one not in out]
+        return out
+
+    def classes_of(box: dict, field: Optional[str] = None) -> set:
+        """The classes the nodes of *box* are written as; for a box that
+        takes them from a coordinate, those *field* offers, else every
+        field of the box."""
+        if isinstance(box.get("class"), str):
+            return {local(box["class"].split(":")[-1])}
+        coordinate = ((box.get("class_brick") or {}).get("settings")
+                      or {}).get("coordinate")
+        out: set = set()
+        for uri in ([field] if field else fields_of(box)):
+            offered = (((parameters[uri].get("axes") or {}).get(coordinate)
+                        or {}).get("vocabulary") or {})
+            out.update(local(str(key).split(":")[-1]) for key in offered
+                       if not str(key).startswith("out:"))
+        for entry in (box.get("table") or {}).values():
+            if isinstance(entry, dict) and isinstance(entry.get("class"),
+                                                      str):
+                out.add(local(entry["class"].split(":")[-1]))
+        return out
+
+    writes: dict = {}
+    classes: dict = {}
+    written: set = set()
+    from_axis: dict = {}
+    for arrow in drawing.get("arrows") or ():
+        if not isinstance(arrow, dict):
+            continue
+        source, target = arrow.get("from"), arrow.get("to")
+        predicate = arrow.get("property")
+        if target not in boxes or not isinstance(predicate, str):
+            continue
+        if source in boxes:
+            subject = boxes[source]
+            node = boxes[target]
+            owners = [node["of"]] if source != target \
+                and node.get("count") == "per_distinct" \
+                and node.get("of") in parameters else []
+        else:
+            subject = node = boxes[target]
+            if source in parameters:
+                owners = [source]
+            else:
+                owners = [uri for uri in fields_of(subject)
+                          if source in (parameters[uri].get("axes") or {})
+                          or source in ROW_KEYS]
+        for klass in classes_of(subject):
+            written.add((klass, path_name(predicate)))
+        for uri in owners:
+            listed = _listed(parameters[uri], None if source in boxes
+                             else source)
+            writes.setdefault(uri, []).append((predicate, listed))
+            classes.setdefault(uri, set()).update(classes_of(node, uri))
+            from_axis[uri] = from_axis.get(uri, False) or (
+                not isinstance(node.get("class"), str)
+                and bool(node.get("class_brick")))
+    return writes, classes, written, from_axis
 
 
 def differences(shapes: list, spec_raw: dict,
                 terms: Optional[Terms] = None,
-                unit_properties=UNIT_PROPERTIES) -> list:
-    """What the spec says differently from the shapes, and what one of them
-    does not say at all. [{kind, parameter, path, detail}], nothing changed.
+                unit_properties=UNIT_PROPERTIES,
+                pairs: Optional[list] = None,
+                drawing: Optional[dict] = None) -> list:
+    """What the spec and its drawing (`map` of the graph file) say
+    differently from the shapes, and what one of them does not say at all.
+    [{kind, parameter, path, detail}], nothing changed.
 
-    A parameter is held against the property shape whose path its `kg` block
-    names. Where several shapes carry that path (a label, on every node),
-    the one is taken whose target class the block names, or the node of the
-    block is of. Where that settles nothing, the parameter is compared to
-    nothing rather than to a guess, and is listed as ambiguous only if no
-    other predicate of its block found its shape.
+    A field is held against the property shape whose path an arrow of the
+    drawing writes for it (`drawn`). Where several shapes carry that path (a
+    label, on every node), the one is taken whose target class is the class
+    of the field's node. A node that takes its class from a coordinate is
+    held against the shape of every class that coordinate offers. Where that
+    settles nothing, the field is compared to nothing rather than to a
+    guess, and is listed as ambiguous only if no other property it writes
+    found its shape. A property no shape carries, or none of the classes its
+    node is written as, is named on its own. A property of the shapes no
+    arrow writes is `not_asked`.
 
     An entry of a list that starts with `out:` is the profile's own word for
     "none of these" and no term, so the shapes are not expected to have it.
     The units a shape lists are no property to ask for where the spec asks
-    for the shape's number.
+    for the shape's number. *pairs*, where given, is filled with (field,
+    shape, property) for every property a field was held against.
     """
     terms = terms or Terms()
     by_path: dict = {}
     for shape in shapes:
         for prop in shape.properties:
             by_path.setdefault(local(prop.path), []).append((shape, prop))
-    node_class = _node_classes(spec_raw)
-    # What the `graph` block links: (class of the start node, predicate).
-    # Nobody is asked for those; the graph writer draws them itself.
-    linked = set()
-    for link in (spec_raw.get("graph") or {}).get("links") or ():
-        if isinstance(link, dict) and isinstance(link.get("predicate"), str):
-            linked.add((node_class.get(link.get("from")),
-                        local(link["predicate"])))
+    writes, classes_of, written, from_axis = drawn(drawing, spec_raw)
     out: list = []
     asked: set = set()
 
-    def note(kind, parameter, path, detail, shape=None):
+    def note(kind, parameter, path, detail, shape=None, entries=None,
+             axis=None):
         row = {"kind": kind, "parameter": parameter, "path": path,
                "detail": detail}
         if shape is not None:
             row["shape"] = shape        # a property of a shape, said by it
+        if entries is not None:
+            row["entries"] = entries    # the IRIs a list row names
+            row["axis"] = axis          # whose list: an axis, or the value
         out.append(row)
 
     for parameter in spec_raw.get("parameters") or ():
+        if not isinstance(parameter, dict):
+            continue
         name = parameter.get("uri")
-        kg = parameter.get("kg")
-        predicates = _predicates(kg)
+        found = writes.get(name) or []
+        predicates = [predicate for predicate, _listed_ in found]
         if not predicates:
             note("no_graph_block", name, None,
-                 "the parameter names no predicate, so it cannot be held "
-                 "against the shapes")
+                 "no arrow of the drawing writes the field, so it cannot be "
+                 "held against the shapes")
             continue
-        classes = set(_classes(kg))
-        if isinstance(kg, dict) and kg.get("node") in node_class:
-            classes.add(node_class[kg["node"]])
-        matched, unsettled = [], []
-        for predicate in predicates:
-            candidates = by_path.get(local(predicate), [])
+        classes = classes_of.get(name) or set()
+        source = from_axis.get(name)
+        matched, unsettled, absent = [], [], []
+        for predicate, listed in found:
+            candidates = by_path.get(path_name(predicate), [])
             if len(candidates) > 1:
                 narrowed = [(shape, prop) for shape, prop in candidates
                             if local(shape.target_class or "") in classes]
-                if len(narrowed) != 1:
+                if len(narrowed) == 1 or (narrowed and source):
+                    candidates = narrowed
+                elif classes and not narrowed:
+                    absent.append(predicate)
+                    continue
+                else:
                     unsettled.append((predicate, candidates))
                     continue
-                candidates = narrowed
-            matched += candidates
+            matched += [(shape, prop, listed) for shape, prop in candidates]
         if not matched:
             for predicate, candidates in unsettled:
-                note("ambiguous", name, predicate,
+                note("ambiguous", name, path_name(predicate),
                      f"{len(candidates)} shapes carry this path and the "
-                     f"block does not say which node is meant")
+                     f"drawing does not say which node is meant")
                 asked.update((shape.name, prop.path)
                              for shape, prop in candidates)
-            if not unsettled:
-                note("not_in_shapes", name, ", ".join(predicates),
+        # Every predicate the drawing writes is one the shapes are asked
+        # for: one no shape of its node carries is named, whatever the
+        # others of the field found.
+        for predicate in absent:
+            note("not_in_shapes", name, path_name(predicate),
+                 "shapes carry this path, but none of the class(es) this "
+                 "node is written as")
+        for predicate in dict.fromkeys(predicates):
+            if not by_path.get(path_name(predicate)):
+                note("not_in_shapes", name, path_name(predicate),
                      "no property shape has this path")
-        for shape, prop in matched:
+        for shape, prop, listed in matched:
             asked.add((shape.name, prop.path))
-            said_min = kg.get("min") if isinstance(kg, dict) else None
-            said_max = kg.get("max") if isinstance(kg, dict) else None
-            if (prop.min_count or prop.max_count is not None) and (
-                    (prop.min_count or 0) != (said_min or 0)
-                    or prop.max_count != said_max):
-                spec_says = "" if said_min is None and said_max is None \
-                    else (f"; the spec says min {said_min or 0}, max "
-                          f"{'any' if said_max is None else said_max}")
+            if pairs is not None:
+                pairs.append((name, shape.name, local(prop.path)))
+            if prop.min_count or prop.max_count is not None:
                 note("cardinality", name, local(prop.path),
                      f"the shapes allow min {prop.min_count or 0}, max "
-                     f"{'any' if prop.max_count is None else prop.max_count}"
-                     + spec_says)
-            vocabulary = parameter.get("vocabulary")
-            if prop.choices and isinstance(vocabulary, dict):
-                theirs = {local(iri): iri for iri in prop.choices}
+                     f"{'any' if prop.max_count is None else prop.max_count}")
+            if not prop.choices:
+                continue
+            theirs = {local(iri): iri for iri in prop.choices}
+            if listed["fixed"] is not None:
+                # One object, the same on every node: the shapes have to
+                # take it, the rest of their list is theirs to offer.
+                if local(listed["fixed"]) not in theirs:
+                    note("list_extra", name, local(prop.path),
+                         f"the spec writes {listed['fixed']} "
+                         f"({listed['from']}), which the shapes' list of "
+                         f"{len(theirs)} does not have",
+                         entries=[listed["fixed"]], axis=listed["axis"])
+                continue
+            vocabulary = listed["vocabulary"]
+            if isinstance(vocabulary, dict) and vocabulary:
                 ours = {local(iri): iri for iri in vocabulary
-                        if not str(iri).startswith("out:")}
+                        if not str(iri).startswith("out:")
+                        and iri not in listed["edgeless"]}
                 missing = sorted(set(theirs) - set(ours))
                 extra = sorted(set(ours) - set(theirs))
                 if missing:
@@ -589,12 +729,16 @@ def differences(shapes: list, spec_raw: dict,
                          f"{len(missing)} entr"
                          f"{'y' if len(missing) == 1 else 'ies'} of the "
                          f"shapes' list not in the spec: "
-                         + ", ".join(missing))
+                         + ", ".join(missing),
+                         entries=[theirs[key] for key in missing],
+                         axis=listed["axis"])
                 if extra:
                     note("list_extra", name, local(prop.path),
                          f"{len(extra)} entr"
                          f"{'y' if len(extra) == 1 else 'ies'} of the spec "
-                         f"not in the shapes' list: " + ", ".join(extra))
+                         f"not in the shapes' list: " + ", ".join(extra),
+                         entries=[ours[key] for key in extra],
+                         axis=listed["axis"])
                 for key in sorted(set(theirs) & set(ours)):
                     entry = vocabulary[ours[key]]
                     label = terms.label(theirs[key])
@@ -605,7 +749,7 @@ def differences(shapes: list, spec_raw: dict,
                     if label and label not in spellings:
                         note("label", name, key,
                              f"the ontology calls it {label!r}, the spec "
-                             f"{said!r}")
+                             f"{said!r}", axis=listed["axis"])
                     meaning = terms.definition(theirs[key])
                     theirs_said = entry.get("definition") \
                         if isinstance(entry, dict) else None
@@ -613,13 +757,15 @@ def differences(shapes: list, spec_raw: dict,
                             " ".join(meaning.split()) != \
                             " ".join(theirs_said.split()):
                         note("definition", name, key,
-                             "the spec's definition is not the ontology's")
-            elif prop.choices and parameter.get("vocabulary_dynamic"):
+                             "the spec's definition is not the ontology's",
+                             axis=listed["axis"])
+            elif listed["dynamic"]:
                 pass        # the list is the profile's, per document
-            elif prop.choices:
+            else:
                 note("list_missing", name, local(prop.path),
                      f"the shapes close this property over "
-                     f"{len(prop.choices)} entries and the spec has no list")
+                     f"{len(prop.choices)} entries and the spec has no list",
+                     entries=list(prop.choices), axis=listed["axis"])
     for shape in shapes:
         listing, numbers = unit_listing(shape, unit_properties)
         # The units a shape lists belong to its number, as the draft hangs
@@ -630,12 +776,12 @@ def differences(shapes: list, spec_raw: dict,
                 continue
             if hung and prop in listing:
                 continue
-            if (local(shape.target_class or ""), local(prop.path)) in linked \
-                    or (None, local(prop.path)) in linked:
+            if (local(shape.target_class or ""), local(prop.path)) \
+                    in written:
                 continue
             needed = " (required: min %d)" % prop.min_count \
                 if prop.min_count else ""
             note("not_asked", None, local(prop.path),
-                 f"{shape.name}: no parameter asks for this property"
-                 + needed, shape=shape.name)
+                 f"{shape.name}: no arrow of the drawing writes this "
+                 f"property" + needed, shape=shape.name)
     return out

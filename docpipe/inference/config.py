@@ -19,6 +19,12 @@ import os
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
 LLM_MODEL    = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
 LLM_API_KEY  = os.environ.get("LLM_API_KEY", "EMPTY")
+# The model names at LLM_BASE_URL the chat may ask, comma-separated, and how
+# many requests each takes at once (`pool.py`). One place in all is the plain
+# client: one request after the other.
+LLM_MODELS = tuple(name.strip() for name in os.environ.get(
+    "LLM_MODELS", "").split(",") if name.strip()) or (LLM_MODEL,)
+LLM_SLOTS_PER_MODEL = int(os.environ.get("LLM_SLOTS_PER_MODEL", "1"))
 LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.1"))
 LLM_MAX_TOKENS  = int(os.environ.get("LLM_MAX_TOKENS", "2048"))
@@ -64,7 +70,7 @@ READOFF_IMAGE_MAX_SIDE = int(os.environ.get("READOFF_IMAGE_MAX_SIDE", "1600"))
 # ---------------------------------------------------------------------------
 CODE_EXEC_URL = os.environ.get("CODE_EXEC_URL", "")
 CODE_EXEC_TOKEN = os.environ.get("CODE_EXEC_TOKEN") or os.environ.get("KWP_SANDBOX_TOKEN", "")
-CODE_EXEC_TIMEOUT = float(os.environ.get("CODE_EXEC_TIMEOUT", "45"))
+# The wait for one run is the rule `code_timeout_s` (env CODE_EXEC_TIMEOUT).
 # Max code runs the model may request while answering ONE batch.
 CODE_EXEC_MAX_ROUNDS = int(os.environ.get("CODE_EXEC_MAX_ROUNDS", "2"))
 

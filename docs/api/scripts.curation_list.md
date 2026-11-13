@@ -8,7 +8,7 @@ Trust is per value and the summary line is per plan, and between the two sits
 the question a curator actually has: which values, in which order, and on
 which page. A corpus run produces tens of thousands of tuples and a share of
 them carry a reason -- a coordinate the run gave up on or could not back, a
-repaired quote, a computed number. Reading the JSONL for those is a filter
+computed number. Reading the JSONL for those is a filter
 nobody should have to write twice.
 
 So: one row per value the harvest cannot stand behind, newest doubt first,

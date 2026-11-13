@@ -21,7 +21,12 @@ It runs as three steps, merge, then db, then embed, run in sequence but
 independently resumable and invocable through `--step`, plus three
 standalone, additive maintenance steps, `enrich-bbox`, `enrich-page-source` and
 `enrich-caption`, that backfill one column family on an already built corpus
-without touching sections, embeddings or the index (`pipeline.py:148`).
+without touching sections, embeddings or the index (`pipeline.py:163`), and a
+fourth standalone step, `reembed`, that embeds the whole corpus again into a new
+index file and writes neither the database nor the old index
+(`pipeline.py:186`), and a fifth, `sync`, that writes a plan processed again
+into the database under the numbers its entries already have and takes the
+vectors whose input changed out of the indexes (`pipeline.py:155`).
 Skipping this stage leaves a plan processed but absent from the database and
 index everything downstream reads.
 
@@ -36,10 +41,10 @@ index are read at query time instead, by [extraction](extraction.md) and the
 
 | | |
 |---|---|
-| **In** | `sections_refined.json` + `visuals.json` (merge); `document.json` (db, embed); `sections.json` (standalone `enrich-bbox`); `page_transcription_report.json` (standalone `enrich-page-source`); an existing FAISS index file, if present (embed). |
-| **Out** | `document.json` per PDF; `Sections`, `Pages`, `SectionPages`, `Segments`, `Tables`, `Images` rows in the database; `Embeddings` rows and their vectors in the FAISS index file. |
-| **Resumes on** | Merge: `document.json` newer than both its inputs. Db: a document already has `Sections` rows. Embed: an `(embedding_type, section_index, item_id)` triple already in `Embeddings`; an input whose batch failed has none, so a document with missing vectors is not done. `--force` clears exactly the step it is passed for. |
-| **Needs** | A `Documents` row already written by fileprocessing, to resolve a processed directory (db, embed). One GPU replica per visible device (embed), or with `EMBEDDING_INDEX_BACKEND=api` an embeddings endpoint and no GPU. No other network call. |
+| **In** | `sections_refined.json` + `visuals.json` (merge); `document.json` (db, embed); `sections.json` (standalone `enrich-bbox`); `page_transcription_report.json` (standalone `enrich-page-source`); an existing FAISS index file, if present (embed); the index file and every `--also` file, which must exist (sync). |
+| **Out** | `document.json` per PDF; `Sections`, `Pages`, `SectionPages`, `Segments`, `Tables`, `Images` rows in the database; `Embeddings` rows and their vectors in the FAISS index file; under sync, rows kept, updated, inserted or deleted under their old numbers, and vectors taken out of the index files (a reembed's record beside a file is marked `complete: false`). |
+| **Resumes on** | Merge: `document.json` newer than both its inputs. Db: a document already has `Sections` rows. Embed: an `(embedding_type, section_index, item_id)` triple already in `Embeddings`; an input whose batch failed has none, so a document with missing vectors is not done. Sync has no resume state: a rerun plans again on the rows as they stand and writes what is still to be written. `--force` clears exactly the step it is passed for. |
+| **Needs** | A `Documents` row already written by fileprocessing, to resolve a processed directory (db, embed). One GPU replica per visible device (embed), one replica on the CPU in fp32 where there is none, or with `EMBEDDING_INDEX_BACKEND=api` an embeddings endpoint and no GPU. No other network call. |
 
 ## Method
 
@@ -48,9 +53,9 @@ index are read at query time instead, by [extraction](extraction.md) and the
 `main()` parses argv, resolves `--profile` into default `data_dir`, `db_path`
 and `index_path` when omitted, calls `run()`, and exits 1 with a logged
 traceback on any uncaught exception and with a logged `Embedding incomplete:`
-sentence when the embed step left inputs without a vector (`pipeline.py:379`).
+sentence when the embed step left inputs without a vector (`pipeline.py:423`).
 `run()` dispatches on
-`--step`: the three `enrich-*` steps return after their own work; otherwise
+`--step`: `sync` merges, then runs the sync, and returns (`pipeline.py:155`); the three `enrich-*` steps and `reembed` return after their own work; otherwise
 merge, db and embed run in order, or only the named step (`pipeline.py:125`).
 
 ### Merge
@@ -61,7 +66,15 @@ the file is a document and is not searched further; two of one name under
 different subfolders are refused with both places named), `merge_single` deep
 copies its sections and replaces each table or figure dict, matched by id, with
 its Stage 5 counterpart wherever that carries a `markdown` or `description`
-key, writing the result to `document.json` through a `.part` file and
+key, joins each table that stage 5 found to continue the table before it to the
+table its run started with (`docpipe.visuals.continuation.join`, owner decision
+2026-11-06: its rows are appended, its id, page, crop, bbox and `qa` go into the
+table's `parts`, it leaves its section, and its own transcription stays in
+`visuals.json`; the log counts the joined parts; a plan already in the
+database gets its joined tables through `--step sync`, which keeps every
+entry's number, or through a db step with `--force`, which deletes and
+reinserts every plan under the root, so a root holding only that plan's
+directory keeps it to that plan), writing the result to `document.json` through a `.part` file and
 `os.replace` so a killed write leaves no truncated file for the cache to
 accept (`merge.py:71`). `merge_batch` runs this over every candidate and
 reports one success or failure per directory (`merge.py:160`). A
@@ -80,15 +93,59 @@ attaches no crops there.
 When `--force` covers both the db and embed steps, `run()` first snapshots
 every candidate's current FAISS ids through `get_document_faiss_ids`, before
 the forced delete below removes the `Embeddings` rows that would otherwise name
-them (`pipeline.py:180`; `database.py:706`). `update_database` then resolves
+them (`pipeline.py:203`; `database.py:768`). `update_database` then resolves
 each directory to a `Documents.id`, skips it if `Sections` rows already exist
 and `--force` is unset, or under `--force` deletes and reinserts, then
 `_insert_sections` creates each `Pages` row via the get-or-create helper
 `_page_id` (`execute()`/`SELECT` per distinct page number, cached in a dict
-built once per document and shared across all its sections, `database.py:407`)
+built once per document and shared across all its sections, `database.py:474`)
 and bulk inserts `SectionPages`, `Segments`, `Tables` and `Images`,
 one `executemany` each: four per section, not five (`database.py:329`,
 `393`). `enrich_page_source` and `enrich_caption` then run automatically.
+
+### Sync: changed entries only
+
+`--step sync` is for a plan whose tables were transcribed again (table
+continuations joined) or whose sections were refined again. Such a plan used to
+go back in with `--force`, which deleted and re-inserted every entry under new
+numbers and embedded all its vectors again, so a harvest, its found places and
+a second index built under the database's ids no longer fitted it. Under the
+owner decision of 2026-11-07 ("Nur Geändertes neu") every entry keeps its number
+and only an entry whose embedding input changed is embedded again
+(`docpipe/chunking/sync.py`).
+
+`run()` merges first (`--force` applies to that merge), then `run_sync` plans
+each document under the root against the rows it has in the database. A
+directory with no `Documents` row is counted as unregistered and left alone. The
+rules:
+
+- A section keeps its row where the new document has a section with the same
+  title and text, in order (`difflib` alignment, `align`). In a changed stretch
+  the new sections take the old rows of that stretch in order; the rest are new
+  or gone.
+- A table or a figure keeps its row by block id, in order where one id stands
+  more than once, and moves with it to the section it now stands in (`pair`). A
+  table part the merge joined to its start has no entry any more and its row is
+  gone.
+- A vector stays only where its input is unchanged: the text and picture that
+  `build_embedding_inputs` makes of the entry, from the database before and from
+  the document now, each with the caption the database holds
+  (`captions.resolve_title`). Every other `Embeddings` row is deleted and its id
+  taken out of the index and of every `--also` file.
+
+The indexes are written first, atomically through a `.part` file, and the
+database after, document by document, one commit each. A run that dies between
+the two leaves rows whose vector is gone, which the embed step drops and embeds
+again; a second run finds the changes still to be written and writes them.
+`--dry-run` skips the merge, writes nothing, and logs one sentence counting
+same, changed, new and gone sections, tables and figures, vectors kept, and
+vectors to embed again or gone.
+
+A sync only takes vectors out. The order after it is sync, then the embed step,
+which embeds each input that has no `Embeddings` row into `index_path`, then
+`--step reembed` on each `--also` file, which fills the ids that file lacks (a
+record marked `complete: false` is continued). Every unchanged entry keeps its
+number and its vector through all three.
 
 ### Caption and page-source backfill
 
@@ -103,11 +160,11 @@ section content and block id, recording the outcome in `caption_source`
 ### Embed: index load and reconciliation
 
 `load_or_create_index` opens the FAISS file or creates a new
-`IndexIDMap(IndexFlatIP)` (`embedding.py:76`); `index_ids` reads every id it
-holds (`embedding.py:97`); `drop_embeddings_missing_from_index` deletes any
+`IndexIDMap(IndexFlatIP)` (`embedding.py:78`); `index_ids` reads every id it
+holds (`embedding.py:99`); `drop_embeddings_missing_from_index` deletes any
 `Embeddings` row whose `faiss_id` is absent from that set; `next_id` becomes
 the maximum of the index's count, the database's high-water mark, and one past
-the largest held id (`pipeline.py:222`; `database.py:734`). `load_embedder`
+the largest held id (`pipeline.py:245`; `database.py:796`). `load_embedder`
 then builds the embedder, and `note_embedding` in `pipeline.py` records its
 model, dimension, backend and token limit in the database's `Meta` table (see
 [store](store.md)). An index that already holds vectors of another model is not
@@ -130,7 +187,9 @@ vector or `Meta` row is written.
 `load_embedder` reads `EMBEDDING_INDEX_BACKEND` (`index_backend()` in
 `embedding.py`). With `local`, the default, it imports
 `qwen3_vl_embedding.MultiGPUEmbedder` and loads the model data-parallel on
-every visible GPU in bf16. With `api` it returns an `ApiIndexEmbedder`, which
+every visible GPU in bf16, or on the CPU in fp32 where there is none
+(`qwen3_vl_embedding.dtype_for`: a CPU without bf16 instructions embedded
+about 11 tokens per second in bf16). With `api` it returns an `ApiIndexEmbedder`, which
 wraps `docpipe.embedding.api.ApiEmbedder` (see [embedding](embedding.md)) and
 needs no GPU; `load_embedder` returns before it imports torch or the model
 module. The query side's `EMBEDDING_BACKEND` is a separate setting and changes
@@ -145,10 +204,12 @@ them through `prepare()` in a `ThreadPoolExecutor` bounded to
 documents' work in flight (`pipeline.py:105`). `prepare()` resolves the document
 id and filters `build_embedding_inputs`' output against
 `get_existing_embeddings`; an unresolved document contributes nothing and is
-named in one warning at the run's end (`pipeline.py:250`, `321`). At
+named in one warning at the run's end (`pipeline.py:273`, `321`). At
 `EMBED_FLUSH_ITEMS` pending items, `create_embeddings` runs and the index saves
 past `EMBED_SAVE_VECTORS` growth; a final flush and save close the run
-(`pipeline.py:286-314`, `331`). One `Unembedded` tally runs through every
+(`pipeline.py:309-337`, `331`). `save_index` writes the whole file under
+`<name>.part` and renames it over the index, so a job killed mid-save leaves
+the last saved index for the resume to load, not a truncated file. One `Unembedded` tally runs through every
 flush, and `embedded` counts the vectors actually created, not the inputs
 handed over. Each prepare thread reuses one connection across calls:
 `_worker_connection` caches it per thread for `document_id()` and
@@ -165,19 +226,53 @@ group, sorts each by text length so a batch pads to its own spread, batches at
 `EMBEDDING_BATCH_SIZE`, calls the embedder's `process()`, adds vectors to the
 index under newly allocated contiguous ids, and writes the matching
 `Embeddings` rows, grouped per document, through one shared `EmbeddingWriter`
-(`embedding.py:193`). An embedder that sets `text_only`, which
-`ApiIndexEmbedder` does, never sees the image-bearing group: those inputs are
-dropped with one warning that counts them and get no `Embeddings` row, so an
-index built through the api holds the text vectors of a corpus only. An
+(`embedding.py:198`). An embedder that sets `text_only` never sees the
+image-bearing group: those inputs are dropped with one warning that counts them
+and get no `Embeddings` row. `ApiIndexEmbedder` takes `text_only` from the
+`ApiEmbedder` it wraps (`embedding.py:155`), and that is true only in the
+OpenAI form of `EMBEDDING_API_FORMAT`, which has no place for a picture; an
+index built through it holds the text vectors of a corpus only. In the
+messages form, the chat a vLLM server takes, `text_only` is false and every
+input is embedded, a figure with its picture. An
 `ApiIndexEmbedder` scales each vector it returns to length one, as the local
 model's are, because the index is an inner-product index.
+
+### Reembed: the same ids, a new index file
+
+`--step reembed` embeds every item the database maps again, with the configured
+embedder, because a vector compares only with vectors of the same model and the
+same implementation of it, and a move to a vLLM server (the messages form of
+[embedding](embedding.md)) changes all of them. `run()` hands it over before
+the merge, db and embed steps are considered (`pipeline.py:186`;
+`run_reembed` in `docpipe/chunking/reembed.py`). `index_path` names a NEW file.
+Each item's vector goes into it under the FAISS id the database already gives
+that item, read per document by `embedding_ids` (`database.py:734` to `716`),
+so the `Embeddings` rows stay as they are. Neither the database nor the old
+index file is written, and a run moves to the new file by its path.
+
+Beside the new file a record `<index>.json` says what made it: model, backend,
+form, dimension, vectors, whether it is complete, and the counts. An existing
+file without that record is an index some run reads, and `check_target` refuses
+it before anything is written; a file with the record is continued, and the
+ids it already holds are skipped. An embedder with `text_only` is refused
+before anything is written too, since the new index would lack every table and
+figure image the old one holds.
+
+What cannot be embedded again is counted by embedding type and never filled
+in: ids the database maps whose item the processed output no longer builds
+(`no_input`), items the output builds that have no id (`no_id`, which the embed
+step, the one that hands out ids, embeds), and inputs that fail alone after
+their batch failed (`missed`). A batch that fails is tried again input by input;
+when any input is missed, the run saves the index and the record with
+`complete` false and ends with `IncompleteIndex`, and a rerun embeds exactly
+those.
 
 ### Standalone bbox backfill
 
 `enrich_bbox` reads a re-run Stage 3 `sections.json`, builds a lookup from
 block id and from (page, normalised text) to a bbox, and updates matching
 `Segments`, `Tables` and `Images` rows, by default only where `bbox` is unset,
-without touching embeddings, content or the index (`database.py:569`).
+without touching embeddings, content or the index (`database.py:598`).
 
 ## Data model
 
@@ -215,21 +310,21 @@ and not as passed: a table of an older run, one the model answered only in plain
 text and one it never read. The column is added to an older database by
 `_ensure_table_qa_column`, which `update_database` calls like the `bbox`
 retrofit, and it is filled only when a document is inserted again. A document
-already in the database is skipped, so an existing database gets its values
-only through a forced re-chunk, which also renews the `Tables` ids that a
-harvest and its decisions name a table by. There is no backfill that leaves the
-ids alone; until then `scripts/table_numbers_in_pdf.py` recomputes the check
-from the stored transcription. A table whose stage 5 run failed the check in an
+already in the database is skipped by the db step, so an existing database gets
+its values through `--step sync`, which keeps the `Tables` ids that a harvest
+and its decisions name a table by, or through a forced re-chunk, which renews
+them. `scripts/table_numbers_in_pdf.py` recomputes the check from the stored
+transcription without writing the database. A table whose stage 5 run failed the check in an
 older `visuals.json` carries `qa_warning` there but no `qa`, so its column stays
 `NULL`.
 
 The FAISS index is one `IndexIDMap` wrapping an `IndexFlatIP` of dimension
 `EMBEDDING_DIM`, holding all six embedding types together, keyed by
-database-allocated ids rather than insertion position (`embedding.py:76`).
+database-allocated ids rather than insertion position (`embedding.py:78`).
 `get_existing_embeddings` returns a document's embedded items as
-`(embedding_type, section_index, item_id_or_None)` tuples (`database.py:648`);
+`(embedding_type, section_index, item_id_or_None)` tuples (`database.py:677`);
 a flush's writeback records `(embedding_type, section_index, item_id,
-faiss_id)` tuples per document (`database.py:850`).
+faiss_id)` tuples per document (`database.py:912`).
 
 ## Configuration
 
@@ -239,20 +334,22 @@ faiss_id)` tuples per document (`database.py:850`).
 | `EMBEDDING_DIM` | env var | `4096` | vector dimension of a new FAISS index | `embedding/config.py:22`; `chunking/config.py:17` |
 | `EMBEDDING_MAX_TOKEN_LENGTH` (as `MAX_TOKEN_LENGTH`) | env var | `16384` | `max_length` passed to the embedder; longer inputs truncate | `embedding/config.py:23`; `chunking/config.py:19` |
 | `EMBEDDING_ALLOW_MIXED_INDEX` | env var / `embedding.allow_mixed_index` | `0` | `0` stops an append to an index of another embedding model before any vector is written (exit 1, one error line); a value other than `0` allows the mixture and records both models | `docpipe/chunking/config.py`, declared in `docpipe/settings.py` (stage `chunk`) |
-| `EMBEDDING_INDEX_BACKEND` | env var | `local` | what builds the index: `local` makes `load_embedder` return a `MultiGPUEmbedder` on the visible GPUs; `api` makes it return an `ApiIndexEmbedder` over `docpipe.embedding.api.ApiEmbedder`, which needs an `EMBEDDING_BASE_URL` (or a hosted `EMBEDDING_PROVIDER`) and no GPU, takes text only and so leaves inputs that carry a picture out; recorded in `Meta` as `embedding/backend` | `index_backend()` in `chunking/embedding.py`; declared in `docpipe/settings.py` |
+| `EMBEDDING_INDEX_BACKEND` | env var | `local` | what builds the index: `local` makes `load_embedder` return a `MultiGPUEmbedder` on the visible GPUs; `api` makes it return an `ApiIndexEmbedder` over `docpipe.embedding.api.ApiEmbedder`, which needs an `EMBEDDING_BASE_URL` (or a hosted `EMBEDDING_PROVIDER`) and no GPU, and in the default OpenAI form of `EMBEDDING_API_FORMAT` takes text only and so leaves inputs that carry a picture out (the messages form embeds them); recorded in `Meta` as `embedding/backend` | `index_backend()` in `chunking/embedding.py`; declared in `docpipe/settings.py` |
 | `EMBEDDING_BACKEND` | env var | `local` | picks the query-time embedder in `docpipe.embedding`; `load_embedder` here does not read it, `EMBEDDING_INDEX_BACKEND` decides what builds the index | `embedding/config.py:19` |
 | `SECTION_EMBED_MAX_WORDS` | code constant | `1800` | last-resort word cap on a section's embedding text, logged when it fires | `chunking/config.py:30`; `chunking.py:64` |
 | `EMBEDDING_BATCH_SIZE` | code constant | `32` | items per model batch in `create_embeddings`; a same-named, env-driven constant in `embedding/config.py` (default `8`) is not read here, except by `ApiEmbedder` under the api backend, which splits each batch into requests of that size | `chunking/config.py:32` |
-| `EMBED_PREPARE_WORKERS` | code constant | `8` | threads reading merged JSON and querying the DB while the GPUs work | `chunking/config.py:38`; `pipeline.py:286` |
+| `EMBED_PREPARE_WORKERS` | code constant | `8` | threads reading merged JSON and querying the DB while the GPUs work | `chunking/config.py:38`; `pipeline.py:309` |
 | `EMBED_PREPARE_AHEAD` | code constant | `32` | documents' prepared input allowed to sit unconsumed | `chunking/config.py:45`; `pipeline.py:105` |
-| `EMBED_FLUSH_ITEMS` | code constant | `4096` | pending-item threshold for one `create_embeddings` call; checked only after a document's inputs are appended, so a flush can exceed it | `chunking/config.py:50`; `pipeline.py:292` |
-| `EMBED_SAVE_VECTORS` | code constant | `50000` | vectors added since the last save before the index file rewrites mid-run; the run's end saves once more | `chunking/config.py:57`; `pipeline.py:300`, `331` |
+| `EMBED_FLUSH_ITEMS` | code constant | `4096` | pending-item threshold for one `create_embeddings` call; checked only after a document's inputs are appended, so a flush can exceed it | `chunking/config.py:50`; `pipeline.py:315` |
+| `EMBED_SAVE_VECTORS` | code constant | `50000` | vectors added since the last save before the index file rewrites mid-run; the run's end saves once more | `chunking/config.py:57`; `pipeline.py:323`, `331` |
 | `FAISS_INDEX_FILE` | code constant | `faiss_index.bin` | declared but unread elsewhere; the real filename comes from the CLI argument or `Profile.index_path`, hardcoding the same literal separately | `chunking/config.py:59`; `docpipe/profile.py:324` |
-| `--step` | CLI flag | none (merge, db, embed) | restrict the run to one of `merge`, `db`, `embed`, `enrich-bbox`, `enrich-page-source`, `enrich-caption` | `pipeline.py:358-369` |
-| `--force` | CLI flag | off | merge: ignore the cache. db: delete and reinsert. embed: evict old vectors instead of skipping. enrich-*: re-derive already-answered rows. | `pipeline.py:371`; used throughout |
-| `--profile` / `DOCPIPE_PROFILE` | CLI flag / env var | none / unset | supplies default `data_dir`, `db_path`, `index_path` when a positional argument is omitted | `profile.py:314-324`, `417`; `pipeline.py:370`, `393-395` |
-| `--log-level` | CLI flag | `INFO` | logging level for the run | `pipeline.py:372-375`, `384` |
-| `data_dir`, `db_path`, `index_path` | positional args | none (fall back to the profile's paths) | processed root, database path, index path | `pipeline.py:351-357`, `393-395` |
+| `--step` | CLI flag | none (merge, db, embed) | restrict the run to one of `merge`, `db`, `embed`, `enrich-bbox`, `enrich-page-source`, `enrich-caption`, `reembed` (writes `index_path` as a new file, see Reembed), `sync` (see Sync) | `pipeline.py:383-406` |
+| `--also` | CLI flag, repeatable | none | with `--step sync`: a further index built under the database's ids, such as a reembed's file, to take the same vectors out of; each must exist | `pipeline.py:407` |
+| `--dry-run` | CLI flag | off | with `--step sync`: count what would change, without merging and without writing | `pipeline.py:411` |
+| `--force` | CLI flag | off | merge: ignore the cache. db: delete and reinsert. embed: evict old vectors instead of skipping. enrich-*: re-derive already-answered rows. | `pipeline.py:415`; used throughout |
+| `--profile` / `DOCPIPE_PROFILE` | CLI flag / env var | none / unset | supplies default `data_dir`, `db_path`, `index_path` when a positional argument is omitted | `profile.py:314-324`, `417`; `pipeline.py:414`, `436-439` |
+| `--log-level` | CLI flag | `INFO` | logging level for the run | `pipeline.py:416-419`, `428-432` |
+| `data_dir`, `db_path`, `index_path` | positional args | none (fall back to the profile's paths) | processed root, database path, index path | `pipeline.py:376-382`, `436-439` |
 
 ## Failure modes
 
@@ -269,14 +366,25 @@ abort the batch (`merge.py:49`). A document with `sections.json` and no
 with one warning that names it and says to run the refinement
 (`merge.py:168-177`).
 
+The sync raises `FileNotFoundError` before it plans anything when the index file
+or an `--also` file does not exist, and the stage ends 1 with the fatal error
+logged. `--also` and `--dry-run` are accepted with any step but read only by
+`sync`. A directory with no `Documents` row is left out of a sync and counted as
+unregistered, not raised as an error. A sync killed after the indexes are
+written and before every document is committed leaves `Embeddings` rows whose
+vector is gone; the embed step drops them at its start and embeds the items
+again, and a rerun of the sync writes the remaining documents. Taking vectors
+out of an `--also` file marks its record incomplete, so a reembed of that file
+is needed before it serves again.
+
 A directory whose `Documents` row cannot be resolved during the db step is
-skipped with a warning (`database.py:500`); reached during the embed step, it
+skipped with a warning (`database.py:529`); reached during the embed step, it
 contributes no inputs and is named in one end-of-run warning, so no GPU time
-is spent on unownable vectors (`pipeline.py:250`, `321`). `enrich_bbox` and
+is spent on unownable vectors (`pipeline.py:273`, `321`). `enrich_bbox` and
 `enrich_page_source` instead `continue` silently on the same case
-(`database.py:594`, `196`), and `enrich_bbox` reads `sections.json` with a
+(`database.py:623`, `196`), and `enrich_bbox` reads `sections.json` with a
 plain `open()`/`json.load()`, no per-directory `try`/`except`
-(`database.py:597`): a malformed file aborts the whole run rather than being
+(`database.py:626`): a malformed file aborts the whole run rather than being
 skipped for one document.
 
 Listing a crop directory raises for anything but a missing directory: only
@@ -284,9 +392,10 @@ Listing a crop directory raises for anything but a missing directory: only
 permission error surfaces instead of silently dropping every VL input
 (`chunking.py:49`). A table or figure with no (or empty) `path` is skipped with
 a warning naming its id, rather than resolving to the containing directory
-itself and embedding that (`chunking.py:175`, `209`). A section past
+itself and embedding that (`chunking.py:179`, `209`). A section past
 `SECTION_EMBED_MAX_WORDS` is truncated and the cut logged, since refinement
-should already have split it (`chunking.py:64`).
+should already have split it, both before and after the model rewrote it
+(`chunking.py:64`).
 
 A model batch that raises inside `create_embeddings` is logged with its item
 range, and its inputs are collected in an `Unembedded` tally by embedding type
@@ -294,14 +403,14 @@ and by document: nothing in the batch reaches the index or database, and the
 other batches are finished. The stage then saves the index with the vectors
 that were made and ends 1 with `Embedding incomplete: N input(s) of M
 document(s) have no vector (type=n, ...); a rerun embeds them`
-(`IncompleteIndex`, `embedding.py:268-273`; `pipeline.py:332`). Since no
+(`IncompleteIndex`, `embedding.py:273-278`; `pipeline.py:355`). Since no
 `Embeddings` row was written for those inputs, the next run picks up exactly
 them. The log line `Embedded %d new item(s) across %d/%d docs that had open
 items; %d item(s) failed` says how many, and `Embedding complete` is logged
 only for a whole index. `create_embeddings` called without a tally raises
 `IncompleteIndex` itself once every batch has been tried. Inputs that an
 embedder with `text_only` leaves out on purpose, the image-bearing ones, are
-not failures, so an index built through the api still ends 0. Two cases are
+not failures, so an index built through the api in the OpenAI form still ends 0. Two cases are
 not covered: a batch whose embedder returns fewer vectors than inputs is not
 collected, it raises `IndexError` at the database write, after the vectors are
 in the index, and the stage ends non-zero without saving; and the embed step
@@ -309,29 +418,29 @@ needs `faiss` at its start, the lazy import freeing only the import of the
 package and of `create_embeddings`. A
 record whose owner row cannot be resolved in `EmbeddingWriter.write` is skipped
 and counted, though its vector is already indexed, and logged with per-type
-counts (`database.py:908-914`); that is a warning and the stage still ends 0, and
+counts (`database.py:970-976`); that is a warning and the stage still ends 0, and
 since the record has no `Embeddings` row a rerun embeds it again and adds
 another orphan vector. Writing for a `pdf_name` with no `Documents` row at
 all writes nothing and logs an error naming the orphaned vector count
-(`database.py:867-871`).
+(`database.py:929-933`).
 
 An `Embeddings` row whose `faiss_id` is absent from the loaded index, left by a
 crash between a batch's write and the next index save, is dropped at the start
-of every embed run and logged, so the item is redone (`database.py:734`). An
+of every embed run and logged, so the item is redone (`database.py:796`). An
 empty known-ids set is refused as a reconciliation base rather than read as
 "nothing is embedded", since that would delete every `Embeddings` row
-(`database.py:748`).
+(`database.py:810`).
 
 Unresolved `data_dir`, `db_path` or `index_path`, with no `--profile` given,
 raises `SystemExit` naming the missing argument, before `run()` is called
-(`pipeline.py:396`).
+(`pipeline.py:440`).
 
 ## Measured behaviour
 
 Reading a merged `document.json` and querying the database cost 6.6 seconds per
 document in the last full run, 91 of 184 minutes with every GPU idle, since
 all 800 documents were prepared before the first batch embedded
-(`pipeline.py:245`). That run's unbounded queue held roughly a million
+(`pipeline.py:268`). That run's unbounded queue held roughly a million
 `EmbeddingInput` records for 1078 plans, traced to an out-of-memory kill at 194
 GB peak resident memory, the reason `EMBED_PREPARE_AHEAD` exists
 (`chunking/config.py:40`).
@@ -340,12 +449,11 @@ A million 4096-dimensional vectors is roughly a 16 GB file; saving it once per
 `EMBED_FLUSH_ITEMS` chunk cost roughly 244 full rewrites over one build, every
 one GPU-idle (`chunking/config.py:52`). The threshold is checked only after a
 document's inputs are appended, so it can be exceeded: forty documents of a
-thousand items each flush in chunks of 5000, not 4096
-(`tests/test_embedding_batching.py:265`).
+thousand items each flush in chunks of 5000, not 4096.
 
 Two directories with no `Documents` row once put 1096 orphaned vectors into
 the index, before the check that skips an unresolved directory existed
-(`pipeline.py:256-259`; `database.py:861`).
+(`pipeline.py:279-282`; `database.py:923`).
 
 Over one plan (Kassel), 15 of 89 tables were captioned with a rounding-footnote
 sentence instead of their real title (`docpipe/captions.py:8`); across its
@@ -360,9 +468,9 @@ distinguishing the two kinds of plan (`database.py:171`; `schema.sql:31`).
 
 `Sections` holds on the order of 134,000 rows, far more `Segments` beneath
 them, why children go out one `executemany` per statement, not one `execute`
-per row (`tests/test_database.py:81`). The corpus holds on the order of
+per row. The corpus holds on the order of
 85,000 crops, why `build_embedding_inputs` lists each directory once rather
-than checking every path (`chunking.py:127`).
+than checking every path (`chunking.py:131`).
 
 A plain `JOIN` instead of `CROSS JOIN` drives SQLite from the whole
 `Embeddings` table on `owner_kind` alone, rescanning that partition per
@@ -372,79 +480,6 @@ document: 338 versus 1.1 milliseconds per document at corpus scale
 Pulling a placeholder's referenced content directly into a section's embedding
 text once made up 46% of the section-text corpus, before this changed to
 substitute only the item's caption (`chunking.py:100`).
-
-## Verification
-
-Merge caching and failure handling:
-`test_merge_batch_skips_cached_dirs_without_parsing`,
-`test_merge_batch_force_remerges_cached_dir`,
-`test_merge_batch_remerges_when_final_json_is_newer`,
-`test_merge_batch_remerges_when_images_json_is_newer`,
-`test_merge_batch_remerges_a_zero_byte_output`,
-`test_merge_keeps_the_previous_output_when_the_write_fails`,
-`test_merge_batch_reports_failure_for_invalid_final_json`,
-`test_merge_batch_contains_an_unreadable_cache_entry`, and
-`test_merge_preserves_segments_and_pages_and_enriches_media`.
-
-Database insertion and resume bookkeeping:
-`test_insert_sections_writes_pages_segments_sectionpages`,
-`test_section_children_go_out_per_statement_not_per_row`,
-`test_embeddings_roundtrip_and_clear`, `test_force_delete_cascades`,
-`test_next_faiss_id_advances_past_max`,
-`test_faiss_id_snapshot_survives_forced_content_delete`,
-`test_per_document_lookups_drive_from_sections` (the query plan itself, not
-only its results),
-`test_existing_embeddings_covers_all_types_of_one_document_only`,
-`test_one_writer_keeps_two_documents_block_ids_apart`,
-`test_a_prepare_worker_asks_both_questions_over_one_connection`, and
-`test_existing_embeddings_resolves_document_without_pdf_suffix`.
-
-Caption and page-source backfill:
-`test_page_source_is_additive_and_says_which_plans_a_model_read`,
-`test_enrich_caption_takes_the_title_from_the_section_text`,
-`test_enrich_caption_is_additive_and_never_runs_twice`, and
-`test_enrich_caption_leaves_a_table_with_no_sentence_alone`.
-
-Embedding-input construction:
-`test_build_inputs_emits_vl_only_for_crops_on_disk`,
-`test_build_inputs_reads_each_crop_directory_once`,
-`test_build_inputs_does_not_hide_an_unreadable_crop_directory`, and
-`test_build_inputs_survives_a_missing_crop_directory`.
-
-Batching, flushing and crash recovery in the embed step:
-`test_a_batch_no_longer_mixes_titles_with_full_sections`,
-`test_every_input_is_embedded_exactly_once`,
-`test_ids_stay_unique_and_contiguous`,
-`test_text_and_image_inputs_stay_in_separate_batches`,
-`test_the_db_writeback_opens_one_connection_for_the_whole_call`,
-`test_the_gpus_start_before_the_last_document_is_read`,
-`test_every_document_is_embedded_exactly_once_across_the_chunks`,
-`test_the_index_is_not_written_once_per_flush`,
-`test_a_crash_mid_run_never_loses_more_than_the_insurance_interval`,
-`test_preparation_never_runs_the_whole_corpus_ahead_of_the_gpus`,
-`test_the_window_still_yields_every_item_exactly_once`,
-`test_rows_without_a_vector_in_the_index_are_dropped`,
-`test_an_empty_index_never_wipes_the_table`, `test_a_clean_run_drops_nothing`,
-`test_a_directory_without_a_documents_row_is_skipped_not_embedded`, and
-`test_the_writer_shouts_instead_of_returning_in_silence`.
-
-The api backend of the index build: `test_the_api_backend_hands_the_index_unit_vectors`,
-`test_an_input_with_a_picture_is_left_out_and_gets_no_row`,
-`test_an_embedder_that_takes_pictures_gets_the_input_that_carries_one`,
-`test_a_vector_of_another_size_never_reaches_the_index`,
-`test_the_backend_setting_decides_and_the_api_needs_no_model`,
-`test_the_query_side_setting_does_not_move_the_index_build`,
-`test_a_hosted_embedding_provider_needs_no_address` and
-`test_a_hosted_endpoint_that_says_not_now_is_asked_again`.
-
-The embedding model wrapper: `test_the_result_comes_back_in_the_caller_order`,
-`test_one_long_item_does_not_land_in_a_shard_of_short_ones`, and
-`test_a_single_replica_needs_no_sharding`.
-
-The bbox backfill: `test_insert_sections_writes_bbox`,
-`test_ensure_bbox_columns_adds_and_is_idempotent`,
-`test_enrich_bbox_backfills_without_touching_embeddings`, and
-`test_enrich_bbox_default_skips_rows_already_set`.
 
 ## Modules
 
@@ -464,22 +499,28 @@ constants instead.
 
 `merge.py` implements the merge step, `merge_single` and `merge_batch`,
 combining Stage 4 and Stage 5 output into `document.json` with an mtime cache.
-Called by `pipeline.run()` and directly by `tests/test_merge.py`.
+Called by `pipeline.run()`.
+
+`sync.py` implements `--step sync`: `align` and `pair` match sections and
+entries to old rows, `plan_document` plans one document and `apply_plan` writes
+it, `drop_from_index` takes ids out of an index file, and `run_sync` runs them
+over every document. It reuses the per-section insert helpers of `database.py`
+(`section_content`, `table_values`, `image_values`, `page_rows`, `segment_rows`,
+`insert_provenance`), which the db step uses too, and `build_embedding_inputs`
+with `log_counts` off. Called by `pipeline.run()`.
 
 `database.py` is all SQLite access: section, table and image insertion, the
 three `enrich-*` backfills, embedding-id bookkeeping (`EmbeddingWriter`,
 `get_existing_embeddings`, `next_faiss_id`,
 `drop_embeddings_missing_from_index`), and the bbox backfill. Called by
-`pipeline.py`, by `embedding.py` through `EmbeddingWriter`, and by most of
-`tests/test_database.py`, `tests/test_embedding_batching.py` and
-`tests/test_segment_bbox.py`. Its docstring's claim that no schema copy is
+`pipeline.py` and by `embedding.py` through `EmbeddingWriter`. Its docstring's claim that no schema copy is
 checked in is stale: `docpipe/store/schema.sql` is a checked-in, code-applied
 schema declaring `bbox`, `page_text_transcribed` and `caption_source`.
 
 `chunking.py` builds one document's `EmbeddingInput` records: section, title,
 table and figure inputs in text and VL form, replacing placeholders with
 captions and capping oversized section text. Called by `pipeline.py`'s
-`prepare()` and directly by `tests/test_chunking.py`.
+`prepare()`.
 
 `embedding.py` is the embed step: FAISS lifecycle (`load_or_create_index`,
 `index_ids`, `save_index`, `remove_ids_from_index`, each importing `faiss` where
@@ -487,8 +528,7 @@ it uses it), `index_backend` and
 `load_embedder` with the `ApiIndexEmbedder` it returns for the api backend, and
 `create_embeddings`, which batches, embeds, allocates ids and writes the
 database back for one flush, and `IncompleteIndex` and `Unembedded` for the
-inputs a failed batch leaves without a vector. Called by `pipeline.py` and directly by
-`tests/test_embedding_batching.py` and `tests/test_embedding_api_index.py`.
+inputs a failed batch leaves without a vector. Called by `pipeline.py`.
 
 `qwen3_vl_embedding.py` is the embedding model wrapper: `Qwen3VLForEmbedding`
 (hidden-state output head), `Qwen3VLEmbedder` (single-device embedding), and
@@ -497,9 +537,8 @@ replicas by length and reassembling results in order. Called by
 `embedding.py`'s `load_embedder` for corpus building, only when
 `EMBEDDING_INDEX_BACKEND` is `local`, and by
 `docpipe/embedding/local.py`'s `LocalEmbedder` for query-time embedding.
-Exercised directly by `tests/test_multigpu_embedder.py`.
 
-`pipeline.py` orchestrates merge, db and embed (or a single `--step`), owns the
+`pipeline.py` orchestrates merge, db and embed (or a single `--step`, including `sync`), owns the
 CLI including `--profile` resolution and logging setup, and implements the
 prepare/flush loop, `prepared_ahead` and `peak_rss_gb`, overlapping preparation
 with GPU embedding. Entry point for `python -m docpipe.chunking` and library
@@ -542,10 +581,12 @@ merge.py: Merges the preprocessing and imageprocessing outputs as
 chunking's first step.
 
 Replaces each table and figure in sections_refined.json with its
-enriched counterpart from visuals.json, matched by item id, and
-writes the result to document.json with an atomic replace. A
-directory is cached and skipped on rerun once document.json is newer
-than both inputs, unless force is set.
+enriched counterpart from visuals.json, matched by item id, joins each
+table the transcription found to continue the table before it to the
+table it continues (`docpipe.visuals.continuation.join`), and writes the
+result to document.json with an atomic replace. A directory is cached and
+skipped on rerun once document.json is newer than both inputs, unless
+force is set.
 
 Author: Felix Vossel
 
@@ -599,8 +640,10 @@ model in this process on the visible GPUs; `api` asks an embeddings endpoint
 and needs none. A setting of its own beside the query side's
 EMBEDDING_BACKEND, because the two differ in a common setup: the index is
 built once with the model on GPUs and queried through an endpoint ever
-after. An endpoint takes text only, so with it the inputs that carry a
-picture are left out and the index holds the text vectors of a corpus.
+after. An endpoint in the OpenAI form takes text only, so with it the inputs
+that carry a picture are left out and the index holds the text vectors of a
+corpus. A vLLM server in the messages form (EMBEDDING_API_FORMAT) takes the
+picture too, and then every input is embedded.
 
 A batch the embedder could not serve leaves its inputs without a vector. The
 other batches are finished first; the inputs left over are counted by

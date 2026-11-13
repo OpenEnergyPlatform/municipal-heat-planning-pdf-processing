@@ -26,3 +26,10 @@ EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "8"))
 # api: any OpenAI-compatible embeddings endpoint.
 EMBEDDING_BASE_URL = os.environ.get("EMBEDDING_BASE_URL", "")
 EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "EMPTY")
+
+# api: how an item reaches the endpoint. "input" is the OpenAI request, text
+# only. "messages" is the chat form vLLM takes: the instruction, the picture
+# and the text in the turns the model's own code builds, so a figure is
+# embedded with its picture and a query is laid out like the items it is
+# compared with.
+EMBEDDING_API_FORMAT = os.environ.get("EMBEDDING_API_FORMAT", "input").strip()

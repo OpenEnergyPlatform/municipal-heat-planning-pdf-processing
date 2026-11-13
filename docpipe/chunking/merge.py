@@ -3,10 +3,12 @@ merge.py: Merges the preprocessing and imageprocessing outputs as
 chunking's first step.
 
 Replaces each table and figure in sections_refined.json with its
-enriched counterpart from visuals.json, matched by item id, and
-writes the result to document.json with an atomic replace. A
-directory is cached and skipped on rerun once document.json is newer
-than both inputs, unless force is set.
+enriched counterpart from visuals.json, matched by item id, joins each
+table the transcription found to continue the table before it to the
+table it continues (`docpipe.visuals.continuation.join`), and writes the
+result to document.json with an atomic replace. A directory is cached and
+skipped on rerun once document.json is newer than both inputs, unless
+force is set.
 
 Author: Felix Vossel
 """
@@ -20,6 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe.artifacts import document_dirs
+from docpipe.visuals.continuation import join
 
 from .config import (SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON,
                      DOCUMENT_JSON)
@@ -133,6 +136,12 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
                     stats.figures_missing += 1
         section["figures"] = new_figures
 
+    # A table the layout cut in parts is one table (owner decision
+    # 2026-11-06): each part the transcription found to continue the table
+    # before it is joined to it, its own transcription staying in
+    # visuals.json.
+    stats.tables_joined = join(merged["sections"])
+
     # Atomic write: a killed job must not leave a half-written output.json that
     # the next run's cache check accepts.
     merged_path.parent.mkdir(parents=True, exist_ok=True)
@@ -147,11 +156,12 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
 
     log.info(
         "Merged: %d sections, %d/%d tables enriched, %d/%d figures enriched"
-        " (%d tables missing, %d figures missing)",
+        " (%d tables missing, %d figures missing, %d table part(s) joined to"
+        " the table they continue)",
         stats.total_sections,
         stats.tables_merged, stats.tables_merged + stats.tables_missing,
         stats.figures_merged, stats.figures_merged + stats.figures_missing,
-        stats.tables_missing, stats.figures_missing,
+        stats.tables_missing, stats.figures_missing, stats.tables_joined,
     )
 
     return merged

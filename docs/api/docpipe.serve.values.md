@@ -22,9 +22,9 @@ about it and nothing added:
     coordinates   each with what was read, the wording it was read from and
                   how the reading ended (`fields.py`)
     quote, page   the words of the document the value stands in, and where
-    level         A, B or C with the reasons (`trust.py`)
+    level         A, B, C or D with the reasons (`trust.py`)
 
-Nothing is filtered: a value of level C is served like one of level A, and
+Nothing is filtered: a value of level D is served like one of level A, and
 says that it is one. Leaving a level out is the asker's decision
 (`level="B"` asks for B and better).
 
@@ -205,6 +205,14 @@ This is the reason behind an `unbacked` state. *parameter* may name
 what only a refusal names (a claim for no parameter of the spec).
 
 ## Functions
+
+### unread_states
+
+```python
+def unread_states() -> tuple
+```
+
+The states of a coordinate that was not read, as the rules say now.
 
 ### read_harvest
 

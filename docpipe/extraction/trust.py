@@ -18,12 +18,17 @@ threshold anybody tuned.
      description (a model's reading of a picture), or out of a
      document whose pages had no text layer and were transcribed page
      by page
-  C  something is off: a coordinate the run gave up on or could not
-     back, a repaired quote, a computed number, a contested identity
+  C  open: a coordinate nobody read, or a number read off a figure's
+     image that no text prints, and nothing speaks against what was read
+  D  in doubt: a coordinate that could not be backed, a computed
+     number, a value looked up in a catalogue, a contested identity, a
+     second reading that came to something else
 
 The reasons form a closed list, because a reason nobody can enumerate
-is a reason nobody can count. What makes a value a C is what a curator
-should examine.
+is a reason nobody can count. C and D are told apart because they ask
+for different things: a C wants its gap filled, a D wants a person to
+look at what was read. A value that is both is a D. What makes a value
+a C or a D is what a curator should examine.
 
 Where in the document a coordinate's passage stands is not a reason.
 The harvest takes a reading whose quote stands in a shown passage and
@@ -31,10 +36,12 @@ carries the answer, and grading it again by that passage's distance
 from the row would be a check the harvest does not make.
 
 A value can be read a second time (`review.py`), and what that reading
-came to is recorded here as a mark. It never raises a level: the
+came to is recorded on the row as a flag. It never raises a level: the
 second reading uses the same model over a narrower window, so an
 agreement states that the reading is self-consistent, not that it is
-right.
+right. Nor does an agreement mark the value `corroborated`: it reads the
+same place again, and one place counts once (owner decision 2026-11-05).
+Only a second passage that prints the number confirms it.
 
 Measured on Kassel's 559 tuples, 527 came out of a table or figure
 image, so image origin alone separates nothing and is not by itself a
@@ -46,12 +53,54 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNANSWERED, UNBACKED
+from .. import rules
+from .fields import EXHAUSTED, READ, SAID_UNSTATED, UNBACKED, state_for
 from .verify import TIER_TEXT
 
 LEVEL_A = "A"
 LEVEL_B = "B"
 LEVEL_C = "C"
+LEVEL_D = "D"
+# Best first: "this level and better" is a cut through this order.
+LEVELS = (LEVEL_A, LEVEL_B, LEVEL_C, LEVEL_D)
+
+
+def review_levels() -> tuple:
+    """The levels a curator should examine (rule `review_levels`)."""
+    return tuple(rules.get("review_levels"))
+
+
+def unread_states() -> tuple:
+    """The states the rule `trust_reason_levels` puts at the level C: a
+    coordinate nobody read. Worked out when asked, so a changed rule
+    changes it."""
+    return tuple(state for state, level
+                 in rules.get("trust_reason_levels").items()
+                 if level == LEVEL_C and state in (EXHAUSTED, "unanswered"))
+
+
+def level_of(reason: str) -> str:
+    """The level the rule `trust_reason_levels` gives a reason: by the
+    reason itself ("review:disagree"), else by the part before its colon
+    ("exhausted" for "exhausted:carrier")."""
+    table = rules.get("trust_reason_levels")
+    level = table.get(reason) or table.get(reason.partition(":")[0])
+    if level not in LEVELS:
+        raise rules.RuleError(f"trust_reason_levels: {reason!r} is at "
+                              f"{level!r}, which is none of "
+                              f"{', '.join(LEVELS)}")
+    return level
+
+
+def __getattr__(name: str):
+    """The two settings that used to be constants of this module, read when
+    asked for: `REVIEW_LEVELS` and `OPEN_STATES` (the states the rule
+    `trust_reason_levels` puts at the level C: a coordinate nobody read)."""
+    if name == "REVIEW_LEVELS":
+        return review_levels()
+    if name == "OPEN_STATES":
+        return unread_states()
+    raise AttributeError(name)
 
 # What a second reading of one value came to. The same model reads a
 # window that is a strict subset of the one the sweep already walked,
@@ -66,12 +115,24 @@ REVIEW_AGREE = "review:agree"
 REVIEW_DISAGREE = "review:disagree"
 REVIEW_UNBACKED = "review:unbacked"
 
-# Flags that document how the value itself was arrived at. Each is a
-# reason on its own, and each is a different thing for a curator to
-# check.
-FLAG_REASONS = {"quote_repaired": "repaired", "computed": "computed",
-                "not_located": "not_located",
-                REVIEW_DISAGREE: "review:disagree"}
+# A value a profile looked up outside the document, in an open catalogue
+# record its own read values found (owner decision 2026-11-04).
+CATALOGUE = "catalogue"
+
+# Flags that document how the value itself was arrived at, and so may be a
+# reason of their own, each a different thing for a curator to check. Which of
+# them count, and at which level, is the rule `trust_reason_levels` (owner
+# decision 2026-11-07: a number a figure only draws, read off its image, is an
+# estimate the plan does not print, a C and not a D, so a printed number of the
+# same coordinates still wins).
+FLAG_REASONS = {"computed": "computed",
+                "not_located": "not_located", CATALOGUE: CATALOGUE,
+                REVIEW_DISAGREE: "review:disagree", "read_off": "read_off"}
+
+
+# The states that can be a reason, whatever the rule says of their level: the
+# ones the schema lists a reason of the form `state:coordinate` for.
+STATE_REASONS = (EXHAUSTED, UNBACKED, "unanswered")
 
 
 def reasons(row: dict, *, conflict: bool = False,
@@ -80,6 +141,7 @@ def reasons(row: dict, *, conflict: bool = False,
 
     An empty list means the harvest sees nothing wrong with the value.
     """
+    counted = rules.get("trust_reason_levels")
     found: list = []
     for key in sorted(row):
         if not key.endswith("_state"):
@@ -91,13 +153,13 @@ def reasons(row: dict, *, conflict: bool = False,
         # document or about this run's scope, recorded as such elsewhere.
         # Unanswered is one about the run, like exhausted: the request came
         # back without this row, and nothing read the coordinate.
-        if state in (EXHAUSTED, UNBACKED, UNANSWERED):
+        if state in counted and state in STATE_REASONS:
             found.append(f"{state}:{key[:-len('_state')]}")
     for flag in row.get("flags") or []:
         reason = FLAG_REASONS.get(flag)
-        if reason and reason not in found:
+        if reason and reason in counted and reason not in found:
             found.append(reason)
-    if conflict:
+    if conflict and "conflict" in counted:
         found.append("conflict")
     if transcribed:
         # Not a doubt about the reading, but a doubt about the page it
@@ -113,19 +175,15 @@ def trust(row: dict, *, conflict: bool = False, transcribed: bool = False,
           corroborated: bool = False) -> dict:
     """{level, reasons, image_origin, corroborated} for one accepted tuple."""
     why = reasons(row, conflict=conflict, transcribed=transcribed)
-    # The review's own answer, read off the row rather than passed in: the
-    # serializers build a verdict from a stored tuple and have no second
-    # reading to hand. It never enters `hard`, so it never lifts a level --
-    # see the module docstring.
-    corroborated = corroborated or REVIEW_AGREE in (row.get("flags") or [])
     hard = [r for r in why if r != "page_transcribed"]
     image = row.get("tier") != TIER_TEXT
-    if hard:
-        level = LEVEL_C
-    elif image or transcribed:
-        level = LEVEL_B
-    else:
-        level = LEVEL_A
+    # The worst of the level of its origin, which an image or a transcribed
+    # page caps (rule `trust_image_cap`), and of the levels of its reasons.
+    level = rules.get("trust_image_cap") if image or transcribed else LEVEL_A
+    for reason in hard:
+        mine = level_of(reason)
+        if LEVELS.index(mine) > LEVELS.index(level):
+            level = mine
     return {"level": level, "reasons": why, "image_origin": image,
             "corroborated": bool(corroborated)}
 
@@ -158,9 +216,10 @@ def transcribed_documents(db) -> set:
 # the level is a fact about the harvest, the sentence is a fact about the
 # reader, and the two corpora do not share a reader. One profile serves German
 # heat plans, the other English scenario studies, and the core cannot know
-# which. So a profile words each of these in its own `kg.TRUST_PROSE`, and
+# which. So a profile words each of these in its own `kg.trust_prose`, and
 # `MARKS` is what that table is held against: a mark added here is a missing
-# key there, reported at import, rather than a line nobody notices missing.
+# key there, reported where the words are read, rather than a line nobody
+# notices missing.
 #
 # `image_origin` and `image_origin_named` are one mark with and without its
 # argument. Split here so a profile's half stays a table of strings instead of
@@ -195,7 +254,7 @@ def marks(verdict: dict, row: Optional[dict] = None) -> tuple:
     if verdict["reasons"]:
         out.append(("reasons",
                     {"reasons": REASON_JOIN.join(verdict["reasons"])}))
-    if verdict["level"] == LEVEL_C:
+    if verdict["level"] in review_levels():
         out.append(("review", {}))
     return tuple(out)
 
@@ -246,7 +305,7 @@ def document_summary(document_id, tuples, refusals) -> dict:
     this line is written, so neither is counted. `trust` takes them as
     arguments for exactly that reason, and the graph side recomputes the
     levels with them. The levels here are the floor: a value that is a C
-    already will not become an A later.
+    already will not become an A later, and an A or a C may become a D.
 
     A pass that appends a parameter to a file builds the line again over every
     tuple and refusal the file now holds. The refusals of the first pass are
@@ -254,19 +313,28 @@ def document_summary(document_id, tuples, refusals) -> dict:
     for want of the parameter stays in the count, so the number says what the
     harvest refused and not how many of those a later pass could read.
     """
-    levels = {LEVEL_A: 0, LEVEL_B: 0, LEVEL_C: 0}
+    levels = dict.fromkeys(LEVELS, 0)
     why: dict = {}
     image = 0
+    # The units a number was read with that are no entry of its list, as
+    # the plan prints them: read and not converted, until the list grows
+    # and a top-up asks them again (owner decision 2026-11-07).
+    unlisted: dict = {}
     for row in tuples:
         verdict = trust(row)
         levels[verdict["level"]] += 1
         image += bool(verdict["image_origin"])
         for reason in verdict["reasons"]:
             why[reason] = why.get(reason, 0) + 1
+        printed = row.get("unit_raw")
+        if row.get("unit") is None and isinstance(printed, str) \
+                and printed.strip():
+            unlisted[printed.strip()] = unlisted.get(printed.strip(), 0) + 1
     return {"document_id": document_id, "tuples": len(tuples),
             "refusals": len(refusals), "levels": levels,
             "reasons": {k: why[k] for k in sorted(why)},
-            "image_origin": image}
+            "image_origin": image,
+            "unlisted_units": {k: unlisted[k] for k in sorted(unlisted)}}
 
 
 # What a whole PARAMETER came to in one document, as against what one
@@ -279,7 +347,8 @@ PARAMETER_STATES = (READ, UNBACKED, EXHAUSTED, SAID_UNSTATED)
 def parameter_states(spec, tuples: list, refusals: list, *,
                      harvested: int = 0,
                      answered: Optional[int] = None,
-                     sources_of: Optional[dict] = None) -> list:
+                     sources_of: Optional[dict] = None,
+                     uncombed=()) -> list:
     """One state per parameter of the spec, in spec order.
 
     Every state this pipeline writes is a state of a ROW: `apply_derived`,
@@ -298,6 +367,11 @@ def parameter_states(spec, tuples: list, refusals: list, *,
     candidate passage had been read in full, and its answer is "the plan
     does not say". Without `sources_of` for a parameter, or for a failed
     request that names no source, a cut anywhere counts for every parameter.
+
+    A field of the document that found nothing while chunks of the
+    document were never shown to it (*uncombed*) ends in the state of
+    `parameter_uncombed`, not "the plan does not say" (owner decision
+    2026-11-13, point 3).
     """
     ran = bool(harvested)
     failed = [r for r in refusals
@@ -325,11 +399,13 @@ def parameter_states(spec, tuples: list, refusals: list, *,
         if mine:
             state = READ
         elif refused:
-            state = UNBACKED
+            state = state_for("parameter_refused")
         elif cut_for(uri):
-            state = EXHAUSTED
+            state = state_for("parameter_cut")
+        elif uri in uncombed:
+            state = state_for("parameter_uncombed")
         else:
-            state = SAID_UNSTATED
+            state = state_for("parameter_silent")
         out.append({"parameter": uri, "state": state,
                     "tuples": mine, "refusals": refused})
     return out

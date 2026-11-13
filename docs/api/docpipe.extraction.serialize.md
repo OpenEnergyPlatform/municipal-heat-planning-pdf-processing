@@ -6,15 +6,11 @@ serialize.py: Turns a document harvest into the profile's target graph.
 
 The module walks the JSONL harvest directory and keeps only the rows
 a run accepted (kind is "tuple"), grouped by document name (collect).
-run() hands each document's rows to a serializer, and the runner's
---serialize flag chooses it: profiles/\<name>/kg.py exposes
-make_serializer(db_path) where the profile writes its graph itself,
-and a profile without one gets the generic writer of graph.py, which
-writes what the `graph` block of the spec describes. What a profile's
-own serializer emits (Turtle with project IRI rules, LinkML YAML, or
-another format) is the profile's decision; the module guarantees only
-the walk, the per-document grouping, and that a refusal row never
-reaches the serializer.
+run() hands each document's rows to a serializer: the one writer of
+graph.py (`graph.make_serializer`), which writes what the drawing of
+the profile's graph file (`map` in graph.json) draws, with the bricks
+of the profile. The module guarantees only the walk, the per-document
+grouping, and that a refusal row never reaches the serializer.
 
 A serializer may leave, per document, which values it wrote
 (`claims`). run() then hands them to the provenance writer it was
@@ -73,7 +69,8 @@ does not hold is named, up to `NAMED` of them, and applied to nothing.
 ```python
 def run(jsonl_dir: Path, out_path: Path,
         serializer: Callable[[str, list], Optional[str]],
-        provenance=None, gold=None, gold_source=None) -> dict
+        provenance=None, gold=None, gold_source=None,
+        index: Optional[dict] = None) -> dict
 ```
 
 Serialize every document's harvest; returns {name: tuple count}.
@@ -91,17 +88,54 @@ harvest is collected and not in `collect`, which the review page and
 `evaluate` read their rows from: counting a decision against a harvest
 that already held it would hide the row it was made on.
 
+*index*, where given, is filled with {document: [the subjects its part
+of the graph names]}: what leaving a paper out of the graph takes
+(`apply_graph_file`).
+
+### apply_graph_file
+
+```python
+def apply_graph_file(path: Path, profile, shapes=(), context=(),
+                     index: Optional[dict] = None) -> Optional[dict]
+```
+
+What the profile's graph file asks of the graph written to *path*
+(`docpipe.graphfile`): classes left out, nodes named anew, the effects
+of the constraints. None, and the file untouched, where it asks
+nothing.
+
+### kind_key
+
+```python
+def kind_key(kind: tuple) -> str
+```
+
+(constraint, path, collection) of a violation as one JSON key.
+
+### profile_context
+
+```python
+def profile_context(profile) -> list
+```
+
+What the profile's last refresh pulled of the target graph, or [].
+
 ### validate
 
 ```python
-def validate(out_path: Path, shapes: list, top: int = 12) -> dict
+def validate(out_path: Path, shapes: list, top: int = 12, context=()) -> dict
 ```
 
 Hold the written graph against the profile's SHACL shapes.
 
 A report, not a gate: the full text goes next to the graph as
-`<name>.shacl.txt` and the most frequent kinds of violation go to the
-log. The graph stays written either way. The harvest is the durable
-artifact and a graph the shapes reject is still the one to look at.
+`<name>.shacl.txt`, the violations counted by kind as `<name>.shacl.json`
+(what `docpipe.extraction.gate` compares a later graph with), and the
+most frequent kinds to the log. The graph stays written either way. The
+harvest is the durable artifact and a graph the shapes reject is still
+the one to look at.
+
+*context* is what the target graph holds about the nodes this one only
+points at (`profile_context`), checked together with it.
 
 [Back to the index](../README.md)

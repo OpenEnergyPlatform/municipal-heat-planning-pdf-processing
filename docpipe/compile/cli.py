@@ -189,14 +189,18 @@ def _check(args) -> int:
 def _diff(args) -> int:
     found, _prefixes, terms = _sources(args)
     path = args.spec
+    profile = resolve_profile(args)
     if path is None:
-        profile = resolve_profile(args)
         path = profile.component("extraction", "SPEC_PATH") if profile \
             else None
         if path is None:
             raise SystemExit("no spec: give --spec, or a --profile that "
                              "has one")
-    rows = drafting.differences(found, _read(path), terms)
+    # What the spec's fields become is the drawing of the profile's graph
+    # file, so that is what the spec is held to the shapes with.
+    from .. import graphfile
+    drawing = graphfile.load(profile).map if profile is not None else None
+    rows = drafting.differences(found, _read(path), terms, drawing=drawing)
     kinds: dict = {}
     for row in rows:
         kinds.setdefault(row["kind"], []).append(row)
@@ -255,37 +259,48 @@ def _corpus(args, profile):
               for source in retrieve([probe], document, set())]
              for document, name in documents])
 
-    prompt = prompts.load(proposing.EXAMPLE_PROMPT_ID, profile)
+    # Asked as its step says: its prompt, and the inputs its message is
+    # built from (owner decision 2026-11-12 evening).
+    prompt, inputs = runner.step_parts(
+        runner.step_asking("example_proposal", "example", profile),
+        proposing.EXAMPLE_PROMPT_ID, profile)
     client = runner._client()
     token_usage.begin("compile")
     return find, lambda parameter, passage: ask_for_example(
-        client, prompt, parameter, passage)
+        client, prompt, parameter, passage, inputs)
 
 
-def ask_for_example(client, prompt, parameter: dict, passage: str):
+def ask_for_example(client, prompt, parameter: dict, passage: str,
+                    inputs: Optional[list] = None):
     """The reply to one example request as an object, or why there is none
     (a text). A reply that is not the one object that was asked for is
     asked again with what was wrong with it, as the harvest does; nothing
-    is repaired."""
+    is repaired. Its message is built from *inputs*, those of its preset
+    where None (`presets.PRESETS["example"]`)."""
     from .. import providers
     from .. import usage as token_usage
     from ..extraction import runner
     from ..llm_preflight import request_extras
 
-    meta = prompt.meta or {}
+    asked = runner.asked_values("example")
     numeric = parameter.get("value_type") in ("float", "int")
     name, shape = proposing.reply_shape(numeric)
-    limit = int(meta.get("max_tokens", 1024))
+    limit = asked["max_tokens"]
+    from ..extraction import general, shows
+    if inputs is None:
+        inputs = general.parts_of({"box": "ask", "preset": "example"})[
+            "inputs"]
     conversation = [{"role": "user", "content": json.dumps(
-        proposing.payload(parameter, passage), ensure_ascii=False)}]
+        shows.apart(inputs, {"field": parameter, "passage": passage}),
+        ensure_ascii=False)}]
     cause = "not_served"
     for attempt in range(1, ASK_ATTEMPTS + 1):
         try:
             answer = client.chat.completions.create(
-                model=runner.LLM_MODEL,
+                model=runner.llm_model(),
                 messages=[{"role": "system", "content": prompt.text},
                           *conversation],
-                temperature=float(meta.get("temperature", 0)),
+                temperature=asked["temperature"],
                 max_tokens=limit,
                 extra_body=request_extras(),
                 **providers.formatted("llm", name, shape))
@@ -294,7 +309,7 @@ def ask_for_example(client, prompt, parameter: dict, passage: str):
                         parameter.get("uri"), exc)
             cause = "not_served"
             continue
-        token_usage.reply(answer, runner.LLM_MODEL)
+        token_usage.reply(answer, runner.llm_model())
         reply = answer.choices[0]
         found = runner._loads_object(reply.message.content)
         if isinstance(found, dict) and isinstance(found.get("tuples"), list):
@@ -371,6 +386,15 @@ def _apply(args) -> int:
             return 1
         _write(args.out, drafting.finished(done))
         print(f"{args.out}: written")
+        # The drawing of what the fields become goes beside the spec, where
+        # a profile keeps its graph file, unless it has one.
+        from .. import graphfile
+        graph = Path(args.out).with_name(graphfile.FILE)
+        said = drafting.graph_file(done)
+        if said and not graph.exists():
+            graph.write_text(graphfile.dump(said), encoding="utf-8",
+                             newline="\n")
+            print(f"{graph}: written")
     return 0
 
 

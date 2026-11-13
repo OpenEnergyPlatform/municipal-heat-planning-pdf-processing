@@ -11,6 +11,10 @@
       "type": "array",
       "description": "In reading order. A section opens at a heading; what stands before the first heading is a section of its own.",
       "items": {"$ref": "#/$defs/section"}
+    },
+    "title_page": {
+      "$ref": "#/$defs/page",
+      "description": "The page the document title stands on: that of the first block the layout detection labelled the document title, else the first page. Stage 4 removes no section that starts on it or on the first page. A file without the key protects the first page alone."
     }
   },
   "required": ["sections"],

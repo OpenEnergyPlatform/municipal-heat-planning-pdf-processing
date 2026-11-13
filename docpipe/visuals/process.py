@@ -24,13 +24,17 @@ from docpipe.reading import Hole
 
 from . import qa, replies
 from .config import (
+    SHOWN_CHARS,
     max_request_tokens,
+    table_continued_prompt,
     table_system_prompt,
     table_user_prompt,
     TABLE_VLM_TEMPERATURE,
     TABLE_QA_MIN_COVERAGE,
     TABLE_QA_MAX_DUPLICATION,
     TABLE_QA_MIN_SOURCE_TOKENS,
+    TABLE_QA_MAX_SHARED_UNREADABLE,
+    TABLE_QA_MIN_KNOWN_WORDS,
     TABLE_QA_RETRY_TEMPERATURE,
     TABLE_QA_RETRY_PENALTY,
     figure_system_prompt,
@@ -52,12 +56,16 @@ _QA_RETRY_HINT = (
 )
 
 
-def _assess_table(markdown: str, source_text: str) -> tuple[bool, dict]:
+def _assess_table(markdown: str, source_text: str,
+                  known_words: set[str] | None) -> tuple[bool, dict]:
     return qa.assess(
         markdown, source_text,
         min_coverage=TABLE_QA_MIN_COVERAGE,
         max_duplication=TABLE_QA_MAX_DUPLICATION,
         min_source_tokens=TABLE_QA_MIN_SOURCE_TOKENS,
+        known_words=known_words,
+        max_shared=TABLE_QA_MAX_SHARED_UNREADABLE,
+        min_known=TABLE_QA_MIN_KNOWN_WORDS,
     )
 
 
@@ -65,7 +73,12 @@ def _assess_table(markdown: str, source_text: str) -> tuple[bool, dict]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _truncate(text: str, max_len: int = 800) -> str:
+def _table_text(reply: dict) -> str:
+    """The Markdown of a table reply, whose `rows` are its lines in order."""
+    return "\n".join(str(row) for row in reply["rows"])
+
+
+def _truncate(text: str, max_len: int = SHOWN_CHARS) -> str:
     """Truncates text with an ellipsis if it exceeds max_len."""
     if len(text) <= max_len:
         return text
@@ -95,11 +108,22 @@ def process_table(
     model: str | None = None,
     lock: threading.Lock | None = None,
     source_text: str = "",
+    known_words: set[str] | None = None,
+    before: dict | None = None,
 ) -> dict:
     """
     Returns a copy of *table* enriched with a ``markdown`` key.
 
-    A QA gate checks coverage against *source_text* and row duplication; on
+    *before*, for a table that may continue the table before it
+    (`continuation.before_of`), is shown to the model with what stands
+    between them: the model says whether the table continues it and, where
+    it does, writes its rows under that table's head. The result then keeps
+    the id of the table before it as ``after`` and the answer as
+    ``continues`` (owner decision 2026-11-06).
+
+    A QA gate checks coverage against *source_text* and row duplication; a
+    source text that cannot be read as the table against *known_words*, the
+    words of the document's text, is no measure (`qa.unreadable`). On
     failure the table is still returned (best effort) but carries a
     ``qa_warning`` field. The result of the check is kept for every table the
     model transcribed, as ``qa`` (the metrics of the kept attempt and whether
@@ -132,11 +156,19 @@ def process_table(
         section_content=_truncate(section.get("content", "")),
         caption_instruction=_caption_instruction(existing_caption, "table"),
     )
+    reply = replies.TABLE
+    if before is not None:
+        user_prompt += table_continued_prompt().format(
+            previous_caption=before.get("caption") or "(none)",
+            previous_head=_truncate(before.get("head") or "") or "(no head)",
+            between=before.get("between") or "(nothing)",
+        )
+        reply = replies.TABLE_CONTINUED
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
         client, table_system_prompt(), user_prompt, image_path,
-        temperature=TABLE_VLM_TEMPERATURE, reply=replies.TABLE,
+        temperature=TABLE_VLM_TEMPERATURE, reply=reply,
         budget=max_request_tokens(), **kwargs
     )
 
@@ -148,20 +180,21 @@ def process_table(
                   response.cause)
         return result
 
-    raw_md = response["markdown"]
-    passed, metrics = _assess_table(raw_md, source_text)
+    raw_md = _table_text(response)
+    passed, metrics = _assess_table(raw_md, source_text, known_words)
 
     if not passed:
         retry = call_vision(
             client, table_system_prompt(), user_prompt + _QA_RETRY_HINT, image_path,
             temperature=TABLE_QA_RETRY_TEMPERATURE,
             repetition_penalty=TABLE_QA_RETRY_PENALTY,
-            reply=replies.TABLE, budget=max_request_tokens(), **kwargs,
+            reply=reply, budget=max_request_tokens(), **kwargs,
         )
         # A retry that is a hole keeps the first attempt, which was read.
         if not isinstance(retry, Hole):
-            retry_md = retry["markdown"]
-            passed2, metrics2 = _assess_table(retry_md, source_text)
+            retry_md = _table_text(retry)
+            passed2, metrics2 = _assess_table(retry_md, source_text,
+                                              known_words)
             # Keep the better attempt: prefer one that passes, else higher
             # coverage. An unassessable coverage is not "better" - there is
             # nothing to compare - so it never displaces the first attempt.
@@ -176,8 +209,15 @@ def process_table(
     result["qa"] = {"passed": passed, **metrics}
     if not passed:
         result["qa_warning"] = metrics
+    continues = False
+    if before is not None:
+        continues = response.get("continues") is True
+        result["after"] = before["after"]
+        result["continues"] = continues
 
-    new_caption = response.get("caption", "")
+    # A part of a table takes the caption of the table it continues, when
+    # the merge joins it there; it gets none of its own.
+    new_caption = "" if continues else response.get("caption", "")
     generated = bool(not existing_caption and new_caption)
     if generated:
         result["caption"] = new_caption
@@ -187,9 +227,16 @@ def process_table(
             stats.captions_generated += 1
         if not passed:
             stats.qa_failed_tables += 1
+        if metrics["source_unreadable"]:
+            stats.qa_unreadable_sources += 1
+        if continues:
+            stats.continued_tables += 1
         stats.processed_tables += 1
 
-    if passed:
+    if passed and metrics["source_unreadable"]:
+        log.info("  ✓ Table %s (its PDF text cannot be read as the table: "
+                 "coverage not assessed)", table["id"])
+    elif passed:
         log.info("  ✓ Table %s", table["id"])
     else:
         cov = metrics["coverage"]

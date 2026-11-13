@@ -18,24 +18,37 @@ a GPU run:
 
 It holds for any profile, wherever it lives. What it reads of a profile is
 what the run reads: the spec the profile names (`extraction.SPEC_PATH`),
-its prompts, the writer of its graph (its own `kg.make_serializer`, else
-the `graph` block of the spec), its `vocabulary` module where it has one.
+its prompts, the drawing of its graph (`map` of `graph.json`), its
+`vocabulary` module where it has one.
 The keys of a request and a reply are the stage's and are checked here by
 name. A wording the run depends on is the profile's, in the language of its
 prompts, so the profile says which passages its prompts have to hold
 (`extraction.PROMPT_CHECKS`). The shapes of its graph are the profile's as
 well: it says where they are (`extraction.shapes_files`) and which of their
-properties it leaves out on purpose (`extraction.NOT_EXTRACTED`).
+properties it leaves out on purpose (the rule `not_extracted`).
+
+What it checks it derives from the flow and the rules in effect, and holds
+no list of its own: the prompts it loads are those of the steps of the
+profile's flow (a run writes no anchors, so none is checked), and more can
+be named by the rule `preflight_prompts`. What a check does when it finds a
+problem is the rule `preflight_severity` (fail, warn or off); the entries
+that mean "I do not know" are `shrug_words`.
 
 Two lines only say what they find and never fail: the properties of the
 shapes that nobody asks and the definitions of the spec that are not the
-pin's. A third fails when it must: the example reply of the field prompt has
-to read back through the reader of the run, and the same reply with an
-invented quote has to be refused.
+pin's.
 
 Author: Felix Vossel
 
 ## Functions
+
+### shrugs
+
+```python
+def shrugs() -> set
+```
+
+The entries that mean "I do not know" (rule `shrug_words`), folded.
 
 ### prompt_checks
 
@@ -49,18 +62,44 @@ An entry is (what is checked, prompt id, passage, whether the passage
 has to be there or must not be). One that is anything else is named
 and not run: a check that cannot be read holds nothing.
 
+### prompts_in_effect
+
+```python
+def prompts_in_effect(profile) -> list
+```
+
+[(prompt id, whether the profile may leave it unwritten)] of the
+requests the steps of *profile*'s flow that are on ask with, in the
+order the flow asks them, then those the rule `preflight_prompts` names
+besides.
+
 ### silent_parameters
 
 ```python
-def silent_parameters(raw: dict) -> list
+def silent_parameters(raw: dict, drawing=None) -> list
 ```
 
-Which parameters of a raw spec say nothing about the graph.
+Which parameters of a raw spec the drawing of the graph does not name.
+
+A field says what it becomes in the graph when the drawing names it as a
+source: an arrow starts at it, a box is of it or takes its value, name
+or address from it, or a brick or a box's `settle` names it
+(`graph.Drawing.says`). No drawing names nothing.
 
 A function rather than three lines inside `audit`, because a gate that
 cannot be handed a failing input is decoration, and `audit` can only be
 handed a profile's own files, which are, by the time anyone runs it, the
 ones that pass.
+
+### left_out_of
+
+```python
+def left_out_of(profile) -> object
+```
+
+The properties of the shapes *profile* leaves out on purpose, as its
+rule `not_extracted` says them: {(shape, property): why}, None where its
+line knows no such rule.
 
 ### not_extracted
 
@@ -68,8 +107,8 @@ ones that pass.
 def not_extracted(declared) -> tuple
 ```
 
-A profile's `extraction.NOT_EXTRACTED` as ({(shape, property): why},
-what is wrong with it).
+The properties a profile leaves out on purpose (`left_out_of`) as
+({(shape, property): why}, what is wrong with it).
 
 The shape properties the profile leaves out on purpose, each with a
 sentence of reason. An entry that is anything else is named and not
@@ -80,16 +119,16 @@ that is no mapping at all, which is named once.
 ### shape_properties
 
 ```python
-def shape_properties(files, raw: dict) -> tuple
+def shape_properties(files, raw: dict, profile=None) -> tuple
 ```
 
-(properties no parameter asks, all properties) of the shapes.
+(properties no arrow writes, all properties) of the shapes.
 
 Both as sorted (shape, property) pairs, the property by the end of its
-IRI. A property is asked when a parameter's `kg` block names it or the
-graph block links it: `docpipe compile diff` decides that and this reads
-what it lists as "not_asked". The shapes file is read as the compiler
-reads it, which needs rdflib.
+IRI. A property is written when an arrow of the drawing of the
+profile's graph file writes it: `docpipe compile diff` decides that and
+this reads what it lists as "not_asked". The shapes file is read as the
+compiler reads it, which needs rdflib.
 
 ### shapes_verdict
 
@@ -101,54 +140,9 @@ def shapes_verdict(profile, raw: dict) -> tuple
 
 The profile says where its shapes are (`extraction.shapes_files`, the
 files of its last refresh) and which of their properties it leaves out on
-purpose (`extraction.NOT_EXTRACTED`). Where it names no shapes, or the
+purpose (the rule `not_extracted`). Where it names no shapes, or the
 file is not there, or rdflib is not, the line says it is skipped: a
 check that was not run is not a gap found.
-
-### example_lines
-
-```python
-def example_lines(text: str) -> list
-```
-
-The lines of a field prompt that are an example reply.
-
-The prompt asks for the reply on ONE line, so its example is one: the
-lines that open the object the reply is. A wrapped example is not found
-here, which `audit` says and does not pass over.
-
-### reads_back
-
-```python
-def reads_back(line: str, spec) -> tuple
-```
-
-(ok, detail) for one example reply, read the way a run reads a reply.
-
-The line goes through `runner._loads_object` and the field it answers
-through `merge_field`, against passages that are the example's own
-quotes: every row of it has to come out read, apart from a row the
-example itself answers "not stated". Then the same reply with every
-quote replaced by one that stands in none of those passages has to come
-out unbacked on every row, or the first half would hold of any reply.
-
-The field is the spec's coordinate of that name. A list that the profile
-only fills per document is no list here, and a name the spec has no
-coordinate for is read as free text, which the detail says.
-
-### example_verdict
-
-```python
-def example_verdict(line: str, spec) -> tuple
-```
-
-`reads_back` for the audit, which a broken example must not abort.
-
-An example whose "groups" is no list or whose "rows" is none cannot be
-walked at all, and the reader says so by raising. For the audit that is
-a failed line that names the example's fault, as it is for any other
-example the reader does not read, and not a traceback in place of the
-other checks of the profile.
 
 ### audit
 

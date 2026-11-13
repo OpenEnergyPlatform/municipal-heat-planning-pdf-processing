@@ -9,9 +9,9 @@ next run harvests it again from the first passage. For one axis of one
 parameter, that is a full corpus run spent answering a question nothing else
 asked.
 
-This module instead takes the coordinate off the rows that carry it, walks the
-same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
-one set of numbers), and writes the answer back. It then carries that one stamp
+This module instead takes the coordinate off the rows that carry it, asks it
+as the harvest asks it (`surveyed.SurveyedHarvest.sweep`, so there is one
+question and one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
 sees what it has to redo. Who read is recorded apart from that: the pass enters
 the stamp's `producers` list whether or not it earned a key, and each
@@ -48,31 +48,35 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from .. import jsonl
+from .. import jsonl, rules
 from . import fields
 from .pipeline import (Row, WorkItem, group_items, mark_unanswered,
                        named_years, row_label)
-from .remap import (enter_producer, next_producer, stamp_forward,
-                    stamp_path_of)
 from .spec import Spec
-from .trust import document_summary
 from .verify import Refusal, quote_in, verify_tuple
 
 log = logging.getLogger(__name__)
 
-# Every key one coordinate owns on a claim -- `schema._slot_properties`. Taking
+# Every key one coordinate owns on a claim (`fields.COORDINATE_KEYS`). Taking
 # a coordinate off means taking all of them: `merge_field` short-circuits on
 # `<name>_state` alone, but a leftover `_quote` or `_source` would then be
 # evidence for an answer nobody gave.
-SLOT_KEYS = ("", "_state", "_raw", "_raw_foreign", "_quote", "_source",
-             "_window", "_seen", "_link_quote", "_link_source",
-             fields.PRODUCER)
+SLOT_KEYS = fields.COORDINATE_KEYS
 
-# A coordinate that was read stays read unless the sweep reads it again.
-KEEP_READ = (fields.READ, fields.DERIVED)
-# A coordinate that was not read is bettered by any answer, "the passages do
-# not say it" included -- that is an answer. Running out of budget is not.
-KEEP_ASKED = KEEP_READ + (fields.SAID_UNSTATED,)
+
+def keep_read() -> tuple:
+    """A coordinate that was read stays read unless the sweep reads it
+    again: the states of a new reading that replace it (rule
+    `reread_keep_states`)."""
+    return tuple(rules.get("reread_keep_states"))
+
+
+def keep_asked() -> tuple:
+    """A coordinate that was not read is bettered by any answer, "the
+    passages do not say it" included -- that is an answer. Running out of
+    budget is not (rule `reread_improves_states`)."""
+    return tuple(rules.get("reread_improves_states"))
+
 
 # What a claim carries that is not a claim: written by the verifier and by
 # fold_claims, and rebuilt by them.
@@ -100,12 +104,14 @@ def actionable(changed, spec: Spec, frame_names=(), *, dynamic_ok: bool = True,
         if not targets:
             blocked.append(key)
             continue
-        if any(slot.name in set(frame_names or ()) for _p, slot in targets):
+        if rules.get("reread_blocks_frame") and any(
+                slot.name in set(frame_names or ()) for _p, slot in targets):
             # The frame decides how many passes the document gets, so a moved
             # frame coordinate can mean rows this file does not have.
             blocked.append(key)
             continue
-        if not dynamic_ok and any(
+        if rules.get("reread_blocks_dynamic_list") and not dynamic_ok \
+                and any(
                 getattr((parameter.axes or {}).get(slot.name), "dynamic", False)
                 for parameter, slot in targets):
             # A dynamic list is filled per document, and swept against an
@@ -151,6 +157,19 @@ def targets_of(spec: Spec, key: str) -> list:
         return out
     got = slot_of(spec, key)
     return [got] if got is not None else []
+
+
+def in_order(keys: list, spec: Spec) -> list:
+    """[(key, parameter, slot)] of the moved coordinates in the order they
+    are read again (rule `reread_order`): by the key of the stamp, each
+    with its parameters in the spec's order, or by the order of the
+    parameters in the spec."""
+    triples = [(key, parameter, slot) for key in keys
+               for parameter, slot in targets_of(spec, key)]
+    if rules.get("reread_order") == "spec_order":
+        place = {p.uri: at for at, p in enumerate(spec.parameters)}
+        triples.sort(key=lambda t: place.get(t[1].uri, len(place)))
+    return triples
 
 
 def reopen(claim: dict, slot) -> dict:
@@ -278,8 +297,8 @@ def rebuild(rows: list, parameter, sources: dict, carry: list) -> tuple:
     if not items:
         return [], {}
     from . import runner
-    batches = group_items(items, max_sources=runner.BATCH_SOURCES,
-                          max_chars=runner.BATCH_CHARS)
+    batches = group_items(items, max_sources=rules.get("batch_sources"),
+                          max_chars=rules.get("batch_chars"))
     by_batch: dict = {}
     for index, batch in enumerate(batches):
         where = {(s.owner_kind, s.owner_id): i
@@ -310,8 +329,7 @@ def _reverify(row: dict, claim: dict, parameter, source,
     finder = ((lambda quote, s=source: locate(s, quote))
               if locate is not None else None)
     outcome = verify_tuple(claim, parameter, source.text,
-                           owner_kind=source.owner_kind, locate=finder,
-                           repair_text=source.body)
+                           owner_kind=source.owner_kind, locate=finder)
     if isinstance(outcome, Refusal):
         return outcome
     out = dict(outcome.tuple)
@@ -335,7 +353,7 @@ def reopened_by_gate(tuples: list, spec: Spec, gate: dict,
     gate reads differently now, those questions were never put and the row
     would otherwise keep a coordinate saying it left a slice it is in.
     """
-    if not gate:
+    if not gate or not rules.get("reread_reopen_closed_rows"):
         return []
     from . import runner
     out: list = []
@@ -417,125 +435,28 @@ def read_harvest(path) -> Stored:
     return stored
 
 
-def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
-                only=None) -> Counter:
-    """Re-sweep one harvest file's moved coordinates, then carry its stamp."""
-    stats: Counter = Counter()
-    stamp_path = stamp_path_of(Path(path))
-    from . import runner
-    changed = runner.stale(stamp_path, current)
-    if not changed:
-        stats["already current"] += 1
-        return stats
-    # What only a parameter the spec gained moved is for the pass that
-    # appends it (`topup_parameter`), and this pass writes none of it. Taken
-    # out here, a new parameter beside one moved coordinate does not block
-    # that coordinate: the keys stay stale and the stamp says so.
-    from .topup_parameter import explained_keys
-    explained = explained_keys(stamp_path, current, spec)
-    changed = [k for k in changed if k not in explained]
-    if not changed:
-        stats["left to --top-up-parameters"] += 1
-        return stats
+# A coordinate this pass asks again: still open when the budget ended, never
+# answered, or answered with a passage that did not carry it.
+OPEN = fields.OPEN                 # the rule `open_states`
+OPEN_PASS = "top-up-open"
 
-    stored = read_harvest(path)
-    stats["unreadable line kept"] += stored.unreadable
-    # The tuples stand in the file as the dicts this pass rewrites in place;
-    # every other line goes back as it was, but for a carriage return: this
-    # pass has always read a file with its line endings folded (`jsonl.read`)
-    # and writes the line feed alone, and a line that kept its own would end
-    # in two.
-    lines: list = [row if row is not None and row.get("kind") == "tuple"
-                   else (raw[:-1] if raw.endswith("\r") else raw)
-                   for raw, row in stored.entries]
-    tuples, refusals = stored.tuples, stored.refusals
-    document_id = stored.document_id
 
-    doc_spec = deps["document_spec"](document_id) if document_id else spec
-    if doc_spec is None:
-        stats["dynamic list unavailable"] += 1
-        return stats
-    unserved = runner.UNSERVED.of(document_id)
-    keys, blocked = actionable(changed, doc_spec, deps.get("frame_names") or (),
-                               dynamic_ok=deps.get("dynamic_ok", True),
-                               only=only)
-    if blocked or not keys:
-        stats["blocked" if blocked else "nothing to sweep"] += 1
-        return stats
+def open_coordinates(tuples: list, spec: Spec) -> list:
+    """[(parameter, slot, rows)] of every asked coordinate some row left open.
 
-    settled = set(keys)
-    demoted: list = []
-    bases = named_years_of(tuples, deps.get("frame_axes"),
-                           deps.get("year_states"))
-    # Where this pass will stand in the stamp's list. The coordinates it
-    # re-reads point at that position, and the rows are written before the
-    # list is, so it is asked for now.
-    position = next_producer(stamp_path)
-    for key in keys:
-        for parameter, slot in targets_of(doc_spec, key):
-            mine = [r for r in tuples if r.get("parameter") == parameter.uri]
-            if not mine:
-                continue
-            if slot.derive:
-                # No request: the spec decides this coordinate. Reopening is
-                # what makes apply_derived write, because it skips a row that
-                # already carries a state.
-                rows = [Row(row_label(i), 0, r) for i, r in enumerate(mine)]
-                for entry in rows:
-                    reopen(entry.claim, slot)
-                stats["derived"] += fields.apply_derived(rows, slot)
-                # Written by this pass, so it says so: a missing key reads as
-                # the harvest.
-                for entry in rows:
-                    if f"{slot.name}_state" in entry.claim:
-                        point(entry.claim, slot, position)
-                continue
-            got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
-                                      stats, bases=bases, position=position)
-            demoted.extend(refused)
-            if not got:
-                settled.discard(key)
-
-    # A row the gate had closed may now stay, and its other coordinates were
-    # never asked. They carry `out_of_slice`, which is not a reading and not a
-    # finding about the plan: it says the row left before the question.
-    for parameter, slot, mine in reopened_by_gate(
-            tuples, doc_spec, deps.get("slice_gate") or {},
-            deps.get("frame_names") or ()):
-        stats["closed rows reopened"] += len(mine)
-        _got, refused = _sweep_one(mine, parameter, slot, doc_spec, deps,
-                                   stats, bases=bases, position=position)
-        demoted.extend(refused)
-    # A refused row is a refusal now, in the file and in the summary. The
-    # line keeps its place: the dict was rewritten where it stands.
-    for row in demoted:
-        if row in tuples:
-            tuples.remove(row)
-            refusals.append(row)
-
-    if document_id is not None:
-        lines.append({"kind": "summary",
-                      **document_summary(document_id, tuples, refusals)})
-    out = [json.dumps(row, ensure_ascii=False) if isinstance(row, dict)
-           else row for row in lines]
-    # Entered whether or not it earns a stamp key below, and before the rows
-    # that point at it are written: a pointer into a list this pass never
-    # joined reads as unknown.
-    if position is not None:
-        enter_producer(stamp_path,
-                       runner.producer("top-up", runner.LLM_MODEL))
-        stats["documents given a producers entry"] += 1
-    tmp = Path(path).with_suffix(".jsonl.tmp")
-    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
-    tmp.replace(path)
-    if runner.UNSERVED.of(document_id) > unserved:
-        # A coordinate that was never read is not a coordinate re-read. The
-        # stamp stays as it was, so the next top-up asks again.
-        stats["stamps left, a request ended on 429 or 5xx"] += 1
-        return stats
-    if stamp_forward(stamp_path, current, settled):
-        stats["stamps carried forward"] += 1
-    return stats
+    The frame's coordinates are among them: a row whose year is open was not
+    under a pair, and its year is asked per row like any other coordinate.
+    """
+    out: list = []
+    for parameter in spec.parameters:
+        mine = [r for r in tuples if r.get("parameter") == parameter.uri]
+        if not mine:
+            continue
+        for slot in fields.asked_slots(parameter):
+            rows = [r for r in mine if r.get(f"{slot.name}_state") in OPEN]
+            if rows:
+                out.append((parameter, slot, rows))
+    return out
 
 
 def point(claim: dict, slot, position: Optional[int]) -> None:
@@ -546,10 +467,86 @@ def point(claim: dict, slot, position: Optional[int]) -> None:
         claim[f"{slot.name}{fields.PRODUCER}"] = position
 
 
-def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
-               stats: Counter, bases: tuple = (),
-               position: Optional[int] = None) -> tuple:
-    """Re-read one coordinate over these rows.
+@dataclass
+class Sweep:
+    """One dimension asked again, between asking and deciding: the rows,
+    their batches, and what each row's entry held before it was taken
+    off."""
+    rows: list
+    parameter: object
+    slot: object
+    usable: list = field(default_factory=list)
+    batches: list = field(default_factory=list)
+    by_batch: dict = field(default_factory=dict)
+    taken: dict = field(default_factory=dict)   # batch index -> {label: block}
+    settled: bool = True
+    ended: bool = False             # no row had a passage to be read in
+    locate: Optional[Callable] = None
+
+
+def sweep_ask(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
+              stats: Counter, bases: tuple = ()) -> Sweep:
+    """Take one coordinate off these rows and ask it again.
+
+    The coordinate is asked as the harvest asks it (`deps["sweep"]`), over
+    the passages its rows were read in. What the rows held is kept in the
+    returned `Sweep` for `sweep_decide`, which keeps it or the new answer.
+    """
+    slots = [slot]
+    owners: list = []
+    for row in rows:
+        for pair in owners_of(row, slots):
+            if pair not in owners:
+                owners.append(pair)
+    sources = deps["owner_sources"](owners)
+
+    sweep = Sweep(rows, parameter, slot, locate=deps.get("locate"))
+    for row in rows:
+        provenance = row.get("provenance") or {}
+        source = sources.get((provenance.get("owner_kind"),
+                              provenance.get("owner_id")))
+        if source is None or not quote_in(source.text or "",
+                                          row.get("quote") or ""):
+            # The database moved under the harvest. Left byte-identical: a
+            # row whose own passage no longer carries its quote cannot be
+            # re-read against that passage at all.
+            stats["source moved"] += 1
+            sweep.settled = False
+            continue
+        sweep.usable.append(row)
+    if not sweep.usable:
+        sweep.settled, sweep.ended = False, True
+        return sweep
+
+    own = {(provenance.get("owner_kind"), provenance.get("owner_id"))
+           for provenance in ((r.get("provenance") or {})
+                              for r in sweep.usable)}
+    carry = [pair for pair in owners if pair not in own]
+    sweep.batches, sweep.by_batch = rebuild(sweep.usable, parameter,
+                                            sources, carry)
+    for batch in sweep.batches:
+        # The document's, not the request's: they hold for every passage.
+        batch.bases = tuple(bases)
+    from . import runner
+    # The unit's set is written once for all parameters, under its own
+    # key; a per-parameter id would find no set and search with the
+    # question instead.
+    anchor_id = (runner.UNIT_ANCHOR if slot.name == fields.UNIT
+                 else runner.anchor_key(parameter.uri, slot.name))
+    for index, batch in enumerate(sweep.batches):
+        listed = sweep.by_batch.get(index) or []
+        if not listed:
+            continue
+        entries = [entry for _row, entry in listed]
+        sweep.taken[index] = {entry.label: reopen(entry.claim, slot)
+                              for entry in entries}
+        deps["sweep"](batch, entries, slots, anchor_id)
+    return sweep
+
+
+def sweep_decide(sweep: Sweep, stats: Counter,
+                 position: Optional[int] = None) -> tuple:
+    """Keep what the coordinate was asked again, or what it held.
 
     (every row settled, the rows the verifier refused afterwards). A refused
     row was rewritten in place as the refusal it now is: the re-read said the
@@ -563,56 +560,21 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
     entry in the stamp's list (`point`). One whose old block was put back
     keeps the pointer that block had, or none.
     """
-    slots = [slot]
+    parameter, slot = sweep.parameter, sweep.slot
     refused: list = []
-    owners: list = []
-    for row in rows:
-        for pair in owners_of(row, slots):
-            if pair not in owners:
-                owners.append(pair)
-    sources = deps["owner_sources"](owners)
-
-    usable, settled = [], True
-    for row in rows:
-        provenance = row.get("provenance") or {}
-        source = sources.get((provenance.get("owner_kind"),
-                              provenance.get("owner_id")))
-        if source is None or not quote_in(source.text or "",
-                                          row.get("quote") or ""):
-            # The database moved under the harvest. Left byte-identical: a
-            # row whose own passage no longer carries its quote cannot be
-            # re-read against that passage at all.
-            stats["source moved"] += 1
-            settled = False
-            continue
-        usable.append(row)
-    if not usable:
+    settled = sweep.settled
+    if sweep.ended:
         return False, refused
-
-    own = {(provenance.get("owner_kind"), provenance.get("owner_id"))
-           for provenance in ((r.get("provenance") or {}) for r in usable)}
-    carry = [pair for pair in owners if pair not in own]
-    batches, by_batch = rebuild(usable, parameter, sources, carry)
-    for batch in batches:
-        # The document's, not the request's: they hold for every passage.
-        batch.bases = tuple(bases)
-    from . import runner
-    # The unit's set is written once for all parameters, under its own
-    # key; a per-parameter id would find no set and search with the
-    # question instead.
-    anchor_id = (runner.UNIT_ANCHOR if slot.name == fields.UNIT
-                 else runner.anchor_key(parameter.uri, slot.name))
-    for index, batch in enumerate(batches):
-        listed = by_batch.get(index) or []
+    for index, batch in enumerate(sweep.batches):
+        listed = sweep.by_batch.get(index) or []
         if not listed:
             continue
         entries = [entry for _row, entry in listed]
-        taken = {entry.label: reopen(entry.claim, slot) for entry in entries}
-        deps["sweep"](batch, entries, slots, anchor_id)
+        taken = sweep.taken[index]
         wrote = []
         for _row, entry in listed:
-            keep = (KEEP_READ if taken[entry.label].get(f"{slot.name}_state")
-                    in KEEP_READ else KEEP_ASKED)
+            keep = (keep_read() if taken[entry.label].get(
+                f"{slot.name}_state") in keep_read() else keep_asked())
             if restore(entry.claim, slot, taken[entry.label], keep=keep):
                 settled = False
                 # Nothing was there to put back (a spec that gained this
@@ -623,14 +585,20 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
         # After the restores and not before. A spec that GAINED this axis has
         # rows with no block to put back, so `restore` leaves a bare absence
         # -- and the schema requires a state on every coordinate of every row.
-        mark_unanswered(entries, slots)
+        mark_unanswered(entries, [slot])
         for entry in wrote:
             point(entry.claim, slot, position)
         for row, entry in listed:
             source = batch.sources[entry.item_index]
             fresh = _reverify(row, entry.claim, parameter, source,
-                              deps.get("locate"))
+                              sweep.locate)
             if isinstance(fresh, Refusal):
+                if rules.get("reread_refused_becomes_refusal") == "keep_old":
+                    # The row stays as it was, and the coordinate is not
+                    # settled: the stamp of its key is not carried forward.
+                    stats["kept after refused re-reading"] += 1
+                    settled = False
+                    continue
                 stats["refused after re-reading"] += 1
                 row.clear()
                 row.update({"kind": "refusal", "parameter": parameter.uri,
@@ -644,16 +612,10 @@ def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
     return settled, refused
 
 
-def run(harvest_dir: Path, spec: Spec, current: dict, deps: dict, *,
-        only=None) -> Counter:
-    """Top up a whole harvest directory against the spec as it reads today."""
-    stats: Counter = Counter()
-    harvest_dir = Path(harvest_dir)
-    for path in sorted(harvest_dir.glob("*.jsonl")):
-        if path.name.endswith(".trace.jsonl"):
-            continue
-        stats.update(top_up_file(path, spec, current, deps, only=only))
-        stats["documents"] += 1
-    for key, value in sorted(stats.items()):
-        log.info("top-up: %-32s %d", key, value)
-    return stats
+def _sweep_one(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
+               stats: Counter, bases: tuple = (),
+               position: Optional[int] = None) -> tuple:
+    """Ask one coordinate again over these rows and decide it: (every row
+    settled, the rows refused afterwards)."""
+    sweep = sweep_ask(rows, parameter, slot, doc_spec, deps, stats, bases)
+    return sweep_decide(sweep, stats, position)

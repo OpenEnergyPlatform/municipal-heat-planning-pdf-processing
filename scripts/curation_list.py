@@ -5,7 +5,7 @@ Trust is per value and the summary line is per plan, and between the two sits
 the question a curator actually has: which values, in which order, and on
 which page. A corpus run produces tens of thousands of tuples and a share of
 them carry a reason -- a coordinate the run gave up on or could not back, a
-repaired quote, a computed number. Reading the JSONL for those is a filter
+computed number. Reading the JSONL for those is a filter
 nobody should have to write twice.
 
 So: one row per value the harvest cannot stand behind, newest doubt first,
@@ -32,8 +32,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import jsonl  # noqa: E402
+from docpipe.extraction import trace  # noqa: E402
 from docpipe.extraction.trust import (  # noqa: E402
-    LEVEL_A, LEVEL_B, LEVEL_C, trust)
+    LEVEL_A, LEVEL_B, LEVEL_C, LEVEL_D, LEVELS, trust)
 
 # What a curator needs to find the value again, in the order they need it.
 COLUMNS = ("document", "level", "reasons", "parameter", "value", "unit",
@@ -120,8 +121,9 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--level", default=LEVEL_C,
-                        help=f"lowest level to list: {LEVEL_C} (default), "
-                             f"{LEVEL_B} or {LEVEL_A} for everything")
+                        help=f"lowest level to list: {LEVEL_C} and {LEVEL_D} "
+                             f"(default), {LEVEL_D} alone, {LEVEL_B}, or "
+                             f"{LEVEL_A} for everything")
     parser.add_argument("--reason", default="",
                         help="only values with a reason starting like this, "
                              "e.g. 'exhausted:' or 'unbacked:year'")
@@ -137,14 +139,14 @@ def main(argv=None) -> int:
     if not args.directory.is_dir():
         print(f"not a directory: {args.directory}", file=sys.stderr)
         return 1
-    order = [LEVEL_A, LEVEL_B, LEVEL_C]
+    order = list(LEVELS)
     if args.level not in order:
         print(f"unknown level: {args.level}", file=sys.stderr)
         return 1
     levels = set(order[order.index(args.level):])
 
     files = sorted(p for p in args.directory.glob("*.jsonl")
-                   if not p.name.endswith(".trace.jsonl"))
+                   if not trace.is_trace(p))
     if args.document:
         wanted = set(args.document)
         files = [f for f in files if f.stem in wanted]

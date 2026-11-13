@@ -390,6 +390,73 @@ def _delete_document_embeddings(document_id: int, connection: sqlite3.Connection
 # Insert (Step 2)
 # ---------------------------------------------------------------------------
 
+def section_content(section: dict) -> str:
+    """A merged section's text as the Sections row holds it."""
+    content = section.get("content", "")
+    if isinstance(content, list):
+        content = "\n".join(str(c) for c in content)
+    return content
+
+
+def table_values(section_id: Optional[int], t: dict) -> tuple:
+    """A merged table as its Tables row holds it: (section, block_id, path,
+    page_number, caption, markdown, bbox, qa)."""
+    return (section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
+            t.get("caption"), t.get("markdown"), _bbox_json(t), _qa_json(t))
+
+
+def image_values(section_id: Optional[int], fig: dict) -> tuple:
+    """A merged figure as its Images row holds it: (section, block_id, path,
+    page_number, caption, description, bbox)."""
+    return (section_id, fig.get("id"), fig.get("path", ""), fig.get("page_number"),
+            fig.get("caption"), fig.get("description"), _bbox_json(fig))
+
+
+def page_rows(section: dict) -> list:
+    """The pages a merged section covers, as SectionPages holds them."""
+    return sorted({pno for pno in section.get("pages", []) or []
+                   if pno is not None})
+
+
+def segment_rows(section: dict) -> list:
+    """A merged section's segments as Segments holds them: (ordinal, page
+    number, kind, ref, text, bbox), the ones a row is written for."""
+    rows = []
+    for ordinal, seg in enumerate(section.get("segments", []) or []):
+        if not isinstance(seg, dict) or seg.get("page") is None:
+            continue
+        kind = seg.get("kind")
+        if kind not in ("text", "table", "figure"):
+            continue
+        rows.append((ordinal, seg.get("page"), kind, seg.get("ref"),
+                     seg.get("text"), _bbox_json(seg)))
+    return rows
+
+
+def insert_provenance(
+    document_id: int,
+    section_id: int,
+    section: dict,
+    connection: sqlite3.Connection,
+    page_cache: dict[int, int],
+) -> None:
+    """Write one section's SectionPages and Segments rows."""
+    # SectionPages: the distinct pages this chunk covers.
+    connection.executemany(
+        "INSERT OR IGNORE INTO SectionPages (section, page) VALUES (?, ?)",
+        [(section_id, _page_id(document_id, pno, connection, page_cache))
+         for pno in page_rows(section)],
+    )
+    # Segments: ordered, page-tagged content pieces (fine provenance).
+    connection.executemany(
+        "INSERT INTO Segments (section, ordinal, page, kind, ref, text, bbox) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(section_id, ordinal, _page_id(document_id, page, connection, page_cache),
+          kind, ref, text, bbox)
+         for ordinal, page, kind, ref, text, bbox in segment_rows(section)],
+    )
+
+
 def _insert_sections(
     document_id: int,
     merged_data: dict,
@@ -407,64 +474,26 @@ def _insert_sections(
     page_cache: dict[int, int] = {}
 
     for sec_idx, section in enumerate(merged_data.get("sections", [])):
-        content = section.get("content", "")
-        if isinstance(content, list):
-            content = "\n".join(str(c) for c in content)
-
         cursor = connection.execute(
             "INSERT INTO Sections (document, section_number, title, content, page_number) "
             "VALUES (?, ?, ?, ?, ?)",
-            (document_id, sec_idx, section.get("title"), content,
+            (document_id, sec_idx, section.get("title"), section_content(section),
              section.get("page_number")),
         )
         section_id = cursor.lastrowid
 
-        # SectionPages: the distinct pages this chunk covers.
-        page_rows = []
-        for pno in section.get("pages", []) or []:
-            pid = _page_id(document_id, pno, connection, page_cache)
-            if pid is not None:
-                page_rows.append((section_id, pid))
-        connection.executemany(
-            "INSERT OR IGNORE INTO SectionPages (section, page) VALUES (?, ?)",
-            page_rows,
-        )
-
-        # Segments: ordered, page-tagged content pieces (fine provenance).
-        segment_rows = []
-        for ordinal, seg in enumerate(section.get("segments", []) or []):
-            if not isinstance(seg, dict):
-                continue
-            pid = _page_id(document_id, seg.get("page"), connection, page_cache)
-            if pid is None:
-                continue
-            kind = seg.get("kind")
-            if kind not in ("text", "table", "figure"):
-                continue
-            segment_rows.append(
-                (section_id, ordinal, pid, kind, seg.get("ref"), seg.get("text"),
-                 _bbox_json(seg))
-            )
-        connection.executemany(
-            "INSERT INTO Segments (section, ordinal, page, kind, ref, text, bbox) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            segment_rows,
-        )
+        insert_provenance(document_id, section_id, section, connection, page_cache)
 
         connection.executemany(
             "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox, qa) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [(section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
-              t.get("caption"), t.get("markdown"), _bbox_json(t), _qa_json(t))
-             for t in section.get("tables", [])],
+            [table_values(section_id, t) for t in section.get("tables", [])],
         )
 
         connection.executemany(
             "INSERT INTO Images (section, block_id, path, page_number, caption, description, bbox) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(section_id, fig.get("id"), fig.get("path", ""), fig.get("page_number"),
-              fig.get("caption"), fig.get("description"), _bbox_json(fig))
-             for fig in section.get("figures", [])],
+            [image_values(section_id, fig) for fig in section.get("figures", [])],
         )
 
 
@@ -681,6 +710,39 @@ def get_existing_embeddings(
         existing.add((etype, section_number, block_id))
 
     return existing
+
+
+# The FAISS id of each embedded item of one document, by the key
+# get_existing_embeddings uses. CROSS JOIN for the same reason as above.
+_EMBEDDING_IDS_SQL = (
+    "SELECT e.embedding_type, s.section_number, NULL, e.faiss_id "
+    "FROM Sections s CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'section' AND e.owner_id = s.id WHERE s.document = ? "
+    "UNION ALL "
+    "SELECT e.embedding_type, s.section_number, t.block_id, e.faiss_id "
+    "FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'table' AND e.owner_id = t.id WHERE s.document = ? "
+    "UNION ALL "
+    "SELECT e.embedding_type, s.section_number, i.block_id, e.faiss_id "
+    "FROM Sections s CROSS JOIN Images i ON i.section = s.id "
+    "CROSS JOIN Embeddings e "
+    "  ON e.owner_kind = 'figure' AND e.owner_id = i.id WHERE s.document = ?"
+)
+
+
+def ids_of_document(connection: sqlite3.Connection, doc_id: int) -> dict:
+    """{(embedding_type, section_index, item_id): faiss_id} of one document,
+    read only: what a new index file has to hold under the same ids
+    (chunking/reembed.py)."""
+    return {(etype, section_number, item_id): int(faiss_id)
+            for etype, section_number, item_id, faiss_id in connection.execute(
+                _EMBEDDING_IDS_SQL, (doc_id, doc_id, doc_id))}
+
+
+def embedding_ids(db_path: Path, doc_id: int) -> dict:
+    """`ids_of_document` on the calling thread's connection."""
+    return ids_of_document(_worker_connection(db_path), doc_id)
 
 
 def clear_embedding_ids(db_path: Path, pdf_name: str) -> list[int]:

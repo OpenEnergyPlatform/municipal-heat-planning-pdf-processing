@@ -2,8 +2,8 @@
 
 `profiles/kwp/extraction.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
-Extraction stage wiring: the kwp spec, the slice gate, the frame, and what
-a plan says about itself.
+Extraction stage wiring: the kwp spec, the frame, and what a plan says
+about itself.
 
 ## Functions
 
@@ -23,5 +23,15 @@ profile for it rather than growing a second idea of what a document is.
 
 Missing metadata is not an error here. The anchor is written from the
 ontology annotation either way and this only makes it sharper.
+
+### shapes_files
+
+```python
+def shapes_files() -> list
+```
+
+The MHPKG shapes of the last `vocabulary --refresh`, or none: the
+files the spec is held against (`docpipe compile diff`, the preflight,
+the Sources tab of `docpipe edit`).
 
 [Back to the index](../README.md)

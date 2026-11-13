@@ -105,7 +105,8 @@ and a figure, one of them with a caption the model may leave null.
 def refine_sections(sections: list[dict],
                     report: Optional[dict] = None,
                     done: Optional[dict] = None,
-                    left: Optional[dict] = None) -> list[dict]
+                    left: Optional[dict] = None,
+                    title_page: Optional[int] = None) -> list[dict]
 ```
 
 Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched

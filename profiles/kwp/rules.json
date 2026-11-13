@@ -1,0 +1,34 @@
+{
+  "rules": {
+    "decimal_mark": ",",
+    "year_range": [
+      1900,
+      2100
+    ],
+    "span_marks": {
+      "qualifier": "out:approximate"
+    },
+    "compute_parts": {
+      "carrier": "out:total",
+      "sector": "out:total",
+      "technology": "out:total",
+      "spatial_scope": "municipality"
+    },
+    "computed_same_once": "on",
+    "compute_least_parts": 2,
+    "sum_printed_least_numbers": 3,
+    "shown_number_places": 6,
+    "compute_zero_counts": false,
+    "compute_needs_frame": true,
+    "compute_out_quantity_counts": false,
+    "share_ask_without_whole": true,
+    "compute_mixed_qualifier": "out:approximate",
+    "frame_axes": [
+      "scenario",
+      "year"
+    ],
+    "alt_label_language": "de",
+    "contract_language": "de",
+    "prompt_checks": []
+  }
+}

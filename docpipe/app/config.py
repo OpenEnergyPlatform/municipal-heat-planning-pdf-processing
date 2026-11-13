@@ -19,7 +19,7 @@ from docpipe.embedding.config import (  # noqa: F401
 )
 from docpipe.inference.config import (  # noqa: F401
     ALL_SCOPES, ANSWER_CONTEXT_TOKENS, ANSWER_IMAGE_MAX_SIDE, ANSWER_MAX_IMAGES,
-    CODE_EXEC_MAX_ROUNDS, CODE_EXEC_TIMEOUT, CODE_EXEC_TOKEN, CODE_EXEC_URL,
+    CODE_EXEC_MAX_ROUNDS, CODE_EXEC_TOKEN, CODE_EXEC_URL,
     COMPARE_MAX_DOCUMENTS,
     FIGURE_EMBEDDING_TYPES, LLM_API_KEY, LLM_BASE_URL, LLM_MAX_RETRIES,
     LLM_MAX_TOKENS, LLM_MODEL, LLM_STUB_MODE, LLM_TEMPERATURE, LLM_TIMEOUT,
@@ -83,11 +83,13 @@ HARVEST_DIR = (Path(os.environ["INFERENCE_HARVEST_DIR"])
 GOLD_PATH = (Path(os.environ["INFERENCE_GOLD_PATH"])
              if os.environ.get("INFERENCE_GOLD_PATH")
              else (path_beside(HARVEST_DIR) if HARVEST_DIR else None))
-# The worst trust level of a harvested value the chat still shows: A, B or C.
+# 0 does not offer the review page, also where a harvest is set.
+REVIEW = os.environ.get("INFERENCE_REVIEW", "1") != "0"
+# The worst trust level of a harvested value the chat still shows: A to D.
 # Unset shows every value, each with its level.
 VALUES_LEVEL = (os.environ.get("INFERENCE_VALUES_LEVEL") or "").strip() or None
-# How many harvested values one answer shows before it says how many more
-# there are.
+# How many harvested values the closed questions give one answer before it
+# says how many more there are. The search by meaning ends with its budget.
 VALUES_LIMIT = int(os.environ.get("INFERENCE_VALUES_LIMIT", "20"))
 # 0 searches by meaning only, also where a word index was built
 # (`docpipe lexical`).

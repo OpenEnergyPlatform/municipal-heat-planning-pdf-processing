@@ -19,6 +19,7 @@ from typing import Callable, Optional
 import faiss
 import numpy as np
 
+from docpipe import rules
 from docpipe.embedding.config import EMBEDDING_DIM
 from . import db
 
@@ -242,7 +243,8 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
                   exclude: Optional[set] = None,
                   probes: Optional[list] = None,
                   per_probe_top: int = 0) -> list[dict]:
-    """ONE ranking over all probes, best score per owner. Not one list per probe.
+    """ONE ranking over all probes, one score per owner, not one list per
+    probe.
 
     `rank_prepared` answers a different question: it gives each probe its own
     top_k and lets each take what the next one may no longer have. Read as a
@@ -252,47 +254,78 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
     that way and at median 26 under this one, with the same index and the same
     probes.
 
-    Max over probes, not sum and not mean: a passage is relevant because ONE
-    question matches it well, and averaging that against fifteen questions it
-    has nothing to do with is how a good hit gets buried. It also means adding
-    a probe can only move an owner up, so a probe list is safe to grow — but
-    only with probes that say something. A vague probe raises everything it
-    half-matches, which is how the query templates pushed the median from 26
-    to 84 when they were merged in beside the anchors.
+    By default the best score any probe gave an owner decides (rule
+    `sentence_fusion` "max", put together by `rerank.fused`, which the
+    reranker uses too), not the sum and not the mean: a passage is relevant
+    because ONE question matches it well, and averaging that against fifteen
+    questions it has nothing to do with is how a good hit gets buried. It also
+    means adding a probe can only move an owner up, so a probe list is safe to
+    grow, but only with probes that say something. A vague probe raises
+    everything it half-matches, which is how the query templates pushed the
+    median from 26 to 84 when they were merged in beside the anchors.
 
     Each hit carries the score AND the probe that won it, because "which
     wording found this" is the question the next round of anchors is written
     from.
+
+    What is read when the search runs (`docpipe.rules`): `sentence_fusion`,
+    `sentence_top` (used where *per_probe_top* is not given), `search_kinds`
+    (the kinds of passage that are hits at all) and `search_full_ranking`.
     """
+    from . import rerank
     fetch = content_fetcher or db.fetch_owner_content
     faiss_ids = prepared["faiss_ids"]
     owner_of = prepared["owner_of"]
     skip = set(exclude or ())
+    how = rules.get("sentence_fusion")
+    kinds = set(rules.get("search_kinds"))
+    full = bool(rules.get("search_full_ranking"))
+    cut = per_probe_top or int(rules.get("sentence_top"))
+    if not full and limit:
+        cut = min(cut, limit) if cut else limit
 
-    # The pool: with per_probe_top set, an owner is eligible when it is in the
-    # top of AT LEAST ONE probe. Max-score fusion alone answers a different
-    # question — a section only the year anchor likes, at rank 3 for that
+    # The pool: with a cut set, an owner is eligible when it is in the top of
+    # AT LEAST ONE probe. Max-score fusion alone answers a different
+    # question: a section only the year anchor likes, at rank 3 for that
     # anchor, can sit at rank 200 in the fused list because two hundred other
     # owners have a higher best score. The cap then drops it, and no question
     # ever gets to read what it asked for.
-    best: dict[tuple[str, int], tuple[float, int]] = {}
+    within: dict = {}
     for i in range(len(scores)):
         row = zip(scores[i].tolist(), positions[i].tolist())
         for taken, (score, pos) in enumerate(row):
-            if per_probe_top and taken >= per_probe_top:
+            if cut and taken >= cut:
                 break
             if pos < 0:
                 continue
             owner = owner_of[faiss_ids[pos]]
-            if owner in skip:
+            if owner in skip or owner[0] not in kinds:
                 continue
-            current = best.get(owner)
-            if current is None or score > current[0]:
-                best[owner] = (float(score), i)
+            seen = within.setdefault(owner, {})
+            if i not in seen or score > seen[i]:
+                seen[i] = float(score)
+
+    # Mean and sum count what EVERY probe gave an owner, also below the cut.
+    counted = within
+    if how != "max" and full:
+        counted = {owner: {} for owner in within}
+        for i in range(len(scores)):
+            row = zip(scores[i].tolist(), positions[i].tolist())
+            for score, pos in row:
+                if pos < 0:
+                    continue
+                seen = counted.get(owner_of[faiss_ids[pos]])
+                if seen is not None and (i not in seen or score > seen[i]):
+                    seen[i] = float(score)
+
+    ranked: dict = {}
+    for owner, by_probe in counted.items():
+        winner = max(by_probe, key=lambda i: (by_probe[i], -i))
+        ranked[owner] = (float(rerank.fused(by_probe.values(), how)), winner)
 
     hits: list[dict] = []
     for (owner_kind, owner_id), (score, probe_index) in sorted(
-            best.items(), key=lambda kv: kv[1][0], reverse=True):
+            ranked.items(), key=lambda kv: kv[1][0], reverse=True):
         if limit and len(hits) >= limit:
             break
         content = fetch(conn, owner_kind, owner_id)

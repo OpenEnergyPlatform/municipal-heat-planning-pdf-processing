@@ -62,6 +62,8 @@ Fields:
 - `off: str = "0"`
 - `sep: str = ","`: what joins this list in the environment
 - `stages: tuple = ()`: the commands that read it
+- `flow: tuple = ()`: The numbers of the profile's flow file this setting wins over (`extraction.flow`): unset, the file says them, so there is no default here.
+- `rule: Optional[str] = None`: The rule of the profile's rules file this setting wins over (`docpipe.rules`): unset, the file says it, so there is no default here.
 
 ## Functions
 
@@ -139,6 +141,18 @@ def origin(env: str) -> str
 
 Where the value of `env` in effect comes from.
 
+### from_flow
+
+```python
+def from_flow(setting: Setting) -> Optional[tuple]
+```
+
+(value as the environment would spell it, where it comes from) of a
+setting that is not set and wins over numbers of the flow or a rule:
+what the flow file or the rules file of the ambient profile says, the
+default profile's where there is none. None for any other setting, and
+where the file cannot be read.
+
 ### rows
 
 ```python
@@ -146,6 +160,30 @@ def rows(stage: Optional[str] = None) -> list
 ```
 
 [(setting, value in effect or None, origin, what the file says or
-None)], for the settings one command reads or for all of them.
+None)], for the settings one command reads or for all of them. A
+setting that wins over numbers of the flow and is not set shows what
+the flow file says, and that file as its origin (`from_flow`).
+
+### git_refusal
+
+```python
+def git_refusal(path) -> Optional[str]
+```
+
+Why *path* may not be written, or None: a file inside a git
+repository has to be ignored by it and not tracked, so that the values
+of a machine (a server's address, a folder) never reach a commit. A
+file outside every repository is free.
+
+### write_project
+
+```python
+def write_project(path, values: dict) -> str
+```
+
+Set {key of a setting ("llm.base_url"): value} in the project file
+*path*, created where it is missing, every other line as it stands:
+"created" or "changed". A key is never written (`Setting.secret`); a
+file that does not read back as the values is not written.
 
 [Back to the index](../README.md)

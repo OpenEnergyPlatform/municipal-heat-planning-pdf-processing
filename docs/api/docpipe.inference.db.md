@@ -7,6 +7,24 @@ what text sits behind a hit. Nothing here knows what the documents are about.
 
 Author: Felix Vossel
 
+## Classes
+
+### PerThread
+
+```python
+class PerThread
+```
+
+A connection that is one object to whoever holds it and a connection
+of its own in every thread that uses it, opened by *open_connection*: the
+requests of one turn read from several threads at once.
+
+#### PerThread.\_\_init\_\_
+
+```python
+def __init__(self, open_connection: Callable)
+```
+
 ## Functions
 
 ### connect_readonly

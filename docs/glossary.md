@@ -51,6 +51,9 @@ chunk
   `docpipe/inference/chunker.py` and assembled by `pack_chunks`. Distinct
   from the chunking pipeline stage, whose own retrieval unit is a section;
   see [app](stages/app.md).
+  The page of `docpipe edit` uses "chunk" for a piece of a document read by the
+  extraction (at most eight sentences, or a table's header plus eight rows); see
+  [the editor](stages/editor.md).
 
 citation
 : One retrieved source shown under an inference-app answer: a dict of its
@@ -120,6 +123,10 @@ derived coordinate
   the wording it was derived from; see [extraction](stages/extraction.md)
   and [states](contract/states.md).
 
+dimension
+: The word the page of `docpipe edit` uses for a coordinate or an axis;
+  see coordinate and axis.
+
 document
 : One row of the `Documents` table: a filename, a profile-supplied
   `external_id`, an optional `group_key`, and the version-linking columns
@@ -127,9 +134,14 @@ document
   which a profile's own metadata table extends; see
   [store](stages/store.md).
 
+dry run
+: The word the page of `docpipe edit` uses for its Try in the Flow tab, which
+  reads a document by the drawing with placeholder answers and no model;
+  see [the editor](stages/editor.md).
+
 dynamic list
 : A closed vocabulary that is real but exists only per document, such as
-  one publication's own AR6 scenario runs, filled in by a profile hook
+  the study regions a publication names, filled in by a profile hook
   before the harvest. Declared as `Axis.dynamic` or
   `Parameter.vocabulary_dynamic` in `docpipe/extraction/spec.py`; where no
   list is filled for a document, the coordinate degrades to a plain
@@ -163,9 +175,20 @@ field
 
 flag
 : A non-fatal finding `verify.verify_tuple` appends to a tuple, such as
-  `quote_repaired`, `period:unstated`, or an `unmapped:<axis>:<wording>`
+  `computed`, `period:unstated`, or an `unmapped:<axis>:<wording>`
   mapping gap. `docpipe/extraction/trust.py`'s `FLAG_REASONS` turns a
   handful of these into trust reasons; see [trust](contract/trust.md).
+
+flow (flow file)
+: The drawing a document is read by and the whole numbers that bound it, in the
+  file `flow.json` of a profile: boxes from a library (`docpipe.extraction.blocks`)
+  in frames that repeat them for each item, in rounds or under a condition,
+  run exactly as drawn by `docpipe.extraction.engine`. The default profile's
+  file is the whole flow; a profile that extends it may set numbers, and a
+  drawing of its own is the whole drawing. A setting of the run wins over
+  the file; a changed flow makes no harvest stale. Read and checked by
+  `docpipe.extraction.flow`, drawn and tried in the Flow tab of `docpipe edit`; see
+  [extraction](stages/extraction.md) and [the editor](stages/editor.md).
 
 fold (folding)
 : Turning a model reply's claims into a document's tuples and refusals by
@@ -174,10 +197,11 @@ fold (folding)
   and `fold_batch`; see [extraction](stages/extraction.md).
 
 follow-up
-: A batch's own request for more context: a `status: partial` reply naming
-  `need_more`, honoured by `docpipe.extraction.pipeline.follow_up` up to a
-  per-sweep budget of fresh passages. Distinct from top-up, which repairs
-  an already-written harvest; see [extraction](stages/extraction.md).
+: A request asked again, as a request of its own, when an answer did not hold:
+  it carries the answer that did not hold and why, and is asked as often as the
+  flow's `follow_ups` says (`docpipe.extraction.addressed.Reader._follow`, prompt
+  `extraction/follow`). Distinct from top-up, which repairs an already-written
+  harvest; see [extraction](stages/extraction.md).
 
 frame
 : The document-level coordinates, such as scenario and year for the kwp
@@ -243,8 +267,20 @@ layout
 : The per-page object detection PP-DocLayoutV3 performs in preprocessing
   Stage 2, classifying each region (table, paragraph title, footer, and so
   on) into the `layout_label` a block carries. Run by
-  `docpipe/preprocessing/stage2_layout.py`; see
+  `docpipe/preprocessing/layout.py`; see
   [preprocessing](stages/preprocessing.md).
+
+line number
+: The word the page of `docpipe edit` uses for the address of a line a request
+  shows; in a table it is `row.column`. See [the editor](stages/editor.md).
+
+merged
+: A spec flag, `"merged": "<kind>"`, on a free-text axis or a free-text
+  value: the name a document gives a thing (a scenario) is read as printed,
+  with its quote, and once the document is folded one request asks which of
+  its names mean the same thing. Each row then carries `<coordinate>_means`
+  (`value_means` for a value). See [extraction](stages/extraction.md),
+  Naming.
 
 OBIE
 : Ontology-based information extraction, the name
@@ -260,6 +296,10 @@ out: sentinel
   like any other but refused as a class or an IRI by a profile's
   serializer, for example `profiles/kwp/kg.py`'s `NOT_IN_GRAPH`; see
   [graph](stages/graph.md).
+
+occurrences
+: The word the page of `docpipe edit` uses for the readings of a value, the
+  places of a document that gave it. See [the editor](stages/editor.md).
 
 owner
 : The `(owner_kind, owner_id)` pair naming which section, table or figure
@@ -286,10 +326,9 @@ parts file
 
 passage
 : The stretch of source text a coordinate's or a value's quote is checked
-  against, cut at sentence boundaries when a quote has to be rebuilt
-  (`docpipe/extraction/verify.py`'s `_sentence_around`). At least
-  `MIN_QUOTE_CHARS` characters, 8 in `docpipe/extraction/verify.py`, so
-  it identifies a specific place rather than a recurring token. See
+  against. A quote has at least `MIN_QUOTE_CHARS` characters, 8 in
+  `docpipe/extraction/verify.py`, so it identifies a specific place rather
+  than a recurring token. See
   [extraction](stages/extraction.md).
 
 plan (the retrieval plan)
@@ -342,9 +381,9 @@ provider
 quote
 : The verbatim passage a claim or a coordinate cites as its evidence,
   checked with whitespace collapsed against the source it names.
-  `docpipe/extraction/verify.py`'s `quote_in` performs the check, and
-  `_repair_quote` rebuilds an abridged quote when the value occurs exactly
-  once in its source. See [extraction](stages/extraction.md).
+  `docpipe/extraction/verify.py`'s `quote_in` performs the check; a quote
+  that does not stand in its source is refused, never rebuilt. See
+  [extraction](stages/extraction.md).
 
 recheck
 : The `--recheck` pass that reapplies the answer-in-quote rule to an
@@ -366,6 +405,9 @@ remap
   settle. Implemented in `docpipe/extraction/remap.py`; see
   [extraction](stages/extraction.md).
 
+request log
+: The word the page of `docpipe edit` uses for a trace; see trace.
+
 resume stamp
 : `<document>.stamp.json`, the record of what produced a document's
   harvest: the spec's sha256, the model, the anchor set, one fingerprint
@@ -379,12 +421,13 @@ resume stamp
   every prompt id are written for a reader and never compared. The stamp
   is withheld, and the next run harvests the document again, when more than
   half its sources never reached the server, when no batch answered, or when
-  any request ended on a 429 or a 5xx; an earlier stamp is removed with it,
+  any request ended on a 429 or a 5xx, timed out, was refused to the end or
+  failed in our own code; an earlier stamp is removed with it,
   and the run exits 1 for the document. See [extraction](stages/extraction.md).
 
 review
-: The `--review` pass reading each of a harvest's level-C values a second
-  time, by the same model, over a window narrowed to that value's own two
+: The `--review` pass reading each of a harvest's level-C and level-D values
+  a second time, by the same model, over a window narrowed to that value's own two
   legal passages, where only a disagreement counts as a trust reason.
   Implemented in `docpipe/extraction/review.py` and written to
   `review.csv`. See [extraction](stages/extraction.md).
@@ -411,6 +454,10 @@ row name
   name. `gold.row_name` in `docpipe/extraction/gold.py`; see [measuring a
   harvest](stages/evaluation.md).
 
+search hits
+: The word the page of `docpipe edit` uses for the supply of a search, the
+  chunks it shows. See [the editor](stages/editor.md).
+
 section
 : One assembled unit of document structure: a title, joined prose content,
   its table and figure references, and its reading-order segments.
@@ -427,12 +474,12 @@ segment
   [preprocessing](stages/preprocessing.md).
 
 slice
-: The profile-named coordinate, or coordinates, that decide first whether
-  a row belongs in the graph a run serializes at all, also called the
-  gate. A row that fails it is closed with state `out_of_slice` and never
-  asked its other axes, for example `profiles/kwp/extraction.py:28`'s
-  `SLICE = {"quantity": None}`. See [extraction](stages/extraction.md) and
-  [kwp](profiles/kwp.md).
+: A coordinate that closes a row: a row that fails it is closed with state
+  `out_of_slice` and never asked its other axes. No profile names one for a plan
+  any more (`SLICE` was deleted on 2026-11-10); what closes a row is a
+  coordinate with an entry a value must have, the spec's `keep` at a
+  coordinate (`fields.kept`, `fields.closed`). See
+  [extraction](stages/extraction.md) and [kwp](profiles/kwp.md).
 
 slot
 : One field of one parameter as a single question with a single answer: a
@@ -518,23 +565,28 @@ top-up-parameters
   [extraction](stages/extraction.md).
 
 trace
-: The per-document, per-event JSONL log (`<document>.trace.jsonl`)
-  recording every plan, anchor, frame, rows, field, sweep, drop, error and
-  coord event, written by `docpipe/extraction/trace.py` and never
+: The per-document, per-event JSONL log, compressed
+  (`<document>.trace.jsonl.gz`; an earlier run's `<document>.trace.jsonl`
+  is still read), recording every event of the run, each model request
+  with what was sent and what came back, and every text the requests
+  repeat once, written by `docpipe/extraction/trace.py` and never
   aggregated by the writer itself. Turned off by setting
   `EXTRACT_TRACE=0`. See [extraction](stages/extraction.md).
 
 trust level
-: The deterministic A, B or C grade `docpipe/extraction/trust.py`'s
+: The deterministic A, B, C or D grade `docpipe/extraction/trust.py`'s
   `trust` computes for an accepted tuple from what the harvest already
-  recorded, with no model and no second opinion. Published at
-  [trust](contract/trust.md).
+  recorded, with no model and no second opinion: a C is open (a coordinate
+  nobody read), a D is in doubt (something speaks against the reading).
+  Published at [trust](contract/trust.md).
 
 trust reason
 : One token in a verdict's `reasons` list, naming why a tuple is not
-  level A: `repaired`, `computed`, `not_located`, `review:disagree`,
-  `conflict`, `page_transcribed`, or an `exhausted:<axis>` or
-  `unbacked:<axis>` pointer at the axis at fault.
+  level A: `computed`, `catalogue`, `not_located`, `review:disagree`,
+  `conflict`, `page_transcribed`, or an `exhausted:<axis>`,
+  `unanswered:<axis>` or `unbacked:<axis>` pointer at the axis at fault.
+  `exhausted` and `unanswered` make a C, `page_transcribed` caps a tuple at B,
+  every other reason makes a D.
   Produced by `docpipe/extraction/trust.py`'s `reasons` and published as
   the closed pattern list `docpipe/extraction/schema.py`'s
   `TRUST_REASONS`; see [trust](contract/trust.md).
@@ -566,6 +618,13 @@ value request
   for the document as a whole. Turned into `Row` objects by
   `docpipe.extraction.pipeline.rows_from_reply`, the only request that
   creates rows; see [extraction](stages/extraction.md).
+
+values index
+: The SQLite file `<harvest>.values.db` beside a harvest: one line of words per
+  value and one vector per different line, built by `docpipe values-index`.
+  The chat finds harvested values by meaning with it; a stale one is not asked.
+  Defined in `docpipe/inference/values_index.py`; see [asking the
+  corpus](stages/inference.md).
 
 verdict
 : The `{level, reasons, image_origin, corroborated}` dict

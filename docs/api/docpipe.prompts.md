@@ -182,6 +182,18 @@ def load(prompt_id: str, profile: Optional[Profile] = None,
 The prompt as the profile writes it, or, for a parts file, as the core
 and the profile make it together.
 
+### made
+
+```python
+def made(prompt_id: str, profile: Profile, owner: Profile, path: Path,
+         raw: str) -> Prompt
+```
+
+The prompt the text *raw* is as the file of *owner* at *path*: what
+`load` makes of a file. For a text that is not written yet, so that
+what is checked before a save is what a run would load after it
+(`docpipe edit`).
+
 ### per_profile
 
 ```python

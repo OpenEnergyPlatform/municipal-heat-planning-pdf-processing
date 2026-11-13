@@ -25,7 +25,7 @@ reads the platform's public bundle list, a GET, to say which acronyms are
 taken: the acronym is unique over there and the only way to find a bundle
 again, because no identifier of ours is accepted.
 
-A body is not the Turtle in another syntax in four places, each on purpose:
+A body is not the Turtle in another syntax in three places, each on purpose:
 
   one bundle per project   Documents whose bundle has the same label are one
                            bundle with several study reports, as they are one
@@ -38,8 +38,6 @@ A body is not the Turtle in another syntax in four places, each on purpose:
   no IAM annotation        The Turtle types every factsheet an IAM scenario.
                            The platform's list does not hold that class yet
                            and refuses a create for it, so a body omits it.
-  study region             The Turtle writes the parent property, the API the
-                           one its closed scenario shape names.
 
 Exit 0 is a report, whatever it says. Exit 2 is a run that could not be
 made: no harvest, no database, no API description or no shapes.
@@ -68,7 +66,7 @@ from typing import Optional
 
 from docpipe import upstream
 from docpipe.extraction.serialize import collect
-from profiles.scenarios import kg
+from profiles.scenarios import kg, vocabulary
 
 HERE = Path(__file__).resolve().parent
 REGIONS_PATH = HERE / "regions.json"
@@ -79,15 +77,10 @@ SOURCES = {
                 "ref": "master",
                 "reviewed": "3432710bac7b6d91dc314bc240dbaeb99cd3d44c",
                 "files": ["docs/oeplatform-code/web-api/openapi.yaml"]},
-    # The head of the branch, which is what the next pin will be. `reviewed`
-    # is the commit the platform pins its validator to today
-    # (oeplatform/settings.py OEKG_SHAPES_PINNED_COMMIT): while the two are
-    # the same file, the verdict here is the validator's. Every run prints
-    # whether they still are.
-    "oekg_shapes": {"kind": "repo_files", "repo": "OpenEnergyPlatform/oekg",
-                    "ref": "production",
-                    "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
-                    "files": ["oekg/shapes/oekg_shapes.ttl"]},
+    # The same source the profile's refresh pulls for its serializer, named
+    # once (sources.json, `vocabulary.sources`), so the dry run and the Turtle are held to
+    # one shapes file.
+    "oekg_shapes": vocabulary.sources()["oekg_shapes"],
 }
 # The lock of these two sources. Its own, so a harvest run's
 # `vocabulary --refresh` does not come to depend on the API description.
@@ -104,18 +97,21 @@ TAG_KEYS = {"study_descriptor": "descriptors",
             "study_technology": "technologies"}
 
 # Written on every factsheet of the Turtle, because the ontology side asks for
-# it. The platform's list of scenario types does not hold it yet, and a create
-# is refused for one entry off that list.
-NOT_YET_LISTED = (kg.OEO_BASE + kg.IAM_SCENARIO,)
+# them (the graph rule `scenario_types_always`, today the IAM scenario). The
+# platform's list of scenario types does not hold the IAM scenario yet, and a
+# create is refused for one entry off that list; every type of that rule is
+# left out of a body, so a type added to it is one the platform's list must
+# not need either.
+def not_yet_listed() -> tuple:
+    """The scenario types of the graph rule as it stands now, as IRIs."""
+    return tuple(kg.OEO_BASE + always for always in kg.always_types())
 
-# What `study_regions` becomes over there. The Turtle writes the parent
-# property (kg.P_STUDY_REGION, see scenario_region in the spec); the API
-# writes the one the closed scenario shape names, onto nodes of the class it
-# requires.
-API_STUDY_REGION = "OEO_00020220"       # has study region
-API_CLS_STUDY_REGION = "OEO_00020032"   # study region
 
-_PREFIX = dict(re.findall(r"@prefix (\w+):\s*<([^>]+)>", kg.PREFIXES))
+# What `study_regions` becomes over there: the path the closed scenario
+# shape names, as the Turtle writes it (the drawing's arrow from
+# scenario_region), onto nodes of the class that shape requires.
+API_CLS_STUDY_REGION = "OEO_00020032"                 # study region
+
 SH = "http://www.w3.org/ns/shacl#"
 
 
@@ -183,14 +179,16 @@ def _union(lists) -> list:
 def merge(studies: list) -> list:
     """One study per bundle: the documents of one project, together.
 
-    kg.py mints a bundle from its label, so two papers of one project already
-    are one bundle with two reports in the Turtle. A create is one body per
-    bundle, and the body of each paper alone would make several bundles of
-    one study. The oldest paper leads: its spelling labels the bundle and
-    its abstract is the bundle's, of which the shapes allow one. An acronym
-    is the one most of the documents give.
+    kg.py mints a bundle from its key, the project's name or else the
+    title, so two papers of one project already are one bundle with two
+    reports in the Turtle. A create is one body per bundle, and the body of
+    each paper alone would make several bundles of one study. The oldest
+    paper leads: its spelling of the project's name labels the bundle (no
+    label where no paper prints one) and its abstract is the bundle's, of
+    which the shapes allow one. An acronym is the one most of the documents
+    give.
 
-    The label alone decides, as it does in the Turtle. An acronym two
+    The key alone decides, as it does in the Turtle. An acronym two
     documents share does not: a harvest pairs a project's name with another
     project's acronym often enough (a paper thanks two projects) that
     joining on it would chain unrelated papers into one bundle. Such a pair
@@ -198,7 +196,7 @@ def merge(studies: list) -> list:
     """
     groups: dict = {}
     for study in studies:
-        groups.setdefault(kg.normalise(study["bundle"]["label"]),
+        groups.setdefault(kg.normalise(study["bundle"]["key"]),
                           []).append(study)
     out = []
     for group in groups.values():
@@ -213,7 +211,9 @@ def merge(studies: list) -> list:
         out.append({
             "documents": [study["document"] for study in group],
             "bundle": {
-                "label": bundles[0]["label"],
+                "key": bundles[0]["key"],
+                "label": next((b["label"] for b in bundles if b.get("label")),
+                              None),
                 "acronym": acronyms.most_common(1)[0][0] if acronyms else None,
                 "abstract": next((b["abstract"] for b in bundles
                                   if b.get("abstract")), None),
@@ -298,8 +298,8 @@ def body(study: dict, known: dict) -> dict:
     the document did not, and the refusal for the missing key is the finding.
     """
     bundle = study["bundle"]
-    out: dict = {"label": bundle["label"]}
-    for key in ("acronym", "abstract"):
+    out: dict = {}
+    for key in ("label", "acronym", "abstract"):
         if bundle.get(key):
             out[key] = bundle[key]
     for key in ("organisations", "funders"):
@@ -318,17 +318,24 @@ def body(study: dict, known: dict) -> dict:
             paper["authors"] = _references(report["authors"])
         out["study_reports"].append(paper)
     scenarios = []
+    left_out = not_yet_listed()
     for scenario in study["scenarios"]:
         item: dict = {"label": scenario["label"], "acronym": scenario["acronym"]}
         if scenario.get("abstract"):
             item["abstract"] = scenario["abstract"]
         types = [kind for kind in scenario.get("types") or ()
-                 if kind not in NOT_YET_LISTED]
+                 if kind not in left_out]
         if types:
             item["scenario_types"] = types
         if scenario.get("regions"):
-            item["study_regions"] = [{"iri": iri, "label": known.get(iri, iri)}
-                                     for iri in scenario["regions"]]
+            # A region the OEKG holds is referenced by its IRI; one the
+            # document names beyond its list goes by its printed name alone,
+            # and the server makes the node (owner decision 2026-11-07).
+            printed = scenario.get("region_names") or {}
+            item["study_regions"] = [
+                {"iri": iri, "label": known[iri]} if iri in known
+                else {"label": printed.get(iri, iri)}
+                for iri in scenario["regions"]]
         if scenario.get("years"):
             item["years"] = list(scenario["years"])
         scenarios.append(item)
@@ -425,7 +432,7 @@ def _iri(name: str):
     """`oeo:OEO_00000506` -> the IRI, against the Turtle's own prefixes."""
     from rdflib import URIRef
     prefix, _, local = name.partition(":")
-    return URIRef(_PREFIX[prefix] + local)
+    return URIRef(kg.prefix_iri()[prefix] + local)
 
 
 def list_problems(shapes) -> list:
@@ -439,24 +446,31 @@ def list_problems(shapes) -> list:
     from rdflib.collection import Collection
     out = []
     for parameter in kg._SPEC["parameters"]:
-        block = (parameter.get("kg") or {}).get("property")
         offered = {iri for iri in parameter.get("vocabulary") or ()
                    if kg.in_graph(iri)}
-        if not block or not offered:
+        if not offered:
             continue
-        allowed: set = set()
-        for shape in shapes.subjects(URIRef(SH + "path"), _iri(kg._name(block))):
-            head = shapes.value(shape, URIRef(SH + "in"))
-            if head is not None:
-                allowed |= {str(item) for item in Collection(shapes, head)}
-        if not allowed:
-            continue
-        for iri in sorted(offered - allowed):
-            out.append(f"{parameter['uri']}: the spec offers "
-                       f"{iri.rsplit('/', 1)[-1]}, which the shapes do not list")
-        for iri in sorted(allowed - offered):
-            out.append(f"{parameter['uri']}: the shapes list "
-                       f"{iri.rsplit('/', 1)[-1]}, which the spec does not offer")
+        # The properties the drawing writes the field's answer under.
+        for predicate in dict.fromkeys(
+                arrow["property"] for arrow in kg.drawing()["arrows"]
+                if arrow["from"] == parameter["uri"]):
+            allowed: set = set()
+            for shape in shapes.subjects(URIRef(SH + "path"),
+                                         _iri(predicate)):
+                head = shapes.value(shape, URIRef(SH + "in"))
+                if head is not None:
+                    allowed |= {str(item) for item in Collection(shapes,
+                                                                 head)}
+            if not allowed:
+                continue
+            for iri in sorted(offered - allowed):
+                out.append(f"{parameter['uri']}: the spec offers "
+                           f"{iri.rsplit('/', 1)[-1]}, which the shapes do "
+                           f"not list")
+            for iri in sorted(allowed - offered):
+                out.append(f"{parameter['uri']}: the shapes list "
+                           f"{iri.rsplit('/', 1)[-1]}, which the spec does "
+                           f"not offer")
     return out
 
 
@@ -480,12 +494,15 @@ def _modelled(item: dict, where: str) -> None:
                          f"about this body until graph() writes them")
 
 
-def graph(payload: dict, known: dict):
+def graph(payload: dict, known: dict, origin: Optional[dict] = None):
     """The bundle as the platform would hold it after creating this body.
 
     The model the module docstring names. Local IRIs stand in for the ones
     the server mints; nothing here is written anywhere. A key the model does
     not cover raises: a verdict over half a body would read as a verdict.
+    *origin*, where given, is filled with {node: [the places of the body it
+    was made from]}, a place a tuple of keys and positions:
+    ("scenarios", 2), ("study_reports", 0, "authors", 1), ("bundle",).
     """
     from rdflib import RDF, RDFS, XSD, Graph, Literal, URIRef
     _modelled(payload, "body")
@@ -495,6 +512,8 @@ def graph(payload: dict, known: dict):
         _modelled(item, "scenarios[]")
     out = Graph()
     counter = collections.Counter()
+    t = kg.terms()
+    api_study_region = t.P_STUDY_REGION.split(":")[-1]   # has study region
 
     def oeo(local: str):
         return URIRef(kg.OEO_BASE + local)
@@ -502,6 +521,10 @@ def graph(payload: dict, known: dict):
     def node(kind: str):
         counter[kind] += 1
         return URIRef(f"urn:dry-run:{kind}:{counter[kind]}")
+
+    def mark(target, where: tuple) -> None:
+        if origin is not None:
+            origin.setdefault(str(target), []).append(where)
 
     def text(subject, predicate: str, value) -> None:
         if value is not None:
@@ -512,10 +535,11 @@ def graph(payload: dict, known: dict):
                                                     datatype=XSD.dateTime)))
 
     def named(subject, predicate: str, references: list, cls: str,
-              kind: str) -> None:
-        for reference in references or ():
+              kind: str, where: tuple) -> None:
+        for number, reference in enumerate(references or ()):
             target = (URIRef(reference["iri"]) if reference.get("iri")
                       else node(kind))
+            mark(target, where + (number,))
             out.add((subject, _iri(predicate), target))
             out.add((target, RDF.type, oeo(cls)))
             out.add((target, RDFS.label, Literal(reference["label"])))
@@ -530,46 +554,136 @@ def graph(payload: dict, known: dict):
                 out.add((URIRef(iri), RDFS.label, Literal(known[iri])))
 
     bundle = node("bundle")
-    out.add((bundle, RDF.type, oeo(kg.CLS_BUNDLE)))
-    text(bundle, kg.P_LABEL, payload.get("label"))
-    text(bundle, kg.P_ACRONYM, payload.get("acronym"))
-    text(bundle, kg.P_ABSTRACT, payload.get("abstract"))
-    named(bundle, kg.P_ORGANISATION, payload.get("organisations"),
-          kg.CLS_ORGANISATION, "organisation")
-    named(bundle, kg.P_FUNDER, payload.get("funders"), kg.CLS_FUNDER, "funder")
+    mark(bundle, ("bundle",))
+    out.add((bundle, RDF.type, oeo(t.CLS_BUNDLE)))
+    text(bundle, t.P_LABEL, payload.get("label"))
+    text(bundle, t.P_ACRONYM, payload.get("acronym"))
+    text(bundle, t.P_ABSTRACT, payload.get("abstract"))
+    named(bundle, t.P_ORGANISATION, payload.get("organisations"),
+          t.CLS_ORGANISATION, "organisation", ("organisations",))
+    named(bundle, t.P_FUNDER, payload.get("funders"), t.CLS_FUNDER, "funder",
+          ("funders",))
     for key, api_key in TAG_KEYS.items():
-        listed(bundle, kg._property(key), payload.get(api_key))
+        listed(bundle, kg.tag_property(key), payload.get(api_key))
 
-    for paper in payload.get("study_reports") or ():
+    for place, paper in enumerate(payload.get("study_reports") or ()):
         report = node("report")
-        out.add((bundle, _iri(kg.P_HAS_PART), report))
-        out.add((report, RDF.type, oeo(kg.CLS_REPORT)))
-        text(report, kg.P_UUID, "minted by the server")
-        text(report, kg.P_LABEL, paper.get("label"))
-        text(report, kg.P_DOI, paper.get("doi"))
+        mark(report, ("study_reports", place))
+        out.add((bundle, _iri(t.P_HAS_PART), report))
+        out.add((report, RDF.type, oeo(t.CLS_REPORT)))
+        text(report, t.P_UUID, "minted by the server")
+        text(report, t.P_LABEL, paper.get("label"))
+        text(report, t.P_DOI, paper.get("doi"))
         if paper.get("publication_date"):
-            stamp(report, kg.P_PUBDATE, paper["publication_date"])
-        named(report, kg.P_AUTHOR, paper.get("authors"), kg.CLS_AUTHOR,
-              "author")
+            stamp(report, t.P_PUBDATE, paper["publication_date"])
+        named(report, t.P_AUTHOR, paper.get("authors"), t.CLS_AUTHOR,
+              "author", ("study_reports", place, "authors"))
 
-    for item in payload.get("scenarios") or ():
+    for place, item in enumerate(payload.get("scenarios") or ()):
         scenario = node("scenario")
-        out.add((bundle, _iri(kg.P_HAS_PART), scenario))
-        out.add((scenario, RDF.type, oeo(kg.CLS_SCENARIO)))
-        text(scenario, kg.P_UUID, "minted by the server")
-        text(scenario, kg.P_LABEL, item.get("label"))
-        text(scenario, kg.P_SCENARIO_ACRONYM, item.get("acronym"))
-        text(scenario, kg.P_SCENARIO_ABSTRACT, item.get("abstract"))
-        listed(scenario, kg.P_SCENARIO_TYPE, item.get("scenario_types"))
-        for region in item.get("study_regions") or ():
-            target = URIRef(region["iri"])
-            out.add((scenario, oeo(API_STUDY_REGION), target))
+        mark(scenario, ("scenarios", place))
+        out.add((bundle, _iri(t.P_HAS_PART), scenario))
+        out.add((scenario, RDF.type, oeo(t.CLS_SCENARIO)))
+        text(scenario, t.P_UUID, "minted by the server")
+        text(scenario, t.P_LABEL, item.get("label"))
+        text(scenario, t.P_SCENARIO_ACRONYM, item.get("acronym"))
+        text(scenario, t.P_SCENARIO_ABSTRACT, item.get("abstract"))
+        listed(scenario, t.P_SCENARIO_TYPE, item.get("scenario_types"))
+        for number, region in enumerate(item.get("study_regions") or ()):
+            # A region sent by its name alone is a node the server makes.
+            target = (URIRef(region["iri"]) if region.get("iri")
+                      else node("region"))
+            mark(target, ("scenarios", place, "study_regions", number))
+            out.add((scenario, oeo(api_study_region), target))
             out.add((target, RDF.type, oeo(API_CLS_STUDY_REGION)))
-            out.add((target, RDFS.label, Literal(known.get(region["iri"],
-                                                           region["label"]))))
+            out.add((target, RDFS.label, Literal(known.get(
+                region.get("iri"), region["label"]))))
         for year in item.get("years") or ():
-            stamp(scenario, kg.P_SCENARIO_YEAR, year)
+            stamp(scenario, t.P_SCENARIO_YEAR, year)
     return out
+
+
+def graph_file_on(payload: dict, made, shapes, known: dict,
+                  context=()) -> tuple:
+    """(the body as the profile's graph file leaves it, None where it leaves
+    the bundle out; what it did): the graph file asks of the bundle as the
+    platform would hold it (`graph`) what it asks of the written graph
+    (`docpipe.graphfile.finish`). A class it does not write takes the items
+    of the body that are its nodes along; a constraint whose effect is to
+    leave the value out takes the item at fault, the bundle where the fault
+    is the bundle's; one that leaves the paper out takes the bundle, as the
+    paper's leaving out takes every node of its document, the bundle's
+    among them; one that stops is said, and nothing is left out for it.
+    Addresses are the platform's to mint, so the address rules ask nothing
+    here."""
+    from rdflib import RDF
+    from docpipe import graphfile
+    done = {"classes_left_out": {}, "left_out": [], "stop": []}
+    origin: dict = {}
+    data = graph(payload, known, origin)
+    drop: set = set()
+    off = {klass for klass in made.classes if not made.written(klass)}
+    for node, klass in data.subject_objects(RDF.type):
+        name = graphfile.local(klass)
+        if name in off and str(node) in origin:
+            done["classes_left_out"][name] = \
+                done["classes_left_out"].get(name, 0) + 1
+            drop.update(origin[str(node)])
+    effects = {key: effect for key, effect in made.constraints.items()
+               if effect != "report"}
+    if effects:
+        for key, focus in graphfile.violations_of(data, shapes, context):
+            effect = effects.get(key)
+            places = origin.get(focus) or [("bundle",)]
+            if effect == "leave_out_value":
+                drop.update(places)
+                done["left_out"].append({"constraint": key, "what": "value"})
+            elif effect == "leave_out_paper":
+                drop.add(("bundle",))
+                done["left_out"].append({"constraint": key, "what": "paper"})
+            elif effect == "stop":
+                done["stop"].append({"constraint": key})
+    return _without(payload, drop), done
+
+
+def _without(payload: dict, drop: set) -> Optional[dict]:
+    """*payload* without the items at the places *drop* names; None where
+    it names the bundle. A list left empty is a key the body does not carry,
+    as a value the harvest does not hold is."""
+    import copy
+    if ("bundle",) in drop:
+        return None
+    out = copy.deepcopy(payload)
+    for place in drop:
+        *keys, number = place
+        holder, last = out, None
+        for key in keys[:-1]:
+            holder = holder[key] if isinstance(holder, (list, dict)) else None
+            if holder is None:
+                break
+        if holder is None:
+            continue
+        last = keys[-1]
+        items = holder.get(last) if isinstance(holder, dict) else None
+        if isinstance(items, list) and number < len(items):
+            items[number] = None
+    return _pruned(out)
+
+
+def _pruned(value):
+    """*value* without the items `_without` marked, and without the lists
+    that leaves empty."""
+    if isinstance(value, dict):
+        out = {}
+        for key, inner in value.items():
+            kept = _pruned(inner)
+            if isinstance(inner, list) and not kept:
+                continue
+            out[key] = kept
+        return out
+    if isinstance(value, list):
+        return [_pruned(one) for one in value if one is not None]
+    return value
 
 
 def _named(iri, known: dict) -> str:
@@ -581,10 +695,13 @@ def _named(iri, known: dict) -> str:
     return f"{label} ({local})" if label else local
 
 
-def shape_problems(data, shapes, known: dict) -> list:
-    """What the shapes say against one bundle graph."""
+def shape_problems(data, shapes, known: dict, context=()) -> list:
+    """What the shapes say against one bundle graph, held together with what
+    the OEKG already holds about the nodes it points at (*context*)."""
     from pyshacl import validate
     from rdflib import RDF, URIRef
+    from docpipe.ontology import with_context
+    with_context(data, context)
     _conforms, results, _text = validate(data, shacl_graph=shapes)
     out = []
     for report in results.subjects(RDF.type, URIRef(SH + "ValidationReport")):
@@ -643,6 +760,7 @@ def acronym_problems(entries: list, taken: Optional[dict] = None) -> None:
     narrower; two bundles that differ in case alone are one study either way.
     """
     used: dict = {}
+    entries = [entry for entry in entries if entry["body"] is not None]
     for entry in entries:
         acronym = entry["body"].get("acronym")
         if acronym:
@@ -669,16 +787,23 @@ def acronym_problems(entries: list, taken: Optional[dict] = None) -> None:
 # -- the run ------------------------------------------------------------------
 
 def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
-            known: dict, taken: Optional[dict] = None) -> tuple:
+            known: dict, taken: Optional[dict] = None, made=None) -> tuple:
     """(entries, documents without a study) for a harvest directory.
 
     An entry is one request as it would be sent, and every reason the
     platform would refuse it: {documents, formed, method, path, body,
     problems}. `documents` are the harvest files the bundle was read from,
     the leading one first; `formed` names what was made here and not read.
+    *made* is the profile's graph file (`docpipe.graphfile`): what it leaves
+    out of the graph it leaves out of the body (`graph_file_on`), an entry
+    it leaves out whole has no body, and one it stops says so; the entry
+    carries what it did (`graph_file`).
     """
+    # The bodies are read with the paths of the same shapes they are held
+    # to, so the dry run and the verdict speak of one file.
     reader = kg.make_study_reader(db)
     schema = RequestSchema(openapi)
+    context = vocabulary.context()
     studies, without = [], []
     for name, rows in collect(harvest).items():
         study = reader(name, rows)
@@ -688,27 +813,45 @@ def dry_run(harvest: Path, db: Path, openapi: dict, shapes,
             studies.append(study)
     bundles = merge(studies)
     form_acronyms(bundles)
+    acting = made is not None and (made.acts() or any(
+        effect == "stop" for effect in made.constraints.values()))
     entries = []
     for item in bundles:
         payload = body(item, known)
-        problems = schema.problems(payload)
-        problems += shape_problems(graph(payload, known), shapes, known)
-        entries.append({"documents": item["documents"], "formed": item["formed"],
-                        "method": "POST", "path": PATH, "body": payload,
-                        "problems": problems})
+        done = None
+        if acting:
+            payload, done = graph_file_on(payload, made, shapes, known,
+                                          context)
+        entry = {"documents": item["documents"], "formed": item["formed"],
+                 "method": "POST", "path": PATH, "body": payload,
+                 "problems": []}
+        if done is not None:
+            entry["graph_file"] = done
+        if payload is not None:
+            entry["problems"] = schema.problems(payload)
+            entry["problems"] += shape_problems(graph(payload, known), shapes,
+                                                known, context)
+            entry["problems"] += [
+                {"check": "graph file", "where": "upload",
+                 "what": f"stopped by {one['constraint']}"}
+                for one in (done or {}).get("stop", ())]
+        entries.append(entry)
     acronym_problems(entries, taken)
     return entries, without
 
 
 HEADINGS = (("schema", "refused by the request schema"),
             ("shape", "refused by the shapes"),
-            ("acronym", "the acronym"))
+            ("acronym", "the acronym"),
+            ("graph file", "stopped by the graph file"))
 
 
 def report(entries: list, without: list, taken: Optional[dict] = None,
            lists: Optional[list] = None) -> str:
     """The run in English, one line per kind of refusal."""
-    ready = [entry for entry in entries if not entry["problems"]]
+    left = [entry for entry in entries if entry["body"] is None]
+    sent = [entry for entry in entries if entry["body"] is not None]
+    ready = [entry for entry in sent if not entry["problems"]]
     documents = sum(len(entry["documents"]) for entry in entries)
     several = sum(1 for entry in entries if len(entry["documents"]) > 1)
     formed = sum(1 for entry in entries if "acronym" in entry["formed"])
@@ -720,7 +863,10 @@ def report(entries: list, without: list, taken: Optional[dict] = None,
              f"  {formed} acronym(s) formed from the first author and the "
              f"year, not read in a document",
              f"  {len(ready)} bundle(s) would be created as they are, "
-             f"{len(entries) - len(ready)} would be refused"]
+             f"{len(sent) - len(ready)} would be refused"]
+    if left:
+        lines.append(f"  {len(left)} bundle(s) the graph file leaves out, "
+                     f"sent as none")
     for check, heading in HEADINGS:
         # Bundles, not nodes: thirty scenarios of one bundle that miss the
         # same thing are one finding about that bundle.
@@ -742,7 +888,7 @@ def report(entries: list, without: list, taken: Optional[dict] = None,
               f"  acronyms were compared with the {len(taken)} acronym(s) "
               f"the platform lists"]
     held: collections.Counter = collections.Counter()
-    for entry in entries:
+    for entry in sent:
         payload = entry["body"]
         held["bundles"] += 1
         held["organisations"] += len(payload.get("organisations") or ())
@@ -784,9 +930,6 @@ def main(argv=None) -> int:
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
 
-    # The reading falls back to an empty AR6 list when the database cannot
-    # be opened, and the bodies then name other scenarios. That is a
-    # different run, not a degraded one.
     if not args.out.is_dir():
         print(f"{args.out}: not a harvest directory")
         return 2
@@ -822,8 +965,11 @@ def main(argv=None) -> int:
     from rdflib import Graph
     openapi = yaml.safe_load(Path(openapi_path).read_text(encoding="utf-8"))
     shapes = Graph().parse(str(shapes_path), format="turtle")
+    from docpipe import graphfile
+    from docpipe.profile import load_profile
+    made = graphfile.load(load_profile(vocabulary.PROFILE))
     entries, without = dry_run(args.out, args.db, openapi, shapes, labels(),
-                               taken)
+                               taken, made)
     if not entries and not without:
         print(f"{args.out}: no harvest in it (*.jsonl)")
         return 2

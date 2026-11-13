@@ -1,5 +1,5 @@
 """
-inference.py – What the answer loop says around the ar6 prompts.
+inference.py – What the answer loop says around the scenarios prompts.
 
 English, like the publications and like the answers. See
 docpipe/inference/wording.py for what each piece is used for.
@@ -11,57 +11,9 @@ READOFF_MARKER = "read off"
 READOFF_NOTE = ("(Note: some values were read off from figures – estimates, "
                 "reading errors possible.)")
 
-PHRASES = {
-    "task_heading": "User's task",
-    "history_heading": ("Conversation so far (use it ONLY to resolve references in the "
-                        "current task — pronouns, \"and …\", ellipses; NOT a source of "
-                        "facts, evidence comes exclusively from the excerpts)"),
-    "history_task": "Question",
-    "history_phrase": "Search anchor",
-    "history_answer": "Answer",
-    "chat_parameter_question": ("What does the user ask for? Choose the entry "
-                                "of the list the question asks about, by what "
-                                "it means and not by its words. A question "
-                                "about none of them is out:unstated."),
 
-    "code_heading": "Code executed",
-    "exec_stdout": "Execution result (stdout)",
-    "exec_empty": "(no output)",
-    "exec_failed": "Execution failed",
-    "exec_unknown": "unknown error",
-    "exec_recover": "Fix the code OR answer without computing.",
-
-    "compute_heading": "Already executed",
-    "compute_guide": ("Give the final answer in the prescribed JSON format — or, only "
-                      "if truly necessary, another "
-                      '{"action":"python","code":...}.'),
-    "compute_guide_final": ("Give the final answer NOW, in the prescribed JSON format "
-                            "(NO more action objects)."),
-
-    "image_heading": "Requested figures (see images)",
-    "image_uncaptioned": "no caption",
-    "image_unavailable": "image unavailable",
-    "image_guide": ("Read the value off the image and give the final answer — or, only "
-                    'if truly necessary, another {"action":"image","id":"..."}.'),
-    "image_guide_final": ("Give the final answer NOW, in the prescribed JSON format "
-                          "(NO more action objects)."),
-    "image_part": "Image for excerpt index={index}",
-
-    "readoff_heading": "To read off (per the pre-check)",
-
-    # The citation under the answer, which the model also reads as `source`.
-    "citation_quotes": ("“", "”"),
-    "citation_page": "page {page}",
-    "citation_page_unknown": "page unknown",
-    "citation_section": "Section",
-    "citation_table": "Table",
-    "citation_figure": "Figure",
-
-    # What the loop splices into a reading, a failed run and an image part.
-    "readoff_value": "{reading} — value read off: {value} {unit}",
-    "exec_none": "no result",
-    "image_requested": "Requested image [{id}]: {title}",
-}
+# What the answer loop says around the prompts is a file beside them:
+# prompts/inference/phrases.json (docpipe/phrases.py).
 
 
 # The words of the chat app's pages (docpipe/app/app.py) and of the picker's
@@ -165,8 +117,9 @@ UI = {
     "reason_unbacked": "{axis}: the quote does not carry it",
     "reason_unanswered": "{axis}: the model gave no answer",
     "reason_conflict": "another reading of the same value differs",
-    "reason_repaired": "the quote was adjusted afterwards",
     "reason_computed": "computed, not read",
+    "reason_read_off": "read off the figure, an estimate",
+    "reason_catalogue": "looked up in a catalogue, not read",
     "reason_not_located": "the quote was not found on its page",
     "reason_review_disagree": "a review disagrees",
     "reason_page_transcribed": "from a page a model transcribed",

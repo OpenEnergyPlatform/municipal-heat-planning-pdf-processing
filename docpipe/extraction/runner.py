@@ -1,40 +1,32 @@
 """
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
+A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
+stops the run where the spec names no groups or the profile lacks a prompt
+of the harvest): every piece asked for every field in the order a reranker
+gives it, each coordinate of each value found asked on its own, and a
+coordinate its place does not state searched for (`addressed.py`, run per
+document by `surveyed.py`), then the fold, the compute step and the file
+with its stamp as below. The passes over a
+stored harvest run on the same steps.
+
 This module supplies the loop's expensive dependencies from the real world:
-FAISS retrieval with owner exclusion, the harvesting LLM call, and locating a
-quote on its page in the source PDF, plus resume stamps and the CLI. Heavy
-imports (faiss, torch-backed embedders, fitz) happen inside functions, so
-importing this module stays cheap and a test that only touches the package pays
-for no GPU stack it does not use.
+FAISS retrieval with owner exclusion, the model calls, and locating a quote on
+its page in the source PDF, plus resume stamps and the CLI. Heavy imports
+(faiss, torch-backed embedders, fitz) happen inside functions, so importing
+this module stays cheap and a test that only touches the package pays for no
+GPU stack it does not use.
 
 `make_retrieve` fuses every probe handed to it into one FAISS search per
 document and ranks each owner by the best score any probe gave it; measured
 over 65 documents and 15,082 values, the fused ranking put the source a value
 was really read from at median rank 26, against 77 for the old per-probe
-concatenation. A probe is either one
-of the spec's query templates (`queries.expand`), stable across the whole
-corpus so `prime_probe_cache`'s embeddings hit for every document, or a
-HyDE-style anchor sentence a model writes: `make_anchors` writes one set per
-question the field sweep asks, cached under `anchors.json` and reusable across
-documents, and `document_anchor` writes the one short sentence per parameter
-the document being planned is searched with, which is a cache miss by
-construction.
+concatenation. A probe is a HyDE-style sentence a model writes:
+`document_anchor` writes the one short sentence per parameter the document is
+searched with, which is a cache miss by construction.
 
-`make_harvester` and `make_fieldwise_harvester` build the request to the model
-and parse its reply strictly: one JSON object and nothing else. A reply that is
-not that is asked again with the cause named (`_reply_fault`), and one cut off
-at the token ceiling is asked again over half the passages (`_split_harvest`)
-rather than half-read. `make_sweeper` drives the field-wise
-sweep: a coordinate the value's own passage does not answer is asked for again
-over short overlapping windows of the rest of the document (`window_sources`),
-bounded per axis. A document's batches ask their own passages in their turn
-(`Turn`), and what is still open after them is searched once per document and
-coordinate with the open rows of all the batches together (`DocumentSearch`).
-`find_frame` and `make_frame_asker` read a document's frame,
-its scenario and year pairs, once before any value, so a value request states
-the pair rather than deciding it. `harvest_batches` runs every batch of a whole
-run in flight at once, not as ordered per-document chains.
+The requests parse the reply strictly: one JSON object and nothing else. A
+reply that is not that is asked again with the cause named (`_reply_fault`).
 
 `make_locate` finds where a quote sits on its page in the source PDF, through
 the same alignment the app highlights with. Resume stamps (`_stamp_current`,
@@ -49,68 +41,158 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import argparse
+import contextvars
 import functools
 import hashlib
 import json
 import logging
 import os
-import re
 import signal
 import sqlite3
 import threading
 import time
-from concurrent.futures import as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from contextlib import ExitStack, contextmanager, nullcontext
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Callable, Optional
 
 from docpipe import prompts
 from docpipe import providers
+from docpipe import rules
+from docpipe.providers.governor import status_of
 from docpipe import usage as token_usage
-from docpipe.llm_preflight import assert_serving, request_extras
+from docpipe.llm_preflight import (assert_serving, assert_step_models,
+                                   request_extras)
 from docpipe.profile import add_profile_argument, program, require_profile
 from docpipe.store.schema import readonly_uri
 
+from . import addressed as addressed_map
+from . import blocks
+from . import archive
+from . import mend
+from . import passflow
+from . import compute as computing
 from . import fields
+from . import flow as flow_map
+from . import shows as shows_map
+from . import found as found_places
+from . import reading as reading_map
 from . import replies
+from . import surveyed as surveyed_map
+from . import thread as thread_map
+from . import scheduler
 from . import scratch
+from . import lookup as lookup_map
 from . import trace
 from .wording import say
-from .pipeline import (YEAR_STATES, Source, WorkItem, apply_frame, batch_uri,
-                       build_sweeps, cell_index as pipeline_cell_index,
-                       drop_repeats, fold_batch, follow_up, group_items,
-                       harvest_document, merge_field, mark_unanswered,
-                       named_years,
-                       open_rows, plan_document,
-                       names_pair, refused_upstream, route_claims,
-                       option_named, row_label, rows_from_reply, sweep_key,
-                       window_sources,
-                       write_report)
-from .fields import EXHAUSTED
-from .queries import expand as expand_queries
+from .pipeline import (YEAR_STATES, DocumentReport, Source,
+                       cell_index as pipeline_cell_index, column_head,
+                       drop_repeats, fold_batch, fold_claims,
+                       option_named, window_around, write_report)
 from .trust import document_summary, parameter_states
 from .spec import Spec, fingerprints, load as load_spec
 
 log = logging.getLogger(__name__)
 
-LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:8000/v1")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "EMPTY")
-LLM_MODEL = os.environ.get("LLM_MODEL", "Qwen/Qwen3.5-122B-A10B-FP8")
-LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "180"))
-MAX_RETRIES = int(os.environ.get("EXTRACT_MAX_RETRIES", "3"))
-# What a retry may take after a request timed out. The first attempt keeps
-# LLM_TIMEOUT, which is sized for a slow but working generation; a request the
-# server did not answer in that time is unlikely to differ on its repeat, and
-# three full timeouts held one field thread for 91 minutes.
-RETRY_TIMEOUT = int(os.environ.get("EXTRACT_RETRY_TIMEOUT", "600"))
-# A malformed reply asked again at temperature 0 comes back the same, byte for
-# byte, correction message or not: on corpus_m5 field retries
-# repeated their first attempt exactly and all three were lost. Every reply
-# fault raises the temperature of the next attempt by this step.
-RETRY_TEMPERATURE_STEP = float(os.environ.get("EXTRACT_RETRY_TEMPERATURE_STEP",
-                                              "0.1"))
+# The numbers of the flow the run reads with (`flow.Numbers`), once a run
+# took its profile's flow (`take_flow`); until then `numbers()` reads what
+# the default profile's flow file and the settings over it say at use.
+NUMBERS: Optional[flow_map.Numbers] = None
+# The boxes of the flow the run reads with, by id, and for each kind of
+# request the first box that asks it, its home (`take_flow`, `in_home`).
+_FLOW_NODES: dict = {}
+_HOMES: dict = {}
+# (the id of a question step, a kind of request) -> the step after it that
+# asks this kind for it (`in_home`).
+_ATTACHED_HOMES: dict = {}
+
+
+def in_home(kind: Optional[str]):
+    """Read with the values of the box that is the home of requests of this
+    kind (the first box of the flow that asks it) while the block runs,
+    unless the step that runs asks this kind itself. Requests of a kind are
+    asked from other steps too: the entry of a list from the step of a find,
+    the check that a find speaks about the value from the step that searches
+    (it is attached to it, and the engine does not enter its box), the name
+    of a scenario from a search. Such a request is asked as the step that
+    asks that kind says (its model, its answer room, its extras), so that
+    every request of a kind is asked alike, wherever it comes from."""
+    step = rules.STEP.get()
+    here = _FLOW_NODES.get(step.ident) if step is not None else None
+    if here is not None and blocks.asks_of(here) == kind:
+        return nullcontext()
+    # A step that stands after the asking step and asks this kind says how
+    # it is asked there ("Choose the list entry", owner decision
+    # 2026-11-12); elsewhere the first of the flow.
+    home = _ATTACHED_HOMES.get((step.ident if step is not None else None,
+                                kind)) or (_HOMES.get(kind) if kind
+                                           else None)
+    if home is None:
+        return nullcontext()
+    from .engine import Engine
+    return rules.in_step(rules.stepped(home, Engine.own_values(home)))
+
+
+def attached_homes(tree: list) -> dict:
+    """{(the id of a box, a kind of request): the step after it that asks
+    this kind for it}: the steps that stand right after a box and apply to
+    its answers (`blocks.Box.attached`), such as "Choose the list entry"."""
+    out: dict = {}
+    lists = [tree] + [steps for parent, _frames in flow_map.walk(tree)
+                      for _label, steps in flow_map.children(parent)]
+    for steps in lists:
+        for i, node in enumerate(steps):
+            if not isinstance(node, dict) or "box" not in node:
+                continue
+            for after in steps[i + 1:]:
+                if not isinstance(after, dict) \
+                        or not blocks.is_attached(after):
+                    break
+                asks = blocks.asks_of(after)
+                if asks and not after.get("off"):
+                    out.setdefault((str(node.get("id")), asks), after)
+    return out
+
+
+def llm_base_url() -> str:
+    """Where the requests go (rule `llm_base_url`, set at the start)."""
+    return providers.llm_base_url()
+
+
+def llm_api_key() -> str:
+    """The key of the model server (rule `llm_api_key`, set at the start)."""
+    return providers.llm_api_key()
+
+
+def llm_model() -> str:
+    """The model the request sent now asks (rule `model`: the step's, else
+    the run's)."""
+    return providers.llm_model()
+
+
+def llm_timeout() -> float:
+    """What the first attempt of a request waits (rule `llm_timeout_s`)."""
+    return providers.llm_timeout()
+
+
+def reply_limit() -> int:
+    """Replies out of their form the request sent now takes before it is
+    left unanswered: the number `replies` of the flow as the step that sends
+    it reads it, which the setting EXTRACT_MAX_RETRIES wins over."""
+    return flow_map.number(numbers(), "replies")
+
+
+def retry_timeout() -> float:
+    """What a retry may take after a request timed out (rule
+    `repeat_timeout_s`). The first attempt keeps `llm_timeout_s`, which is
+    sized for a slow but working generation; a request the server did not
+    answer in that time is unlikely to differ on its repeat, and three full
+    timeouts held one field thread for 91 minutes."""
+    return rules.get("repeat_timeout_s")
+
 
 # Set by SIGTERM (a time-limit trap or a manual kill). The run stops
 # taking new work, writes the documents whose every batch came back, and
@@ -119,8 +201,14 @@ STOP = threading.Event()
 
 
 def retry_temperature(base: float, faults: int) -> float:
-    """The sampling temperature after `faults` unreadable replies."""
-    return min(1.0, base + RETRY_TEMPERATURE_STEP * faults)
+    """The sampling temperature after `faults` unreadable replies. A
+    malformed reply asked again at temperature 0 comes back the same, byte
+    for byte, correction message or not: on corpus_m5 field retries repeated
+    their first attempt exactly and all three were lost. Every reply fault
+    raises the temperature of the next attempt by a step (rules
+    `retry_temperature_step`, `retry_temperature_most`)."""
+    return min(rules.get("retry_temperature_most"),
+               base + rules.get("retry_temperature_step") * faults)
 
 
 STOPPED_EXIT = 143
@@ -138,23 +226,6 @@ def install_stop_handler() -> None:
     if threading.current_thread() is not threading.main_thread():
         return
     signal.signal(signal.SIGTERM, lambda *_: STOP.set())
-# How long to wait before asking again, and it is two curves because the two
-# failures are not alike. A reply the model got wrong comes back the moment it
-# is asked again; a server that is not there needs time to come back. The
-# corpus_m5 run had neither: `attempt < MAX_RETRIES` stops one short of the
-# loop it guards, so attempts 3, 4 and 5 of every harvest waited not at all,
-# and 256 requests spent their whole budget inside a few seconds of one
-# outage — 1,152 of that run's 1,156 connection errors fell in its last hour.
-# How often a request may be halved before it is simply refused. Without a
-# floor the recursion is bounded only by the number of rows, and one stuck
-# table of 64 line items becomes a tree of 127 requests that the field
-# sweep's window budget cannot see: it counts the one call it made. Three
-# halvings are eight parts, which is the largest table the corpus has needed.
-SPLIT_DEPTH = int(os.environ.get("EXTRACT_SPLIT_DEPTH", "3"))
-RETRY_WAIT = float(os.environ.get("EXTRACT_RETRY_WAIT", "2"))
-RETRY_WAIT_MAX = float(os.environ.get("EXTRACT_RETRY_WAIT_MAX", "6"))
-TRANSPORT_WAIT = float(os.environ.get("EXTRACT_TRANSPORT_WAIT", "15"))
-TRANSPORT_WAIT_MAX = float(os.environ.get("EXTRACT_TRANSPORT_WAIT_MAX", "120"))
 
 
 def unheld_requests() -> int:
@@ -186,40 +257,86 @@ def retry_wait(attempt: int, transport: bool = False) -> float:
     """
     if providers.replaying():
         return 0.0          # nothing comes back that is waited for
+    growth = rules.get("retry_wait_growth")
+    doubling = growth == "doubling" or (growth == "by_cause" and transport)
+    steps = 2 ** max(0, attempt - 1) if doubling else attempt
     if transport:
-        return min(TRANSPORT_WAIT * (2 ** max(0, attempt - 1)),
-                   TRANSPORT_WAIT_MAX)
-    return min(RETRY_WAIT * attempt, RETRY_WAIT_MAX)
+        return min(rules.get("transport_wait_s") * steps,
+                   rules.get("transport_wait_most_s"))
+    return min(rules.get("retry_wait_s") * steps,
+               rules.get("retry_wait_most_s"))
+
+
+def failure_statuses() -> tuple:
+    """((first, last) of each status range, whether a timeout counts) of the
+    rule `server_failure_statuses`: the answers that mean the server did not
+    do the work. Refused where an entry is none of 429, 500-599, timeout."""
+    ranges, timeout = [], False
+    for said in rules.get("server_failure_statuses"):
+        if said == "timeout":
+            timeout = True
+            continue
+        low, _, high = said.partition("-")
+        try:
+            ranges.append((int(low), int(high or low)))
+        except ValueError:
+            raise ValueError(
+                f"server_failure_statuses: {said!r} is no status (429), "
+                f"no range (500-599) and not timeout") from None
+    return tuple(ranges), timeout
 
 
 def unserved(exc: BaseException) -> bool:
-    """A 429, a 5xx or a timeout: the server was asked and did not do the work.
+    """A 429, a 5xx or a timeout: the server was asked and did not do the work
+    (the statuses of the rule `server_failure_statuses`).
 
     None says anything about the request. A rate limit lifts and a server
     recovers, and the same request is answered then. A request that timed out
     was never answered either: a server whose engine stopped taking requests
     kept its connections open until every one of them timed out, and their
     documents were stamped with the coordinates never read. Every other 4xx
-    refuses the request itself, and refuses it every time.
+    refuses the request itself (`refused`). The status is read as the
+    providers read it (`governor.status_of`): the client's own or that of
+    its response, the reranker's.
     """
-    status = getattr(exc, "status_code", None)
-    if isinstance(status, int):
-        return status == 429 or status >= 500
-    return providers.timed_out(exc)
+    status = status_of(exc)
+    ranges, timeout = failure_statuses()
+    if status is not None:
+        return any(low <= status <= high for low, high in ranges)
+    return timeout and providers.timed_out(exc)
 
 
 def server_side(exc: BaseException) -> bool:
-    """Whether a failure is the server's: it never arrived, or was `unserved`.
+    """Whether a failure is the server's: no reply came at all (no
+    connection, one that broke off, a timeout: `providers.no_reply`), or the
+    server said it did not do the work (`unserved`).
 
     These wait on the long curve and count towards the dead-server streak. A
-    429 retried after two seconds is the same 429.
+    429 retried after two seconds is the same 429. Any other failure without
+    a status is a fault of our own code (owner decision 2026-11-12: only the
+    server's error codes are asked again without a limit): asked again, the
+    same request runs through the same code.
     """
-    return (not isinstance(getattr(exc, "status_code", None), int)
-            or unserved(exc))
+    return unserved(exc) or (status_of(exc) is None
+                             and providers.no_reply(exc))
+
+
+def refused(exc: BaseException) -> bool:
+    """A 4xx that is not the server's failure (429): the server refused the
+    request itself, such as one too long for the model or one our code built
+    wrong ("System message must be at the beginning."). It is asked again
+    `refusal_retry_most` times at most, and a request refused to the end
+    leaves its document unfinished (owner decision 2026-11-09): a later run
+    reads it again, and nothing is lost without a word."""
+    status = status_of(exc)
+    return (status is not None and 400 <= status < 500
+            and not unserved(exc))
 
 
 class Unserved:
-    """Documents one of whose requests ended on a 429, a 5xx or a timeout.
+    """Documents one of whose requests ended on a 429, a 5xx or a timeout,
+    on a refusal asked `refusal_retry_most` times (`refused`), or on a fault
+    of our own code (owner decision 2026-11-12).
 
     Such a request was never answered, so its document is not finished,
     whichever request it was: a passage's rows, one coordinate, the frame, a
@@ -246,66 +363,254 @@ class Unserved:
 
 # For the whole run, like STOP: the request loops only know a document's id.
 UNSERVED = Unserved()
-# Requests in flight against the server, for the whole run — not per document.
-# vLLM batches continuously: what it can schedule is what it is given, and a
-# handful of requests leaves four GPUs idle between tokens. The first pilot
-# ran eight at a time and did 0.14 requests a second.
-LLM_PARALLEL = int(os.environ.get("EXTRACT_LLM_PARALLEL", "128"))
-# Sandbox rounds per harvest. A computed value carries its code and the code's
-# output as evidence; without the sandbox the model would have to work the
-# number out itself, and that number would have no evidence at all.
-CODE_ROUNDS = int(os.environ.get("EXTRACT_CODE_ROUNDS", "2"))
-# How many sources share one request, and how much text they may bring. The
-# ceiling is the model's window minus the parameter payload, which
-# context_budget measures: at 17.5k tokens of spec for kwp, six sources of
-# 14k characters together leave the answer room to be written.
-BATCH_SOURCES = int(os.environ.get("EXTRACT_BATCH_SOURCES", "6"))
-BATCH_CHARS = int(os.environ.get("EXTRACT_BATCH_CHARS", "14000"))
-# What the model is told it already has, so it does not hand back the same
-# value from a neighbouring passage.
-PRIOR_MAX = int(os.environ.get("EXTRACT_PRIOR_MAX", "24"))
-# What one prior entry actually costs, measured on real tuples from the pilot
-# corpus: 40 entries came to 11071 characters, about 110 tokens each. The
-# placeholder here was 60, which is the one direction a budget must not err in.
-PRIOR_TOKENS = 110
-# How often a chain may answer "there is more here, look for this" and get
-# fresh passages for it. Bounded: the model can always ask again.
-FOLLOWUP_ROUNDS = int(os.environ.get("EXTRACT_FOLLOWUP_ROUNDS", "1"))
-# Threads for the two cheap halves: retrieval planning (FAISS + SQL) and
-# verification (PyMuPDF quote location). Neither talks to the LLM server.
-PLAN_PARALLEL = int(os.environ.get("EXTRACT_PLAN_PARALLEL", "8"))
-# The longest stretch of source text one request may carry. A section over
-# this is split into windows and each window asked separately: truncating
-# would drop values silently, which is the one thing this stage may not do.
-MAX_SOURCE_CHARS = int(os.environ.get("EXTRACT_MAX_SOURCE_CHARS", "16000"))
-SOURCE_OVERLAP_CHARS = 400
-# Tables and figures go to the model as pictures as well as text: the
-# transcription IS a reading of that picture, and a model that can see both
-# can notice when they disagree.
-ATTACH_IMAGES = os.environ.get("EXTRACT_ATTACH_IMAGES", "1") != "0"
-IMAGE_MAX_SIDE = int(os.environ.get("EXTRACT_IMAGE_MAX_SIDE", "1280"))
-# A section can run over a page break; how many of its pages to try before
-# giving up on placing the quote.
-LOCATE_MAX_PAGES = int(os.environ.get("EXTRACT_LOCATE_MAX_PAGES", "3"))
-# Pages whose words stay in memory for the locator, across documents.
-LOCATE_CACHE_PAGES = int(os.environ.get("EXTRACT_LOCATE_CACHE_PAGES", "512"))
+# Set where the run stops for a server that answers no more (`run`): with
+# STOP the end of every request asked again for the server's failure.
+HALT = threading.Event()
 
-QUERIES_PROMPT_ID = "extraction/queries"
+
+def halted() -> bool:
+    """Does the run stop: a SIGTERM, or a server that answers no more?"""
+    return STOP.is_set() or HALT.is_set()
+
+
+def persistently(what: str, call: Callable) -> Callable:
+    """*call*, asked again after the server's failure (`server_side`) until
+    it answers or the run halts (owner decisions 2026-11-09 and 2026-11-12:
+    only the server's error codes are asked again without a limit): a
+    search, an embedding or a reranker that failed is never replaced by
+    another order or by nothing. Each failure is logged and waited for on
+    the long curve (`retry_wait`); a run that halts raises the last one.
+    With the rule `search_retry_most` above 0 the server's failure is asked
+    that many times at most and then raised. A request the server refuses
+    (`refused`) is asked `refusal_retry_most` times at most, and a fault of
+    our own code as often again as the rule `other_errors_retry` says, then
+    each is raised: its document fails and stays unfinished, the run goes
+    on, and a later run reads it again (owner decisions 2026-11-09 and
+    2026-11-12)."""
+    def again(*args, **kwargs):
+        attempt = refusals = failures = faults = 0
+        while True:
+            attempt += 1
+            try:
+                return call(*args, **kwargs)
+            except Exception as exc:
+                if halted():
+                    raise
+                if refused(exc):
+                    refusals += 1
+                    if refusals >= rules.get("refusal_retry_most"):
+                        log.error("   %s refused %d time(s), its document "
+                                  "stays unfinished: %s", what, refusals,
+                                  exc)
+                        raise
+                elif server_side(exc):
+                    failures += 1
+                    most = rules.get("search_retry_most")
+                    if most and failures >= most:
+                        log.error("   %s failed %d time(s), its document "
+                                  "stays unfinished: %s", what, failures,
+                                  exc)
+                        raise
+                else:
+                    faults += 1
+                    if faults > rules.get("other_errors_retry"):
+                        log.error("   %s failed in our own code, its "
+                                  "document stays unfinished: %s", what,
+                                  exc, exc_info=exc)
+                        raise
+                log.warning("   %s failed (attempt %d), asked again: %s",
+                            what, attempt, exc)
+                time.sleep(retry_wait(attempt, server_side(exc)))
+    return again
+
+
+class Failures:
+    """What the failures of one request mean, the same for every request of
+    the stage. The rule stands here once and not in each retry loop: of nine
+    loops, three kept all of it, and the compute request asked again at once
+    after a server error, asked a refused request again, and left its
+    document stamped as finished when no attempt of it was served.
+
+    A failure that is the server's (`server_side`: no reply, a 429, a 5xx)
+    is asked again, after the long wait (`retry_wait`), without a limit
+    until the run halts (`halted`, owner decisions 2026-11-09 and
+    2026-11-12: only the server's error codes are asked again without a
+    limit), or as often as the rule `server_retry_most` says where it is
+    above 0; a reply that could not be read is asked again as often as the
+    number `replies` says at most (`attempts`, read for the request, in its
+    step), and a request the server refuses (`refused`, owner decision
+    2026-11-09) as often as `refusal_retry_most` says, after the short
+    wait. Any other failure is a fault of our own code: asked again as
+    often as the rule `other_errors_retry` says (0: not at all). A request
+    given up on whose last attempt the server did not serve (`unserved`),
+    refused, or failed in our own code leaves its document unfinished
+    (`UNSERVED`): the stamp is withheld, the run goes on, a resume reads it
+    again, and the log names the fault with where it arose.
+
+    *document_id* is the document the request reads, None for a request of
+    the run itself. *noted* is False for a request whose end is told another
+    way: one the document is finished without (the places map, the review),
+    or one whose hole carries its cause to the stamp itself (the rows
+    harvest, `not_happened`). It still waits and stops by the rule.
+    """
+
+    def __init__(self, document_id=None, noted: bool = True):
+        self.document_id = document_id
+        self.noted = noted
+        self.transport = False
+        self.lost = False
+        self.faults = 0
+        # The failures of the server this request met, the refusals so far,
+        # and the last refusal's words.
+        self.server_failures = 0
+        self.other_errors = 0
+        self.refusals = 0
+        self.why = ""
+        # The last fault of our own code, None where the last failure was
+        # none (`failed`).
+        self.fault_of_ours: Optional[BaseException] = None
+
+    def attempts(self, replies: int = 0):
+        """The attempts of one request, 1, 2, ...: after a failure that is
+        the server's (`failed` True) the next one after the long wait, until
+        the run halts; after a reply that could not be read (`fault`) the
+        next one after the short wait, *replies* such replies at most (the
+        number `replies` of the flow, read for this request, where none is
+        given); after a refusal the next one after the short wait, as long
+        as `failed` says so. The caller ends the loop on an answer and where
+        `failed` says no more."""
+        attempt = 0
+        while True:
+            attempt += 1
+            yield attempt
+            if self.transport:
+                if halted():
+                    return
+            elif self.faults >= (replies or reply_limit()):
+                return
+            self.wait(attempt)
+
+    def failed(self, exc: BaseException) -> bool:
+        """Whether the request that raised *exc* is asked again: after the
+        server's failure until the run halts or the rule `server_retry_most`
+        is reached (`attempts`), after a refusal until it is the
+        `refusal_retry_most`th, after a fault of our own code as often as
+        the rule `other_errors_retry` says. A request not asked again has
+        no answer, and its document is not finished (`lost`)."""
+        self.transport, self.lost = server_side(exc), unserved(exc)
+        self.fault_of_ours = None
+        if refused(exc):
+            self.refusals += 1
+            self.lost = True
+            self.why = str(exc)[:300]
+            return self.refusals < rules.get("refusal_retry_most")
+        if not self.transport:
+            # Neither the server's failure nor a refusal: a fault of our
+            # own code (owner decision 2026-11-12), never answered either.
+            self.other_errors += 1
+            self.lost = True
+            self.fault_of_ours = exc
+            return self.other_errors <= rules.get("other_errors_retry")
+        self.server_failures += 1
+        most = rules.get("server_retry_most")
+        if most and self.server_failures >= most:
+            # Given up on the server's failure: never answered, so the
+            # document is not finished.
+            self.lost = True
+            return False
+        return True
+
+    def answered(self) -> None:
+        """The server answered the request, whatever its reply says."""
+        self.transport = self.lost = False
+        self.refusals = 0
+        self.fault_of_ours = None
+
+    def fault(self) -> int:
+        """The reply could not be read: how many such replies so far."""
+        self.faults += 1
+        return self.faults
+
+    def wait(self, attempt: int) -> None:
+        """Before asking again after attempt *attempt*: the long curve after
+        the server's failure, the short one after a reply."""
+        time.sleep(retry_wait(attempt, self.transport))
+
+    def given_up(self) -> None:
+        """The request is asked no more and has no answer. A fault of our
+        own code is logged with where it arose, whether or not its document
+        is noted: it is what a person fixes."""
+        if self.fault_of_ours is not None:
+            log.error("   document %s: a request failed in our own code "
+                      "and is not asked again%s: %s", self.document_id,
+                      ", the document stays unfinished" if self.noted
+                      else "", self.fault_of_ours,
+                      exc_info=self.fault_of_ours)
+        if self.lost and self.noted:
+            UNSERVED.note(self.document_id)
+            if self.refusals:
+                log.warning("   document %s stays unfinished: the server "
+                            "refused a request %d time(s): %s",
+                            self.document_id, self.refusals, self.why)
+
+
+def code_rounds() -> int:
+    """Sandbox rounds per calculation question (rule `code_rounds`). A
+    computed value carries its code and the code's output as evidence;
+    without the sandbox the model would have to work the number out itself,
+    and that number would have no evidence at all."""
+    return rules.get("code_rounds")
+
+
+# How many code runs the sandbox takes at a time, for the whole run (rule
+# `code_slots`). A code run waiting for its turn stands on the sandbox's own
+# timeout otherwise. One semaphore per size the rule has had.
+_SANDBOX: dict = {}
+_SANDBOX_LOCK = threading.Lock()
+
+
+def sandbox_slots() -> threading.BoundedSemaphore:
+    """The semaphore of the code runs the sandbox takes at once, as the rule
+    `code_slots` says it now."""
+    size = int(rules.get("code_slots"))
+    with _SANDBOX_LOCK:
+        if size not in _SANDBOX:
+            _SANDBOX[size] = threading.BoundedSemaphore(size)
+        return _SANDBOX[size]
+
+
+def attach_images() -> bool:
+    """Tables and figures go to the model as pictures as well as text (rule
+    `attach_images`): the transcription IS a reading of that picture, and a
+    model that can see both can notice when they disagree."""
+    return bool(rules.get("attach_images"))
+
+
+def image_max_side() -> int:
+    """Pixels of a crop's longer side (rule `image_max_side`)."""
+    return rules.get("image_max_side")
+
+
+
 ANCHORS_PROMPT_ID = "extraction/anchors"
-# The pair a value is read with: one call finds the values, one call per
-# coordinate fills them in.
-ROWS_PROMPT_ID = "extraction/rows"
-FIELD_PROMPT_ID = "extraction/field"
 # The one sentence a document is searched with, written for THAT document.
 PHRASE_PROMPT_ID = "extraction/phrase"
-# Which scenarios and which years the document really carries. Asked once per
-# document, before any value: the pair is the frame every value hangs in, and
-# a frame the run discovers first is one the value request cannot get wrong.
-FRAME_PROMPT_ID = "extraction/frame"
-PROMPT_IDS = (QUERIES_PROMPT_ID, ANCHORS_PROMPT_ID, ROWS_PROMPT_ID,
-              FIELD_PROMPT_ID, PHRASE_PROMPT_ID, FRAME_PROMPT_ID)
+# The prompts of a harvest piece by piece (addressed.py), the run's own
+# wherever the profile writes them and its spec names groups
+# (`surveyed_flow`); the check of a find from another passage is the
+# profile's choice, and the names request is asked only by a run that
+# builds a list of names (`addressed.OPTIONAL`, `names_asked`).
+SURVEY_PROMPT_IDS = tuple(prompt_id for kind, prompt_id
+                          in addressed_map.PROMPT_IDS.items()
+                          if kind not in addressed_map.OPTIONAL)
+# The flow this run harvests with, under the name stamps and producers have
+# recorded since the survey began it: every harvest reads passage by
+# passage. Nothing compares it; older harvests say "fieldwise" (`schema.py`),
+# which is still read.
+SURVEYED = "survey"
+FLOW = SURVEYED
 # The second reading of one value, under a window narrowed to the two passages
-# the row may legally quote from. Not in PROMPT_IDS, which are the harvest's
+# the row may legally quote from. Not in SURVEY_PROMPT_IDS, which are the harvest's
 # own prompts: what the review writes into a stamp goes under `review/`.
 REVIEW_PROMPT_ID = "extraction/review"
 
@@ -314,111 +619,83 @@ REVIEW_PROMPT_ID = "extraction/review"
 PARAMETER_ANCHOR = "#parameter"
 # The same for "which entry of the unit lists is this", asked before it.
 UNIT_ANCHOR = "#unit"
-# How many prose sections a document is planned from. Tables and figures are
-# not capped. Measured over 65 documents: 66% of all values sit in the first
-# 50 ranks of an anchor-only ranking, 80% of them are in a table or a figure
-# and are taken whole regardless of rank.
-PROSE_TOP = int(os.environ.get("EXTRACT_PROSE_TOP", "200"))
-# How many owners the document plan takes, tables figures and prose together,
-# in the order the ranking put them. This is the cut that replaces the
-# structural floor: whether something is a table decides nothing here, only
-# how well it answers the one sentence this document was asked. The floor
-# stays wired as the COUNTER -- how many tables and figures a bare ranking
-# leaves outside is the number that says whether it has to come back, and it
-# can only be taken while the floor is still there to ask. 100 since corpus_m5:
-# at 50 the plans held 40 percent of a document's tables and 15 percent of its
-# figures.
-# The counter has answered: at 100 the plans held 13 to 40 percent of a
-# document's figures and tables, and 71 percent of every tuple of the run came
-# out of one of them. So a floor is back, as a share of this cap rather than
-# beside it (`VISUAL_SHARE`): the cut stays exactly this wide, and what is cut
-# is decided with the ranking rather than only by it.
-PLAN_TOP = int(os.environ.get("EXTRACT_PLAN_TOP", "100"))
-# How many rounds the frame search may ask for more passages before it says
-# what it has. Bounded, because it decides the whole harvest: every value is
-# asked for one of its pairs, so a frame that never finished would be a
-# document that never got read.
-FRAME_ROUNDS = int(os.environ.get("EXTRACT_FRAME_ROUNDS", "3"))
-# How many passages one frame request reads. More than a field window, fewer
-# than the plan: a scenario stands in a heading and a year in a column header,
-# and neither is found by looking at two passages at a time.
-FRAME_SOURCES = int(os.environ.get("EXTRACT_FRAME_SOURCES", "12"))
-# And how many characters of passage. The same budget one value request gets,
-# because the frame reads the whole plan in as many requests as that takes:
-# the window of the run this was measured on was 32,047 tokens and the plan is
-# fifty passages, so a frame that read them in one request would not fit and a
-# frame that read the first twelve would miss the rest.
-FRAME_CHARS = int(os.environ.get("EXTRACT_FRAME_CHARS", str(BATCH_CHARS)))
-# What counts as a calendar year for the deterministic cross-check. Not a
-# reading and never one: it only says how many year-shaped numbers stand in
-# the very passages the model was shown and did not name. A plan writes 2045
-# as a target and 2045 as a megawatt-hour, so this reports and decides
-# nothing.
-FRAME_YEAR_MIN = int(os.environ.get("EXTRACT_FRAME_YEAR_MIN", "1990"))
-FRAME_YEAR_MAX = int(os.environ.get("EXTRACT_FRAME_YEAR_MAX", "2100"))
-_YEAR_RE = re.compile(r"(?<![0-9])([0-9]{4})(?![0-9])")
-# Where the run's concurrency actually lives once the values are found. A
-# batch is one row request and then one sweep per axis, and the sweeps are
-# independent, so 128 batches of seven axes are nine hundred sweeps that can
-# all be in flight. Within ONE sweep the windows stay strictly sequential —
-# it exists to stop as soon as the coordinate is read, and asking the next
-# three windows speculatively would buy parallelism with wasted requests.
-#
-# 64 was the bottleneck it looks like: 128 batch threads waiting on a pool of
-# 64 held the server at a quarter of what it schedules.
-FIELD_PARALLEL = int(os.environ.get("EXTRACT_FIELD_PARALLEL", "192"))
-# Short windows, many requests. Two sources per window with one shared is the
-# unit the sweep walks the document in once a coordinate was not in the
-# value's own passage; the rounds bound it, because a stop heuristic without a
-# bound is an outage.
-FIELD_WINDOW = int(os.environ.get("EXTRACT_FIELD_WINDOW", "2"))
-FIELD_OVERLAP = int(os.environ.get("EXTRACT_FIELD_OVERLAP", "1"))
-FIELD_ROUNDS = int(os.environ.get("EXTRACT_FIELD_ROUNDS", "4"))
-# The most windows one coordinate may cost before the sweep stops. A plan of
-# 249 sections combed two at a time for seven axes would be nine hundred
-# requests for one batch, so there is a ceiling — and a row that hits it is
-# marked exhausted, never "not stated".
-FIELD_MAX_WINDOWS = int(os.environ.get("EXTRACT_FIELD_MAX_WINDOWS", "24"))
-# How often one window is asked when the answers came back unbackable. The
-# retry carries the reason per row, so it is a correction and not a repeat.
-FIELD_ATTEMPTS = int(os.environ.get("EXTRACT_FIELD_ATTEMPTS", "3"))
-# What the last stage may spend. Its own number rather than a share of the
-# one above: reading the rest of a plan is a different search from ranking
-# passages out of it, and the two sharing a budget is what left the stage
-# unreachable for every sweep that needed it.
-REST_MAX_WINDOWS = int(os.environ.get("EXTRACT_REST_MAX_WINDOWS", "12"))
+# How many calculation questions run at once is the rule `compute_parallel`.
+# What a search shows are numbers of the flow (`NUMBERS`, owner decisions
+# 2026-11-09: "Bei 5 bleiben und das mit 50 passt", "Ja als Einstellung"):
+# the pieces of a search for an open coordinate or a field the document has
+# once, how many of them tables, figures and text get first, and how many a
+# request shows. The settings EXTRACT_SEARCH_PIECES, EXTRACT_SEARCH_SHARES
+# and EXTRACT_SEARCH_CHUNKS win over the flow's file for a run.
+# A search that only the end of the document stops: every piece is shown.
+REST_TO_END = 1_000_000
+# Set by a pass that reads to the end (`read_to_end`).
+TO_END = False
 
 
-def window_budget(share: float = 1.0) -> dict:
-    """{stage: windows} for one coordinate's sweep, own then retrieval then
-    rest. Read at call time so a test that moves one constant moves this.
+def read_to_end() -> None:
+    """Every search from here on shows every piece of its document, so a
+    coordinate ends read or `unstated` and never `exhausted`."""
+    global TO_END
+    TO_END = True
 
-    The sum is FIELD_MAX_WINDOWS + REST_MAX_WINDOWS. `own` can never bind --
-    one window, and the attempt loop already stops at FIELD_ATTEMPTS -- and
-    is written here so the three numbers add up in one place instead of two.
 
-    *share* scales the two search stages for a coordinate the profile says
-    to look for less far (`SEARCH_SHARE`): under one budget, corpus_m5's
-    sector search filled 4 percent of its 392,541 requests where the scope's
-    filled 25 percent. At least one window stays, so no stage is skipped.
-    """
-    retrieval = max(0, FIELD_MAX_WINDOWS - FIELD_ATTEMPTS)
-    rest = REST_MAX_WINDOWS
-    if share < 1.0:
-        retrieval = max(1, round(retrieval * share)) if retrieval else 0
-        rest = max(1, round(rest * share)) if rest else 0
-    return {"own": FIELD_ATTEMPTS, "retrieval": retrieval, "rest": rest}
-# How many already-read passages ride along at the front of a window. Where
-# one coordinate of a row was read, the next one is usually a few lines away
-# — and today that passage went into `seen` after the window that showed it
-# and was never shown again, so the sweep leaves the one place it knows
-# something is and never comes back. Three, because the window itself is two:
-# the re-entry may not become the window.
-FIELD_RE_ENTRY = int(os.environ.get("EXTRACT_FIELD_RE_ENTRY", "3"))
-# The most rows one field request answers for. A table of 170 numbers asked in
-# one request is one long answer that ends cut off; 32 rows of one field are
-# about 2,600 answer tokens at the p90 measured on corpus_m5.
-FIELD_ROWS = int(os.environ.get("EXTRACT_FIELD_ROWS", "32"))
+_flow_logged: Optional[tuple] = None
+
+
+def take_flow(profile=None):
+    """The numbers of the flow a run of *profile* reads with
+    (`flow.in_effect`: its flow file, and the settings over it), taken for
+    every request from here on and returned. They are logged whenever they
+    differ from those logged before, each with where it comes from, so that
+    the log of a job says what it read with."""
+    global NUMBERS, _flow_logged, _FLOW_NODES, _HOMES, _ATTACHED_HOMES
+    NUMBERS = flow_map.in_effect(profile)
+    _FLOW_NODES = {}
+    _HOMES = {}
+    _ATTACHED_HOMES = attached_homes(flow_map.tree_of(profile))
+    for node, _frames in flow_map.walk(flow_map.tree_of(profile)):
+        if "box" in node:
+            _FLOW_NODES[str(node.get("id"))] = node
+    # The home of a kind of request is the first box asking it that takes
+    # part in the run: a box that is off asks nothing.
+    for node, _frames in flow_map.on(flow_map.tree_of(profile)):
+        asks = blocks.asks_of(node) if "box" in node else None
+        if asks:
+            _HOMES.setdefault(asks, node)
+    # A request the main flow never asks (the second reading, the example
+    # of a field) has its home in the flow of its pass.
+    for kind, node in passflow.homes(profile).items():
+        _HOMES.setdefault(kind, node)
+    taken = rules.use(profile)
+    said = (tuple(NUMBERS.as_dict().items()),
+            tuple(sorted(NUMBERS.origin.items())))
+    if said != _flow_logged:
+        _flow_logged = said
+        by_origin: dict = {}
+        for name, value in NUMBERS.as_dict().items():
+            by_origin.setdefault(NUMBERS.origin.get(name, "?"), []).append(
+                f"{name}={value}")
+        log.info("flow: %s", "; ".join(
+            f"{' '.join(numbers)} [{origin}]"
+            for origin, numbers in by_origin.items()))
+        # The rules a profile sets itself, and those a setting sets: what
+        # the default profile's file says is not repeated.
+        own = {name: value for name, value in taken.values.items()
+               if not taken.owners.get(name, "").endswith(
+                   f"of {rules.DEFAULT_NAME}")}
+        log.info("rules: %s (sha256 %s)", "; ".join(
+            f"{name}={json.dumps(value, ensure_ascii=False)[:60]} "
+            f"[{taken.owners.get(name)}]" for name, value in own.items())
+            or "those of the default profile", taken.sha256[:12])
+    return NUMBERS
+
+
+def numbers() -> flow_map.Numbers:
+    """The numbers of the flow the run reads with: those `take_flow` took
+    for the run's profile, else what the default profile's flow file and
+    the settings over it say now."""
+    return NUMBERS if NUMBERS is not None else flow_map.in_effect()
+
 
 # ---------------------------------------------------------------------------
 # Retrieval: probe text -> ranked unseen owners of one document
@@ -432,8 +709,8 @@ def embedder():
     """The one resident embedding model this run uses.
 
     `get_embedder()` CONSTRUCTS a backend, it does not return a shared one, and
-    this call used to sit inside the per-probe `embed()`. With
-    EXTRACT_PLAN_PARALLEL threads each asking for its own probes, every probe
+    this call used to sit inside the per-probe `embed()`. With several
+    planning threads each asking for its own probes, every probe
     loaded another copy of the 8B model onto the same card: five fit into 80 GB,
     the sixth died of CUDA OOM, and with it all sixteen documents.
 
@@ -447,6 +724,70 @@ def embedder():
                 from docpipe.embedding import get_embedder
                 _EMBEDDER = get_embedder()
     return _EMBEDDER
+
+
+class Coalescer:
+    """embed(items) from any number of threads, sent to the model in batches.
+
+    The searches of every document in flight ask for vectors at the same
+    time, a few probes each. One worker takes everything that has queued up,
+    embeds it in one call, and hands each caller its slice; what arrives
+    while that call runs is the next batch. So a batch is as large as the
+    demand of the moment and no larger, and the card runs one call at a time
+    instead of a hundred small ones racing for it.
+    """
+
+    def __init__(self, backend: Callable):
+        self._backend = backend
+        self._cond = threading.Condition()
+        self._queue: list = []
+        self._worker: Optional[threading.Thread] = None
+        self.calls = 0
+
+    def embed(self, items: list) -> list:
+        if not items:
+            return []
+        slot = {"items": list(items), "done": False}
+        with self._cond:
+            self._queue.append(slot)
+            if self._worker is None or not self._worker.is_alive():
+                self._worker = threading.Thread(target=self._run, daemon=True,
+                                                name="embed")
+                self._worker.start()
+            self._cond.notify_all()
+            while not slot["done"]:
+                self._cond.wait()
+        if "error" in slot:
+            raise slot["error"]
+        return slot["vectors"]
+
+    def _run(self) -> None:
+        while True:
+            with self._cond:
+                while not self._queue:
+                    if not self._cond.wait(timeout=60) and not self._queue:
+                        self._worker = None
+                        return
+                batch, self._queue = self._queue, []
+            flat = [item for slot in batch for item in slot["items"]]
+            try:
+                vectors = self._backend().embed(flat)
+                self.calls += 1
+            except Exception as exc:          # every caller hears of it
+                vectors, error = None, exc
+            with self._cond:
+                at = 0
+                for slot in batch:
+                    if vectors is None:
+                        slot["error"] = error
+                    else:
+                        slot["vectors"] = vectors[at:at + len(slot["items"])]
+                        at += len(slot["items"])
+                    slot["done"] = True
+                self._cond.notify_all()
+
+
+COALESCED = Coalescer(embedder)
 
 
 def _source_of(hit: dict, via: Optional[str] = None) -> Source:
@@ -468,40 +809,12 @@ def _source_of(hit: dict, via: Optional[str] = None) -> Source:
     # or a year printed only in a caption was visible and not quotable.
     heading = (hit.get("title") or hit.get("section_title") or "").strip()
     text = body
-    if heading and heading not in body[:200]:
+    if heading and heading not in body[:rules.get("heading_in_front_chars")]:
         text = f"{heading}\n{body}"
     return Source(owner_kind=hit["owner_kind"], owner_id=hit["owner_id"],
                   text=text, provenance=provenance,
                   image_path=hit.get("image_path"),
                   body=body if text is not body else None)
-
-
-def make_content_fetcher() -> Callable:
-    """fetch_owner_content, but each owner is read from SQLite once.
-
-    A sweep meets the same section again in the next round, and again for the
-    next parameter: four parameters times four rounds is the same row read up
-    to sixteen times over NFS. One planning thread owns one of these, so it
-    needs no lock.
-    """
-    from docpipe.inference import db as inference_db
-
-    seen: dict = {}
-
-    def fetch(conn, owner_kind: str, owner_id: int):
-        key = (owner_kind, owner_id)
-        if key not in seen:
-            seen[key] = inference_db.fetch_owner_content(conn, owner_kind, owner_id)
-        return seen[key]
-
-    return fetch
-
-
-# Owners (sections, tables, figures) whose content a run keeps. The whole of
-# the largest corpus fits (KWP: 252,909), so a run reads each owner once; past
-# the bound the oldest goes, so a larger corpus cannot grow into it.
-CONTENT_CACHE_OWNERS = int(os.environ.get("EXTRACT_CONTENT_CACHE_OWNERS",
-                                          "300000"))
 
 
 def make_shared_content(limit: Optional[int] = None) -> Callable:
@@ -520,7 +833,11 @@ def make_shared_content(limit: Optional[int] = None) -> Callable:
     """
     from docpipe.inference import db as inference_db
 
-    bound = CONTENT_CACHE_OWNERS if limit is None else limit
+    # Owners (sections, tables, figures) whose content a run keeps (rule
+    # `content_cache_owners`). The whole of the largest corpus fits (KWP:
+    # 252,909), so a run reads each owner once; past the bound the oldest
+    # goes, so a larger corpus cannot grow into it.
+    bound = rules.get("content_cache_owners") if limit is None else limit
     lock = threading.Lock()
     seen: dict = {}
 
@@ -563,14 +880,20 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                        | inference_db.TABLE_EMBEDDING_TYPES
                        | inference_db.FIGURE_EMBEDDING_TYPES)
 
-    def embed(probe: str):
-        key = query_cache.make_key("text", text=probe, image_bytes=None)
-        cached = query_cache.get(cache_conn, key)
-        if cached is not None:
-            return cached
-        vec = embedder().embed_one({"text": probe})
-        query_cache.put(cache_conn, key, vec)
-        return vec
+    def embed_many(probes: list) -> list:
+        """The vectors of *probes*: the cached ones read, the others embedded
+        in one call that waits with every other thread's (`COALESCED`)."""
+        keys = [query_cache.make_key("text", text=p, image_bytes=None)
+                for p in probes]
+        vectors = [query_cache.get(cache_conn, key) for key in keys]
+        missing = [i for i, vec in enumerate(vectors) if vec is None]
+        if missing:
+            fresh = COALESCED.embed([{"text": probes[i]} for i in missing])
+            for i, vec in zip(missing, fresh):
+                vectors[i] = vec
+            query_cache.put_many(cache_conn, [(keys[i], vectors[i])
+                                              for i in missing])
+        return vectors
 
     # A sweep calls this once per parameter and per round with the same probe
     # list, and only `exclude` differs between rounds. Without these two the
@@ -591,7 +914,7 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         key = (document_id, tuple(probes))
         if search[0] != key:
             search[:] = [key, faiss_store.search_prepared(
-                document[1], [embed(p) for p in probes])]
+                document[1], embed_many(list(probes)))]
         scores, positions = search[1]
         hits = faiss_store.fuse_prepared(
             conn, document[1], scores, positions,
@@ -601,68 +924,6 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         return [_source_of(hit) for hit in hits]
 
     return retrieve
-
-
-def make_structure(conn: sqlite3.Connection,
-                   content_fetcher: Optional[Callable] = None) -> Callable:
-    """(document_id) -> every table and every figure of the document.
-
-    The floor of the plan, and it is structural rather than lexical on
-    purpose. The old floor searched the stored text with LIKE for the
-    vocabulary's own words, which is a worse version of the retrieval above
-    it — measured over the corpus it never had anything left to add, because
-    the sweep above had already walked the whole document.
-
-    This one adds what retrieval is bad at and structure is certain about:
-    12,094 of 15,082 values came from a table or a figure, and whether
-    something is a table is not a question a similarity search should be
-    asked. There are about 110 per document, which is affordable exactly
-    because the plan is no longer built once per parameter.
-    """
-    from docpipe.inference import db as inference_db
-
-    fetch = content_fetcher or inference_db.fetch_owner_content
-
-    def structure(document_id: int) -> list:
-        out: list = []
-        for kind, sql in (
-                ("table", "SELECT t.id FROM \"Tables\" t "
-                          "JOIN Sections s ON s.id = t.section "
-                          "WHERE s.document = ? ORDER BY t.id"),
-                ("figure", "SELECT i.id FROM Images i "
-                           "JOIN Sections s ON s.id = i.section "
-                           "WHERE s.document = ? ORDER BY i.id")):
-            try:
-                ids = [int(r[0]) for r in conn.execute(sql, (document_id,))]
-            except Exception as exc:
-                log.warning("   %ss of document %s unreadable: %s", kind,
-                            document_id, exc)
-                continue
-            for owner_id in ids:
-                content = fetch(conn, kind, owner_id)
-                if content is None:
-                    continue
-                out.append(_source_of({"score": None, **content}))
-        return out
-
-    return structure
-
-
-# How much of a parent section rides along with its table. Kassel's median
-# section is 894 characters and its longest is 6,038, so most fit whole and
-# the rest are cut around the table's own placeholder rather than dropped:
-# the sentence that dates a table stands next to its placeholder and nowhere
-# else.
-PARENT_CHARS = int(os.environ.get("EXTRACT_PARENT_CHARS", "4000"))
-
-
-def _around(text: str, needle: str, budget: int) -> str:
-    """A window of *budget* characters centred on *needle*."""
-    at = text.find(needle) if needle else -1
-    if at == -1:
-        return text[:budget]
-    start = max(0, at - budget // 2)
-    return text[start:start + budget]
 
 
 def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
@@ -713,12 +974,19 @@ def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
             if content is None:
                 continue
             parent = _source_of({"score": None, **content}, via="parent")
-            if len(parent.text or "") > PARENT_CHARS:
+            # How much of a parent section rides along with its table (rule
+            # `review_parent_chars`). Kassel's median section is 894
+            # characters and its longest is 6,038, so most fit whole and the
+            # rest are cut around the table's own placeholder rather than
+            # dropped: the sentence that dates a table stands next to its
+            # placeholder and nowhere else.
+            most = rules.get("review_parent_chars")
+            if len(parent.text or "") > most:
                 block = provenance.get("block_id") or ""
                 parent = Source(owner_kind=parent.owner_kind,
                                 owner_id=parent.owner_id,
-                                text=_around(parent.text, f"[{block}",
-                                             PARENT_CHARS),
+                                text=window_around(parent.text, f"[{block}",
+                                             most),
                                 provenance=parent.provenance,
                                 image_path=parent.image_path)
             out.append(parent)
@@ -816,23 +1084,11 @@ def make_review_sources(db_path: Path,
                           "owner_id": int(owner)})
         # A row whose own source IS a section has one passage, not two:
         # `make_parents` skips a parent that is already shown.
+        if rules.get("review_shown_passages") != "own_and_section":
+            return [own]
         return [own] + list(parents([own]))
 
     return sources_for
-
-
-def own_section_number(sources) -> Optional[int]:
-    """The earliest section any of these passages stands in, or None.
-
-    The rest stage reads in the document's own order, and that order starts at
-    section 1 -- the title page of a 249-section plan, for a row that stands on
-    page 180. Earliest and not nearest, because one sweep asks for several rows
-    at once and only a start before all of them is close to every one.
-    """
-    numbers = [n for n in ((s.provenance or {}).get("section_number")
-                           for s in sources or ())
-               if isinstance(n, int)]
-    return min(numbers) if numbers else None
 
 
 def make_rest_of_document(db_path: Path,
@@ -892,7 +1148,7 @@ def make_rest_of_document(db_path: Path,
             log.warning("   sections of document %s unreadable: %s",
                         document_id, exc)
             return []
-        if start is not None:
+        if start is not None and rules.get("rest_starts_at_open_rows"):
             at = next((i for i, (_id, number) in enumerate(order)
                        if number is not None and number >= start), 0)
             order = order[at:] + order[:at]
@@ -913,9 +1169,37 @@ def make_rest_of_document(db_path: Path,
     return rest_of_document
 
 
+def make_search_reranker(image_root: Optional[Path] = None
+                         ) -> Optional[Callable]:
+    """() -> one thread's reranker of every search (`rerank.Reranker`), or
+    None where the run is given no reranker server (rule
+    `rerank_base_url`; owner decisions 2026-11-06 and 2026-11-08). A figure
+    is scored with its picture, as the reading shows it."""
+    from docpipe.inference import rerank as rerank_map
+    if not rerank_map.base_url():
+        return None
+
+    def figure_image(source) -> Optional[dict]:
+        if (source.owner_kind == "figure" and source.image_path
+                and attach_images() and rules.get("rerank_with_images")):
+            return _image_part(str(image_root / source.image_path)
+                               if image_root else source.image_path)
+        return None
+
+    drawn, upto = rerank_map.drawn_of("rerank_pool")
+    log.info("extraction: searches reranked by %s at %s, the best %d of "
+             "each kind and %d drawn from its places up to %d",
+             rerank_map.model_name(), rerank_map.base_url(),
+             rerank_map.pool_size("section"), drawn, upto)
+    store = rerank_map.Scores()
+    return lambda: rerank_map.make_reranker(image_of=figure_image,
+                                            store=store)
+
+
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
                       cache_path: Path,
-                      content: Optional[Callable] = None) -> Callable:
+                      content: Optional[Callable] = None,
+                      reranker: Optional[Callable] = None) -> Callable:
     """(document_id, queries, exclude) -> the passages the model asked for.
 
     Retrieval a second time, but from a query the MODEL wrote rather than one
@@ -937,6 +1221,10 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
 
     The passages' content comes from *content*, the run's shared store or one
     of its own, and not from a store per thread.
+
+    *reranker()* makes one thread's reranker (`rerank.Reranker`), which puts
+    the best passages of each kind in its own order before they are handed
+    back; None leaves the vector search's order.
     """
     from docpipe.inference import query_cache
 
@@ -953,6 +1241,7 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
             # were rebuilt for every round of every coordinate.
             local.retrieve = make_retrieve(local.conn, index, id_to_pos,
                                            local.cache, shared)
+            local.rerank = reranker() if reranker is not None else None
         return local.retrieve
 
     def more_sources(document_id: int, queries: list, exclude: set,
@@ -961,17 +1250,25 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
         found: list = []
         taken = set(exclude)
         try:
-            for source in retrieve(list(queries)[:4], document_id, taken,
+            # Every probe: a search asks with one sentence per table of its
+            # open rows, and the ranking keeps each one's best match (max
+            # over probes). Their vectors come in one batch (`embed_many`).
+            for source in retrieve(list(queries), document_id, taken,
                                    limit=limit):
                 key = (source.owner_kind, source.owner_id)
                 if key in taken:
                     continue
                 taken.add(key)
                 found.append(source)
+            if local.rerank is not None:
+                found = local.rerank.order(document_id, list(queries), found)
         except Exception as exc:
+            # Raised, never an empty list: a search that could not run is
+            # no finding about the plan (owner decision 2026-11-09), and
+            # what asked it asks again (`persistently`).
             log.warning("   more-passages for document %s failed: %s",
                         document_id, exc)
-            return []
+            raise
         return found
 
     return more_sources
@@ -980,12 +1277,11 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
 def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
     """A copy of *spec* whose dynamic axes carry THIS document's list.
 
-    The AR6 scenario names are run identifiers — EN_INDCi2030_300f — and two
-    of 328 of them occur verbatim in the text they were extracted from. The
-    document says "the Current Policies scenario". Nothing but the model can
-    bridge that, and it can only do so if it is shown the list it may choose
-    from; the mapping then arrives flagged, like every other judgement call
-    the harvest records.
+    The countries a publication names differ per publication, and a list of
+    all 249 would bury the handful it names. Nothing but the model can map a
+    wording onto an entry, and it can only do so if it is shown the list it
+    may choose from; the mapping then arrives flagged, like every other
+    judgement call the harvest records.
     """
     if not vocabularies:
         return spec
@@ -998,8 +1294,13 @@ def fill_dynamic_axes(spec: Spec, vocabularies: Optional[dict]) -> Spec:
                 axes[name] = replace(axis, vocabulary=vocabularies[name])
                 changed = True
         # A category parameter whose VALUE is the choice takes the list named
-        # after the parameter itself.
+        # after the parameter itself, and after it the entries the spec says
+        # such a list always has (`Parameter.beside`): the list then exists
+        # where the document names nothing of its own.
         values = vocabularies.get(parameter.uri)
+        if parameter.vocabulary_dynamic and parameter.beside \
+                and parameter.uri in vocabularies:
+            values = {**(values or {}), **parameter.beside}
         if parameter.vocabulary_dynamic and values:
             parameters.append(replace(parameter, axes=axes, vocabulary=values))
             changed = True
@@ -1114,18 +1415,6 @@ def _key16(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def anchor_question_key(target) -> str:
-    """The one question a stored anchor set was written for.
-
-    An anchor is a sentence written from a label, a description and a
-    wording. Those three and the anchor's own id are the target tuple, so the
-    tuple IS the question, and a set is reusable exactly while its tuple has
-    not moved.
-    """
-    return _key16(json.dumps(list(target), ensure_ascii=False,
-                             sort_keys=True, separators=(",", ":")))
-
-
 def anchors_key() -> str:
     """Everything an anchor set depends on that is NOT one question: the
     anchor prompt, the model and the version of the target SET. The cache is
@@ -1146,7 +1435,7 @@ def anchors_key() -> str:
     so a harvest that never had one keeps its key.
     """
     versions = prompts.versions((ANCHORS_PROMPT_ID,))
-    return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{LLM_MODEL}"
+    return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{llm_model()}"
                   f"|{ANCHOR_SCHEMA}|")
 
 
@@ -1184,10 +1473,160 @@ def anchor_targets(spec: Spec) -> list:
             if t[0] not in (PARAMETER_ANCHOR, UNIT_ANCHOR) or t[3]]
 
 
+# What a field's sentence request may carry (`phrase_payload`).
+PHRASE_KEYS = ("label", "description", "names", "document", "frame")
+
+
+def phrase_told(prompt) -> str:
+    """The system prompt a field's sentence request is told, every part of
+    *prompt* it may carry (`PHRASE_KEYS`)."""
+    return thread_map.cut(prompt).system(PHRASE_KEYS).text
+
+
+def step_asking(target: str, preset: str, profile=None) -> dict:
+    """The step of a request asked apart from the reading of a document (a
+    calculation, a second reading, the example of a field): the first of
+    the flow of *profile* whose answer goes to *target*, on or off, else
+    the first of the flow of a pass, else its *preset*; read once where the
+    request's sender is made."""
+    from docpipe.profile import active_profile
+    profile = profile or active_profile()
+    trees = [flow_map.tree_of(profile)]
+    for name in passflow.names(profile):
+        if name == passflow.MAIN:
+            continue
+        try:
+            trees.append(passflow.load(name, profile))
+        except (flow_map.FlowError, LookupError, OSError):
+            continue
+    for tree in trees:
+        for node, _frames in flow_map.walk(tree):
+            if "box" in node and blocks.target_of(node) == target:
+                return node
+    return {"id": preset, "box": "ask", "preset": preset}
+
+
+def step_parts(step: dict, standard: str, profile=None) -> tuple:
+    """(prompt, inputs) of a step asked apart from the reading: the prompt
+    of its kind (*standard*) where it names that one, else its own
+    (`own_prompt`), and the inputs its first message is built from."""
+    from . import general
+    parts = general.parts_of(step)
+    named = parts["prompt"]
+    prompt = (prompts.load(standard, profile) if profile is not None
+              else prompts.load(standard)) if named == standard \
+        else own_prompt(named, profile)
+    return prompt, parts["inputs"]
+
+
+def sentence_step() -> dict:
+    """The step whose request writes a field's sentence, which the chunks
+    of a field are ordered by and the search of a field of the whole
+    document goes with: the first of the run's flow that orders the chunks
+    by it (`targets.chunk_order`), on or off, else its preset."""
+    for node in _FLOW_NODES.values():
+        if blocks.target_of(node) == "chunk_order":
+            return node
+    return {"id": "sentences", "box": "ask", "preset": "sentences"}
+
+
+def phrase_payload(parameter, context: Optional[dict] = None,
+                   step: Optional[dict] = None) -> dict:
+    """What a field's sentence request carries: the inputs of the step that
+    writes it (*step*, `sentence_step` where None), from the field (its
+    name, what it means and the names of its list, owner decision
+    2026-11-05) and from what the document says of itself (*context*, its
+    texts only)."""
+    from . import general, shows
+    context = {k: v for k, v in (context or {}).items()
+               if isinstance(v, str) and v.strip()}
+    inputs = general.parts_of(step or sentence_step())["inputs"]
+    return shows.apart(inputs, {"field": parameter, "context": context})
+
+
+def sentences_written(profile=None) -> str:
+    """What names the sentences the orders of a harvest are made with
+    (`addressed.Orders`): the part of the prompt a field's sentence is told
+    (`phrase_told`), and the inputs and answer form of the step that writes
+    them where they are not its preset's. An order kept from sentences
+    written otherwise is made again; a part told only to the sentence of
+    one coordinate's search changes no order."""
+    from . import general
+    step = sentence_step()
+    parts = general.parts_of(step)
+    prompt = prompts.load(PHRASE_PROMPT_ID, profile) \
+        if parts["prompt"] == PHRASE_PROMPT_ID \
+        else own_prompt(parts["prompt"], profile)
+    written = "document:" + hashlib.sha256(
+        phrase_told(prompt).encode("utf-8")).hexdigest()
+    preset = general.preset_of(step)
+    own = {key: parts[key] for key, theirs in (
+        ("inputs", list(preset.inputs) if preset else None),
+        ("reply", preset.reply if preset else None))
+        if preset is None or parts[key] != theirs}
+    if own:
+        written += "|" + hashlib.sha256(json.dumps(
+            own, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:16]
+    return written
+
+
+def document_context_of(db_path: Optional[Path],
+                        document_context: Optional[Callable]) -> Callable:
+    """context_of(document_id): what the document says of itself (the
+    profile's `document_context`), each call on its own read-only
+    connection; {} where the profile has none."""
+    def context_of(document_id) -> dict:
+        if document_context is None or db_path is None:
+            return {}
+        conn = sqlite3.connect(readonly_uri(db_path), uri=True)
+        try:
+            return dict(document_context(conn, document_id) or {})
+        finally:
+            conn.close()
+    return context_of
+
+
+def make_seek_probes(context_of: Optional[Callable] = None,
+                     write: Optional[Callable] = None) -> Callable:
+    """probes(parameter, document_id) -> the sentences a plan's passages
+    are ranked with for a parameter, which sets the order it reads them in,
+    and the search after an open coordinate goes with where its answer
+    wrote none (`addressed.Orders`, `engine.Engine.box_order`).
+
+    Every parameter gets a sentence written for this document by the model,
+    from the parameter's label, description and list names and from what
+    the document says of itself (*context_of(document_id)*, the profile's
+    `document_context`: the municipality of a plan, the title of a
+    publication), as the chat turns a question into a sentence of the
+    document before it searches (owner decisions 2026-11-05, 2026-11-08 and
+    2026-11-09). *write(parameter, context)* writes the sentences, one
+    phrase request (`document_anchor`) where not given. A parameter no
+    sentence could be written for gets none, and the search falls back to
+    its label. Each sentence is sent in its document's turn (owner decision
+    2026-11-07).
+    """
+    def phrase(parameter, context, document_id):
+        if write is not None:
+            return list(write(parameter, context) or [])
+        return document_anchor(SimpleNamespace(parameters=[parameter]),
+                               context, document_id=document_id
+                               ).get(parameter.uri, [])
+
+    def probes(parameter, document_id) -> list:
+        context = dict(context_of(document_id) if context_of else {})
+        sentences = phrase(parameter, context, document_id)
+        for text in sentences:
+            trace.event("seek_probe", document_id, parameter=parameter.uri,
+                        per="document", text=text)
+        return list(sentences)
+    return probes
+
+
 def document_anchor(spec: Spec, context: Optional[dict] = None,
                     client=None, prompt=None,
-                    frame: Optional[dict] = None,
-                    document_id: Optional[int] = None) -> dict:
+                    document_id: Optional[int] = None,
+                    step: Optional[dict] = None) -> dict:
     """{parameter uri: [one sentence]} — the probe THIS document is searched with.
 
     The QA app turns a question into one short statement before it searches,
@@ -1211,46 +1650,57 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     filled with the label. `plan_document` says out loud when it plans without
     anchors, and a probe that is a bare label is the "silently worse
     retrieval" this whole stage exists to end.
+
+    Each request is sent for *document_id*, in that document's turn, with
+    the ticket of the thread that asked (`_for`), although a thread of the
+    pool below sends it: such a thread belongs to no document, and a request
+    of none goes before every document (owner decision 2026-11-07).
+
+    The request is built from the inputs of the step that orders the chunks
+    by the sentence (*step*, `sentence_step` where None) and asked with its
+    prompt (owner decision 2026-11-12 evening: every question is "Ask the
+    model").
     """
-    prompt = prompt if prompt is not None else prompts.load(PHRASE_PROMPT_ID)
-    client = client or _client()
-    context = {k: v for k, v in (context or {}).items()
-               if isinstance(v, str) and v.strip()}
+    from . import general
+    step = step or sentence_step()
+    if prompt is None:
+        named = general.parts_of(step)["prompt"]
+        prompt = prompts.load(PHRASE_PROMPT_ID) \
+            if named == PHRASE_PROMPT_ID else own_prompt(named)
+    client = _repeating(client or _client())
+    behalf = (document_id, scheduler.current()[1])
 
     def one(parameter):
-        body = {"label": parameter.label,
-                "description": parameter.description}
-        if context:
-            body["document"] = context
-        if frame:
-            # The pair this sentence searches for, in the document's own
-            # wording where the frame read one. "Nutzwaermebedarf 2040 im
-            # Zielszenario" finds the table for 2040; the parameter alone
-            # finds the first table of the chapter, whatever its year.
-            body["frame"] = {k: frame.get(f"{k}_raw") or v
-                             for k, v in frame.items()
-                             if not k.endswith(("_raw", "_quote", "_source"))}
+        body = phrase_payload(parameter, context, step)
         payload = json.dumps(body, ensure_ascii=False, indent=2)
-        transport = lost = False
+        # Told only what its message carries: the parts of the prompt for a
+        # sentence of one coordinate stay out (`addressed.Reader.sentence`).
+        system = thread_map.cut(prompt).system(body.keys()).text
+        failures = Failures(document_id)
         conversation: list = [{"role": "user", "content": payload}]
-        limit = int(prompt.meta.get("max_tokens", 300))
-        faults = 0
-        for attempt in range(1, MAX_RETRIES + 1):
+        with in_home("phrase"):
+            return written(parameter, failures, conversation, system)
+
+    def written(parameter, failures, conversation, system):
+        wanted = request_wanted("phrase")
+        for attempt in failures.attempts():
+            limit = request_room(system, conversation, wanted, whole=True)
+            if limit is None:
+                break
+            started = time.time()
             try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(
-                        float(prompt.meta.get("temperature", 0)), faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    extra_body=request_extras(),
-                    **providers.formatted("llm", "phrase_reply",
-                                          replies.phrase()),
-                )
-                token_usage.reply(response, LLM_MODEL)
+                with scheduler.on_behalf(*behalf):
+                    response = send_request(
+                        client, system, conversation, limit,
+                        failures.faults, reply_grammar(
+                            "phrase_reply", replies.phrase()))
+                failures.answered()
+                token_usage.reply(response, llm_model())
+                _asked("phrase", document_id, response, attempt=attempt,
+                       started=started, parameter=parameter.uri)
                 reply = response.choices[0]
-                phrase = ((_loads_object(reply.message.content) or {})
+                phrase = ((_loads_object(reply.message.content, document_id,
+                                         "phrase") or {})
                           .get("phrase") or "")
                 phrase = phrase.strip() if isinstance(phrase, str) else ""
                 if phrase:
@@ -1259,21 +1709,21 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 # not be read is asked again WITH the reason. Three silent
                 # tries were three copies of the same reply.
                 cause, correction = _reply_fault(reply, limit)
-                faults += 1
-                transport = lost = False
+                failures.fault()
                 log.warning("phrase %s attempt %d: %s reply",
                             parameter.uri, attempt, cause)
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
+                if rules.get("retry_shows_reply"):
+                    conversation.append({
+                        "role": "assistant",
+                        "content": reply.message.content or ""})
+                    conversation.append({"role": "user",
+                                         "content": correction})
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
                             parameter.uri, attempt, exc)
-                transport, lost = server_side(exc), unserved(exc)
-            if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            UNSERVED.note(document_id)
+                if not failures.failed(exc):
+                    break
+        failures.given_up()
         log.warning("phrase %s: no anchor written for this document",
                     parameter.uri)
         return parameter.uri, []
@@ -1283,137 +1733,98 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
     # group of 64 plans took half an hour with the GPUs waiting.
     from concurrent.futures import ThreadPoolExecutor
     out: dict = {}
-    with ThreadPoolExecutor(max_workers=max(len(spec.parameters), 1)) as pool:
-        for uri, phrase in pool.map(one, spec.parameters):
+    # Each in the context of the caller: the box of the flow asking goes
+    # with it into the trace (`addressed.ASKING`).
+    asked = [(contextvars.copy_context(), parameter)
+             for parameter in spec.parameters]
+    together = rules.get("phrase_parallel") or len(spec.parameters)
+    with ThreadPoolExecutor(max_workers=max(together, 1)) as pool:
+        for uri, phrase in pool.map(lambda job: job[0].run(one, job[1]),
+                                    asked):
             if phrase:
                 out[uri] = phrase
     return out
 
 
-def years_in_sources(sources, low: int = 0, high: int = 0) -> set:
-    """Every year-shaped number in these passages. A count, not a reading.
-
-    The frame carries the whole harvest: every value is asked for one of its
-    pairs, so a year the frame missed loses all of that year's values at once
-    and loses them silently -- which is the one failure this design has that
-    the old one did not. So the same passages the model was shown are scanned
-    without a model, and what it did not name is reported.
-
-    Reported, never added. "2045 MWh/a" is a year-shaped number and is not a
-    year, and a cross-check that decided would put it in the frame and ask
-    every table for a year the plan does not have.
-    """
-    low = low or FRAME_YEAR_MIN
-    high = high or FRAME_YEAR_MAX
-    found = set()
-    for source in sources or ():
-        for part in (source.text or "", (source.provenance or {}).get("title") or ""):
-            for match in _YEAR_RE.finditer(part):
-                year = int(match.group(1))
-                if low <= year <= high:
-                    found.add(year)
-    return found
+# The server's context window as it reported it at the start of a run
+# (`set_model_len`), None where it reported none: then the rule
+# `model_window_tokens` says it. The job serves at least `context_budget`.
+_SERVED_WINDOW: Optional[int] = None
 
 
-def _frame_payload(sources: list, slots: list, known: Optional[list] = None,
-                   candidates: Optional[list] = None,
-                   corrections: Optional[list] = None) -> dict:
-    """The request body of one frame request.
-
-    Sources first, then the answer space of every frame coordinate that has
-    one. A closed list is offered as a list -- the model chooses rather than
-    generates -- and an open one (the year is an int) is left open, because
-    there is no list of years to choose from.
-    """
-    listed = []
-    for index, source in enumerate(sources):
-        provenance = source.provenance or {}
-        entry = {"id": f"Q{index + 1}", "kind": source.owner_kind,
-                 "title": provenance.get("title"),
-                 "section": provenance.get("section_title"),
-                 "text": source.text}
-        for key in ("page", "block_id"):
-            if provenance.get(key):
-                entry[key] = provenance[key]
-        listed.append(entry)
-    payload: dict = {"sources": listed}
-    for slot in slots:
-        options = slot.answerable() if slot.kind == fields.CHOICE else None
-        if options:
-            # Under the key the profile's frame prompt reads them from. The
-            # core does not know what a frame coordinate is called there: a
-            # profile whose phrase names the coordinate keeps two closed
-            # coordinates in two lists, one that names a single key has one.
-            payload.setdefault(say("frame_options", slot=slot.name),
-                               {}).update(
-                {k: v for k, v in options.items()
-                 if not str(k).startswith("out:")})
-    if known:
-        payload["known"] = [{s.name: pair.get(s.name) for s in slots}
-                            for pair in known]
-    if candidates:
-        # The second pass. These numbers really stand in the passages above
-        # and the first round did not name them, which is either a year it
-        # missed or a number that only looks like one. The model decides
-        # which, and its answer is checked like every other: the quote stands
-        # in a shown passage and carries the year -- so a candidate that is a
-        # megawatt-hour simply comes back unquotable.
-        payload["candidates"] = list(candidates)
-    if corrections:
-        # What was wrong with the last answer over these same passages. A
-        # pair that failed its evidence, or named a scenario that is not on
-        # the list, used to disappear without a word -- the model was never
-        # told, and the next window was asked in exactly the same way.
-        payload["corrections"] = [c.get("reason") for c in corrections
-                                  if isinstance(c, dict) and c.get("reason")]
-    return payload
+def model_window() -> int:
+    """The window every request is sized against."""
+    if _SERVED_WINDOW:
+        return _SERVED_WINDOW
+    with rules.in_step(None):        # a value of the machine: the run's
+        return int(rules.get("model_window_tokens"))
 
 
-# The server's context window. Read from the server at the start of a run
-# (`set_model_len`); the job serves at least `context_budget`.
-MAX_MODEL_LEN = int(os.environ.get("EXTRACT_MAX_MODEL_LEN", "32768"))
-# Prompt characters per token, set low so a prompt is never estimated short.
-PROMPT_CHARS_PER_TOKEN = 2.62
-# One crop at IMAGE_MAX_SIDE on both sides, one visual token per 28 px square.
-IMAGE_TOKENS = (IMAGE_MAX_SIDE // 28 + 1) ** 2 + 2
-# Room kept free between the estimate and the window.
-ANSWER_MARGIN = 256
-# Less room than this for the answer and the request is not sent.
-MIN_ANSWER_TOKENS = 512
-# Answer tokens one row costs in a field reply: twice the p90 measured on
-# corpus_m5 (29 at the median, 80 at p90), so a chunk's answer fits its room.
-FIELD_ROW_TOKENS = 160
+def image_tokens() -> int:
+    """One crop at its longest side on both sides, one visual token per
+    square of `image_token_side_px` pixels."""
+    return (image_max_side() // rules.get("image_token_side_px") + 1) ** 2 + 2
+
+
+def least_answer_tokens() -> int:
+    """Less room than this for the answer and the request is not sent
+    (rule `least_answer_tokens`)."""
+    return rules.get("least_answer_tokens")
 
 
 def set_model_len(tokens: Optional[int]) -> None:
     """The window the server reports, when it reports one."""
-    global MAX_MODEL_LEN
+    global _SERVED_WINDOW
     if tokens:
-        MAX_MODEL_LEN = int(tokens)
+        _SERVED_WINDOW = int(tokens)
 
 
 # The adaptive request limit every client waits in, steered by the server's
 # queue (throttle.py); None while it is off or the server has no /metrics.
 LIMIT = None
+# The one queue every request of the run is sent through, oldest document
+# first (scheduler.py), and the threads a sweep asks its windows ahead on.
+# Both None while the limit is off: a sweep then asks one window at a time.
+SCHEDULER = None
+AHEAD = None
 
 
 def start_limit() -> None:
-    """Steer the requests by the server's queue unless EXTRACT_LIMIT_ADAPTIVE=0."""
+    """Steer the requests by the server's queue unless the rule
+    `limit_adaptive` is off."""
     global LIMIT
-    if LIMIT is not None or os.environ.get("EXTRACT_LIMIT_ADAPTIVE",
-                                           "1") == "0":
+    if LIMIT is not None or not rules.get("limit_adaptive"):
         return
     if providers.replaying():
         return              # no queue to read and nothing to be refused by
     from . import throttle
     gate = providers.gate("llm")
     # A hosted API has no queue to read; what it refuses steers the limit.
-    LIMIT = (throttle.start(LLM_BASE_URL) if gate is None
+    LIMIT = (throttle.start(llm_base_url()) if gate is None
              else throttle.start_hosted(gate))
-    if LIMIT is not None and FIELD_PARALLEL < LIMIT.maximum:
-        log.info("llm limit: EXTRACT_FIELD_PARALLEL=%d opens fewer field "
-                 "requests than EXTRACT_LIMIT_MAX=%d allows", FIELD_PARALLEL,
-                 LIMIT.maximum)
+    if LIMIT is not None:
+        global SCHEDULER, AHEAD
+        SCHEDULER = scheduler.Scheduler(LIMIT)
+        AHEAD = ThreadPoolExecutor(max_workers=LIMIT.maximum,
+                                   thread_name_prefix="ahead")
+    if LIMIT is not None and rules.get("compute_parallel") < LIMIT.maximum:
+        log.info("llm limit: compute_parallel=%d opens fewer calculation "
+                 "requests than limit_most=%d allows",
+                 rules.get("compute_parallel"), LIMIT.maximum)
+
+
+def start_fixed_limit(requests: int) -> None:
+    """The run's one queue (`SCHEDULER`), with a limit of *requests* open at
+    once that does not move: a probe's places (owner decision 2026-11-07,
+    the places count requests with the model, not the conversations open,
+    so one that waits for its search holds none). Every client made after
+    this sends through it (`_client`)."""
+    global LIMIT, SCHEDULER
+    from . import throttle
+    requests = rules.get("fixed_limit_requests") or requests
+    LIMIT = throttle.AdaptiveLimit(start=requests, minimum=requests,
+                                   maximum=requests)
+    SCHEDULER = scheduler.Scheduler(LIMIT)
 
 
 class PromptCounter:
@@ -1421,7 +1832,7 @@ class PromptCounter:
 
     The text of every message goes through the model's chat template with the
     settings every request carries (`request_extras`) and is counted exactly;
-    a crop is counted at IMAGE_TOKENS, the most one can take. The estimate
+    a crop is counted at `image_tokens`, the most one can take. The estimate
     this replaces ran short on tables of figures, where the tokenizer gives
     every digit a token of its own: requests went out one token over the
     window and were refused, and a refused request that carried a crop broke
@@ -1456,7 +1867,7 @@ class PromptCounter:
                 messages, tokenize=False, add_generation_prompt=True,
                 **kwargs)
             ids = self._tokenizer.encode(text, add_special_tokens=False)
-        return len(ids) + images * IMAGE_TOKENS
+        return len(ids) + images * image_tokens()
 
 
 # Set by `start_counting` for the run; None counts by estimate.
@@ -1475,7 +1886,7 @@ def start_counting(model: Optional[str] = None) -> None:
     if PROMPT_COUNTER is not None or providers.replaying() or providers.hosted("llm"):
         return
     from transformers import AutoTokenizer
-    name = model or LLM_MODEL
+    name = model or llm_model()
     try:
         PROMPT_COUNTER = PromptCounter(AutoTokenizer.from_pretrained(name))
     except Exception as exc:
@@ -1510,578 +1921,591 @@ def prompt_tokens(system: str, conversation: list) -> int:
                 images += 1
             else:
                 chars += len(part.get("text") or "")
-    return (int(chars / PROMPT_CHARS_PER_TOKEN) + images * IMAGE_TOKENS
-            + 16 * (len(conversation) + 1))
+    return (int(chars / rules.get("prompt_chars_per_token"))
+            + images * image_tokens()
+            + rules.get("message_overhead_tokens") * (len(conversation) + 1))
 
 
 def answer_room(system: str, conversation: list, wanted: int) -> int:
     """max_tokens for this request: *wanted*, or what the window leaves."""
-    return min(int(wanted), MAX_MODEL_LEN - ANSWER_MARGIN
+    return min(int(wanted), model_window()
+               - rules.get("answer_margin_tokens")
                - prompt_tokens(system, conversation))
 
 
-def make_frame_asker(image_root: Optional[Path] = None) -> Callable:
-    """ask(sources, slots, document_id, known, usage_out) -> reply or None.
+def request_room(system: str, conversation: list, wanted: int,
+                 whole: bool = False) -> Optional[int]:
+    """max_tokens a request may ask, None where the room is less than
+    `least_answer_tokens`: such a request is not sent and counts as an
+    answer that was cut off. The room is the answer that is asked for, or,
+    with *whole*, what the window leaves, however short the answer asked for
+    is (a search sentence of 300 tokens is sent where the window holds 512
+    more)."""
+    limit = answer_room(system, conversation, wanted)
+    room = answer_room(system, conversation, 1 << 30) if whole else limit
+    return None if room < least_answer_tokens() else limit
 
-    One request, and the answer is a list of pairs with two quotes each. Two,
-    because a column header carries the years and a section heading carries
-    the scenario: one passage can back both halves only when it prints both,
-    and every coordinate is checked against its OWN quote exactly as a field
-    answer is.
-    """
-    prompt = prompts.load(FRAME_PROMPT_ID)
-    client = _client()
-    temperature = float(prompt.meta.get("temperature", 0))
-    max_tokens = int(prompt.meta.get("max_tokens", 4096))
 
-    def ask(sources: list, slots: list, document_id: Optional[int] = None,
-            known: Optional[list] = None,
-            usage_out: Optional[dict] = None,
-            candidates: Optional[list] = None,
-            corrections: Optional[list] = None, *,
-            depth: int = 0) -> Optional[dict]:
-        payload = json.dumps(
-            _frame_payload(sources, slots, known, candidates, corrections),
-            ensure_ascii=False, indent=2)
-        # The crops ride along, as they do for every other request: a year
-        # in a column header and a scenario in a figure caption are often
-        # clearer in the picture than in the transcription of it.
-        content: object = payload
-        parts = [{"type": "text", "text": payload}]
-        for index, source in enumerate(sources):
-            path = source.image_path
-            if not (path and ATTACH_IMAGES):
-                continue
-            part = _image_part(str(image_root / path) if image_root else path)
-            if part is not None:
-                parts.append({"type": "text", "text": say(
-                    "image_for", label=f"Q{index + 1}")})
-                parts.append(part)
-        if len(parts) > 1:
-            content = parts
-        transport = lost = False
-        conversation: list = [{"role": "user", "content": content}]
-        faults = 0
-        for attempt in range(1, MAX_RETRIES + 1):
-            started = time.time()
-            limit = answer_room(prompt.text, conversation, max_tokens)
-            if limit < MIN_ANSWER_TOKENS:
-                log.warning("frame %s: the prompt leaves %d answer token(s) in "
-                            "a window of %d -- not sent", document_id, limit,
-                            MAX_MODEL_LEN)
-                trace.event("error", document_id, where="frame",
-                            kind="too_long", attempt=attempt, room=limit)
-                break
+def request_wanted(kind: str) -> int:
+    """The longest answer, in tokens, a request may ask for (rule
+    `max_tokens` of the step that asks its kind)."""
+    return int(rules.get("max_tokens"))
+
+
+def asked_values(kind: Optional[str], profile=None) -> dict:
+    """The `max_tokens` and `temperature` a request of *kind* is asked with
+    where no run is going (the editor's try, the compile step): the values
+    of the box that is the kind's home in the flow of *profile*, else the
+    run's. A request of no kind the flow has asks with the run's."""
+    from docpipe.profile import active_profile
+    from .engine import Engine
+    home = None
+    for node, _frames in flow_map.on(flow_map.tree_of(
+            profile or active_profile())):
+        if kind and "box" in node and blocks.asks_of(node) == kind:
+            home = node
+            break
+    if home is None and kind:
+        home = passflow.homes(profile or active_profile()).get(kind)
+    with (rules.in_step(rules.stepped(home, Engine.own_values(home)))
+          if home is not None else nullcontext()):
+        return {"max_tokens": int(rules.get("max_tokens")),
+                "temperature": float(rules.get("temperature"))}
+
+
+def reply_grammar(name: str, schema: dict, always: bool = False):
+    """The `response_format` of a request whose reply is *schema*: always
+    for a request that never goes without its grammar, else as the rule
+    `schema_grammar` and the provider say (`providers.reply_format`)."""
+    return (providers.grammar(name, schema) if always
+            else providers.reply_format("llm", name, schema))
+
+
+def send_request(client, system: str, conversation: list, limit: int,
+                 faults: int, response_format=None):
+    """The one place a request of the harvest goes out: the model, the
+    temperature after *faults* unreadable replies (rules `temperature`,
+    `retry_temperature_step`, `retry_temperature_most`), the answer room
+    *limit*, the system prompt and *conversation*, the reply grammar where
+    one is asked for and the settings every request carries
+    (`request_extras`), each read for the step that sends it."""
+    kwargs = {"model": llm_model(),
+              "temperature": retry_temperature(
+                  float(rules.get("temperature")), faults),
+              "max_tokens": limit,
+              "messages": [{"role": "system", "content": system},
+                           *conversation],
+              "extra_body": request_extras()}
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    return client.chat.completions.create(**kwargs)
+
+
+def make_page_count(db_path: Optional[Path]) -> Callable:
+    """document_id -> its page count in the catalog, None where unknown."""
+    def pages(document_id: int) -> Optional[int]:
+        if db_path is None:
+            return None
+        try:
+            conn = sqlite3.connect(readonly_uri(db_path), uri=True)
             try:
-                completion = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature, faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    extra_body=request_extras(),
-                    **providers.formatted("llm", "frame_reply",
-                                          replies.frame(slots)),
-                )
-                transport = lost = False
-                _observe_usage(getattr(completion, "usage", None))
-                if usage_out is not None:
-                    usage = getattr(completion, "usage", None)
-                    usage_out["prompt_tokens"] = getattr(
-                        usage, "prompt_tokens", None)
-                    usage_out["completion_tokens"] = getattr(
-                        usage, "completion_tokens", None)
-                    usage_out["ms"] = int((time.time() - started) * 1000)
-                    usage_out["attempt"] = attempt
-                reply = completion.choices[0]
-                parsed = _loads_object(reply.message.content or "")
-                # WITH its list: a dict that carries no `pairs` is a reply
-                # that answered something else, and returning it made the
-                # window look answered and the plan pairless.
-                if isinstance(parsed, dict) and isinstance(
-                        parsed.get("pairs"), list):
-                    return parsed
-                faults += 1
-                cause, correction = _reply_fault(
-                    reply, limit, key="pairs",
-                    shorter=say("shorter_frame"))
-                log.warning("frame %s attempt %d: %s reply%s",
-                            document_id, attempt, cause, _unparsable(reply))
-                trace.event("error", document_id, where="frame",
-                            kind="unreadable", cause=cause, attempt=attempt,
-                            finish=getattr(reply, "finish_reason", None))
-                if cause == "cut_off" and len(sources) > 1 \
-                        and depth < SPLIT_DEPTH:
-                    # Fewer passages per request. A pair the frame does not
-                    # have loses every value of that pair, so the half of the
-                    # window that was never answered for is asked rather than
-                    # written off.
-                    cut = len(sources) // 2
-                    merged: dict = {"pairs": [], "status": "complete",
-                                    "need_more": []}
-                    for offset, part in ((0, sources[:cut]),
-                                         (cut, sources[cut:])):
-                        got = ask(part, slots, document_id, known, usage_out,
-                                  candidates, corrections, depth=depth + 1)
-                        if not isinstance(got, dict):
-                            merged["status"] = "incomplete"
-                            continue
-                        merged["pairs"].extend(_relabel_sources(
-                            [p for p in (got.get("pairs") or ())
-                             if isinstance(p, dict)], offset))
-                        if str(got.get("status") or "") != "complete":
-                            merged["status"] = "incomplete"
-                        merged["need_more"].extend(
-                            q for q in (got.get("need_more") or ())
-                            if isinstance(q, str))
-                    trace.event("error", document_id, where="frame",
-                                kind="split", attempt=attempt)
-                    return merged
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
-            except Exception as exc:
-                log.warning("frame %s attempt %d failed: %s",
-                            document_id, attempt, exc)
-                transport, lost = server_side(exc), unserved(exc)
-                trace.event("error", document_id, where="frame",
-                            kind="exception", attempt=attempt,
-                            detail=str(exc)[:200])
-                if not transport:
-                    break
-            if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            UNSERVED.note(document_id)
-        return None
-
-    return ask
+                row = conn.execute("SELECT num_pages FROM Documents "
+                                   "WHERE id = ?", (document_id,)).fetchone()
+            finally:
+                conn.close()
+        except sqlite3.Error:
+            return None
+        return int(row[0]) if row and row[0] else None
+    return pages
 
 
-def frame_pairs(reply: Optional[dict], slots: list, sources: list,
-                rejected: Optional[list] = None) -> list:
-    """The pairs of a reply that carry their own evidence, in order.
+# Where a prompt shows the reply its request asks for (`system_text`), and
+# the reply where nothing shown holds what it asks.
+EXAMPLE_PLACE = "example"
+NOTHING_PLACE = "nothing"
 
-    Every coordinate is held to what a field answer is held to: its quote sits
-    verbatim in one of the passages that were SHOWN, the quote contains the
-    answer, and a scenario is one of the keys the request listed. Nothing else
-    is checked. A frame reading is document-level by construction -- it is
-    read once, from a caption or a heading, and every row of the document
-    inherits it -- so "is this passage near this row" is not a question about
-    it, and no reading anywhere in the harvest is asked it.
 
-    *rejected* collects one sentence per pair that did not get through, for
-    `find_frame` to put back in front of the model. Silently dropping them is
-    how a plan ended up with a scenario the ontology has no class for: the
-    pair was refused, nobody said so, and the next window was asked the same
-    question in the same way.
+def system_text(prompt, example) -> str:
+    """The system prompt one request sends: the prompt with its example
+    reply ({{example}}) written for this request, as one line of JSON (owner
+    decisions 2026-11-06: every request's example shows exactly the
+    coordinates it asks, each read, so the model has no key to leave out).
+    A request that finds values gives two, a pair (owner decision
+    2026-11-09: "immer ein Positiv und ein Negativbeispiel"): the first
+    goes to {{example}}, the second to {{nothing}}. A prompt without such a
+    place is sent as it is written; one with it and no example for it is an
+    error before anything is sent, as every open placeholder is
+    (`prompts.Prompt.render`)."""
+    places = getattr(prompt, "placeholders", ())
+    if EXAMPLE_PLACE not in places and NOTHING_PLACE not in places:
+        return prompt.text
+    if example is None:
+        raise KeyError(f"{prompt.id}: the prompt shows the reply of its "
+                       f"request and the request gave no example")
+    pair = tuple(example) if isinstance(example, (tuple, list)) \
+        else (example,)
+    if len(pair) > 1 and NOTHING_PLACE not in places:
+        raise KeyError(f"{prompt.id}: the request shows two replies and the "
+                       f"prompt has a place for one")
+    values = {name: json.dumps(one, ensure_ascii=False,
+                               separators=(",", ":"))
+              for name, one in zip((EXAMPLE_PLACE, NOTHING_PLACE), pair)}
+    # A place the request shows no reply for (the flow's switch for the
+    # empty example is off, or the request has no example) is empty text.
+    return prompt.render(**{name: values.get(name, "")
+                            for name in (EXAMPLE_PLACE, NOTHING_PLACE)
+                            if name in places})
+
+
+def ask_in_grammar(client, prompt, conversation: list, shape: dict,
+                   document_id: int, where: str, key: str, /,
+                   example: Optional[dict] = None, **noted):
+    """One request of the harvest, in the step that asks its kind
+    (`in_home`); see `_ask_in_grammar`."""
+    with in_home(noted.get("asked") if where == "follow" else where):
+        return _ask_in_grammar(client, prompt, conversation, shape,
+                               document_id, where, key, example, **noted)
+
+
+def _ask_in_grammar(client, prompt, conversation: list, shape: dict,
+                    document_id: int, where: str, key: str,
+                    example: Optional[dict] = None, **noted):
+    """One request of the harvest: the reply as a dict, "cut_off" when it
+    did not fit its room, or None when it could not be read. The prompt
+    shows *example*, the reply this request asks for (`system_text`); the
+    request is its prompt and *conversation*, one message (owner decisions
+    2026-11-08: no request is a conversation).
+
+    Asked again with the cause when the reply is no JSON object, or one
+    without a key its schema requires (`_lacking`, rule
+    `missing_key_asks_again`), as many such replies as the number `replies`
+    says at most, as every request of the stage is (the answer shown to the
+    model that wrote it where the rule `retry_shows_reply` is on); a reply
+    cut off at its limit is not rescued. Each answer is traced
+    as `<where>_ask` with *noted*.
+
+    A 429, a 5xx or a timeout is asked again until the server answers or
+    the run halts (`Failures.attempts`, owner decision 2026-11-09), a
+    refusal `refusal_retry_most` times at most; a request whose last
+    attempt ended on one was never answered, so its document is noted
+    (`UNSERVED`) and goes unstamped, as for every request of the run. One
+    that timed out is asked again with the time a repeat gets
+    (`_repeating`), whatever client it was handed, as every request of the
+    harvest is.
     """
-    from .pipeline import answer_in_quote, option_named
-    from .verify import quote_in
-
-    where = {f"Q{i + 1}": s for i, s in enumerate(sources)}
-    out: list = []
-    seen: set = set()
-
-    def refuse(reason: str) -> None:
-        # Bounded: the corrections ride in the next prompt, and a reply whose
-        # every pair failed would otherwise pay for itself twice.
-        if rejected is not None and len(rejected) < 6:
-            rejected.append({"reason": reason})
-
-    for entry in (reply or {}).get("pairs") or ():
-        if not isinstance(entry, dict):
-            continue
-        pair: dict = {}
-        for slot in slots:
-            given = entry.get(slot.name)
-            if isinstance(given, str):
-                given = given.strip()
-            if given is None or given == "":
-                refuse(say("frame_missing", slot=slot.name))
+    client = _repeating(client)
+    wanted = request_wanted(where)
+    text = system_text(prompt, example)
+    failures = Failures(document_id)
+    for attempt in failures.attempts():
+        limit = request_room(text, conversation, wanted)
+        if limit is None:
+            return "cut_off"
+        started = time.time()
+        try:
+            with _for(document_id):
+                response = send_request(client, text, conversation, limit,
+                                        failures.faults, shape)
+            failures.answered()
+            reply = response.choices[0]
+            usage = getattr(response, "usage", None)
+            _observe_usage(usage)
+            box = addressed_map.asking_box()
+            trace.event(f"{where}_ask", document_id, attempt=attempt,
+                        ms=int((time.time() - started) * 1000),
+                        prompt_tokens=getattr(usage, "prompt_tokens", None),
+                        completion_tokens=getattr(usage, "completion_tokens",
+                                                  None),
+                        **({"box": box} if box else {}), **noted)
+            answer = _loads_object(
+                reply.message.content, document_id, where,
+                closes=getattr(reply, "finish_reason", None) != "length")
+            missing = (_lacking(answer, shape)
+                       if rules.get("missing_key_asks_again") else None)
+            if isinstance(answer, dict) and missing is None:
+                return answer
+            failures.fault()
+            cause, correction = _reply_fault(reply, limit,
+                                             key=missing or key)
+            trace.event("error", document_id, where=where,
+                        kind="unreadable", cause=cause, attempt=attempt)
+            if cause == "cut_off":
+                kept = (mend.rescued(reply.message.content, key)
+                        if rules.get("cut_off") == "rescue" else None)
+                if kept is None:
+                    return "cut_off"
+                # The complete entries stay, and the request still counts as
+                # cut off: it is noted as one.
+                trace.event("error", document_id, where=where,
+                            kind="cut_off_rescued", rule="cut_off",
+                            kept=len(next(iter(kept.values()))))
+                return kept
+            if rules.get("retry_shows_reply"):
+                conversation = conversation + [
+                    {"role": "assistant",
+                     "content": reply.message.content or ""},
+                    {"role": "user", "content": correction}]
+        except Exception as exc:
+            log.warning("   %s %s attempt %d failed: %s", where, document_id,
+                        attempt, exc)
+            trace.event("error", document_id, where=where, kind="exception",
+                        attempt=attempt, detail=str(exc)[:300])
+            if not failures.failed(exc):
                 break
-            quote = entry.get(f"{slot.name}_quote")
-            if not isinstance(quote, str) or not quote.strip():
-                refuse(say("frame_no_quote", slot=slot.name,
-                                   given=given))
-                break
-            named = entry.get(f"{slot.name}_source")
-            found = where.get(str(named))
-            if found is None or not quote_in(found.text or "", quote):
-                found = next((s for s in sources
-                              if quote_in(s.text or "", quote)), None)
-            if found is None:
-                refuse(say("frame_quote_not_in_source",
-                                   slot=slot.name, given=given,
-                                   quote=quote.strip()[:80]))
-                break
-            wording = entry.get(f"{slot.name}_raw")
-            wording = wording.strip() if isinstance(wording, str) else None
-            if not answer_in_quote(slot, given, wording, quote):
-                refuse(say("frame_answer_not_in_quote",
-                                   slot=slot.name, given=given,
-                                   quote=quote.strip()[:80]))
-                break
-            if slot.kind == fields.CHOICE and slot.options \
-                    and option_named(slot, given) is None:
-                # An answer that is not on the closed list. It used to be
-                # taken as long as its wording stood in the quote, and the
-                # class lookup behind it then came back empty -- 8,944 of
-                # ar6's tuples carry an unmapped scenario label for exactly
-                # this reason. Asked again instead, and told which list.
-                refuse(say("frame_not_an_option", given=given,
-                           slot=slot.name,
-                           options=say("frame_options", slot=slot.name)))
-                break
-            if slot.kind == fields.NUMBER:
-                try:
-                    given = int(str(given).strip())
-                except (TypeError, ValueError):
-                    refuse(say("frame_not_a_year",
-                                       slot=slot.name, given=given))
-                    break
-            pair[slot.name] = given
-            pair[f"{slot.name}_raw"] = wording
-            pair[f"{slot.name}_quote"] = quote.strip()
-            pair[f"{slot.name}_source"] = [found.owner_kind, found.owner_id]
-        else:
-            key = tuple(pair.get(slot.name) for slot in slots)
-            if key not in seen:
-                seen.add(key)
-                out.append(pair)
-    return out
+    failures.given_up()
+    return None
 
 
-
-def frame_windows(sources: list, max_sources: int = 0,
-                  max_chars: int = 0) -> list:
-    """The plan's passages in windows one frame request can hold.
-
-    All of them, not a prefix. A pair may only be quoted from a passage that
-    was shown (`frame_pairs`), so a year printed past the cut cannot enter the
-    frame at all, and a pair the frame does not have loses every value of that
-    pair. Measured on Kassel: a frame over the first 12 of 50 passages found
-    2 pairs, 2040 and 2024, and 174 of the 234 table tuples the hand reading
-    covers were then stamped with a year printed on another table.
-    """
-    max_sources = max_sources or FRAME_SOURCES
-    max_chars = max_chars or FRAME_CHARS
-    windows: list = []
-    current: list = []
-    chars = 0
-    for source in sources or ():
-        size = len(source.text or "")
-        if current and (len(current) >= max_sources
-                        or chars + size > max_chars):
-            windows.append(current)
-            current, chars = [], 0
-        current.append(source)
-        chars += size
-    if current:
-        windows.append(current)
-    return windows
+def worded(words: str, payload: dict) -> str:
+    """A message: its words, then what it shows as JSON."""
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
+    return f"{words}\n\n{data}" if words else data
 
 
-def find_frame(sources: list, slots: list, document_id: int, ask: Callable,
-               more_sources: Optional[Callable] = None,
-               probes: Optional[list] = None,
-               start: Optional[list] = None) -> tuple:
-    """(pairs, status, missed) - which scenarios and years this document has.
-
-    Asked once per document and over every window of the plan, before any
-    value. Every value question is then one of these pairs, which is what
-    takes the coordinate out of the model's hands: it is not asked which year
-    a number belongs to, it is asked what the number for THIS year is.
-
-    `missed` is the deterministic cross-check: the year-shaped numbers in the
-    passages that no pair names. It is a finding for the second pass, never an
-    addition to the frame, and the second pass shows the window that CARRIES
-    the missed year instead of the first window again.
-
-    `start` is the pairs a harvest already read for this document. They stand
-    first and in their order, the model is shown them as known, and a pair it
-    names again is not added a second time (`take`), so what comes back is
-    the stored pairs and then the ones these passages print in addition.
-    """
-    if not slots:
-        return [], "complete", []
-    number = [s for s in slots if s.kind == fields.NUMBER]
-    windows = frame_windows(sources)
-    pairs: list = list(start or ())
-    finished = True
-
-    def take(found) -> None:
-        known = {tuple(p.get(s.name) for s in slots) for p in pairs}
-        pairs.extend(p for p in found
-                     if tuple(p.get(s.name) for s in slots) not in known)
-
-    def one(shown: list, attempt: int, recheck: Optional[list] = None) -> str:
-        said = "complete"
-        corrections: Optional[list] = None
-        # Two rounds at most over one window: the ask, and one that says what
-        # was wrong with it. The second round is only sent when a pair was
-        # actually refused, so a clean window still costs one request.
-        for extra in range(2):
-            usage: dict = {}
-            rejected: list = []
-            reply = ask(shown, slots, document_id, pairs, usage, recheck,
-                        corrections)
-            take(frame_pairs(reply, slots, shown, rejected))
-            # The conservative reading wins across the rounds: a window whose
-            # first answer said "incomplete" is not finished because the
-            # second one, asked about what was refused, says it is.
-            if str((reply or {}).get("status") or "").strip() != "complete":
-                said = "exhausted"
-            trace.event("frame", document_id, pairs=len(pairs),
-                        scenarios=sorted({str(p.get(slots[0].name))
-                                          for p in pairs}),
-                        years=sorted({p[s.name] for p in pairs for s in number
-                                      if isinstance(p.get(s.name), int)}),
-                        missed=list(recheck or []),
-                        sources=[[s.owner_kind, s.owner_id] for s in shown],
-                        status="complete" if said == "complete" else "exhausted",
-                        attempt=attempt + extra,
-                        rejected=len(rejected),
-                        prompt_tokens=usage.get("prompt_tokens"),
-                        completion_tokens=usage.get("completion_tokens"),
-                        ms=usage.get("ms", 0))
-            if not rejected:
-                break
-            corrections = rejected
-        return said
-
-    for index, shown in enumerate(windows):
-        if one(shown, index + 1) != "complete":
-            finished = False
-
-    def _not_named() -> list:
-        if not number:
-            return []
-        named = {p[s.name] for p in pairs for s in number
-                 if isinstance(p.get(s.name), int)}
-        return sorted(years_in_sources(sources) - named)
-
-    missed = _not_named()
-    for index, shown in enumerate(windows):
-        if not missed:
-            break
-        here = sorted(years_in_sources(shown) & set(missed))
-        if not here:
-            continue
-        # The second pass, and it is the whole reason the deterministic scan
-        # exists. What the scan found and the model did not name is put back
-        # in front of it once, by name, together with the passages it stands
-        # in.
-        one(shown, index + 1, here)
-        missed = _not_named()
-
-    # Nothing in the whole plan carries a pair. Only then is it worth looking
-    # past the plan, and the passages that come back are read like any other
-    # window.
-    for round_index in range(1, max(1, FRAME_ROUNDS)):
-        if pairs or more_sources is None or not probes:
-            break
-        seen = {(s.owner_kind, s.owner_id) for s in sources or ()}
-        fresh = more_sources(document_id, list(probes), seen) or []
-        if not fresh:
-            break
-        for shown in frame_windows(fresh):
-            one(shown, round_index, None)
-        missed = _not_named()
-
-    status = "complete" if finished and pairs else "exhausted"
-    trace.event("frame", document_id, pairs=len(pairs),
-                scenarios=sorted({str(p.get(slots[0].name)) for p in pairs}),
-                years=sorted({p[s.name] for p in pairs for s in number
-                              if isinstance(p.get(s.name), int)}),
-                missed=missed,
-                sources=[[s.owner_kind, s.owner_id] for s in sources],
-                status=status, attempt=0, prompt_tokens=None,
-                completion_tokens=None, ms=0)
-    return pairs, status, missed
-
-
-def load_anchors(path: Path, key: str, targets: list) -> dict:
-    """The anchor sets a previous run wrote that are still the answer to the
-    same question.
-
-    Per question, not per file. One changed question used to miss the whole
-    cache and have the model rewrite all nineteen sets, and those sets decide
-    which passages a document is read from -- so an edit to the year question
-    changed the retrieval of the carrier coordinate, which nothing had asked
-    for and no line anywhere reported.
-
-    A file written before the per-question map existed carries none of it and
-    is therefore reused for nothing: it cannot say which of its sets still
-    answer, and guessing is how a run comes to search with a set nobody
-    checked.
-    """
+def run_each(jobs: list, run: Callable) -> list:
+    """*run(job)* for each of *jobs*, side by side on the run's threads
+    (`AHEAD`) where it has them, the results in the order of the jobs. Only
+    the caller waits: no job waits for another, so the threads never wait
+    for themselves. A job that fails takes back every job not yet begun."""
+    jobs = list(jobs)
+    if AHEAD is None or len(jobs) < 2:
+        return [run(job) for job in jobs]
+    # Each job runs in the context of its caller: the box of the flow
+    # asking (`addressed.ASKING`) goes with it into the trace.
+    futures = [AHEAD.submit(contextvars.copy_context().run, run, job)
+               for job in jobs]
     try:
-        stored = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    if not isinstance(stored, dict) or stored.get("key") != key:
-        return {}
-    anchors = stored.get("anchors")
-    if not isinstance(anchors, dict):
-        return {}
-    questions = stored.get("questions")
-    if not isinstance(questions, dict):
-        # Absent, or something other than a map. Either way the file cannot
-        # say which of its sets still answer, so none of them is taken.
-        questions = {}
-    want = {target[0]: anchor_question_key(target) for target in targets}
-    return {anchor_id: texts for anchor_id, texts in anchors.items()
-            if anchor_id in want and questions.get(anchor_id) == want[anchor_id]}
+        return [future.result() for future in futures]
+    except BaseException:
+        for future in futures:
+            future.cancel()
+        raise
 
 
-def save_anchors(path: Path, key: str, anchors: dict,
-                 targets: Optional[list] = None) -> None:
-    """Write the sets and, beside each, the question it answers."""
-    questions = {target[0]: anchor_question_key(target)
-                 for target in (targets or [])}
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(
-        json.dumps({"key": key, "model": LLM_MODEL, "anchors": anchors,
-                    "questions": {k: v for k, v in questions.items()
-                                  if k in anchors}},
-                   ensure_ascii=False, indent=2), encoding="utf-8")
+# What a request of the harvest names its reply's list or answer by, for the
+# sentence that tells the model what was missing (`_reply_fault`).
+ASK_KEYS = {"transcribe": "caption", "find": "found", "docfield": "found",
+            "coord": "at", "search": "at", "list": "entry",
+            "names": "entry", "check": "about", "work": "found",
+            "phrase": "phrase"}
 
 
-def make_anchors(spec: Spec, client=None, *, store: Optional[Path] = None,
-                 key: str = "") -> dict:
-    """anchor id -> search anchors the model wrote for one question.
-
-    The QA app turns a question into a HyDE anchor before it searches: a
-    sentence written as it would READ in the document, because that is what a
-    similarity search matches against. This stage searched with the spec's
-    templates alone, which name the thing rather than say it.
-
-    Once per run and per question, not per document: the anchor depends on
-    the question, not on the plan, and a stable probe string is what makes the
-    query-embedding cache hit across the whole corpus.
-    """
-    prompt = prompts.load(ANCHORS_PROMPT_ID)
-    # Stored, because they decide which passages the whole corpus is harvested
-    # from. Two calls in one job shared 0 of 18 strings, so a restart searched
-    # a different document set with nothing in any of the 1082 output files
-    # saying which set had found it. The file carries the reproducibility;
-    # the temperature stays where it is.
-    targets = anchor_targets(spec)
-    out: dict = (dict(load_anchors(store, key, targets))
-                 if store is not None else {})
-    todo = [t for t in targets if not out.get(t[0])]
-    if store is not None and out:
-        log.info("extraction: %d anchor set(s) reused from %s, %d to write",
-                 len(out), store, len(todo))
-    if not todo:
-        return out
-    client = client or _client()
-
-    def one(target):
-        anchor_id, label, description, question = target
-        body = {"label": label, "description": description}
-        if question:
-            # The anchors must read like the ANSWER to this question, not like
-            # the topic it belongs to. Without it every axis of a parameter
-            # would get the same six sentences about the parameter.
-            body["question"] = question
-        payload = json.dumps(body, ensure_ascii=False, indent=2)
-        transport = lost = False
-        conversation: list = [{"role": "user", "content": payload}]
-        limit = int(prompt.meta.get("max_tokens", 800))
-        faults = 0
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(
-                        float(prompt.meta.get("temperature", 0.4)), faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    extra_body=request_extras(),
-                    **providers.formatted("llm", "anchors_reply",
-                                          replies.anchors()),
-                )
-                token_usage.reply(response, LLM_MODEL)
-                reply = response.choices[0]
-                parsed = _loads_object(reply.message.content)
-                anchors = [a.strip() for a in (parsed or {}).get("anchors", ())
-                           if isinstance(a, str) and a.strip()]
-                if anchors:
-                    return anchor_id, anchors
-                cause, correction = _reply_fault(reply, limit, key="anchors")
-                faults += 1
-                transport = lost = False
-                log.warning("anchors %s attempt %d: %s reply",
-                            anchor_id, attempt, cause)
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
-            except Exception as exc:
-                log.warning("anchors %s attempt %d failed: %s",
-                            anchor_id, attempt, exc)
-                transport, lost = server_side(exc), unserved(exc)
-            if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            # The run's own request: there is no document to leave unstamped,
-            # so the caller decides before any document is planned.
-            UNSERVED.note(None)
-        log.warning("anchors %s: none generated", anchor_id)
-        return anchor_id, []
-
-    from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=min(8, len(todo) or 1)) as pool:
-        for uri, anchors in pool.map(one, todo):
-            out[uri] = anchors
-    if store is not None:
-        save_anchors(store, key, out, targets)
-    log.info("extraction: %d anchor(s) over %d question(s)",
-             sum(len(v) for v in out.values()), len(out))
-    for uri, anchors in out.items():
-        for anchor in anchors:
-            log.info("   anchor %s: %s", uri, anchor)
-    return out
+def request_prompt(parts, payload: dict, shape: Optional[dict] = None):
+    """The prompt of one request: what every request of its kind is told,
+    and the part of each field its payload carries (`thread.Parts.system`,
+    owner decision 2026-11-07: no request is told about a field it does not
+    carry); where its reply may fetch (*shape* offers "more"), the part
+    `more`, and `get_image` where it may ask for a figure's picture (owner
+    decision 2026-11-12)."""
+    return parts.system(set(payload.keys()) | reply_offers(shape))
 
 
-def probe_texts(spec: Spec, templates: list, anchors: Optional[dict] = None) -> list:
-    """Every retrieval probe the run will ever send, once, order-stable."""
-    seen: set = set()
-    probes: list = []
-    for parameter in spec.parameters:
-        for probe in list(expand_queries(templates, parameter)) + list(
-                (anchors or {}).get(parameter.uri, ())):
-            if probe not in seen:
-                seen.add(probe)
-                probes.append(probe)
-    return probes
+def reply_offers(shape: Optional[dict]) -> set:
+    """{"more", "get_image"} as far as the reply form *shape* offers them:
+    what a request's prompt tells about besides its payload."""
+    schema = ((shape or {}).get("json_schema") or {}).get("schema") or {}
+    more = (schema.get("properties") or {}).get("more")
+    if not isinstance(more, dict):
+        return set()
+    gets = (((more.get("items") or {}).get("properties") or {})
+            .get("get") or {}).get("enum") or ()
+    return {"more"} | ({"get_image"} if addressed_map.IMAGE in gets
+                       else set())
 
 
-def prime_probe_cache(cache_conn, spec: Spec, templates: list,
-                      anchors: Optional[dict] = None) -> int:
-    """Embed every probe of every parameter in one batch, before any planning.
+def make_asks(profile=None) -> Optional[addressed_map.Asks]:
+    """The requests of the harvest (`addressed.Asks`), each with a prompt of
+    its own and its payload as one message, no conversation (owner decisions
+    2026-11-08) where the rule `conversation` keeps none (`messages`); None
+    where the profile writes one of their prompts not,
+    those of `addressed.OPTIONAL` aside. A request asked again
+    (`follow`) goes under the prompt of the request it follows, its words
+    after the payload. The sentence a search goes with is a request of its
+    own (`phrase`, owner decision 2026-11-09), under the prompt the
+    document's search sentences are written with."""
+    loaded: dict = {}
+    for kind, prompt_id in addressed_map.PROMPT_IDS.items():
+        try:
+            loaded[kind] = thread_map.cut(prompts.load(prompt_id, profile))
+        except (FileNotFoundError, LookupError):
+            # Writing out the figures prepares a document; the flow says
+            # where its prompt is missing (`flow.prompt_problems`).
+            if kind not in addressed_map.OPTIONAL and kind != "transcribe":
+                return None
+    client = _client()
 
-    The probes come from the spec, not from a document, so the whole corpus
-    asks the same few dozen questions. Embedded from inside the sweep they
-    cost one GPU round trip per miss and put every planning thread behind the
-    same lock; embedded here they cost one call, and retrieval afterwards
-    reads nothing but the cache.
-    """
-    from docpipe.inference import query_cache
+    def follow_words() -> str:
+        # The words after a follow-up's payload, of the way each group of
+        # them has in the step of the request it follows (`thread.chosen`).
+        return thread_map.chosen(loaded["follow"].common,
+                                 loaded["follow"].prompt.id).strip()
 
-    probes = probe_texts(spec, templates, anchors)
-    keys = {p: query_cache.make_key("text", text=p, image_bytes=None)
-            for p in probes}
-    missing = [p for p in probes if query_cache.get(cache_conn, keys[p]) is None]
-    if missing:
-        vectors = embedder().embed([{"text": p} for p in missing])
-        query_cache.put_many(cache_conn,
-                             [(keys[p], v) for p, v in zip(missing, vectors)])
-    log.info("extraction: %d probe(s), %d embedded in one batch, %d cached",
-             len(probes), len(missing), len(probes) - len(missing))
-    return len(probes)
+    def message(payload: dict) -> str:
+        return json.dumps(own(payload), ensure_ascii=False, indent=1)
+
+    def own(payload: dict) -> dict:
+        return {key: value for key, value in payload.items()
+                if key not in ("conversation", addressed_map.PICTURE)}
+
+    def messages(payload: dict, content: str) -> list:
+        """The messages of a request: where the rule `conversation` keeps
+        the questions asked before about the same value
+        (`addressed.Reader._talk`), each of them and its answer as a
+        message of its own, then this request's (owner decision
+        2026-11-07: one question a message, a follow-up after it). A
+        request that carries a figure's picture (`addressed.PICTURE`,
+        owner decision 2026-11-12) sends it beside its message."""
+        out = []
+        for one in payload.get("conversation") or ():
+            asked = message(one["sent"])
+            if "follow_up" in one:
+                asked = f"{asked}\n\n{follow_words()}"
+            out += [{"role": "user", "content": asked},
+                    {"role": "assistant", "content": json.dumps(
+                        one["answer"], ensure_ascii=False)}]
+        picture = payload.get(addressed_map.PICTURE)
+        part = _image_part(picture) if picture else None
+        if part is not None:
+            return out + [{"role": "user", "content": [
+                {"type": "text", "text": content}, part]}]
+        return out + [{"role": "user", "content": content}]
+
+    def asker(kind: str) -> Callable:
+        parts = loaded[kind]
+
+        def ask(payload, document_id, /, shape, example, **noted):
+            return ask_in_grammar(
+                client, request_prompt(parts, own(payload), shape),
+                messages(payload, message(payload)),
+                shape, document_id, kind, ASK_KEYS[kind], example, **noted)
+        return ask
+
+    def follow(kind, payload, document_id, /, shape, example, **noted):
+        content = f"{message(payload)}\n\n{follow_words()}"
+        return ask_in_grammar(
+            client, request_prompt(loaded[kind], own(payload), shape),
+            messages(payload, content),
+            shape, document_id, "follow", ASK_KEYS[kind], example,
+            **{**noted, "asked": kind})
+
+    def optional(kind: str) -> Optional[Callable]:
+        return asker(kind) if kind in loaded else None
+
+    own_cut: dict = {}
+
+    def own_parts(prompt):
+        # A general step's prompt: a prompt file of the profile, or a text
+        # of the step's own, cut at its markers like every prompt.
+        key = json.dumps(prompt, sort_keys=True, ensure_ascii=False)
+        if key not in own_cut:
+            own_cut[key] = thread_map.cut(own_prompt(prompt, profile))
+        return own_cut[key]
+
+    def general_ask(prompt, payload, document_id, /, shape, example,
+                    follow=False, kind=None, **noted):
+        # A step's own prompt: of a step of the page's own, or of a
+        # question whose prompt was changed, which keeps the name of its
+        # kind in the log (owner decision 2026-11-12 evening).
+        from . import general
+        parts = own_parts(prompt)
+        system = request_prompt(parts, own(payload), shape)
+        text, payload = general.in_prompt(system.text, payload)
+        system = replace(system, text=text)
+        content = message(payload)
+        if follow:
+            content = f"{content}\n\n{follow_words()}"
+        kind = kind or "own"
+        key = ASK_KEYS.get(kind) or general.first_key(
+            ((shape or {}).get("json_schema") or {}).get("schema") or {})
+        return ask_in_grammar(
+            client, system, messages(payload, content), shape, document_id,
+            "follow" if follow else kind, key, example,
+            **({**noted, "asked": kind} if follow else noted))
+    return addressed_map.Asks(
+        find=asker("find"), docfield=asker("docfield"), coord=asker("coord"),
+        list=asker("list"), names=optional("names"),
+        search=asker("search"), follow=follow, check=optional("check"),
+        work=optional("work"), phrase=optional("phrase"),
+        own=general_ask, transcribe=optional("transcribe"))
+
+
+def own_prompt(prompt, profile=None):
+    """The prompt of a general step: the prompt file *prompt* names
+    ("extraction/find"), or {"text": ...} a text of the step's own, made as
+    a prompt file of the profile would be (`prompts.made`)."""
+    from docpipe.profile import active_profile
+    profile = profile or active_profile()
+    if isinstance(prompt, dict):
+        text = str(prompt.get("text") or "")
+        return prompts.made("own/step", profile, profile,
+                            profile.prompts_dir / "own" / "step.md", text)
+    return prompts.load(str(prompt), profile)
+
+
+def image_path_of(source, image_root: Optional[Path]) -> Optional[str]:
+    """Where a figure's crop is, None where the run sends no image or the
+    figure has none."""
+    if source.owner_kind != "figure" or not source.image_path \
+            or not attach_images():
+        return None
+    return str(Path(image_root) / source.image_path) if image_root \
+        else source.image_path
+
+
+def transcript_fingerprint(profile) -> Callable:
+    """fingerprint(told=None): what names the prompt and model that wrote a
+    kept transcription of a figure (`addressed.Transcripts`, owner decision
+    2026-11-08, e), told where it is read, in the step that writes out the
+    figures, whose model it names; *told* the step's own prompt, inputs and
+    answer form where they are not its preset's
+    (`engine.Engine.writes_figures`). "" where the profile writes no prompt
+    for it."""
+    try:
+        standard = prompts.load(addressed_map.PROMPT_IDS["transcribe"],
+                                profile)
+    except (FileNotFoundError, LookupError):
+        standard = None
+
+    def fingerprint(told: Optional[dict] = None) -> str:
+        told = dict(told or {})
+        prompt = own_prompt(told.pop("prompt"), profile) \
+            if "prompt" in told else standard
+        if prompt is None:
+            return ""
+        rest = "|" + json.dumps(told, sort_keys=True, ensure_ascii=False) \
+            if told else ""
+        return hashlib.sha256(
+            f"{prompt.sha256}|{llm_model()}{rest}".encode("utf-8")
+        ).hexdigest()[:16]
+    return fingerprint
+
+
+def search_budget() -> tuple:
+    """(pieces, shares, per request) of every search of the run: how many
+    pieces a search for an open coordinate or a field the document has
+    once shows, how many of them each kind of passage gets first, and how
+    many a request shows (owner decisions 2026-11-09: 50, 20 of tables, 15
+    of figures, 15 of text, 5 a request), from the run's flow (`NUMBERS`);
+    a pass that reads to the end shows every piece (`read_to_end`)."""
+    taken = numbers()
+    pieces = REST_TO_END if TO_END else taken.search_pieces
+    return pieces, taken.shares(), taken.search_per_request
+
+
+def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
+                probes: Optional[Callable] = None,
+                rerank: Optional[Callable] = None,
+                context: Optional[Callable] = None,
+                image_of: Optional[Callable] = None):
+    """The reading of a document piece by piece (`addressed.Reader`), or
+    None where its spec names no groups or the profile writes no prompts
+    for it. What is asked once of a plan beside its fields
+    (`Spec.plan_fields`) and the field that names other works
+    (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
+    a search shows (`search_budget`) and every other number that bounds the
+    reading from the run's flow (`NUMBERS`)."""
+    if not spec.groups:
+        return None
+    asks = make_asks(profile)
+    if asks is None:
+        return None
+    pieces, shares, per_request = search_budget()
+    return addressed_map.Reader(
+        spec, asks, order, search_order=search_order, rerank=rerank,
+        probes=probes, known=row_context,
+        plan_fields=spec.plan_fields, works=spec.works,
+        frame_slots=frame_slots_of(spec), each=run_each, trace=trace.event,
+        budget=pieces, shares=shares, per_request=per_request,
+        context=context, numbers=numbers(),
+        flow=flow_map.tree_of(profile), image_of=image_of)
+
+
+class Persistent:
+    """A reranker whose every order is asked again until it answers or the
+    run halts, a refused one as often as the flow's `replies` says at most
+    (`persistently`)."""
+
+    def __init__(self, reranker):
+        self.reranker = reranker
+        self.order = persistently("rerank", reranker.order)
+
+
+def make_chunk_reranker() -> Optional[Callable]:
+    """() -> one thread's reranker of the pieces of a plan, which scores
+    every piece it is given (`rerank.Reranker`), asked again until it
+    answers (`Persistent`), or None where the run is given no reranker
+    server (rule `rerank_base_url`). How many pieces it scores is the rule
+    `rerank_chunk_pool`, read when it orders."""
+    from docpipe.inference import rerank as rerank_map
+    if not rerank_map.base_url():
+        return None
+    store = rerank_map.Scores()
+    return lambda: Persistent(rerank_map.Reranker(
+        pool_rule="rerank_chunk_pool", store=store))
+
+
+def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
+                 image_root: Optional[Path], profile, every: Callable,
+                 spec_for: Optional[Callable] = None,
+                 rank: Optional[Callable] = None,
+                 reranker: Optional[Callable] = None):
+    """The harvest of a document piece by piece (`surveyed.SurveyedHarvest`)
+    as a run and a probe make it: the order of the pieces by the reranker
+    (*reranker*, `make_chunk_reranker`) and the search over passages
+    (*rank*, `make_more_sources` with its reranker), a field's search
+    sentences (`make_seek_probes`), the figures transcribed once and kept
+    under *out* (`transcripts/`), the orders kept there too (`survey/`), and
+    the numbers of the profile's flow (`take_flow`: the lines of a piece
+    among them). *every(
+    document_id, exclude)* is the plan's passages in its order. A search
+    that fails is asked again until it answers, a refused one as often as
+    the flow's `replies` says (`persistently`)."""
+    if rank is not None:
+        rank = persistently("search", rank)
+    order, search_order, rerank = addressed_map.make_order(reranker, rank)
+    component = (profile.component if profile is not None
+                 else (lambda stage, name: None))
+    context_of = document_context_of(
+        db_path, component("extraction", "document_context"))
+    seek = make_seek_probes(context_of)
+    # The figures are written out by the step of the flow that does it
+    # (`engine.Engine.writes_figures`) and kept under the harvest.
+    transcripts = addressed_map.Transcripts(
+        None, Path(out) / "transcripts", transcript_fingerprint(profile),
+        lambda source: addressed_map.image_key(image_path_of(source,
+                                                             image_root)))
+    numbers = take_flow(profile)
+    orders = addressed_map.Orders(order, seek, Path(out) / "survey",
+                                  trace=trace.event,
+                                  written=sentences_written(profile))
+    log.info("harvest: pieces of %d lines, figures transcribed once under "
+             "%s, orders kept in %s", numbers.piece_lines,
+             Path(out) / "transcripts", Path(out) / "survey")
+    return surveyed_map.SurveyedHarvest(
+        spec,
+        lambda doc_spec: make_reader(
+            doc_spec, profile, order, search_order, seek, rerank, context_of,
+            # The picture a coordinate request may ask for: the figure's
+            # crop where the run attaches images (owner decision
+            # 2026-11-12).
+            lambda source: image_path_of(source, image_root)),
+        lambda document_id: every(document_id, set()),
+        spec_for=spec_for, transcripts=transcripts, orders=orders,
+        numbers=numbers, each=run_each, trace=trace.event)
+
+
+def frame_slots_of(spec: Spec) -> list:
+    """The coordinates of the plan's frame, which its base and target years
+    date a value by: the pair of each group that names one
+    (`spec.Group.paired`)."""
+    return [slot for group in spec.groups.values() if group.pair
+            for slot in fields.frame_slots(spec, group.paired)]
+
+
+def dates_by_plan(spec: Spec) -> bool:
+    """Does the spec date a value by the plan's own years: has its frame a
+    year?"""
+    return any(slot.kind == fields.NUMBER for slot in frame_slots_of(spec))
 
 
 # ---------------------------------------------------------------------------
@@ -2093,21 +2517,23 @@ def prime_probe_cache(cache_conn, spec: Spec, templates: list,
 # as unreachable only once every one of its requests has given up: when vLLM
 # died on the first corpus run with the adaptive limit, the runner took 78
 # minutes to notice.
-SERVER_DEAD_AFTER = float(os.environ.get("EXTRACT_SERVER_DEAD_AFTER", "180"))
-SERVER_PROBE_EVERY = 15.0
 
 
-def probe_server(base_url: str = None, timeout: float = 10.0) -> bool:
+def probe_server(base_url: str = None,
+                 timeout: Optional[float] = None) -> bool:
     """Whether the server answers `GET {base_url}/models` at all.
 
     Any reply below 500 counts: a server that refuses the key is still there.
+    The time it waits is the rule `server_probe_timeout_s`.
     """
     import urllib.error
     import urllib.request
-    request = urllib.request.Request((base_url or LLM_BASE_URL).rstrip("/")
+    if timeout is None:
+        timeout = rules.get("server_probe_timeout_s")
+    request = urllib.request.Request((base_url or llm_base_url()).rstrip("/")
                                      + "/models")
-    if LLM_API_KEY:
-        request.add_header("Authorization", f"Bearer {LLM_API_KEY}")
+    if llm_api_key():
+        request.add_header("Authorization", f"Bearer {llm_api_key()}")
     try:
         with urllib.request.urlopen(request, timeout=timeout):
             return True
@@ -2118,17 +2544,21 @@ def probe_server(base_url: str = None, timeout: float = 10.0) -> bool:
 
 
 def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
-                 every: float = SERVER_PROBE_EVERY,
-                 dead_after: float = SERVER_DEAD_AFTER,
+                 every: Optional[float] = None,
+                 dead_after: Optional[float] = None,
                  clock: Callable = time.monotonic,
                  sleep: Callable = time.sleep) -> threading.Thread:
     """A daemon thread that calls *on_dead(seconds)* once the server has not
-    answered for *dead_after* seconds, then stops watching."""
-
+    answered for *dead_after* seconds (rule `server_dead_after_s`), probing
+    every *every* (rule `server_probe_every_s`), then stops watching."""
     def watch() -> None:
         silent_since = None
         while True:
-            sleep(every)
+            # Read at each look: the rules may be changed while the run goes.
+            sleep(rules.get("server_probe_every_s") if every is None
+                  else every)
+            limit = (rules.get("server_dead_after_s") if dead_after is None
+                     else dead_after)
             if probe():
                 silent_since = None
                 continue
@@ -2137,7 +2567,7 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
                 silent_since = now
                 log.warning("extraction: the model server did not answer the "
                             "health probe")
-            elif now - silent_since >= dead_after:
+            elif now - silent_since >= limit:
                 on_dead(now - silent_since)
                 return
 
@@ -2146,27 +2576,83 @@ def watch_server(on_dead: Callable, *, probe: Callable = probe_server,
     return thread
 
 
+_SHARED_HTTP = None
+_SHARED_HTTP_LOCK = threading.Lock()
+
+
+def shared_http(limit=None):
+    """The one connection pool every request of the run goes out through.
+
+    Each kind of request has a client of its own (finding, coordinates,
+    lists, the search, the check, ...), and each client used to keep a
+    pool of its own:
+    connections it had opened stayed open while it sent nothing, so a probe
+    with 18 requests in flight held 40 connections to the proxy, and a server
+    that takes about 20 at once refused the rest outright (one probe,
+    1,110 requests refused). One pool for all, as large as the requests the
+    run may have open at once (*limit*, the run's `LIMIT`), holds no more
+    connections than requests in flight. Made once, with the first client.
+    """
+    global _SHARED_HTTP
+    with _SHARED_HTTP_LOCK:
+        if _SHARED_HTTP is None:
+            import httpx
+            most = rules.get("http_connections") or getattr(
+                limit if limit is not None else LIMIT, "maximum", None)
+            _SHARED_HTTP = httpx.Client(
+                limits=httpx.Limits(max_connections=most,
+                                    max_keepalive_connections=most),
+                timeout=llm_timeout())
+        return _SHARED_HTTP
+
+
 def _client():
-    """The one client shape this stage uses, for the provider it is set to."""
-    client = providers.client("llm", base_url=LLM_BASE_URL,
-                              api_key=LLM_API_KEY, timeout=LLM_TIMEOUT,
-                              max_retries=0)
-    if LIMIT is None:
-        return client
-    from .throttle import Limited
-    return Limited(client, LIMIT)
+    """The one client shape this stage uses, for the provider it is set to.
+    A request that timed out is repeated with the time of a repeat
+    (`_repeating`). Every client of the run sends through one connection
+    pool (`shared_http`)."""
+    shared = ({"http_client": shared_http()}
+              if providers.provider("llm") == providers.OPENAI_COMPATIBLE
+              else {})
+    client = providers.client("llm", base_url=llm_base_url(),
+                              api_key=llm_api_key(), timeout=llm_timeout(),
+                              max_retries=0, **shared)
+    if SCHEDULER is None:
+        # Several model names on one endpoint share their places as the chat's
+        # do. One model and one place is the plain client.
+        from ..inference import pool
+        return _repeating(pool.over(client))
+    return _repeating(scheduler.Scheduled(client, SCHEDULER))
 
 
-def _loads_object(raw_text) -> Optional[dict]:
+def _repeating(client):
+    """*client*, whose repeat of a request that timed out gets
+    `repeat_timeout_s` (`scheduler.Repeats`, read where the request is
+    sent): every request of the stage, made here or handed in."""
+    return scheduler.repeating(client)
+
+
+def _for(document_id):
+    """The requests sent inside belong to this document; the sweep's ticket,
+    if the calling thread carries one, stays."""
+    return scheduler.on_behalf(document_id, scheduler.current()[1])
+
+
+def _loads_object(raw_text, document_id=None, where: str = "",
+                  closes: bool = True) -> Optional[dict]:
     """The one JSON object a reply was asked for, or None.
 
-    Strict, and that is the point of it. Every softener this used to carry --
-    closing the brackets a reply stopped short of, reading one object out of
-    a longer text, stripping fences and think blocks -- turned a defective
-    answer into a value that then stood in the harvest saying "read" with
-    nothing under it. A reply that is not exactly the object that was asked
-    for is asked again, and the retry says what was wrong with it
-    (`_reply_fault`).
+    Strict, and that is the point of it (decided on 2026-09-12). Every
+    softener this used to carry -- closing the brackets a reply stopped
+    short of, reading one object out of a longer text, stripping fences and
+    think blocks -- turned a defective answer into a value that then stood
+    in the harvest saying "read" with nothing under it. A reply that is not
+    exactly the object that was asked for is asked again, and the retry says
+    what was wrong with it (`_reply_fault`). Only the rule `repair_replies`
+    brings a repair back, for the step that asks; a reply that was read
+    after one is noted in the request log (`repaired`, with the repairs and
+    the rule), for the document *document_id* and the request *where*.
+    *closes* is False for a reply that was cut off: it is never closed.
     """
     text = (raw_text or "").strip()
     if not text:
@@ -2174,80 +2660,21 @@ def _loads_object(raw_text) -> Optional[dict]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        return None
+        kinds = rules.get("repair_replies")
+        if not kinds:
+            return None
+        data, used = mend.repaired(text, kinds, closes)
+        if data is not None:
+            trace.event("repaired", document_id, where=where, repairs=used,
+                        rule="repair_replies")
+        return data
     return data if isinstance(data, dict) else None
 
-
-# What a `defaults` block may NOT carry. Stated as the exclusion, not as a
-# list of axis names: the axes are the profile's business and the core has no
-# opinion on them. These two are different in kind — they are the evidence
-# pair, one number and the words it was read from, and a shared one would
-# hand every tuple in the reply the same evidence, which is the one thing
-# this stage exists to prevent. Underscore keys are ours, not the model's.
-NOT_DEFAULTABLE = frozenset({
-    "value", "quote", "value_raw",
-    # Not a coordinate at all but a switch: `computed` decides WHICH evidence
-    # check applies, letting the value be absent from its own quote as long
-    # as the sandbox printed it. Shared across a reply it would open that
-    # door for every tuple in it, and a table whose rows are all computed is
-    # exactly the case the defaults block was written for.
-    "computed", "compute",
-})
 
 _DECODER = json.JSONDecoder()
 
 
-def expand_defaults(defaults: Optional[dict], tuples: list) -> list:
-    """Fold the reply's shared coordinates into every tuple that omits them.
-
-    Measured on the one table that truncated in three consecutive pilots: of
-    the sixteen keys a tuple carries, ten are identical across all 39 of its
-    tuples, and rewriting them costs 52% of the whole answer. So the model
-    writes them once. A tuple's own key always wins, and a key in
-    NOT_DEFAULTABLE is dropped however the model labelled it.
-    """
-    if not isinstance(defaults, dict) or not defaults:
-        return tuples
-    shared = {k: v for k, v in defaults.items()
-              if isinstance(k, str) and k not in NOT_DEFAULTABLE
-              and not k.startswith("_")}
-    if not shared:
-        return tuples
-    out = []
-    for claim in tuples:
-        if not isinstance(claim, dict):
-            out.append(claim)
-            continue
-        merged = dict(shared)
-        merged.update(claim)          # what the tuple says about itself wins
-        out.append(merged)
-    return out
-
-
-def _parse_reply(raw_text) -> Optional[dict]:
-    """The whole answer object, not just its tuples.
-
-    A batch reply says three things: what it found, whether these passages
-    are exhausted for the parameter, and -- when they are not -- what
-    sentence to search for next. Only `tuples` decides whether the reply was
-    understood at all; the other two default to the conservative reading,
-    which is "there may be more, but I cannot say where".
-    """
-    data = _loads_object(raw_text)
-    if data is None:
-        return None
-    tuples = data.get("tuples")
-    if not isinstance(tuples, list):
-        return None
-    status = data.get("status")
-    need = data.get("need_more")
-    return {"tuples": expand_defaults(data.get("defaults"), tuples),
-            "status": status if status in ("complete", "partial") else "partial",
-            "need_more": [q for q in (need or []) if isinstance(q, str) and q.strip()]}
-
-
 _UNPARSABLE_SHOWN = 0
-_UNPARSABLE_LIMIT = int(os.environ.get("EXTRACT_SHOW_UNPARSABLE", "20"))
 
 
 def _unparsable(reply) -> str:
@@ -2259,7 +2686,7 @@ def _unparsable(reply) -> str:
     handful of examples, not a second copy of the run in the log.
     """
     global _UNPARSABLE_SHOWN
-    if _UNPARSABLE_SHOWN >= _UNPARSABLE_LIMIT:
+    if _UNPARSABLE_SHOWN >= rules.get("show_unparsable"):
         return ""
     _UNPARSABLE_SHOWN += 1
     message = getattr(reply, "message", None)
@@ -2288,6 +2715,34 @@ def _shape_rule() -> str:
     """What has to be said back whatever went wrong: the shape that was
     asked for."""
     return say("shape_rule")
+
+
+def _lacking(answer, shape: Optional[dict]) -> Optional[str]:
+    """The first key the schema of *shape* requires at its top that the
+    object *answer* lacks; None when it has them all, or is no object.
+
+    Such a reply parses and is still not the object that was asked for, so
+    it is asked again as `missing_key` (owner decision 2026-11-04). A server
+    that holds a reply to its grammar never sends it; one that holds it to
+    no schema sent `{}` for tables full of values, which read as tables
+    without any.
+    """
+    if not isinstance(answer, dict):
+        return None
+    schema = ((shape or {}).get("json_schema") or {}).get("schema") or {}
+    return next((key for key in schema.get("required") or ()
+                 if key not in answer), None)
+
+
+def _excerpt() -> tuple:
+    """(characters before, after, of foreign text) of a broken answer the
+    question asked again shows the model (rule `fault_excerpt_chars`)."""
+    said = rules.get("fault_excerpt_chars")
+    try:
+        return said["before"], said["after"], said["foreign"]
+    except KeyError as exc:
+        raise ValueError(f"fault_excerpt_chars names no {exc}: it gives "
+                         f"before, after and foreign") from None
 
 
 def _reply_fault(reply, limit: int, *, key: str = "",
@@ -2342,83 +2797,22 @@ def _reply_fault(reply, limit: int, *, key: str = "",
         try:
             _obj, end = _DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
-            around = text[max(start, exc.pos - 60):exc.pos + 20]
+            before, after, _foreign = _excerpt()
+            around = text[max(start, exc.pos - before):exc.pos + after]
             return "syntax", say(
                 "syntax", position=exc.pos - start, message=exc.msg,
                 around=around) + shape
         extra = (text[:start] + text[end:]).strip()
         return "outside_text", say(
-            "outside_text", extra=extra[:200]) + shape
+            "outside_text", extra=extra[:_excerpt()[2]]) + shape
     if not isinstance(data, dict):
         return "not_an_object", say(
             "not_an_object", kind=type(data).__name__) + shape
     if key and not isinstance(data.get(key), list):
-        which = "key_missing" if key not in data else "key_not_a_list"
+        which = ("key_missing" if data.get(key) in (None, "")
+                 or key not in data else "key_not_a_list")
         return "missing_key", say(which, key=key) + shape
     return "wrong_shape", say("wrong_shape") + shape
-
-
-def _relabel_sources(entries, offset: int, suffix: str = "source"):
-    """A part's Q labels shifted back onto the whole request's numbering.
-
-    A request asked again in halves numbers its passages from Q1, and the
-    second half's Q1 is the whole request's Q4. Unshifted, every answer of
-    that half would be checked against the wrong passage -- which is the one
-    way splitting could corrupt what a truncation merely lost.
-    """
-    if not offset:
-        return entries
-    for entry in entries or ():
-        if not isinstance(entry, dict):
-            continue
-        for key in [k for k in entry
-                    if k == suffix or k.endswith("_" + suffix)]:
-            name = entry.get(key)
-            if isinstance(name, str) and name.startswith("Q") \
-                    and name[1:].strip().isdigit():
-                entry[key] = f"Q{int(name[1:].strip()) + offset}"
-    return entries
-
-
-def _split_harvest(batch, prior, harvest: Callable, limit: int,
-                   ceiling: int, first, depth: int = 0) -> Optional[dict]:
-    """A cut-off batch asked again in pieces, or None when it cannot be.
-
-    Two ways to make an answer fit: fewer passages per request, and -- when a
-    single passage already IS the request -- more room for the answer. The
-    reply that was cut off is not used at all. It was, once: the tuples
-    written before the cut were kept and the passages after it became holes,
-    which put a half-read request into the harvest as if it had been read.
-    """
-    items = list(batch.items)
-    if len(items) > 1 and depth < SPLIT_DEPTH:
-        cut = len(items) // 2
-        log.warning("   harvest %s/%s+%d cut off at %d tokens: asked again "
-                    "as %d and %d passage(s)", first.owner_kind,
-                    first.owner_id, len(items) - 1, limit, cut,
-                    len(items) - cut)
-        merged: dict = {"tuples": [], "status": "complete", "need_more": []}
-        for offset, part in ((0, items[:cut]), (cut, items[cut:])):
-            got = harvest(replace(batch, items=list(part)), prior,
-                          depth=depth + 1)
-            if not isinstance(got, dict):
-                merged["status"] = "partial"
-                continue
-            merged["tuples"].extend(_relabel_sources(
-                [t for t in (got.get("tuples") or ()) if isinstance(t, dict)],
-                offset))
-            if got.get("status") != "complete":
-                merged["status"] = str(got.get("status") or "partial")
-            merged["need_more"].extend(
-                q for q in (got.get("need_more") or ()) if isinstance(q, str))
-        return merged
-    if limit < ceiling * 4:
-        log.warning("   harvest %s/%s cut off at %d tokens: %s, asked again "
-                    "with %d", first.owner_kind, first.owner_id, limit,
-                    "one passage" if len(items) == 1 else "no room to split",
-                    limit * 2)
-        return harvest(batch, prior, ceiling=limit * 2, depth=depth)
-    return None
 
 
 def _parse_action(text) -> Optional[str]:
@@ -2430,7 +2824,7 @@ def _parse_action(text) -> Optional[str]:
     return code if isinstance(code, str) and code.strip() else None
 
 
-def _compute_reply(run: dict) -> str:
+def _compute_reply(run: dict, done: str = "code_output") -> str:
     """What the model gets back after a sandbox round."""
     if not run.get("ok"):
         return say("code_failed", error=run.get("error")
@@ -2438,7 +2832,7 @@ def _compute_reply(run: dict) -> str:
     out = (run.get("stdout") or "").strip()
     if not out:
         return say("code_silent")
-    return say("code_output", output=out)
+    return say(done, output=out)
 
 
 def _parameter_payload(parameter) -> dict:
@@ -2474,69 +2868,62 @@ def _parameter_payload(parameter) -> dict:
     return payload
 
 
-@functools.lru_cache(maxsize=192)
+_IMAGES: dict = {}
+_IMAGES_LOCK = threading.Lock()
+
+
 def _image_data_url(path: str) -> Optional[str]:
-    """The crop, read, downscaled and base64'd — once per file per run.
+    """The crop, read, downscaled and base64'd — once per file, size and
+    format per run.
 
     Every parameter asks the same table again, so the same PNG used to be
-    reopened, resampled and re-encoded once per parameter. Bounded because a
-    corpus run meets thousands of crops and each one is a megabyte of base64.
+    reopened, resampled and re-encoded once per parameter. Bounded
+    (`image_cache_crops`, the oldest leave first) because a corpus run meets
+    thousands of crops and each one is a megabyte of base64. The key holds
+    what the image depends on, the size (`image_max_side`) and the format
+    (`image_format`) of the step that asks, so that a step with another size
+    gets its own image and not the first one made.
 
-    PNG, not JPEG: these crops are synthetic graphics with thin rules and
-    small axis labels, exactly what JPEG artefacts blur first — and a blurred
-    digit is the failure this whole stage exists to avoid. Deliberately not
-    imported from llm_client, which binds the QA prompts at import time.
+    PNG, not JPEG, unless the rule says so: these crops are synthetic
+    graphics with thin rules and small axis labels, exactly what JPEG
+    artefacts blur first — and a blurred digit is the failure this whole
+    stage exists to avoid. Deliberately not imported from llm_client, which
+    binds the QA prompts at import time.
     """
     import base64
     import io
+    side, kind = image_max_side(), rules.get("image_format")
+    key = (path, side, kind)
+    with _IMAGES_LOCK:
+        if key in _IMAGES:
+            return _IMAGES[key]
     try:
         from PIL import Image
         img = Image.open(path)
-        if max(img.size) > IMAGE_MAX_SIDE:
-            img.thumbnail((IMAGE_MAX_SIDE, IMAGE_MAX_SIDE))
+        if max(img.size) > side:
+            img.thumbnail((side, side))
+        if kind == "jpeg" and img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format=kind.upper())
     except Exception as exc:
         log.warning("   crop not attachable (%s): %s", path, exc)
         return None
-    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    url = (f"data:image/{kind};base64,"
+           + base64.b64encode(buf.getvalue()).decode())
+    with _IMAGES_LOCK:
+        most = rules.get("image_cache_crops")
+        while most and len(_IMAGES) >= most:
+            _IMAGES.pop(next(iter(_IMAGES)))
+        if most:
+            _IMAGES[key] = url
+    return url
 
 
 def _image_part(path: str) -> Optional[dict]:
     """A table or figure crop as a chat message part, or None if unreadable."""
     url = _image_data_url(str(path))
     return None if url is None else {"type": "image_url", "image_url": {"url": url}}
-
-
-# The evidence a row keeps next to each coordinate: what makes it re-checkable,
-# and nothing that tells a repeat from a new value. Who read the coordinate
-# (`fields.PRODUCER`) is one more: it says nothing about the value, and shown
-# to the model it would change a request the harvest did not write it for.
-_EVIDENCE = ("_raw", "_raw_foreign", "_quote", "_source", "_window", "_state",
-             "_seen", "_link_quote", "_link_source", fields.PRODUCER)
-
-
-def _prior_payload(prior: list) -> list:
-    """What the model is told it already has, small enough to send every time.
-
-    Coordinates and the value, not the whole verified row: the point is that
-    the model recognises a repeat, and provenance, flags, tier and the
-    evidence beside each coordinate say nothing about that. The evidence went
-    along until corpus_m5 measured it: 74 percent of a 24-row block, 13k
-    tokens at the median and past the window at the top, where rows requests
-    came back as 400. The newest entries are the ones a neighbouring passage
-    is likely to duplicate, so the tail is what survives the cap.
-    """
-    out: list = []
-    for row in prior[-PRIOR_MAX:]:
-        item = {k: v for k, v in row.items()
-                if k not in ("provenance", "flags", "tier", "compute", "quote")
-                and not k.endswith(_EVIDENCE) and v is not None}
-        quote = row.get("quote")
-        if isinstance(quote, str):
-            item["quote"] = quote[:80]
-        out.append(item)
-    return out
 
 
 def _quantities_payload(spec) -> list:
@@ -2560,41 +2947,6 @@ def _quantities_payload(spec) -> list:
     return out
 
 
-def _batch_payload(batch, prior: list, spec=None) -> dict:
-    """The request body: labelled sources, the target, and what we have.
-
-    The target is one parameter when the plan fixed one, and the list of
-    quantities when it did not. The second is the document-level plan: a
-    passage is read once and every value in it is found in that one reading,
-    instead of once per parameter with two thirds of the answers empty.
-    """
-    sources = []
-    for index, item in enumerate(batch.items):
-        source = item.source
-        sources.append({"id": batch.label(index), "kind": source.owner_kind,
-                        "title": source.provenance.get("title"),
-                        "section": source.provenance.get("section_title"),
-                        "text": source.text})
-    payload: dict = {"sources": sources}
-    if batch.frame:
-        # The pair this request is for. It was read once for the document and
-        # it is not a question here: the request asks what the value IS for
-        # this scenario and this year, which is the whole point of finding the
-        # frame first.
-        payload = {"frame": {k: v for k, v in batch.frame.items()
-                             if not k.endswith(("_raw", "_quote", "_source"))},
-                   **payload}
-    if getattr(batch, "anchors", ()):
-        payload = {"anchors": list(batch.anchors), **payload}
-    if batch.parameter is not None:
-        payload = {"parameter": _parameter_payload(batch.parameter), **payload}
-    elif spec is not None:
-        payload = {"quantities": _quantities_payload(spec), **payload}
-    if prior:
-        payload["prior"] = _prior_payload(prior)
-    return payload
-
-
 _USAGE = {"n": 0, "prompt_max": 0, "prompt_sum": 0, "completion_max": 0}
 _USAGE_LOCK = threading.Lock()
 
@@ -2613,7 +2965,7 @@ def _observe_usage(usage) -> None:
     completion = getattr(usage, "completion_tokens", None)
     if not isinstance(prompt, int):
         return
-    token_usage.add(LLM_MODEL, input_tokens=prompt,
+    token_usage.add(llm_model(), input_tokens=prompt,
                     output_tokens=completion if isinstance(completion, int)
                     else 0,
                     cached_tokens=token_usage.cached_of(usage))
@@ -2623,6 +2975,22 @@ def _observe_usage(usage) -> None:
         _USAGE["prompt_max"] = max(_USAGE["prompt_max"], prompt)
         if isinstance(completion, int):
             _USAGE["completion_max"] = max(_USAGE["completion_max"], completion)
+
+
+def _asked(stage: str, document_id, response, *, attempt: int,
+           started: float, **noted) -> None:
+    """One request that got a reply, in its document's trace as
+    `<stage>_ask` with its attempt, time and tokens. Every request kind
+    writes one, and the run's stats count each kind by its stage
+    (`stats.from_traces`), so no kind of request goes uncounted (owner
+    decision 2026-11-05)."""
+    usage = getattr(response, "usage", None)
+    box = addressed_map.asking_box()
+    trace.event(f"{stage}_ask", document_id, attempt=attempt,
+                ms=int((time.time() - started) * 1000),
+                prompt_tokens=getattr(usage, "prompt_tokens", None),
+                completion_tokens=getattr(usage, "completion_tokens", None),
+                **({"box": box} if box else {}), **noted)
 
 
 def log_usage(budget: Optional[int] = None) -> None:
@@ -2637,301 +3005,51 @@ def log_usage(budget: Optional[int] = None) -> None:
              seen["completion_max"], budget if budget is not None else "-")
 
 
-def make_harvester(image_root: Optional[Path] = None, spec=None) -> Callable:
-    """The rows request: the values of a batch of passages, with the crops of
-    its tables and figures, a sandbox round for a number the model computes,
-    and the split of a request whose answer did not fit.
-    """
-    prompt = prompts.load(ROWS_PROMPT_ID)
-    client = _client()
-    temperature = float(prompt.meta.get("temperature", 0.1))
-    max_tokens = int(prompt.meta.get("max_tokens", 4096))
-
-    # Deferred: docpipe.inference's package __init__ pulls in the whole answer
-    # loop, which demands a profile at import time.
-    from docpipe.inference import code_exec
-
-    def harvest(batch, prior: Optional[list] = None, *,
-                ceiling: Optional[int] = None, depth: int = 0) -> dict:
-        started = time.time()
-        payload = json.dumps(_batch_payload(batch, prior or [],
-                                            spec_of(batch, spec)),
-                             ensure_ascii=False, indent=2)
-        compute: list = []
-        # The crops ride along for tables and figures: the transcription is a
-        # reading of that picture, and the model should be able to check it
-        # against the picture rather than trust it. One part per source that
-        # has one, in the batch's own order, so a crop stays next to the
-        # label its text was given.
-        content: object = payload
-        parts = [{"type": "text", "text": payload}]
-        for index, item in enumerate(batch.items):
-            path = item.source.image_path
-            if not (path and ATTACH_IMAGES):
-                continue
-            part = _image_part(str(image_root / path) if image_root else path)
-            if part is not None:
-                parts.append({"type": "text", "text": say(
-                    "image_for", label=batch.label(index))})
-                parts.append(part)
-        if len(parts) > 1:
-            content = parts
-        first = batch.items[0].source
-        why = ["no_answer"]
-        conversation: list = [{"role": "user", "content": content}]
-        transport = False
-        timed_out = False
-        # The wait follows the FAILURES, not the turns of the conversation: a
-        # sandbox round is a turn and not a failure, and counting it escalated
-        # the backoff of the next real one.
-        failures = 0
-        # More room than the prompt asks for only when a single passage came
-        # back cut off and there is nothing left to split.
-        wanted = ceiling or max_tokens
-        limit = wanted
-        faults = 0
-        # A compute round is a turn of the same conversation, not a retry, so
-        # the attempt budget grows with the rounds actually used.
-        for attempt in range(1, MAX_RETRIES + CODE_ROUNDS + 1):
-            limit = answer_room(prompt.text, conversation, wanted)
-            if limit < MIN_ANSWER_TOKENS:
-                log.warning("   harvest %s/%s+%d: the prompt leaves %d answer "
-                            "token(s) in a window of %d -- not sent",
-                            first.owner_kind, first.owner_id,
-                            len(batch.items) - 1, limit, MAX_MODEL_LEN)
-                trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
-                            kind="too_long", attempt=attempt, room=limit,
-                            owner=[first.owner_kind, first.owner_id])
-                break
-            try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature, faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    # Refinement and the vision path have said this for
-                    # longer than this stage has existed: a reasoning model
-                    # must not spend the token budget on a think block,
-                    # because that truncates the JSON answer. Extraction was
-                    # the one stage that did not say it, and the pilot lost
-                    # 1093 of 16102 harvests to replies with no 'tuples' in
-                    # them, HTTP 200 every one.
-                    extra_body=request_extras(),
-                    **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
-                    **providers.formatted("llm", "rows_reply", replies.rows(
-                        sandbox=CODE_ROUNDS > 0)),
-                )
-                transport = False
-                why[0] = "no_answer"
-                reply = response.choices[0]
-                _observe_usage(getattr(response, "usage", None))
-                # An action object instead of an answer: the model wants the
-                # sandbox. A value it works out itself would be a number with
-                # no evidence; a value the sandbox works out carries the code
-                # and the code's output, which is checkable without rerunning
-                # anything. Bounded, and only while a round is left.
-                action = _parse_action(reply.message.content)
-                if action and len(compute) < CODE_ROUNDS:
-                    out = code_exec.run_code(
-                        action, context={
-                            "sources": {batch.label(i): it.source.text
-                                        for i, it in enumerate(batch.items)},
-                            "title": first.provenance.get("title")})
-                    compute.append({"code": action,
-                                    "stdout": (out.get("stdout") or "")[:2000],
-                                    "ok": bool(out.get("ok")),
-                                    "error": out.get("error")})
-                    conversation.append({"role": "assistant",
-                                         "content": reply.message.content or ""})
-                    conversation.append({"role": "user",
-                                         "content": _compute_reply(compute[-1])})
-                    continue
-                answer = _parse_reply(reply.message.content)
-                if answer is not None:
-                    if compute:
-                        for t in answer["tuples"]:
-                            if isinstance(t, dict):
-                                t.setdefault("compute", compute)
-                    usage = getattr(response, "usage", None)
-                    trace.event("rows", batch.document_id, prompt=ROWS_PROMPT_ID,
-                                attempt=attempt, rows=len(answer["tuples"]),
-                                status=answer.get("status"),
-                                sources=[[it.source.owner_kind,
-                                          it.source.owner_id]
-                                         for it in batch.items],
-                                ranks=[it.rank for it in batch.items],
-                                origins=[it.origin for it in batch.items],
-                                prompt_tokens=getattr(usage, "prompt_tokens",
-                                                      None),
-                                completion_tokens=getattr(
-                                    usage, "completion_tokens", None),
-                                ms=int((time.time() - started) * 1000))
-                    return answer
-                faults += 1
-                cause, correction = _reply_fault(
-                    reply, limit, key="tuples",
-                    shorter=say("shorter_rows"))
-                log.warning("   harvest %s/%s+%d attempt %d: %s reply%s",
-                            first.owner_kind, first.owner_id,
-                            len(batch.items) - 1, attempt, cause,
-                            _unparsable(reply))
-                trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
-                            kind="unreadable", cause=cause, attempt=attempt,
-                            owner=[first.owner_kind, first.owner_id],
-                            finish=getattr(reply, "finish_reason", None))
-                if cause == "cut_off":
-                    smaller = _split_harvest(batch, prior, harvest, limit,
-                                             max_tokens, first, depth)
-                    if smaller is not None:
-                        trace.event("error", batch.document_id,
-                                    where=ROWS_PROMPT_ID, kind="split",
-                                    attempt=attempt,
-                                    owner=[first.owner_kind, first.owner_id])
-                        return smaller
-                    # One passage, and the ceiling raised as far as it goes.
-                    # Nothing to split and nothing to shorten, so the request
-                    # is a hole -- named as one, not filled with the half of
-                    # it that arrived.
-                    why[0] = "cut_off"
-                    break
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
-            except Exception as exc:
-                log.warning("   harvest %s/%s+%d attempt %d failed: %s",
-                            first.owner_kind, first.owner_id,
-                            len(batch.items) - 1, attempt, exc)
-                status = getattr(exc, "status_code", None)
-                trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
-                            kind="exception", attempt=attempt,
-                            status=status, detail=str(exc)[:300],
-                            owner=[first.owner_kind, first.owner_id])
-                # No HTTP status at all is a transport failure: the server is
-                # not there. A 429, a 5xx or a timeout is a server that was
-                # asked and did not do the work. Neither is a harvested
-                # document, and a resume must never mistake one for it.
-                why[0] = ("unserved" if unserved(exc)
-                          else "no_answer" if isinstance(status, int)
-                          else "unreachable")
-                transport = server_side(exc)
-                timed_out = _timed_out(exc)
-                if not transport:
-                    # A request the server refuses is refused every time. The
-                    # last run spent three tries and eight seconds of sleep on
-                    # each over-long section before writing the same sentinel.
-                    break
-            # Every attempt but the last, and the loop runs to
-            # MAX_RETRIES + CODE_ROUNDS: the old bound stopped two short of it.
-            failures += 1
-            if attempt < MAX_RETRIES + CODE_ROUNDS:
-                time.sleep(retry_wait(failures, transport))
-        # Sources the model never answered for are a hole in the harvest, and
-        # holes must be visible: the caller counts these via the sentinel.
-        # One per source, so a batch of six that died is six holes, not one.
-        # The cause rides along, because a server that is gone and a model
-        # that answered nothing are the same row in the output and must not
-        # be the same thing to the resume: an unreachable server would
-        # otherwise stamp every remaining document as harvested.
-        trace.event("error", batch.document_id, where=ROWS_PROMPT_ID,
-                    kind="gave_up", why=why[0],
-                    sources=[[it.source.owner_kind, it.source.owner_id]
-                             for it in batch.items],
-                    ms=int((time.time() - started) * 1000))
-        return {"tuples": [{"_harvest_failed": True, "_why": why[0],
-                            "source": batch.label(i)}
-                           for i in range(len(batch.items))],
-                "status": "failed", "need_more": []}
-
-    return harvest
-
-
-def _field_payload(shown: list, rows: list, slots,
-                   corrections: Optional[list] = None,
-                   owner_of: Optional[dict] = None,
-                   bases: Optional[list] = None) -> dict:
-    """The request body of one field request, over the window shown.
-
-    One field. Sources first, rows second, the field last: the asker sends
-    the sources and their crops ahead of the rest, so the requests for the
-    other fields of the same window share that prefix on the server.
-    """
-    sources = []
-    for index, source in enumerate(shown):
-        entry = {"id": f"Q{index + 1}", "kind": source.owner_kind,
-                 "title": source.provenance.get("title"),
-                 "section": source.provenance.get("section_title"),
-                 "text": source.text}
-        # Where this source stands, so "the section this table is in" is a
-        # fact the request carries rather than one the model has to infer
-        # from the order the sources happen to be in.
-        for key in ("page", "block_id"):
-            if source.provenance.get(key):
-                entry[key] = source.provenance[key]
-        sources.append(entry)
-    # Which shown source is which, so a row can name its own by id rather
-    # than by the model recognising its own quote among five passages.
-    where = {(s.owner_kind, s.owner_id): f"Q{i + 1}"
-             for i, s in enumerate(shown)}
-    listed = []
-    for row in rows:
-        entry = {"id": row.label,
-                 "value": row.claim.get("value"),
-                 "quote": row.claim.get("quote")}
-        own = (owner_of or {}).get(row.label)
-        here = (where.get((own.owner_kind, own.owner_id))
-                if own is not None else None)
-        if here:
-            entry["source"] = here
-        unit = row.claim.get("unit_raw") or row.claim.get("unit")
-        if unit:
-            entry["unit"] = unit
-        # Which cell of the quoted table row this number sits in. Three
-        # numbers under three year columns share one quote, and the column is
-        # what tells them apart — a fact already in hand here, so it is handed
-        # over rather than left to be counted.
-        cell = pipeline_cell_index(entry["quote"], entry["value"])
-        if cell is not None:
-            entry["column"], entry["columns"] = cell
-        listed.append(entry)
-    asked = []
-    names = set()
-    for slot in ([slots] if not isinstance(slots, (list, tuple)) else slots):
-        field = {"name": slot.name, "question": slot.question}
-        if slot.options:
-            field["options"] = slot.answerable()
-        asked.append(field)
-        names.add(slot.name)
-    out = {"sources": sources, "rows": listed}
-    # The plan's base years and its target years, where the field asked is the
-    # one they date: a row whose table says "Basisjahr" or "Zieljahr" and
-    # prints no year answers one of these and cites the passage that names
-    # the state (`merge_field`). Each state under its own key, so the prompt
-    # can say which word points at which list.
-    for state, key in YEAR_STATES.items():
-        dated = [{"year": b["year"], "quote": b["quote"]}
-                 for b in bases or ()
-                 if b.get("axis") in names and b["state"] == state]
-        if dated:
-            out[key] = dated
-    out["fields"] = asked
-    if corrections:
-        # What was wrong with the last answer, per row. A verification failure
-        # is information the model can act on, and withholding it turns three
-        # attempts into the same wrong answer three times. Only the row and
-        # the sentence go over the wire: the rest of the entry is for the
-        # trace, and the model pays for every token it is shown.
-        out["corrections"] = [{"row": c.get("row"), "reason": c.get("reason")}
-                              for c in corrections]
+def row_context(claim: dict, asked=()) -> dict:
+    """{axis: the plan's wording} of every coordinate this row has READ,
+    the ones asked now left out. A derived coordinate is the spec's decision
+    and its wording is the unit, so it says nothing about the number."""
+    out = {}
+    for key in sorted(claim):
+        if not key.endswith("_state") or claim[key] != fields.READ:
+            continue
+        name = key[:-len("_state")]
+        raw = claim.get(f"{name}_raw")
+        if name in asked or name == fields.UNIT:
+            continue
+        if isinstance(raw, str) and raw.strip():
+            out[name] = raw.strip()
+        elif isinstance(claim.get(name), int):
+            # A year has no wording where its number stands in the quote, and
+            # the scenario read after it has to see it.
+            out[name] = str(claim[name])
     return out
+
+
+def cell_facts(value, quote, own=None, head=None) -> dict:
+    """Which cell of the quoted table row a number sits in and the head of
+    that column. Three numbers under three year columns share one quote, and
+    the column is what tells them apart: a fact already in hand here, so it
+    is handed over rather than left to be counted. A number printed in two
+    cells has its *head* from its place in its row's list (`with_head`)."""
+    cell = pipeline_cell_index(quote, value)
+    if cell is None:
+        return {"head": head} if head else {}
+    facts = {"column": cell[0], "columns": cell[1]}
+    if own is not None and own.owner_kind == "table":
+        head = column_head(own.text, *cell)
+        if head:
+            facts["head"] = head
+    return facts
 
 
 def keeps_row(slot, answer, allowed) -> bool:
     """Does this gate answer keep the row in the slice this run serializes?
 
     The answer is the option's LABEL, because that is what a field reply
-    carries and what merge_field writes: "Potenzial", not "out:potential". The
-    profile names classes, so the label is resolved here — reading the profile
+    carries and what merge_field writes: "Nutzenergie", not
+    "out:useful_energy". The profile names classes, so the label is resolved
+    here — reading the profile
     as if it held German spellings would have kept every potential and thrown
     away every target scenario, which is exactly what it did.
 
@@ -2953,257 +3071,11 @@ def keeps_row(slot, answer, allowed) -> bool:
     return uri in allowed
 
 
-def _merge_field_replies(replies: list) -> Optional[dict]:
-    """The chunk replies of one window as one reply, or None."""
-    got = [reply for reply in replies if isinstance(reply, dict)]
-    if len(got) <= 1:
-        return got[0] if got else None
-    merged: dict = {"fields": {}, "need_more": []}
-    for reply in got:
-        answered = reply.get("fields")
-        for name, answer in (answered.items()
-                             if isinstance(answered, dict) else ()):
-            if not isinstance(answer, dict):
-                continue
-            into = merged["fields"].setdefault(name, {"groups": [],
-                                                     "answers": {}})
-            into["groups"].extend(g for g in (answer.get("groups") or ())
-                                  if isinstance(g, dict))
-            if isinstance(answer.get("answers"), dict):
-                into["answers"].update(answer["answers"])
-        merged["need_more"].extend(q for q in (reply.get("need_more") or ())
-                                   if isinstance(q, str))
-    return merged
-
-
-def field_response_format(slot) -> dict:
-    """The shape a reply to one field request can take, as a server grammar.
-
-    The field contract of the prompt, handed to vLLM as a JSON schema so the
-    reply is generated inside it: one object, the asked field under its own
-    name, `groups` and `answers`, and a `value` that is one of the options
-    (UNSTATED included) or, for a number, an integer. 70,395 field replies of
-    corpus_m5 carried text beside the object and were asked again; under the
-    grammar none can. Nothing here is a check: every key stays optional that
-    the prompt leaves optional (`value` may be omitted with a wording, a
-    `quote` is not asked of UNSTATED), and what the reply says is verified by
-    `merge_field` as before.
-    """
-    if slot.kind == fields.CHOICE and slot.options:
-        value = {"enum": list(slot.answerable())}
-    elif slot.kind == fields.NUMBER:
-        value = {"anyOf": [{"type": "integer"},
-                           {"enum": [fields.UNSTATED]}]}
-    else:
-        value = {"type": "string"}
-    said = {"value": value, "value_raw": {"type": "string"},
-            "quote": {"type": "string"}}
-    answer = {"type": "object", "properties": said,
-              "additionalProperties": False}
-    group = {"type": "object",
-             "properties": {"rows": {"type": "array",
-                                     "items": {"type": "string"}},
-                            **said},
-             "required": ["rows"], "additionalProperties": False}
-    field = {"type": "object",
-             "properties": {"groups": {"type": "array", "items": group},
-                            "answers": {"type": "object",
-                                        "additionalProperties": answer}},
-             "additionalProperties": False}
-    schema = {"type": "object",
-              "properties": {
-                  "fields": {"type": "object",
-                             "properties": {slot.name: field},
-                             "required": [slot.name],
-                             "additionalProperties": False},
-                  "need_more": {"type": "array",
-                                "items": {"type": "string"}}},
-              "required": ["fields"], "additionalProperties": False}
-    return {"type": "json_schema",
-            "json_schema": {"name": "field_reply", "schema": schema}}
-
-
-def _timed_out(exc: BaseException) -> bool:
-    """A request the server never answered within its budget, as opposed to a
-    connection it refused at once: only the first is worth a shorter retry."""
-    return providers.timed_out(exc)
-
-
-def make_field_asker(image_root: Optional[Path] = None, *,
-                     dead=None, on_give_up: Optional[Callable] = None
-                     ) -> Callable:
-    """ask(shown, rows, slots, ...) -> {"fields": {name: answer}}, or None.
-
-    *dead* is the run's DeadStreak: the rows pool has always had one, the
-    field pool none, so a server that went away was found by every one of its
-    192 threads separately, each spending its own retries. *on_give_up* is
-    called once when the streak fires.
-
-    One coordinate per request, over at most FIELD_ROWS rows. Five coordinates
-    for every row of a batch in one request wanted up to 27,311 prompt tokens
-    and more answer than the window left, and came back refused or cut off;
-    one question about a handful of numbers fits by construction. Several
-    slots are asked one after another, rows in chunks, and the replies merged
-    under the field's name, which is what the sweep folds. A chunk whose
-    prompt leaves too little room for its rows is halved before it is sent.
-
-    No sandbox: a field answer is a choice and a quote, never arithmetic.
-    """
-    prompt = prompts.load(FIELD_PROMPT_ID)
-    client = _client()
-    temperature = float(prompt.meta.get("temperature", 0.1))
-    max_tokens = int(prompt.meta.get("max_tokens", 4096))
-
-    def content_of(shown, rows, slot, corrections, owner_of,
-                   bases=None) -> list:
-        """The passages and their crops first, the rows and the field last,
-        so requests over the same window share their prefix up to the field."""
-        body = _field_payload(shown, rows, slot, corrections, owner_of,
-                              bases)
-        head = json.dumps({"sources": body.pop("sources")},
-                          ensure_ascii=False, indent=2) + "\n"
-        tail = json.dumps(body, ensure_ascii=False, indent=2)
-        parts = [{"type": "text", "text": head}]
-        for index, source in enumerate(shown):
-            path = source.image_path
-            if not (path and ATTACH_IMAGES):
-                continue
-            part = _image_part(str(image_root / path) if image_root else path)
-            if part is not None:
-                parts.append({"type": "text", "text": say(
-                    "image_for", label=f"Q{index + 1}")})
-                parts.append(part)
-        if len(parts) == 1:
-            return head + tail
-        parts.append({"type": "text", "text": "\n" + tail})
-        return parts
-
-    def request(shown, rows, slot, corrections, document_id, usage_out,
-                owner_of, bases=None) -> Optional[dict]:
-        name = slot.name
-        conversation: list = [{"role": "user", "content": content_of(
-            shown, rows, slot, corrections, owner_of, bases)}]
-        needed = min(max_tokens, len(rows) * FIELD_ROW_TOKENS + ANSWER_MARGIN)
-        room = answer_room(prompt.text, conversation, max_tokens)
-        if room < max(needed, MIN_ANSWER_TOKENS):
-            if len(rows) > 1:
-                cut = len(rows) // 2
-                return _merge_field_replies([
-                    request(shown, part, slot,
-                            [c for c in (corrections or ())
-                             if c.get("row") in {r.label for r in part}],
-                            document_id, usage_out, owner_of, bases)
-                    for part in (rows[:cut], rows[cut:])])
-            log.warning("   field %s: the prompt leaves %d answer token(s) in "
-                        "a window of %d -- not sent", name, room,
-                        MAX_MODEL_LEN)
-            trace.event("error", document_id, where="field", kind="too_long",
-                        slot=name, room=room)
-            return None
-        # A model error is told to the model, the same way a verification
-        # failure is. Retrying a malformed reply without saying what was
-        # malformed is one attempt three times.
-        shape = field_response_format(slot)
-        transport = lost = False
-        timed_out = False
-        faults = 0
-        for attempt in range(1, MAX_RETRIES + 1):
-            limit = answer_room(prompt.text, conversation, max_tokens)
-            if limit < MIN_ANSWER_TOKENS:
-                break
-            try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature, faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    response_format=shape,
-                    extra_body=request_extras(),
-                    **({"timeout": RETRY_TIMEOUT} if timed_out else {}),
-                )
-                transport = lost = False
-                if dead is not None:
-                    dead.clear()
-                reply = response.choices[0]
-                usage = getattr(response, "usage", None)
-                _observe_usage(usage)
-                if usage_out is not None:
-                    # Per request, summed over the chunks of one window.
-                    for key in ("prompt_tokens", "completion_tokens"):
-                        usage_out[key] = ((usage_out.get(key) or 0)
-                                          + (getattr(usage, key, None) or 0))
-                answer = _loads_object(reply.message.content)
-                if isinstance(answer, dict):
-                    return answer
-                faults += 1
-                cause, correction = _reply_fault(
-                    reply, limit, shorter=say("shorter_field"))
-                log.warning("   field %s attempt %d: %s reply%s",
-                            name, attempt, cause, _unparsable(reply))
-                trace.event("error", document_id, where="field",
-                            kind="unreadable", cause=cause, slot=name,
-                            attempt=attempt,
-                            finish=getattr(reply, "finish_reason", None))
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
-            except Exception as exc:
-                log.warning("   field %s attempt %d failed: %s",
-                            name, attempt, exc)
-                status = getattr(exc, "status_code", None)
-                trace.event("error", document_id, where="field",
-                            kind="exception", slot=name, attempt=attempt,
-                            status=status, detail=str(exc)[:300])
-                transport, lost = server_side(exc), unserved(exc)
-                timed_out = _timed_out(exc)
-                if not transport:
-                    break
-            if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
-        if lost:
-            # One coordinate of this document was never read, and the sweep
-            # that asked cannot tell that from a window that held nothing.
-            UNSERVED.note(document_id)
-        if transport and dead is not None and dead.hit():
-            log.error("field: %d requests in a row the server did not serve "
-                      "-- the run gives up", dead.limit)
-            if on_give_up is not None:
-                on_give_up()
-        return None
-
-    def ask(shown: list, rows: list, slots,
-            corrections: Optional[list] = None,
-            document_id: Optional[int] = None,
-            usage_out: Optional[dict] = None,
-            owner_of: Optional[dict] = None,
-            bases: Optional[list] = None) -> Optional[dict]:
-        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
-        step = max(1, FIELD_ROWS)
-        chunks = [rows[start:start + step]
-                  for start in range(0, len(rows), step)] or [rows]
-        replies = []
-        for slot in slots:
-            for chunk in chunks:
-                here = {row.label for row in chunk}
-                mine = [c for c in (corrections or ())
-                        if c.get("row") in here
-                        and c.get("field") in (None, slot.name)]
-                replies.append(request(shown, chunk, slot, mine or None,
-                                       document_id, usage_out, owner_of,
-                                       bases))
-        return _merge_field_replies(replies)
-
-    return ask
-
-
 def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
     """The request body of one review request: one row, its two passages.
 
-    Its own body and not `_field_payload`'s: that one exists to amortise many
-    rows over one caption and carries the ids, groups and corrections that go
-    with it. Reusing it would bind this prompt to the whole field contract,
-    and the review asks a different question of one row.
+    Its own body: the review asks a different question of one row than any
+    other request does, and shares nothing of their contract.
     """
     sources = []
     for index, source in enumerate(shown):
@@ -3238,12 +3110,12 @@ def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
         # The second reading names its unit as one entry too: the first
         # reading's is compared by factor, and a wording has none.
         listed["units_accepted"] = sorted(parameter.units_accepted)
-    # Which cell of the quoted table row the number sits in. Three numbers
-    # under three year columns share one quote, and the column is what tells
-    # them apart.
-    cell = pipeline_cell_index(listed.get("quote"), listed.get("value"))
-    if cell is not None:
-        listed["column"], listed["columns"] = cell
+    owner = next((s for s in shown
+                  if (s.owner_kind, s.owner_id) == (
+                      provenance.get("owner_kind"),
+                      provenance.get("owner_id"))), None)
+    listed.update(cell_facts(listed.get("value"), listed.get("quote"), owner,
+                             row.get("head")))
     asked = []
     for slot in slots:
         field = {"name": slot.name, "question": slot.question}
@@ -3261,13 +3133,21 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     contradicts itself -- not a reading that is wrong about the picture in the
     same way twice.
     """
-    prompt = prompts.load(REVIEW_PROMPT_ID)
     client = _client()
-    temperature = float(prompt.meta.get("temperature", 0.0))
-    max_tokens = int(prompt.meta.get("max_tokens", 1024))
+    step = step_asking("review_marks", "review")
 
     def ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
-        payload = json.dumps(_review_payload(row, shown, parameter, slots),
+        # Asked with the values of the box that is the home of the second
+        # reading (`in_home`), whoever calls.
+        with in_home("review"):
+            return _ask(row, shown, parameter, slots)
+
+    def _ask(row: dict, shown: list, parameter, slots) -> Optional[dict]:
+        # The prompt is composed where it is used: it names rules (the
+        # least characters of a quote) the box may set for itself.
+        prompt, inputs = step_parts(step, REVIEW_PROMPT_ID)
+        payload = json.dumps(shows_map.apart(inputs, {"row": SimpleNamespace(
+            row=row, shown=shown, parameter=parameter, slots=slots)}),
                              ensure_ascii=False, indent=2)
         # The crops ride along exactly as they do for a field request: a
         # transcription is a model's reading of a picture, and a review of a
@@ -3276,7 +3156,7 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
         parts = [{"type": "text", "text": payload}]
         for index, source in enumerate(shown):
             path = source.image_path
-            if not (path and ATTACH_IMAGES):
+            if not (path and attach_images()):
                 continue
             part = _image_part(str(image_root / path) if image_root else path)
             if part is not None:
@@ -3285,1391 +3165,492 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 parts.append(part)
         if len(parts) > 1:
             content = parts
-        transport = False
+        # A pass over a written harvest: a row it could not read again gets
+        # no flag and is read again by the next review (review.py).
+        failures = Failures(noted=False)
         conversation: list = [{"role": "user", "content": content}]
-        faults = 0
-        for attempt in range(1, MAX_RETRIES + 1):
-            limit = answer_room(prompt.text, conversation, max_tokens)
-            if limit < MIN_ANSWER_TOKENS:
-                log.warning("   review: the prompt leaves %d answer token(s) "
-                            "in a window of %d -- not sent", limit,
-                            MAX_MODEL_LEN)
+        for attempt in failures.attempts():
+            limit = request_room(prompt.text, conversation,
+                                 request_wanted("review"))
+            if limit is None:
+                log.warning("   review: the prompt leaves less than %d "
+                            "answer token(s) in a window of %d -- not sent",
+                            least_answer_tokens(), model_window())
                 break
+            started = time.time()
             try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    temperature=retry_temperature(temperature, faults),
-                    max_tokens=limit,
-                    messages=[{"role": "system", "content": prompt.text},
-                              *conversation],
-                    extra_body=request_extras(),
-                    **providers.formatted("llm", "review_reply",
-                                          replies.review(slots)),
-                )
-                transport = False
+                response = send_request(
+                    client, prompt.text, conversation, limit,
+                    failures.faults,
+                    reply_grammar("review_reply", replies.review(slots)))
+                failures.answered()
                 reply = response.choices[0]
                 _observe_usage(getattr(response, "usage", None))
-                answer = _loads_object(reply.message.content)
+                _asked("review", (row.get("provenance") or {}).get(
+                    "document_id"), response, attempt=attempt,
+                    started=started, parameter=getattr(parameter, "uri", None))
+                answer = _loads_object(
+                    reply.message.content, (row.get("provenance") or {}).get(
+                        "document_id"), "review")
                 if isinstance(answer, dict):
                     return answer
                 # One row and two passages: there is nothing here to split, so
                 # a reply that did not fit is told to quote less rather than
                 # to answer for fewer rows.
-                faults += 1
+                failures.fault()
                 cause, correction = _reply_fault(
                     reply, limit, shorter=say("shorter_review"))
                 log.warning("   review attempt %d: %s reply%s",
                             attempt, cause, _unparsable(reply))
-                conversation.append({"role": "assistant",
-                                     "content": reply.message.content or ""})
-                conversation.append({"role": "user", "content": correction})
+                if rules.get("retry_shows_reply"):
+                    conversation.append({
+                        "role": "assistant",
+                        "content": reply.message.content or ""})
+                    conversation.append({"role": "user",
+                                         "content": correction})
             except Exception as exc:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
-                transport = server_side(exc)
-                if not transport:
+                if not failures.failed(exc):
                     break
-            if attempt < MAX_RETRIES:
-                time.sleep(retry_wait(attempt, transport))
+        failures.given_up()
         return None
 
     return ask
 
 
-class SweepStopped(Exception):
-    """The run was stopped (a signal, a dead server) while a document's search
-    was still asking. The document is left unwritten, like a batch that was
-    never harvested."""
-
-
-class Scope:
-    """The rows one sweep asks for, and the batches they came from.
-
-    A batch's rows keep the labels the rows request gave them. Rows of several
-    batches would meet on "R1" and an answer for one would land on the other,
-    so then every row stands in the scope as a view with a label of its own.
-    The view shares the claim of the row it stands for: what a window reads is
-    written into the batch's row, and `Row.label` and `Row.item_index`, which
-    the fold reads, do not move.
-
-    *groups* is [(batch, its views)]. A row is checked against the passages of
-    its own batch (`merge_field`) and never against the union of the
-    document's: the union is a pool the row's answer was not shown.
+def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
+    """The step that completes a document's rows from outside the document,
+    after its fold and its computing (`profiles/<name>/completion.py:
+    complete(report, spec, db=)`, *db* the run's database, for what the
+    profile looks up there): `completed(report, spec)`, which adds what it
+    found to the report and returns what it came to, traced as `completion`,
+    or None where nothing was open. None where the profile has no such step
+    or the flow has its box (`catalogue`) off or not at all.
     """
+    complete = profile.component("completion", "complete")
+    if complete is None \
+            or not flow_map.box_on(flow_map.tree_of(profile), "catalogue"):
+        return None
 
-    def __init__(self, entries: list):
-        taken = [row for _batch, rows in entries for row in rows]
-        relabel = len({row.label for row in taken}) < len(taken)
-        self.batches = [batch for batch, _rows in entries]
-        self.groups: list = []
-        self.rows: list = []
-        # Which source each row came from: the request names it for the row,
-        # and a later window shows it and its section again (`re_entry`).
-        self.owner_of: dict = {}
-        for batch, rows in entries:
-            views = []
-            for row in rows:
-                view = (replace(row, label=row_label(len(self.rows)))
-                        if relabel else row)
-                views.append(view)
-                self.rows.append(view)
-                if 0 <= row.item_index < len(batch.items):
-                    self.owner_of[view.label] = \
-                        batch.items[row.item_index].source
-            self.groups.append((batch, views))
+    def completed(report, spec) -> Optional[dict]:
+        outcome = complete(report, spec, db=db)
+        if outcome:
+            trace.event("completion", report.document_id, **outcome)
+        return outcome
+    return completed
 
 
-class Sweeping:
-    """One coordinate asked over a scope of rows, window after window.
+_COMPUTE_POOLS: dict = {}
+_COMPUTE_POOLS_LOCK = threading.Lock()
 
-    The stages are the sweep's own: the passages the values came from (own),
-    then the passages the question ranks (retrieval), then the rest of the
-    document in its order. Whether they run one after another for the rows of
-    one batch (`Sweeper.__call__`) or the last two once for the rows of all the
-    batches of a document (`Sweeper.search`) is the sweeper's business. The
-    attempt loop, the check and the trace are these methods, once.
 
-    One coordinate per sweep and per request: the harvester runs the sweeps of
-    a row's coordinates side by side, so a coordinate that is read in the
-    value's own passage stops there and does not wait on one that has to look
-    further out.
+def compute_pool() -> ThreadPoolExecutor:
+    """The threads the calculation questions of the whole run take turns on,
+    as many as the rule `compute_parallel` says now (one pool for each size
+    it has had)."""
+    size = int(rules.get("compute_parallel"))
+    with _COMPUTE_POOLS_LOCK:
+        if size not in _COMPUTE_POOLS:
+            _COMPUTE_POOLS[size] = ThreadPoolExecutor(
+                max_workers=size, thread_name_prefix="compute")
+        return _COMPUTE_POOLS[size]
 
-    The value's own passages first, because a carrier usually is in the table
-    row it labels. What is still open after that is looked for further out, one
-    short window at a time with an overlap, because the year of a table is in
-    its caption and the scenario is in the section heading, neither of which
-    the value's passage contains.
 
-    Short windows and many requests, not one wide one. A window that holds the
-    answer holds it whether or not ninety other passages ride along, and the
-    ninety cost the attention that would have found it.
+def make_computer(profile, passages_of: Optional[Callable] = None,
+                  pages_of: Optional[Callable] = None,
+                  rank: Optional[Callable] = None) -> Optional[Callable]:
+    """The step that works out what a document's verified rows leave open
+    (`compute.py`): `compute(answered, report, locate=, spec=, stop=)`, which
+    folds what it computed into the report and says False if a stop ended it.
 
-    One window saying "not in here" ends nothing. It is a statement about two
-    passages, and the next window shows two others: a row stays open through
-    out:unstated and closes only on a reading. What ends the sweep is running
-    out of document, retrieval first and then the sections in their own order,
-    or running out of budget, and those two are written down differently,
-    because "the plan does not say" and "we stopped looking" are the pair this
-    whole stage exists to keep apart.
+    None where it cannot run: the profile names no open question or writes no
+    prompt, or the run has no sandbox, since a number the model works out
+    itself has no evidence.
+
+    Two questions that come to one statement leave one row: the profile's
+    `same` says when two worked-out rows are (owner decision 2026-11-03).
+
+    *passages_of(document_id)* is the plan's passages in their order. With it
+    a request has the reading's tools (`reading.Gathered`: the next or the
+    previous section, a table or figure by its placeholder, a search by
+    pattern or by a sentence), each passage cut to two pages of the plan
+    (*pages_of*, `lookup.two_pages`), and a question that takes a number
+    (`Question.take`) may take it from whatever the request showed: a
+    passage, its title, a hit's line or title (owner decision 2026-11-05).
+    *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
+    which "similar" lists (`make_more_sources` in a run); without it that
+    search finds nothing.
     """
-
-    def __init__(self, sweeper, scope: Scope, slots, anchor_id: str, *,
-                 seen: set, held: dict, kind: str, stop=None):
-        self.sweeper = sweeper
-        self.scope = scope
-        self.rows = scope.rows
-        self.batches = scope.batches
-        self.owner_of = scope.owner_of
-        self.slots = list(slots) if isinstance(slots, (list, tuple)) \
-            else [slots]
-        self.name = "+".join(slot.name for slot in self.slots)
-        self.anchor_id = anchor_id
-        self.kind = kind
-        self.stop = stop
-        first = self.batches[0]
-        self.document_id = first.document_id
-        # The document's, on every batch of it: `plan_batches` writes one tuple
-        # on all of them and a follow-up copies its parent's.
-        self.bases = list(first.bases)
-        parameters = {batch.parameter.uri if batch.parameter else None
-                      for batch in self.batches}
-        self.parameter = parameters.pop() if len(parameters) == 1 else None
-        self.totals = {"filled": 0, "unquoted": 0, "unbacked": 0,
-                       "unstated": 0, "raw_missing": 0, "raw_foreign": 0,
-                       "via_base": 0, "via_target": 0, "retried": 0}
-        # What must not be FETCHED again, and every passage this sweep has
-        # already materialised, by key. `seen` answers the first question;
-        # `held` answers what may be SHOWN again, which is the opposite
-        # question and needs the passage itself rather than its key.
-        self.seen = seen
-        self.held = held
-        # One allowance per stage, not one for the sweep. Own, retrieval
-        # and rest are three different searches, and a stage that ran out must
-        # not be the reason the next one never ran. Two ways it was:
-        #
-        #   * own's retries were charged to retrieval. Measured on a stubbed
-        #     sweep: retrieval got 21 windows when own retried three times and
-        #     23 when it answered once, for the same document.
-        #   * rest took its allowance by ASSIGNING the shared counter,
-        #     `max(0, FIELD_MAX_WINDOWS - REST_MAX_WINDOWS)`, which is
-        #     REST_MAX_WINDOWS only while that number is the smaller one. Set
-        #     the rest allowance above the field one and it becomes 0, and the
-        #     stage silently gets the whole budget.
-        #
-        self.budget = sweeper.budget_of(self.slots)
-        self.spent = {stage: 0 for stage in self.budget}
-        # The rest stage is bounded in requests as well: what it may send,
-        # set when the stage begins (`search`), and what it has sent.
-        self.rest_requests: Optional[int] = None
-        self.rest_asked = 0
-        self.state = {"answer": None, "stage": "own"}
-
-    def requests_of(self, rows: list) -> int:
-        """The requests one window costs for these rows: the asker cuts the
-        rows of a window into requests of FIELD_ROWS, per coordinate."""
-        return len(self.slots) * -(-len(rows) // max(1, FIELD_ROWS))
-
-    def still_open(self, pool: list) -> list:
-        """Rows with at least one of these fields still unread."""
-        wanted = {row.label for slot in self.slots
-                  for row in open_rows(pool, slot)}
-        return [row for row in pool if row.label in wanted]
-
-    def re_entry(self, todo: list, already: set) -> list:
-        """The passages these rows were last read in, to ride along.
-
-        The sweep asks five coordinates of the same row and moves on after
-        each window. Where the sector was read, the aggregation is a
-        column further right, so the search starts again where it last
-        found something instead of striking that passage off for good.
-
-        Three places, in this order, and only the ones the window does not
-        already show:
-
-        - the passage a coordinate of this row was READ in, by this sweep
-          or by the sweep of another coordinate running beside it. It is
-          the one of the three that `seen` makes unreachable forever, and
-          it is the one that has already proved it carries this row's
-          answers.
-        - the section the row's own passage stands in. It is also the only
-          one of the three that is in no checked pool from the second
-          window on, so an answer quoting the caption of its own table
-          came back unbacked: its quote stood in no passage the check was
-          given.
-        - the row's own passage last, because `merge_field` checks against
-          the row's batch's passages in every window anyway and the row
-          carries its own quote in the request, so it is the one that is
-          not lost when the budget cuts the list off.
-        """
-        found, sections, owns = [], [], []
-        picked = set()
-
-        def take(bucket, key):
-            source = self.held.get(key)
-            if source is None or key in picked or key in already:
-                return
-            picked.add(key)
-            bucket.append(source)
-
-        for row in todo:
-            # A copy: the other coordinates' sweeps write into the claim
-            # while this one reads it.
-            for key, where in list(row.claim.items()):
-                if (key.endswith("_source")
-                        and isinstance(where, (list, tuple))
-                        and len(where) == 2):
-                    take(found, (where[0], where[1]))
-        for row in todo:
-            own = self.owner_of.get(row.label)
-            parent = (own.provenance or {}).get("parent_section") \
-                if own is not None else None
-            if parent is not None:
-                take(sections, ("section", parent))
-        for row in todo:
-            own = self.owner_of.get(row.label)
-            if own is not None:
-                take(owns, (own.owner_kind, own.owner_id))
-        return (found + sections + owns)[:FIELD_RE_ENTRY]
-
-    def run(self, windows) -> bool:
-        """Ask over these windows. False when the budget ran out.
-
-        A window is asked again when its answers came back unbackable, and
-        the retry carries what was wrong with each row. A model told "R7:
-        your quote is in none of the sources" can fix R7; a model told
-        nothing gives the same answer again, which is why three attempts
-        without the reason are one attempt three times. Every attempt
-        counts against the window budget, so a stubborn coordinate cannot
-        eat the document.
-        """
-        state = self.state
-        for window in windows:
-            todo = self.still_open(self.rows)
-            if not todo:
-                return True
-            # The re-entry rides in FRONT of the window and is not part
-            # of it: the window generator is untouched, so the frontier
-            # still advances by exactly one window per request and a
-            # re-shown passage can never stand in for a fresh one.
-            shown = self.re_entry(todo, {(s.owner_kind, s.owner_id)
-                                         for s in window}) + list(window)
-            corrections = None
-            # Only where a retry pays. Measured on the M3 run: a retry of
-            # the OWN window fills 4.88 rows, a third of what a fresh own
-            # window fills; a retry further out fills 0.10, a seventh of
-            # the fresh window it displaces. 145 of 149 third attempts
-            # filled nothing at all, and 263 of 334 retries came back with
-            # exactly the same failures as the attempt before them.
-            attempts = FIELD_ATTEMPTS if state["stage"] == "own" else 1
-            for attempt in range(attempts):
-                if self.stop is not None and self.stop.is_set():
-                    raise SweepStopped()
-                stage = state["stage"]
-                if self.spent[stage] >= self.budget[stage]:
-                    return False
-                if stage == "rest" and self.rest_requests is not None:
-                    cost = self.requests_of(todo)
-                    if self.rest_asked + cost > self.rest_requests:
-                        return False
-                    self.rest_asked += cost
-                self.spent[stage] += 1
-                started = time.time()
-                usage: dict = {}
-                state["answer"] = self.sweeper.ask(
-                    shown, todo, self.slots, corrections, self.document_id,
-                    usage, self.owner_of, bases=list(self.bases))
-                # Checked against the window AND the passages the rows
-                # carry. A row's own quote is shown to the model in the
-                # rows list, so citing it is legitimate, and from the
-                # second window on it is no longer among `shown`, which
-                # threw away correct readings by the hundred: one batch
-                # logged 520 dropped against 31 read. The passages a row
-                # carries are those of ITS batch.
-                # One reply, folded field by field. A field that is
-                # missing from it is simply not folded, which leaves its
-                # rows open for the next window, the same outcome as an
-                # empty answer, and the same as before.
-                answered = (state["answer"] or {}).get("fields")
-                if not isinstance(answered, dict):
-                    answered = {}
-                counts = {"filled": 0, "unquoted": 0, "unbacked": 0,
-                          "unstated": 0, "raw_missing": 0,
-                          "raw_foreign": 0, "via_base": 0, "via_target": 0,
-                          "failed": []}
-                # Which FIELD filled and which failed, not only how many.
-                # Five fields answer in one reply, and a run that logs
-                # "aggregation+carrier+sector+year+spatial_scope: 3 of 5"
-                # cannot say which two were dropped: 7,738 unbacked and
-                # 3,110 unquoted answers of one corpus group were not
-                # attributable to a coordinate.
-                filled_by: dict = {}
-                unbacked_by: dict = {}
-                for slot in self.slots:
-                    for batch, members in self.scope.groups:
-                        got = merge_field(
-                            members, list(shown) + batch.sources, slot,
-                            answered.get(slot.name),
-                            window=(stage, sum(self.spent.values())),
-                            bases=list(self.bases))
-                        for key in ("filled", "unquoted", "unbacked",
-                                    "unstated", "raw_missing",
-                                    "raw_foreign", "via_base", "via_target"):
-                            counts[key] += got[key]
-                        if got["filled"]:
-                            filled_by[slot.name] = (
-                                filled_by.get(slot.name, 0) + got["filled"])
-                        if got["unquoted"] or got["unbacked"]:
-                            unbacked_by[slot.name] = (
-                                unbacked_by.get(slot.name, 0)
-                                + got["unquoted"] + got["unbacked"])
-                        for bad in got["failed"]:
-                            counts["failed"].append(dict(bad,
-                                                         field=slot.name))
-                for key in ("filled", "unquoted", "unbacked", "unstated",
-                            "raw_missing", "raw_foreign", "via_base",
-                            "via_target"):
-                    self.totals[key] += counts[key]
-                self.totals["retried"] += 1 if attempt else 0
-                # The window this coordinate was asked in, what was shown,
-                # and what came back. Every knob this stage has cuts
-                # through this distribution, and none of them could be set
-                # from a log line that only counted the failures. `batches`
-                # is how many batches the rows of the request came from:
-                # one for a batch's own stage, the document's for its search.
-                trace.event("field", self.document_id, slot=self.name,
-                            anchor=self.anchor_id,
-                            window=sum(self.spent.values()),
-                            stage=stage, attempt=attempt,
-                            parameter=self.parameter,
-                            batches=len(self.batches),
-                            open=len(todo),
-                            reply=state["answer"] is not None,
-                            shown=[[x.owner_kind, x.owner_id]
-                                   for x in shown],
-                            ms=int((time.time() - started) * 1000),
-                            filled_by=filled_by, unbacked_by=unbacked_by,
-                            prompt_tokens=usage.get("prompt_tokens"),
-                            completion_tokens=usage.get(
-                                "completion_tokens"),
-                            **{k: counts[k] for k in
-                               ("filled", "unquoted", "unbacked",
-                                "unstated", "raw_missing",
-                                "raw_foreign", "via_base", "via_target")})
-                for bad in counts["failed"]:
-                    # What was answered, not only that it failed: the
-                    # corpus_m5 trace counted 284,643 quantity answers
-                    # whose quote did not carry them and could not say
-                    # whether the wording, the quote or the pairing of
-                    # the two was wrong.
-                    quote = bad.get("quote")
-                    trace.event("drop", self.document_id, slot=self.name,
-                                field=bad.get("field"),
-                                window=sum(self.spent.values()),
-                                attempt=attempt,
-                                batches=len(self.batches),
-                                row=bad.get("row"),
-                                why=bad.get("why") or "unbacked",
-                                given=bad.get("given"),
-                                raw=bad.get("raw"),
-                                quote=(quote[:300] if isinstance(quote, str)
-                                       else None))
-                corrections = counts["failed"]
-                if not corrections:
-                    break
-                named = {c["row"] for c in corrections}
-                todo = [r for r in self.still_open(self.rows)
-                        if r.label in named]
-                if not todo:
-                    break
-        return True
-
-    def own(self) -> bool:
-        """The value's own passages AND the sections they stand in. A table
-        carries its numbers and its row labels; the year, the scenario and
-        the caption live one level up, and the own window never showed it.
-        One batch's stage: its rows are the scope."""
-        batch = self.batches[0]
-        own = list(batch.sources)
-        for parent in (self.sweeper.parents(batch.sources)
-                       if self.sweeper.parents else ()):
-            own.append(parent)
-            self.seen.add((parent.owner_kind, parent.owner_id))
-            self.held[(parent.owner_kind, parent.owner_id)] = parent
-        self.state["stage"] = "own"
-        return self.run([own])
-
-    def search(self, combed: bool = True, heard=()) -> bool:
-        """Retrieval, then the rest of the document, over every open row of
-        the scope. *combed* is what the stage before it ended on. *heard* is
-        what the model said it still needed in answers this sweep did not see
-        itself, the own stages of the batches the rows come from.
-
-        True when the document was read to its end: with no budget cut the
-        coordinate that is still open is a statement about the plan.
-        """
-        sweeper = self.sweeper
-        self.state["stage"] = "retrieval"
-        document = self.kind == "document"
-        if document:
-            log.info("   search %s: %d row(s) of %d batch(es), %d retrieval "
-                     "window(s) allowed", self.name, len(self.rows),
-                     len(self.batches), self.budget["retrieval"])
-        first = True
-        for _ in range(FIELD_ROUNDS):
-            if (not combed or not self.still_open(self.rows)
-                    or sweeper.more_sources is None):
-                break
-            # Still open, so look further out. The probes are the anchors
-            # written for THIS question: sentences as a plan would print the
-            # answer. The question itself was what this searched with before,
-            # and a question is the one sentence that never stands in a
-            # document.
-            probes = list(sweeper.anchors.get(self.anchor_id) or ())
-            if not probes:
-                probes = [slot.question for slot in self.slots
-                          if slot.question]
-            need = list(heard) if first else []
-            need += (self.state["answer"] or {}).get("need_more") or []
-            first = False
-            probes += [q for q in need if isinstance(q, str) and len(q) > 20]
-            # As many passages as the windows left can show, and no more.
-            # The ranking covers the whole plan, and handed over whole it
-            # marked every passage as seen after one round: the rest stage
-            # then found nothing to read and a sweep the budget had cut off
-            # ended "unstated". No budget left is not a combed document.
-            left = self.budget["retrieval"] - self.spent["retrieval"]
-            if left <= 0:
-                combed = False
-                break
-            fresh = sweeper.more_sources(self.document_id, probes,
-                                         set(self.seen),
-                                         FIELD_WINDOW * left) or []
-            if not fresh:
-                break
-            for source in fresh:
-                self.seen.add((source.owner_kind, source.owner_id))
-                self.held[(source.owner_kind, source.owner_id)] = source
-            # No overlap: the pool is ranked by relevance, so neighbours in
-            # it are not neighbours in the plan, and a passage shown twice
-            # was a request spent twice: half of corpus_m5's 1,235,462
-            # search requests. The overlap is the rest stage's, whose pool
-            # is in document order and whose seam a caption sits on.
-            combed = self.run(window_sources(fresh, FIELD_WINDOW, 0))
-
-        open_now = self.still_open(self.rows)
-        if open_now and sweeper.rest_of_document is not None:
-            # Retrieval has nothing left to offer and the coordinate is still
-            # open. Read the rest of the plan rather than call it unstated on
-            # the strength of what a ranking happened to surface.
-            #
-            # Not `combed and ...`: `run` returns False exactly when the
-            # budget ran out, and a sweep with budget left has no open rows.
-            # So the old condition was never both true at once: 0 of the 70
-            # sweeps of the M3 run entered this stage, and 32 of the 33 that
-            # hit the cap had had exactly one retrieval round out of four.
-            # The stage that exists to keep "we stopped looking" apart from
-            # "the plan does not say it" was unreachable, and the harvest
-            # shows it: 789 exhausted and 0 unstated.
-            #
-            # Its own allowance, and its own counter rather than a number
-            # written into the shared one. Bounded, because 33 sweeps of
-            # that run hit the cap and an unbounded second pass would put the
-            # requests per document over the 1161 the acceptance allows.
-            #
-            # Once for every batch that still has an open row of this
-            # coordinate: the search is one pass over the document in its
-            # order where the batches' own sweeps were each one over the same
-            # sections, so it costs what they cost and no more, and it stops
-            # where the document does.
-            #
-            # In windows and in requests. A window is shown to every open row
-            # and the asker cuts the rows into requests of FIELD_ROWS, so the
-            # rows of many batches in one window are more requests than one
-            # batch's window was. On a stubbed document, 17 batches of 40 open
-            # rows each sent 2,346 requests through their own sweeps and 4,414
-            # through one search counted in windows alone. The bound is what
-            # the batches' own sweeps could send at most: for each batch its
-            # windows times the requests one of its windows took. For the rows
-            # of one batch that is never reached before the windows are.
-            open_labels = {row.label for row in open_now}
-            asking = [rows for rows in (
-                [row for row in members if row.label in open_labels]
-                for _batch, members in self.scope.groups) if rows]
-            each = self.budget["rest"]
-            self.budget["rest"] = each * len(asking)
-            self.rest_requests = each * sum(self.requests_of(rows)
-                                            for rows in asking)
-            if document:
-                log.info("   search %s: the rest of the document, %d "
-                         "window(s) and %d request(s) allowed for %d "
-                         "batch(es) with an open row", self.name,
-                         self.budget["rest"], self.rest_requests,
-                         len(asking))
-            rest = sweeper.rest_of_document(
-                self.document_id, set(self.seen),
-                own_section_number([self.owner_of[row.label]
-                                    for row in open_now
-                                    if row.label in self.owner_of])) or []
-            for source in rest:
-                self.held[(source.owner_kind, source.owner_id)] = source
-            self.state["stage"] = "rest"
-            # Nothing left means every passage of the plan was shown, and
-            # that is what "combed" says. An empty run said it too, once,
-            # about a plan the budget had cut off after two passages.
-            combed = (self.run(window_sources(rest, FIELD_WINDOW,
-                                              FIELD_OVERLAP))
-                      if rest else True)
-        return combed
-
-    def close(self, combed: bool = True) -> dict:
-        """What the sweep came to, in the trace and as a dict. A sweep that
-        ended on its budget marks every row still open `exhausted`; an own
-        stage ends nothing, the search after it does."""
-        stranded = 0
-        # Before the rows are marked: `exhausted` is no longer open.
-        left = (len(self.still_open(self.rows))
-                if self.kind == "document" else 0)
-        if not combed and self.kind != "own":
-            for slot in self.slots:
-                for row in open_rows(self.rows, slot):
-                    # Still open with the document unread to the end. Not the
-                    # same finding as a document that does not say it, and not
-                    # recorded as one.
-                    row.claim[f"{slot.name}_state"] = EXHAUSTED
-                    stranded += 1
-        self.totals["asked"] = sum(self.spent.values())
-        self.totals["exhausted"] = stranded
-        if self.kind == "document":
-            log.info("   search %s: %d window(s) asked, %d of %d row(s) "
-                     "read, %d row(s) left open, %s", self.name,
-                     self.totals["asked"], self.totals["filled"],
-                     len(self.rows), left,
-                     "the document read to its end" if combed
-                     else "the allowance spent")
-        trace.event("sweep", self.document_id, slot=self.name,
-                    anchor=self.anchor_id, windows=sum(self.spent.values()),
-                    rows=len(self.rows), combed=combed,
-                    batches=len(self.batches), scope=self.kind,
-                    **self.totals)
-        return self.totals
-
-
-class Sweeper:
-    """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to,
-    and the two halves it is made of.
-
-    Called, it walks the three stages for one batch's rows, which is what a
-    pass over a stored harvest wants. `own` is the first stage alone, a
-    batch's turn; `search` is the other two, once for the rows of several
-    batches (a document's), under an allowance that grows with the batches
-    that still have an open row. Built by `make_sweeper`.
-    """
-
-    def __init__(self, ask: Callable, *, more_sources: Optional[Callable],
-                 rest_of_document: Optional[Callable],
-                 parents: Optional[Callable], anchors: dict,
-                 budget_of: Callable):
-        self.ask = ask
-        self.more_sources = more_sources
-        self.rest_of_document = rest_of_document
-        self.parents = parents
-        self.anchors = anchors
-        self.budget_of = budget_of
-
-    @staticmethod
-    def _kept(batches: list) -> tuple:
-        """(keys, passages by key) of every passage these batches carry."""
-        held = {(item.source.owner_kind, item.source.owner_id): item.source
-                for batch in batches for item in batch.items}
-        return set(held), held
-
-    def __call__(self, batch, rows: list, slots, anchor_id: str = "") -> dict:
-        seen, held = self._kept([batch])
-        sweeping = Sweeping(self, Scope([(batch, rows)]), slots, anchor_id,
-                            seen=seen, held=held, kind="batch")
-        return sweeping.close(sweeping.search(sweeping.own()))
-
-    def own(self, batch, rows: list, slots, anchor_id: str = "",
-            heard: Optional[list] = None, stop=None) -> dict:
-        """The value's own passages and nothing further. What the model said
-        it still needed goes into *heard*, for the search that follows."""
-        seen, held = self._kept([batch])
-        sweeping = Sweeping(self, Scope([(batch, rows)]), slots, anchor_id,
-                            seen=seen, held=held, kind="own", stop=stop)
-        combed = sweeping.own()
-        if heard is not None:
-            for question in (sweeping.state["answer"] or {}).get(
-                    "need_more") or []:
-                if isinstance(question, str) and question not in heard:
-                    heard.append(question)
-        return sweeping.close(combed)
-
-    def search(self, entries: list, slots, anchor_id: str = "",
-               heard=(), stop=None) -> dict:
-        """Retrieval, then the rest of the document, once for these rows of
-        several batches: [(batch, its rows)].
-
-        With several batches nothing is left out of the retrieval pool. A
-        batch's own passages were asked for ITS rows only, so none of them is
-        already seen for all the rows of the search, and a pool that left them
-        out would leave out the place another batch's row was read in. With one
-        batch the search is that batch's own sweep and looks where it looked:
-        its passages and their sections were asked in its own stage.
-        """
-        batches = [batch for batch, _rows in entries]
-        _seen, held = self._kept(batches)
-        for batch in batches:
-            for parent in (self.parents(batch.sources)
-                           if self.parents else ()):
-                held[(parent.owner_kind, parent.owner_id)] = parent
-        sweeping = Sweeping(self, Scope(entries), slots, anchor_id,
-                            seen=set(held) if len(batches) == 1 else set(),
-                            held=held, kind="document", stop=stop)
-        return sweeping.close(sweeping.search(True, heard))
-
-
-def make_sweeper(ask: Callable, *,
-                 more_sources: Optional[Callable] = None,
-                 rest_of_document: Optional[Callable] = None,
-                 parents: Optional[Callable] = None,
-                 anchors: Optional[dict] = None,
-                 search_share: Optional[dict] = None) -> Sweeper:
-    """sweep_field(batch, rows, slots, anchor_id) -> what the sweep came to.
-
-    Lifted out of the harvester so a pass that re-reads ONE coordinate of an
-    already harvested document walks the same three stages, in the same
-    order, under the same allowances. A second copy of this would be a second
-    set of numbers, and every measurement the sweep has ever produced is
-    about this one.
-
-    Its five dependencies are exactly what it closed over inside the
-    harvester: the asker, and the three ways of finding more passages plus
-    the anchor sets that seed them. *search_share* is the profile's
-    `SEARCH_SHARE`: {coordinate: fraction of the search budget}.
-    """
-    anchors = anchors or {}
-    search_share = search_share or {}
-
-    def budget_of(slots: list) -> dict:
-        """The allowance of one coordinate's sweep, per stage."""
-        budget = window_budget(min(search_share.get(slot.name, 1.0)
-                                   for slot in slots))
-        return budget
-
-    return Sweeper(ask, more_sources=more_sources,
-                   rest_of_document=rest_of_document, parents=parents,
-                   anchors=anchors, budget_of=budget_of)
-
-
-# The keys of the coordinates a batch's rows can be held at, for the search
-# that settles them: the unit, the parameter, and (parameter, axis) for the
-# gate axes and for the others.
-UNIT_KEY = ("unit",)
-PARAMETER_KEY = ("parameter",)
-
-
-class Turn:
-    """One batch's rows on their way through the coordinates that decide them:
-    the unit, which settles the parameter, the parameter, which decides the
-    axes a row has, the gate axes, one after another, and then the other
-    axes, side by side.
-
-    Two ways to walk it. Whole (`deferred` False) every coordinate is swept
-    through all three stages before the next one is asked, which is what a
-    pass over a stored harvest wants. Deferred, the turn asks each coordinate's
-    own stage only, and a row whose deciding coordinate is still open WAITS
-    there: nothing behind it is asked. The document step (`DocumentSearch`)
-    then searches what is open once for all the batches of the document and
-    lets the rows that waited go on. Both walk this one body.
-    """
-
-    def __init__(self, batch, rows: list, *, doc_spec, sweeper: Sweeper,
-                 frame_axes: Optional[list] = None,
-                 slice_gate: Optional[dict] = None, pool=None,
-                 deferred: bool = False):
-        self.batch = batch
-        self.rows = rows
-        self.doc_spec = doc_spec
-        self.sweeper = sweeper
-        self.frame_axes = frame_axes
-        self.slice_gate = slice_gate
-        self.pool = pool
-        self.deferred = deferred
-        self.stop = None
-        self.counts: dict = {}       # coordinate -> what its sweeps came to
-        self.slots_of: dict = {}     # row label -> the slots that apply to it
-        self.plan: dict = {}         # parameter uri -> (axes, gate, gated)
-        self.jobs: list = []         # (rows, slots, anchor id, key)
-        self.open: dict = {}         # key -> rows left open by an own stage
-        self.deciding: set = set()   # the keys whose rows wait for the search
-        self.asked: dict = {}        # key -> (slots, anchor id)
-        self.heard: dict = {}        # anchor id -> what the model still needs
-        self.unit_slot = fields.unit_slot(doc_spec)
-        self.with_unit = ([row for row in rows
-                           if fields.has_number(row.claim)]
-                          if self.unit_slot is not None else [])
-        self.parameter_slot = (fields.parameter_slot(doc_spec)
-                               if batch.parameter is None else None)
-        self.blank = 0
-
-    # Asking.
-
-    def stage(self, rows: list, slots: list, anchor: str) -> tuple:
-        """(what the sweep came to, the rows still open on these slots).
-
-        Whole, nothing is left open for anyone: the sweep ended. Deferred,
-        only the own stage ran and what it left open is for the search.
-        """
-        if not self.deferred:
-            return self.sweeper(self.batch, rows, slots, anchor), []
-        totals = self.sweeper.own(
-            self.batch, rows, slots, anchor,
-            heard=self.heard.setdefault(anchor, []), stop=self.stop)
-        wanted = {row.label for slot in slots
-                  for row in open_rows(rows, slot)}
-        return totals, [row for row in rows if row.label in wanted]
-
-    def record(self, slots: list, totals: dict) -> None:
-        into = self.counts.setdefault("+".join(s.name for s in slots), {})
-        for key, value in totals.items():
-            into[key] = into.get(key, 0) + value
-
-    def hold(self, key: tuple, slots: list, anchor: str, still: list,
-             deciding: bool) -> list:
-        """What an own stage left open is registered for the search. The rows
-        come back for the caller to keep from going on, if *deciding*."""
-        if not still:
-            return []
-        self.open.setdefault(key, []).extend(still)
-        self.asked[key] = (slots, anchor)
-        if deciding:
-            self.deciding.add(key)
-        return still
-
-    def ask(self, rows: list, slots, anchor: str, key: tuple,
-            deciding: bool = False) -> list:
-        """One coordinate over these rows, as far as this turn takes it.
-        Returns the rows that now wait on the search (deferred, deciding)."""
-        slots = list(slots) if isinstance(slots, (list, tuple)) else [slots]
-        totals, still = self.stage(rows, slots, anchor)
-        self.record(slots, totals)
-        held = self.hold(key, slots, anchor, still, deciding)
-        return held if deciding else []
-
-    def run_jobs(self, parallel: bool) -> None:
-        """The axes that decide nothing, side by side. Beside each other where
-        the turn has the field pool to itself; one after the other inside the
-        document step, whose own tasks are already what runs side by side."""
-        jobs, self.jobs = self.jobs, []
-        if not jobs:
-            return
-        if parallel and self.pool is not None:
-            futures = {self.pool.submit(self.stage, rows, slots, anchor):
-                       (rows, slots, anchor, key)
-                       for rows, slots, anchor, key in jobs}
-            for future in as_completed(futures):
-                _rows, slots, anchor, key = futures[future]
-                try:
-                    totals, still = future.result()
-                except Exception as exc:        # pragma: no cover - defensive
-                    log.warning("   field %s raised: %s",
-                                "+".join(s.name for s in slots), exc)
-                    continue
-                self.record(slots, totals)
-                self.hold(key, slots, anchor, still, False)
-            return
-        for rows, slots, anchor, key in jobs:
-            totals, still = self.stage(rows, slots, anchor)
-            self.record(slots, totals)
-            self.hold(key, slots, anchor, still, False)
-
-    # The walk.
-
-    def project(self, group: list, axes: list) -> None:
-        """The pair onto these rows, as far as their parameter has its axes.
-
-        Before anything is asked. The sweep only offers a coordinate that
-        is still open, so projecting here is what makes the year sweeper
-        fall away rather than run and find nothing: measured on M3, the
-        year axis produced 1,849 refusals against 0 readings, because
-        every later window excluded the row's own source and only that one
-        could carry the year.
-
-        Only the frame coordinates the row's parameter has. The pair spans
-        the document, but the planning organisation has no scenario and no
-        year, and 11 of its rows on corpus_m5 carried both, which the
-        schema refuses.
-        """
-        batch = self.batch
-        own = {axis.name: axis for axis in axes}
-        slots = [own[slot.name] for slot in self.frame_axes or ()
-                 if slot.name in own]
-        if not group or not slots:
-            return
-        # A row whose own quote named another pair of the document keeps
-        # that pair. It is written first and separately, so the request's
-        # own pair below never reaches it.
-        rerouted: dict = {}
-        for row in group:
-            if row.pair:
-                rerouted.setdefault(row.pair_index, []).append(row)
-        for pair_index, rows_of in rerouted.items():
-            written = apply_frame(rows_of, rows_of[0].pair, pair_index,
-                                  slots, batch.sources)
-            if written:
-                log.debug("   other pair %s: %d coordinate(s) on %d "
-                          "row(s)", batch.document_id, written,
-                          len(rows_of))
-        group = [row for row in group if not row.pair]
-        if not group:
-            return
-        if batch.frame:
-            written = apply_frame(group, batch.frame, batch.frame_index,
-                                  slots, batch.sources)
-            if written:
-                log.debug("   frame %s: %d coordinate(s) on %d row(s)",
-                          batch.document_id, written, len(group))
-
-    def normalise(self, rows: list) -> None:
-        """The unit as the list spells it. The answer names an option by any
-        spelling the list folds alike, and the lookups below are exact."""
-        for row in rows:
-            option = option_named(self.unit_slot, row.claim.get("unit"))
-            if option is not None:
-                row.claim["unit"] = option.label
-
-    def begin(self) -> None:
-        """The turn: the unit first, and as a coordinate: one entry of a
-        closed list, read with its own passage, never looked up from a
-        spelling. The value request writes the unit as the passage prints it,
-        and which entry that means is a reading: "450 kWh über das Jahr" is
-        kWh/a, a storage capacity of 200 kWh is kWh, "kWh/m²a" and "kWp" are
-        in no list. A spelling table made that reading until now, and on 641
-        plans of corpus_m5 it let 3,324 tuples carry an entry their wording
-        contradicts. Before the parameter, because the entry chosen is what
-        settles the parameter. The value request's own entry is dropped
-        first: it was a choice made beside the number, not a reading of its
-        own, and left in place it would stand where the question's answer
-        belongs.
-
-        The unit decides only where the parameter is open; with the batch's
-        parameter fixed a row whose unit is open goes on to its axes, and the
-        unit is searched on its own.
-        """
-        for row in self.with_unit:
-            row.claim.pop("unit", None)
-        go = self.rows
-        if self.with_unit:
-            deciding = self.batch.parameter is None
-            waiting = self.ask(self.with_unit, self.unit_slot, UNIT_ANCHOR,
-                               UNIT_KEY, deciding)
-            self.normalise(self.with_unit)
-            if waiting:
-                held = {row.label for row in waiting}
-                go = [row for row in self.rows if row.label not in held]
-        self.go_on(go)
-        self.run_jobs(parallel=True)
-
-    def go_on(self, rows: list) -> None:
-        """Rows whose unit is settled: to the parameter, or to the axes of the
-        parameter the batch was planned for."""
-        if self.batch.parameter is None:
-            self.settle_parameter(rows)
-            return
-        parameter = self.batch.parameter
-        axes = fields.axis_slots(parameter)
-        for row in rows:
-            self.slots_of[row.label] = axes
-        self.project(rows, axes)
-        for axis in axes:
-            fields.apply_derived(rows, axis)
-        for axis in axes:
-            if not axis.derive:
-                self.jobs.append((rows, [axis],
-                                  anchor_key(parameter.uri, axis.name),
-                                  (parameter.uri, axis.name)))
-
-    def settle_parameter(self, rows: list) -> None:
-        """Which quantity each value is comes first, because it decides which
-        coordinates the row even has. One request, one quote, and a row it
-        cannot answer for gets no axes rather than the axes of a guess.
-
-        Asked only where the unit leaves it open. The spec says it itself,
-        "the unit separates the two parameters", and over the kwp spec the
-        nine energy units and the forty-two emission units share not one
-        spelling. Asking anyway cost 322 of 1,043 field windows on Kassel,
-        30.9 percent, for a coordinate not one of 559 accepted tuples
-        contradicted.
-        """
-        slot = self.parameter_slot
-        undecided = []
-        for row in rows:
-            parameter = fields.derive_parameter(self.doc_spec, row.claim)
-            if parameter is None:
-                if fields.parameter_undecidable(self.doc_spec, row.claim):
-                    # No parameter of the spec can hold this row, so the
-                    # sweep has no answer to find: whatever it returned,
-                    # `verify` refuses it on the same unit lookup. The row
-                    # still goes on to be refused with the unit as the
-                    # reason; it is just not asked about first.
-                    row.claim["parameter_state"] = fields.OUT_OF_SLICE
-                    continue
-                undecided.append(row)
-                continue
-            row.claim["parameter"] = parameter.label
-            row.claim["parameter_state"] = fields.DERIVED
-            wording = row.claim.get("unit_raw") or row.claim.get("unit")
-            if wording:
-                row.claim["parameter_raw"] = wording
-            # The passage the unit was read in: that is where the
-            # wording the parameter follows from stands.
-            quote = row.claim.get("unit_quote") or row.claim.get("quote")
-            if quote:
-                row.claim["parameter_quote"] = quote
-        held = set()
-        if undecided:
-            held = {row.label for row in self.ask(
-                undecided, slot, PARAMETER_ANCHOR, PARAMETER_KEY, True)}
-        self.enter([row for row in rows if row.label not in held])
-
-    def enter(self, rows: list) -> None:
-        """Rows whose parameter is settled: their axes, the gate first."""
-        slot = self.parameter_slot
-        uri_of = {opt.label: opt.uri for opt in slot.options}
-        grouped: dict = {}
-        for row in rows:
-            uri = uri_of.get(str(row.claim.get("parameter") or "").strip())
-            if uri is None:
-                self.slots_of[row.label] = [slot]
-                continue
-            row.claim["parameter"] = uri
-            grouped.setdefault(uri, []).append(row)
-        for uri, group in grouped.items():
-            axes = fields.axis_slots(self.doc_spec.by_uri[uri])
-            for row in group:
-                self.slots_of[row.label] = [slot] + axes
-            self.project(group, axes)
-            # What the spec decides is written before anything is asked,
-            # and before the gate: a row that leaves at the gate still
-            # carries the coordinates that never needed a request, so
-            # `out_of_slice` says "never asked" about the axes that
-            # really were not asked and about no others.
-            for axis in axes:
-                fields.apply_derived(group, axis)
-            axes = [axis for axis in axes if not axis.derive]
-            by_name = {axis.name: axis for axis in axes}
-            gate = [by_name[name] for name in (self.slice_gate or {})
-                    if name in by_name]
-            self.plan[uri] = (axes, gate, {axis.name for axis in gate})
-            self.walk(uri, group, 0)
-
-    def keep(self, rows: list, axis, axes: list) -> list:
-        """The rows this gate answer keeps; the others are closed. A closed
-        row is never asked, and said so: an empty cell here would be
-        indistinguishable from a coordinate the model dropped."""
-        allowed = (self.slice_gate or {}).get(axis.name)
-        kept = [row for row in rows
-                if keeps_row(axis, row.claim.get(axis.name), allowed)]
-        staying = {row.label for row in kept}
-        for row in rows:
-            if row.label in staying:
-                continue
-            for other in axes:
-                row.claim.setdefault(f"{other.name}_state",
-                                     fields.OUT_OF_SLICE)
-        return kept
-
-    def walk(self, uri: str, rows: list, position: int) -> None:
-        """The gate axes from *position* on, one after another and first.
-        Each of them can close a row, and a closed row must not pay for the
-        axes behind it: measured on 20 plans, 4,064 of 6,763 harvested tuples
-        were dropped by the serializer for exactly these two coordinates,
-        after the run had paid for all seven axes of every one of them. A row
-        whose gate coordinate is still open waits there; the others go on."""
-        axes, gate, gated = self.plan[uri]
-        inside = rows
-        while inside and position < len(gate):
-            axis = gate[position]
-            held = {row.label for row in self.ask(
-                inside, [axis], anchor_key(uri, axis.name),
-                (uri, axis.name), True)}
-            inside = self.keep([row for row in inside
-                                if row.label not in held], axis, axes)
-            position += 1
-        for axis in axes:
-            if inside and axis.name not in gated:
-                self.jobs.append((inside, [axis], anchor_key(uri, axis.name),
-                                  (uri, axis.name)))
-
-    def release(self, keys: list) -> None:
-        """The search of these coordinates is over: the rows that waited at
-        them go on, from the coordinate behind. What a search left open it
-        read to its end or ran out on, and either way it is settled."""
-        # All of them out of `open` first: a continuation that raises must
-        # not leave its coordinates behind for the document step to ask again.
-        freed = [(key, self.open.pop(key)) for key in keys
-                 if key in self.open]
-        for key, rows in freed:
-            waited = key in self.deciding
-            self.deciding.discard(key)
-            if key == UNIT_KEY:
-                self.normalise(rows)
-                if waited:
-                    self.settle_parameter(rows)
-            elif key == PARAMETER_KEY:
-                self.enter(rows)
-            elif waited:
-                uri, name = key
-                axes, gate, _gated = self.plan[uri]
-                position = [axis.name for axis in gate].index(name)
-                self.walk(uri, self.keep(rows, gate[position], axes),
-                          position + 1)
-        self.run_jobs(parallel=False)
-
-    # The end.
-
-    def tally(self) -> dict:
-        return {k: sum(c.get(k, 0) for c in self.counts.values())
-                for k in ("filled", "unstated", "unquoted", "unbacked",
-                          "asked", "retried")}
-
-    def finish(self) -> None:
-        """Every coordinate no field reply mentioned, named as such."""
-        in_unit = {row.label for row in self.with_unit}
-        for row in self.rows:
-            # In front of the parameter and the axes, in the order asked, so
-            # a row that never answered is marked on this coordinate too.
-            slots = list(self.slots_of.get(row.label, []))
-            if row.label in in_unit:
-                slots = [self.unit_slot] + slots
-            self.blank += mark_unanswered([row], slots)
-        tally = self.tally()
-        if tally["unquoted"] or tally["unbacked"] or self.blank:
-            if self.deferred:
-                # What the batch's own stages came to. The document's search
-                # of what they left open says its own numbers
-                # (`Sweeping.close`), and only the last count is the end's.
-                log.info("   own stages: %d coordinate(s) read, %d not "
-                         "stated, dropped %d (quote not in source) + %d "
-                         "(answer not in quote); %d coordinate(s) unanswered "
-                         "at the end",
-                         tally["filled"], tally["unstated"],
-                         tally["unquoted"], tally["unbacked"], self.blank)
-            else:
-                log.info("   fields: %d read, %d not stated, %d unanswered, "
-                         "dropped %d (quote not in source) + %d (answer not "
-                         "in quote)", tally["filled"], tally["unstated"],
-                         self.blank, tally["unquoted"], tally["unbacked"])
-
-    def reply(self, rows_reply: dict, orphans: list) -> dict:
-        """What goes back to the run. The label goes on so the fold routes
-        each claim to the source the value request already settled on, instead
-        of deciding a second time from the quote alone.
-
-        A deferred turn is not finished, and the document step needs its rows
-        and where each waits. They travel with the reply under a private key
-        because `harvest_batches` hands back (batch, reply) and nothing else;
-        `search_document` takes it out before the reply is folded or written.
-        """
-        for row in self.rows:
-            row.claim["source"] = self.batch.label(row.item_index)
-        out = {"tuples": [row.claim for row in self.rows] + orphans,
-               "status": rows_reply.get("status", "complete"),
-               "need_more": rows_reply.get("need_more") or [],
-               "_fieldwise": self.tally()}
-        if self.deferred:
-            out["_turn"] = self
-        return out
-
-
-def _attempt(label: str, task: Callable, waited_on: bool) -> None:
-    """Run one task of a document's search.
-
-    What it raises, a stop apart, is raised where rows wait on the task (the
-    unit, the parameter, a gate axis, a batch going on behind one of them):
-    in a batch's own sweep those raised into its turn and the batch counted
-    as not read, so here the document is not written. For an axis that
-    decides nothing it is a warning and the coordinates come out
-    `unanswered`, as when a field job of a batch's turn raises.
-    """
+    from docpipe.inference import code_exec
+
+    open_questions = profile.component("compute", "questions")
+    if open_questions is None or code_rounds() < 1 \
+            or not flow_map.compute_on(flow_map.tree_of(profile)):
+        return None
+    if not code_exec.is_enabled():
+        # The flow computes and the run has no sandbox: said, not left out
+        # quietly (owner decision 2026-11-13, point 9).
+        log.warning("compute: the flow computes, but no sandbox is set "
+                    "(CODE_EXEC_URL): nothing is computed in this run")
+        return None
+    same = profile.component("compute", "same")
+    # The question is asked as its step says: its prompt, and the inputs
+    # its first message is built from (owner decision 2026-11-12 evening).
     try:
-        task()
-    except SweepStopped:
-        raise
-    except Exception as exc:
-        if waited_on:
-            raise
-        log.warning("   %s raised: %s", label, exc)
+        prompt, inputs = step_parts(step_asking("computed", "compute",
+                                                profile),
+                                    computing.COMPUTE_PROMPT_ID)
+    except (FileNotFoundError, LookupError):
+        return None
+    # A prompt that lacks the words of a follow-up stops the run here, not
+    # the step quietly.
+    parts = thread_map.cut(prompt, follows=computing.FOLLOWS)
+    client = _client()
 
+    def ask(question, items: dict, document_id: int, stop,
+            check: Optional[Callable] = None) -> tuple:
+        """(how it ended, the new row or None, code runs, what it fetched and
+        took). The conversation of one question: what it reads of the plan,
+        a number it takes, code, its output, the number. *check(question,
+        claim)* is why the row's own check refuses a claim, None where it
+        takes it."""
+        shown = computing.passages(question, items)
+        order = list(passages_of(document_id)) if passages_of else []
+        passages = {(s.owner_kind, s.owner_id): s for s in order}
+        anchor = computing.owner_of(question.anchor)
+        gathered = reading_map.Gathered(
+            seen={(s.owner_kind, s.owner_id) for s in shown},
+            cursor={"next": anchor, "previous": anchor},
+            rank=(functools.partial(rank, document_id)
+                  if rank is not None else None))
+        budget = (lookup_map.two_pages(
+            order, pages_of(document_id) if pages_of else None,
+            rules.get("compute_fetch_pages")) if order else None)
+        runs: list = []
+        noted = {"taken": 0, "untaken": 0, "misquoted": 0, "rejected": 0,
+                 "reason": None}
+        faults = 0
 
-class DocumentSearch:
-    """What the batches of one document left open, searched once per
-    coordinate with the open rows of all of them together.
+        # The question is one conversation (owner decisions 2026-11-07):
+        # its first message shows what is wanted, the numbers and their
+        # passages; what it fetched, a number it took and its code's output
+        # follow the answer that asked for them, each with what is new.
+        first = {**shows_map.apart(inputs, {"question": SimpleNamespace(
+            question=question, shown=shown, fetched=gathered.sources)}),
+                 **gathered.context()}
+        system = parts.system(first).text
+        conversation = [{"role": "user", "content": json.dumps(
+            first, ensure_ascii=False, indent=2)}]
+        fetched = {"mark": gathered.mark()}
 
-    In the order the batches' own turns could not keep: the unit, then the
-    parameter, then each gate axis, then the other axes. After each search the
-    rows that waited on it go on, and a batch's own stage asks the coordinates
-    they reach only now. Rows that wait nowhere are not held up by it.
+        def told(said: Optional[str], text: str) -> None:
+            conversation.extend(({"role": "assistant", "content": said or ""},
+                                 {"role": "user", "content": text}))
 
-    Every task here is a leaf: a search is one coordinate's windows in order, a
-    continuation is one batch's own stages in order, and the pool they run on
-    is the field pool the batches' turns use. Nothing here waits on the pool
-    from inside it.
-    """
+        def passage_of(number) -> str:
+            source = passages.get(computing.owner_of(number.row))
+            if source is None:
+                item = computing.item_of(items, number.row)
+                source = item.source if item is not None else None
+            return (source.text or "") if source is not None else ""
 
-    def __init__(self, sweeper: Sweeper, pool, slice_gate: Optional[dict],
-                 stop=None):
-        self.sweeper = sweeper
-        self.pool = pool
-        self.order = list(slice_gate or {})
-        self.stop = stop
+        def ended(outcome: str, claim=None) -> tuple:
+            return outcome, claim, runs, {
+                "fetched": len(gathered.sources),
+                "searched": len(gathered.hits), **noted}
 
-    def phase(self, key: tuple) -> int:
-        """Where a coordinate stands in the order: the unit, the parameter,
-        the gate axes in the gate's order, and the rest."""
-        if key == UNIT_KEY:
-            return 0
-        if key == PARAMETER_KEY:
-            return 1
-        return 2 + (self.order.index(key[1]) if key[1] in self.order
-                    else len(self.order))
-
-    def fan_out(self, tasks: dict) -> None:
-        """These tasks, {label: (callable, whether rows wait on it)}, side by
-        side on the field pool. All of them are waited for before what one of
-        them raised is raised, a stop first: none is left writing into rows
-        the document step has given up."""
-        if self.pool is None:
-            for label, (task, waited_on) in tasks.items():
-                _attempt(label, task, waited_on)
-            return
-        futures = [self.pool.submit(_attempt, label, task, waited_on)
-                   for label, (task, waited_on) in tasks.items()]
-        raised = [error for error in (future.exception() for future in futures)
-                  if error is not None]
-        stops = [error for error in raised if isinstance(error, SweepStopped)]
-        if raised:
-            raise (stops or raised)[0]
-
-    def run(self, turns: list) -> None:
-        for turn in turns:
-            turn.stop = self.stop
-        while True:
-            keys = sorted({key for turn in turns for key in turn.open},
-                          key=lambda key: (self.phase(key), key))
-            if not keys:
-                break
-            now = [key for key in keys
-                   if self.phase(key) == self.phase(keys[0])]
-            self.search(turns, now)
-            self.cut()
-            # A coordinate is asked once, whatever its search came to: the
-            # search of an axis nothing waits on that raised leaves its rows
-            # open and unanswered (`Turn.release` takes them out of `open`).
-            self.carry_on(turns, now)
-            self.cut()
-        for turn in turns:
-            turn.finish()
-
-    def cut(self) -> None:
-        """A stop is seen between two requests. One that came with the last
-        request of a search, or of the own stages after it, has none behind it
-        to be seen by, and that request may be the one the server did not
-        answer: the step is cut all the same."""
-        if self.stop is not None and self.stop.is_set():
-            raise SweepStopped()
-
-    def search(self, turns: list, keys: list) -> None:
-        """One search per coordinate, over the rows of every batch that has
-        some open on it."""
-        tasks = {}
-        for key in keys:
-            members = [turn for turn in turns if key in turn.open]
-            slots, anchor = members[0].asked[key]
-            heard = []
-            for turn in members:
-                for question in turn.heard.get(anchor, ()):
-                    if question not in heard:
-                        heard.append(question)
-            entries = [(turn.batch, list(turn.open[key])) for turn in members]
-            tasks["search " + "/".join(key)] = (functools.partial(
-                self.sweeper.search, entries, slots, anchor, heard,
-                self.stop), any(key in turn.deciding for turn in members))
-        self.fan_out(tasks)
-
-    def carry_on(self, turns: list, keys: list) -> None:
-        """The rows that waited on these coordinates go on, batch by batch.
-        What a batch asks here are the own stages of coordinates its rows
-        wait on, as in its turn."""
-        tasks = {f"batch {n}": (functools.partial(turn.release, keys), True)
-                 for n, turn in enumerate(turns)
-                 if any(key in turn.open for key in keys)}
-        self.fan_out(tasks)
-
-
-def make_fieldwise_harvester(image_root: Optional[Path] = None,
-                             more_sources: Optional[Callable] = None,
-                             rest_of_document: Optional[Callable] = None,
-                             spec=None, anchors: Optional[dict] = None,
-                             slice_gate: Optional[dict] = None,
-                             parents: Optional[Callable] = None,
-                             frame_axes: Optional[list] = None,
-                             search_share: Optional[dict] = None,
-                             dead=None,
-                             on_give_up: Optional[Callable] = None
-                             ) -> Callable:
-    """A harvest(batch, prior) that asks the rows once and then every
-    coordinate of them, one field to a request.
-
-    The batch is the unit in flight, and the sweep over the fields happens
-    inside one batch's turn. That is `harvest` itself, which a pass over a
-    stored harvest uses: every coordinate through all its stages, per batch.
-
-    The harvest of a document does it in two halves, both on the callable:
-    `harvest.turn(batch, prior)` is the turn with the passages of the batch's
-    own values only, and `harvest.search_document(answered)` is what is still
-    open after them, searched once per document and coordinate with the rows
-    of all the batches together.
-    """
-    from concurrent.futures import ThreadPoolExecutor
-
-    find_rows = make_harvester(image_root, spec=spec)
-    # Only what was given: a stub asker without the streak still fits.
-    ask = make_field_asker(image_root, **{k: v for k, v in
-                           (('dead', dead), ('on_give_up', on_give_up))
-                           if v is not None})
-    anchors = anchors or {}
-    pool = ThreadPoolExecutor(max_workers=FIELD_PARALLEL,
-                              thread_name_prefix="field")
-
-    sweep_field = make_sweeper(ask, more_sources=more_sources,
-                               rest_of_document=rest_of_document,
-                               parents=parents, anchors=anchors,
-                               search_share=search_share)
-
-    def turn_of(batch, prior: Optional[list], deferred: bool) -> dict:
-        reply = find_rows(batch, prior)
-        # This document's lists, on every slot built below.
-        doc_spec = spec_of(batch, spec)
-        rows, orphans = rows_from_reply(batch, reply, frame_axes, doc_spec)
-        if not rows:
-            # Nothing to sweep: no value in these passages, a value request
-            # that died, or every claim refused above. What goes back is what
-            # `rows_from_reply` made of the claims, sentinels and reasons
-            # included. The raw claims went back until now, and verified a
-            # second time they came out as "claim names no parameter of the
-            # spec": 598 of Kassel's refusals.
-            return {**(reply if isinstance(reply, dict) else {}),
-                    "tuples": orphans}
-        walking = Turn(batch, rows, doc_spec=doc_spec, sweeper=sweep_field,
-                       frame_axes=frame_axes, slice_gate=slice_gate,
-                       pool=pool, deferred=deferred)
-        walking.begin()
-        if not deferred:
-            walking.finish()
-        return walking.reply(reply, orphans)
-
-    def harvest(batch, prior: Optional[list] = None) -> dict:
-        return turn_of(batch, prior, False)
-
-    def harvest_turn(batch, prior: Optional[list] = None) -> dict:
-        return turn_of(batch, prior, True)
-
-    def search_document(answered: list, stop=None) -> bool:
-        """What the batches of one document left open, searched once per
-        coordinate over the rows of all of them, and every coordinate then
-        named. *answered* is what `harvest_batches` returned for `turn`.
-
-        False when *stop* (a signal, a dead server) ended it: the document is
-        then half read and must not be written, like a batch never harvested.
-        What a search that rows wait on raised is raised here, and the caller
-        counts the document as failed and does not write it either.
-        """
-        turns = [reply.pop("_turn") for _batch, reply in answered
-                 if isinstance(reply, dict) and "_turn" in reply]
-        # In the order of the plan and not of the replies, which come back as
-        # they finish: the labels of a search follow it.
-        turns.sort(key=lambda t: (
-            t.batch.frame_index,
-            [(item.source.owner_kind, item.source.owner_id)
-             for item in t.batch.items]))
-        # What the document says about itself is on every one of its batches,
-        # so there is one group in a run. Rows under another base year or
-        # another spec would be asked in requests of their own.
-        groups: list = []
-        for each in turns:
-            for bases, doc_spec, members in groups:
-                if each.batch.bases == bases and each.doc_spec is doc_spec:
-                    members.append(each)
+        failures = Failures(document_id)
+        # The wait follows the failures, not the rounds: a round of code, of
+        # fetching or of taking is no failure.
+        failed = 0
+        attempt = 0
+        while attempt < (reply_limit() + code_rounds()
+                         + rules.get("compute_extra_attempts")):
+            attempt += 1
+            if stop is not None and stop.is_set():
+                return ended("stopped")
+            limit = request_room(system, conversation,
+                                 request_wanted("compute"))
+            if limit is None:
+                return ended("too_long")
+            shape = replies.compute(
+                computing.labels(question),
+                more=reading_map.more_schema() if order else None,
+                take=question.taking if question.take else None,
+                quote=question.cites)
+            started = time.time()
+            try:
+                with _for(document_id):
+                    response = send_request(
+                        client, system, conversation, limit, faults,
+                        reply_grammar("compute_reply", shape, always=True))
+            except Exception as exc:
+                log.warning("   compute %s attempt %d failed: %s",
+                            document_id, attempt, exc)
+                trace.event("error", document_id, where="compute",
+                            kind="exception", attempt=attempt,
+                            detail=str(exc)[:300])
+                if not failures.failed(exc) or halted():
                     break
-            else:
-                groups.append((each.batch.bases, each.doc_spec, [each]))
-        searching = DocumentSearch(sweep_field, pool, slice_gate, stop)
-        try:
-            for _bases, _spec, members in groups:
-                searching.run(members)
-        except SweepStopped:
-            return False
-        return True
-
-    harvest.turn = harvest_turn
-    harvest.search_document = search_document
-    return harvest
-
-
-def split_long_sources(items: list, max_chars: int = MAX_SOURCE_CHARS) -> list:
-    """Work items whose source text fits one request.
-
-    A section longer than the window used to be sent whole, rejected by the
-    server with a 400, retried twice and written off — the values in it were
-    lost without ever being read. Windows overlap so a number is never cut in
-    half at the seam; both windows carry the same owner, so the provenance and
-    the dedup that hang off it do not notice the split.
-    """
-    out: list = []
-    for item in items:
-        text = item.source.text or ""
-        if len(text) <= max_chars:
-            out.append(item)
-            continue
-        step = max(max_chars - SOURCE_OVERLAP_CHARS, 1)
-        for start in range(0, len(text), step):
-            window = text[start:start + max_chars]
-            if not window.strip():
+                # The server's failure takes no round (owner decision
+                # 2026-11-09: asked again until it answers or the run
+                # halts).
+                failed += 1
+                attempt -= 1
+                failures.wait(failed)
                 continue
-            part = replace(item.source, text=window)
-            out.append(WorkItem(item.document_id, item.parameter, part))
-            if start + max_chars >= len(text):
-                break
-    if len(out) != len(items):
-        log.info("extraction: %d source(s) split into %d window(s) at %d chars",
-                 len(items), len(out), max_chars)
+            failures.answered()
+            reply = response.choices[0]
+            _observe_usage(getattr(response, "usage", None))
+            _asked("compute", document_id, response, attempt=attempt,
+                   started=started)
+            said = reply.message.content
+            code = _parse_action(said)
+            if code and len(runs) < code_rounds():
+                with sandbox_slots():
+                    out = code_exec.run_code(code, context=computing.context(
+                        question, shown, gathered.sources))
+                if out.get("sandbox"):
+                    # The sandbox failed, not the code: the model is not
+                    # told, the question ends without a row and the log
+                    # says so (owner decision 2026-11-13, point 9).
+                    log.warning("   compute %s: the sandbox failed (%s), "
+                                "question %s left without a row",
+                                document_id, out.get("error"),
+                                getattr(question, "label", question))
+                    trace.event("error", document_id, where="compute",
+                                kind="sandbox", attempt=attempt,
+                                detail=str(out.get("error"))[:300])
+                    return ended("sandbox_failed")
+                runs.append({"code": code,
+                             "stdout": (out.get("stdout") or "")[
+                                 :rules.get("code_output_chars")],
+                             "ok": bool(out.get("ok")),
+                             "error": out.get("error")})
+                trace.event("code", document_id, attempt=attempt, **runs[-1])
+                told(said, _compute_reply(runs[-1], "compute_output"))
+                continue
+            answer = _loads_object(said)
+            if isinstance(answer, dict) and order and gathered.fetch(
+                    answer.get("more"), order, passages, budget):
+                # What it fetched follows the answer that asked for it, as in
+                # the search: a round that brings something new is no
+                # attempt, and the window bounds how many there are.
+                attempt -= 1
+                told(said, parts.follow_up(gathered.since(fetched["mark"])))
+                fetched["mark"] = gathered.mark()
+                continue
+            taken = answer.get("take") if isinstance(answer, dict) else None
+            if isinstance(taken, dict) and question.take is not None:
+                # Read from the passage its quote stands in, of all the
+                # request showed, as a value round's value is (owner
+                # decision 2026-11-05): a passage, its title, a hit's line
+                # or title, each under the passage it was shown with; where
+                # the rule `check_quote_shown` is off, of the whole plan
+                # (owner decision 2026-11-12).
+                source = reading_map.passage_of(taken, [
+                    *shown, *(one for each in shown
+                              for one in reading_map.shown_as(
+                                  each, (each.provenance or {}).get("title"))),
+                    *gathered.evidence(passages)], order)
+                made = (question.take(taken, source) if source is not None
+                        else "quote not found in any passage shown")
+                if isinstance(made, computing.Number):
+                    question.numbers.append(made)
+                    noted["taken"] += 1
+                    # The number it took, as the first message shows the
+                    # others, after the answer that took it.
+                    entry = computing.payload(question, shown,
+                                              gathered.sources)["numbers"][-1]
+                    told(said, worded(say("compute_taken", label=entry["id"]),
+                                      {"numbers": [entry]}))
+                else:
+                    faults += 1
+                    noted["untaken"] += 1
+                    told(said, say("compute_not_taken", reason=made))
+                continue
+            if not isinstance(answer, dict) or "value" not in answer:
+                faults += 1
+                cause, correction = _reply_fault(reply, limit)
+                trace.event("error", document_id, where="compute",
+                            kind="unreadable", cause=cause, attempt=attempt,
+                            finish=getattr(reply, "finish_reason", None))
+                told(said, correction)
+                continue
+            if answer["value"] is None:
+                return ended("none")
+            if not any(run["ok"] for run in runs):
+                faults += 1
+                told(said, say("compute_needs_code"))
+                continue
+            used = computing.used_numbers(question, answer)
+            # The quote that says what the chosen number is has to stand in
+            # its passage, as every quote does; one that does not is told,
+            # not taken (owner decision 2026-11-04, the model chooses with
+            # evidence).
+            missing = computing.unquoted(question, answer, used, passage_of)
+            if missing is not None:
+                faults += 1
+                noted["misquoted"] += 1
+                told(said, say("compute_quote", label=missing))
+                continue
+            claim = computing.claim_of(question, answer["value"], used, runs,
+                                       cited=answer.get("quote"))
+            if not claim:
+                return ended("none")
+            # The row's own check, while the model can still answer it
+            # (owner decision 2026-11-05): checked only once the conversation
+            # had ended, 68 shares and 30 sums of a probe were refused without
+            # the model ever hearing why.
+            reason = check(question, claim) if check is not None else None
+            if reason is not None:
+                faults += 1
+                noted["rejected"] += 1
+                noted["reason"] = reason
+                told(said, say("compute_rejected", reason=reason))
+                continue
+            return ended("read", claim)
+        failures.given_up()
+        return ended("unanswered")
+
+    def compute(answered: list, report, *, locate: Optional[Callable] = None,
+                spec=None, stop=None) -> bool:
+        if not answered:
+            return True
+        doc_spec = spec_of(answered[0][0], spec)
+        questions = open_questions(report.tuples, doc_spec)
+        if not questions:
+            return True
+        items: dict = {}
+        for batch, _reply in answered:
+            for item in batch.items:
+                source = item.source
+                items.setdefault((source.owner_kind, source.owner_id),
+                                 []).append(item)
+
+        def item_for(question):
+            # The row's parameter is its own, whatever its anchor's is.
+            return replace(computing.item_of(items, question.anchor),
+                           parameter=None)
+
+        def check(question, claim) -> Optional[str]:
+            """Why the fold refuses *claim*: the same check, into a report of
+            its own. Locating its quote only marks a row, never refuses one."""
+            tried = DocumentReport(document_id=report.document_id)
+            fold_claims(item_for(question), [claim], tried, spec=doc_spec)
+            return tried.refusals[0]["reason"] if tried.refusals else None
+
+        started = time.time()
+        # Each question in the context of the compute box of the flow, so
+        # that its requests name it in the trace (`addressed.ASKING`).
+        computing_box = next((node.get("id") for node in flow_map.tree_of(
+            profile) if isinstance(node, dict)
+            and rules.step_kind(node) == "compute"), None)
+        with addressed_map.asking(addressed_map.Asking(computing_box)):
+            pool = compute_pool()
+            asked = [(question, pool.submit(
+                contextvars.copy_context().run, ask, question, items,
+                report.document_id, stop, check))
+                for question in questions]
+        made: list = []
+        for question, future in asked:
+            outcome, claim, runs, noted = future.result()
+            if claim is not None:
+                before = len(report.tuples)
+                fold_claims(item_for(question), [claim], report,
+                            locate=locate, spec=doc_spec)
+                if len(report.tuples) == before:
+                    outcome = "refused"
+                elif same is not None and any(
+                        same(report.tuples[-1], row, doc_spec) for row in made):
+                    report.tuples.pop()
+                    outcome = "same"
+                else:
+                    made.append(report.tuples[-1])
+            trace.event("compute", report.document_id, kind=question.kind,
+                        numbers=len(question.numbers), outcome=outcome,
+                        runs=len(runs), **noted)
+        log.info("   compute %s: %d question(s) in %.0f s",
+                 report.document_id, len(questions), time.time() - started)
+        return stop is None or not stop.is_set()
+
+    return compute
+
+
+def step_models(profile=None) -> dict:
+    """{step id: model} of the steps of the flow that name a model of their
+    own (rule `model`), for the check before the run
+    (`llm_preflight.assert_step_models`). A step that is off asks
+    nothing, so the model it names is not needed."""
+    out: dict = {}
+    for node, _frames in flow_map.on(flow_map.tree_of(profile)):
+        named = (node.get("rules") or {}).get("model")
+        if named:
+            out[str(node.get("id"))] = str(named)
     return out
 
 
-class DeadStreak:
-    """Consecutive requests the server did not serve (not reached, or a 429
-    or a 5xx), across every document in flight: a dead server fails them all
-    alike, and one with twenty batches never sees sixty-four of its own."""
+def preflight(required: int, *, what: str, profile=None) -> bool:
+    """The check before the run (rule `preflight_on`): the server offers
+    the model, its window holds *required* tokens, and, where a *profile*
+    is given, the models its steps name are offered too. True where the
+    check ran, False where the rule has the run ask nothing."""
+    if not rules.get("preflight_on"):
+        return False
+    set_model_len(assert_serving(llm_base_url(), llm_api_key(), llm_model(),
+                                 required, what=what, flag="--max-model-len",
+                                 role="llm"))
+    if profile is not None:
+        assert_step_models(llm_base_url(), llm_api_key(),
+                           step_models(profile), role="llm")
+    return True
 
-    def __init__(self, limit: int):
-        self.limit = limit
-        self._count = 0
-        self._lock = threading.Lock()
 
-    def hit(self) -> bool:
-        with self._lock:
-            self._count += 1
-            return self._count >= self.limit
+def documents_at_once() -> int:
+    """The most documents read at the same time (rule
+    `documents_in_flight`), at least one."""
+    return max(1, int(rules.get("documents_in_flight")))
 
-    def clear(self) -> None:
-        with self._lock:
-            self._count = 0
+
+def dead_server_ends_run(seconds: float) -> bool:
+    """Does a server that has not answered for *seconds* end the run (rule
+    `dead_server_ends_run`)? Where it does not, the run says so and goes
+    on."""
+    if rules.get("dead_server_ends_run"):
+        return True
+    log.error("extraction: the model server stopped answering — no "
+              "reply for %.0f s; the run goes on (rule "
+              "dead_server_ends_run)", seconds)
+    return False
+
+
+def document_room(limit) -> Optional[Callable]:
+    """(documents open) -> how many more may start now, or None without a
+    steered limit (the ceiling alone decides then).
+
+    A document is let in while the model requests in flight stay below what
+    the throttle allows, one per look. A fixed count did not track the load:
+    64 documents read to their end each kept one request open, and four
+    GPUs ran at a fifth of their cache with nothing waiting. Planning sends
+    nothing, so a document planning does not hold the next one back; the
+    ones that start asking fill the limit, and while they hold it no further
+    document starts.
+    """
+    if limit is None or rules.get("document_admission") == "ceiling_only":
+        return None
+
+    def room(open_documents: int) -> int:
+        return 1 if limit.in_flight < limit.limit else 0
+
+    return room
 
 
 def harvest_documents(documents: list, harvest_document: Callable, *,
                       in_flight: int, stop=None,
-                      halted: Optional[Callable] = None) -> tuple:
-    """Run *harvest_document(id, filename)* with *in_flight* at a time.
+                      halted: Optional[Callable] = None,
+                      room: Optional[Callable] = None) -> tuple:
+    """Run *harvest_document(id, filename)*, *in_flight* at most at a time
+    and, with *room* (`document_room`), as many as the server has room for.
 
     Not in groups: the moment one document is done the next one starts, so a
     slow plan holds its own place and nobody else's. A group of sixteen used
@@ -4678,7 +3659,9 @@ def harvest_documents(documents: list, harvest_document: Callable, *,
 
     *harvest_document* returns (written, failures). *stop* (SIGTERM) ends the
     loop at once without waiting for what is open; *halted* only stops new
-    documents from starting, and the open ones are waited for.
+    documents from starting, and the open ones are waited for. A document
+    that is done, written or not, has the answers kept for its requests
+    forgotten (`scheduler.read_out`).
 
     Returns (done, written, failures).
     """
@@ -4697,18 +3680,28 @@ def harvest_documents(documents: list, harvest_document: Callable, *,
                               thread_name_prefix="document")
     try:
         while queue or pending:
-            while (queue and len(pending) < in_flight and not stopping()
+            allowed = in_flight - len(pending)
+            if room is not None:
+                allowed = min(allowed, room(len(pending)))
+            while (queue and allowed > 0 and not stopping()
                    and not (halted is not None and halted())):
                 document_id, filename = queue.pop(0)
                 pending[pool.submit(harvest_document, document_id,
-                                    filename)] = filename
+                                    filename)] = (document_id, filename)
+                allowed -= 1
             if not pending or stopping():
                 break
-            finished, _ = wait(list(pending), timeout=5,
+            # Looked at every second while documents wait for room, so the
+            # next one starts soon after the load allows it.
+            finished, _ = wait(list(pending),
+                               timeout=1 if room is not None and queue else 5,
                                return_when=FIRST_COMPLETED)
             for future in finished:
-                filename = pending.pop(future)
+                document_id, filename = pending.pop(future)
                 done += 1
+                # Done, written or not: the answers kept for its requests go
+                # (`scheduler.read_out`).
+                scheduler.read_out(document_id)
                 try:
                     ok, failed = future.result()
                     failures += failed
@@ -4724,163 +3717,6 @@ def harvest_documents(documents: list, harvest_document: Callable, *,
     return done, written, failures
 
 
-def harvest_batches(batches: list, harvest: Callable, *,
-                    more_sources: Optional[Callable] = None,
-                    verify: Optional[Callable] = None,
-                    on_give_up: Optional[Callable] = None,
-                    workers: int = LLM_PARALLEL,
-                    stop=None,
-                    unfinished: Optional[set] = None,
-                    pool=None,
-                    dead: Optional[DeadStreak] = None,
-                    progress: bool = True) -> list:
-    """Every batch of the whole run in flight at once.
-
-    The batch is the unit, not the chain. A chain — one document, one
-    parameter — has to be read in order only if a later batch must be told
-    what an earlier one found, and making that ordering real made it the unit
-    of scheduling too: the pilot's canary stage is a single document, which
-    is three chains, so three requests faced a server sized for two hundred.
-    The same document had taken three minutes when every source was its own
-    request; it was killed unfinished after nine.
-
-    So `prior` became a hint that each batch reads at dispatch instead of a
-    sequence it waits for. *verify* turns one reply into the rows that
-    survived checking, and only those are recorded — the hint must not carry
-    claims the verifier threw away, or a value refused once is suppressed
-    everywhere else in the document.
-
-    Returns [(batch, reply)] in submission order, follow-up batches appended
-    as they are earned. Ordering is by index, not by completion: the server
-    answers a 40-token table long before a 6000-token section, and the report
-    must not depend on that.
-
-    *on_give_up* is called once when the dead-server cut fires. Cancelling this
-    group is not enough on its own: the cut fired sixteen times in one run and
-    the loop went on to the next group each time, so a server that died at
-    01:44 was still being asked at 05:14. What the caller does with it is the
-    caller's business, but it has to be able to know.
-
-    *stop* ends the harvest early when it is set (SIGTERM): nothing new is
-    submitted, and the call returns at once without waiting for the requests
-    still open. Whenever batches are left behind, by *stop* or by the
-    dead-server cut, the documents they belong to are added to *unfinished*.
-    Such a document has replies for some of its batches and none for the rest,
-    and written it would be stamped as if it had been read whole.
-
-    *pool* and *dead* are shared when several documents harvest at once: the
-    pool bounds the requests of all of them together, and the streak counts
-    unreachable replies across all of them. Without them the call has its own.
-    """
-    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-
-    if not batches:
-        return []
-    sweeps = build_sweeps(batches, FOLLOWUP_ROUNDS)
-    results: list = []
-    started = time.time()
-    submitted = len(batches)
-
-    def one(batch):
-        sweep = sweeps[sweep_key(batch)]
-        reply = harvest(batch, sweep.snapshot())
-        reply = reply if isinstance(reply, dict) else {}
-        if verify is not None:
-            try:
-                sweep.record(verify(batch, reply))
-            except Exception as exc:                        # pragma: no cover
-                log.warning("   prior for %s/%s not updated: %s",
-                            batch.document_id, batch_uri(batch), exc)
-        return batch, reply, sweep
-
-    # A server that goes away turns every request into the same failure, and
-    # the pool would work its way through the whole queue to find that out.
-    # Measured: 53 minutes of dying on five GPUs. Past this many consecutive
-    # unreachable replies the rest is cancelled and the run ends with its
-    # documents unstamped, which is what makes a resume possible.
-    dead = dead if dead is not None else DeadStreak(max(64, workers))
-
-    def leave(pending: dict) -> None:
-        if unfinished is not None:
-            unfinished.update(b.document_id for b in pending.values())
-        for f in list(pending):
-            f.cancel()
-        pending.clear()
-
-    own_pool = pool is None
-    if own_pool:
-        pool = ThreadPoolExecutor(max_workers=max(workers, 1))
-    stopped = False
-    try:
-        try:
-            pending = {pool.submit(one, b): b for b in batches}
-        except RuntimeError:
-            # The shared pool was shut down by a stop between this document's
-            # last check and its first batch.
-            if unfinished is not None:
-                unfinished.update(b.document_id for b in batches)
-            return results
-        step = max(submitted // 20, 25)
-        while pending:
-            if stop is not None and stop.is_set():
-                log.error("harvest: stopped with %d of %d batches back, %d "
-                          "left open", len(results), submitted, len(pending))
-                leave(pending)
-                stopped = True
-                break
-            # With a timeout, so a stop is seen while every open request is
-            # still waiting on the server.
-            done_now, _ = wait(list(pending), timeout=5,
-                               return_when=FIRST_COMPLETED)
-            for future in done_now:
-                batch = pending.pop(future)
-                try:
-                    batch, reply, sweep = future.result()
-                except Exception as exc:                    # pragma: no cover
-                    log.warning("   harvest %s/%s raised: %s",
-                                batch.document_id, batch_uri(batch), exc)
-                    reply = {"tuples": [{"_harvest_failed": True,
-                                         "_why": "unreachable",
-                                         "source": batch.label(i)}
-                                        for i in range(len(batch.items))],
-                             "status": "failed", "need_more": []}
-                    sweep = None
-                results.append((batch, reply))
-                if any(t.get("_why") in ("unreachable", "unserved")
-                       for t in reply.get("tuples") or []):
-                    if dead.hit():
-                        log.error("harvest: %d requests in a row the server "
-                                  "did not serve — cancelling the remaining %d",
-                                  dead.limit, len(pending))
-                        leave(pending)
-                        if on_give_up is not None:
-                            on_give_up()
-                        break
-                else:
-                    dead.clear()
-                if sweep is not None and more_sources is not None:
-                    # A follow-up joins the pool rather than blocking its
-                    # sweep: the passages it brings are new to the whole run,
-                    # so nothing else is waiting on them.
-                    for extra in follow_up(batch, reply, sweep, more_sources,
-                                           max_sources=BATCH_SOURCES,
-                                           max_chars=BATCH_CHARS):
-                        submitted += 1
-                        pending[pool.submit(one, extra)] = extra
-                if progress and (len(results) % step == 0 or not pending):
-                    elapsed = max(time.time() - started, 1e-6)
-                    rate = len(results) / elapsed
-                    log.info("harvest: %d/%d batches (%.1f/s, %.0f s left)",
-                             len(results), submitted, rate,
-                             (submitted - len(results)) / max(rate, 1e-6))
-    finally:
-        # After a stop the open requests are not waited for: the process is
-        # about to exit, and a field sweep can hold its thread for minutes.
-        if own_pool:
-            pool.shutdown(wait=not stopped, cancel_futures=stopped)
-    return results
-
-
 # ---------------------------------------------------------------------------
 # Where a quote sits in the source PDF
 # ---------------------------------------------------------------------------
@@ -4893,7 +3729,7 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
     A section can run over a page break, so the section's other pages are
     tried too - bounded, because this opens the PDF each time.
     """
-    if pdf_root is None or os.environ.get("EXTRACT_LOCATE", "1") == "0":
+    if pdf_root is None or not rules.get("locate_quotes"):
         # The rectangles are display data: they say WHERE on the page a quote
         # sits, never whether the value is accepted. A run that cannot afford
         # to enter MuPDF at all still produces every value, quote and page.
@@ -4926,7 +3762,7 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
             words = pages.get(key)
             if words is None:
                 words = page_words(pdf_path, page)
-                if len(pages) >= LOCATE_CACHE_PAGES:
+                while len(pages) >= rules.get("locate_cache_pages"):
                     pages.pop(next(iter(pages)))
                 pages[key] = words
         return words
@@ -4982,7 +3818,7 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
             return None
         candidates = ([int(first_page)] if first_page else []) + \
                      [p for p in pages if p != first_page]
-        for page in candidates[:LOCATE_MAX_PAGES]:
+        for page in candidates[:rules.get("locate_max_pages")]:
             # MuPDF is entered inside words_of, under the lock. The lock once
             # guarded the two dicts and not the library, so eight verification
             # threads opened and laid out PDFs at once; a corpus run died of
@@ -5024,10 +3860,64 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     Without a spec the stamp keeps its old shape. That is for callers that
     have no spec to hand, and it is a coarser stamp, not a wrong one -- and
     with nothing finer to go on `spec` decides again.
+
+    The numbers of the flow are not among these keys. They belong to the
+    pass that read with them and stand in its entry (`producer`), so a pass
+    over a stored harvest neither carries them forward nor finds them
+    changed.
     """
-    return {"spec": spec_sha, "model": LLM_MODEL, "anchors": anchors_sha,
-            **prompts.versions(PROMPT_IDS),
+    return {"spec": spec_sha, "model": llm_model(), "anchors": anchors_sha,
+            **prompts.versions(survey_prompt_ids()),
             **(fingerprints(spec) if spec is not None else {})}
+
+
+def survey_prompt_ids(profile=None) -> tuple:
+    """The prompts of a harvest piece by piece (`SURVEY_PROMPT_IDS`), and
+    those of `addressed.OPTIONAL` the profile writes: the check of a find
+    from another passage, the names request."""
+    out = list(SURVEY_PROMPT_IDS)
+    for kind in addressed_map.OPTIONAL:
+        try:
+            prompts.load(addressed_map.PROMPT_IDS[kind], profile)
+        except (FileNotFoundError, LookupError):
+            continue
+        out.append(addressed_map.PROMPT_IDS[kind])
+    return tuple(out)
+
+
+def surveyed_flow(spec: Spec, profile=None) -> bool:
+    """Whether a run can harvest piece by piece: its spec names groups. A
+    spec without groups cannot be harvested (`main` stops on it).
+
+    A spec with groups whose profile lacks a prompt of the harvest is a
+    broken profile: the run stops and names the prompt, as `spec.load`
+    stops at a broken group (owner decision 2026-11-04), before a request
+    is sent rather than at the first plan's reading."""
+    if not spec.groups:
+        return False
+    wanted = list(SURVEY_PROMPT_IDS)
+    if names_asked(spec):
+        wanted.append(addressed_map.PROMPT_IDS["names"])
+    for prompt_id in wanted:
+        try:
+            prompts.load(prompt_id, profile)
+        except (FileNotFoundError, LookupError) as exc:
+            raise LookupError(
+                f"the spec names groups, so the profile "
+                f"{getattr(profile, 'name', None) or 'in use'!r} must write "
+                f"every prompt of the harvest, and {prompt_id!r} is missing: "
+                f"{exc}") from exc
+    return True
+
+
+def names_asked(spec: Spec) -> bool:
+    """Whether a run asks names against a document's lists: its spec
+    merges a field or a coordinate into a list of names (a scenario), or
+    keeps a list of works (`Spec.works`)."""
+    merged = any(getattr(p, "merged", None)
+                 or any(getattr(a, "merged", None) for a in p.axes.values())
+                 for p in spec.parameters)
+    return bool(merged or getattr(spec, "works", None))
 
 
 def producer(kind: str, model: Optional[str] = None) -> dict:
@@ -5040,13 +3930,30 @@ def producer(kind: str, model: Optional[str] = None) -> dict:
     list that names them all. A coordinate a top-up re-read points at its
     entry by position (`fields.PRODUCER`), so entries are never removed or
     reordered.
+
+    A pass that asks a model also names the flow it read with (`take_flow`):
+    `numbers`, every number in effect, a setting that won over the flow file
+    among them, and `flow_file`, the sha256 of the flow's files; and the
+    rules (`rules_file`, the sha256 of the rules files, `rules_set`, the
+    rules a setting set). For a reader: a changed number or rule makes no
+    harvest stale.
     """
     from docpipe import __version__
     entry = {"pass": kind, "docpipe": __version__,
              "utc": datetime.now(timezone.utc).isoformat(timespec="seconds")}
     if model is not None:
+        taken = rules.current()
         entry.update(model=model, provider=providers.provider("llm"),
-                     prompts=prompts.versions(PROMPT_IDS))
+                     prompts=prompts.versions(survey_prompt_ids()), flow=FLOW,
+                     numbers=numbers().as_dict(),
+                     flow_file=numbers().sha256,
+                     rules_file=taken.sha256,
+                     **({"rules_set": {
+                         name: taken.values[name] for name, owner
+                         in taken.owners.items()
+                         if not owner.startswith(rules.FILE)}}
+                        if any(not owner.startswith(rules.FILE)
+                               for owner in taken.owners.values()) else {}))
     return entry
 
 
@@ -5096,12 +4003,13 @@ def note_index_model(db_path, command: str = "extraction") -> None:
         log.warning("%s: %s", command, mismatch)
 
 
-def stamp_record(name: str) -> dict:
-    """The stamp keys that place a harvest. The version and the producers
-    decide nothing; `document` is compared (`document_moved`)."""
+def stamp_record(name: str, kind: str = "harvest") -> dict:
+    """The stamp keys that place a harvest. The version decides nothing,
+    `document` is compared (`document_moved`), and of the producers
+    `read_in_part` reads whether the document was read to its end."""
     from docpipe import __version__
     record = {"docpipe": __version__,
-              "producers": [producer("harvest", LLM_MODEL)]}
+              "producers": [producer(kind, llm_model())]}
     if name in DOCUMENT_CONTENT:
         record[DOCUMENT_KEY] = DOCUMENT_CONTENT[name]
     return record
@@ -5142,19 +4050,19 @@ def document_moved(stored: dict, current: dict) -> bool:
 # keys it outvotes them: one added byte and all 991 stamped documents report
 # stale together, which is the bill the finer keys exist to avoid. With no
 # finer keys in the stamp it is all there is, and then it decides again.
-COARSE = ("spec",)
+# (the keys that stand for it where nothing finer is: rule
+# `coarse_stamp_keys`).
 
 # What a run really asks a document through, one key per question and per
 # answer space: the ontology keys, and the only ones `stale` compares. Their
 # presence is what licenses ignoring `spec`: with nothing finer in the stamp
 # there is nothing else to go on.
-QUESTION_KEYS = ("parameter/", "value/", "axis/", "slot/")
 
-# Where a top-up writes its trace: beside the harvest's `trace/`, never into
-# it. trace._handle opens "w", so the harvest's own file would be truncated,
-# and scripts/harvest_compare.py reads `trace/` alone, so a top-up's requests
-# are not counted into the harvest's cost.
-TOPUP_TRACE_DIR = "trace-topup"
+
+def question_keys() -> tuple:
+    """The keys of a stamp that decide whether a document is read again
+    (rule `question_keys`, owner decision 2026-09-10)."""
+    return tuple(rules.get("question_keys"))
 
 
 def recorded_questions(questions: Optional[dict]) -> dict:
@@ -5183,7 +4091,7 @@ def recorded_questions(questions: Optional[dict]) -> dict:
 def stale(stamp_path: Path, current: dict) -> list:
     """Which keys differ from now; everything when unstamped.
 
-    The ontology keys are compared (`QUESTION_KEYS`: one per parameter,
+    The ontology keys are compared (`question_keys`: one per parameter,
     value list, axis and slot), the whole-file sha `spec` only for a stamp
     that has none of them, and the sha256 of the PDF the harvest read from
     (`DOCUMENT_KEY`) where the stamp and `current` both carry one. The model,
@@ -5214,10 +4122,12 @@ def stale(stamp_path: Path, current: dict) -> list:
         stored = json.loads(stamp_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return unstamped
-    detailed = any(k.startswith(QUESTION_KEYS) for k in current)
+    keys = question_keys()
+    detailed = any(k.startswith(keys) for k in current)
 
     def compared(key: str) -> bool:
-        return key.startswith(QUESTION_KEYS) or (not detailed and key in COARSE)
+        return key.startswith(keys) or (
+            not detailed and key in rules.get("coarse_stamp_keys"))
 
     changed = {k for k in current
                if compared(k) and stored.get(k) != current[k]}
@@ -5231,7 +4141,8 @@ def stale(stamp_path: Path, current: dict) -> list:
 def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
                          force: bool = False, force_stale: bool = False,
                          anchors_sha: str = "", spec: Optional[Spec] = None,
-                         top_up: bool = False) -> list:
+                         top_up: bool = False,
+                         start_at: bool = False) -> list:
     """Which of these documents this run has work for.
 
     A top-up is the exception and it is not a small one: this filter drops
@@ -5246,36 +4157,31 @@ def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
     return [(did, fn) for did, fn in documents
             if not already_done(Path(fn).stem, out_dir, spec_sha,
                                 force=force, force_stale=force_stale,
-                                anchors_sha=anchors_sha, spec=spec)]
+                                anchors_sha=anchors_sha, spec=spec,
+                                start_at=start_at)]
 
 
-def run_document(document_id: int, name: str, out_dir: Path, spec: Spec,
-                 spec_sha: str, templates: list, deps: dict, *,
-                 force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "") -> bool:
-    if already_done(name, out_dir, spec_sha, force=force,
-                    force_stale=force_stale, anchors_sha=anchors_sha,
-                    spec=spec):
-        return True
-    report = harvest_document(document_id, spec, templates,
-                              retrieve=deps["retrieve"],
-                              harvest=deps["harvest"],
-                              locate=deps.get("locate"),
-                              structure=deps.get("structure"),
-                              more_sources=deps.get("more_sources"),
-                              extra_probes=deps.get("anchors"),
-                              prose_top=PROSE_TOP)
-    stamped = finish_document(report, name, out_dir, spec_sha, anchors_sha,
-                              spec=spec, lost=UNSERVED.of(document_id))
-    return stamped
+def read_in_part(stamp_path: Path) -> bool:
+    """Whether the stamp's document was read at its found places alone, with
+    nothing having read the rest of it since."""
+    from .remap import _read_stamp
+    from .topup_rest import read_to_end
+    stamp = _read_stamp(stamp_path) or {}
+    return not read_to_end(stamp_path) and any(
+        isinstance(p, dict) and p.get("pass") == found_places.PASS
+        for p in stamp.get("producers") or ())
 
 
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "", spec: Optional[Spec] = None) -> bool:
+                 anchors_sha: str = "", spec: Optional[Spec] = None,
+                 start_at: bool = False) -> bool:
     """True when this document needs no work: harvested under the current
-    ontology keys — or stale with nobody asking for the redo."""
-    if force or not (out_dir / f"{name}.jsonl").exists():
+    ontology keys — or stale with nobody asking for the redo. A document read
+    at its found places alone is no work only for a run that starts at them:
+    any other run owes it the rest of the plan."""
+    if force or not rules.get("skip_current") \
+            or not (out_dir / f"{name}.jsonl").exists():
         return False
     stamp_path = out_dir / f"{name}.stamp.json"
     if not stamp_path.is_file():
@@ -5286,6 +4192,10 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         # Treating that as "already done" is how deleting the stamps to force
         # a redo caused every document to be skipped instead.
         log.info("extraction: %s carries no stamp — harvested again", name)
+        return False
+    if not start_at and read_in_part(stamp_path):
+        log.info("extraction: %s was read at its found places alone — "
+                 "harvested again", name)
         return False
     changed = stale(stamp_path, {**_stamp_current(spec_sha, anchors_sha, spec),
                                  **document_current(name)})
@@ -5315,7 +4225,6 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
 # A document this many of whose sources died on an unreachable server was not
 # harvested, whatever its file says. Half is the line: below it a plan really
 # can be mostly holes, above it the server was gone.
-UNREACHABLE_LIMIT = 0.5
 
 
 def not_happened(report, *, answered: Optional[int] = None,
@@ -5327,7 +4236,9 @@ def not_happened(report, *, answered: Optional[int] = None,
     reached the server, of the sources the plan held; "no_reply" is the
     sources planned, when not one batch came back (`answered` is how many did;
     None means the caller does not track it and the count is not checked);
-    "unserved" is the requests that ended on a 429, a 5xx or a timeout, `lost` of them
+    "unserved" is the requests that ended on a 429, a 5xx, a timeout, a
+    refusal asked `refusal_retry_most` times or a fault of our own code
+    asked `other_errors_retry` times, `lost` of them
     noted beside the report and the rest in its sentinels. None when the
     reading happened. `finish_document` withholds the stamp on any of them
     and the pass for a new parameter writes nothing.
@@ -5337,13 +4248,13 @@ def not_happened(report, *, answered: Optional[int] = None,
     unreachable = sum(1 for r in failed
                       if r.get("claim", {}).get("_why") == "unreachable")
     sources = max(report.owners_harvested, len(failed))
-    if sources and unreachable > sources * UNREACHABLE_LIMIT:
+    if sources and unreachable > sources * rules.get("unreachable_share"):
         return "unreachable", unreachable, sources
-    if sources and answered == 0:
+    if sources and answered == 0 and not rules.get("stamp_without_reply"):
         return "no_reply", sources, sources
     lost += sum(1 for r in failed
                 if r.get("claim", {}).get("_why") == "unserved")
-    if lost:
+    if lost and rules.get("unserved_unstamped"):
         return "unserved", lost, lost
     return None
 
@@ -5370,7 +4281,8 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     documents into 0-byte results a resume would have skipped.
 
     `lost` is how many of the document's other requests (a coordinate,
-    the frame, a search sentence) ended on a 429 or a 5xx, or timed out; the passages that
+    the frame, a search sentence) ended on a 429 or a 5xx, timed out,
+    were refused to the end or failed in our own code; the passages that
     ended there carry it in their sentinel. One is enough to withhold the
     stamp: the request was never answered and nothing says it cannot be.
 
@@ -5397,7 +4309,8 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     states = (parameter_states(spec, report.tuples, report.refusals,
                                harvested=report.owners_harvested,
                                answered=answered,
-                               sources_of=getattr(report, "sources_of", None))
+                               sources_of=getattr(report, "sources_of", None),
+                               uncombed=getattr(report, "uncombed", ()))
               if spec is not None else None)
     if spec is not None:
         check_against_schema(report, name, spec, states)
@@ -5416,14 +4329,18 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                       "reply — not stamped, so a resume harvests it again",
                       name, of)
         else:
-            log.error("extraction: %s: %d request(s) ended on a 429 or a "
-                      "5xx — not stamped, so a resume harvests it again",
-                      name, found)
+            log.error("extraction: %s: %d request(s) not served, refused "
+                      "to the end or failed in our own code — not stamped, "
+                      "so a resume harvests it again", name, found)
         return False
+    archive.keep(stamp)
     stamp.write_text(
         json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
                     **recorded_questions(questions),
-                    **stamp_record(name)},
+                    **stamp_record(name, found_places.PASS
+                                   if found_places.STAGE
+                                   in getattr(report, "planned", ())
+                                   else "harvest")},
                    ensure_ascii=False, indent=2),
         encoding="utf-8")
     return True
@@ -5483,6 +4400,8 @@ def check_against_schema(report, name: str, spec,
     not do is pass unnoticed, because the schema is what everyone downstream
     reads instead of this file.
     """
+    if not rules.get("write_checks_schema"):
+        return 0
     validators = _harvest_validators(spec)
     if validators is None:
         return 0
@@ -5540,11 +4459,16 @@ def resolve_image_root(pdf_root: Optional[Path],
     return (Path(pdf_root) / "processed") if pdf_root else Path(fallback)
 
 
-# A choice list the profile fills per document is not in the spec file, so it
-# cannot be measured there. This is its ceiling: the widest such list in this
-# corpus is one publication's 146 AR6 scenarios beside the ~250 OEKG study
-# regions, and both together stay well inside it.
-DYNAMIC_LIST_TOKENS = 4000
+def field_slots(spec) -> list:
+    """Every slot a request can ask, one per request: the parameter, the
+    unit, each parameter's coordinates and the value of a category parameter
+    asked again."""
+    out = [fields.parameter_slot(spec), fields.unit_slot(spec)]
+    for parameter in spec.parameters:
+        out += fields.axis_slots(parameter)
+        if parameter.value_type == "category":
+            out.append(fields.value_choice(parameter))
+    return [slot for slot in out if slot is not None]
 
 
 def context_budget(prompt, spec=None) -> int:
@@ -5564,108 +4488,98 @@ def context_budget(prompt, spec=None) -> int:
     no parameter carries every parameter's class lists at once. The second
     was not counted until a profile had four lists, one of 153 classes, and
     its reading requests outgrew a budget that still measured the widest
-    single parameter.
+    single parameter. A field request carries one slot's options as the
+    model reads them, definitions and all, and the value of a category
+    parameter asked again carries its whole list: 63,230 characters for 154
+    sectors whose parameter payload counts 9,627. Unmeasured, that request
+    did not fit the window and was never sent.
 
-    A request carries several sources now, so the text term is the batch's
-    ceiling rather than one window's — and one source too long to share a
-    request rides alone, which is why the larger of the two is what counts.
-    Every source in a batch may bring a crop, and the prior block rides along
-    on top.
+    A request shows the pieces of a search: as many as the flow says
+    (`search_per_request`), each of its lines (`piece_lines`) and headings
+    (`headings`) at the tokens the longest line takes (`window_line_tokens`);
+    each piece may bring a crop. Each number counts at its largest in the
+    flow, wherever a box sets one for itself.
     """
-    payload = 2000
+    payload = rules.get("window_floor_tokens")
     if spec is not None:
         widest = max((len(json.dumps(_parameter_payload(p), ensure_ascii=False))
                       for p in spec.parameters), default=0)
         together = len(json.dumps(_quantities_payload(spec),
                                   ensure_ascii=False))
+        asked = max((len(json.dumps(slot.answerable(), ensure_ascii=False))
+                     for slot in field_slots(spec) if slot.options),
+                    default=0)
         dynamic = any(p.vocabulary_dynamic or
                       any(a.dynamic for a in p.axes.values())
                       for p in spec.parameters)
-        payload = max(payload, max(widest, together) // 3 + 600
-                      + (DYNAMIC_LIST_TOKENS if dynamic else 0))
-    return int(len(prompt.text.split()) * 3
-               + max(BATCH_CHARS, MAX_SOURCE_CHARS) // 3    # the batch's text
-               + (1200 * BATCH_SOURCES if ATTACH_IMAGES else 0)   # its crops
-               + PRIOR_MAX * PRIOR_TOKENS                   # what we have already
+        # A choice list the profile fills per document is not in the spec
+        # file, so it cannot be measured there: its ceiling is the rule
+        # `dynamic_list_tokens`.
+        payload = max(payload, max(widest, together, asked)
+                      // rules.get("window_words_per_token")
+                      + rules.get("window_extra_tokens")
+                      + (rules.get("dynamic_list_tokens") if dynamic else 0))
+    per_request = most_of_number("search_per_request")
+    lines = most_of_number("piece_lines") + most_of_number("headings")
+    # Of each group of ways the longest: a step may choose any of them.
+    words = len(thread_map.widest(prompt.text,
+                                  getattr(prompt, "id", "")).split())
+    return int(words * rules.get("window_words_per_token")
+               + per_request * lines
+               * rules.get("window_line_tokens")         # the pieces' text
+               + (rules.get("window_tokens_per_image") * per_request
+                  if attach_images() else 0)               # their crops
                + payload                                    # payload + envelope
-               + int(prompt.meta.get("max_tokens", 4096)))
+               + answer_tokens_of(prompt))
 
 
-# How many tuples one source yields when it yields at all, at the 90th
-# percentile — measured over the finished pilots' own output, grouped by
-# (owner, parameter). Sizing on the median would truncate half the fat
-# tables; sizing on the maximum would make the batch pointless. The tail past
-# p90 is what the split is for: the batch is asked again in halves.
-TUPLES_PER_SOURCE_P90 = 12
-# Characters per output token, from the truncated replies themselves: they
-# stopped at exactly max_tokens, so content length over max_tokens is the
-# measurement. It came out between 2.62 and 2.82; the low end is conservative.
-CHARS_PER_TOKEN = 2.62
+def most_of_number(name: str) -> int:
+    """The largest value the number *name* of the flow takes in any box or
+    frame of it that is on (the run's number, and what each node sets for
+    itself)."""
+    from docpipe.profile import active_profile
+    from .engine import Engine
+    most = int(flow_map.number(numbers(), name))
+    for node, _frames in flow_map.on(flow_map.tree_of(active_profile())):
+        said = Engine.own_values(node).get(name)
+        if said is not None:
+            most = max(most, int(said))
+    return most
 
 
-def fit_batch_sources(prompt, spec, wanted: int = BATCH_SOURCES) -> int:
-    """The largest batch this profile can be ANSWERED for, at most *wanted*.
-
-    The two numbers that killed a pilot lived in different files and nobody
-    ever compared them: how many sources one request reads is set here, and
-    how much the model may write about them is set in the prompt's
-    frontmatter. Six sources of kwp tuples fit in 8192 tokens; six sources of
-    ar6 tuples, whose quotes are whole sentences, need 11000 and would be cut
-    off — every time, deterministically, on five GPUs.
-
-    So the batch follows the answer budget rather than a hand-picked
-    constant, and what one tuple costs comes from the profile's own example,
-    which is the very contract the prompt shows the model.
-    """
-    widest = max((len(json.dumps(t, ensure_ascii=False))
-                  for parameter in spec.parameters
-                  for t in (parameter.example or {}).get("tuples", ())),
-                 default=0)
-    if not widest:
-        return wanted
-    per_source = TUPLES_PER_SOURCE_P90 * widest / CHARS_PER_TOKEN
-    allowed = int(int(prompt.meta.get("max_tokens", 4096)) // per_source)
-    return max(1, min(wanted, allowed))
+def answer_tokens_of(prompt) -> int:
+    """The longest answer a request of *prompt*'s kind may ask for: the
+    longest of those the steps of the flow that ask this kind set for
+    themselves (rule `max_tokens`), else the run's."""
+    from docpipe.profile import active_profile
+    from . import blocks
+    kind = next((name for name, prompt_id in addressed_map.PROMPT_IDS.items()
+                 if prompt_id == getattr(prompt, "id", None)), None)
+    name = "max_tokens"
+    own = []
+    for node in flow_map.boxes(flow_map.tree_of(active_profile())):
+        said = (node.get("rules") or {}).get(name)
+        if blocks.asks_of(node) == kind and said is not None:
+            own.append(int(said))
+    return max(own) if own else int(rules.get(name))
 
 
-def sent_prompt_ids(framed: bool) -> tuple:
-    """The prompts a harvest sends to the model as a system message.
-
-    The rows request, the field request, the sentence a document is searched
-    with and the anchor questions; the frame request only when the profile has
-    frame axes, because `ask_frame` does not exist otherwise. Not the queries
-    (a list of search templates, never sent) and not the review, which has a
-    line of its own in the doctor.
-    """
-    return (ROWS_PROMPT_ID, FIELD_PROMPT_ID, PHRASE_PROMPT_ID,
-            ANCHORS_PROMPT_ID, *((FRAME_PROMPT_ID,) if framed else ()))
-
-
-def request_budget(spec, framed: bool, profile=None) -> int:
+def request_budget(spec, profile=None) -> int:
     """Tokens the largest request this run sends needs, per request.
 
     The window a server is started with has to hold every request kind of the
-    run, so it follows the largest of them, and the largest is the field
-    request for one profile and the rows request for the other. Read off the
-    prompts the run sends and never off one that no request carries.
+    run, so it follows the largest of them. Read off the prompts the run
+    sends (`survey_prompt_ids`): one per kind of request of the reading
+    (`addressed.KINDS`). Never off one that no request carries, and not the
+    review, which has a line of its own in the doctor.
     """
     return max(context_budget(prompts.load(prompt_id, profile), spec)
-               for prompt_id in sent_prompt_ids(framed))
-
-
-def batch_sources_for(spec, profile=None) -> int:
-    """How many passages one rows request reads for this profile.
-
-    The rows request is the only one that reads BATCH_SOURCES passages, and its
-    max_tokens is what bounds that reply. The field request reads
-    FIELD_WINDOW passages and answers a row at a time, so its ceiling says
-    nothing about how many tuples a batch yields.
-    """
-    return fit_batch_sources(prompts.load(ROWS_PROMPT_ID, profile), spec)
+               for prompt_id in survey_prompt_ids())
 
 
 def _documents(conn: sqlite3.Connection) -> list:
-    """Every current document, the largest first.
+    """Every current document, the largest first (rule `largest_first`;
+    otherwise by name).
 
     Admission is bounded (EXTRACT_BATCH_DOCS in flight) and a document lasts
     as long as its slowest sweep's chain of windows, which is sequential by
@@ -5678,8 +4592,11 @@ def _documents(conn: sqlite3.Connection) -> list:
             for r in conn.execute(
                 "SELECT d.id, d.filename FROM Documents d "
                 "LEFT JOIN Sections s ON s.document = d.id "
-                "WHERE d.is_current = 1 GROUP BY d.id, d.filename "
-                "ORDER BY COUNT(s.id) DESC, d.filename")]
+                + ("WHERE d.is_current = 1 "
+                   if rules.get("current_versions_only") else "")
+                + "GROUP BY d.id, d.filename "
+                + ("ORDER BY COUNT(s.id) DESC, d.filename"
+                   if rules.get("largest_first") else "ORDER BY d.filename"))]
 
 
 def select_documents(documents: list, wanted: Optional[list]) -> tuple:
@@ -5690,256 +4607,23 @@ def select_documents(documents: list, wanted: Optional[list]) -> tuple:
     only. A pilot has to hear about that instead of quietly being smaller than
     it was meant to be.
     """
+    wanted = wanted or rules.get("documents")
     if not wanted:
         return documents, []
-    ids = set(wanted)
+    ids = {int(one) for one in wanted}
     chosen = [d for d in documents if d[0] in ids]
     return chosen, sorted(ids - {d[0] for d in chosen})
 
 
-def pair_batches(items: list, pairs: list, pair_plans: list, frame_axes: list,
-                 anchors: list, *,
-                 max_sources: int = BATCH_SOURCES,
-                 max_chars: int = BATCH_CHARS) -> tuple:
-    """(batches, rest, added) for one document with a frame.
-
-    A pair is read over every passage that prints it, and over no other. Its
-    own search and the document's search keep `PLAN_TOP` passages each, cut
-    from two rankings. A table the document's search found that prints 2045,
-    below the cut of the 2045 search, was in no batch at all: not under the
-    pair, whose search had not kept it, and not in the rest, which is what
-    prints none of the pairs. So every passage any search of the document
-    planned goes to every pair it prints. `added` counts the ones a pair's own
-    search had not kept; a pair whose own search failed (`None`) is read over
-    those alone.
-
-    A passage a pair's own search kept that does not print the pair is not
-    read under it: every value from it is refused as another pair's, and on
-    corpus_m5 that was 26,990 refusals, 95 percent of all. It goes where the
-    passages of no pair go.
-
-    `rest` is what any search of the document found that prints none of the
-    pairs. It is read without one, and its year is asked per row against the
-    section the passage stands in, which is where a plan writes it. A pair
-    chosen for it from outside would be a coordinate with a quote from
-    somewhere else, and the owner's rule is that every value says in the plan
-    what it refers to.
-    """
-    def key(item):
-        return (item.source.owner_kind, item.source.owner_id,
-                item.source.text or "")
-
-    known: dict = {}
-    for item in list(items) + [item for planned in pair_plans
-                               for item in planned or ()]:
-        known.setdefault(key(item), item)
-    batches: list = []
-    added = 0
-    for pair_index, pair in enumerate(pairs):
-        planned = [item for item in (pair_plans[pair_index]
-                                     if pair_index < len(pair_plans)
-                                     else None) or ()
-                   if names_pair(item.source, pair, frame_axes)]
-        have = {key(item) for item in planned}
-        extra = [item for k, item in known.items()
-                 if k not in have and names_pair(item.source, pair, frame_axes)]
-        added += len(extra)
-        for batch in group_items(planned + extra, max_sources=max_sources,
-                                 max_chars=max_chars):
-            batch.frame = pair
-            batch.frame_index = pair_index
-            # Every pair of the document, so a claim whose quote names
-            # another one of them can be filed there instead of refused.
-            batch.pairs = tuple(pairs)
-            batch.anchors = tuple(anchors[pair_index]
-                                  if pair_index < len(anchors) else ())
-            batches.append(batch)
-    rest = [item for item in known.values()
-            if not any(names_pair(item.source, pair, frame_axes)
-                       for pair in pairs)]
-    return batches, rest, added
-
-
-@dataclass
-class PlannedDocument:
-    """One document planned, as `plan_batches` hands it to the harvest."""
-    name: str                   # the file stem
-    report: object              # the plan's DocumentReport, still empty
-    batches: list               # every batch of the document, framed or not
-    doc_spec: Spec              # this document's spec, its lists closed
-    pairs: list                 # the frame's pairs, in the order of `indices`
-    indices: list               # the index each pair stands under in the file
-    failed: int = 0             # frame and pair plans that raised
-
-
-# The constant of a profile's extraction.py that says which frame pairs are
-# which state of the plan (`pipeline.YEAR_STATES`).
-YEAR_STATE_CONSTANTS = {"base": "BASE_YEAR", "target": "TARGET_YEAR"}
-
-
-def year_states_of(profile) -> dict:
-    """{state: which frame pairs are that state of the plan}, as the profile
-    says it: their years date a row that names the state by word
-    ("Basisjahr", "Zieljahr") and prints no year. None for a state the
-    profile does not name, which then has no years."""
-    return {state: profile.component("extraction", YEAR_STATE_CONSTANTS[state])
+def year_states_of(spec: Spec) -> dict:
+    """{state: which frame pairs are that state of the plan}, as the spec
+    says it at the plan field of the state's year (`plan_fields`, key `of`,
+    owner decision 2026-11-10): their years date a row that names the state
+    by word ("Basisjahr", "Zieljahr") and prints no year, in a pass over a
+    stored harvest, which asks no plan its years. None for a state the spec
+    does not say it of, which then has no years."""
+    return {state: (spec.plan_fields.get(f"{state}_year") or {}).get("of")
             for state in YEAR_STATES}
-
-
-def plan_batches(document_id: int, filename: str, *, plan: Callable,
-                 plan_pool, ask_frame: Optional[Callable], frame_axes: list,
-                 more_sources: Optional[Callable], year_states,
-                 anchor_texts: dict, only=(),
-                 stored_pairs: Optional[dict] = None) -> PlannedDocument:
-    """One document from its first search to its batches: the plan, the frame,
-    one plan per pair and the batches that read them.
-
-    The planning half of the harvest of a document, shared by the run and by
-    the pass that appends a parameter to a stored harvest. *only* names the
-    parameters (by uri) the document is searched for and the batches ask for;
-    empty is every parameter, which is the harvest. *stored_pairs* is
-    {index: pair} of a harvest already on disk: the frame is asked over this
-    plan's passages with those pairs seeded, they keep their index and the
-    pairs the passages print in addition are numbered after them. Without it
-    the pairs stand under 0, 1, 2 as the frame found them.
-    """
-    failed = 0
-    name, items, report, doc_spec = plan_pool.submit(
-        plan, document_id, filename, only=only).result()
-    # ---- Frame: which scenarios and years, once per document -------------
-    # Before any value. Every value request below asks for ONE of these
-    # pairs, so the coordinate is never something the model has to decide
-    # while it is reading a number.
-    seeds = sorted(stored_pairs or {})
-    pairs: list = []
-    if ask_frame is not None:
-        try:
-            if seeds:
-                pairs, status, missed = find_frame(
-                    [item.source for item in items], frame_axes,
-                    report.document_id, ask_frame, more_sources,
-                    start=[stored_pairs[i] for i in seeds])
-            else:
-                pairs, status, missed = find_frame(
-                    [item.source for item in items], frame_axes,
-                    report.document_id, ask_frame, more_sources)
-        except Exception:
-            failed += 1
-            pairs = []
-            log.exception("extraction: frame %s failed", name)
-        else:
-            if missed:
-                # A year the deterministic scan found in the very passages
-                # the model was shown and it did not name. Reported, never
-                # added: "2045 MWh/a" is year-shaped and is not a year.
-                log.info("extract: %s: frame %d pair(s), %s, %d "
-                         "year-shaped number(s) not named: %s",
-                         name, len(pairs), status, len(missed),
-                         ", ".join(str(y) for y in missed[:8]))
-            else:
-                log.info("extract: %s: frame %d pair(s), %s",
-                         name, len(pairs), status)
-    pairs = list(pairs or ())
-    # The seeds come back first and in order, so position says which index a
-    # pair stands under; a pair found in addition takes the next free one.
-    free = seeds[-1] + 1 if seeds else 0
-    indices = (seeds + [free + k for k in range(len(pairs))])[:len(pairs)]
-
-    # ---- Plan again, once per pair: the pair is a search, not a label ----
-    # "Nutzwaermebedarf 2040 im Zielszenario" is a sentence the plan can
-    # print and the value request for 2040 is asked over what THAT
-    # sentence finds.
-    pair_items: dict = {}
-    if pairs:
-        futures = {plan_pool.submit(plan, document_id, filename, pair,
-                                    indices[position], only=only): position
-                   for position, pair in enumerate(pairs)}
-        for future in as_completed(futures):
-            position = futures[future]
-            try:
-                _name, found, pair_report, _spec = future.result()
-            except Exception:
-                failed += 1
-                log.exception("extraction: planning %s for pair %d "
-                              "failed", name, indices[position])
-                continue
-            pair_items[position] = found
-            # The pair's own anchors found passages of their own; they are
-            # that parameter's too.
-            for uri, keys in pair_report.sources_of.items():
-                report.sources_of.setdefault(uri, set()).update(keys)
-
-    framed, rest, added = pair_batches(
-        items, pairs, [pair_items.get(i) for i in range(len(pairs))],
-        frame_axes, [anchor_texts.get((name, indices[i]), ())
-                     for i in range(len(pairs))],
-        max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS)
-    # The rest: what prints none of the pairs. A value the frame search has
-    # no pair for is harvested here without one, and its year is read per
-    # row or ends `unstated`, so a year the search missed is a countable
-    # gap and not a silent loss.
-    if pairs:
-        log.info("extract: %s: %d pair(s), %d passage(s) print none of "
-                 "them, %d read under a pair its own search had not kept",
-                 name, len(pairs), len(rest), added)
-    batches = list(framed) + list(group_items(
-        rest, max_sources=BATCH_SOURCES, max_chars=BATCH_CHARS))
-    # The pairs by the index they stand under, a gap staying a gap: a base
-    # year and a row filed under another pair name the pair by it, and
-    # `["frame", i]` then means the same pair everywhere in the file. The
-    # batches above were built from the compact list, which is what keeps a
-    # gap from naming every passage.
-    ordered: list = [None] * ((max(indices) + 1) if indices else 0)
-    for pair, index in zip(pairs, indices):
-        ordered[index] = pair
-    for batch in framed:
-        batch.frame_index = indices[batch.frame_index]
-        batch.pairs = tuple(ordered)
-    bases = tuple(named_years(ordered, frame_axes, year_states))
-    for state in YEAR_STATES:
-        years = [str(b["year"]) for b in bases if b["state"] == state]
-        if years:
-            log.info("extract: %s: %s year(s) %s", name, state,
-                     ", ".join(years))
-    asked = narrow_spec(doc_spec, only)
-    for batch in batches:
-        batch.bases = bases
-        # What the plan searched with is what the requests offer and
-        # what their answers are checked against.
-        batch.spec = asked
-    log.info("extraction: %s planned — %d batch(es) over %d source(s)",
-             name, len(batches), sum(len(b.items) for b in batches))
-    return PlannedDocument(name=name, report=report, batches=batches,
-                           doc_spec=doc_spec, pairs=pairs, indices=indices,
-                           failed=failed)
-
-
-def accepted_rows(batch, reply, spec) -> list:
-    """What of one reply survives checking: the next batch's `prior`.
-
-    The same verify_tuple the fold runs, against the same source text, so
-    the two cannot drift apart. It skips only `locate`, which turns a
-    quote into highlight rectangles and has never decided whether a
-    claim is accepted.
-    """
-    from .verify import Refusal, verify_tuple
-
-    routed, _orphans = route_claims(
-        batch, [claim for claim in reply.get("tuples") or ()
-                if not refused_upstream(claim)])
-    rows: list = []
-    for item, claims in zip(batch.items, routed):
-        for claim in claims:
-            parameter = item.parameter or spec_of(
-                batch, spec).by_uri.get(str(claim.get("parameter") or ""))
-            if parameter is None:
-                continue
-            outcome = verify_tuple(dict(claim), parameter,
-                                   item.source.text,
-                                   owner_kind=item.source.owner_kind)
-            if not isinstance(outcome, Refusal):
-                rows.append(dict(outcome.tuple))
-    return rows
 
 
 def fold_answers(answered: list, report, *, locate: Optional[Callable],
@@ -6000,7 +4684,109 @@ def _decisions_file(harvest_dir: Path) -> tuple:
         return None, path
 
 
+# The switches of the follow-up passes and the flow each one chooses, in the
+# order a run takes one where more than one is given.
+SWITCH_FLOWS = (("recheck", "recheck"), ("remap", "remap"),
+                ("review", "review"), ("top_up", "top_up"),
+                ("top_up_open", "top_up_open"),
+                ("top_up_parameters", "top_up_parameters"),
+                ("start_at", "start_at"))
+# What a flow without a harvest of its own reads: every document of the
+# database, not only those the harvest would read.
+LISTING_FLOWS = ("top_up", "top_up_open", "top_up_parameters")
+
+
+def chosen_flow(args) -> tuple:
+    """(the flow this run starts, why it cannot): `--flow NAME` or the flow
+    the switch chooses, the main flow where there is neither. A switch that
+    chooses another flow than `--flow` names is refused."""
+    switched = [name for switch, name in SWITCH_FLOWS
+                if getattr(args, switch, None)]
+    if args.flow is not None:
+        others = [name for name in switched if name != args.flow]
+        if others:
+            return args.flow, (f"--flow {args.flow} and the switch of the "
+                               f"flow {others[0]} name two flows: a run "
+                               f"starts one")
+        if args.flow == "start_at" and not args.start_at:
+            return args.flow, ("--flow start_at needs the harvest to start "
+                               "at: --start-at HARVEST")
+        return args.flow, None
+    return (switched[0] if switched else passflow.MAIN), None
+
+
+def follow_up_problem(name: str, profile) -> Optional[str]:
+    """Why the flow *name* cannot be started for *profile*, or None."""
+    if name == passflow.MAIN:
+        return None
+    if name not in passflow.names(profile):
+        return (f"--flow {name}: the profile {profile.name!r} has no such "
+                f"flow; it has {', '.join(passflow.names(profile))}")
+    try:
+        tree = passflow.load(name, profile)
+    except (flow_map.FlowError, LookupError, OSError) as exc:
+        return f"--flow {name}: {exc}"
+    said = passflow.startable(tree)
+    return f"--flow {name}: {said}" if said else None
+
+
+def follow_up_run(args, spec, current, documents, document_name, whole,
+                  every, locate, document_axes, frame_axes, year_states,
+                  sweep, owner_sources, in_flight, room, harvest_document,
+                  make_found, harvest_documents_of) -> passflow.Run:
+    """What a flow of a follow-up pass runs with (`passflow.Run`): where the
+    harvest is, the stamp this run would write, and the means to read a
+    document again as the harvest reads it (`whole`: the survey of the
+    plan, asked for the new parameters alone or for the passages nobody
+    read)."""
+    document_spec = document_spec_per_call(args.db, spec, document_axes)
+    deps = {"sweep": sweep, "owner_sources": owner_sources,
+            "document_spec": document_spec,
+            "frame_names": [slot.name for slot in frame_axes],
+            "frame_axes": frame_axes, "year_states": year_states,
+            "dynamic_ok": document_axes is not None, "locate": locate}
+    stems = {Path(fn).stem for _did, fn in documents}
+    return passflow.Run(
+        out=args.out, spec=spec, current=current, deps=deps,
+        only=args.top_up_key, documents=documents, named=lambda: stems,
+        in_flight=in_flight, room=room, locate=locate,
+        document_spec=lambda document_id: (
+            document_spec(document_id) if document_id else spec),
+        take_parameters=lambda document_id, uris: whole(
+            document_id, only=tuple(uris), scope="parameters"),
+        take_passages=lambda document_id, passages, also: whole(
+            document_id, scope="rest", passages=passages, also=also),
+        passages_of=lambda document_id: every(document_id, set()),
+        make_found=make_found, harvest_documents=harvest_documents_of,
+        harvest_document=harvest_document,
+        open_trace=lambda folder: trace.open_trace(args.out / folder,
+                                                   document_name.get),
+        begin_archive=archive.begin, flush_trace=trace.flush)
+
+
+def log_follow_up(name: str, stats) -> None:
+    """The line that says what a pass over a stored harvest did."""
+    if name == "top_up":
+        log.info("top-up: %d row(s) re-read over %d document(s), %d "
+                 "stamp(s) carried forward, %d blocked", stats["rows"],
+                 stats["documents"], stats["stamps carried forward"],
+                 stats["blocked"])
+    elif name == "top_up_open":
+        log.info("top-up-open: %d open coordinate(s) asked over %d "
+                 "document(s), %d still open",
+                 stats["open coordinates asked"], stats["documents"],
+                 stats["open coordinates left"])
+
+
 def main(argv: Optional[list] = None) -> int:
+    """The call line of the run. What a call switch sets for the run alone
+    (`--document`, `--force`) is a rule laid over the rules for as long as
+    the run goes (`rules.overlaid`), and gone after it."""
+    with ExitStack() as stack:
+        return _main(argv, stack)
+
+
+def _main(argv: Optional[list], stack: ExitStack) -> int:
     parser = argparse.ArgumentParser(
         prog=program("docpipe.extraction"),
         description="Ontology-guided value extraction over an indexed corpus")
@@ -6036,8 +4822,9 @@ def main(argv: Optional[list] = None) -> int:
                              "harvest needs and exit (feed it to the "
                              "server's --max-model-len)")
     parser.add_argument("--serialize", type=Path, default=None, metavar="TTL",
-                        help="No harvest: hand the JSONL in OUT to the "
-                             "profile's kg.make_serializer and write TTL")
+                        help="No harvest: write the JSONL in OUT as the "
+                             "drawing of the profile's graph file says, as "
+                             "TTL")
     parser.add_argument("--no-provenance", dest="provenance",
                         action="store_false",
                         help="With --serialize: do not write the "
@@ -6062,6 +4849,13 @@ def main(argv: Optional[list] = None) -> int:
                         help="--top-up only: sweep this stamp key and no "
                              "other, e.g. axis/energy_consumption/sector. "
                              "Repeatable")
+    parser.add_argument("--top-up-open", action="store_true",
+                        help="over the harvest in --out: ask every coordinate "
+                             "left exhausted, unanswered or unbacked again, "
+                             "reading each document to its end, then read "
+                             "the passages its trace says were never asked "
+                             "for values and append their rows. Needs the "
+                             "model, the index and the harvest's traces")
     parser.add_argument("--top-up-parameters", action="store_true",
                         help="append the parameters the spec has gained "
                              "since a document was harvested, over the "
@@ -6074,15 +4868,30 @@ def main(argv: Optional[list] = None) -> int:
                              "read completely is left as it was and ends the "
                              "run non-zero. Needs the model and the index. "
                              "Not combined with --top-up")
+    parser.add_argument("--start-at", type=Path, action="append",
+                        metavar="HARVEST",
+                        help="start each document at the passages this "
+                             "stored harvest found something in, instead of "
+                             "searching: no anchors, no ranking, no rest of "
+                             "the plan. Only the places are taken, the model "
+                             "reads them again. A coordinate still open "
+                             "afterwards is searched as in any run; a number "
+                             "in another passage stays unread until "
+                             "--top-up-open. A document without places is "
+                             "planned as usual. Repeatable: the places add "
+                             "up")
     parser.add_argument("--review", action="store_true",
                         help="read every value nobody can stand behind a "
                              "second time, over its own passage and the "
                              "section that passage stands in, and record "
                              "what the second reading came to. One request "
-                             "per C value: `python scripts/curation_list.py "
-                             "OUT --level C` prints that count for free")
-    parser.add_argument("--review-limit", type=int, default=0, metavar="N",
-                        help="--review only: stop after N values (0 = all)")
+                             "per C or D value: `python "
+                             "scripts/curation_list.py OUT --level C` prints "
+                             "that count for free")
+    parser.add_argument("--review-limit", type=int, default=None,
+                        metavar="N",
+                        help="--review only: stop after N values (0 = all; "
+                             "the rule review_limit where not given)")
     parser.add_argument("--remap", action="store_true",
                         help="map every coordinate's recorded wording onto "
                              "the vocabulary as the spec reads today, over "
@@ -6090,6 +4899,14 @@ def main(argv: Optional[list] = None) -> int:
                              "document's stamp forward for every answer "
                              "space it could fully re-map, so a grown option "
                              "list costs minutes instead of a corpus run")
+    parser.add_argument("--flow", default=None, metavar="NAME",
+                        help="start the flow NAME: main (the harvest, as "
+                             "without a switch) or a follow-up pass of the "
+                             "profile (top_up, top_up_open, "
+                             "top_up_parameters, remap, recheck, review, "
+                             "start_at). Each switch above only chooses "
+                             "its flow, so --top-up and --flow top_up are "
+                             "the same run")
     parser.add_argument("--spec", type=Path, default=None, metavar="FILE",
                         help="read the spec from FILE instead of the "
                              "profile's SPEC_PATH: a trial harvest of a "
@@ -6102,10 +4919,20 @@ def main(argv: Optional[list] = None) -> int:
                              "read --spec (it says so)")
     add_profile_argument(parser)
     args = parser.parse_args(argv)
-    if args.top_up_parameters and args.top_up:
-        # Two passes over one harvest that write their trace into one folder
-        # and truncate it per document: one command, one of them.
-        parser.error("--top-up-parameters is not combined with --top-up")
+    if args.top_up_open and (args.top_up or args.top_up_parameters):
+        parser.error("--top-up-open is a pass of its own")
+    if args.start_at and (args.top_up or args.top_up_parameters
+                          or args.top_up_open):
+        parser.error("--start-at starts a harvest, it is no top-up")
+    chosen, problem = chosen_flow(args)
+    if problem:
+        parser.error(problem)
+    for harvest in args.start_at or ():
+        if not harvest.is_dir():
+            parser.error(f"--start-at: {harvest} is no harvest")
+        if harvest.resolve() == args.out.resolve():
+            parser.error("--start-at names another harvest than OUT, which "
+                         "this run writes")
     logging.basicConfig(level=args.log_level,
                         format="%(asctime)s [%(levelname)s] %(name)s %(message)s",
                         datefmt="%H:%M:%S")
@@ -6115,6 +4942,28 @@ def main(argv: Optional[list] = None) -> int:
             parser.error(problem)
 
     profile = require_profile(args)
+    take_flow(profile)
+    if args.top_up_parameters and args.top_up:
+        # Two passes over one harvest: a run starts one flow, and these two
+        # write their trace into one folder and write it anew per document.
+        parser.error("--top-up-parameters is not combined with --top-up: "
+                     + (passflow.shared_trace("top_up", "top_up_parameters",
+                                              profile)
+                        or "a run starts one flow"))
+    problem = follow_up_problem(chosen, profile)
+    if problem:
+        parser.error(problem)
+    # The switch is the flow it chooses: what follows asks the flow.
+    for switch, name in SWITCH_FLOWS:
+        if name != "start_at":
+            setattr(args, switch, chosen == name)
+    if chosen != "start_at":
+        args.start_at = None
+    if args.document:
+        stack.enter_context(rules.overlaid(
+            documents=[str(one) for one in args.document]))
+    if args.force:
+        stack.enter_context(rules.overlaid(skip_current=False))
     token_usage.begin("extraction")
     if args.recheck:
         raw_spec_path = run_spec_path(args, profile)
@@ -6126,7 +4975,8 @@ def main(argv: Optional[list] = None) -> int:
         with document_specs(args.db, run_spec, profile.component(
                 "extraction", "document_axes")) as spec_for:
             stats = recheck_run(args.out, run_spec,
-                                drop_stamps=not args.keep_stamps,
+                                drop_stamps=False if args.keep_stamps
+                                else None,
                                 spec_for=spec_for)
         if stats[fields.LISTS_UNREADABLE]:
             log.warning("recheck: %d document(s) left alone, their choice "
@@ -6145,9 +4995,16 @@ def main(argv: Optional[list] = None) -> int:
         spec_path = Path(raw_spec_path)
         spec = load_spec(spec_path)
         from .remap import run as remap_run
-        stats = remap_run(args.out, spec,
-                          _stamp_current(hashlib.sha256(spec_path.read_bytes()).hexdigest(),
-                                        "", spec))
+        # A dynamic list is the document's own, as its harvest offered it.
+        with document_specs(args.db, spec, profile.component(
+                "extraction", "document_axes")) as spec_for:
+            stats = remap_run(args.out, spec,
+                              _stamp_current(hashlib.sha256(spec_path.read_bytes()).hexdigest(),
+                                            "", spec), spec_for=spec_for)
+        if stats[fields.LISTS_UNREADABLE]:
+            log.warning("remap: %d document(s) left alone, their choice "
+                        "lists could not be closed",
+                        stats[fields.LISTS_UNREADABLE])
         settled = stats["unchanged"] + stats["remapped"] \
             + stats["remapped (required)"] + stats["newly mapped"]
         log.info("remap: %d of %d coordinate(s) map onto the current lists, "
@@ -6163,54 +5020,75 @@ def main(argv: Optional[list] = None) -> int:
                         "written from the profile's own spec and not from "
                         "%s", args.spec)
         from . import graph, provenance
-        factory = profile.component("kg", "make_serializer")
+        # The drawing of the profile's graph file says what an answer
+        # becomes; the program writes it (`graph.py`).
+        try:
+            serializer = graph.make_serializer(profile, args.db)
+        except graph.GraphError as exc:
+            parser.error(str(exc))
         described = profile.component("kg", "PROVENANCE") or {}
-        if factory is not None:
-            serializer = factory(args.db)
-        else:
-            # No writer of its own: the graph block of the spec says what
-            # an answer becomes, where the spec has one. The profile's, and
-            # never --spec's: --serialize does not read that option.
-            raw_spec_path = profile.component("extraction", "SPEC_PATH")
-            if raw_spec_path is None:
-                parser.error(f"profile {profile.name!r} has no extraction "
-                             f"spec and no kg.make_serializer: nothing "
-                             f"says what its graph is")
-            try:
-                serializer = graph.make_serializer(json.loads(
-                    Path(raw_spec_path).read_text(encoding="utf-8")))
-            except graph.GraphError as exc:
-                parser.error(f"{raw_spec_path}: {exc}")
-            described = {"base": serializer.base,
-                         **(serializer.provenance or {})}
         writer = None
-        if args.provenance and provenance.enabled() \
-                and described.get("base"):
-            writer = provenance.Writer(described["base"], described)
-        from .serialize import run as serialize_run, validate
+        if args.provenance and provenance.enabled() and described:
+            # Written under the graph rule `base` as it stands now; the
+            # profile names only the vocabulary.
+            from docpipe import graphfile
+            base = graphfile.get("base", profile.name)
+            if base:
+                writer = provenance.Writer(base, {**described, "base": base})
+        from .serialize import (apply_graph_file, profile_context,
+                                run as serialize_run, validate)
         held, gold_path = _decisions_file(args.out)
+        indexes = [{}]
         try:
             counts = serialize_run(args.out, args.serialize, serializer,
-                                   writer, gold=held, gold_source=gold_path)
+                                   writer, gold=held, gold_source=gold_path,
+                                   index=indexes[0])
         except ValueError as exc:
             log.error("serialize: %s", exc)
             return 1
         log.info("serialize: %d tuple(s) from %d document(s) -> %s",
                  sum(counts.values()), len(counts), args.serialize)
+        written = [Path(args.serialize)]
+        # A profile whose data schema closes its lists more tightly than the
+        # graph does writes the graph a second time as that schema takes it,
+        # beside the full one; the full one keeps everything that was read.
+        if serializer.writer.drawing.document.get("strict"):
+            beside = Path(args.serialize).with_suffix(".strict.ttl")
+            try:
+                indexes.append({})
+                taken = serialize_run(args.out, beside,
+                                      graph.make_serializer(
+                                          profile, args.db, strict=True),
+                                      index=indexes[-1])
+                log.info("serialize: %d document(s) as the data schema takes "
+                         "them -> %s", len(taken), beside)
+                written.append(beside)
+            except ValueError as exc:
+                log.warning("serialize: strict graph not written: %s", exc)
         # The shapes the last `vocabulary --refresh` pulled. A profile that
         # names none has nothing to validate against; one that names them
         # but was never refreshed is told so rather than passed over.
         shapes = profile.component("vocabulary", "shapes")
+        paths = shapes() if shapes is not None else []
+        context = profile_context(profile) if paths else ()
+        # What the profile's graph file asks of the written graphs: classes
+        # left out, nodes named anew, constraints that leave a value or a
+        # paper out (`docpipe.graphfile`); nothing where it asks nothing.
+        for graph_path, index in zip(written, indexes):
+            try:
+                apply_graph_file(graph_path, profile, paths, context, index)
+            except Exception:
+                log.exception("graph file: not applied to %s", graph_path)
         if shapes is not None:
-            paths = shapes()
             if paths:
                 # The graph is written by now, and the report must not take
                 # the serialize result with it when the validator fails.
-                try:
-                    validate(args.serialize, paths)
-                except Exception:
-                    log.exception("shacl: validation of %s failed, no report "
-                                  "written", args.serialize)
+                for graph_path in written:
+                    try:
+                        validate(graph_path, paths, context=context)
+                    except Exception:
+                        log.exception("shacl: validation of %s failed, no "
+                                      "report written", graph_path)
             else:
                 log.warning("shacl: no shapes from a refresh, the graph is "
                             "not validated (python -m profiles.%s.vocabulary "
@@ -6222,7 +5100,7 @@ def main(argv: Optional[list] = None) -> int:
                                              profile.processed_dir)
 
     # component, not require: extraction is an optional stage. A profile that
-    # does not do OBIE (ar6 today) must stay loadable everywhere else and only
+    # does not do OBIE must stay loadable everywhere else and only
     # fail here, when someone actually asks it to extract.
     raw_spec_path = run_spec_path(args, profile)
     if raw_spec_path is None:
@@ -6231,33 +5109,40 @@ def main(argv: Optional[list] = None) -> int:
                      f"with SPEC_PATH)")
     spec_path = Path(raw_spec_path)
     spec = load_spec(spec_path)
+    # Every run reads each plan passage by passage, so the spec must name
+    # groups (`surveyed_flow`). Recorded in each pass's producer entry.
+    if not surveyed_flow(spec, profile):
+        parser.error(f"the spec {spec_path} names no groups: a spec needs "
+                     f"groups, since every run reads each plan passage by "
+                     f"passage")
+    global FLOW
+    FLOW = SURVEYED
     if args.review:
         # The two guards `main` applies below, applied here as well: this
         # branch returns before either of them is reached, and a review that
         # reads every table without its picture is a review of a
         # transcription.
-        if ATTACH_IMAGES and not Path(args.image_root).is_dir():
+        if attach_images() and not Path(args.image_root).is_dir():
             parser.error(f"image root {args.image_root} is not a directory — "
                          f"every table and figure crop would be missing. Pass "
                          f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to review "
                          f"from the transcriptions alone")
-        review_prompt = prompts.load(REVIEW_PROMPT_ID)
-        set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-                                     context_budget(review_prompt, spec),
-                                     what="extraction review",
-                                     flag="--max-model-len", role="llm"))
+        review_prompt, _inputs = step_parts(
+            step_asking("review_marks", "review"), REVIEW_PROMPT_ID)
+        preflight(context_budget(review_prompt, spec),
+                  what="extraction review")
         start_limit()
         start_counting()
         from .review import run as review_run
         wanted = None
-        if args.document:
+        if rules.get("documents"):
             # The harvest files are named after the documents, so a
             # restriction is resolved through the same listing the harvest
             # selects from and fails the same way on an id that is not on it.
             listing = sqlite3.connect(readonly_uri(args.db), uri=True)
             try:
                 chosen, missing = select_documents(_documents(listing),
-                                                   args.document)
+                                                   None)
             finally:
                 listing.close()
             if missing:
@@ -6271,9 +5156,9 @@ def main(argv: Optional[list] = None) -> int:
                 args.out, spec, ask=make_review_asker(args.image_root),
                 sources_for=make_review_sources(args.db),
                 documents=wanted, limit=args.review_limit,
-                prompt_sha=review_prompt.sha256, model=LLM_MODEL,
+                prompt_sha=review_prompt.sha256, model=llm_model(),
                 spec_for=spec_for,
-                producer=producer("review", LLM_MODEL))
+                producer=producer("review", llm_model()))
         if stats[fields.LISTS_UNREADABLE]:
             log.warning("review: %d document(s) left alone, their choice "
                         "lists could not be closed",
@@ -6284,18 +5169,8 @@ def main(argv: Optional[list] = None) -> int:
                  stats["unbacked"], stats["documents"])
         return 1 if unheld_requests() else 0
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
-    # Which coordinates decide whether a value belongs in the graph at all.
-    # The profile's business: "scenario == target" is what the kwp target
-    # slice holds and says nothing about any other corpus.
-    slice_gate = profile.component("extraction", "SLICE") or {}
-    if slice_gate:
-        log.info("extraction: slice gate on %s — a row that falls out here "
-                 "is not asked for its other coordinates",
-                 ", ".join(sorted(slice_gate)))
-    anchors_sha = anchors_key()
-    templates = [line for line in
-                 prompts.load(QUERIES_PROMPT_ID).text.splitlines()
-                 if line.strip() and not line.lstrip().startswith("#")]
+    # A harvest passage by passage writes no anchors, and its stamps say so.
+    anchors_sha = ""
     # Optional: (connection, document_id) -> {axis name: {uri: [labels]}} for
     # the axes the spec declares dynamic.
     document_axes = profile.component("extraction", "document_axes")
@@ -6312,26 +5187,18 @@ def main(argv: Optional[list] = None) -> int:
     # supported on a frame axis.
     frame_axes = fields.frame_slots(spec, profile.component("extraction",
                                                             "FRAME") or ())
-    year_states = year_states_of(profile)
-    search_share = profile.component("extraction", "SEARCH_SHARE") or {}
-    if frame_axes:
-        log.info("extraction: the frame is %s — found once per document, then "
-                 "one value request per pair",
-                 " x ".join(slot.name for slot in frame_axes))
-    # Which sentence each document was really asked. Written into that
-    # document's stamp for a reader; `stale` compares the ontology keys alone.
-    asked: dict = {}
+    year_states = year_states_of(spec)
 
+    log.info("extraction: each plan in pieces: find, coordinates, lists, "
+             "search")
     # The largest request of the run, over the prompts it sends: what the
     # server is started with, what the doctor checks and what it is asked for.
-    required = request_budget(spec, bool(frame_axes))
+    required = request_budget(spec)
     if args.print_context_budget:
         print(required)
         return 0
     # The window every request is sized against before it is sent.
-    set_model_len(assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-                                 required, what="extraction",
-                                 flag="--max-model-len", role="llm"))
+    preflight(required, what="extraction", profile=profile)
     start_limit()
     start_counting()
 
@@ -6343,7 +5210,7 @@ def main(argv: Optional[list] = None) -> int:
     # 8, 9 and 10 of Kassel were planned against an int and the job failed.
     faiss_index, id_to_pos = faiss_store.load_global_index(args.index)
     args.out.mkdir(parents=True, exist_ok=True)
-    if ATTACH_IMAGES and not Path(args.image_root).is_dir():
+    if attach_images() and not Path(args.image_root).is_dir():
         # Loud here, at second one. The alternative is what happened last
         # time: a warning per crop, buried in half a million log lines, while
         # the harvest read every table without its picture.
@@ -6351,34 +5218,6 @@ def main(argv: Optional[list] = None) -> int:
                      f"every table and figure crop would be missing. Pass "
                      f"--image-root, or EXTRACT_ATTACH_IMAGES=0 to harvest "
                      f"from the transcriptions alone")
-    # The batch follows what the model is allowed to say about it, not the
-    # other way round: what the rows request may write, since that request
-    # reads the batch. Said out loud, because a run that quietly reads three
-    # sources where the constant says six is a run whose numbers mean
-    # something else than the last one's.
-    global BATCH_SOURCES
-    fitted = batch_sources_for(spec)
-    if fitted != BATCH_SOURCES:
-        log.info("extraction: %d source(s) per request, not %d — that is what "
-                 "max_tokens allows this profile to answer for",
-                 fitted, BATCH_SOURCES)
-        BATCH_SOURCES = fitted
-
-    budget = window_budget()
-    log.info("extraction: one request per field, swept in windows of %d "
-             "(overlap %d) until read; %d batch thread(s), %d field "
-             "thread(s), at most %d own + %d retrieval + %d rest = %d "
-             "window(s) per coordinate (a document's search: retrieval "
-             "once, rest once for every batch that still has an open row "
-             "and never more requests than those batches' own windows)",
-             FIELD_WINDOW, FIELD_OVERLAP, LLM_PARALLEL, FIELD_PARALLEL,
-             budget["own"], budget["retrieval"], budget["rest"],
-             sum(budget.values()))
-    shares = profile.component("extraction", "SEARCH_SHARE") or {}
-    if shares:
-        log.info("extraction: search share per coordinate: %s",
-                 ", ".join(f"{name} {share:g}"
-                           for name, share in sorted(shares.items())))
     locate = make_locate(args.db, args.pdf_root)
     note_documents(args.db)
     note_index_model(args.db)
@@ -6389,7 +5228,7 @@ def main(argv: Optional[list] = None) -> int:
         documents = _documents(listing)
     finally:
         listing.close()
-    documents, missing = select_documents(documents, args.document)
+    documents, missing = select_documents(documents, None)
     if missing:
         log.error("%d named document(s) not found or not current: %s",
                   len(missing), ", ".join(str(m) for m in missing))
@@ -6398,8 +5237,10 @@ def main(argv: Optional[list] = None) -> int:
     documents = documents_to_harvest(
         documents, args.out, spec_sha, force=args.force,
         force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
-        top_up=args.top_up or args.top_up_parameters)
-    if args.top_up_parameters:
+        top_up=chosen in LISTING_FLOWS or chosen not in (
+            passflow.MAIN, "start_at", "recheck", "remap", "review"),
+        start_at=bool(args.start_at))
+    if args.top_up_parameters or args.top_up_open:
         from . import topup_parameter
         documents, unharvested = topup_parameter.with_harvest(documents,
                                                               args.out)
@@ -6410,189 +5251,112 @@ def main(argv: Optional[list] = None) -> int:
     if not documents:
         log.info("extraction: nothing to harvest")
         return 0
+    # What this run replaces is kept under its name (archive.py); a flow of
+    # a follow-up pass names its own (the setting `archive` of its first box).
+    if chosen == passflow.MAIN:
+        archive.begin("harvest")
 
-    # How many documents are in flight at once. Not a group: a document that
-    # is written makes room for the next one, so a slow plan holds its own
-    # place and nobody else's.
-    in_flight = max(1, int(os.environ.get("EXTRACT_BATCH_DOCS", "64")))
+    # How many documents are in flight at once: as many as the server has
+    # room for (`document_room`), and never more than this ceiling, which
+    # only guards the runner's memory. Not a group: a document that is
+    # written makes room for the next one.
+    in_flight = documents_at_once()
+    room = document_room(LIMIT)
     log.info("extraction: %d document(s), %d parameter(s), "
-             "plan_parallel=%d, llm_parallel=%d, in_flight=%d",
+             "documents in flight %s",
              len(documents), len(spec.parameters),
-             PLAN_PARALLEL, LLM_PARALLEL, in_flight)
+             f"by the server's room, at most {in_flight}" if room
+             else f"{in_flight}")
 
-    # One call per question the field sweep asks, before anything is
-    # planned: the anchors depend on the question, not on the document, and a
-    # probe string that is the same for the whole corpus is what makes the
-    # query-embedding cache pay.
     UNSERVED.clear()
-    anchors = ({} if os.environ.get("EXTRACT_ANCHORS", "1") == "0"
-               else make_anchors(spec, store=args.out / "anchors.json",
-                                 key=anchors_sha))
-    if UNSERVED.of(None):
-        # Every document would be searched without them and stamped as if it
-        # had been searched with them. The ones written are kept in the
-        # store, so the next start asks only for the rest.
-        log.error("extraction: %d anchor request(s) ended on a 429 or a 5xx, "
-                  "or timed out — nothing is harvested without them, start the run again",
-                  UNSERVED.of(None))
-        return 1
 
+    # Creates the query-embedding cache the passage search reads.
     cache_path = args.out / "query_cache.db"
-    primer = query_cache.connect(cache_path)
-    prime_probe_cache(primer, spec, templates, anchors)
-    primer.close()
+    query_cache.connect(cache_path).close()
     # One store of passage content for every helper and thread of this run.
     content = make_shared_content()
-    more_sources = make_more_sources(args.db, faiss_index, id_to_pos,
-                                     cache_path, content=content)
+    more_sources = make_more_sources(
+        args.db, faiss_index, id_to_pos, cache_path, content=content,
+        reranker=make_search_reranker(args.image_root))
+    # What the reading searches the plan with, which the passes over a
+    # stored harvest re-read a coordinate with as well.
+    pages_of = make_page_count(args.db)
+    every = make_rest_of_document(args.db, content=content)
+    specs: dict = {}
+    specs_lock = threading.Lock()
 
-    if args.top_up:
-        from . import topup
-        trace.open_trace(args.out / TOPUP_TRACE_DIR,
-                         {did: Path(fn).stem for did, fn in documents}.get)
-        frame_names = [slot.name for slot in frame_axes]
-        listing = sqlite3.connect(readonly_uri(args.db), uri=True)
-        listing.row_factory = sqlite3.Row
-
-        document_spec = make_document_spec(listing, spec, document_axes)
-
-        try:
-            log.info("top-up: this may rewrite %s for every question whose "
-                     "wording moved — the anchors key hashes the prompt and "
-                     "the model, not the questions",
-                     args.out / "anchors.json")
-            stats = topup.run(
-                args.out, spec,
-                _stamp_current(spec_sha, anchors_sha, spec),
-                {"sweep": make_sweeper(
-                    make_field_asker(args.image_root),
-                    more_sources=more_sources,
-                    rest_of_document=make_rest_of_document(args.db,
-                                                           content=content),
-                    parents=make_parents(args.db, content=content),
-                    anchors=anchors,
-                    search_share=search_share),
-                 "owner_sources": make_owner_sources(args.db, content=content),
-                 "document_spec": document_spec,
-                 "frame_names": frame_names,
-                 "frame_axes": frame_axes,
-                 "year_states": year_states,
-                 "dynamic_ok": document_axes is not None,
-                 "slice_gate": slice_gate,
-                 "locate": locate},
-                only=args.top_up_key)
-        finally:
-            listing.close()
-        log.info("top-up: %d row(s) re-read over %d document(s), %d stamp(s) "
-                 "carried forward, %d blocked",
-                 stats["rows"], stats["documents"],
-                 stats["stamps carried forward"], stats["blocked"])
-        return 1 if unheld_requests() else 0
-
-    ask_frame = make_frame_asker(args.image_root) if frame_axes else None
-
-    # The sentences each pair was searched with, by (document, pair index),
-    # so the request that reads the pair's passages can say what it asks.
-    anchor_texts: dict = {}
-
-    def plan(document_id: int, filename: str, frame: Optional[dict] = None,
-             frame_index: int = 0, only=()) -> tuple:
-        # Both connections per thread, cache included. Sharing one across the
-        # pool would rest on SQLite being built serialized, and the priming
-        # above already means every read here is a hit.
+    def spec_for(document_id: int) -> Spec:
+        """The spec with the lists this document closes, made once per
+        document (`fill_dynamic_axes`, as `closed_spec` below)."""
+        if document_axes is None:
+            return spec
+        with specs_lock:
+            if document_id in specs:
+                return specs[document_id]
         conn = sqlite3.connect(readonly_uri(args.db), uri=True)
         conn.row_factory = sqlite3.Row
-        cache_conn = query_cache.connect(cache_path, create=False)
         try:
-            # One memo per document: retrieval and the fallback floor meet the
-            # same section in every round and for every parameter.
-            fetch = make_content_fetcher()
-            # A dynamic axis only becomes a closed list here, where the
-            # document is known.
-            doc_spec = spec
-            if document_axes is not None:
-                lists = document_axes(conn, document_id)
-                doc_spec = fill_dynamic_axes(spec, lists)
-                if lists:
-                    # The one line that says whether the model was given a
-                    # choice at all: an empty list means it was asked to pick
-                    # from nothing and every answer will come back unmapped.
-                    log.info("extract: %s: choice lists %s", Path(filename).stem,
-                             ", ".join(f"{k}={len(v)}"
-                                       for k, v in sorted(lists.items())))
-            # What this search is for: the whole spec, or only the parameters
-            # `only` names. The document's spec itself is handed back either
-            # way, so the caller still reads every list the document closes.
-            wanted = narrow_spec(doc_spec, only)
-            retrieve = make_retrieve(conn, faiss_index, id_to_pos,
-                                     cache_conn, fetch, limit=PLAN_TOP)
-            # The anchor is written for THIS document, so the document has to
-            # say something first. One cheap probe out of the spec's own
-            # templates, and what comes back carries its caption -- the words
-            # this plan uses for the thing, which is what the anchor is for.
-            context = dict(document_context(conn, document_id)
-                           if document_context is not None else {})
-            seed = [q for parameter in wanted.parameters
-                    for q in list(expand_queries(templates, parameter))[:1]]
-            first = retrieve(seed, document_id, set()) if seed else []
-            if first:
-                context.setdefault(
-                    "caption", (first[0].provenance or {}).get("title") or "")
-            probes = document_anchor(wanted, context, frame=frame,
-                                     document_id=document_id)
-            name = Path(filename).stem
-            for uri, texts in sorted(probes.items()):
-                for text in texts:
-                    trace.event("anchor", document_id, parameter=uri,
-                                text=text,
-                                frame=frame_index if frame else None)
-            if frame is None:
-                asked[name] = dict(probes)
-            else:
-                # Recorded next to the document's own sentences, under the
-                # pair they were written for.
-                asked.setdefault(name, {}).update(
-                    {f"{uri}#{frame_index}": list(texts)
-                     for uri, texts in probes.items()})
-                anchor_texts[(name, frame_index)] = [
-                    text for texts in probes.values() for text in texts]
-            items, report = plan_document(
-                document_id, wanted, templates, extra_probes=probes,
-                retrieve=retrieve,
-                structure=make_structure(conn, fetch), top=PLAN_TOP)
-            for item in items:
-                trace.event("plan", document_id, rank=item.rank,
-                            origin=item.origin, kind=item.source.owner_kind,
-                            owner=item.source.owner_id,
-                            chars=len(item.source.text or ""),
-                            image=bool(item.source.image_path),
-                            frame=frame_index if frame else None)
-            return name, split_long_sources(items), report, doc_spec
+            made = fill_dynamic_axes(spec, document_axes(conn, document_id))
         finally:
             conn.close()
-            cache_conn.close()
+        with specs_lock:
+            return specs.setdefault(document_id, made)
+
+    def rank(document_id: int, probes: list, exclude: set) -> list:
+        """The whole plan, best first for a search's sentences."""
+        return more_sources(document_id, probes, set(exclude), limit=0)
+
+    whole = make_harvest(spec, db_path=args.db, out=args.out,
+                         image_root=args.image_root, profile=profile,
+                         every=every, spec_for=spec_for, rank=rank,
+                         reranker=make_chunk_reranker())
+
+    def pass_sweep():
+        """What a pass over a stored harvest asks a coordinate again with:
+        the harvest's own questions (`surveyed.SurveyedHarvest.sweep`)."""
+        return whole.sweep
 
     document_name = {did: Path(fn).stem for did, fn in documents}
     # Every event carries the document it belongs to and lands in that
     # document's own file, so a redone document overwrites its own trace. A
     # pass over a stored harvest writes beside the harvest's traces and not
-    # into them: they say what the harvest cost, and are opened for writing.
-    if args.top_up_parameters:
-        trace.open_trace(args.out / TOPUP_TRACE_DIR, document_name.get)
-    else:
+    # into them (the setting `trace` of the box that starts it): they say
+    # what the harvest cost, and are opened for writing.
+    if chosen == passflow.MAIN:
         trace.open_trace(args.out / "trace", document_name.get)
 
-    # The hint the next batch of a sweep is told: what survived checking so
-    # far, with the run's spec for a batch that carries none of its own.
-    prior_rows = functools.partial(accepted_rows, spec=spec)
+    computer = make_computer(profile,
+                             lambda document_id: every(document_id, set()),
+                             pages_of, rank)
+    completer = make_completer(profile, args.db)
 
-    def verify(entry: tuple) -> bool:
+    def verify(entry: tuple, replies: Optional[int] = None) -> bool:
+        """Fold, work out, complete and write one document. *replies* is how
+        many of its requests came back, its batches when not given: for a
+        harvest passage by passage the readings that came back."""
         name, report, answered = entry
-        replies = len(answered)
+        replies = len(answered) if replies is None else replies
         fold_answers(answered, report, locate=locate, spec=spec)
+        # Stopped half way a document is half worked out, and unwritten like
+        # one half read.
+        if computer is not None:
+            reader = whole.reader_of(spec)
+            # The calculation reads the values of its own step, the compute
+            # box of the flow, and not those of the writing around it.
+            with (reader.engine.step_of("compute") if reader is not None
+                  else nullcontext()):
+                if not computer(answered, report, locate=locate, spec=spec,
+                                stop=Halted):
+                    return False
+        if completer is not None:
+            reader = whole.reader_of(spec)
+            # The completion reads the values of its own step, the
+            # catalogue box of the flow.
+            with (reader.engine.step_of("catalogue") if reader is not None
+                  else nullcontext()):
+                completer(report, spec)
         stamped = finish_document(report, name, args.out, spec_sha,
                                   anchors_sha, answered=replies, spec=spec,
-                                  questions=asked.pop(name, None),
                                   lost=UNSERVED.of(report.document_id))
         trace.flush(report.document_id)
         return stamped
@@ -6603,7 +5367,10 @@ def main(argv: Optional[list] = None) -> int:
     # written stay written; the ones in flight are left unstamped and a resume
     # harvests them again.
     server_gone = [False]
-    halt = threading.Event()
+    # The run's own: every request asked again for the server's failure
+    # ends with it (`halted`).
+    halt = HALT
+    halt.clear()
 
     class Halted:
         """SIGTERM or a dead server: nothing new starts, open work is left."""
@@ -6620,6 +5387,8 @@ def main(argv: Optional[list] = None) -> int:
         """No answer for minutes: nothing in flight can finish any more, so
         the run ends at once, like a SIGTERM, instead of waiting for every
         open request to spend its retries on a server that is gone."""
+        if not dead_server_ends_run(seconds):
+            return
         give_up()
         log.error("extraction: the model server stopped answering — no reply "
                   "for %.0f s, the run ends here. What was harvested is "
@@ -6635,111 +5404,75 @@ def main(argv: Optional[list] = None) -> int:
     if not providers.hosted("llm") and not providers.replaying():
         watch_server(server_dead)
 
-    # Shared by every document in flight: the pool bounds the batches of all
-    # of them together, the streak sees a dead server across all of them.
-    batch_pool = ThreadPoolExecutor(max_workers=max(LLM_PARALLEL, 1),
-                                    thread_name_prefix="batch")
-    # Planning is retrieval on the embedder's card and SQL: PLAN_PARALLEL plans
-    # at a time across all documents, not per document.
-    plan_pool = ThreadPoolExecutor(max_workers=max(PLAN_PARALLEL, 1),
-                                   thread_name_prefix="plan")
-    dead = DeadStreak(max(64, LLM_PARALLEL))
-    # After more_sources, because the field sweep uses it: a coordinate that
-    # is not in the value's own passage is looked for further out in the same
-    # document. After the streak and the give-up, because the field pool
-    # shares them with the rows pool. OpenAI client is thread-safe.
-    harvest = make_fieldwise_harvester(args.image_root, more_sources,
-                                       make_rest_of_document(args.db,
-                                                             content=content),
-                                       spec=spec, anchors=anchors,
-                                       slice_gate=slice_gate,
-                                       parents=make_parents(args.db, content=content),
-                                       frame_axes=frame_axes,
-                                       search_share=search_share,
-                                       dead=dead, on_give_up=give_up)
-    # A document is harvested in two halves: each batch asks the passages its
-    # values came from (`turn`), and what is still open after them is searched
-    # once per coordinate for all the batches together (`search_document`). A
-    # harvester without the halves is its own whole turn.
-    own_turn = getattr(harvest, "turn", harvest)
-    search_document = getattr(harvest, "search_document", None)
+    # OpenAI client is thread-safe.
+    rest_of_document = make_rest_of_document(args.db, content=content)
+    # The places of the earlier harvests, made by the step of the flow
+    # `start_at` that takes them (`passboxes.box_places`).
+    found_of: list = [None]
 
-    # The two halves of a document that the harvest and the pass over a stored
-    # harvest have in common, each bound once: the plan with the run's frame,
-    # and the batches in the pools every document shares, with the stop and the
-    # dead-server cut. Two bindings would be two places to wire a pool or a
-    # cut differently from each other.
-    plan_for = functools.partial(
-        plan_batches, plan=plan, plan_pool=plan_pool, ask_frame=ask_frame,
-        frame_axes=frame_axes, more_sources=more_sources,
-        year_states=year_states, anchor_texts=anchor_texts)
-    harvest_all = functools.partial(
-        harvest_batches, harvest=harvest, more_sources=more_sources,
-        verify=prior_rows, workers=LLM_PARALLEL, on_give_up=give_up,
-        stop=Halted, pool=batch_pool, dead=dead, progress=False)
+    def make_found():
+        found_of[0] = found_places.Found(args.start_at, document_name.get,
+                                         rest_of_document)
+        return found_of[0]
+
+    whole.halted = Halted.is_set
 
     def harvest_document(document_id: int, filename: str) -> tuple:
-        """One document from its plan to its file: (written, failures).
+        """One document from its order to its file: (written, failures).
 
-        Planned, framed and harvested on its own, its batches in the pool all
-        documents share, and written the moment its last batch is back.
+        With --start-at the order covers the passages earlier harvests
+        found something in, and the rest of the plan for a parameter none
+        of them was asked (`found.Found.gained`); the stamp then says the
+        document was read in part.
         """
-        planned = plan_for(document_id, filename)
-        name, report, batches, failed = (planned.name, planned.report,
-                                         planned.batches, planned.failed)
-        if Halted.is_set():
-            return False, failed
+        name = Path(filename).stem
+        found = found_of[0]
+        kept = found.passages(document_id) if found is not None else []
+        if kept:
+            taken = surveyed_map.take_found(
+                whole, document_id, kept,
+                found.gained(document_id, spec))
+            stage = found_places.STAGE
+        else:
+            taken = whole(document_id)
+            stage = surveyed_map.STAGE
+        if taken is None:
+            return False, 0
+        report = DocumentReport(document_id=document_id,
+                                owners_harvested=taken.passages,
+                                planned={stage: taken.passages},
+                                sources_of=taken.sources_of,
+                                uncombed=taken.uncombed)
+        with whole.reader_of(spec).engine.step_of("write"):
+            stamped = verify((name, report, taken.answered),
+                             replies=taken.replies)
+        return stamped, 0 if stamped else 1
 
-        unfinished: set = set()
-        answered = harvest_all(batches, unfinished=unfinished,
-                               harvest=own_turn)
-        if report.document_id in unfinished:
-            log.error("extraction: %s left with batches never harvested — not "
-                      "written, so a resume harvests it again", name)
-            return False, failed
-        # A stop or the dead-server cut during the search leaves the document
-        # half read, and unwritten like one with a batch never harvested.
-        if search_document is not None and not search_document(
-                answered, stop=Halted):
-            log.error("extraction: %s left with the search over its open "
-                      "coordinates unfinished, not written, so a resume "
-                      "harvests it again", name)
-            return False, failed
-        # Written and left for a resume is not a finished document: the
-        # run says so in its exit code, as it does for a server that is gone.
-        stamped = verify((name, report, answered))
-        return stamped, failed + (0 if stamped else 1)
-
-    parameter_pass = None
-    if args.top_up_parameters:
-        from . import topup_parameter
-
-        # The same loop, the same pools, the same stop, dead-server and exit
-        # code as the harvest: only what is done for one document differs.
-        parameter_pass = topup_parameter.DocumentPass(
-            args.out, spec, _stamp_current(spec_sha, anchors_sha, spec),
-            {"document_spec": document_spec_per_call(args.db, spec,
-                                                     document_axes),
-             "plan": plan_for, "harvest": harvest_all,
-             "questions": lambda name: asked.pop(name, None),
-             "locate": locate, "frame_axes": frame_axes,
-             "frame_names": [slot.name for slot in frame_axes],
-             "dynamic_ok": document_axes is not None,
-             "halted": Halted.is_set})
-        harvest_document = parameter_pass
-
+    follow_up = None
+    if chosen != passflow.MAIN:
+        follow_up = follow_up_run(
+            args, spec, _stamp_current(spec_sha, anchors_sha, spec),
+            documents, document_name, whole, every, locate, document_axes,
+            frame_axes, year_states, pass_sweep(),
+            make_owner_sources(args.db, content=content), in_flight, room,
+            harvest_document, make_found,
+            lambda docs, step: harvest_documents(
+                docs, step, in_flight=in_flight, stop=STOP,
+                halted=halt.is_set, room=room))
     install_stop_handler()
     try:
-        done, _written, failed = harvest_documents(
-            documents, harvest_document, in_flight=in_flight, stop=STOP,
-            halted=halt.is_set)
+        if follow_up is None:
+            done, _written, failed = harvest_documents(
+                documents, harvest_document, in_flight=in_flight, stop=STOP,
+                halted=halt.is_set, room=room)
+        else:
+            passflow.run_named(chosen, follow_up, profile)
+            done, failed = follow_up.done, follow_up.failed
         failures += failed
     finally:
         stopped = STOP.is_set()
-        batch_pool.shutdown(wait=not stopped, cancel_futures=stopped)
-        plan_pool.shutdown(wait=not stopped, cancel_futures=stopped)
-    if parameter_pass is not None:
-        parameter_pass.report()
+    if follow_up is not None:
+        log_follow_up(chosen, follow_up.stats)
 
     if server_gone[0]:
         log.error("extraction: the model server stopped answering — the run "
@@ -6760,8 +5493,22 @@ def main(argv: Optional[list] = None) -> int:
         _hard_exit(STOPPED_EXIT)
         return STOPPED_EXIT
 
-    log_usage(request_budget(spec, bool(frame_axes)))
+    log_usage(request_budget(spec))
     failures += unheld_requests()
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)
+    write_stats(args.out, follow_up.traces if follow_up is not None
+                and follow_up.traces else ["trace"],
+                set(document_name.values()))
     return 1 if failures else 0
+
+
+def write_stats(out: Path, traces: list, names: set) -> None:
+    """Where this run found the harvest hard (stats.py), beside it. A
+    failure to count is logged and never fails the run."""
+    from . import stats
+    trace.flush()
+    try:
+        stats.write(out, [Path(out) / t for t in traces], names)
+    except Exception:
+        log.exception("stats: not written")

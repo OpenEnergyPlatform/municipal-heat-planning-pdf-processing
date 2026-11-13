@@ -17,7 +17,9 @@ label where the spec has one (`<name>_label`) and how the reading ended
 (`<name>_state`). The columns of a file are the coordinates its values
 have, in alphabetical order after the fixed ones. After all of those come
 the passages the coordinates were read from (`<name>_quote`), appended so
-that a table written before they existed keeps its columns where they were.
+that a table written before they existed keeps its columns where they were,
+and last, for a file with a value read off a figure, what was read
+(`reading`), which backs a number no text states.
 
 Author: Felix Vossel
 """
@@ -37,6 +39,9 @@ STATE_COLUMNS = ("document", "parameter", "label", "state", "tuples",
 REFUSAL_COLUMNS = ("document", "parameter", "reason", "failed", "owner_kind",
                    "owner_id", "claim")
 QUOTE = "_quote"
+# The evidence of a value read off a figure, in place of its quote (owner
+# decision 2026-11-07).
+READING = "reading"
 
 
 def flat(value: dict) -> dict:
@@ -54,6 +59,8 @@ def flat(value: dict) -> dict:
         line[f"{name}_state"] = coordinate.get("state")
     for name, coordinate in coordinates:
         line[name + QUOTE] = coordinate.get("quote")
+    if value.get("reading"):
+        line[READING] = value["reading"]
     return line
 
 
@@ -62,10 +69,13 @@ def columns(lines: Iterable[dict]) -> list:
     named = {name for line in lines for name in line} - set(FIXED)
     # The quotes of the coordinates come last; `quote` itself is fixed.
     quotes = {name for name in named if name.endswith(QUOTE)}
-    extra = sorted(named - quotes,
+    # After them what was read off a figure for a number no text states,
+    # where a value of the file has one.
+    reading = [READING] if READING in named else []
+    extra = sorted(named - quotes - set(reading),
                    key=lambda name: (name.split("_label")[0]
                                      .split("_state")[0], name))
-    return list(FIXED) + extra + sorted(quotes)
+    return list(FIXED) + extra + sorted(quotes) + reading
 
 
 def _cell(content):

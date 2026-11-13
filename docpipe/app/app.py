@@ -29,6 +29,8 @@ import logging
 import mimetypes
 import os
 import sys
+import threading
+from functools import partial
 from pathlib import Path
 
 # A pdf.js viewer behind PDF_VIEWER_PREFIX is served as ES modules; some Python
@@ -46,6 +48,8 @@ if _PACKAGE_PARENT not in sys.path:
     sys.path.insert(0, _PACKAGE_PARENT)
 
 import streamlit as st
+from streamlit.runtime.scriptrunner import (
+    add_script_run_ctx, get_script_run_ctx)
 
 from docpipe import prompts
 from docpipe.app import config, pdf_link
@@ -53,7 +57,8 @@ from docpipe.extraction import gold, trust
 from docpipe.extraction.verify import canonical_number
 from docpipe.inference import (
     answer, catalog, chunker, compare, faiss_store, kg_route, lexical,
-    llm_client, query_cache, replies, request_log, values_route, wording,
+    llm_client, pool, query_cache, replies, request_log, values_index,
+    values_route, wording,
 )
 from docpipe.inference import db
 from docpipe.profile import load_profile
@@ -70,6 +75,7 @@ T: dict = {}
 # Streamlit refuses two widgets of one identity in a run, and two citations of
 # one document are two download buttons of the same label: each takes a key.
 _downloads = itertools.count()
+_EMBEDDING = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +91,7 @@ def get_index():
 
 @st.cache_resource
 def get_db():
-    return db.connect_readonly(config.DB_PATH)
+    return db.PerThread(lambda: db.connect_readonly(config.DB_PATH))
 
 
 @st.cache_resource
@@ -155,6 +161,18 @@ def get_values():
 
 
 @st.cache_resource
+def get_values_index():
+    """The vectors of the harvest's values, or None: no harvest, or none
+    that is current. `values_index.load` says which in the log."""
+    store, _rows = get_values()
+    if store is None:
+        return None
+    return values_index.load(config.HARVEST_DIR, store,
+                             values_index.document_names(get_catalog(),
+                                                         get_db()))
+
+
+@st.cache_resource
 def get_coordinate_prompt():
     return prompts.load(values_route.COORDINATE_PROMPT_ID, WORDS_PROFILE)
 
@@ -195,11 +213,17 @@ def embed_query(item: dict, cache_conn, cache_key: str):
     if cached is not None:
         log.info("Query cache hit (%s)", cache_key[:12])
         return cached, True
-    # Heavy backend imported lazily so a cache-hit turn never touches torch;
-    # which backend that is (local model or an endpoint) is configuration.
-    from docpipe.embedding import get_embedder
-    vec = get_embedder().embed_one(item)
-    query_cache.put(cache_conn, cache_key, vec)
+    # One after the other, on one card. Whoever waited here may find the
+    # vector of the same words already there.
+    with _EMBEDDING:
+        cached = query_cache.get(cache_conn, cache_key)
+        if cached is not None:
+            return cached, True
+        # Heavy backend imported lazily so a cache-hit turn never touches torch;
+        # which backend that is (local model or an endpoint) is configuration.
+        from docpipe.embedding import get_embedder
+        vec = get_embedder().embed_one(item)
+        query_cache.put(cache_conn, cache_key, vec)
     return vec, False
 
 
@@ -236,13 +260,14 @@ def _corpus(image_bytes: bytes | None = None) -> answer.Corpus:
 
 def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
              document_id: int | None, scopes: list[str], as_json: bool = False,
-             history: list | None = None):
+             history: list | None = None, corpus: answer.Corpus | None = None,
+             progress=None):
     """One turn, with this app's resources and its spinners attached.
     `document_id` None asks the whole corpus."""
     return answer.answer_question(
-        task, _corpus(image_bytes), document_id, scopes,
+        task, corpus or _corpus(image_bytes), document_id, scopes,
         image_bytes=image_bytes, image_only=image_only, as_json=as_json,
-        history=history, progress=_spinner,
+        history=history, progress=progress or _spinner,
     )
 
 
@@ -275,18 +300,31 @@ def _ask_coordinate(task: str, slot):
                              slot.answerable() if slot.is_closed else {})
 
 
-def run_values_turn(task: str, document_id: int | None) -> dict | None:
+def run_values_turn(task: str, document_id: int | None,
+                    history: list | None = None) -> dict | None:
     """What the harvest holds for the question, or None: no harvest, or
     the question names nothing it has. `document_id` None asks every
     document's harvest."""
-    got = values_outcome(task, document_id)
+    got = values_outcome(task, document_id, history)
     return got if got is not None and got["route"] == "values" else None
 
 
-def values_outcome(task: str, document_id: int | None) -> dict | None:
+def _anchor_vector(task: str, history: list | None):
+    """The vector of the question's search anchor: the one sentence the
+    documents are searched with too, so a vector made for one is there for
+    the other."""
+    phrase, _recheck = llm_client.make_search_phrase(task, history=history)
+    vector, _cached = embed_query({"text": phrase}, get_cache(),
+                                  query_cache.make_key("text", text=phrase))
+    return vector
+
+
+def values_outcome(task: str, document_id: int | None,
+                   history: list | None = None) -> dict | None:
     """The harvest's answer with its reason where it has none
     (`values_route.REASONS`), or None: no harvest, or a document the
-    database does not know."""
+    database does not know. By meaning where the harvest has its vectors,
+    else by closed questions."""
     store, _rows = get_values()
     if store is None:
         return None
@@ -296,6 +334,15 @@ def values_outcome(task: str, document_id: int | None) -> dict | None:
         if not filename:
             return None
         name = Path(filename).stem
+    index = get_values_index()
+    if index is not None:
+        return values_route.answer_from_index(
+            task, index, embed=partial(_anchor_vector, history=history),
+            pick=partial(llm_client.pick_values, history=history),
+            count=partial(chunker.count_tokens,
+                          tokenizer=chunker.get_tokenizer()),
+            budget=config.ANSWER_CONTEXT_TOKENS, document=name,
+            level=config.VALUES_LEVEL)
     return values_route.answer_from_values(
         task, store, ask=_ask_value_coordinate, document=name,
         level=config.VALUES_LEVEL, limit=config.VALUES_LIMIT,
@@ -304,7 +351,9 @@ def values_outcome(task: str, document_id: int | None) -> dict | None:
 
 
 def run_values_answer(task: str, got: dict, document_id: int | None,
-                      history: list | None = None) -> dict:
+                      history: list | None = None,
+                      corpus: answer.Corpus | None = None,
+                      progress=None) -> dict:
     """The question answered from the passages the found values were read
     from (`answer.answer_from_values`), and the values the answer stands on.
 
@@ -313,8 +362,8 @@ def run_values_answer(task: str, got: dict, document_id: int | None,
     ones, `shown` how many the answer was given, `total` how many matched.
     """
     result = answer.answer_from_values(
-        task, _corpus(), got["values"], document_id, history=history,
-        progress=_spinner)
+        task, corpus or _corpus(), got["values"], document_id, history=history,
+        progress=progress or _spinner)
     return {"answer": result["answer"], "answer_text": result["answer_text"],
             "citations": result["citations"],
             "made": result.get("statements_made", 0),
@@ -369,6 +418,18 @@ def _ask_value_coordinate(task: str, slot):
                              slot.answerable() if slot.is_closed else {})
 
 
+def _in_this_run(work):
+    """*work* for another thread: it may read the cached resources of this
+    run, and it shows nothing itself."""
+    ctx = get_script_run_ctx()
+
+    def run():
+        add_script_run_ctx(threading.current_thread(), ctx)
+        return work()
+
+    return run
+
+
 def _spinner(label: str):
     """A labelled spinner with Streamlit's built-in live elapsed timer."""
     return st.spinner(f"{label} …", show_time=True)
@@ -392,8 +453,10 @@ def main() -> None:
     if config.PROFILE is None:
         st.warning(T["no_profile"])
 
-    # The review page is offered where there is something to review.
-    if config.HARVEST_DIR is not None and config.GOLD_PATH is not None:
+    # The review page is offered where there is something to review and it
+    # is not switched off.
+    if (config.REVIEW and config.HARVEST_DIR is not None
+            and config.GOLD_PATH is not None):
         with st.sidebar:
             page = st.radio("page", [T["page_chat"], T["page_review"]],
                             horizontal=True, label_visibility="collapsed")
@@ -555,7 +618,8 @@ def chat_page() -> None:
         history.append(message)
         return
     if route == "route_harvest":
-        got = None if image_only else values_outcome(task, doc_id)
+        got = (None if image_only
+               else values_outcome(task, doc_id, by_doc.get(doc_id, [])))
         if got is not None and got["route"] == "values":
             harvest = run_values_answer(task, got, doc_id,
                                         by_doc.get(doc_id, []))
@@ -576,14 +640,24 @@ def chat_page() -> None:
     # out of the passages the harvest read its values from, not out of the
     # search below. Not for a question that is only an image: it names
     # nothing.
-    values = (None if image_only or route == "route_documents"
-              else run_values_turn(task, doc_id))
-    harvest = (None if values is None
-               else _kept(run_values_answer(task, values, doc_id,
-                                            by_doc.get(doc_id, []))))
+    corpus = _corpus(image_bytes)
 
-    result = run_turn(task, image_bytes, image_only, doc_id, scopes, as_json=as_json,
-                      history=by_doc.get(doc_id, []))
+    def from_harvest():
+        values = (None if image_only or route == "route_documents"
+                  else run_values_turn(task, doc_id, by_doc.get(doc_id, [])))
+        return None if values is None else _kept(run_values_answer(
+            task, values, doc_id, by_doc.get(doc_id, []), corpus=corpus,
+            progress=answer._silent))
+
+    def from_documents():
+        return run_turn(task, image_bytes, image_only, doc_id, scopes,
+                        as_json=as_json, history=by_doc.get(doc_id, []),
+                        corpus=corpus, progress=answer._silent)
+
+    # The two run side by side, so the one spinner stands for both.
+    with _spinner(T["preparing"]), pool.turn():
+        harvest, result = llm_client.together(
+            [_in_this_run(from_harvest), _in_this_run(from_documents)])
 
     recheck_note = None
     if result.get("recheck"):
@@ -746,8 +820,9 @@ def reason_words() -> dict:
             "unbacked": T["reason_unbacked"],
             "unanswered": T["reason_unanswered"],
             "conflict": T["reason_conflict"],
-            "repaired": T["reason_repaired"],
             "computed": T["reason_computed"],
+            "read_off": T["reason_read_off"],
+            "catalogue": T["reason_catalogue"],
             "not_located": T["reason_not_located"],
             "review:disagree": T["reason_review_disagree"],
             "page_transcribed": T["reason_page_transcribed"]}
@@ -787,12 +862,15 @@ def _value_line(value: dict) -> str:
 
 
 def _value_details(value: dict) -> list:
-    """The coordinates by name and the reasons of the level, in words."""
+    """The coordinates by name, what was read off a figure where no text
+    states the number, and the reasons of the level, in words."""
     names = axis_names()
     lines = [f"{names.get(axis, axis)}: {_coordinate_text(entry)}"
              for axis, entry in (value.get("coordinates") or {}).items()
              if axis not in NOT_A_COORDINATE
              and entry.get("value") not in (None, "")]
+    if value.get("reading"):
+        lines.append(f"{T['read_off']}: {value['reading']}")
     lines += [_reason(reason) for reason in value.get("reasons") or []]
     return lines
 
@@ -902,8 +980,8 @@ def _render_kg(values: list) -> None:
     """The graph's values, each under the trust line the serializer wrote.
 
     The badge is the LAST comment line above the node and the evidence the
-    rest, which is the order evidence_comment writes them in. A C is a
-    warning because the profile's own word for it is a review request.
+    rest, which is the order evidence_comment writes them in. A C or a D is
+    a warning because the profile's own word for it is a review request.
     """
     hooks = get_kg_hooks()
     for value in values:
@@ -917,7 +995,7 @@ def _render_kg(values: list) -> None:
                      hooks.spec, hooks.axes, (value.get("abouts") or "").split())]
         st.caption("🏷 " + " · ".join([value["partLabel"]] + about))
         level = kg_route.trust_level(value["trust"], hooks.prose)
-        if level == kg_route.LEVEL_C:
+        if level in kg_route.review_levels():
             st.warning(value["trust"])
         elif level == kg_route.LEVEL_B:
             st.caption(value["trust"])
@@ -1137,7 +1215,8 @@ def _typed(text: str, like):
         sign, digits = 1, text
         if digits[:1] in ("-", "\u2212", "+"):
             sign, digits = (1 if digits[0] == "+" else -1), digits[1:].strip()
-        mark = WORDS_PROFILE.component("extraction", "DECIMAL_MARK") or ","
+        from docpipe import rules
+        mark = rules.load(WORDS_PROFILE)["decimal_mark"]
         canonical = canonical_number(digits, mark)
         if canonical is None:
             return text

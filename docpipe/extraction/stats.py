@@ -1,0 +1,428 @@
+"""
+stats.py: Where a harvest is hard, written beside it after every run.
+
+    python -m docpipe.extraction.stats <harvest dir> [--trace trace ...]
+
+The harvest says what was read; this says what was not and why, in the
+numbers a report and the ontology side can act on:
+
+- coordinates per parameter, axis and state (`read`, `unstated`,
+  `exhausted`, ...), and per document the share still open, hardest first;
+- the plan's wordings the model mapped onto a class although no listed
+  spelling matched (`<axis>_raw_foreign`): spellings the vocabulary lacks,
+  or classes it lacks;
+- answers outside the closed list (`not_an_option` drops in the trace),
+  with the wording given: candidates for a class the ontology does not have;
+- the `out:total` readings per axis and wording, which include the numbers
+  a plan does not split by that axis at all;
+- per axis and search stage, the requests sent and the coordinates they
+  filled, which is what a coordinate costs;
+- the reasons answers were dropped, per axis;
+- the open questions of the compute step, per kind and how they ended;
+- the harvest piece by piece: requests and tokens per kind of request,
+  the pieces each document was cut into, the passages it was read in and
+  for how many fields, the readings per reason unread, the fields a
+  document has once and the values read of them, the works a document
+  presents beside itself, and the search sentences that were questions
+  (owner decisions 2026-11-08);
+- how many requests were with the server at once, on average and at most,
+  and the seconds they spent with it and waiting for a place, all and per
+  stage; and per stage the requests answered with the answer of the same
+  request sent before, which went out once (owner decision 2026-11-07).
+
+Every count says what it counts. Read from the harvest files and the trace
+directories named; written to `<harvest dir>/stats/<pass>-<run start>.json`.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+from collections import Counter, defaultdict
+from pathlib import Path
+from typing import Iterable, Optional
+
+from .. import rules
+from . import archive, trace
+from .schema import ASK_STAGES
+
+log = logging.getLogger(__name__)
+
+STATS = "stats"
+from .fields import OPEN  # noqa: E402,F401  (rule `open_states`)
+# Every request writes `<stage>_ask`; each such kind is counted under its
+# stage, a stage no list names as well, and the known stages count even
+# when they asked nothing (owner decision 2026-11-05).
+ASK = "_ask"
+
+
+def _int(event: dict, key: str) -> int:
+    value = event.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) \
+        else 0
+
+
+def _at(event: dict, key: str) -> Optional[float]:
+    value = event.get(key)
+    return float(value) if isinstance(value, (int, float)) \
+        and not isinstance(value, bool) else None
+
+
+def _stage(event: dict) -> str:
+    """The stage an event that reports a request speaks for: `<stage>_ask`
+    names it, an error says where it was, any other event is its own."""
+    kind = str(event.get("t"))
+    if kind.endswith(ASK) and len(kind) > len(ASK):
+        return kind[:-len(ASK)]
+    if kind == "error":
+        return str(event.get("where"))
+    return kind
+
+
+def at_once(timed: list) -> dict:
+    """How many requests were with the server at once (owner decision
+    2026-11-07): the mean over the time from the first one sent to the last
+    answer, and the most at one moment; and the seconds they were with the
+    server and waited for a place in the run's queue, all and per stage.
+    *timed* is [(stage, event)] of the events that report a request sent,
+    whatever their kind. One without its times (a trace from before
+    2026-11-07) counts in none of these; one no queue held waited no time."""
+    serving: Counter = Counter()
+    waiting: Counter = Counter()
+    edges = []
+    for stage, event in timed:
+        asked, answered = _at(event, "asked_at"), _at(event, "answered_at")
+        if asked is None or answered is None:
+            continue
+        sent = _at(event, "sent_at")
+        sent = asked if sent is None else sent
+        serving[stage] += max(0.0, answered - sent)
+        waiting[stage] += max(0.0, sent - asked)
+        edges += [(sent, 1), (answered, -1)]
+    # An answer and a sending at the same moment: the answer first.
+    edges.sort()
+    now = most = 0
+    for _moment, step in edges:
+        now += step
+        most = max(most, now)
+    span = (edges[-1][0] - edges[0][0]) if edges else 0.0
+    served = sum(serving.values())
+    return {"mean": round(served / span, 2) if span > 0 else 0.0,
+            "most": most,
+            "seconds_with_the_server": round(served, 1),
+            "seconds_waiting_for_a_place": round(sum(waiting.values()), 1),
+            "by_stage": {stage: {
+                "seconds_with_the_server": round(serving[stage], 1),
+                "seconds_waiting_for_a_place": round(waiting[stage], 1)}
+                for stage in sorted(serving)}}
+
+
+def _lines(path: Path) -> Iterable[dict]:
+    try:
+        handle = open(path, encoding="utf-8")
+    except OSError:
+        return
+    with handle:
+        for line in handle:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict):
+                yield row
+
+
+def from_harvest(harvest_dir: Path, names: Optional[set] = None) -> dict:
+    """The counts the harvest files carry."""
+    states: dict = defaultdict(lambda: defaultdict(Counter))
+    foreign: dict = defaultdict(Counter)
+    totals: dict = defaultdict(Counter)
+    hardest = []
+    documents = tuples = 0
+    for path in sorted(Path(harvest_dir).glob("*.jsonl")):
+        if trace.is_trace(path) or (
+                names is not None and path.stem not in names):
+            continue
+        documents += 1
+        asked = still_open = 0
+        for row in _lines(path):
+            if row.get("kind") != "tuple":
+                continue
+            tuples += 1
+            parameter = row.get("parameter") or "?"
+            for key, state in row.items():
+                if not key.endswith("_state") or not isinstance(state, str):
+                    continue
+                axis = key[:-len("_state")]
+                states[parameter][axis][state] += 1
+                if state in rules.get("stats_not_asked_states"):
+                    continue
+                asked += 1
+                if state in OPEN:
+                    still_open += 1
+                if state != "read":
+                    continue
+                raw = row.get(f"{axis}_raw")
+                if row.get(f"{axis}_raw_foreign") and isinstance(raw, str):
+                    foreign[axis][(str(row.get(axis)), raw)] += 1
+                if row.get(axis) == "out:total" and isinstance(raw, str):
+                    totals[axis][raw] += 1
+        if asked:
+            hardest.append([path.stem, still_open, asked])
+    hardest.sort(key=lambda d: (-d[1] / d[2], -d[2]))
+    return {
+        "documents": documents,
+        "tuples": tuples,
+        "coordinates_by_parameter_axis_state": {
+            p: {a: dict(c) for a, c in axes.items()}
+            for p, axes in states.items()},
+        "documents_by_open_share": [
+            {"document": d, "open_coordinates": o, "asked_coordinates": a}
+            for d, o, a in hardest],
+        "read_with_wording_off_the_list": {
+            axis: [{"value": v, "wording": w, "coordinates": n}
+                   for (v, w), n in c.most_common()]
+            for axis, c in foreign.items()},
+        "read_as_total": {
+            axis: [{"wording": w, "coordinates": n}
+                   for w, n in c.most_common()]
+            for axis, c in totals.items()},
+    }
+
+
+def from_traces(trace_dirs: Iterable[Path],
+                names: Optional[set] = None) -> dict:
+    """The counts the traces carry: requests and fills per axis and stage,
+    the reasons answers were dropped, the answers outside the list."""
+    requests: dict = defaultdict(Counter)
+    filled: dict = defaultdict(Counter)
+    drops: dict = defaultdict(Counter)
+    outside: dict = defaultdict(Counter)
+    maps: Counter = Counter()
+    places_by_axis: Counter = Counter()
+    planned: Counter = Counter()
+    withdrawn = 0
+    from_table = 0
+    computed: dict = defaultdict(Counter)
+    completed: Counter = Counter()
+    stages: dict = defaultdict(Counter)
+    ordered: Counter = Counter()
+    readings: Counter = Counter()
+    unread_why: Counter = Counter()
+    refused_first: Counter = Counter()
+    pieces: Counter = Counter()
+    once: Counter = Counter()
+    works: Counter = Counter()
+    timed: list = []
+    for directory in trace_dirs:
+        for path in trace.files(directory):
+            if names is not None and trace.name_of(path) not in names:
+                continue
+            for event in trace.lines(path):
+                kind = event.get("t")
+                if "asked_at" in event and event.get("once") is not True:
+                    # Every event that reports a request carries its times,
+                    # whatever its kind; an answer given again was not sent.
+                    timed.append((_stage(event), event))
+                if kind == "field":
+                    axis = str(event.get("slot"))
+                    stage = str(event.get("stage"))
+                    requests[axis][stage] += 1
+                    filled[axis][stage] += int(event.get("filled") or 0)
+                elif kind == "drop":
+                    axis = str(event.get("field") or event.get("slot"))
+                    why = str(event.get("why") or "unbacked")
+                    drops[axis][why] += 1
+                    if why == "not_an_option":
+                        outside[axis][(str(event.get("given")),
+                                       str(event.get("raw")))] += 1
+                elif kind == "places":
+                    maps["documents"] += 1
+                    maps["complete"] += bool(event.get("complete"))
+                    for key in ("passages", "windows", "places", "dropped",
+                                "unread"):
+                        maps[key] += int(event.get(key) or 0)
+                    places_by_axis.update(event.get("by_axis") or {})
+                elif kind == "plan":
+                    planned[str(event.get("origin"))] += 1
+                elif kind == "sweep":
+                    withdrawn += int(event.get("withdrawn") or 0)
+                    from_table += int(event.get("via_table") or 0)
+                elif kind == "compute":
+                    computed[str(event.get("kind"))][
+                        str(event.get("outcome"))] += 1
+                elif kind == "completion":
+                    completed[str(event.get("outcome"))] += 1
+                elif isinstance(kind, str) and kind.endswith(ASK) \
+                        and len(kind) > len(ASK):
+                    stage = kind[:-len(ASK)]
+                    if event.get("once") is True:
+                        # The answer of the same request sent before: nothing
+                        # went out and nothing was spent (owner decision
+                        # 2026-11-07).
+                        stages[stage]["answered_once"] += 1
+                        continue
+                    stages[stage]["requests"] += 1
+                    stages[stage]["prompt_tokens"] += _int(event,
+                                                           "prompt_tokens")
+                    stages[stage]["completion_tokens"] += _int(
+                        event, "completion_tokens")
+                elif kind == "order":
+                    ordered["documents"] += 1
+                    ordered["passages"] += _int(event, "passages")
+                    ordered["readings"] += (_int(event, "passages")
+                                            * _int(event, "parameters"))
+                elif kind == "read":
+                    readings["readings"] += 1
+                    if event.get("unread"):
+                        unread_why[str(event.get("why"))] += 1
+                    for key in ("values", "unanswered"):
+                        readings[key] += _int(event, key)
+                    refused_first.update(
+                        {str(w): n for w, n in
+                         (event.get("failed") or {}).items()
+                         if isinstance(n, int)})
+                elif kind == "asked":
+                    pieces["documents"] += 1
+                    pieces["chunks"] += _int(event, "chunks")
+                    pieces["question_queries"] += _int(event,
+                                                       "question_queries")
+                elif kind == "docfield":
+                    once["fields"] += 1
+                    once["values"] += _int(event, "values")
+                    once["unread"] += bool(event.get("why"))
+                elif kind == "works":
+                    works["documents"] += 1
+                    works["works"] += _int(event, "works")
+                    works["new"] += _int(event, "new")
+    return {
+        # The maps of places: documents mapped and how many completely,
+        # passages, requests, places taken and not, requests unread, and
+        # places per axis.
+        "places_maps": {**{k: maps[k] for k in (
+            "documents", "complete", "passages", "windows", "places",
+            "dropped", "unread")}, "places_by_axis": dict(places_by_axis)},
+        "windows_withdrawn_unsent": withdrawn,
+        # Rows that took the frame their table was asked for.
+        "coordinates_taken_from_their_table": from_table,
+        "computed_questions_by_kind_outcome": {k: dict(c)
+                                               for k, c in computed.items()},
+        # Documents a profile completed from outside them, by what the
+        # lookup came to.
+        "completions_by_outcome": dict(completed),
+        # Where the plans' passages came from: a search or a found place.
+        "passages_planned_by_origin": dict(planned),
+        "requests_and_fills_by_axis_stage": {
+            axis: {stage: {"requests": requests[axis][stage],
+                           "coordinates_filled": filled[axis][stage]}
+                   for stage in requests[axis]}
+            for axis in requests},
+        "dropped_answers_by_axis_reason": {a: dict(c)
+                                           for a, c in drops.items()},
+        "answers_outside_the_list": {
+            axis: [{"given": g, "wording": w, "answers": n}
+                   for (g, w), n in c.most_common()]
+            for axis, c in outside.items()},
+        # Per kind of request: requests that got a reply, their tokens, and
+        # those answered with the answer of the same request sent before in
+        # the document, which were not sent (owner decision 2026-11-07). A
+        # request asked again with what did not hold is a kind of its own
+        # ("follow").
+        "requests_by_stage": {
+            stage: {k: stages[stage][k] for k in (
+                "requests", "prompt_tokens", "completion_tokens",
+                "answered_once")}
+            for stage in dict.fromkeys((*ASK_STAGES, *sorted(stages)))},
+        # Requests with the server at once, and the seconds with it and
+        # waiting for a place (`at_once`).
+        "requests_at_once": at_once(timed),
+        # Documents ordered (`addressed.Orders`), their passages, and the
+        # readings that order planned: each passage for each field
+        # (passages x fields).
+        "order": {
+            "documents": ordered["documents"],
+            "passages": ordered["passages"],
+            "readings_planned": ordered["readings"]},
+        # Readings (one passage for one field), the readings that came to
+        # no reply per reason, values read, coordinates left unanswered and
+        # the refusals of a first answer per reason.
+        "reading": {
+            "readings": readings["readings"],
+            "unread_by_reason": dict(unread_why),
+            "values": readings["values"],
+            "coordinates_unanswered": readings["unanswered"],
+            "refused_first_by_reason": dict(refused_first)},
+        # Documents read piece by piece, the pieces they were cut into, and
+        # the search sentences that were questions, which a search takes
+        # and the run counts (owner decision 2026-11-08: "So pingelig wäre
+        # ich da nicht").
+        "pieces": {
+            "documents": pieces["documents"],
+            "chunks": pieces["chunks"],
+            "question_queries": pieces["question_queries"]},
+        # The fields a document has once, asked once per document: fields
+        # asked, values read, and fields a request came to nothing for.
+        "asked_once": {
+            "fields": once["fields"],
+            "values": once["values"],
+            "unread": once["unread"]},
+        # The works documents present, compare or cite beside themselves,
+        # their own entry included, and the new ones asked their details.
+        "works": {
+            "documents": works["documents"],
+            "works": works["works"],
+            "asked_their_details": works["new"]},
+    }
+
+
+def collect(harvest_dir: Path, trace_dirs: Iterable[Path] = (),
+            names: Optional[set] = None) -> dict:
+    return {**from_harvest(harvest_dir, names),
+            **from_traces(trace_dirs, names)}
+
+
+def write(harvest_dir: Path, trace_dirs: Iterable[Path] = (),
+          names: Optional[set] = None, *,
+          always: bool = False) -> Optional[Path]:
+    """Collect and write; returns the file, None where the rule
+    `write_stats` is off for this run (*always*: the command line asked for
+    the statistics, whatever the run does). Logs the lines a report starts
+    with: the open coordinates per axis and the costliest stages."""
+    if not always and not rules.get("write_stats"):
+        return None
+    harvest_dir = Path(harvest_dir)
+    out = collect(harvest_dir, [Path(d) for d in trace_dirs
+                                if Path(d).is_dir()], names)
+    target = (harvest_dir / STATS /
+              (archive.folder(harvest_dir).name + ".json"))
+    target.parent.mkdir(parents=True, exist_ok=True)
+    archive.keep(target)
+    target.write_text(json.dumps(out, ensure_ascii=False, indent=1),
+                      encoding="utf-8")
+    still: Counter = Counter()
+    for axes in out["coordinates_by_parameter_axis_state"].values():
+        for axis, counts in axes.items():
+            still[axis] += sum(counts.get(s, 0) for s in OPEN)
+    log.info("stats: %d document(s), %d tuple(s), open coordinates per axis: "
+             "%s -> %s", out["documents"], out["tuples"],
+             ", ".join(f"{a} {n}" for a, n in still.most_common()) or "none",
+             target)
+    return target
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("harvest", type=Path)
+    parser.add_argument("--trace", type=Path, action="append", default=[],
+                        help="a trace directory, relative to the harvest; "
+                             "repeatable (default: trace)")
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    archive.begin("stats")
+    traces = [args.harvest / t for t in (args.trace or [Path("trace")])]
+    print(write(args.harvest, traces, always=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

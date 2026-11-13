@@ -18,12 +18,13 @@ import os
 import sqlite3
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from . import chunker, code_exec, config, db, llm_client, request_log
+from . import chunker, code_exec, config, db, llm_client, pool, request_log
 from . import hybrid, replies, statements, wording
 
 log = logging.getLogger(__name__)
@@ -163,14 +164,18 @@ def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
     n_findings (int), cache_hit (bool), n_hits (int), phrase (str|None),
     as_json (bool), n_batches (int), compute (list), examined, recheck,
     n_excluded, requested (block ids), statements (list[dict]),
-    statements_made / statements_shown / statements_dropped (int, counting
-    statements), faults (list of {"request", "cause"}).
+    statements_made / statements_shown / statements_dropped /
+    statements_repeated (int, counting statements), faults (list of
+    {"request", "cause"}).
 
     The answer is made of the statements the model wrote whose evidence
     stood in the source they cite (`statements.back`); the rest are counted
     in `statements_dropped`, never shown. Each batch is told the statements
     already checked and writes only new ones, so what was checked is carried
-    forward as it was and the model cannot rewrite it. `answer_text` is the
+    forward as it was and the model cannot rewrite it. Batches may be sent
+    ahead of that (`pool.in_order`) and are taken in order all the same; what
+    one of them says again is named by one request over the checked
+    statements and leaves (`statements_repeated`). `answer_text` is the
     same statements without list marks and citation numbers, which is what a
     follow-up and a comparison read.
 
@@ -181,7 +186,7 @@ def answer_question(task: str, corpus: Corpus, document_id: Optional[int],
     answer was reshaped as JSON; where that did not happen the answer is the
     prose and `faults` says why.
     """
-    with llm_client.collecting() as faults:
+    with pool.turn(), llm_client.collecting() as faults:
         result = _turn(task, corpus, document_id, scopes, faults,
                        image_bytes=image_bytes, image_only=image_only,
                        as_json=as_json, history=history, progress=progress)
@@ -196,7 +201,8 @@ def _empty(as_json: bool, faults: list) -> dict:
             "n_batches": 0, "compute": [], "examined": [], "recheck": False,
             "n_excluded": 0, "requested": [], "statements": [],
             "statements_made": 0, "statements_shown": 0,
-            "statements_dropped": 0, "faults": faults}
+            "statements_dropped": 0, "statements_repeated": 0,
+            "faults": faults}
 
 
 def answer_from_values(task: str, corpus: Corpus, values: list,
@@ -212,7 +218,7 @@ def answer_from_values(task: str, corpus: Corpus, values: list,
     passage exactly as in a document turn, and the citations are the same
     kind. Returns what `answer_question` returns; `n_hits` counts passages.
     """
-    with llm_client.collecting() as faults:
+    with pool.turn(), llm_client.collecting() as faults:
         result = _empty(as_json, faults)
         start_time = time.time()
         hits, seen = [], set()
@@ -311,6 +317,32 @@ def _turn(task: str, corpus: Corpus, document_id: Optional[int], scopes: list,
                         as_json=as_json, progress=progress)
 
 
+def _ask_batch(task: str, items: list, prior: Optional[list], top_hits: list,
+               corpus: Corpus, document_id: Optional[int], history) -> dict:
+    """One batch asked. The batch is told what was already said and checked
+    (`prior`) and writes only what is new: a checked statement is never
+    rewritten."""
+    # Attach the table/figure crops so values that exist only in a chart
+    # can be read off the image (capped; downscaled in llm_client).
+    images = {}
+    for it in items:
+        if len(images) >= config.ANSWER_MAX_IMAGES:
+            break
+        img = corpus.resolve_image(top_hits[it["index"]].get("image_path"))
+        if img is not None:
+            images[it["index"]] = str(img)
+    code_ctx = _code_context(items, top_hits) if code_exec.is_enabled() else None
+    return llm_client.answer_from_sources(
+        task, items, prior=prior,
+        code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
+        code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
+        history=history, images=images or None,
+        image_requester=_image_requester(
+            corpus, document_id,
+            tuple(top_hits[it["index"]].get("document_id") for it in items)),
+        max_image_requests=config.REQUEST_IMAGE_MAX)
+
+
 def _answer_hits(task: str, corpus: Corpus, document_id: Optional[int],
                  scopes: list, hits: list, result: dict, faults: list, *,
                  mode: str, phrase: Optional[str], start_time: float,
@@ -332,31 +364,27 @@ def _answer_hits(task: str, corpus: Corpus, document_id: Optional[int],
     made = dropped = 0
     examined = set()
     requested_items: list[dict] = []
-    with progress("🔍 Answer from the sources"):
-        for bi, chunk in enumerate(batches, start=1):
+    # Whether a batch was asked without the statements that stood before it.
+    ahead = False
+
+    def prepare(i: int) -> tuple:
+        return batches[i], statements.texts(shown) or None
+
+    def ask(job: tuple) -> tuple:
+        chunk, prior = job
+        with llm_client.collecting() as own:
+            out = _ask_batch(task, chunk.items, prior, top_hits, corpus,
+                             document_id, history)
+        return chunk, prior, out, own
+
+    with progress("🔍 Answer from the sources"), closing(pool.in_order(
+            len(batches), prepare, ask)) as answers:
+        for bi, (chunk, prior, out, own) in enumerate(answers, start=1):
             items = chunk.items
-            # Attach the table/figure crops so values that exist only in a chart
-            # can be read off the image (capped; downscaled in llm_client).
-            images = {}
-            for it in items:
-                if len(images) >= config.ANSWER_MAX_IMAGES:
-                    break
-                img = corpus.resolve_image(top_hits[it["index"]].get("image_path"))
-                if img is not None:
-                    images[it["index"]] = str(img)
-            code_ctx = _code_context(items, top_hits) if code_exec.is_enabled() else None
-            # The batch is told what was already said and checked, and writes
-            # only what is new: a checked statement is never rewritten.
-            out = llm_client.answer_from_sources(
-                task, items, prior=statements.texts(shown) or None,
-                code_runner=(code_exec.run_code if code_exec.is_enabled() else None),
-                code_context=code_ctx, max_compute=config.CODE_EXEC_MAX_ROUNDS,
-                history=history, images=images or None,
-                image_requester=_image_requester(
-                    corpus, document_id,
-                    tuple(top_hits[it["index"]].get("document_id")
-                          for it in items)),
-                max_image_requests=config.REQUEST_IMAGE_MAX)
+            # Taken in here, in batch order, whichever came back first: a
+            # batch that is not needed leaves no fault and read nothing.
+            faults.extend(own)
+            ahead = ahead or (prior or []) != statements.texts(shown)
             # Sources the LLM actually read this turn; a later re-check of the
             # same question searches past exactly these. A batch whose reply
             # stayed unreadable (a half of it, where it was halved) was not
@@ -403,6 +431,16 @@ def _answer_hits(task: str, corpus: Corpus, document_id: Optional[int],
     result["examined"] = sorted(examined)
     result["requested"] = [r["block_id"] for r in requested_items]
 
+    # A batch asked ahead did not see what came before it. Only then can a
+    # statement be a repeat, and only then is this asked.
+    repeated = set()
+    if ahead and len(shown) > 1:
+        with progress("🧹 Repeats"):
+            repeated = statements.repeated(
+                llm_client.repeats_among(task, statements.texts(shown)),
+                len(shown))
+        shown[:] = [s for at, s in enumerate(shown) if at not in repeated]
+
     # What was asked for and not cited is not shown as evidence: a crop the
     # model asked for is a citation only where a statement stands on it.
     citations = statements.citations_of(shown)
@@ -415,11 +453,14 @@ def _answer_hits(task: str, corpus: Corpus, document_id: Optional[int],
     visual_cits = [c for c in citations if c["visual"]]
     if visual_cits:
         with progress("🔬 Refine the read-off"):
-            for cit in visual_cits[: config.READOFF_MAX_CALLS]:
-                img = corpus.resolve_image(cit.get("image_path"))
-                if img is None:
-                    continue
-                ro = llm_client.read_off_image(task, str(img), cit["quote"])
+            readable = [(cit, img) for cit, img in (
+                (cit, corpus.resolve_image(cit.get("image_path")))
+                for cit in visual_cits[: config.READOFF_MAX_CALLS])
+                if img is not None]
+            readings = llm_client.together(
+                [partial(llm_client.read_off_image, task, str(img), cit["quote"])
+                 for cit, img in readable])
+            for (cit, _img), ro in zip(readable, readings):
                 if ro:
                     cit["quote"] = ro["reading"]
                     for s in shown:
@@ -435,7 +476,7 @@ def _answer_hits(task: str, corpus: Corpus, document_id: Optional[int],
     result.update(
         statements=[{k: v for k, v in s.items() if k != "hit"} for s in shown],
         statements_made=made, statements_shown=len(shown),
-        statements_dropped=dropped)
+        statements_dropped=dropped, statements_repeated=len(repeated))
 
     if not shown:      # nothing backed → refuse (anti-hallucination)
         # Three different things end here and are told apart in the log: the

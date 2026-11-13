@@ -330,13 +330,16 @@ def _extraction_spec(profile):
 
 def _extract_budget(profile) -> int:
     """What `extract --print-context-budget` prints: the largest request of
-    the prompts the run sends. A frame request counts when the profile names
-    frame axes, as it does in the run."""
-    from .extraction import fields, runner
+    the prompts the run sends, those of a harvest passage by passage. A
+    spec without groups is a failure here, as the run stops on it
+    (`runner.surveyed_flow`)."""
+    from .extraction import runner
     spec = _extraction_spec(profile)
-    framed = bool(fields.frame_slots(
-        spec, profile.component("extraction", "FRAME") or ()))
-    return runner.request_budget(spec, framed, profile)
+    if not runner.surveyed_flow(spec, profile):
+        raise LookupError("the spec names no groups: a spec needs groups, "
+                          "since every run reads each plan passage by "
+                          "passage")
+    return runner.request_budget(spec, profile)
 
 
 def _review_budget(profile) -> int:
@@ -474,8 +477,8 @@ def check_request(stage: Optional[str], asked: list,
 def _prompt_ids(stage: str) -> tuple:
     """The prompts a stage's own module says it loads."""
     if stage == "preprocess":
-        from .preprocessing import page_text_fallback
-        return (page_text_fallback.PAGE_TRANSCRIBE_PROMPT_ID,)
+        from .preprocessing import page_text_without_layer
+        return (page_text_without_layer.PAGE_TRANSCRIBE_PROMPT_ID,)
     if stage == "refine":
         from .refinement import config
         return tuple(config.PROMPT_IDS)
@@ -484,7 +487,8 @@ def _prompt_ids(stage: str) -> tuple:
         return tuple(config.PROMPT_IDS)
     if stage == "extract":
         from .extraction import runner
-        return (*runner.PROMPT_IDS, runner.REVIEW_PROMPT_ID)
+        return (*runner.SURVEY_PROMPT_IDS, runner.PHRASE_PROMPT_ID,
+                runner.REVIEW_PROMPT_ID)
     if stage == "chat":
         from .inference import llm_client
         return tuple(llm_client.PROMPT_IDS)
@@ -549,13 +553,13 @@ def _prompts_of(stage: str, profile) -> list:
 def _extraction_phrases(profile) -> list:
     from .extraction import wording
     _has_extraction(profile)
-    return [Check("wording", "extraction.PHRASES", OK,
+    return [Check("wording", "prompts/extraction/phrases.json", OK,
                   f"{len(wording.phrases(profile))} phrase(s), none missing")]
 
 
 def _inference_phrases(profile) -> list:
     from .inference import wording
-    return [Check("wording", "inference.PHRASES", OK,
+    return [Check("wording", "prompts/inference/phrases.json", OK,
                   f"{len(wording.phrases(profile))} phrase(s), none missing")]
 
 
@@ -570,7 +574,7 @@ def _graph_route(profile) -> list:
     hooks = kg_route.hooks(profile)
     if hooks is None:
         raise Unconfigured("the profile has no graph route to answer from "
-                           "(no kg.VALUE_QUERY)")
+                           "(no kg.value_query)")
     return [Check("wording", "graph route", OK,
                   f"{len(hooks.notes)} reason(s) worded, and its coordinate "
                   f"prompt found")]
@@ -579,8 +583,8 @@ def _graph_route(profile) -> list:
 # (stage, line, check). The tables are the stages' own, and so is the check
 # that one is complete: it raises and names what is missing.
 WORDING = (
-    ("extract", "extraction.PHRASES", _extraction_phrases),
-    ("chat", "inference.PHRASES", _inference_phrases),
+    ("extract", "prompts/extraction/phrases.json", _extraction_phrases),
+    ("chat", "prompts/inference/phrases.json", _inference_phrases),
     ("chat", "inference.UI", _inference_ui),
     ("chat", "graph route", _graph_route),
 )

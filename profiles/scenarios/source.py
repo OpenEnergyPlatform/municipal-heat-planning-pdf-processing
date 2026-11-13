@@ -1,9 +1,9 @@
 """
-source.py – Where the AR6 corpus comes from: pdf_index.json, the crawl over the
-publications the AR6 scenario database cites.
+source.py – Where the scenarios corpus comes from: pdf_index.json, the crawl
+over the publications of the corpus.
 
-One entry is one publication. Its PDF is staged by hand, and the scenarios it
-documents become the link table.
+One entry is one publication. Its PDF is staged by hand. What a publication
+says about its scenarios is read from the publication alone.
 
 Author: Felix Vossel
 """
@@ -23,7 +23,6 @@ from .config import (
     PDF_SUFFIX,
     PUBLICATION_META_FILE,
     PUBLISHED_DAY,
-    SCENARIO_FILE,
 )
 
 log = logging.getLogger(__name__)
@@ -62,7 +61,6 @@ def extract_meta(entry: dict, publication_meta: dict) -> dict:
         "year": int(year) if year else None,
         "venue": fetched.get("venue"),
         "is_oa": _as_flag(fetched.get("is_oa", entry.get("is_oa"))),
-        "scenario_count": len(entry.get("scenario_ids") or []),
     }
 
 
@@ -83,13 +81,12 @@ def _optional_json(path: Path, default):
         return default
 
 
-class Ar6Source(Source):
-    """The AR6 publication crawl as a document source."""
+class ScenarioSource(Source):
+    """The publication crawl as a document source."""
 
     def __init__(self, index_file: Path):
         self.index_file = Path(index_file)
         self._entries: Optional[list] = None
-        self._scenario_names: dict = {}
         self._publication_meta: dict = {}
 
     def _load(self) -> list:
@@ -102,8 +99,6 @@ class Ar6Source(Source):
             log.info("%d of %d index entries have no local PDF — skipped.",
                      skipped, len(entries))
         folder = self.index_file.parent
-        self._scenario_names = {int(s["id"]): s["name"]
-                                for s in _optional_json(folder / SCENARIO_FILE, [])}
         self._publication_meta = _optional_json(folder / PUBLICATION_META_FILE, {})
         return self._entries
 
@@ -121,7 +116,7 @@ class Ar6Source(Source):
         return SourceDoc(
             external_id=external_id,
             filename=filename_for(entry),
-            # These files are staged into data/ar6/pdf/ by hand — half of them
+            # These files are staged into data/scenarios/pdf/ by hand — half of them
             # took a login, a mirror or a browser to get at, and none of that
             # survives a re-fetch. url=None means "must already be there".
             url=None,
@@ -130,7 +125,6 @@ class Ar6Source(Source):
             group_key=external_id,
             published=published_for(meta["year"]),
             meta=meta,
-            payload={"scenario_ids": list(entry.get("scenario_ids") or [])},
         )
 
     def after_document(self, connection: sqlite3.Connection, doc: SourceDoc) -> None:
@@ -138,11 +132,7 @@ class Ar6Source(Source):
         if document is None:
             return
         store.upsert_publication_meta(document, doc.meta, connection)
-        for ar6_id in doc.payload["scenario_ids"]:
-            scenario = store.upsert_scenario(
-                ar6_id, self._scenario_names.get(ar6_id, str(ar6_id)), connection)
-            store.link_scenario(document, scenario, connection)
 
 
 # The source this profile contributes to `python -m scripts.fileprocessing`.
-SOURCE = Ar6Source
+SOURCE = ScenarioSource

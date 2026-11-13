@@ -3,10 +3,11 @@ local.py: Embeds items with a model loaded and kept resident in this
 process.
 
 LocalEmbedder loads the model once, under a lock, and keeps it on the
-GPUs for every later call. This is what a batch run wants: thousands
-of items against one load. embed() delegates to
-docpipe.chunking.qwen3_vl_embedding.MultiGPUEmbedder, whose
-process() method returns a bf16 tensor; embed() converts that tensor
+GPUs (on the CPU where there are none) for every later call. This is
+what a batch run wants: thousands of items against one load. embed()
+delegates to docpipe.chunking.qwen3_vl_embedding.MultiGPUEmbedder,
+whose process() method returns a tensor in its device's precision
+(bf16 on a GPU, fp32 on the CPU); embed() converts that tensor
 to a list of floats, so this backend returns the same shape of
 result as ApiEmbedder. The `normalize` setting is left at its
 default because the corpus vectors already stored in the index were
@@ -55,7 +56,7 @@ class LocalEmbedder:
                     from docpipe.chunking.qwen3_vl_embedding import MultiGPUEmbedder
                     self._resident = MultiGPUEmbedder(
                         self.model, max_length=self.max_length)
-        # MultiGPUEmbedder speaks process() and returns a bf16 tensor; this
+        # MultiGPUEmbedder speaks process() and returns a tensor; this
         # protocol speaks embed() and returns lists of floats, the same thing
         # ApiEmbedder gives back. Calling .embed() on it raised AttributeError,
         # so this backend had never once run.

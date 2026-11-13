@@ -64,6 +64,14 @@ def curie(self, iri: str) -> str
 def local(iri: str) -> str
 ```
 
+### path_name
+
+```python
+def path_name(predicate: str) -> str
+```
+
+The end of a property's IRI, from the IRI or a prefixed name.
+
 ### slug
 
 ```python
@@ -103,6 +111,15 @@ def finished(raw: dict) -> dict
 
 The draft as a spec: without the marks only the drafting needs.
 
+### graph_file
+
+```python
+def graph_file(raw: dict) -> dict
+```
+
+What the draft says for the project's graph file (graph.json): the
+rule `base` and the drawing, {} where it says nothing.
+
 ### todo
 
 ```python
@@ -115,27 +132,54 @@ The lines this function can name itself, and after them whatever
 `spec.load` still refuses: that is the judge, and a draft is done when
 it has nothing left to say.
 
+### drawn
+
+```python
+def drawn(drawing: Optional[dict], spec_raw: dict) -> tuple
+```
+
+What a drawing (`map` of a graph file) writes, as `differences`
+holds it to the shapes: ({field: [(predicate, listed)]}, {field: the
+local names of the classes of its nodes}, {(class, predicate)} every
+arrow writes, {field: whether its node takes its class from a
+coordinate}).
+
+An arrow from a field, from one of its coordinates or from a key of its
+reading is the field's; an arrow from a box to a box of one node per
+distinct reading is the field's whose readings those are; any other
+arrow between boxes, and an arrow from a box to itself, is the
+drawing's structure and no field's: it only says the property is
+written.
+
 ### differences
 
 ```python
 def differences(shapes: list, spec_raw: dict,
                 terms: Optional[Terms] = None,
-                unit_properties=UNIT_PROPERTIES) -> list
+                unit_properties=UNIT_PROPERTIES,
+                pairs: Optional[list] = None,
+                drawing: Optional[dict] = None) -> list
 ```
 
-What the spec says differently from the shapes, and what one of them
-does not say at all. [{kind, parameter, path, detail}], nothing changed.
+What the spec and its drawing (`map` of the graph file) say
+differently from the shapes, and what one of them does not say at all.
+[{kind, parameter, path, detail}], nothing changed.
 
-A parameter is held against the property shape whose path its `kg` block
-names. Where several shapes carry that path (a label, on every node),
-the one is taken whose target class the block names, or the node of the
-block is of. Where that settles nothing, the parameter is compared to
-nothing rather than to a guess, and is listed as ambiguous only if no
-other predicate of its block found its shape.
+A field is held against the property shape whose path an arrow of the
+drawing writes for it (`drawn`). Where several shapes carry that path (a
+label, on every node), the one is taken whose target class is the class
+of the field's node. A node that takes its class from a coordinate is
+held against the shape of every class that coordinate offers. Where that
+settles nothing, the field is compared to nothing rather than to a
+guess, and is listed as ambiguous only if no other property it writes
+found its shape. A property no shape carries, or none of the classes its
+node is written as, is named on its own. A property of the shapes no
+arrow writes is `not_asked`.
 
 An entry of a list that starts with `out:` is the profile's own word for
 "none of these" and no term, so the shapes are not expected to have it.
 The units a shape lists are no property to ask for where the spec asks
-for the shape's number.
+for the shape's number. *pairs*, where given, is filled with (field,
+shape, property) for every property a field was held against.
 
 [Back to the index](../README.md)

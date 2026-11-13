@@ -167,8 +167,9 @@ DESCRIPTIONS = {
         "description": "Values read from the documents, each with its "
                        "quote, its page and its trust level (A: stated in "
                        "the document's own text; B: read from a table or "
-                       "figure image or a transcribed page; C: something is "
-                       "open, see `reasons`). Every coordinate has its own "
+                       "figure image or a transcribed page; C: a coordinate "
+                       "was not read; D: something speaks against the "
+                       "reading; see `reasons`). Every coordinate has its own "
                        "quote and state. Every argument narrows the "
                        "result; none returns everything.",
         "inputSchema": {

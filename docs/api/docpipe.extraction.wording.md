@@ -14,7 +14,8 @@ profile wrote its prompts in another language. The two keys of an entry of
 a closed list are the exception: they are keys of the request, English in
 every profile.
 
-A profile contributes them in `profiles/<name>/extraction.py: PHRASES`. A
+A profile writes them in `profiles/<name>/prompts/extraction/phrases.json`
+(`docpipe/phrases.py`; a table in its `extraction.py` until 2026-11-10). A
 profile that extends another one writes only the ones it words differently.
 A phrase is a template for `str.format`: the names in braces are filled by
 the stage, `!r` shows a value the way the model wrote it, and a brace that

@@ -1,7 +1,5 @@
 ---
-template: review
-temperature: 0
-max_tokens: 1024
+template: review
 ---
 <!-- part: role -->
 You read documents.

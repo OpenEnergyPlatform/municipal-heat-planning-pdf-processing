@@ -1,0 +1,62 @@
+{
+  "sources": {
+    "oeo": {
+      "kind": "release_asset",
+      "repo": "OpenEnergyPlatform/ontology",
+      "asset": "oeo-closure.owl"
+    },
+    "regions": {
+      "kind": "sparql",
+      "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
+      "token_env": "OEP_API_TOKEN",
+      "query": "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\nSELECT DISTINCT ?region ?label WHERE {\n  ?region ?p ?o .\n  FILTER(STRSTARTS(STR(?region), \"https://openenergyplatform.org/ontology/oekg/region/\"))\n  OPTIONAL { ?region rdfs:label ?label }\n}"
+    },
+    "oekg_context": {
+      "kind": "sparql",
+      "endpoint": "https://openenergyplatform.org/api/v0/oekg/sparql/",
+      "token_env": "OEP_API_TOKEN",
+      "query": "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\nPREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\nSELECT ?s ?p ?o WHERE {\n  VALUES ?p { rdf:type rdfs:label }\n  ?s ?p ?o .\n  FILTER(STRSTARTS(STR(?s), \"https://openenergyplatform.org/ontology/oekg/region/\")\n         || STRSTARTS(STR(?s), \"https://openenergyplatform.org/ontology/oeo/\"))\n}"
+    },
+    "oekg_shapes": {
+      "kind": "repo_files",
+      "repo": "OpenEnergyPlatform/oekg",
+      "ref": "production",
+      "reviewed": "b4604e02060624b381bdbe2f872df94cfd0f5630",
+      "files": [
+        "oekg/shapes/oekg_shapes.ttl"
+      ]
+    },
+    "iiasa_regions": {
+      "kind": "repo_tree",
+      "repo": "IAMconsortium/common-definitions",
+      "ref": "main",
+      "paths": [
+        "definitions/region/",
+        "mappings/"
+      ],
+      "suffix": ".yaml"
+    },
+    "m49": {
+      "kind": "url",
+      "url": "https://unstats.un.org/SDGAPI/v1/sdg/GeoArea/Tree",
+      "file": "tree.json"
+    },
+    "worldbank": {
+      "kind": "url",
+      "url": "https://datacatalogfiles.worldbank.org/ddh-published/0037712/DR0090755/CLASS.xlsx",
+      "file": "CLASS.xlsx"
+    },
+    "lcc": {
+      "kind": "url",
+      "url": "https://www.omg.org/spec/LCC/Countries/ISO3166-1-CountryCodes.rdf",
+      "file": "ISO3166-1-CountryCodes.rdf"
+    }
+  },
+  "lists": {
+    "scenario": {
+      "kind": "class",
+      "root": "https://openenergyplatform.org/ontology/oeo/OEO_00000364"
+    }
+  },
+  "axis_lists": {}
+}

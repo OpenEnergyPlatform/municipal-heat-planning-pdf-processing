@@ -190,9 +190,9 @@ together. The gate is shared by every request to one endpoint: the first
 answer that says wait closes it for all of them, and each request passes it
 before it is sent.
 
-Without a number from the API the wait doubles from HOLD_START up to
-HOLD_MAX with every round of refusals, and starts over with the first
-request that is served. A round is what finds the gate open: the requests
+Without a number from the API the wait doubles from `rate_hold_start_s` up
+to `rate_hold_most_s` with every round of refusals, and starts over with the
+first request that is served. A round is what finds the gate open: the requests
 that were already under way when it closed come back refused too, and they
 say nothing new.
 

@@ -197,7 +197,16 @@ def load(prompt_id: str, profile: Optional[Profile] = None,
             f"profile {profile.name!r} provides no prompt {prompt_id!r} ({path})"
             + (f", nor does {', '.join(extended)}" if extended else ""))
 
-    raw = path.read_text(encoding="utf-8")
+    return made(prompt_id, profile, owner, path,
+                path.read_text(encoding="utf-8"))
+
+
+def made(prompt_id: str, profile: Profile, owner: Profile, path: Path,
+         raw: str) -> Prompt:
+    """The prompt the text *raw* is as the file of *owner* at *path*: what
+    `load` makes of a file. For a text that is not written yet, so that
+    what is checked before a save is what a run would load after it
+    (`docpipe edit`)."""
     meta, body = _split(raw)
     if "template" in meta:
         return _composed(prompt_id, profile, owner, path, raw, meta, body)

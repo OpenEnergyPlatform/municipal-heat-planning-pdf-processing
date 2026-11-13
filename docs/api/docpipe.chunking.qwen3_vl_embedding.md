@@ -181,7 +181,8 @@ def process(self, inputs: List[Dict[str, Any]], normalize: bool = True) -> torch
 
 Embed a batch of inputs — dicts with 'text' and optionally
 'image'/'video' — into a (batch_size, hidden_dim) tensor, L2-normalized
-unless `normalize` is False.
+unless `normalize` is False. The inputs run in groups of similar
+length, each padded to its own longest (`in_groups`).
 
 ### MultiGPUEmbedder
 
@@ -197,6 +198,8 @@ results back into the original input order.
 
 Exposes the same ``process(inputs, normalize=True) -> Tensor`` interface as
 :class:`Qwen3VLEmbedder`; with a single device it degenerates to one replica.
+Each replica computes in the precision of its device (`dtype_for`) unless
+*dtype* asks for one.
 
 #### MultiGPUEmbedder.\_\_init\_\_
 
@@ -205,7 +208,7 @@ def __init__(
     self,
     model_name_or_path: str,
     max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
-    dtype: torch.dtype = torch.bfloat16,
+    dtype: Optional[torch.dtype] = None,
     devices: Optional[List[str]] = None,
     **kwargs,
 )
@@ -221,6 +224,17 @@ Embed ``inputs`` across all replicas, returned on the CPU in order.
 
 ## Functions
 
+### dtype_for
+
+```python
+def dtype_for(device: Union[str, torch.device]) -> torch.dtype
+```
+
+The precision a replica computes in on *device*: bf16 on a GPU, fp32
+on the CPU, where bf16 matmuls are slow or missing. A CPU without bf16
+instructions embedded about 11 tokens per second in bf16, ten hours for
+one plan of 432 inputs.
+
 ### sample_frames
 
 ```python
@@ -228,5 +242,25 @@ def sample_frames(frames: List[Union[str, Image.Image]], num_segments: int, max_
 ```
 
 Sample evenly spaced frames from a frame list.
+
+### pad_groups
+
+```python
+def pad_groups(sizes: List[int], many: int = PAD_GROUPS) -> List[List[int]]
+```
+
+[[indices]] of the inputs of *sizes*: sorted by size and cut into
+*many* groups of neighbouring sizes, fewer where there are fewer inputs,
+their counts as even as the cut allows. Every index stands in one group.
+
+### in_groups
+
+```python
+def in_groups(inputs: List[Dict[str, Any]], run, many: int = PAD_GROUPS) -> torch.Tensor
+```
+
+*run(items)* -> a tensor of one row per item, once per group of
+*inputs* (`pad_groups` over `_input_size`), so each group is padded only
+to its own longest; the rows come back in the order of *inputs*.
 
 [Back to the index](../README.md)

@@ -19,8 +19,8 @@ identifier walk, and the two checks every profile shares (a term the
 ontology does not have, a term the ontology has deprecated) are the
 same question in every profile, so they live here.
 
-The kind recorded for each term matters beyond bookkeeping. A `kg`
-block names predicates, and a predicate is an owl:ObjectProperty; an
+The kind recorded for each term matters beyond bookkeeping. The arrows
+of a drawing name predicates, and a predicate is an owl:ObjectProperty; an
 index built over classes and individuals alone would report every
 predicate as missing. That is why the scenarios profile had no
 snapshot before this module existed: its seventeen identifiers are
@@ -114,8 +114,8 @@ def _class_names(graph, node) -> set:
 def index(graph, language: str) -> dict:
     """identifier -> {kind, label, alt_labels, definition, parents, deprecated}.
 
-    Properties as well as classes and individuals. Without them a spec's `kg`
-    blocks -- which name predicates and nothing else -- read as a list of
+    Properties as well as classes and individuals. Without them a drawing's
+    arrows -- which name predicates and nothing else -- read as a list of
     terms the ontology does not have.
 
     `parents` is what a term is under: a class's superclasses, a property's
@@ -177,7 +177,7 @@ def index(graph, language: str) -> dict:
             }
             if kind.endswith("property"):
                 # What the ontology says a subject and an object of this
-                # predicate ARE. Without them a `kg` block can name a real
+                # predicate ARE. Without them an arrow can name a real
                 # property, pass every check here, and still emit a triple
                 # that types its own subject into a class it is disjoint
                 # from -- which is what three of kwp's edges did.
@@ -242,7 +242,7 @@ def spec_terms(spec_raw: dict) -> dict:
     """Every ontology identifier the spec names, and where it names it.
 
     The whole spec, at any depth, in keys as well as values: a vocabulary
-    writes its terms as KEYS, a `kg` block writes them as values, and one
+    writes its terms as KEYS, an arrow writes them as values, and one
     profile spells them bare while the other spells them as IRIs. The version
     this replaces walked three named places, matched bare identifiers only,
     and reported zero identifiers for the scenarios spec -- a checker that
@@ -272,18 +272,20 @@ def spec_terms(spec_raw: dict) -> dict:
 
 def build(closure: Path, sets: dict, spec_raw: dict, *, language: str,
           extra: Optional[list] = None, base: str = "",
-          also: tuple = ()) -> dict:
+          also: tuple = (), drawing: Optional[dict] = None) -> dict:
     """The vocabulary snapshot, from the ontology files as they stand.
 
     `language` is the tag of the alternative labels the snapshot keeps, the
     profile's to say (see `index`); there is no default, so a caller cannot
     leave it to the core. `extra` are further files parsed into the same
     graph (MHPO, say); `base` is the IRI prefix whose ontology header carries
-    the version to pin. `also` are identifiers the snapshot has to carry
-    although the spec does not name them: the classes a writer's own edges
-    name. `edge_problems` asks whether a subject is under a predicate's
-    domain, and a subject the snapshot does not carry has no parents to
-    answer with.
+    the version to pin. `drawing` is the drawing of the profile's graph
+    (`graph.json`, `map`): every term it names is carried, as every term the
+    spec names is. `also` are identifiers the snapshot has to carry
+    although neither names them: the classes a writer's own edges name.
+    `edge_problems` asks whether a subject is under a predicate's domain,
+    and a subject the snapshot does not carry has no parents to answer
+    with.
     """
     from rdflib import OWL, RDF, URIRef
     paths = [closure] + list(extra or [])
@@ -296,6 +298,7 @@ def build(closure: Path, sets: dict, spec_raw: dict, *, language: str,
     # that is not the ontology's.
     wanted = {uri for members in reachable.values() for uri in members}
     wanted |= set(spec_terms(spec_raw))
+    wanted |= set(drawing_terms(drawing))
     wanted |= set(also)
     full = index(graph, language)
     # Grown to a fixpoint over parents, domains and ranges rather than one
@@ -347,7 +350,29 @@ def build(closure: Path, sets: dict, spec_raw: dict, *, language: str,
             "disjoint": [list(pair) for pair in disjoint]}
 
 
-def shacl_report(data: Path, shapes: list) -> dict:
+def with_context(graph, context) -> int:
+    """Add to *graph* what *context* says about the nodes it only points at.
+
+    *context* is [(subject, predicate, object)] the target graph already
+    holds, classes and labels: an rdf:type object is an IRI, any other a
+    literal. A node the graph describes itself gets nothing from it, so the
+    graph's own statements are what is checked. Returns the triples added.
+    """
+    from rdflib import Literal, URIRef
+    from rdflib.namespace import RDF
+    described = set(graph.subjects())
+    referenced = {o for o in graph.objects()
+                  if isinstance(o, URIRef) and o not in described}
+    added = 0
+    for s, p, o in context:
+        if URIRef(s) in referenced:
+            graph.add((URIRef(s), URIRef(p),
+                       URIRef(o) if p == str(RDF.type) else Literal(o)))
+            added += 1
+    return added
+
+
+def shacl_report(data: Path, shapes: list, context=()) -> dict:
     """A written graph held against SHACL shapes: {conforms, violations, counts, text}.
 
     The shapes files are parsed into ONE graph first. pyshacl takes repeated
@@ -356,6 +381,10 @@ def shacl_report(data: Path, shapes: list) -> dict:
     was bitten by exactly that). `counts` groups the violations by
     constraint, shape target and path, most frequent first, so a report of
     fifty thousand lines can still be read in the log.
+
+    The graph is held together with *context* (`with_context`): a region or
+    a term it references is checked as the target graph holds it, not as a
+    bare IRI that has neither class nor label.
     """
     import re
     from pyshacl import validate
@@ -363,9 +392,10 @@ def shacl_report(data: Path, shapes: list) -> dict:
     shapes_graph = Graph()
     for path in shapes:
         shapes_graph.parse(str(path), format="turtle")
+    graph = Graph().parse(str(data), format="turtle")
+    added = with_context(graph, context)
     conforms, _results, text = validate(
-        Graph().parse(str(data), format="turtle"),
-        shacl_graph=shapes_graph, advanced=True)
+        graph, shacl_graph=shapes_graph, advanced=True)
     counts: collections.Counter = collections.Counter()
     blocks = text.split("Constraint Violation")[1:]
     for block in blocks:
@@ -378,7 +408,7 @@ def shacl_report(data: Path, shapes: list) -> dict:
                 path.group(1) if path else "-",
                 focus.group(1) if focus else "?")] += 1
     return {"conforms": bool(conforms), "violations": len(blocks),
-            "counts": counts.most_common(), "text": text}
+            "counts": counts.most_common(), "text": text, "context": added}
 
 
 def serialize(snapshot: dict) -> str:
@@ -425,132 +455,210 @@ def term_problems(spec_raw: dict, snapshot: dict) -> list:
     return problems
 
 
-def kind_problems(spec_raw: dict, snapshot: dict) -> list:
-    """A `kg` block's predicate that the ontology does not call a property.
+def drawing_identifier(value) -> Optional[str]:
+    """`identifier`, also of a prefixed name as a drawing writes it
+    (`oeo:OEO_00390096`, `mhpo:MHPO_00020003`)."""
+    if isinstance(value, str) and "://" not in value and ":" in value:
+        value = value.split(":", 1)[1]
+    return identifier(value)
 
-    The block says what a coordinate becomes in the graph, and a class written
-    where a predicate belongs emits Turtle that parses and asserts nonsense.
+
+def _local(name) -> str:
+    """A prefixed name's local part, as an edge names its predicate."""
+    text = str(name)
+    if "://" not in text and ":" in text:
+        return text.split(":", 1)[1]
+    return text
+
+
+def drawing_term_problems(drawing: dict, snapshot: dict,
+                          noted_elsewhere=()) -> list:
+    """`term_problems` for the identifiers a drawing names
+    (`drawing_terms`): absent, and deprecated. *noted_elsewhere* are the
+    identifiers a profile holds to the pin in a report of their own (the
+    terms a schema prescribes); they are not reported twice."""
+    terms = snapshot["terms"]
+    families = set(snapshot.get("pin", {}).get("families") or ())
+    skipped = set(noted_elsewhere)
+    problems: list = []
+    for uri, wheres in drawing_terms(drawing).items():
+        if families and uri.split("_")[0] not in families:
+            continue
+        if uri in skipped:
+            continue
+        term = terms.get(uri)
+        if term is None:
+            problems.append(f"{wheres[0]}: {uri} is not in the pinned "
+                            f"ontology")
+        elif term["deprecated"]:
+            problems.append(f"{wheres[0]}: {uri} is deprecated")
+    return problems
+
+
+def kind_problems(drawing: dict, snapshot: dict) -> list:
+    """A property of the drawing that the ontology does not call a property.
+
+    An arrow says what a reading becomes in the graph, and a class written
+    where a property belongs emits Turtle that parses and asserts nonsense.
     Only checkable since the index carries the kind.
     """
     terms = snapshot["terms"]
     problems: list = []
-
-    def walk(node, where):
-        if isinstance(node, dict):
-            name = identifier(node.get("predicate"))
-            if name:
-                term = terms.get(name)
-                if term and not term["kind"].endswith("property"):
-                    problems.append(f"{where}: {name} ({term['label']}) is a "
-                                    f"{term['kind']}, not a property")
-            for key, value in node.items():
-                walk(value, f"{where}.{key}")
-        elif isinstance(node, list):
-            for item in node:
-                walk(item, where)
-
-    for parameter in spec_raw.get("parameters", []):
-        walk(parameter.get("kg"), f"{parameter.get('uri')}.kg")
-        for axis, block in (parameter.get("axes") or {}).items():
-            walk(block.get("kg"), f"{parameter.get('uri')}.{axis}.kg")
+    for number, arrow in enumerate((drawing or {}).get("arrows") or (), 1):
+        if not isinstance(arrow, dict):
+            continue
+        name = drawing_identifier(arrow.get("property"))
+        term = terms.get(name) if name else None
+        if term and not term["kind"].endswith("property"):
+            problems.append(f"arrow {number} ({arrow.get('from')} -> "
+                            f"{arrow.get('to')}): {name} ({term['label']}) "
+                            f"is a {term['kind']}, not a property")
     return problems
 
 
-def spec_edges(spec_raw: dict) -> list:
-    """Every triple shape the spec's `kg` blocks promise.
+def drawing_terms(drawing: dict) -> dict:
+    """Every ontology identifier a drawing names, and where: the classes of
+    its boxes and tables, its properties, and what its bricks are set to."""
+    found: dict = collections.defaultdict(list)
 
-    Derived, never listed: the parameter's `class_from` names the axis whose
-    options are the classes a value node can carry, so each of those is a
-    subject; `number` and `unit` are its own predicates, and an axis with
-    role `edge` is one predicate whose objects are that axis' options. A
-    parent axis contributes the edge from the node above down to the
-    container it mints. What is left over is the handful of edges behind no
-    parameter, and those are the profile's to declare.
-    """
-    out: list = []
-    # A node the profile mints is named once with its class and referred to
-    # by name afterwards, so the class of a subject is looked up and not
-    # repeated. Both profiles' grammars are here: one hangs predicates off a
-    # value node built from an axis, the other off named nodes.
-    node_class = {}
-    for parameter in spec_raw.get("parameters", []):
-        kg = parameter.get("kg") or {}
-        if kg.get("node") and identifier(kg.get("class")):
-            node_class[kg["node"]] = identifier(kg["class"])
-
-    def add(where, subject, block, object_=None, datatype=None):
-        predicate = (block or {}).get("predicate")
-        if predicate:
-            out.append({"where": where, "subject": subject,
-                        "predicate": predicate,
-                        "object": object_,
-                        "datatype": datatype or (block or {}).get("datatype")})
-
-    for parameter in spec_raw.get("parameters", []):
-        uri = parameter.get("uri")
-        kg = parameter.get("kg") or {}
-        axes = parameter.get("axes") or {}
-        source = kg.get("class_from")
-        if source:
-            subjects = [identifier(key) for key in
-                        ((axes.get(source) or {}).get("vocabulary") or {})]
+    def walk(node, where):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                name = drawing_identifier(key)
+                if name:
+                    found[name].append(where)
+                walk(value, where)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item, where)
         else:
-            subjects = [identifier(kg.get("class"))]
-        subjects = [name for name in subjects if name] or [None]
-        for subject in subjects:
-            add(f"{uri}.kg.number", subject, kg.get("number"))
-            add(f"{uri}.kg.unit", subject, kg.get("unit"),
-                object_=parameter.get("unit_target"))
-            for axis, block in axes.items():
-                edge = block.get("kg") or {}
-                if edge.get("role") != "edge":
-                    continue
-                if edge.get("datatype"):
-                    add(f"{uri}.{axis}.kg", subject, edge)
-                    continue
-                # An option the spec has already declared edgeless writes
-                # no triple, so holding it to the predicate's range would
-                # report the very thing the declaration is there to say.
-                edgeless = set(edge.get("no_edge_for") or ())
-                # A minted object node: the axis says what class it carries,
-                # so the edge points at a class and not at the option.
-                if edge.get("object_class"):
-                    add(f"{uri}.{axis}.kg", subject, edge,
-                        object_=edge["object_class"])
-                    continue
-                options = [identifier(key) for key
-                           in (block.get("vocabulary") or {})
-                           if key not in edgeless]
-                for option in [o for o in options if o] or [None]:
-                    add(f"{uri}.{axis}.kg", subject, edge, object_=option)
-        # The edge from the plan down to a node this parameter mints, and the
-        # edge from a container down to itself: the subject is a node the
-        # profile names and not a class the spec carries, so only the object
-        # side is held here.
-        add(f"{uri}.kg.edge_from_plan", None, kg.get("edge_from_plan"),
-            object_=kg.get("class"))
-        for axis, block in axes.items():
-            edge = block.get("kg") or {}
-            if edge.get("role") != "parent":
-                continue
-            for key, entry in (edge.get("map") or {}).items():
-                if isinstance(entry, dict) and entry.get("linked_by"):
-                    add(f"{uri}.{axis}.kg.map.{key}", None,
-                        entry["linked_by"], object_=entry.get("class"))
-            if edge.get("linked_by"):
-                for key, entry in (edge.get("map") or {}).items():
-                    if isinstance(entry, dict) and entry.get("class"):
-                        add(f"{uri}.{axis}.kg.linked_by", None,
-                            edge["linked_by"], object_=entry["class"])
-        # The other grammar: a predicate written on a named node, and an edge
-        # from one named node to another.
-        if kg.get("property"):
-            add(f"{uri}.kg.property", node_class.get(kg.get("node")),
-                kg["property"])
-        if kg.get("edge_from"):
-            add(f"{uri}.kg.edge_from",
-                node_class.get((kg["edge_from"] or {}).get("node")),
-                kg["edge_from"], object_=kg.get("class"))
+            name = drawing_identifier(node)
+            if name:
+                found[name].append(where)
+
+    for box in (drawing or {}).get("boxes") or ():
+        if isinstance(box, dict):
+            walk({key: value for key, value in box.items()
+                  if key not in ("note", "id")}, f"box {box.get('id')}")
+    for number, arrow in enumerate((drawing or {}).get("arrows") or (), 1):
+        if isinstance(arrow, dict):
+            walk({key: value for key, value in arrow.items()
+                  if key not in ("note", "label", "accepted", "from", "to")},
+                 f"arrow {number}")
+    return {k: v for k, v in sorted(found.items())}
+
+
+def drawing_edges(drawing: dict, spec_raw: dict, bricks=None) -> list:
+    """Every triple shape a drawing writes: {where, subject, predicate,
+    object, datatype, accepted}, the subject's class, the predicate, and the
+    object's class or the literal's datatype, each as far as the drawing
+    says it.
+
+    Derived, never listed: a box that takes its class from a coordinate
+    (KWP's value) has every class that coordinate offers as a subject; an
+    arrow whose brick writes an answer has every entry of the coordinate's
+    list as an object (`Brick.writes`); an arrow from one box to another has
+    the classes of both. An arrow may say why it is written against the
+    ontology (`accepted`), and the reason travels with it to
+    `edge_problems`.
+    """
+    drawing = drawing or {}
+    bricks = bricks or {}
+    parameters = {one["uri"]: one for one in spec_raw.get("parameters") or ()
+                  if isinstance(one, dict) and one.get("uri")}
+    boxes = {box["id"]: box for box in drawing.get("boxes") or ()
+             if isinstance(box, dict) and box.get("id")}
+
+    def fields_of(box: dict, seen=()) -> list:
+        of = box.get("of")
+        names = [of] if isinstance(of, str) else [
+            one for one in of if isinstance(one, str)] \
+            if isinstance(of, list) else []
+        out = [one for one in names if one in parameters]
+        among = box.get("among")
+        if among in boxes and among not in seen:
+            out += [one for one in fields_of(boxes[among], seen + (among,))
+                    if one not in out]
+        return out
+
+    def listed(owner: dict) -> list:
+        return [drawing_identifier(key) for key in (owner.get("vocabulary") or {})
+                if not str(key).startswith("out:") and drawing_identifier(key)]
+
+    def subjects(box: dict, field=None) -> list:
+        if box.get("class"):
+            return [drawing_identifier(box["class"])]
+        out: list = []
+        coordinate = ((box.get("class_brick") or {}).get("settings")
+                      or {}).get("coordinate")
+        if coordinate:
+            for uri in ([field] if field else fields_of(box)):
+                axis = (parameters[uri].get("axes") or {}).get(coordinate)
+                out += [one for one in listed(axis or {}) if one not in out]
+        for entry in (box.get("table") or {}).values():
+            if isinstance(entry, dict) and drawing_identifier(entry.get("class")):
+                out.append(drawing_identifier(entry["class"]))
+        for klass in (box.get("class_by") or {}).values():
+            if drawing_identifier(klass) and drawing_identifier(klass) not in out:
+                out.append(drawing_identifier(klass))
+        return out or [None]
+
+    out: list = []
+
+    def add(where, subject, arrow, object_=None, datatype=None):
+        out.append({"where": where, "subject": subject,
+                    "predicate": _local(arrow["property"]), "object": object_,
+                    "datatype": datatype,
+                    "accepted": arrow.get("accepted")})
+
+    for arrow in drawing.get("arrows") or ():
+        if not isinstance(arrow, dict) or arrow.get("to") not in boxes:
+            continue
+        source, target = arrow.get("from"), arrow["to"]
+        subject_box = boxes[source] if source in boxes else boxes[target]
+        where = f"{subject_box['id']}.{source} {arrow.get('property')}"
+        if source in boxes and source != target:
+            for subject in subjects(subject_box):
+                for object_ in subjects(boxes[target]):
+                    add(where, subject, arrow, object_)
+            continue
+        brick = bricks.get(arrow.get("brick") or "text")
+        writes = getattr(brick, "writes", "") or ""
+        settings = arrow.get("settings") or {}
+        datatype = writes if writes.startswith("xsd:") else (
+            settings.get("datatype") if writes == "setting:datatype"
+            else None)
+        if source in boxes:
+            for subject in subjects(subject_box):
+                add(where, subject, arrow, None, datatype)
+            continue
+        fields = [source] if source in parameters else [
+            uri for uri in fields_of(subject_box)
+            if source in (parameters[uri].get("axes") or {})
+            or source in parameters[uri]
+            or source in ("value", "value_target", "value_raw")]
+        for uri in fields or [None]:
+            parameter = parameters.get(uri) or {}
+            objects: list = [None]
+            if writes == "answers":
+                objects = listed((parameter.get("axes") or {}).get(source)
+                                 or {}) or [None]
+                total = drawing_identifier(settings.get("total_class"))
+                if total and total not in objects:
+                    objects.append(total)
+            elif writes == "entries":
+                objects = listed(parameter) or [None]
+            elif writes.startswith("key:"):
+                objects = [drawing_identifier(parameter.get(writes[4:]))]
+            for subject in subjects(subject_box, uri):
+                for object_ in objects:
+                    add(where, subject, arrow, object_, datatype)
+    for box in boxes.values():
+        if box.get("uuid"):
+            for subject in subjects(box):
+                out.append({"where": f"{box['id']}.uuid", "subject": subject,
+                            "predicate": _local(box["uuid"]), "object": None,
+                            "datatype": "xsd:string", "accepted": None})
     return out
 
 

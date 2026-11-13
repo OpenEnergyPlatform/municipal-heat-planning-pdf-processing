@@ -1,15 +1,16 @@
-"""Extraction stage wiring: where the ar6 spec lives, and the lists that are
-only closed once a document is named.
+"""Extraction stage wiring: where the scenarios spec lives, and the list that
+is only closed once a document is named.
 
-Two of the ar6 fields have a finite set of correct answers, but the set is not
+One of the fields has a finite set of correct answers, but the set is not
 the same for every publication, so it cannot sit in the spec file:
 
-  scenario / scenario_label  the AR6 scenarios THIS publication documents.
-                             The corpus holds 1389 of them, one publication
-                             documents up to 146, and the model has to pick
-                             from that publication's own list.
   scenario_region            the 249 study regions the OEKG actually uses,
                              narrowed to those the document names at all.
+
+A scenario is read as the publication names it, and which entry of the
+publication's list of scenarios a name is, a new one or one read before, is
+asked while the publication is read (`docpipe/extraction/addressed.py`,
+owner decisions 2026-11-08).
 
 The narrowing is not a guess. Every claim has to quote its source verbatim, and
 the sources are exactly the section, table and figure texts scanned here, so a
@@ -17,15 +18,15 @@ region whose name appears nowhere in them could never have been quoted. What is
 dropped is unreachable, not merely unlikely — and dropping it keeps the prompt
 at the handful of countries a paper mentions instead of all 249.
 
-Both lists carry `out:` entries, and they are the point of this file as much as
-the real entries are. A closed list without an escape hatch does not stop the
+The list carries `out:` entries, and they are the point of this file as much
+as the real entries are. A closed list without an escape hatch does not stop the
 model from answering; it stops it from answering CORRECTLY, and what comes back
 is the nearest entry that is not quite right. The OEKG knows 249 countries and
-no aggregates, while an AR6 scenario is usually global — so without
-`out:global` the honest answer to "which region" does not exist in the list,
-and a paper about worldwide emissions that happens to mention Germany once
-invites "Germany". The same holds for a run identifier: naming a family is not
-naming a run, and the model needs a way to say so that is not silence.
+no aggregates, while a scenario is usually global — so without a world entry
+the honest answer to "which region" does not exist in the list, and a paper
+about worldwide emissions that happens to mention Germany once invites
+"Germany". The world and the groups of countries are entries of the list now
+and are written as their member countries.
 
 Silence is the other half of the argument. An empty field already meant
 "unmapped" and was already counted, but it meant three different things at
@@ -36,63 +37,81 @@ counting.
 import json
 import re
 import sqlite3
+from docpipe import rules
 from pathlib import Path
 
 SPEC_PATH = Path(__file__).with_name("extraction_spec.json")
 REGIONS_PATH = Path(__file__).with_name("regions.json")
+AGGREGATES_PATH = Path(__file__).with_name("region_aggregates.json")
+WORLD = "aggregate:World"
 
-# Every label is matched on word boundaries, short or long. "US" hides inside
-# "thus" and "UK" inside "Ukraine", but so does Niger inside Nigeria, India
-# inside Indiana and Chile inside Chilean — and those are the expensive ones,
-# because they put a wrong country in front of the model as a valid choice.
-# The cost is the other direction: a paper that only ever writes "Chilean" no
-# longer offers Chile. That is the cheaper mistake, and it is a visible one —
-# the model then has to choose the out: entry, which is counted.
-_WORD = r"(?<!\w){}(?!\w)"
+# Every label is matched on word boundaries, short or long (rule
+# `region_whole_words`). "US" hides inside "thus" and "UK" inside "Ukraine",
+# but so does Niger inside Nigeria, India inside Indiana and Chile inside
+# Chilean — and those are the expensive ones, because they put a wrong
+# country in front of the model as a valid choice. The cost is the other
+# direction: a paper that only ever writes "Chilean" no longer offers Chile.
+# That is the cheaper mistake, and it is a visible one — the model then has
+# to choose the out: entry, which is counted.
+def _word(escaped: str) -> str:
+    """The pattern that finds *escaped*: as a whole word, or, where the rule
+    `region_whole_words` is off, wherever it stands."""
+    if rules.get("region_whole_words", "scenarios"):
+        return r"(?<!\w)" + escaped + r"(?!\w)"
+    return escaped
 
 
 # The entries that are not a thing in the graph. `kg.py` refuses to mint an IRI
 # or a link from any of them (NOT_IN_GRAPH, one definition for both profiles in
 # docpipe/extraction/graphkit.py) and counts them by name.
 
-# The first label is the answer token: runner._parameter_payload renders a
-# choice list as {labels[0]: labels[1:]} and the prompt says to copy it
-# character for character. So labels[0] is short and quotable, and the
-# explanation is an alternate — value_to_uri() maps every label, so both
-# spellings resolve. The long gloss first was a mistake: an answer nobody can
-# retype without a slip is an answer that arrives as an unmapped wording, and
-# an unmapped wording is exactly what these entries exist to prevent.
+# The entries a region list always has beside the regions a document
+# names stand in the spec (`beside` of scenario_region, owner decision
+# 2026-11-10). The first label of each is the answer token:
+# runner._parameter_payload renders a choice list as {labels[0]: labels[1:]}
+# and the prompt says to copy it character for character. So labels[0] is
+# short and quotable, and the explanation is an alternate — value_to_uri()
+# maps every label, so both spellings resolve. The long gloss first was a
+# mistake: an answer nobody can retype without a slip is an answer that
+# arrives as an unmapped wording, and an unmapped wording is exactly what
+# these entries exist to prevent.
 #
 # A scenario is global far more often than national, and the OEKG's region list
 # is 249 countries with no aggregate — no World, no EU27, no OECD, no R5.
-# Without these the correct answer for most AR6 scenarios is not in the list.
-REGION_OUT = {
-    "out:global": ["global", "weltweit", "worldwide",
-                   u"global — die ganze Welt, kein einzelnes Land"],
-    "out:multiregion": ["mehrere Regionen", "mehrere Länder", "EU27", "OECD",
-                        u"mehrere Länder oder eine Region, die die Liste "
-                        u"nicht führt"],
-    "out:other": ["andere Region", "etwas anderes, das kein Land der Liste ist"],
-}
-
-# The AR6 identifiers are finer than the language of the papers: the pilot's
-# 146-scenario document writes "NPi", and the database has EN_NPi2020_300f,
-# _400 and _3000. That wording names a family, not a run, and `ambiguous()` in
-# kg.py drops the link when it happens. It cannot tell that case apart from a
-# scenario the publication simply does not have in AR6 — these two can.
-SCENARIO_OUT = {
-    "out:family": ["Szenario-Familie", "Familie",
-                   "eine Szenario-Familie oder eine Beschreibung, die auf "
-                   "mehrere Läufe passt und auf keinen genau",
-                   "eine Szenario-Familie, kein einzelner Lauf"],
-    "out:not_documented": ["nicht in AR6", "nicht in der AR6-Liste",
-                           u"ein Szenario dieser Publikation, das nicht in "
-                           u"ihrer AR6-Liste steht"],
-}
-
+# The groups are entries now (`region_aggregates.json`, from the regions of
+# IAMconsortium/common-definitions, the UN's M49 and the World Bank): a group
+# is written as its member countries. "several regions" stays for a group
+# none of them has, "other region" for any other region the list lacks; the
+# graph writes either as a study region of its own under the name the
+# document prints (kg.printed_region, owner decision 2026-11-07).
 
 def _regions() -> dict:
     return json.loads(REGIONS_PATH.read_text(encoding="utf-8"))
+
+
+def aggregates() -> dict:
+    """{key: {labels, members, ...}}, the groups of countries of the last
+    refresh; empty before one has written them."""
+    if not AGGREGATES_PATH.is_file():
+        return {}
+    return json.loads(AGGREGATES_PATH.read_text(encoding="utf-8"))
+
+
+# The texts of a document a region can be named in, by the names the rule
+# `region_search_texts` gives them: one query each, with the document as its
+# one parameter.
+_TEXTS_OF = {
+    "sections": "SELECT s.content FROM Sections s WHERE s.document = ?",
+    "tables": ("SELECT t.markdown FROM Tables t JOIN Sections s "
+               "ON t.section = s.id WHERE s.document = ?"),
+    "table captions": ("SELECT t.caption FROM Tables t JOIN Sections s "
+                       "ON t.section = s.id WHERE s.document = ?"),
+    "image descriptions": ("SELECT i.description FROM Images i JOIN "
+                           "Sections s ON i.section = s.id "
+                           "WHERE s.document = ?"),
+    "image captions": ("SELECT i.caption FROM Images i JOIN Sections s "
+                       "ON i.section = s.id WHERE s.document = ?"),
+}
 
 
 def _document_text(conn: sqlite3.Connection, document_id: int) -> str:
@@ -102,28 +121,52 @@ def _document_text(conn: sqlite3.Connection, document_id: int) -> str:
     # in "Figure 3: Emissions in India" is quotable — and if the narrowing has
     # not seen it, the model is offered no class for it and answers with a
     # wording nobody can resolve.
+    parts = _TEXTS_OF
+    chosen = [name for name in rules.get("region_search_texts", "scenarios")
+              if name in parts]
+    if not chosen:
+        return ""
     rows = conn.execute(
-        "SELECT s.content FROM Sections s WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT t.markdown FROM Tables t JOIN Sections s ON t.section = s.id "
-        "WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT t.caption FROM Tables t JOIN Sections s ON t.section = s.id "
-        "WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT i.description FROM Images i JOIN Sections s ON i.section = s.id "
-        "WHERE s.document = ? "
-        "UNION ALL "
-        "SELECT i.caption FROM Images i JOIN Sections s ON i.section = s.id "
-        "WHERE s.document = ?",
-        (document_id,) * 5,
+        " UNION ALL ".join(parts[name] for name in chosen),
+        (document_id,) * len(chosen),
     ).fetchall()
     return "\n".join(str(r[0]) for r in rows if r[0])
 
 
 def _acronym(label: str) -> bool:
-    """A label that is only a word when its capitals are: US, UK, USA, U.S."""
-    return len(label) <= 4 and label.upper() == label and label.lower() != label
+    """A label that is only a word when its capitals are: US, UK, USA, U.S.
+    (rule `acronym_most_chars`)."""
+    return (len(label) <= rules.get("acronym_most_chars", "scenarios")
+            and label.upper() == label and label.lower() != label)
+
+
+def _code(label: str) -> bool:
+    """A group's code: one word without a small letter ("LAM", "EU")."""
+    return (" " not in label and label.lower() != label
+            and not any(c.islower() for c in label))
+
+
+def spellings(labels: list, joined: bool = False) -> list:
+    """An entry's labels and the ways a paper writes them.
+
+    "&" and "and" stand for each other. Where *joined*, a group's code and
+    its name are joined as a paper joins them ("LAM (Latin America)",
+    "Latin America (LAM)", "LAM - Latin America"): a wording made of two
+    names of one entry names that entry, and `_one_meaning` keeps one two
+    entries share from naming either.
+    """
+    out = list(labels)
+    for label in labels:
+        for one, other in ((" & ", " and "), (" and ", " & ")):
+            if one in label:
+                out.append(label.replace(one, other))
+    if joined:
+        names = [label for label in out if any(c.islower() for c in label)]
+        for code in [label for label in labels if _code(label)]:
+            for name in names:
+                out += [f"{code} ({name})", f"{name} ({code})",
+                        f"{code} - {name}", f"{code} – {name}"]
+    return list(dict.fromkeys(out))
 
 
 def _mentioned(text: str, labels: list) -> bool:
@@ -135,273 +178,174 @@ def _mentioned(text: str, labels: list) -> bool:
         # those entries exist to remove. An all-caps acronym is matched with
         # its capitals; everything else is matched casefolded.
         if _acronym(label):
-            if re.search(_WORD.format(re.escape(label)), text):
+            if re.search(_word(re.escape(label)), text):
                 return True
             continue
         needle = label.casefold()
         if needle not in lowered:
             continue
-        if re.search(_WORD.format(re.escape(needle)), lowered):
+        if re.search(_word(re.escape(needle)), lowered):
             return True
     return False
 
 
-def document_scenarios(conn: sqlite3.Connection, document_id: int) -> dict:
-    """The AR6 scenarios this publication documents, as a choice list.
+def _named(text: str, names) -> bool:
+    """Does the text name one of these models, with its capitals? A model's
+    name is a proper name: "IMAGE" is a model, "image" is a word of every
+    paper with a figure."""
+    return any(re.search(_word(re.escape(name)), text)
+               for name in names)
 
-    Keyed by the AR6 name itself rather than an invented IRI: the name is the
-    identity the corpus links against, and kg.py resolves it the same way.
+
+def _one_meaning(offered: dict, groups: dict) -> dict:
+    """The offered entries, each label kept where it means one thing.
+
+    Two entries offered under one label would make one answer name two
+    groups. The region of a model the paper names keeps the label; where no
+    such region or two of them carry it, no entry does. An entry left
+    without a label is not offered.
     """
-    rows = conn.execute(
-        "SELECT sc.name FROM Scenarios sc "
-        "JOIN DocumentScenarios ds ON ds.scenario = sc.id "
-        "WHERE ds.document = ? ORDER BY sc.name",
-        (document_id,),
-    ).fetchall()
-    return {str(r[0]): [str(r[0])] for r in rows if r[0]}
+    from docpipe.extraction.spec import fold_label
+    holders: dict = {}
+    for key, labels in offered.items():
+        for label in labels:
+            keys = holders.setdefault(fold_label(label), [])
+            if key not in keys:
+                keys.append(key)
+    out = {}
+    for key, labels in offered.items():
+        kept = []
+        for label in labels:
+            keys = holders[fold_label(label)]
+            models = [k for k in keys if (groups.get(k) or {}).get("named_by")]
+            if keys == [key] or models == [key]:
+                kept.append(label)
+        if kept:
+            out[key] = kept
+    return out
 
 
 def document_regions(conn: sqlite3.Connection, document_id: int) -> dict:
+    """The countries and groups of countries this document names.
+
+    The world is always offered, as `global` was. A group of the IAM
+    regions is also offered by its bare name where the document names its
+    family: a paper writes "the R10 regions" and then "Europe". A model's
+    own region is offered where the paper names the model and the region,
+    and keeps a label it shares with another group (`_one_meaning`). Every
+    entry is offered with the ways a paper writes its labels (`spellings`).
+    """
+    groups = aggregates()
+    out = ({WORLD: spellings(groups[WORLD]["labels"], True)}
+           if WORLD in groups else {})
     text = _document_text(conn, document_id)
     if not text:
-        return {}
-    return {iri: labels for iri, labels in _regions().items()
-            if _mentioned(text, labels)}
+        return out
+    for iri, labels in _regions().items():
+        labels = spellings(labels)
+        if _mentioned(text, labels):
+            out[iri] = labels
+    for key, group in groups.items():
+        labels = spellings(group["labels"], True)
+        if group.get("named_by"):
+            if (key not in out
+                    and (_named(text, group["named_by"])
+                         or not rules.get("model_region_needs_model", "scenarios"))
+                    and _mentioned(text, labels)):
+                out[key] = labels
+            continue
+        family = group.get("family")
+        named = labels + ([labels[0].rsplit(" (", 1)[0]]
+                          if family and _mentioned(text, [family]) else [])
+        if key not in out and _mentioned(text, named):
+            out[key] = labels
+    return _one_meaning(out, groups)
 
 
 def document_axes(conn: sqlite3.Connection, document_id: int) -> dict:
     """Per-document choice lists, keyed by axis name and by parameter uri.
 
-    The out: entries are appended unconditionally, so every list exists even
-    when the narrowing finds nothing. That case is not hypothetical — a
-    publication with no runs in DocumentScenarios, or one that names no country
-    at all, used to leave the field with no list, and a field with no list is
-    free text again.
+    The regions this document names, possibly none. The run appends the
+    out: entries the spec lists beside them (`beside` of scenario_region,
+    `runner.fill_dynamic_axes`), so the list exists even when the narrowing
+    finds nothing. That case is not hypothetical — a publication that names
+    no country at all used to leave the field with no list, and a field with
+    no list is free text again.
     """
-    scenarios = dict(document_scenarios(conn, document_id))
-    scenarios.update(SCENARIO_OUT)
-    regions = dict(document_regions(conn, document_id))
-    regions.update(REGION_OUT)
-    return {
-        "scenario": scenarios,          # the coordinate on the other fields
-        "scenario_label": scenarios,    # and the value of the field itself
-        "scenario_region": regions,
-    }
+    return {"scenario_region": dict(document_regions(conn, document_id))}
 
-# How the documents write the decimal. It decides what the digits leave
-# open: "3,251" is 3251 here, and "1.234" is 1.234.
-DECIMAL_MARK = "."
+# How the documents write the decimal is the rule `decimal_mark` (the
+# default profile's rules.json; "3,251" is 3251 here).
+
+# How many lines a piece holds is a number of the flow (`flow.json`, owner
+# decision 2026-11-08, f: eight; twelve only measured where a probe loses
+# values).
+
+# What a publication settles for all its values (`plan_fields`) and the
+# works it presents, compares, reviews or cites beside itself (`works`)
+# stand in the spec, with the texts a request shows of them (owner decision
+# 2026-11-10).
 
 # The language tag of the ontology's alternative labels that the vocabulary
-# snapshot keeps for this profile, the words its spec is held against. "de"
-# is what the committed snapshot was built with.
-ALT_LABEL_LANGUAGE = "de"
-
-# The language of the core's contract text in this profile's prompts (see the
-# same constant of the kwp profile).
-CONTRACT_LANGUAGE = "de"
-
-
-# What the preflight (`docpipe preflight`) holds this profile's prompts to,
-# beyond the keys the stage reads by name: a wording the run depends on. The
-# prompts are in the profile's language, so the passage is too.
-# (what is checked, prompt, passage, True: has to be there, False: must not)
-PROMPT_CHECKS = (
-    ("field prompt asks one field", "extraction/field",
-     "GENAU EIN Feld", True),
-    ("rows prompt no longer fixes one parameter", "extraction/rows",
-     '"parameter": die gesucht', False),
-)
+# snapshot keeps for this profile, the words its spec is held against: the
+# rule `alt_label_language` (`ALT_LABEL_LANGUAGE`). The publications are
+# English, and so are the words offered for them. The language of the core's
+# contract text in this profile's prompts is the rule `contract_language`
+# (`CONTRACT_LANGUAGE`), what the preflight holds the prompts to the rule
+# `prompt_checks` (`PROMPT_CHECKS`); see `__getattr__`.
 
 
 def shapes_files() -> list:
-    """The OEKG shapes of the last refresh of the API sources, or none.
+    """The OEKG shapes of the last `vocabulary --refresh`, or none.
 
-    Where the preflight finds the file `NOT_EXTRACTED` is held against.
+    Where the preflight finds the file the rule `not_extracted` is held
+    against: the
+    same one the serializer reads its paths from.
     """
-    from docpipe import upstream
-    from profiles.scenarios import oekg_api   # lazy: it reads the spec
-    path = oekg_api._locked("oekg_shapes", upstream.CACHE)
-    return [path] if path else []
+    from profiles.scenarios import vocabulary   # lazy: it reads the spec
+    return [path for path in vocabulary.shapes() if path.is_file()]
 
 
 # The properties of the OEKG shapes that no parameter reads, each left out on
-# purpose and each with its reason. `docpipe compile diff` lists them and the
-# preflight warns about every one that is neither a parameter nor here. Keyed
-# by (shape, property): the shape as the compiler names it, the property by
-# the end of its IRI. The first group is the owner's decision (2026-10-05):
-# nobody asks for these five, though none of them is required. The rest the
-# serializer writes itself or never touches.
-_NO_DATASET_NODE = "the serializer writes no dataset node"
-_NO_FACTSHEET = ("the serializer writes no factsheet of this kind, so there "
-                 "is nothing to give it")
-_OWN_UUID = ("the serializer writes it on every node it mints (kg.P_UUID), "
-             "behind no parameter")
-NOT_EXTRACTED = {
-    # contact person
-    ("study", "OEO_00000508"):
-        "has contact person: optional in the shapes, and the bundle carries "
-        "authors, organisations and funders and no contact person",
-    # the study's energy carrier tag
-    ("study", "OEO_00020432"):
-        "covers energy carrier: optional in the shapes, a closed list; the "
-        "sector and technology tags of the study are asked and its energy "
-        "carrier tag is not",
-    # interacting region
-    ("scenario", "OEO_00020222"):
-        "has interacting region: optional in the shapes; a scenario's study "
-        "region is asked and its interacting region is not",
-    # input and output datasets of a scenario
-    ("scenario", "OEO_00020436"):
-        "has information output: optional in the shapes, and "
-        + _NO_DATASET_NODE,
-    ("scenario", "OEO_00020437"):
-        "has information input: optional in the shapes, and "
-        + _NO_DATASET_NODE,
-    # the publication's reference link
-    ("publication", "OEO_00390078"):
-        "has reference: optional in the shapes; the report carries no link "
-        "to its reference",
-    ("region", "OEO_00390078"):
-        "has reference: optional in the shapes; a region is only referenced "
-        "by its IRI and never written",
-    # written by the serializer itself
-    ("study", "BFO_0000051"):
-        "has part: the serializer writes it from the kg block of the "
-        "scenario coordinate, the bundle holds its report and its "
-        "factsheets, and no parameter asks for it",
-    ("scenario", "OEO_00020220"):
-        "has study region: the serializer writes its parent, has spatial "
-        "region, for scenario_region, and the bundle body for the platform "
-        "writes this one itself",
-    ("publication", "OEO_00390095"): "has uuid: " + _OWN_UUID,
-    ("scenario", "OEO_00390095"): "has uuid: " + _OWN_UUID,
-    ("common", "label"):
-        "label of the objects of the author, organisation, funder, tag and "
-        "scenario type properties: the serializer writes it for the authors, "
-        "organisations and funders it mints, and a tag or a scenario type is "
-        "the IRI of a node the OEKG already holds with its label",
-    ("region", "label"):
-        "label: a region is only referenced by its IRI, the node exists in "
-        "the OEKG with its label, and writing ours would give it a second one",
-    # shapes of nodes the serializer never writes
-    ("dataset", "label"): "label: " + _NO_DATASET_NODE,
-    ("dataset", "has_id"): "has_id: " + _NO_DATASET_NODE,
-    ("dataset", "OEO_00390094"): "has iri: " + _NO_DATASET_NODE,
-    ("dataset", "OEO_00390095"): "has uuid: " + _NO_DATASET_NODE,
-    ("framework", "label"): "label: " + _NO_FACTSHEET,
-    ("framework", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
-    ("model", "label"): "label: " + _NO_FACTSHEET,
-    ("model", "OEO_00390094"): "has iri: " + _NO_FACTSHEET,
-}
+# purpose and each with its reason, are the rule `not_extracted` (rules.json
+# beside this file, owner decision 2026-10-05 for the first five): `docpipe
+# compile diff` lists them and the preflight warns about every one that is
+# neither a parameter nor there.
 
 
-# What the stage says to the model outside its prompts: why an answer was not
-# taken, what was wrong with a reply, what stands beside an image. In the
-# language of the prompts, and read by docpipe/extraction/wording.py, which
-# says what each name is filled with.
-PHRASES = {
-    # the closed list as a request shows it: protocol keys, so English in
-    # every profile
-    "option_means": 'means',
-    "option_spellings": 'spellings',
-    "unstated_means": 'in diesen Passagen steht es nicht',
-    "unstated_spelling": 'steht in diesen Passagen nicht',
-    # why a coordinate's answer was not taken
-    "kind_whole_number": 'eine ganze Zahl',
-    "kind_text": 'eine Angabe als Text',
-    "not_an_option": (
-        'Dein "value" {given!r} ist keiner der Einträge aus "options". '
-        'Wähle genau einen Namen daraus, Zeichen für Zeichen '
-        'abgeschrieben, auch einen mit "out:". Passt keiner, obwohl die '
-        'Passage die Angabe nennt, dann lass "value" weg und gib die '
-        'Bezeichnung in "value_raw".'),
-    "wrong_type": (
-        'Dein "value" {given!r} ist nicht {wrong}. Antworte mit {wrong}, '
-        'genau wie die Passage es schreibt.'),
-    "quote_not_in_source": (
-        'Dein "quote" steht in keiner der gezeigten Quellen. Kopiere '
-        'eine Passage Zeichen für Zeichen aus "sources" oder aus dem '
-        '"quote" der Zeile selbst.'),
-    "quote_too_short": (
-        'Dein "quote" ist zu kurz, um eine Stelle zu benennen '
-        '(mindestens {minimum} Zeichen). Zitier den ganzen Satz oder die '
-        'ganze Zeile, in der die Antwort steht.'),
-    "answer_not_in_quote": (
-        'Dein "quote" enthält {answer!r} nicht. Zitier die Stelle, an '
-        'der es wirklich steht, oder antworte mit "{unstated}".'),
-    # The key of the frame request that holds the entries of a closed frame
-    # coordinate. The frame prompt reads them there.
-    "frame_options": "scenarios",
-    # why a pair of the document's frame was not taken
-    "frame_missing": 'In einem Paar fehlte "{slot}".',
-    "frame_no_quote": 'Zu {slot}={given!r} fehlte "{slot}_quote".',
-    "frame_quote_not_in_source": (
-        'Das Zitat zu {slot}={given!r} steht in keiner der gezeigten '
-        'Passagen: {quote!r}. Kopiere es Zeichen für Zeichen aus '
-        '"sources".'),
-    "frame_answer_not_in_quote": (
-        '{slot}={given!r} steht nicht in seinem Zitat {quote!r}. Schreib '
-        'die Formulierung des Plans in "{slot}_raw".'),
-    "frame_not_an_option": (
-        '{given!r} ist keiner der Schlüssel aus "scenarios". Wähle genau '
-        'einen daraus, Zeichen für Zeichen abgeschrieben, und schreib '
-        'das Wort des Plans in "{slot}_raw".'),
-    "frame_not_a_year": (
-        '{slot}={given!r} ist keine ganze Jahreszahl. Gib das Jahr '
-        'vierstellig an.'),
-    # a reply that could not be read
-    "shape_rule": (
-        ' Gib NUR das JSON-Objekt aus, in EINER Zeile, ohne Text davor '
-        'oder danach, ohne Codefence, ohne <think>-Block und ohne ein '
-        'zweites Objekt. Anführungszeichen INNERHALB eines Zitats müssen '
-        'als \\" escaped sein — ist das mühsam, kürz das Zitat auf eine '
-        'Stelle ohne Anführungszeichen.'),
-    "cut_off": (
-        'Deine Antwort wurde nach {limit} Tokens abgeschnitten und ist '
-        'deshalb kein vollständiges JSON-Objekt. '),
-    "shorter": (
-        'Antworte kürzer: zitiere nur die kurze Stelle, an der die '
-        'Angabe steht.'),
-    "shorter_frame": (
-        'Antworte mit weniger Paaren und zitiere nur die kurze Stelle, '
-        'an der das Szenario oder das Jahr steht.'),
-    "shorter_rows": (
-        'Antworte mit weniger Tupeln und zitiere nur die kurze Stelle, '
-        'an der die Zahl steht.'),
-    "shorter_field": (
-        'Fasse Zeilen mit derselben Antwort in "groups" zusammen und '
-        'zitiere nur die kurze Stelle, an der die Angabe steht.'),
-    "shorter_review": (
-        'Zitiere nur die kurze Stelle, an der die Angabe steht, und lass '
-        'jedes Feld weg, das die zwei Passagen nicht tragen.'),
-    "reasoning_only": (
-        'Du hast nur nachgedacht und nichts geantwortet: dein Beitrag '
-        'war leer. Denk nicht vor, sondern gib direkt das Ergebnis aus.'),
-    "empty": 'Deine Antwort war leer.',
-    "no_object": 'Deine Antwort enthielt gar kein JSON-Objekt.',
-    "syntax": (
-        'Dein JSON bricht bei Zeichen {position} ab ({message}), an '
-        'dieser Stelle: {around!r}.'),
-    "outside_text": 'Neben dem JSON-Objekt stand noch Text: {extra!r}.',
-    "not_an_object": (
-        'Deine Antwort war eine {kind}-Struktur und kein JSON-Objekt.'),
-    "key_missing": 'In deiner Antwort fehlte "{key}".',
-    "key_not_a_list": 'In deiner Antwort war keine Liste "{key}".',
-    "wrong_shape": 'Deine Antwort hatte nicht die Form, die verlangt war.',
-    # what the model gets back after a calculation
-    "code_failed": (
-        'Der Code lief nicht: {error}. Antworte jetzt ohne Berechnung, '
-        'oder korrigiere den Code.'),
-    "code_error_unknown": 'unbekannt',
-    "code_silent": (
-        'Der Code lief, hat aber nichts ausgegeben. Gib jedes Ergebnis '
-        'mit print() aus, oder antworte ohne Berechnung.'),
-    "code_output": (
-        'Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit dem '
-        'Tupel-Objekt. Berechnete Werte tragen "computed": true.'),
-    # labels inside a request
-    "image_for": 'Bild zu {label}:',
-    "anchor_parameter": 'Kennzahl',
-    "anchor_unit": 'Einheit',
-}
+# What the stage says to the model outside its prompts (why an answer was not
+# taken, what was wrong with a reply) is a file beside them:
+# prompts/extraction/phrases.json (docpipe/phrases.py).
+
+
+def document_context(conn, document_id: int) -> dict:
+    """What a publication says of itself, for the sentence it is searched
+    with: its title as the corpus index holds it (`DocumentMeta.title`).
+    Missing metadata is no error: the sentence is then written from the
+    parameter alone."""
+    try:
+        row = conn.execute("SELECT title FROM DocumentMeta WHERE document = ?",
+                           (document_id,)).fetchone()
+    except Exception:
+        return {}
+    title = (row[0] or "").strip() if row else ""
+    return {"name": title} if title else {}
+
+
+def __getattr__(name: str):
+    """The values this module had as constants, as the rules say them now
+    (`alt_label_language`, `contract_language`,
+    `prompt_checks`): read when a caller asks for them, not at import."""
+    if name == "ALT_LABEL_LANGUAGE":
+        return rules.get("alt_label_language", "scenarios")
+    if name == "CONTRACT_LANGUAGE":
+        # The language of the profile's own prompts: the run's, whatever
+        # step composes a prompt.
+        with rules.in_step(None):
+            return rules.get("contract_language", "scenarios")
+    if name == "PROMPT_CHECKS":
+        return tuple((row["what"], row["prompt"], row["passage"],
+                      {"yes": True, "no": False}.get(row["required"],
+                                                      row["required"]))
+                     for row in rules.get("prompt_checks", "scenarios"))
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

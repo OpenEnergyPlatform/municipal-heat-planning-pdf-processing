@@ -49,21 +49,24 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Collection, Optional
 
 from docpipe import prompts, providers, reading, usage
+from docpipe.profile import profile_value
 from docpipe.llm_preflight import request_extras, served_window
 from docpipe.reading import Hole
 
 from . import replies
 from .corrections import apply_corrections
-from .split import (NotServed, split_max_tokens, split_oversized,
+from .split import (NotServed, cut_to_limit, split_max_tokens, split_oversized,
                     split_temperature)
 from .config import (
     further_room,
     PROMPT_IDS,
     REFINEMENT_PARTIAL_JSON,
     REFINEMENT_REPORT_JSON,
+    SECTION_MAX_WORDS,
+    SECTION_SPLIT_ENABLE,
     SECTIONS_JSON,
     SECTIONS_REFINED_JSON,
     LLM_MODEL,
@@ -526,9 +529,13 @@ def _coerce_section(sec: dict) -> dict:
 def _apply_actions(
     processed_sections: list[dict],
     previous_kept: Optional[dict],
+    front_pages: Collection[int] = (),
 ) -> tuple[list[dict], Optional[dict]]:
     """
-    Applies the _action directives returned by the LLM.
+    Applies the _action directives returned by the LLM. A section that starts
+    on one of *front_pages*, the first page and the title page
+    (`_front_pages`), is front matter (title, authors, affiliations, journal
+    line, dates) and is never removed.
 
     Returns:
         (result_sections, last_kept_section)
@@ -553,12 +560,35 @@ def _apply_actions(
                     "  Refusing to remove '%s': it carries %d table(s) and "
                     "%d figure(s)", sec.get("title", "?"),
                     len(sec.get("tables") or []), len(sec.get("figures") or []))
+            elif _synthetic_heading(sec.get("title", "").strip()):
+                # What stands before the first heading is the head of the first
+                # page: a journal line, and often the title with it. Removed
+                # as a running head, it took a scenario document's title along.
+                log.info("  Refusing to remove the text before the first "
+                         "heading: the title may stand in it")
+            elif _starts_on(sec, front_pages):
+                # Authors often come out of layout detection as a one-line
+                # heading; removed as a running head, 19 of 85 author lines
+                # were gone from the scenarios corpus.
+                log.info("  Refusing to remove '%s': it is front matter (first "
+                         "or title page)", sec.get("title", "?"))
             else:
                 log.debug(f"  Removing section: {sec.get('title', '?')}")
+                # Its text goes, its heading does not: a contents page or an
+                # authors' block can be headed by the paper's title, and three
+                # scenario documents lost theirs with it. Left as a bare
+                # heading, `_fold_bare_headings` hands it to the section after.
+                # It is no section to merge into.
+                title = sec.get("title", "").strip()
+                if title:
+                    result.append({"title": title, "content": "",
+                                   "tables": [], "figures": [],
+                                   "segments": [], "_removed": True})
                 continue
 
         if action == "merge_into_previous":
-            target = result[-1] if result else previous_kept
+            kept = [s for s in result if not s.get("_removed")]
+            target = kept[-1] if kept else previous_kept
             if target is not None:
                 merge_content = sec.get("content", "")
                 if isinstance(merge_content, list):
@@ -584,7 +614,8 @@ def _apply_actions(
         # "keep" or "replace" → include in output
         result.append(sec)
 
-    last_kept = result[-1] if result else previous_kept
+    kept = [s for s in result if not s.get("_removed")]
+    last_kept = kept[-1] if kept else previous_kept
     return result, last_kept
 
 
@@ -785,6 +816,27 @@ def _reattach_media_bbox(inputs: list[dict], outputs: list[dict]) -> None:
                     item["bbox"] = b
 
 
+def _hold_to_limit(sections: list[dict]) -> list[dict]:
+    """Every refined section at most SECTION_MAX_WORDS long (`cut_to_limit`).
+
+    The limit is held before the model reads, and the model's merges and its
+    BibTeX lists undo it: 22 sections in 20 scenario documents went into the
+    embedding over its budget and lost their tail there.
+    """
+    if not SECTION_SPLIT_ENABLE:
+        return sections
+    out: list[dict] = []
+    held = 0
+    for sec in sections:
+        parts = cut_to_limit(sec)
+        held += len(parts) > 1
+        out.extend(parts)
+    if held:
+        log.info("Stage 4: cut %d refined section(s) back to %d words "
+                 "→ %d sections", held, SECTION_MAX_WORDS, len(out))
+    return out
+
+
 def _finalize_pages(section: dict) -> None:
     """Recompute a section's `pages` (and page_number) in place from its
     segments and its tables'/figures' page numbers. Falls back to the section's
@@ -845,6 +897,79 @@ def _is_empty_section(sec: dict) -> bool:
     has_tables = bool(sec.get("tables"))
     has_figures = bool(sec.get("figures"))
     return not has_content and not has_tables and not has_figures
+
+
+def _page_of(sections: list[dict]) -> Optional[int]:
+    """The lowest page any of *sections* carries, None when none carries one."""
+    pages = [p for sec in sections for p in _section_pages(sec)]
+    return min(pages) if pages else None
+
+
+def _section_pages(sec: dict) -> list:
+    """The pages a section's segments stand on, else its page list, else its
+    page number: a heading-only section carries no segment."""
+    pages = [seg["page"] for seg in sec.get("segments") or []
+             if isinstance(seg, dict) and seg.get("page") is not None]
+    if not pages:
+        pages = list(sec.get("pages") or [])
+    if not pages and isinstance(sec.get("page_number"), int):
+        pages = [sec["page_number"]]
+    return pages
+
+
+def _starts_on(sec: dict, pages: Collection[int]) -> bool:
+    """Whether *sec* starts on one of *pages*."""
+    own = _section_pages(sec)
+    return bool(own) and min(own) in pages
+
+
+def _front_pages(sections: list[dict], title_page: Optional[int]) -> set:
+    """The pages whose sections are front matter: the lowest page any of
+    *sections* carries, and Stage 3's title page where the file names one.
+    A cover before the title page and a title detected further in both leave
+    the first page among them."""
+    return {page for page in (_page_of(sections), title_page)
+            if page is not None}
+
+
+def _synthetic_heading(title: str) -> bool:
+    """Whether *title* is the name Stage 3 gives the text before any heading."""
+    return title == profile_value("preprocessing", "FRONT_SECTION_TITLE")
+
+
+def _fold_bare_headings(sections: list[dict]) -> list[dict]:
+    """A section that is a heading and nothing else opens the text of the next.
+
+    The empty-section filter counts no title, and a paper's title is set apart
+    from its authors as a heading with no body of its own: 9 of the scenarios
+    documents lost it here, and with it every node of their graph. Its heading
+    goes in front of the next section's text instead, where it can be read and
+    quoted, and the next section's own heading follows it there: a title
+    broken over three headings ("pathways to", "deep decarbonization", "in
+    India") then reads in its order, and a passage, which puts its heading in
+    front only when its text does not open with it, is not reordered.
+    Headings with nothing after them, or before a literature list, are left
+    to the filter as before. The profile's name for what comes before the
+    first heading is not the document's word and is never handed on.
+    """
+    out: list[dict] = []
+    pending: list[str] = []
+    for sec in sections:
+        sec.pop("_removed", None)
+        title = str(sec.get("title") or "").strip()
+        own = [title] if title and not _synthetic_heading(title) else []
+        if _is_empty_section(sec):
+            pending += own
+            continue
+        if pending and isinstance(sec.get("content", ""), str):
+            sec["content"] = "\n".join(pending + own
+                                       + [sec.get("content") or ""])
+        pending = []
+        out.append(sec)
+    if pending:
+        log.info("Stage 4: %d heading(s) with no text after them: %s",
+                 len(pending), "; ".join(t[:60] for t in pending))
+    return out
 
 
 # Leading numbering prefix. A 1–2 digit bare number is stripped; 4-digit years
@@ -991,7 +1116,8 @@ def _make_splitter(client) -> Callable[..., dict | Hole]:
 def refine_sections(sections: list[dict],
                     report: Optional[dict] = None,
                     done: Optional[dict] = None,
-                    left: Optional[dict] = None) -> list[dict]:
+                    left: Optional[dict] = None,
+                    title_page: Optional[int] = None) -> list[dict]:
     """
     Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
     in parallel but assembled in order (merge/split semantics are positional).
@@ -1121,6 +1247,9 @@ def refine_sections(sections: list[dict],
     # ── Sequential assembly (order matters for merge_into_previous) ──────
     refined: list[dict] = []
     previous_kept: Optional[dict] = None
+    # The first page and Stage 3's title page; an older sections.json names
+    # no title page and leaves the first page alone.
+    front_pages = _front_pages(sections, title_page)
     # A window (or the part of one) that is a hole keeps its original text,
     # which is indistinguishable in the output from a window that needed no
     # change, so the only place this can be recorded is here, while it
@@ -1168,7 +1297,8 @@ def refine_sections(sections: list[dict],
                 previous_kept = part[-1] if part else previous_kept
             else:
                 _thread_provenance(part, result)
-                applied, previous_kept = _apply_actions(result, previous_kept)
+                applied, previous_kept = _apply_actions(result, previous_kept,
+                                                         front_pages)
                 refined.extend(applied)
 
     log.info(f"Stage 4: {len(refined)} sections after LLM refinement")
@@ -1176,11 +1306,14 @@ def refine_sections(sections: list[dict],
     _reattach_media_bbox(sections, refined)
 
     # ── Post-filter: remove empty sections ───────────────────────────────
+    refined = _fold_bare_headings(refined)
     before = len(refined)
     refined = [s for s in refined if not _is_empty_section(s)]
     removed = before - len(refined)
     if removed:
         log.info(f"Stage 4: removed {removed} empty section(s)")
+
+    refined = _hold_to_limit(refined)
 
     # Keep each section's page span self-consistent after merges/splits.
     for s in refined:
@@ -1399,8 +1532,13 @@ def run_refine(output_dir: Path, data: Optional[dict] = None,
     left: dict = {}
     try:
         # A third argument only when there is something to resume.
-        refined = (refine_sections(sections, report, left=left) if done is None
-                   else refine_sections(sections, report, done, left=left))
+        title_page = data.get("title_page")
+        if not isinstance(title_page, int):
+            title_page = None
+        refined = (refine_sections(sections, report, left=left,
+                                   title_page=title_page) if done is None
+                   else refine_sections(sections, report, done, left=left,
+                                        title_page=title_page))
     except Unfinished as unfinished:
         if unfinished.sections is None:
             log.error("Stage 4: %s: the model server did not serve the cut "

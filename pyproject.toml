@@ -53,9 +53,14 @@ version = {attr = "docpipe.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["docpipe*"]
+# the sources of the editor's page and their libraries; the built page is web/
+exclude = ["docpipe.editor.ui*"]
 
 [tool.setuptools.package-data]
 # builtin/ holds the profile the package brings itself. It is found as a
 # profile is (by its directory), not imported as part of the package.
 docpipe = ["**/*.md", "**/*.json", "**/*.sql", "**/*.toml", "**/*.js",
-           "**/*.ttl", "builtin/**/*.py"]
+           "**/*.ttl", "**/*.html", "**/*.css", "builtin/**/*.py"]
+
+[tool.setuptools.exclude-package-data]
+docpipe = ["editor/ui/*"]

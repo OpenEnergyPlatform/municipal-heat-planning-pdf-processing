@@ -57,6 +57,8 @@ STAGES = {
               "states and the corpus passages: HTTP API or MCP server"),
     "lexical": ("docpipe.inference.lexical", "build the word index the chat "
                 "searches beside the vectors"),
+    "values-index": ("docpipe.inference.values_index", "build the vectors "
+                     "the chat finds harvested values by"),
     "sandbox": ("docpipe.app.sandbox_service", "the service that runs code "
                 "a model wrote, in a container without a network"),
 }
@@ -71,6 +73,8 @@ OWN = {
     "profiles": "the profiles this installation finds, and where",
     "column": "a column of one's own: the spec of one question for a "
               "trial harvest, in a folder of its own",
+    "edit": "a profile's spec, prompts, sentences and the numbers of its "
+            "flow in the browser, on a local page",
 }
 USAGE = "docpipe [--profile P] [--config FILE] <command> [arguments]"
 
@@ -366,6 +370,11 @@ def _init(rest: Sequence[str]) -> int:
     return 0
 
 
+# The origin of a number no profile and no setting says differently than the
+# default profile's flow file (`extraction.flow.in_effect`).
+UNSET_FLOW = "flow.json of default"
+
+
 def _config(rest: Sequence[str]) -> int:
     import argparse
     parser = argparse.ArgumentParser(
@@ -382,7 +391,9 @@ def _config(rest: Sequence[str]) -> int:
     print(f"project file: {settings.project_file() or 'none'}")
     print(f"profile:      {os.environ.get(ENV_VAR) or 'none'}")
     for setting, value, origin, shadowed in settings.rows(args.stage):
-        if args.set and origin == "default":
+        # At its default: not set at all, or said by the flow file every
+        # profile starts from.
+        if args.set and origin in ("default", UNSET_FLOW):
             continue
         shown = "(unset)" if value is None else (
             "****" if setting.secret and value else value)
@@ -444,6 +455,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if command == "column":
         from . import column
         return column.main(rest)
+    if command == "edit":
+        from . import editor
+        return editor.main(rest)
     from . import doctor
     return doctor.main(rest)
 

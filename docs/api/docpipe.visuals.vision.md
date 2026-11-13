@@ -36,6 +36,15 @@ def check_model_available(
 
 Verifies that the vLLM endpoint is reachable and serves *model*.
 
+### reply_type
+
+```python
+def reply_type(reply: tuple) -> type
+```
+
+What the first required key of *reply* (a `replies` entry) has to be
+in the reply: a list where its schema is an array, else text.
+
 ### call_vision
 
 ```python
@@ -61,8 +70,8 @@ it answers with.
 The wall-clock bound per request is the client timeout set by
 create_client(), not *max_retries*. *reply* is the (name, schema) of the
 object asked for (see `replies`): the grammar of every request, and its
-one required key (the item's `markdown`, `description`) has to be in the
-reply as text.
+first required key (a table's `rows`, a figure's `description`) has to be
+in the reply as what its schema says, a list or text (`reply_type`).
 
 A reply that is not that object is asked again with its cause named, the
 answer echoed back. A reply that was cut off at its token limit is not

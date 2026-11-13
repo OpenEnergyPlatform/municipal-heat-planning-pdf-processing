@@ -58,6 +58,7 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from docpipe import jsonl                                    # noqa: E402
+from docpipe.extraction import trace                         # noqa: E402
 from docpipe.extraction.verify import (                      # noqa: E402
     canonical_number, decimal_mark, numbers_in)
 from docpipe.profile import bind_command_line, resolve_profile  # noqa: E402
@@ -131,8 +132,9 @@ def share_class(found: int, numbers: int) -> str:
 
 
 def numbers_of(text: str) -> set:
-    """The distinct numbers of *text*, each in its one canonical spelling."""
-    return {n for n in numbers_in(text) if n}
+    """The distinct numbers of *text*, each in its one canonical spelling and
+    without its sign, which `numbers_in` lists beside the magnitude."""
+    return {n for n in numbers_in(text) if n and not n.startswith("-")}
 
 
 def frame_of(bbox_json) -> Optional[tuple]:
@@ -269,7 +271,7 @@ def read_harvest(directory: Path, documents=None) -> dict:
     out = {"files": 0, "tuples": 0, "by_owner": collections.Counter(),
            "wanted": collections.defaultdict(list)}
     for path in sorted(p for p in directory.glob("*.jsonl")
-                       if not p.name.endswith(".trace.jsonl")):
+                       if not trace.is_trace(p)):
         out["files"] += 1
         for line in jsonl.read(path):
             if not line.strip():
@@ -293,7 +295,7 @@ def read_harvest(directory: Path, documents=None) -> dict:
             value = row.get("value")
             number = (None if isinstance(value, bool)
                       or not isinstance(value, (int, float))
-                      else canonical_number(value))
+                      else canonical_number(abs(value)))
             out["wanted"][owner].append({
                 "parameter": row.get("parameter"), "number": number,
                 "computed": row.get("computed") is True,
@@ -500,7 +502,7 @@ def main(argv=None) -> int:
         return 1
     if args.harvest is not None and not any(
             p for p in args.harvest.glob("*.jsonl")
-            if not p.name.endswith(".trace.jsonl")):
+            if not trace.is_trace(p)):
         print(f"no harvest in {args.harvest}", file=sys.stderr)
         return 1
     try:

@@ -28,8 +28,8 @@ from pathlib import Path
 
 import fitz
 
-from docpipe.preprocessing.stage1_extract import _render_page_to_pil
-from docpipe.preprocessing.stage2_layout import load_model, _infer_batch
+from docpipe.preprocessing.layout_model import infer_batch, load_model
+from docpipe.preprocessing.rendering import render_page_to_pil
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def run(db_path: Path, pdf_dir: Path, out: Path, n: int, seed: int,
     def flush() -> None:
         if not batch:
             return
-        detections = _infer_batch([img for _, img in batch], processor, model, device)
+        detections = infer_batch([img for _, img in batch], processor, model, device)
         for (stem, img), dets in zip(batch, detections):
             w, h = img.size
             lines = []
@@ -90,7 +90,7 @@ def run(db_path: Path, pdf_dir: Path, out: Path, n: int, seed: int,
         stem = f"d{doc_id:04d}_p{page_no:04d}"
         try:
             with fitz.open(str(pdf_path)) as doc:
-                img = _render_page_to_pil(doc.load_page(page_no - 1), RENDER_DPI)
+                img = render_page_to_pil(doc.load_page(page_no - 1), RENDER_DPI)
         except Exception as e:
             log.warning("Page not renderable, skipped: %s p%d (%s)", filename, page_no, e)
             skipped += 1

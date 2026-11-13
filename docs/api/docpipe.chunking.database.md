@@ -118,6 +118,63 @@ always there -- and what a reader and the model are shown is now right.
 The vector follows when the plan is preprocessed again, where Stage 3
 settles the caption before anything is embedded.
 
+### section_content
+
+```python
+def section_content(section: dict) -> str
+```
+
+A merged section's text as the Sections row holds it.
+
+### table_values
+
+```python
+def table_values(section_id: Optional[int], t: dict) -> tuple
+```
+
+A merged table as its Tables row holds it: (section, block_id, path,
+page_number, caption, markdown, bbox, qa).
+
+### image_values
+
+```python
+def image_values(section_id: Optional[int], fig: dict) -> tuple
+```
+
+A merged figure as its Images row holds it: (section, block_id, path,
+page_number, caption, description, bbox).
+
+### page_rows
+
+```python
+def page_rows(section: dict) -> list
+```
+
+The pages a merged section covers, as SectionPages holds them.
+
+### segment_rows
+
+```python
+def segment_rows(section: dict) -> list
+```
+
+A merged section's segments as Segments holds them: (ordinal, page
+number, kind, ref, text, bbox), the ones a row is written for.
+
+### insert_provenance
+
+```python
+def insert_provenance(
+    document_id: int,
+    section_id: int,
+    section: dict,
+    connection: sqlite3.Connection,
+    page_cache: dict[int, int],
+) -> None
+```
+
+Write one section's SectionPages and Segments rows.
+
 ### update_database
 
 ```python
@@ -165,6 +222,24 @@ block id, None for section-level embeddings. Empty if the doc is unknown.
 
 Runs on the calling thread's connection. Pass `doc_id` when the caller has
 already resolved it — the prepare loop asks document_id() first.
+
+### ids_of_document
+
+```python
+def ids_of_document(connection: sqlite3.Connection, doc_id: int) -> dict
+```
+
+{(embedding_type, section_index, item_id): faiss_id} of one document,
+read only: what a new index file has to hold under the same ids
+(chunking/reembed.py).
+
+### embedding_ids
+
+```python
+def embedding_ids(db_path: Path, doc_id: int) -> dict
+```
+
+`ids_of_document` on the calling thread's connection.
 
 ### clear_embedding_ids
 

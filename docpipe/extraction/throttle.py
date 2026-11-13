@@ -12,15 +12,18 @@ each prompt the server already holds in its prefix cache.
 So the limit is steered while the run goes (additive increase, multiplicative
 decrease). Every few seconds the controller reads the server's /metrics:
 
-  up    nothing waiting, the KV cache below KV_GROW, and the client actually
-        using the limit it has
-  down  requests waiting (twice in a row), the KV cache at KV_HIGH, or a
-        preemption
+  up    nothing waiting, the KV cache below `limit_kv_grow`, and the client
+        actually using the limit it has
+  down  requests waiting (twice in a row), the KV cache at `limit_kv_high`,
+        or a preemption
 
 The time per output token is not a reason to step down: it grows with every
 sequence in the batch while the tokens per second of the whole batch still
-rise, and those are what the harvest waits for. EXTRACT_LIMIT_TPOT_MAX makes
-it one for a server shared with interactive users.
+rise, and those are what the harvest waits for. The rule `limit_token_time_s`
+makes it one for a server shared with interactive users.
+
+Every number here is a rule (`limit_*`), read where it is used and not once
+when the module is loaded.
 
 After a step down it holds for a few samples, so the server can drain before
 it is pushed again. A server without /metrics gets no limit at all, and one
@@ -36,7 +39,6 @@ API asks to wait.
 from __future__ import annotations
 
 import logging
-import os
 import re
 import threading
 import time
@@ -45,31 +47,41 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Optional
 
+from docpipe import rules
+
 log = logging.getLogger(__name__)
 
-START = int(os.environ.get("EXTRACT_LIMIT_START", "128"))
-MINIMUM = int(os.environ.get("EXTRACT_LIMIT_MIN", "16"))
-MAXIMUM = int(os.environ.get("EXTRACT_LIMIT_MAX", "512"))
-STEP = int(os.environ.get("EXTRACT_LIMIT_STEP", "8"))
-BACKOFF = float(os.environ.get("EXTRACT_LIMIT_BACKOFF", "0.8"))
-POLL = float(os.environ.get("EXTRACT_LIMIT_POLL", "5"))
-# KV cache fractions: grow only below the first, step down at the second.
-KV_GROW = float(os.environ.get("EXTRACT_LIMIT_KV_GROW", "0.80"))
-KV_HIGH = float(os.environ.get("EXTRACT_LIMIT_KV_HIGH", "0.92"))
-# Seconds per output token above which a sample counts as pressure; unset,
-# the token time never steps the limit down.
-TPOT_MAX = (float(os.environ["EXTRACT_LIMIT_TPOT_MAX"])
-            if os.environ.get("EXTRACT_LIMIT_TPOT_MAX") else None)
-# Consecutive waiting samples before stepping down, and samples held after.
-WAITING_SAMPLES = 2
-HOLD_SAMPLES = 6
+def _token_time() -> Optional[float]:
+    """Seconds per output token above which a sample counts as pressure;
+    None where the rule says 0 and the token time never steps the limit
+    down."""
+    said = rules.get("limit_token_time_s")
+    return said if said else None
+
+
+def _kv_marks() -> tuple:
+    """(grow below, step down at): the two fractions of the server's cache,
+    refused where the first lies above the second, since the limit would
+    grow and fall at the same load."""
+    grow, high = rules.get("limit_kv_grow"), rules.get("limit_kv_high")
+    if grow > high:
+        raise ValueError(f"limit_kv_grow ({grow}) is above limit_kv_high "
+                         f"({high}): the limit would grow and fall at the "
+                         f"same load of the cache")
+    return grow, high
 
 
 class AdaptiveLimit:
-    """A semaphore whose size can change while requests hold it."""
+    """A semaphore whose size can change while requests hold it. Each bound
+    that is not given is the rule's (`limit_start`, `limit_least`,
+    `limit_most`)."""
 
-    def __init__(self, start: int = START, minimum: int = MINIMUM,
-                 maximum: int = MAXIMUM):
+    def __init__(self, start: Optional[int] = None,
+                 minimum: Optional[int] = None,
+                 maximum: Optional[int] = None):
+        start = rules.get("limit_start") if start is None else start
+        minimum = rules.get("limit_least") if minimum is None else minimum
+        maximum = rules.get("limit_most") if maximum is None else maximum
         self.minimum = max(1, int(minimum))
         self.maximum = max(self.minimum, int(maximum))
         self._limit = min(self.maximum, max(self.minimum, int(start)))
@@ -175,7 +187,9 @@ def _first(values: dict, *names) -> Optional[float]:
 class Reader:
     """Samples the server's /metrics, turning counters into differences."""
 
-    def __init__(self, base_url: str, timeout: float = 3.0):
+    def __init__(self, base_url: str, timeout: Optional[float] = None):
+        if timeout is None:
+            timeout = rules.get("metrics_timeout_s")
         root = base_url.rstrip("/")
         if root.endswith("/v1"):
             root = root[:-3]
@@ -221,16 +235,20 @@ class Reader:
 class Controller:
     """Decides the next limit from one sample; no threads, no I/O."""
 
-    def __init__(self, limit: AdaptiveLimit, *, step: int = STEP,
-                 backoff: float = BACKOFF, kv_grow: float = KV_GROW,
-                 kv_high: float = KV_HIGH,
-                 tpot_max: Optional[float] = TPOT_MAX):
+    def __init__(self, limit: AdaptiveLimit, *, step: Optional[int] = None,
+                 backoff: Optional[float] = None,
+                 kv_grow: Optional[float] = None,
+                 kv_high: Optional[float] = None,
+                 tpot_max: Optional[float] = None):
+        grow, high = _kv_marks()
         self.limit = limit
-        self.step = max(1, int(step))
-        self.backoff = backoff
-        self.kv_grow = kv_grow
-        self.kv_high = kv_high
-        self.tpot_max = tpot_max
+        self.step = max(1, int(rules.get("limit_step") if step is None
+                               else step))
+        self.backoff = (rules.get("limit_backoff") if backoff is None
+                        else backoff)
+        self.kv_grow = grow if kv_grow is None else kv_grow
+        self.kv_high = high if kv_high is None else kv_high
+        self.tpot_max = _token_time() if tpot_max is None else tpot_max
         self._waiting_streak = 0
         self._hold = 0
 
@@ -240,17 +258,17 @@ class Controller:
         self._waiting_streak = (self._waiting_streak + 1
                                 if sample.waiting > 0 else 0)
         why = None
-        if sample.preempted > 0:
+        if sample.preempted > 0 and rules.get("limit_down_on_preemption"):
             why = f"{sample.preempted:.0f} preemption(s)"
         elif sample.kv >= self.kv_high:
             why = f"KV cache {sample.kv:.0%}"
-        elif self._waiting_streak >= WAITING_SAMPLES:
+        elif self._waiting_streak >= rules.get("limit_waiting_samples"):
             why = f"{sample.waiting:.0f} waiting"
         elif (self.tpot_max is not None and sample.tpot is not None
               and sample.tpot > self.tpot_max):
             why = f"{sample.tpot * 1000:.0f} ms per token"
         if why is not None:
-            self._hold = HOLD_SAMPLES
+            self._hold = rules.get("limit_hold_samples")
             self._waiting_streak = 0
             return max(self.limit.minimum,
                        int(current * self.backoff)), why
@@ -261,7 +279,8 @@ class Controller:
         # thread pools or the documents in flight hold the requests below it,
         # a larger number would change nothing but the log.
         if (sample.waiting == 0 and sample.kv < self.kv_grow
-                and used >= current - self.step // 2):
+                and (used >= current - self.step // 2
+                     or not rules.get("limit_grow_only_when_used"))):
             return min(self.limit.maximum, current + self.step), None
         return current, None
 
@@ -269,11 +288,13 @@ class Controller:
 class RateController:
     """Decides the next limit from whether the API asked to wait."""
 
-    def __init__(self, limit: AdaptiveLimit, *, step: int = STEP,
-                 backoff: float = BACKOFF):
+    def __init__(self, limit: AdaptiveLimit, *, step: Optional[int] = None,
+                 backoff: Optional[float] = None):
         self.limit = limit
-        self.step = max(1, int(step))
-        self.backoff = backoff
+        self.step = max(1, int(rules.get("limit_step") if step is None
+                               else step))
+        self.backoff = (rules.get("limit_backoff") if backoff is None
+                        else backoff)
         self._limited = threading.Event()
         self._hold = 0
 
@@ -291,7 +312,7 @@ class RateController:
         current = self.limit.limit
         if self._limited.is_set():
             self._limited.clear()
-            self._hold = HOLD_SAMPLES
+            self._hold = rules.get("limit_hold_samples")
             return (max(self.limit.minimum, int(current * self.backoff)),
                     "the API asked to wait")
         if closed:
@@ -299,21 +320,25 @@ class RateController:
         if self._hold > 0:
             self._hold -= 1
             return current, None
-        if used >= current - self.step // 2:
+        if (used >= current - self.step // 2
+                or not rules.get("limit_grow_only_when_used")):
             return min(self.limit.maximum, current + self.step), None
         return current, None
 
 
 def start_hosted(gate, *, limit: Optional[AdaptiveLimit] = None,
-                 poll: float = POLL) -> AdaptiveLimit:
-    """An adaptive limit for a hosted API, steered by its gate."""
-    limit = limit or AdaptiveLimit(start=MINIMUM)
+                 poll: Optional[float] = None) -> AdaptiveLimit:
+    """An adaptive limit for a hosted API, steered by its gate. It starts at
+    the rule `limit_start_hosted`, the fewest requests (`limit_least`) where
+    that says 0."""
+    limit = limit or AdaptiveLimit(
+        start=rules.get("limit_start_hosted") or rules.get("limit_least"))
     controller = RateController(limit)
     gate.listen(controller.limited)
 
     def steer() -> None:
         while True:
-            time.sleep(poll)
+            time.sleep(rules.get("limit_poll_s") if poll is None else poll)
             used = limit.take_peak()
             before = limit.limit
             after, why = controller.decide(used, gate.closed())
@@ -331,12 +356,13 @@ def start_hosted(gate, *, limit: Optional[AdaptiveLimit] = None,
 
 def start(base_url: str, *, limit: Optional[AdaptiveLimit] = None,
           reader: Optional[Reader] = None,
-          poll: float = POLL) -> Optional[AdaptiveLimit]:
+          poll: Optional[float] = None) -> Optional[AdaptiveLimit]:
     """An adaptive limit and the daemon thread that steers it.
 
     None when the server does not serve vLLM's /metrics: without a queue to
     read there is nothing to steer by, and the thread pools bound the
-    requests as they did before.
+    requests as they did before (rule `limit_without_metrics` none). With
+    the rule at fixed the limit stays where `limit_start` puts it.
     """
     reader = reader or Reader(base_url)
     try:
@@ -345,6 +371,12 @@ def start(base_url: str, *, limit: Optional[AdaptiveLimit] = None,
     except Exception as exc:
         first, error = None, exc
     if first is None:
+        if rules.get("limit_without_metrics") == "fixed":
+            start = rules.get("limit_start")
+            log.warning("llm limit: %s unreadable (%s) -- a fixed limit of "
+                        "%d", reader.url, error, start)
+            return limit or AdaptiveLimit(start=start, minimum=start,
+                                          maximum=start)
         log.warning("llm limit: %s unreadable (%s) -- no adaptive limit, the "
                     "thread pools bound the requests", reader.url, error)
         return None
@@ -354,7 +386,7 @@ def start(base_url: str, *, limit: Optional[AdaptiveLimit] = None,
     def steer() -> None:
         failed = 0
         while True:
-            time.sleep(poll)
+            time.sleep(rules.get("limit_poll_s") if poll is None else poll)
             try:
                 sample = reader.sample()
             except Exception as exc:

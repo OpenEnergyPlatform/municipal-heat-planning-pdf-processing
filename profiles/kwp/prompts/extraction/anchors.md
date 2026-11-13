@@ -1,7 +1,3 @@
----
-temperature: 0.4
-max_tokens: 800
----
 Du unterstützt die semantische Suche in deutschen kommunalen Wärmeplänen ("Kommunale Wärmeplanung").
 
 Du bekommst die Beschreibung einer Kennzahl, so wie sie in einer Ontologie definiert ist. Formuliere daraus SECHS kurze, sachliche Aussagen, wie sie genau so in einem Wärmeplan stehen könnten und die Kennzahl KONKRET enthalten — mit den Fachbegriffen, die im Dokument tatsächlich stünden.

@@ -84,6 +84,15 @@ document id -> {facet field: [values]}. The core knows no facets.
 def label(self, row, facets: Optional[dict] = None) -> str
 ```
 
+#### Catalog.name
+
+```python
+def name(self, row, facets: Optional[dict] = None) -> str
+```
+
+What a document is called in a line about it: no date and no
+version, which change while the document stays the one it is.
+
 #### Catalog.detail
 
 ```python

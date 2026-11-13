@@ -7,6 +7,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -17,6 +18,7 @@ log = logging.getLogger(__name__)
 
 _TOKENIZER = None
 _TOKENIZER_TRIED = False
+_TOKENIZER_LOCK = threading.Lock()
 
 
 @dataclass
@@ -31,22 +33,25 @@ def get_tokenizer(tokenizer_id: str = LLM_TOKENIZER_ID):
     loaded (offline, gated repo, missing dependency) → char/4 heuristic.
     """
     global _TOKENIZER, _TOKENIZER_TRIED
-    if _TOKENIZER_TRIED:
+    with _TOKENIZER_LOCK:
+        if _TOKENIZER_TRIED:
+            return _TOKENIZER
+        try:
+            from transformers import AutoTokenizer
+            _TOKENIZER = AutoTokenizer.from_pretrained(tokenizer_id)
+        except Exception as e:
+            log.warning("Tokenizer '%s' unavailable, using char/4 heuristic: %s", tokenizer_id, e)
+            _TOKENIZER = None
+        _TOKENIZER_TRIED = True
         return _TOKENIZER
-    _TOKENIZER_TRIED = True
-    try:
-        from transformers import AutoTokenizer
-        _TOKENIZER = AutoTokenizer.from_pretrained(tokenizer_id)
-    except Exception as e:
-        log.warning("Tokenizer '%s' unavailable, using char/4 heuristic: %s", tokenizer_id, e)
-        _TOKENIZER = None
-    return _TOKENIZER
 
 
 def count_tokens(text: str, tokenizer=None) -> int:
     """Token count via the tokenizer if given, else a char/4 estimate."""
     if tokenizer is not None:
-        return len(tokenizer.encode(text, add_special_tokens=False))
+        # A fast tokenizer raises "Already borrowed" when two threads use it.
+        with _TOKENIZER_LOCK:
+            return len(tokenizer.encode(text, add_special_tokens=False))
     return max(1, len(text) // 4)
 
 

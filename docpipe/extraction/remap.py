@@ -13,6 +13,9 @@ every coordinate, the class in `<axis>` and the document's own wording in
 files on disk. A new alias, a renamed label, or an option moved to another
 class is answered by running that function again, with no model, no GPU, and no
 index.
+A list a profile closes per document, such as the regions a paper names, is
+that document's own: the pass rebuilds it from the corpus database, opened
+read-only, so a wording is mapped onto the list its harvest was offered.
 
 Four cases stop the pass from settling a coordinate, and each is counted rather
 than silently dropped. No wording: the model never sent `<axis>_raw`, so there
@@ -41,12 +44,12 @@ import logging
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
-from .. import jsonl
+from .. import rules
+from . import archive
 from .fields import CHOICE, axis_slots
 from .spec import Spec, fold_label
-from .trust import document_summary
 
 log = logging.getLogger(__name__)
 
@@ -104,9 +107,18 @@ def remap_row(row: dict, parameter) -> tuple:
             # an empty cell would lose a reading rather than correct one.
             counts["not listed"] += 1
             open_spaces.add(space)
+            if rules.get("remap_unlisted") == "empty" and current is not None:
+                counts["not listed, class emptied"] += 1
+                row.pop(holds, None)
             return
         if uri == current:
             counts["unchanged"] += 1
+            return
+        if current is not None and not rules.get("remap_overwrite_class"):
+            # A class that is there stays, and the coordinate is not
+            # settled: the stamp of its answer space is not carried forward.
+            counts["not overwritten"] += 1
+            open_spaces.add(space)
             return
         if current is None:
             counts["newly mapped"] += 1
@@ -153,13 +165,17 @@ def refused_spaces(refusals: list, spaces: set) -> set:
     space it belonged to would be the same mistake in a smaller place.
     """
     out: set = set()
+    if not rules.get("remap_refusals_block_stamp"):
+        return out
     for row in refusals:
         reason = row.get("reason") or ""
         if not any(family in reason for family in _MAPPABLE):
             continue
         match = _AXIS_REASON.search(reason)
         uri = row.get("parameter")
-        key = f"axis/{uri}/{match.group(1)}" if match and uri else None
+        key = (f"axis/{uri}/{match.group(1)}" if match and uri
+               else f"value/{uri}" if uri and reason.startswith("value ")
+               else None)
         if key in spaces:
             out.add(key)
         else:
@@ -221,6 +237,7 @@ def enter_producer(stamp_path: Path, producer: dict) -> Optional[int]:
         return None
     wrote = producers_of(stored)
     stored["producers"] = [*wrote, producer]
+    archive.keep(stamp_path)
     stamp_path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
     return len(wrote)
 
@@ -263,6 +280,7 @@ def stamp_forward(stamp_path: Path, current: dict, settled: set,
     # read as current while a changed prompt sits unaddressed.
     if "spec" in changed and not (changed - earned - {"spec"}):
         stored["spec"] = current["spec"]
+    archive.keep(stamp_path)
     stamp_path.write_text(json.dumps(stored, indent=2), encoding="utf-8")
     return True
 
@@ -271,81 +289,42 @@ def stamp_path_of(path: Path) -> Path:
     return path.parent / (path.name[: -len(".jsonl")] + ".stamp.json")
 
 
-def remap_file(path: Path, spec: Spec, current: dict) -> Counter:
-    """Re-map one harvest file in place, then carry its stamp forward."""
-    stats: Counter = Counter()
-    lines: list = []
-    tuples, refusals, document_id = [], [], None
-    spaces = spaces_of(current)
-    settled = set(spaces)
-    for line in jsonl.read(path):
-        if not line.strip():
-            continue
-        try:
-            row = json.loads(line)
-        except json.JSONDecodeError:
-            stats["unreadable line kept"] += 1
-            lines.append(line)
-            continue
-        if row.get("kind") == "summary":
-            document_id = row.get("document_id")
-            continue
-        if row.get("kind") != "tuple":
-            # Kept verbatim, and only a refusal counted as one: the rebuilt
-            # summary's refusal count is read as a model-error rate, and a
-            # parameter_state line is a fact about the run.
-            if row.get("kind") == "refusal":
-                refusals.append(row)
-            lines.append(line)
-            continue
-        parameter = spec.by_uri.get(row.get("parameter"))
-        if parameter is None:
-            # No list to map against, so nothing this pass may touch -- and
-            # nothing it may vouch for either.
-            stats["unknown parameter kept"] += 1
-            settled = set()
-            tuples.append(row)
-            lines.append(line)
-            continue
-        stats["tuples"] += 1
-        counts, open_spaces = remap_row(row, parameter)
-        stats.update(counts)
-        settled -= open_spaces
-        tuples.append(row)
-        lines.append(json.dumps(row, ensure_ascii=False))
-
-    blocked = refused_spaces(refusals, spaces)
-    stats["refusals may now map"] += len(blocked & settled)
-    settled -= blocked
-
-    if document_id is not None:
-        # The levels are computed from the coordinates this pass just moved.
-        lines.append(json.dumps(
-            {"kind": "summary",
-             **document_summary(document_id, tuples, refusals)},
-            ensure_ascii=False))
-    tmp = Path(path).with_suffix(".jsonl.tmp")
-    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    tmp.replace(path)
-    if stamp_forward(stamp_path_of(Path(path)), current, settled,
-                     producer=_producer()):
-        stats["stamps carried forward"] += 1
-    return stats
+def _spec_of(spec: Spec, spec_for: Optional[Callable]) -> Callable:
+    """document id -> the spec its harvest was read with: the document's own
+    where the profile closes lists per document, else the run's."""
+    return (lambda document_id: spec_for(document_id)) \
+        if spec_for is not None else (lambda document_id: spec)
 
 
-def run(harvest_dir: Path, spec: Spec, current: dict) -> Counter:
-    """Re-map a whole harvest directory against the spec as it reads today.
+def remap_file(path: Path, spec: Spec, current: dict,
+               spec_for: Optional[Callable] = None) -> Counter:
+    """Re-map one harvest file in place, then carry its stamp forward: the
+    flow `remap` for this one file.
+
+    *spec_for* gives a document its own spec, with the lists its harvest was
+    offered: a dynamic list (the regions a document names) is
+    there and in no other. A document whose lists cannot be closed is left
+    alone and counted, as the recheck leaves it.
+    """
+    from . import passflow
+    run = passflow.Run(out=Path(path).parent, spec=spec, current=current,
+                       document_spec=_spec_of(spec, spec_for))
+    from ..profile import active_profile
+    doc = passflow.one(passflow.load("remap", active_profile()), run, None,
+                       Path(path).name)
+    return doc.stats
+
+
+def run(harvest_dir: Path, spec: Spec, current: dict,
+        spec_for: Optional[Callable] = None) -> Counter:
+    """Re-map a whole harvest directory against the spec as it reads today:
+    the flow `remap` (`passflow`).
 
     `current` is the stamp this run would write, so the pass can carry the
     keys it earned forward without knowing how a stamp is assembled.
+    `spec_for` is each document's own spec (`remap_file`).
     """
-    stats: Counter = Counter()
-    harvest_dir = Path(harvest_dir)
-    for path in sorted(harvest_dir.glob("*.jsonl")):
-        if path.name.endswith(".trace.jsonl"):
-            continue
-        stats.update(remap_file(path, spec, current))
-        stats["documents"] += 1
-    for key, value in sorted(stats.items()):
-        log.info("remap: %-32s %d", key, value)
-    return stats
+    from . import passflow
+    return passflow.run_named("remap", passflow.Run(
+        out=Path(harvest_dir), spec=spec, current=current,
+        document_spec=_spec_of(spec, spec_for)))

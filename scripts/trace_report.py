@@ -2,7 +2,7 @@
 """
 trace_report.py – The four questions a run must be able to answer afterwards.
 
-Reads the JSONL the harvest writes under <out>/trace and prints distributions,
+Reads the traces the harvest writes under <out>/trace and prints distributions,
 not totals. Every setting this stage has is a cut through one of these, and a
 cut can only be defended against the distribution it cuts.
 
@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import argparse
 import collections
-import json
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from docpipe.extraction import trace  # noqa: E402
 
 
 def percentile(values: list, share: float):
@@ -37,12 +40,8 @@ def spread(name: str, values: list, unit: str = "") -> str:
 
 
 def read(directory: Path):
-    for path in sorted(directory.glob("*.trace.jsonl")):
-        for line in path.open(encoding="utf-8"):
-            try:
-                yield json.loads(line)
-            except json.JSONDecodeError:
-                continue
+    for path in trace.files(directory):
+        yield from trace.lines(path)
 
 
 def main(argv=None) -> int:

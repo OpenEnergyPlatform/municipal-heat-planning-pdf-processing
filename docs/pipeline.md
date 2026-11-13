@@ -38,7 +38,7 @@ flowchart LR
 | [6. Chunking, embedding, database](stages/chunking.md) | `sections_refined.json` and `visuals.json`, then `document.json` | `document.json`, then rows in SQLite and vectors in the FAISS index |
 | [7. Extraction](stages/extraction.md) | the corpus itself: SQLite and the FAISS index, plus, by default, the table and figure crops under each document's `images/` directory | one `<doc>.jsonl` harvest and one `<doc>.stamp.json` per document |
 | [8. The graph](stages/graph.md) | the accepted tuple lines of a harvest | one Turtle file, written by the profile's own `kg.make_serializer` or from the `graph` block of its spec, and beside it the provenance file |
-| [Inference](stages/inference.md) | one question, SQLite and the FAISS index, a word index and a harvest where there are ones, read live | a grounded answer with a citation; nothing written to the corpus |
+| [Inference](stages/inference.md) | one question, SQLite and the FAISS index, a word index, a harvest and the vectors of its values, where there are ones, read live | a grounded answer with a citation; nothing written to the corpus |
 | [The app](stages/app.md) | the same corpus, one chat turn at a time | a rendered answer, plus its own query cache and request log; from its review page, decisions for `gold.jsonl` |
 
 ## The stages
@@ -78,7 +78,7 @@ Full account: [stages/preprocessing.md](stages/preprocessing.md).
 Each page is rendered and passed through PP-DocLayoutV3, an object
 detector that classifies tables, figures, titles, captions, headers and
 footers, each with a bounding box and a confidence score
-(`docpipe/preprocessing/stage2_layout.py`). Detected tables and figures are
+(`docpipe/preprocessing/layout.py`). Detected tables and figures are
 cropped from the rendered page and saved as PNGs under the document's
 `images/` directory. A page with no PDF text layer can optionally be
 transcribed by a vision model instead, off unless the flag
@@ -98,7 +98,7 @@ Full account: [stages/preprocessing.md](stages/preprocessing.md).
 No model runs here. PyMuPDF's extracted text is combined with the stage 2
 layout into an ordered list of sections, each with a title, a page number
 and placeholder tokens such as `[p13_tbl0]` marking where a table or figure
-sits in the reading order (`docpipe/preprocessing/stage3_structure.py`). A
+sits in the reading order (`docpipe/preprocessing/sections.py`). A
 page with more than one text column has its blocks reordered column by
 column instead of by raw position (`docpipe/preprocessing/columns.py`),
 governed by the profile's `column_layout` setting. Repeated running headers
@@ -238,7 +238,7 @@ reapplies the answer-in-quote rule with no model, `--remap` re-resolves a
 coordinate's wording against a changed vocabulary with no model, `--top-up`
 resweeps only the coordinates a stamp says moved, `--top-up-parameters`
 appends the rows of a parameter the spec has gained since the harvest,
-`--review` reads the lowest trust level values a second time, and
+`--review` reads the values of trust levels C and D a second time, and
 `--serialize` hands accepted tuples to stage 8.
 Resume answers per question rather than per document; see
 [The extraction stamp](#the-extraction-stamp) below.
@@ -282,7 +282,9 @@ the corpus, so one question does not need a whole GPU.
 Two further answer paths read what extraction wrote, and carry its
 guarantee. Where a harvest is configured, a question for a number is first
 answered from the harvest itself, with the quote, page and trust level
-extraction wrote, and the answer from the documents follows. Where a profile's
+extraction wrote, and the answer from the documents follows. The values are
+found by meaning among the vectors `docpipe values-index` builds beside the
+harvest, or by closed questions where there are none. Where a profile's
 Turtle graph exists, a closed question can be answered from it directly (the
 app does not offer that route while no corpus graph exists). An answer from
 the documents carries a different guarantee: a claim extraction would refuse
@@ -332,9 +334,9 @@ are written for an operator to read, in the log and on disk; none is read
 back by any stage. Stage 2's `--transcribe-missing-text` pass instead
 decides, per page and per document, at run time, which pages carry no
 usable text, through `needs_transcription`
-(`docpipe/preprocessing/page_text_fallback.py:78`), called from
+(`docpipe/preprocessing/page_text_without_layer.py:77`), called from
 `fill_missing_page_text`
-(`docpipe/preprocessing/page_text_fallback.py:163` to `196`), itself
+(`docpipe/preprocessing/page_text_without_layer.py:162` to `195`), itself
 called from `docpipe/preprocessing/pipeline.py:383` to `432`.
 
 **The per-document results directory.** Chunking's db step is the last
@@ -394,7 +396,8 @@ a document is left unstamped, so the next run redoes it, when more than
 half its planned sources came back unreachable (`UNREACHABLE_LIMIT = 0.5`,
 `docpipe/extraction/runner.py:4539`, `:4561` to `4562`), when nothing
 answered at all (`:4563` to `4564`), or when any one of its requests ended
-on a 429 or a 5xx, which is no answer (`:4565` to `4568`); `not_happened`
+on a 429 or a 5xx, timed out, was refused to the end or failed in our own
+code, which is no answer (`:4565` to `4568`); `not_happened`
 (`:4542` to `4569`) tells the three apart, and the pass that appends a
 parameter asks it too.
 `finish_document` removes an earlier stamp before it writes the file, so a
@@ -455,7 +458,7 @@ not refresh it for a file replaced under the same name, so this fires when the
 with no stamp at all is read as fully stale, on principle: the opposite
 reading, a missing stamp taken as nothing left to do, had already let a
 run silently skip 165 documents with exit code 0
-(`scripts/change_audit.py:10`).
+(`scripts/change_audit.py`).
 
 The review prompt (`extraction/review`) is deliberately left out of
 `PROMPT_IDS` itself, not merely out of the comparison: a review leaves a
@@ -596,6 +599,8 @@ With `INFERENCE_HARVEST_DIR` set to the harvest directory, the chat shows the
 numbers the harvest holds for a question before it searches the documents, and
 offers the review page. A word index built with `docpipe lexical
 data/kwp/kwp.db` makes it search by word beside the search by meaning. The
+vectors `docpipe values-index data/kwp/extraction` builds make it find those
+numbers by meaning, and without them it asks closed questions. The
 Turtle file at `INFERENCE_KG_TTL_PATH` is read by no route while the app does
 not offer the graph route.
 
@@ -622,6 +627,12 @@ profile default and always have to be spelled out.
   an assistant's tool; see [handing the values on](stages/serve.md).
 - **Drafting a spec.** `docpipe compile` drafts an extraction spec from the
   shapes and the ontology of a graph; see [the spec compiler](stages/compile.md).
+- **Editing a profile.** `docpipe edit` shows a profile's extraction spec in the
+  browser and says which questions an edit moves and which stored documents it
+  makes stale; its second tab edits the prompts and the sentences of the
+  stages and shows what an edit does to recorded requests, and its third tab
+  draws the steps of the reading and edits the numbers that bound them; see
+  [editing a profile](stages/editor.md).
 - **Checking a profile.** `docpipe preflight` holds any profile to what a
   corpus run rests on, without a GPU: its spec, its prompts, the shape it
   publishes and the writer of its graph; see [the check before a
@@ -633,8 +644,8 @@ profile default and always have to be spelled out.
 names the seven states a coordinate can carry, so `unstated` (the plan does
 not say it) and `exhausted` (the run stopped looking) stay two different
 findings rather than one. [How much of a value the run can stand
-behind](contract/trust.md) names the three trust levels and the closed
-list of reasons behind the lowest one. The harvest contract per profile,
+behind](contract/trust.md) names the four trust levels and the closed
+list of reasons behind the two lowest ones. The harvest contract per profile,
 [kwp](contract/kwp.md) and [scenarios](contract/scenarios.md), is
 generated from `profiles/<name>/extraction_schema.json`, itself generated
 from the spec that profile names (`extraction.SPEC_PATH`) by `docpipe/extraction/

@@ -41,6 +41,12 @@ def facet_values(self, conn: sqlite3.Connection, rows) -> dict
 document id -> {facet field: [value]}, for the facets that are a
 DocumentMeta column.
 
+#### MetaCatalog.name
+
+```python
+def name(self, row, facets: Optional[dict] = None) -> str
+```
+
 #### MetaCatalog.label
 
 ```python

@@ -59,6 +59,27 @@ Fields:
 
 ## Functions
 
+### tier_of
+
+```python
+def tier_of(owner_kind: str) -> str
+```
+
+How well a place of this kind backs a value (rule `evidence_tiers`):
+the document's own prose, or a model's reading of a picture, which is
+what a kind the rule does not list is.
+
+### read_off
+
+```python
+def read_off(raw: dict, owner_kind: str) -> bool
+```
+
+Is this a figure's value read off its image: the switch the reading
+sets where its request sent the image (`read_off`), and the sentence of
+what was read (`reading`)? Then that sentence is the evidence of the
+number, and neither quote check applies to it.
+
 ### decimal_mark
 
 ```python
@@ -66,8 +87,7 @@ def decimal_mark() -> str
 ```
 
 How the documents of the ambient profile write the decimal: "," or
-".". The profile says it (`extraction.py: DECIMAL_MARK`); one that does
-not is read with the comma, as every corpus was before this was asked.
+"." (rule `decimal_mark`).
 
 It decides only what the digits leave open. '1.036.767,8' reads the same
 under both. '3,251' is 3.251 where the comma is the decimal mark and
@@ -91,8 +111,23 @@ the ambient profile's (`decimal_mark`).
 ### numbers_in
 
 ```python
-def numbers_in(text: str) -> set
+def numbers_in(text: str, decimal: Optional[str] = None) -> set
 ```
+
+The numbers *text* prints, each in `canonical_number`'s spelling.
+*decimal* is the mark the text writes the decimal with: the documents'
+by default.
+
+### compared
+
+```python
+def compared(wanted: Optional[str]) -> Optional[str]
+```
+
+The spelling of a wanted number to look for among `numbers_in`: with
+its sign where the rule `sign_belongs` is on, else its magnitude, so
+that the sign stays outside the number and either sign is backed by
+the printed magnitude.
 
 ### flat
 
@@ -116,6 +151,16 @@ def quote_in(source: str, quote: str) -> bool
 
 Whitespace-collapsed literal containment — corrections.py semantics.
 
+### times_stated
+
+```python
+def times_stated(raw: dict, parameter: Parameter, quote: str) -> int
+```
+
+How often a value stands in its quote for itself: a number as a number
+of its own, a wording where no letter or digit runs on from it ("OECD"
+in "non-OECD" is no second one). The same split `value_in_quote` makes.
+
 ### computed_in_output
 
 ```python
@@ -132,6 +177,47 @@ which is exactly why the arithmetic goes to the sandbox at all. The quote
 is still required and still checked: it proves the inputs are in the
 document.
 
+### printed_rounding
+
+```python
+def printed_rounding(value: float) -> float
+```
+
+Half a unit of the last digit a number is written with: 116.1 stands
+for anything from 116.05 to 116.15, and 38892.0 for 38891.5 to 38892.5
+(the share of the unit is the rule `computed_rounding_half_units`).
+
+### computed_from_inputs
+
+```python
+def computed_from_inputs(raw: dict) -> bool
+```
+
+Is the number what the numbers it was worked out from make?
+
+The output proves the code printed the number, not that the code worked
+with the numbers the answer names: one summed a column of its table and
+printed 1,948 t/a beside inputs of 20,345 and 1,399. What the inputs make
+stands on the last run (`expected`, from the question: a share times its
+whole, the sum of the parts), and the number has to be it, to the rounding
+it is written with (owner decision 2026-11-03). A number the rows request
+worked out names no inputs and is held to its output alone.
+
+### wording_of
+
+```python
+def wording_of(raw: dict, parameter: Parameter)
+```
+
+The words a value's quote has to hold.
+
+For a category the tuple carries two things: the class the model mapped
+to and, in *\_raw, how the document worded it. The evidence check is
+about the document, so it runs against the wording, never against the
+class name the mapping produced. Any other value is its own wording: a
+value_raw beside it vouches for nothing but itself (owner decision
+2026-11-04).
+
 ### value_in_quote
 
 ```python
@@ -140,13 +226,35 @@ def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool
 
 Is the claimed value actually in the passage it cites?
 
+### number_outside_quote
+
+```python
+def number_outside_quote(claim: dict) -> bool
+```
+
+A number the quote it stands under does not print. What
+`value_in_quote` refuses, asked before the parameter of a row is known.
+
+### min_quote_chars
+
+```python
+def min_quote_chars() -> int
+```
+
+### not_in_quote
+
+```python
+def not_in_quote(raw: dict) -> str
+```
+
+Why the fold refuses a value its quote does not hold.
+
 ### verify_tuple
 
 ```python
 def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
                  owner_kind: str = "section",
-                 locate: Optional[Callable[[str], Optional[list]]] = None,
-                 repair_text: Optional[str] = None)
+                 locate: Optional[Callable[[str], Optional[list]]] = None)
 ```
 
 One claimed tuple against everything the model does not control.
@@ -157,9 +265,24 @@ that maps the quote to highlight rectangles in the source PDF — lazy
 because opening the PDF is the expensive step and a claim refused earlier
 never needs it.
 
-*repair_text* is what a missing quote is rebuilt from, when the heading
-prefixed into *source_text* is not part of it. The repair rests on the
-value occurring exactly once, and 1.9% of this corpus's table numbers
-also stand in their own caption.
+A quote that does not stand in *source_text* is refused, and nothing
+rebuilds it from the source (owner decision 2026-11-05).
+
+### value_refused
+
+```python
+def value_refused(raw: dict, parameter: Parameter, source_text: str,
+                  owner_kind: str = "section") -> Optional[str]
+```
+
+Why the fold would refuse a value read before its coordinates, or
+None: what `verify_tuple` checks of the value itself (its type, its
+entry of a closed list) and of its quote (long enough, standing in
+*source_text*, holding the value), in its words; of a value read off a
+figure of *owner_kind* (`read_off`) only the value itself. Not the unit
+and not the axes, which a reading asks after the value and checks as it
+reads them (`pipeline.merge_field`). A reading asks it of each value
+while the model can still answer (`reading.round_failure`), so it holds
+a value to the check the fold applies (owner decisions 2026-11-05).
 
 [Back to the index](../README.md)

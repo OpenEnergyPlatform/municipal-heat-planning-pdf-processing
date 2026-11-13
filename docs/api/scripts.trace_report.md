@@ -4,7 +4,7 @@
 
 trace_report.py – The four questions a run must be able to answer afterwards.
 
-Reads the JSONL the harvest writes under \<out>/trace and prints distributions,
+Reads the traces the harvest writes under \<out>/trace and prints distributions,
 not totals. Every setting this stage has is a cut through one of these, and a
 cut can only be defended against the distribution it cuts.
 

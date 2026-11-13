@@ -4,11 +4,13 @@
 
 sandbox_service.py: Localhost HTTP wrapper around llm-sandbox.
 
-Each request runs the submitted code in a fresh, ephemeral container with
-no network, resource limits, every capability dropped and an execution
+The service keeps KWP_SANDBOX_PARALLEL containers for as long as it runs,
+with no network, resource limits, every capability dropped and an execution
 timeout, so untrusted, possibly prompt-injected LLM code cannot reach the
-host or the network. The server binds loopback only and is guarded by a
-bearer token; it must not be exposed directly.
+host or the network. Each request runs in one of them, and what the run left
+behind, its processes and its files, is cleared before that container serves
+the next one. The server binds loopback only and is guarded by a bearer
+token; it must not be exposed directly.
 
     POST /run   Authorization: Bearer <KWP_SANDBOX_TOKEN>
        body: {"code": "<python>", "context": {"var": <json-value>, ...},
@@ -56,6 +58,25 @@ def log_message(self, *args)
 ```python
 def run_code(code: str, context: dict | None, timeout: int) -> dict
 ```
+
+### open_pool
+
+```python
+def open_pool()
+```
+
+The containers of this service, made when it starts.
+
+### wait_until_ready
+
+```python
+def wait_until_ready(pool, timeout: float, clock=time.monotonic,
+                     sleep=time.sleep) -> None
+```
+
+Back once every container of the pool stands idle. A run that came
+before would make a container of its own while podman is still starting,
+and failed so in a job.
 
 ### main
 

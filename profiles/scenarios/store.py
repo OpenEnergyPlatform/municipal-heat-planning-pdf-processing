@@ -1,6 +1,6 @@
 """
-store.py – The project's own tables: publication metadata, the AR6 scenarios
-and the links between them. The core never touches these.
+store.py – The project's own table: publication metadata. The core never
+touches it.
 
 Author: Felix Vossel
 """
@@ -29,29 +29,3 @@ def upsert_publication_meta(document: int, values: dict,
     own schedule) reaches the corpus.
     """
     core_documents.upsert_document_meta(document, values, connection)
-
-
-def upsert_scenario(ar6_id: int, name: str, connection: sqlite3.Connection) -> int:
-    """The row for an AR6 scenario, created or renamed. Returns its id."""
-    return connection.execute(
-        """
-        INSERT INTO Scenarios (ar6_id, name)
-        VALUES (?, ?)
-        ON CONFLICT(ar6_id) DO UPDATE SET name = excluded.name
-        RETURNING id
-        """,
-        (ar6_id, name),
-    ).fetchone()[0]
-
-
-def link_scenario(document: int, scenario: int,
-                  connection: sqlite3.Connection) -> None:
-    """Record that `document` documents `scenario`; a re-import is a no-op."""
-    connection.execute(
-        """
-        INSERT INTO DocumentScenarios (document, scenario)
-        VALUES (?, ?)
-        ON CONFLICT(document, scenario) DO NOTHING
-        """,
-        (document, scenario),
-    )

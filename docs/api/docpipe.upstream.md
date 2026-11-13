@@ -5,12 +5,12 @@
 upstream.py: Pulls the files a profile is written against, at the version
 upstream currently calls its own.
 
-A profile names its sources in `profiles/<name>/vocabulary.py: SOURCES`. This
+A profile names its sources in `profiles/<name>/sources.json` (`docpipe.sources`). This
 module resolves each one to a version, downloads it into a cache keyed by that
 version, and returns a record of what it got. What a file is for (a closure to
 snapshot, shapes to validate against, regions to offer) is the profile's.
 
-Four kinds:
+Six kinds:
 
   release_asset  An asset of the repository's latest GitHub release. A
                  repository without a release is an error, unless the source
@@ -22,10 +22,18 @@ Four kinds:
                  their bytes. A source may name the commit its profile was
                  `reviewed` against, and the record then lists every file that
                  differs from that commit.
+  repo_tree      Every file under some folders at the head of a branch, taken
+                 from the branch's archive, for a tree a profile cannot name
+                 file by file without the API. The version is a digest over
+                 the files taken.
   sparql         A query against the OEKG endpoint. The token comes from the
                  environment variable `token_env` names and is written nowhere.
+  url            One file at a fixed address, for a publisher that is not a
+                 repository. Fetched again on every refresh; the version is a
+                 digest over its bytes.
 
-Only github.com and raw.githubusercontent.com are asked, never
+Of GitHub, only github.com (which redirects an archive to
+codeload.github.com) and raw.githubusercontent.com are asked, never
 api.github.com: the API allows 60 unauthenticated requests an hour per
 address, and every user of a shared machine shares one address.
 
@@ -72,6 +80,19 @@ The tag of the latest release, or None if the repository has none.
 
 github.com answers /releases/latest with a redirect to the release's tag
 page, and a repository without a release with one to /releases.
+
+### tree_members
+
+```python
+def tree_members(body: bytes, paths, suffix: str = "") -> list
+```
+
+[(path, data)] by path, for the regular files of a gzipped tar branch
+archive that sit under one of `paths` and end in `suffix`.
+
+GitHub puts every member under one top folder; a path is the name below
+it. A member that is absolute or climbs out with `..` is refused, so no
+name an archive carries can place a file outside the cache.
 
 ### sparql
 

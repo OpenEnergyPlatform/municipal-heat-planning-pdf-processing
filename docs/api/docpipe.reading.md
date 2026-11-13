@@ -19,7 +19,9 @@ a test holds the two against each other, so neither can drift. The harvest does
 not call this module: it keeps its own reader and its own sentences.
 
 The sentences the model hears are the profile's, in the language of that
-profile's prompts for these stages (`profiles/<name>/reading.py: PHRASES`).
+profile's prompts for these stages
+(`profiles/<name>/prompts/reading/phrases.json`, `docpipe/phrases.py`; a
+table in its `reading.py` until 2026-11-10).
 
 Author: Felix Vossel
 

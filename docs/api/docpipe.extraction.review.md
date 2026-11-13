@@ -40,11 +40,12 @@ def rows_to_review(tuples: list, *, force: bool = False) -> list
 
 The values a second reading is worth spending a request on.
 
-The lowest level and nothing above it: a value whose coordinates were all
-read and whose quote needed no repair has nothing for a narrower window
-to find. And each row once -- a row already carrying a review flag
+The levels a curator examines and nothing above them: a value whose
+coordinates were all read and whose quote needed no repair has nothing for
+a narrower window to find. And each row once -- a row already carrying a review flag
 is not asked again, because the second answer would be the second answer
-to the same question and no more.
+to the same question and no more. The levels are the rule
+`review_levels`, the once the rule `review_once_per_row`.
 
 ### disputed
 
@@ -55,7 +56,7 @@ def disputed(verdict: dict) -> list
 The coordinates this row's reasons actually name, in order, once each.
 
 A row whose reasons name none is asked for its value alone. That is the
-common case for `repaired` and `computed`, and asking such a row for all
+common case for `computed`, and asking such a row for all
 seven of its coordinates would spend the whole review budget re-reading
 what nothing is wrong with.
 
@@ -65,7 +66,9 @@ what nothing is wrong with.
 def review_fields(parameter, names) -> list
 ```
 
-The value slot plus the named coordinates, in spec order.
+The value slot plus the named coordinates, in spec order. Where the
+reasons name none, the rule `review_fields_when_no_axis` says whether
+that is all, or every coordinate besides.
 
 ### backed
 
@@ -111,12 +114,13 @@ disagreement is a disagreement with.
 
 ```python
 def review_file(path: Path, spec: Spec, *, ask: Callable,
-                sources_for: Callable, limit: int = 0,
+                sources_for: Callable, limit: Optional[int] = None,
                 working: Optional[list] = None,
                 spec_for: Optional[Callable] = None) -> Counter
 ```
 
-Review one harvest file in place. Returns what the reading came to.
+Review one harvest file in place, as the flow `review` does for a
+file. Returns what the reading came to.
 
 The summary is recomputed rather than carried over: a disagreement is a
 reason, and the summary counts reasons. A carried summary would report the
@@ -132,13 +136,14 @@ wording.
 
 ```python
 def run(harvest_dir: Path, spec: Spec, *, ask: Callable,
-        sources_for: Callable, documents=None, limit: int = 0,
+        sources_for: Callable, documents=None, limit: Optional[int] = None,
         prompt_sha: str = "", model: str = "",
         spec_for: Optional[Callable] = None,
         producer: Optional[dict] = None) -> Counter
 ```
 
-Review a whole harvest directory, or the documents named by stem.
+Review a whole harvest directory, or the documents named by stem:
+the flow `review` (`passflow`).
 
 The stamps stay, and none is created. The review changes nothing a resume
 decides on -- values, coordinates and states are byte-identical, only

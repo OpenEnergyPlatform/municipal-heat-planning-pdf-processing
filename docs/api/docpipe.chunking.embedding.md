@@ -13,8 +13,10 @@ model in this process on the visible GPUs; `api` asks an embeddings endpoint
 and needs none. A setting of its own beside the query side's
 EMBEDDING_BACKEND, because the two differ in a common setup: the index is
 built once with the model on GPUs and queried through an endpoint ever
-after. An endpoint takes text only, so with it the inputs that carry a
-picture are left out and the index holds the text vectors of a corpus.
+after. An endpoint in the OpenAI form takes text only, so with it the inputs
+that carry a picture are left out and the index holds the text vectors of a
+corpus. A vLLM server in the messages form (EMBEDDING_API_FORMAT) takes the
+picture too, and then every input is embedded.
 
 A batch the embedder could not serve leaves its inputs without a vector. The
 other batches are finished first; the inputs left over are counted by
@@ -74,7 +76,9 @@ The api backend at index time: items in, one unit vector each out.
 
 The index is an inner-product index and the local model hands it unit
 vectors, so these are scaled to length one as well; an endpoint that
-already returns unit vectors is left as it is by that.
+already returns unit vectors is left as it is by that. Whether a picture
+goes along is the wrapped embedder's (`text_only`): the OpenAI form has no
+place for one, the messages form has.
 
 #### ApiIndexEmbedder.\_\_init\_\_
 
@@ -119,7 +123,9 @@ vector is really in the index.
 def save_index(index: faiss.Index, index_path: Path) -> None
 ```
 
-Save the FAISS index to disk.
+Save the FAISS index to disk, written whole under a new name first: a
+job killed while the file is written leaves the last saved index, which
+the next run resumes from, and not a truncated one it cannot load.
 
 ### remove_ids_from_index
 
@@ -146,8 +152,9 @@ def load_embedder(model_name: str = EMBEDDING_MODEL)
 The embedder of this run, for the backend EMBEDDING_INDEX_BACKEND names.
 
 `api`: an ApiIndexEmbedder. Otherwise the model itself, data-parallel
-across all visible GPUs in bf16: a MultiGPUEmbedder, which exposes the
-same ``process()`` interface as a single Qwen3VLEmbedder.
+across all visible GPUs in bf16, or on the CPU in fp32 where there is
+none (`qwen3_vl_embedding.dtype_for`): a MultiGPUEmbedder, which exposes
+the same ``process()`` interface as a single Qwen3VLEmbedder.
 
 ### create_embeddings
 

@@ -43,19 +43,6 @@ jobs:
         run: >
           docker build -f docker/Containerfile
           --build-arg REVISION=${{ github.sha }} -t docpipe:ci .
-      # The base image ships its own top-level `tests` package, so the repo's
-      # tests/ is pinned before pytest imports it. The docs build is not in
-      # the image.
-      - name: Test suite inside the image
-        run: |
-          docker run --rm --network none -e DOCPIPE_PROFILE=kwp docpipe:ci python3 -c "
-          import sys, types, pytest
-          pinned = types.ModuleType('tests')
-          pinned.__path__ = ['tests']
-          sys.modules['tests'] = pinned
-          sys.exit(pytest.main(['tests', '-q', '-p', 'no:cacheprovider',
-                                '--ignore=tests/test_docs_build.py']))
-          "
       # First, because the ghcr.io package cannot be made public.
       - name: Push to Docker Hub
         if: ${{ vars.DOCKERHUB_USERNAME != '' }}

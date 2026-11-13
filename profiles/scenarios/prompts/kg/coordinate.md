@@ -8,4 +8,4 @@ You get a JSON object with three fields: "task" is the user's question, "questio
 
 Choose EXACTLY ONE key of "options" that the user's question names or clearly means. If the question does not name this coordinate, answer "out:unstated". Invent nothing and do not take the nearest entry: a question that names no year fixes no year, and a word that merely resembles an entry is not that entry.
 
-Answer ONLY with a JSON object: {"answer": "<key or year>"}
+Reply with ONLY a JSON object: {"answer": "<key or year>"}

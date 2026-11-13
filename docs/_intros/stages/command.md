@@ -32,14 +32,16 @@ project file say when it is imported, so the command settles both first.
 | `refine` | stage 4: repair the text of each section |
 | `visuals` | stage 5: transcribe tables, describe figures |
 | `chunk` | stage 6: merge, database, embeddings |
-| `extract` | stages 7 and 8: harvest, top up, review, serialize; `--spec FILE` harvests a column of one's own instead of the profile's spec |
+| `extract` | stages 7 and 8: harvest, the follow-up passes (`--top-up`, `--top-up-open`, `--top-up-parameters`, `--remap`, `--recheck`, `--review`, `--start-at`, each the run of a flow of its own; `--flow NAME` runs any flow by name), serialize; `--spec FILE` harvests a column of one's own instead of the profile's spec |
 | `reanchor` | after a rebuilt database: find each harvested row's passage again |
 | `compile` | draft an extraction spec from shapes (see [the spec compiler](compile.md)) |
 | `column` | the spec of one question of one's own, for a trial harvest over a few documents (see [a column of one's own](extraction.md)) |
+| `edit` | a profile's extraction spec, prompts, sentences, flow, rules, sources and graph drawing in the browser, on a local page, with what each spec edit costs the next run and what a prompt edit does to recorded requests (see [editing a profile](editor.md)) |
 | `preflight` | before a corpus run: check a profile's spec, prompts, schema and graph writer (see [the extraction stage](extraction.md)) |
 | `evaluate`, `benchmark` | measure a harvest; `evaluate NEW --diff OLD` compares two harvests without decisions (see [measuring a harvest](evaluation.md)) |
 | `export`, `serve` | hand the harvested values on, with the states and refusals beside them and a search over the corpus passages (see [handing the values on](serve.md)) |
 | `lexical` | build the word index the chat searches beside the vectors |
+| `values-index` | build the vectors the chat finds harvested values by (see [asking the corpus](inference.md)) |
 | `chat` | the chat over a processed corpus (see [the app](app.md)) |
 | `sandbox` | the service that runs code a model wrote, in a container without a network |
 | `init` | start a project in this folder |
@@ -57,16 +59,18 @@ values are put into the environment before a stage is imported, for the
 names the environment does not set. So the environment still wins, and a
 stage reads what it always read. A key that names no setting is refused
 with the nearest ones; so is a key or a token, which belongs in `.env` or
-the environment. A `.env` beside the project file is read too.
+the environment. A `.env` beside the project file is read too. The values of
+the machine among the rules of the reading (a model's address, the slots per
+model, the connections) are set only here, never in a rules file and never at a
+step of the flow; the Run section of the Flow tab of `docpipe edit` writes them
+(see [editing a profile](editor.md)).
 
 `docpipe config` prints every setting with its value and where the value
 comes from (the default, the project file, a `.env`, the environment);
 `--stage S` narrows it to the settings one command reads and `--set` to the
 ones that are not at their default. `--stage` offers the commands that have
 settings of their own; one that has none (`compile`, `evaluate`, `export`)
-reads those of the stage it works for. A test holds the list against every
-environment name the code reads, so a setting cannot exist without a line
-there.
+reads those of the stage it works for.
 
 ## Running the stages and seeing where they stand
 
@@ -247,7 +251,8 @@ where the stages themselves say what they ask:
   request fields (the reasoning settings, or the reply schema of a hosted
   API). A refusal fails. A server that could not be asked, or that answered
   429 or a 5xx, gives a warning, "no verdict", and the exit stays 0. The chat
-  sends these fields as well (`LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT`), so
+  sends these fields as well (`LLM_ENABLE_THINKING`, `LLM_REASONING_EFFORT`,
+  `LLM_TOOL_CHOICE`), so
   a chat-only check sends the request too, and a server that refuses
   `chat_template_kwargs` or `reasoning_effort` fails it. With `--stage`, the
   request is sent for `refine`, `extract`, `visuals` and `chat`
@@ -258,8 +263,9 @@ where the stages themselves say what they ask:
   with its template) are told apart. For a parts file the line carries the
   `PromptPartsError`, which names the prompt, the part or block, the profile and
   both files, and a hint on what a parts file holds (see [the extraction
-  prompts](../profiles.md)). The `extract` line covers the rows, field, frame and
-  review prompts, and the `compile` line the example prompt.
+  prompts](../profiles.md)). The `extract` line covers the prompts of the harvest (one for each kind of
+  request, `transcribe` to `follow`), the search-sentence prompt and the review prompt,
+  and the `compile` line the example prompt.
 - `wording`: the profile's phrase and UI tables for extraction and the chat,
   and the hooks of the graph route, each checked by the code that raises for
   what is missing.

@@ -57,6 +57,30 @@ LAYOUT_AUTOCAST = os.environ.get("DOCPIPE_LAYOUT_AUTOCAST", "off").lower()
 # work is all the GPU is ever waiting for.
 LAYOUT_PREFETCH_BATCHES = int(os.environ.get("DOCPIPE_LAYOUT_PREFETCH", "1"))
 
+# Worker processes that render the pages, both resolutions, in place of the
+# prefetch thread (`rendering.py`). In one process MuPDF renders behind one
+# lock, so every page waits on one core while the GPU stands idle. A scanned
+# page of the 1,896-page book 10.1017_cbo9780511793677 is one JPEG 2000 image
+# of 12 megapixels: one core took 0.58 s to render it at 150 dpi and 0.74 s at
+# 300 dpi, and Stage 2 took 1.25 s a page of it in the scenario rebuild of
+# 2026-11-11. On 3,254 KWP pages rendering was 0.119 of the 0.150 s a page
+# took through Stage 1-3. Unset, there are as many workers as this process
+# has CPUs to run on, less two for its main and prefetch threads;
+# DOCPIPE_LAYOUT_RENDER_PROCS sets the number, and 0 keeps the thread.
+def _render_procs() -> int:
+    """The number of Stage 2's render workers (see above)."""
+    value = os.environ.get("DOCPIPE_LAYOUT_RENDER_PROCS", "").strip()
+    if value:
+        return int(value)
+    try:
+        cpus = len(os.sched_getaffinity(0))   # what the job's cgroup grants
+    except AttributeError:                     # no affinity on Windows, macOS
+        cpus = os.cpu_count() or 1
+    return max(0, cpus - 2)
+
+
+LAYOUT_RENDER_PROCS = _render_procs()
+
 # Per-class confidence thresholds, keyed by the model's class id.
 PP_CLASS_THRESHOLDS: dict[int, float] = {
     0: 0.50, 1: 0.50, 2: 0.50, 3: 0.45,

@@ -98,32 +98,6 @@ Fields:
 - `shared: set = field(default_factory=set)`
 - `stored: object = None`: the harvest file, read, when it was needed
 
-### DocumentPass
-
-```python
-class DocumentPass
-```
-
-`harvest_document(document_id, filename) -> (written, failures)` for the
-run's own loop (`runner.harvest_documents`), with what it counted.
-
-The loop calls it from several threads, one document each; the counts are
-added under a lock.
-
-#### DocumentPass.\_\_init\_\_
-
-```python
-def __init__(self, out_dir: Path, spec: Spec, current: dict, deps: dict)
-```
-
-#### DocumentPass.report
-
-```python
-def report(self) -> None
-```
-
-One line per count, each with what it counts.
-
 ## Functions
 
 ### owned_keys
@@ -181,9 +155,9 @@ def explained_keys(stamp_path: Path, current: dict, spec: Spec) -> set
 
 The keys of *current* that only the parameters the spec gained moved.
 
-What a pass for coordinates (`topup.top_up_file`) takes out of its list
-before it asks what blocks it: these are this pass's to answer, and it
-writes none of them.
+What a pass for coordinates (the step `changed` of the flow `top_up`)
+takes out of its list before it asks what blocks it: these are this
+pass's to answer, and it writes none of them.
 
 ### derivation_moved
 
@@ -262,6 +236,15 @@ The stored tuples are not dumped again, they are the strings they were,
 so no key moves, no number is spelled another way and no character is
 escaped. Only the old summary is replaced.
 
+### refuses_incomplete
+
+```python
+def refuses_incomplete() -> bool
+```
+
+Whether a pass that did not read what it set out to writes neither
+file nor stamp (rule `parameter_pass_all_or_nothing`).
+
 ### not_read
 
 ```python
@@ -269,27 +252,6 @@ def not_read(cause: str, found: int, of: int) -> str
 ```
 
 What `runner.not_happened` counted, said in the unit it counted.
-
-### append_document
-
-```python
-def append_document(document_id: int, filename: str, out_dir: Path,
-                    spec: Spec, current: dict, deps: dict) -> tuple
-```
-
-(written, failures, stats) for one stored document.
-
-`deps` is what the run supplies: "document_spec" (id -> this document's
-spec, None when a list it closes cannot be), "plan" (the run's
-`plan_batches`, everything but the document bound), "harvest" (the run's
-`harvest_batches` over its pools, everything but the batches and the
-unfinished set bound), "questions" (name -> the sentences this document
-was searched with, taken), "locate", "frame_axes", "frame_names",
-"dynamic_ok" and "halted".
-
-Nothing is written unless the new parameters were read: a document the
-server did not serve, a frame or a plan that raised, or one the run halted
-in leaves the file and the stamp as they were.
 
 ### with_harvest
 

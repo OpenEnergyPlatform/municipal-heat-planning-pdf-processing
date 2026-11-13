@@ -12,9 +12,9 @@ next run harvests it again from the first passage. For one axis of one
 parameter, that is a full corpus run spent answering a question nothing else
 asked.
 
-This module instead takes the coordinate off the rows that carry it, walks the
-same sweep the harvest walks (`runner.make_sweeper`, so there is one sweep and
-one set of numbers), and writes the answer back. It then carries that one stamp
+This module instead takes the coordinate off the rows that carry it, asks it
+as the harvest asks it (`surveyed.SurveyedHarvest.sweep`, so there is one
+question and one set of numbers), and writes the answer back. It then carries that one stamp
 key forward and leaves every other key exactly as it was, so a later run still
 sees what it has to redo. Who read is recorded apart from that: the pass enters
 the stamp's `producers` list whether or not it earned a key, and each
@@ -75,7 +75,51 @@ Fields:
 def lines(self) -> list
 ```
 
+### Sweep
+
+```python
+@dataclass
+class Sweep
+```
+
+One dimension asked again, between asking and deciding: the rows,
+their batches, and what each row's entry held before it was taken
+off.
+
+Fields:
+
+- `rows: list`
+- `parameter: object`
+- `slot: object`
+- `usable: list = field(default_factory=list)`
+- `batches: list = field(default_factory=list)`
+- `by_batch: dict = field(default_factory=dict)`
+- `taken: dict = field(default_factory=dict)`: batch index -> {label: block}
+- `settled: bool = True`
+- `ended: bool = False`: no row had a passage to be read in
+- `locate: Optional[Callable] = None`
+
 ## Functions
+
+### keep_read
+
+```python
+def keep_read() -> tuple
+```
+
+A coordinate that was read stays read unless the sweep reads it
+again: the states of a new reading that replace it (rule
+`reread_keep_states`).
+
+### keep_asked
+
+```python
+def keep_asked() -> tuple
+```
+
+A coordinate that was not read is bettered by any answer, "the
+passages do not say it" included -- that is an answer. Running out of
+budget is not (rule `reread_improves_states`).
 
 ### actionable
 
@@ -113,6 +157,17 @@ the unit of every numeric parameter: one question in the harvest, asked
 before the parameter is known, so one key -- and swept here parameter by
 parameter with that parameter's own list, because a stored row already
 knows its parameter.
+
+### in_order
+
+```python
+def in_order(keys: list, spec: Spec) -> list
+```
+
+[(key, parameter, slot)] of the moved coordinates in the order they
+are read again (rule `reread_order`): by the key of the stamp, each
+with its parameters in the spec's order, or by the order of the
+parameters in the spec.
 
 ### reopen
 
@@ -218,14 +273,16 @@ what it was down to a carriage return (`jsonl.lines`). A line that is not
 JSON, or is JSON and no record, is kept as it stands and counted. An empty
 line is not a record and is not kept.
 
-### top_up_file
+### open_coordinates
 
 ```python
-def top_up_file(path: Path, spec: Spec, current: dict, deps: dict, *,
-                only=None) -> Counter
+def open_coordinates(tuples: list, spec: Spec) -> list
 ```
 
-Re-sweep one harvest file's moved coordinates, then carry its stamp.
+[(parameter, slot, rows)] of every asked coordinate some row left open.
+
+The frame's coordinates are among them: a row whose year is open was not
+under a pair, and its year is asked per row like any other coordinate.
 
 ### point
 
@@ -237,13 +294,38 @@ Say that this pass wrote this coordinate: `<axis>_producer` is the
 position of its entry in the stamp's list. Nothing to point at, nothing
 written.
 
-### run
+### sweep_ask
 
 ```python
-def run(harvest_dir: Path, spec: Spec, current: dict, deps: dict, *,
-        only=None) -> Counter
+def sweep_ask(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
+              stats: Counter, bases: tuple = ()) -> Sweep
 ```
 
-Top up a whole harvest directory against the spec as it reads today.
+Take one coordinate off these rows and ask it again.
+
+The coordinate is asked as the harvest asks it (`deps["sweep"]`), over
+the passages its rows were read in. What the rows held is kept in the
+returned `Sweep` for `sweep_decide`, which keeps it or the new answer.
+
+### sweep_decide
+
+```python
+def sweep_decide(sweep: Sweep, stats: Counter,
+                 position: Optional[int] = None) -> tuple
+```
+
+Keep what the coordinate was asked again, or what it held.
+
+(every row settled, the rows the verifier refused afterwards). A refused
+row was rewritten in place as the refusal it now is: the re-read said the
+coordinate is not what the tuple carried -- a unit no list holds, a
+required axis the passages do not state -- and that is the finding, with
+the claim kept beside the reason for the audit. Keeping the old tuple
+instead would leave in the graph exactly the reading the re-read was
+asked to check.
+
+A coordinate whose new reading stands points at `position`, this pass's
+entry in the stamp's list (`point`). One whose old block was put back
+keeps the pointer that block had, or none.
 
 [Back to the index](../README.md)

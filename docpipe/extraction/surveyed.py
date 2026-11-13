@@ -1,0 +1,473 @@
+"""
+surveyed.py: One document harvested piece by piece, both profiles (owner
+decisions 2026-11-08 evening).
+
+The document's passages as numbered lines in pieces of at most eight, its
+figures transcribed once (`addressed.Transcripts`); what the plan settles
+for all its values and its own years asked once (`addressed.Reader.settled`);
+then every field read: a field the document has once asked once, every other
+field in every piece, the pieces best first for its sentences
+(`addressed.Orders`), and each value's coordinates asked one by one
+(`addressed.Reader`). The run folds what they read, works out what the
+profile computes and writes the file with its stamp, as it writes every
+harvest.
+
+What could not be read is a hole with its reason, never a plan that seems
+silent: a passage a field was to be read in that came to no readable reply
+goes to the fold as the harvest's sentinel (`_harvest_failed`, `_why`
+cut_off or no_answer). The fold keeps it as a refusal, and a field that has
+no row then ends `exhausted` and not `unstated` (`trust.parameter_states`).
+The hole of a reading names its field (`_parameter`), so a pass over the
+harvest knows what to read again.
+
+The passes over a stored harvest go through the same steps. `--start-at`
+reads the passages earlier harvests found something in (`take_found`);
+`--top-up-parameters` reads the whole plan for the fields the spec gained
+(`append_parameters`); `--top-up-open` asks every coordinate left open again
+(`SurveyedHarvest.sweep` under `topup._sweep_one`) and then reads what
+nothing has read yet (`append_unread`); `--top-up` asks the coordinates
+whose question moved (`SurveyedHarvest.sweep`). An order of part of a plan
+is kept under its own scope beside the whole one's.
+
+Author: Felix Vossel
+"""
+from __future__ import annotations
+
+import collections
+import copy
+import json
+import logging
+import threading
+from collections import Counter
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Callable, Optional
+
+from .. import rules
+from .lookup import continued
+from . import fields
+from . import flow as flow_map
+from .addressed import Plan
+from .pipeline import Batch, Row, WorkItem, row_label
+from .reading import NO_ANSWER, Read
+from .survey import Answer, Found
+from .verify import canonical_number, flat, quote_in
+
+log = logging.getLogger(__name__)
+
+# The stage a passage of a plan read piece by piece was read in
+# (`DocumentReport.planned`).
+STAGE = "survey"
+# Where the frame of a field appended to a stored harvest came from.
+FRAME_SURVEYED = "the survey of the new parameters"
+
+
+def hole(document_id: int, source, why: str,
+         parameter: Optional[str] = None) -> tuple:
+    """(batch, reply) the fold turns into the refusal of a passage nothing
+    could read: the sentinel claim with its reason, filed under no parameter
+    as every sentinel is, the parameter it was read for beside it."""
+    batch = Batch(document_id, None, [WorkItem(document_id, None, source)])
+    claim = {"_harvest_failed": True, "_why": why, "source": batch.label(0)}
+    if parameter:
+        claim["_parameter"] = parameter
+    return batch, {"tuples": [claim]}
+
+
+def derive_left(reads: list) -> int:
+    """What the spec derives from the unit, on every value no request read
+    it for once its coordinates are asked (owner decision 2026-11-07: asked
+    first, and only where no answer is read taken from the unit,
+    `fields.derives`). Returns how many coordinates."""
+    done = 0
+    for read in reads:
+        parameter = read.batch.parameter
+        if parameter is None:
+            continue
+        for slot in fields.axis_slots(parameter):
+            if not slot.derive:
+                continue
+            done += fields.apply_derived(
+                [Row(row_label(i), 0, claim)
+                 for i, claim in enumerate(read.claims)
+                 if fields.derives(slot, claim, parameter)], slot)
+    return done
+
+
+@dataclass
+class Taken:
+    """What the reading of one document came to, in the shape the fold and
+    the stamp read."""
+    reads: list = field(default_factory=list)
+    # (batch, reply) for the fold: every reading's values and every hole.
+    answered: list = field(default_factory=list)
+    # Readings that came back with a reply: none of them means no reply at
+    # all (`runner.not_happened`).
+    replies: int = 0
+    passages: int = 0
+    # parameter uri -> the passages it was read in (`trust.parameter_states`).
+    sources_of: dict = field(default_factory=dict)
+    # parameter uris of fields of the document that found nothing while
+    # chunks were never shown to them (`Read.uncombed`).
+    uncombed: set = field(default_factory=set)
+
+
+def taken_of(document_id: int, spec, reads: list) -> Taken:
+    """The fold's view of one document's reading, holes included. A field's
+    sources are the passages it was read in."""
+    answered: list = []
+    sources_of: dict = {p.uri: set() for p in spec.parameters}
+    uncombed = {r.batch.parameter.uri for r in reads if r.uncombed}
+    reads = [r for r in reads if not r.uncombed]
+    for read in reads:
+        source = read.batch.items[0].source
+        uri = read.batch.parameter.uri
+        sources_of.setdefault(uri, set()).add((source.owner_kind,
+                                               source.owner_id))
+        if read.unread:
+            answered.append(hole(document_id, source, read.why or NO_ANSWER,
+                                 uri))
+            continue
+        answered.append((read.batch, {"tuples": read.claims}))
+        # A piece of the passage no reply answered, the others read.
+        answered.extend(hole(document_id, source, why, uri)
+                        for why in read.lost)
+    replies = sum(1 for read in reads if not read.unread)
+    passages = len({(r.batch.items[0].source.owner_kind,
+                     r.batch.items[0].source.owner_id) for r in reads})
+    return Taken(reads, answered, replies, passages, sources_of, uncombed)
+
+
+def locate_value(plan: Plan, source, claim: dict) -> Optional[dict]:
+    """The address of a stored value in its passage (`at`): the line its
+    quote stands in, the cell of a table row that alone holds its number or
+    words; None where no line of the passage holds the quote. A value read
+    with its address keeps it."""
+    if isinstance(claim.get("at"), dict):
+        return claim["at"]
+    passage = plan.passages.get((source.owner_kind, source.owner_id))
+    quote = claim.get("quote")
+    if passage is None or not isinstance(quote, str):
+        return None
+    lines = [line for line in passage.lines
+             if quote_in(line.text, quote) or quote_in(quote, line.text)]
+    if not lines:
+        return None
+    line = lines[0]
+    at = {"owner": list(passage.owner), "line": line.number}
+    words = str(claim.get("value_raw") or claim.get("value") or "")
+    number = canonical_number(words)
+    if line.cells:
+        holding = [i for i, cell in enumerate(line.cells, start=1)
+                   if (number is not None and canonical_number(cell)
+                       == number) or (words and flat(words).casefold()
+                                      in flat(cell).casefold())]
+        if len(holding) == 1:
+            at["cell"] = holding[0]
+    return at
+
+
+class SurveyedHarvest:
+    """document_id -> Taken, or None when the run was halted on the way.
+
+    *make_reader(spec)* is the run's reading (`addressed.Reader`), made
+    once per spec; *spec_for(document_id)* the document's spec, its lists
+    closed (`runner.closed_spec`); *passages_of(document_id)* every passage
+    of the document in its order; *transcripts(document_id, figures, each)*
+    its figures' lines (`addressed.Transcripts`); *orders(plan, parameters,
+    chunk_units, scope, chunks)* the pieces of each field best first
+    (`addressed.Orders`); *halted()* whether the run stops. *numbers* are
+    the numbers of the flow a plan is cut by (`flow.Numbers`: the lines of
+    a piece and of the title page, the headings shown up to a place), the
+    default profile's where none are given; *each(jobs, run)* runs jobs
+    side by side; *trace* writes what a document's requests came to.
+    """
+
+    def __init__(self, spec, make_reader: Callable, passages_of: Callable,
+                 *, spec_for: Optional[Callable] = None,
+                 halted: Optional[Callable] = None,
+                 transcripts: Optional[Callable] = None,
+                 orders: Optional[Callable] = None,
+                 numbers=None,
+                 each: Optional[Callable] = None, trace=None):
+        self.spec = spec
+        self.make_reader = make_reader
+        self.passages_of = passages_of
+        self.spec_for = spec_for or (lambda document_id: spec)
+        self.halted = halted or (lambda: False)
+        self.transcripts = transcripts
+        self.orders = orders
+        self.numbers = numbers or flow_map.default()
+        self.each = each
+        self.trace = trace
+        self._made: dict = {}
+        self._plans: collections.OrderedDict = collections.OrderedDict()
+        self._lock = threading.Lock()
+
+    @property
+    def chunk_units(self) -> int:
+        """The lines a chunk has, as the step that runs reads them."""
+        return flow_map.number(self.numbers, "piece_lines")
+
+    def reader_of(self, spec):
+        # The spec is held with what was made of it, so its id is not given
+        # to another spec while the entry stands.
+        with self._lock:
+            key = id(spec)
+            if key not in self._made:
+                self._made[key] = (spec, self.make_reader(spec))
+            return self._made[key][1]
+
+    def plan_of(self, document_id: int) -> tuple:
+        """(the document's Plan, its Counts): its pieces, its figures'
+        lines, what it settles and its years. A pass over a stored harvest
+        asks several batches of one document and finds it made."""
+        with self._lock:
+            if document_id in self._plans:
+                self._plans.move_to_end(document_id)
+                return self._plans[document_id]
+        spec = self.spec_for(document_id)
+        sources = continued(self.passages_of(document_id))
+        # The document as the drawing of the flow prepares it: its figures
+        # transcribed, its pieces cut, its lists, what it settles
+        # (`engine.Engine.plan`).
+        plan, counts = self.reader_of(spec).engine.plan(
+            document_id, sources, self.transcripts, self.each, self.numbers)
+        # How many plans the run keeps is the memory of the run, whatever
+        # step asks for a plan.
+        with rules.in_step(None):
+            kept = rules.get("plans_kept")
+        with self._lock:
+            self._plans[document_id] = (plan, counts)
+            while len(self._plans) > kept:
+                self._plans.popitem(last=False)
+        return plan, counts
+
+    def forget(self, document_id: int) -> None:
+        with self._lock:
+            self._plans.pop(document_id, None)
+
+    def __call__(self, document_id: int, *, only=(), scope: str = "",
+                 passages: Optional[list] = None,
+                 also: Optional[Found] = None) -> Optional[Taken]:
+        """The whole plan, or part of it: for the fields *only*, the
+        *passages* given, under *scope*. *also* names passages to read for
+        some fields besides (`take_found`, `append_unread`)."""
+        spec = self.spec_for(document_id)
+        plan, counts = self.plan_of(document_id)
+        self.forget(document_id)
+        if self.halted():
+            return None
+        wanted = set(only or ())
+        parameters = [p for p in spec.parameters
+                      if not wanted or p.uri in wanted]
+        chosen = None
+        if passages is not None:
+            owners = {(s.owner_kind, s.owner_id) for s in passages}
+            chosen = [c for c in plan.chunks if c.owner in owners]
+        chunks: dict = {p.uri: (list(chosen) if chosen is not None
+                                else None) for p in parameters}
+        if also is not None:
+            for owner, answer in also.answers.items():
+                extra = [c for c in plan.chunks if c.owner == tuple(owner)]
+                for uri in answer.parameters:
+                    parameter = spec.by_uri.get(uri)
+                    if parameter is None:
+                        continue
+                    if uri not in chunks:
+                        parameters.append(parameter)
+                        chunks[uri] = []
+                    if chunks[uri] is not None:
+                        chunks[uri] += [c for c in extra
+                                        if c not in chunks[uri]]
+        located = [p for p in parameters
+                   if not getattr(p, "once_per_document", False)]
+        if any(got is None for got in chunks.values()):
+            read_in = list(plan.chunks)
+        else:
+            read_in = sorted({c for got in chunks.values() for c in got},
+                             key=lambda c: plan.position[c.key])
+        # The order of each field's pieces where the drawing orders them
+        # (its box `sentences`), kept under the harvest.
+        order_fields = None
+        if self.orders is not None:
+            def order_fields(fields_: list) -> dict:
+                return self.orders(plan, fields_, plan.cut.key(), scope,
+                                   read_in)
+        reads = self.reader_of(spec).engine.read(
+            plan, parameters, chunks, counts, None, order_fields)
+        if self.halted():
+            return None
+        # What the unit decides is the writing's, read with the values of
+        # its box (`derive_from_unit`).
+        with self.reader_of(spec).engine.step_of("write"):
+            derive_left(reads)
+        if self.trace is not None:
+            self.trace("asked", document_id, requests=dict(counts.asked),
+                       refused=dict(counts.failed),
+                       question_queries=counts.questions,
+                       chunks=len(plan.chunks), scope=scope or None)
+        return taken_of(document_id, spec, reads)
+
+    def sweep(self, batch, rows, slots, anchor=None) -> None:
+        """What a pass over a stored harvest asks a coordinate again with
+        (`topup._sweep_one`): each row's value at the line its quote stands
+        in, each coordinate of *slots* asked as the harvest asks it
+        (`addressed.Reader.coordinate`); what it leaves open is restored by
+        the pass as it restores any sweep's."""
+        document_id = batch.document_id
+        spec = self.spec_for(document_id)
+        reader = self.reader_of(spec)
+        plan, counts = self.plan_of(document_id)
+        read = Read(batch, [])
+        groups = {name: group for group in spec.groups.values()
+                  for name in group.coordinates}
+        made = {"n": 0}
+
+        def clone(row: Row) -> Row:
+            made["n"] += 1
+            return Row(f"{row.label}.{made['n']}", row.item_index,
+                       copy.deepcopy(row.claim))
+        for row in rows:
+            source = batch.items[row.item_index].source
+            at = locate_value(plan, source, row.claim)
+            if at is None:
+                continue
+            row.claim["at"] = at
+            for slot in slots:
+                row.claim.pop(f"{slot.name}_state", None)
+                reader.coordinate(plan, read, row, groups.get(slot.name),
+                                  slot, counts, clone)
+
+
+def take_found(whole: SurveyedHarvest, document_id: int, kept: list,
+               gained: list) -> Optional[Taken]:
+    """--start-at: the passages earlier harvests found something in, and
+    for a field none of them was asked (*gained*) the rest of the plan as
+    well, so that it is read over the whole plan as in any run (owner
+    decision 2026-11-03)."""
+    also = None
+    if gained:
+        held = {(s.owner_kind, s.owner_id) for s in kept}
+        rest = [s for s in whole.passages_of(document_id)
+                if (s.owner_kind, s.owner_id) not in held]
+        if rest:
+            also = Found(True)
+            for source in rest:
+                owner = (source.owner_kind, source.owner_id)
+                also.answers[owner] = Answer(owner, list(gained))
+    return whole(document_id, scope="found", passages=kept, also=also)
+
+
+def append_parameters(document_id: int, filename: str, out_dir: Path,
+                      spec, current: dict, deps: dict) -> tuple:
+    """(written, failures, stats) of --top-up-parameters for one stored
+    document, in a run that harvests from the survey: the first chain of
+    the flow `top_up_parameters` (`passflow`, `passboxes`).
+
+    The rules of `topup_parameter.append_document`, which this is for such a
+    run: only the addition may have moved, the stored lines stay as they
+    are, and nothing is written, neither file nor stamp, unless the new
+    parameters were read. They are read by a survey of the whole plan for
+    them alone (*deps["take"](document_id, uris)*), read piece by piece
+    with their coordinates asked and searched for; the frame of their rows
+    comes from that survey.
+
+    *deps* holds "document_spec" (id -> the document's spec, None when its
+    lists cannot be closed), "take", "locate", "frame_names" and
+    "dynamic_ok".
+    """
+    from . import passflow
+    from ..profile import active_profile
+    run = passflow.Run(
+        out=Path(out_dir), spec=spec, current=current, deps=deps,
+        take_parameters=deps["take"], locate=deps.get("locate"))
+    doc = passflow.one(passflow.load("top_up_parameters", active_profile()),
+                       run, document_id, filename)
+    return doc.written, doc.failed, _counts(doc.stats)
+
+
+def _counts(stats: Counter) -> Counter:
+    """What a pass over one document counted, as the callers of the single
+    document have it: the document itself is counted by the caller."""
+    stats = Counter(stats)
+    stats.pop("documents", None)
+    return stats
+
+
+def surveyed_owners(out_dir: Path, document_id: int) -> tuple:
+    """({owner: Answer} every stored survey of the document answered, and
+    the owners none of them could) from `survey/<document>[.<scope>].json`.
+    What was surveyed is read from the files whatever key they were kept
+    under: a pass reads what the harvest covered, not what it would ask
+    today."""
+    answers: dict = {}
+    unanswered: set = set()
+    folder = Path(out_dir) / "survey"
+    for path in sorted(folder.glob(f"{document_id}.json")) + sorted(
+            folder.glob(f"{document_id}.*.json")):
+        try:
+            kept = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for entry in kept.get("answers") or ():
+            owner = tuple(entry.get("owner") or ())
+            if len(owner) != 2:
+                continue
+            answers.setdefault(owner, Answer(
+                owner, list(entry.get("parameters") or ()),
+                dict(entry.get("tuples") or {}),
+                list(entry.get("dropped") or ())))
+        unanswered.update(tuple(o) for o in kept.get("unanswered") or ()
+                          if len(o) == 2)
+    return answers, unanswered - set(answers)
+
+
+def holes_of(refusals: list) -> tuple:
+    """({owner} of passages nothing read, {owner: {parameter}} of passages a
+    parameter's reading came to nothing in) among a harvest's refusals."""
+    passages: set = set()
+    readings: dict = {}
+    for refusal in refusals:
+        claim = refusal.get("claim") or {}
+        owner = refusal.get("owner")
+        if not claim.get("_harvest_failed") or not owner or len(owner) != 2:
+            continue
+        parameter = claim.get("_parameter")
+        if parameter:
+            readings.setdefault(tuple(owner), set()).add(parameter)
+        else:
+            passages.add(tuple(owner))
+    return passages, readings
+
+
+def append_unread(document_id: int, filename: str, out_dir: Path,
+                  deps: dict) -> tuple:
+    """(written, failures, stats) of the second half of --top-up-open for
+    one stored document, in a run that harvests from the survey: what
+    nothing has read yet, read now and appended after the stored lines
+    (the chain of the flow `top_up_open` that starts at the unread
+    passages).
+
+    Unread is a passage no survey of the harvest answered (one it left
+    unanswered, or one outside the found places of a harvest read in part),
+    and a passage a parameter's reading came to nothing in (a hole that
+    names its parameter, `_parameter`), which is read again for that
+    parameter alone with what its survey said of the passage. A harvest of
+    the old flow has no surveys: what its rows requests were shown counts as
+    read (`topup_rest.read_owners`). A document with neither is skipped, as
+    in that flow. A document this pass has read to its end says so in its
+    stamp (`topup_rest.PASS`) and is not read again.
+
+    *deps* holds "take" (document_id, passages, also -> Taken), "passages_of"
+    (document_id -> every passage), "locate" and "spec".
+    """
+    from . import passflow
+    from ..profile import active_profile
+    run = passflow.Run(
+        out=Path(out_dir), spec=deps["spec"], deps=deps,
+        take_passages=deps["take"], passages_of=deps["passages_of"],
+        locate=deps.get("locate"))
+    doc = passflow.one(passflow.load("top_up_open", active_profile()), run,
+                       document_id, filename, start="unread")
+    return doc.written, doc.failed, _counts(doc.stats)

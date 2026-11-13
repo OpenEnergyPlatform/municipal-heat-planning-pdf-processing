@@ -129,6 +129,45 @@ def enforced(response_format, dialect: str = schemas.ALL_REQUIRED,
 def decoded(text: str, decode) -> str
 ```
 
+### thinking_room
+
+```python
+def thinking_room(endpoint: Endpoint) -> int
+```
+
+The tokens a hosted model may think in beyond the answer room of a
+request, as the step that sends it says (rule `thinking_room_tokens`):
+read where the request is sent, not when the client was built.
+
+### options_of
+
+```python
+def options_of(endpoint: Endpoint) -> dict
+```
+
+What an installation adds to the request body of this endpoint's
+role: for the text model the rule `request_options` of the step that
+sends the request, for any other role what its client was built with.
+
+### schema_dialect
+
+```python
+def schema_dialect(natural: str) -> str
+```
+
+The dialect a hosted API's reply schema is written in: *natural*, the
+API's own, or the one the step's rule `schema_dialect` names.
+
+### optional_budget
+
+```python
+def optional_budget() -> tuple
+```
+
+(optional properties, properties with alternatives) a hosted API
+that counts them compiles (rules `schema_optional_fields`,
+`schema_optional_alternatives`).
+
 ### merge
 
 ```python

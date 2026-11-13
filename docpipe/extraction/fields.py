@@ -25,8 +25,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from .. import rules
 from . import wording
-from .spec import Parameter
+from .spec import UNIT, Parameter, fold_label
 
 # What a slot wants back. VALUE is the only one that decides how many rows
 # there are; every other slot fills a column of rows that already exist.
@@ -46,6 +47,14 @@ TEXT = "text"
 # profile's language, the wire carries this. It rides the out: convention, so
 # the serializers already refuse to mint it as a class.
 UNSTATED = "out:unstated"
+
+# The entries a closed list marks the two ends of a range with, protocol
+# tokens as UNSTATED is: in "zwischen 60 und 100 MWh" 60 is the lower and 100
+# the upper end of one range, and the run links them on both rows under
+# RANGE, [lower, upper] (`reading.link_ranges`, owner decision 2026-11-06).
+RANGE_LOW = "out:range_low"
+RANGE_HIGH = "out:range_high"
+RANGE = "range"
 
 # What is known about one coordinate of one row, always one of these.
 READ = "read"                # answered, and the passage carries it
@@ -80,6 +89,48 @@ DERIVED = "derived"
 # is an empty cell, and an empty cell is the one thing every state in
 # this module was written to prevent.
 OUT_OF_SLICE = "out_of_slice"
+STATES = (READ, SAID_UNSTATED, UNBACKED, EXHAUSTED, UNANSWERED, DERIVED,
+          OUT_OF_SLICE)
+
+
+def state_for(event: str) -> str:
+    """The state a coordinate or a parameter ends in for *event*, as the
+    rule `state_rules` says (skipped, answered_not_stated, refused,
+    parameter_refused, parameter_cut, parameter_silent)."""
+    table = rules.get("state_rules")
+    state = table.get(event)
+    if state is None:
+        raise rules.RuleError(f"state_rules says nothing for {event!r}")
+    if state not in STATES:
+        raise rules.RuleError(f"state_rules: {event!r} ends in {state!r}, "
+                              f"which is none of {', '.join(STATES)}")
+    return state
+
+
+def open_states() -> tuple:
+    """The states that mean a coordinate is still open (rule
+    `open_states`): what a condition "open" holds for and a top-up of open
+    values reads again."""
+    return tuple(rules.get("open_states"))
+
+
+class _Open:
+    """The open states as a collection read when it is asked: `in` and
+    iteration give the rule's value of that moment. The one place the
+    conditions, the top-up and the statistics take them from."""
+
+    def __contains__(self, state) -> bool:
+        return state in open_states()
+
+    def __iter__(self):
+        return iter(open_states())
+
+    def __len__(self) -> int:
+        return len(open_states())
+
+
+OPEN = _Open()
+
 
 # The key a coordinate carries when a pass after the harvest read it, a top-up
 # that re-read it or a pass that appended its row: `<axis>_producer`, the
@@ -88,6 +139,16 @@ OUT_OF_SLICE = "out_of_slice"
 # that no later pass touched must keep reading that way.
 PRODUCER = "_producer"
 BY_HARVEST, BY_PASS, BY_UNKNOWN = "harvest", "pass", "unknown"
+
+# Every key one coordinate owns on a claim (`schema._slot_properties`): its
+# answer and state, its wording, its quote and the passage that holds it,
+# where it was read, what the model saw where it found it unstated, its link,
+# the entries of the document's list it means (`addressed.Names`) and the
+# pass that read it.
+# Taking a coordinate off, or copying it whole, means all of them.
+COORDINATE_KEYS = ("", "_state", "_raw", "_raw_foreign", "_quote", "_source",
+                   "_window", "_seen", "_link_quote", "_link_source",
+                   "_means", PRODUCER)
 
 
 def reader_of(row: dict, name: str, producers) -> tuple:
@@ -116,7 +177,12 @@ class Option:
     label: str                  # what the model answers
     uri: str                    # what the label resolves to
     synonyms: tuple = ()        # the other spellings the spec knows
-    definition: str = ""        # what the ontology says the term means
+    # What the term means, as the request shows it: the spec's gloss where it
+    # has one, else the definition (owner decision 2026-11-05, ticket 26).
+    definition: str = ""
+    # The group the entry belongs to, by which a long list is asked first
+    # (`flow.Numbers.list_meanings`, owner decision 2026-11-08).
+    group: str = ""
 
 
 @dataclass(frozen=True)
@@ -129,6 +195,21 @@ class Slot:
     options: tuple = ()
     # {"from": "unit", "value": uri} when the spec decides this coordinate.
     derive: Optional[dict] = None
+    # The kind of thing whose name the document gives here, such as
+    # "scenario" (`spec.Axis.merged`): a value stated for several of them is
+    # one row per name, and which of the document's names mean the same thing
+    # is asked while the document is read (`addressed.Names`).
+    merged: Optional[str] = None
+    # Whether an answer may be the print itself where the list has no entry
+    # for it: the unit, which is never refused (owner decision 2026-11-07,
+    # `pipeline.printed_only`).
+    keeps_print: bool = False
+    # The entry a value must have here to be a value of its parameter
+    # (`spec.Axis.keep`, owner decisions 2026-11-07, `kept`).
+    keep: Optional[str] = None
+    # Whether a value stated for several entries of the list is one row per
+    # entry (`spec.Axis.several`).
+    several: bool = False
 
     @property
     def is_closed(self) -> bool:
@@ -153,21 +234,61 @@ class Slot:
         # The two keys are protocol, the same English pair in every profile
         # (a prompt that names them names these); the gloss of UNSTATED is
         # the profile's prose.
+        # Each entry by its meaning only (owner decision 2026-11-07: the
+        # answer is the entry the plan's words mean, never the nearest
+        # spelling); the spellings stay in the spec for the check of an
+        # answer that gives no wording (`pipeline.answer_in_quote`).
         words = wording.phrases()
-        means, spellings = words["option_means"], words["option_spellings"]
-        if any(opt.definition for opt in self.options):
-            out = {opt.label: {means: opt.definition,
-                               spellings: list(opt.synonyms)}
-                   if opt.definition else {spellings: list(opt.synonyms)}
-                   for opt in self.options}
-            out[UNSTATED] = {means: words["unstated_means"]}
-            return out
-        out = {opt.label: list(opt.synonyms) for opt in self.options}
-        out[UNSTATED] = [words["unstated_spelling"]]
+        means = words["option_means"]
+        out = {opt.label: {means: opt.definition} if opt.definition else {}
+               for opt in self.options}
+        out[UNSTATED] = {means: words["unstated_means"]}
         return out
 
 
-def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
+def beside_names(slot: Slot) -> bool:
+    """Does a coordinate of names take entries beside them
+    (`spec.Axis.beside`, owner decision 2026-11-07): a free-text slot with a
+    list?"""
+    return slot.kind == TEXT and bool(slot.options)
+
+
+def wording_asked(slot: Slot) -> bool:
+    """Is the printed wording (`value_raw`) asked beside a coordinate's
+    answer? Only where the answer is not the print itself: an entry of a
+    list or a number, and a coordinate of names that takes entries beside
+    them, whose entry the wording backs. A free text answer is its own
+    wording; the request does not ask it twice, and the row keeps it as its
+    wording (`pipeline.merge_field`, owner decision 2026-11-06)."""
+    return bool(slot.is_closed) or slot.kind == NUMBER or beside_names(slot)
+
+
+# What an example reply writes for an answer (`value_example`): a placeholder
+# for an entry of a list or a wording, and one for a year, never a year of
+# its own the model could copy (owner decision 2026-11-07: "mach das
+# Beispiel mit YYYY"; rules `example_words`, `example_year`).
+def said() -> str:
+    return rules.get("example_words")
+
+
+def year_word() -> str:
+    return rules.get("example_year")
+
+
+def value_example(slot: Slot):
+    """A coordinate's answer as the example of a request shows it, read: an
+    entry of its list or a wording as a placeholder, a number as the
+    placeholder of a year. Never UNSTATED: an example shows every coordinate
+    read (owner decision 2026-11-06), and the prompt's rule line shows how
+    an unstated one looks."""
+    if not slot.is_closed and slot.kind == NUMBER:
+        return year_word()
+    return said()
+
+
+def _options(vocabulary: dict, definitions: Optional[dict] = None,
+             glosses: Optional[dict] = None,
+             groups: Optional[dict] = None) -> tuple:
     """The closed list as options, first label canonical, rest synonyms.
 
     The spec writes a vocabulary as uri -> [labels] and the first label is the
@@ -177,15 +298,19 @@ def _options(vocabulary: dict, definitions: Optional[dict] = None) -> tuple:
 
     The meaning rides along where the spec carries one, because "decide by
     the definition and not by the nearest word" is a rule that needs the
-    definition in the request to be followable.
+    definition in the request to be followable; in one line of the profile's
+    language where the spec has that (*glosses*, ticket 26).
     """
     out = []
     for uri, labels in (vocabulary or {}).items():
         labels = [l for l in labels if isinstance(l, str) and l.strip()]
         if not labels:
             continue
+        meaning = ((glosses or {}).get(uri)
+                   or (definitions or {}).get(uri, ""))
         out.append(Option(label=labels[0], uri=uri, synonyms=tuple(labels[1:]),
-                          definition=(definitions or {}).get(uri, "")))
+                          definition=meaning,
+                          group=(groups or {}).get(uri, "")))
     return tuple(out)
 
 
@@ -208,8 +333,25 @@ def parameter_slot(spec) -> Slot:
                               for p in spec.parameters))
 
 
-# The coordinate that says which entry of units_accepted a number is in.
-UNIT = "unit"
+def holds(parameter: Parameter, claim: dict) -> bool:
+    """Is the row's value one of this parameter's entries?
+
+    A category parameter's value is an answer to its closed list (owner,
+    2026-09-11). The value is read before the parameter, as the wording the
+    passage prints, so a row whose parameter is read with a value its list
+    does not hold has the value asked again, to that list (`value_choice`).
+    The lookup is the one `verify._check_value` resolves the value with.
+
+    A value left out with the wording beside it is the answer that no entry
+    fits, and fits every category parameter. A text or numeric parameter
+    holds any value here; its own checks are elsewhere.
+    """
+    if parameter.value_type != "category":
+        return True
+    value = claim.get("value")
+    if not isinstance(value, str) or not value.strip():
+        return True
+    return fold_label(value.strip()) in parameter.value_to_uri()
 
 
 # Counted by a pass over a harvest on disk for a document whose own choice
@@ -241,8 +383,8 @@ def unit_slot(spec, parameter: Optional[Parameter] = None) -> Optional[Slot]:
     A coordinate like the parameter, and asked before it: the value request
     writes the unit as the passage prints it, and which entry that means is a
     reading, not a lookup. "450 kWh über das Jahr" is kWh/a and a storage
-    capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a", "kWp"
-    and "g/kWh" are in no list and the row is refused for saying so. A
+    capacity of 200 kWh is kWh; "Gigawattstunden" is GWh; "kWh/m²a" is in no
+    list and the number keeps the unit as printed, unconverted. A
     spelling table stood in for this reading once, and measured on 641 plans
     of corpus_m5 it let 3,324 tuples carry an entry their wording
     contradicts.
@@ -266,7 +408,8 @@ def unit_slot(spec, parameter: Optional[Parameter] = None) -> Optional[Slot]:
                 question=spec.unit_question,
                 options=tuple(Option(label=unit, uri=unit,
                                      definition=", ".join(labels))
-                              for unit, labels in belongs.items()))
+                              for unit, labels in belongs.items()),
+                keeps_print=True)
 
 
 def asked_slots(parameter: Parameter) -> list:
@@ -286,7 +429,7 @@ def frame_slots(spec, names) -> list:
 
     WHICH ones those are is the profile's business. The core never names a
     coordinate, so this takes a list of names and resolves it against the
-    spec, exactly like `SLICE` does for the gate.
+    spec.
 
     Read off the first parameter that has all of them, because a frame is one
     per document: a spec whose parameters disagreed about it would have two
@@ -350,6 +493,8 @@ def derive_parameter(spec, claim: dict):
     accepts (the row is refused later, with the unit as the reason), or a unit
     two parameters accept. Then the question is a real question and is asked.
     """
+    if not rules.get("parameter_from_unit"):
+        return None
     if is_wording(spec, claim):
         text = [p for p in spec.parameters if not p.is_numeric]
         return text[0] if len(text) == 1 else None
@@ -379,6 +524,8 @@ def parameter_undecidable(spec, claim: dict) -> bool:
     spelling. They cost 178 of 853 field requests, 20.9 percent, and every
     one of the five answers they produced was refused afterwards anyway.
     """
+    if not rules.get("parameter_from_unit"):
+        return False
     if is_wording(spec, claim):
         # A wording needs a text parameter, and one is a decision.
         return not [p for p in spec.parameters if not p.is_numeric]
@@ -392,8 +539,38 @@ def parameter_undecidable(spec, claim: dict) -> bool:
                 if p.is_numeric and unit in p.units_accepted]
 
 
+def derived_by_unit(claim: dict, parameter) -> bool:
+    """Does the spec decide the coordinates it derives from the unit for this
+    value: the unit question read an entry of the parameter's list that
+    converts onto the parameter's own unit? Where it read the print without
+    one, the model is asked them (owner decision 2026-11-07: "wo es nicht
+    automatisch geht, soll es das LLM versuchen"); so is a value whose entry
+    converts onto a unit of its own, an emission factor in g CO2/kWh being
+    no annual amount."""
+    unit = claim.get(UNIT)
+    return (claim.get(f"{UNIT}_state") == READ
+            and parameter.unit_factor(unit) is not None
+            and parameter.target_of(unit) == parameter.unit_target)
+
+
+def derives(slot, claim: dict, parameter) -> bool:
+    """May the spec set *slot* for this value from its unit: the unit
+    decides it (`derived_by_unit`), and no request read the coordinate. It
+    is asked first, and taken from the unit only where nothing read it
+    (owner decision 2026-11-07: "Fragen wir trotzdem und nur im Fallback
+    machen wir die Zuordnung")."""
+    if (not slot.derive or not derived_by_unit(claim, parameter)
+            or rules.get("derive_from_unit") != "ask_first_then_derive"):
+        return False
+    return claim.get(f"{slot.name}_state") not in (READ, DERIVED,
+                                                   OUT_OF_SLICE)
+
+
 def apply_derived(rows: list, slot: Slot) -> int:
-    """Write a derived coordinate onto every row that has none. Returns how many.
+    """Write a derived coordinate onto every row no request read it on: one
+    never asked, and one asked and left open, whose answer, quote and state
+    go (owner decision 2026-11-07: asked first, derived only where no answer
+    is read). Returns how many.
 
     The wording it was derived from is kept, and so is the row's own passage:
     a derived coordinate is not evidence-free, it is evidenced by the unit the
@@ -403,8 +580,11 @@ def apply_derived(rows: list, slot: Slot) -> int:
         return 0
     done = 0
     for row in rows:
-        if row.claim.get(f"{slot.name}_state"):
+        if row.claim.get(f"{slot.name}_state") in (READ, DERIVED,
+                                                   OUT_OF_SLICE):
             continue
+        for suffix in COORDINATE_KEYS:
+            row.claim.pop(f"{slot.name}{suffix}", None)
         row.claim[slot.name] = slot.derive["value"]
         row.claim[f"{slot.name}_state"] = DERIVED
         wording = row.claim.get("unit_raw") or row.claim.get("unit")
@@ -427,7 +607,29 @@ def value_slot(parameter: Parameter) -> Slot:
     return Slot(name="value", kind=VALUE, required=True,
                 question=parameter.description,
                 options=_options(parameter.vocabulary,
-                                 getattr(parameter, "definitions", None)))
+                                 getattr(parameter, "definitions", None),
+                                 getattr(parameter, "glosses", None),
+                                 getattr(parameter, "groups", None)))
+
+
+def value_choice(parameter: Parameter) -> Slot:
+    """The value of a category parameter, asked again as one of its entries.
+
+    The rows request reads a value before its parameter, so what it writes is
+    the wording the passage prints: "includes only adopted policies" where
+    the list holds the types of a scenario. Once the parameter is read, which
+    entry that wording is becomes a question of its own, with a quote like
+    every coordinate, and the wording stays in value_raw. Asking the
+    parameter again instead left the model no answer that could pass: on one
+    corpus run 8,810 rows were asked it in every window to the end of their
+    document, and 5,636,615 answers were refused.
+    """
+    return Slot(name="value", kind=CHOICE, required=True,
+                question=parameter.description,
+                options=_options(parameter.vocabulary,
+                                 getattr(parameter, "definitions", None),
+                                 getattr(parameter, "glosses", None),
+                                 getattr(parameter, "groups", None)))
 
 
 def axis_slots(parameter: Parameter) -> list:
@@ -442,8 +644,11 @@ def axis_slots(parameter: Parameter) -> list:
         if axis.vocabulary:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,
-                        options=_options(axis.vocabulary, axis.definitions),
-                        derive=axis.derive)
+                        options=_options(axis.vocabulary, axis.definitions,
+                                         axis.glosses,
+                                         getattr(axis, "groups", None)),
+                        derive=axis.derive, keep=axis.keep,
+                        several=axis.several)
         elif axis.enum:
             slot = Slot(name=name, kind=CHOICE, required=axis.required,
                         question=axis.question,
@@ -452,10 +657,45 @@ def axis_slots(parameter: Parameter) -> list:
             slot = Slot(name=name, kind=NUMBER, required=axis.required,
                         question=axis.question)
         else:
+            # A coordinate of names keeps the entries it takes beside them
+            # as its list (`beside_names`).
             slot = Slot(name=name, kind=TEXT, required=axis.required,
-                        question=axis.question)
+                        question=axis.question,
+                        options=_options(getattr(axis, "beside", None),
+                                         axis.definitions, axis.glosses),
+                        merged=getattr(axis, "merged", None))
         out.append(slot)
     return out
+
+
+def kept(slot: Slot, claim: dict) -> Optional[bool]:
+    """Is the value of *claim* a value of its parameter by *slot*, a
+    coordinate with an entry it must have (`Slot.keep`, owner decisions
+    2026-11-07)? True where the coordinate was read as that entry, False
+    where it was read as another, None where it is open or *slot* has no
+    such entry. The answer is the entry's label, as `pipeline.merge_field`
+    writes it, or its key."""
+    if not slot.keep or claim.get(f"{slot.name}_state") != READ:
+        return None
+    answer = claim.get(slot.name)
+    uri = next((option.uri for option in slot.options
+                if answer in (option.label, option.uri)), answer)
+    return uri == slot.keep
+
+
+def closed(slots: list, claim: dict) -> bool:
+    """Has a coordinate of *slots* read the value of *claim* as no value of
+    its parameter (`kept` False), so that nothing after it is asked?"""
+    return any(kept(slot, claim) is False for slot in slots)
+
+
+def in_parameter(parameter: Parameter, claim: dict) -> bool:
+    """Is the value of *claim* a value of *parameter* on every coordinate
+    with an entry it must have, each read as that entry? The graph takes
+    only such a value; one read with another entry, or whose entry stayed
+    open, stays in the harvest (owner decisions 2026-11-07)."""
+    return all(kept(slot, claim) for slot in axis_slots(parameter)
+               if slot.keep)
 
 
 def slots(parameter: Parameter) -> list:

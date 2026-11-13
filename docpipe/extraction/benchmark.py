@@ -52,7 +52,7 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
-from .. import dotenv, settings
+from .. import dotenv, rules, settings
 from ..profile import (ENV_VAR, MARKER, PATH_ENV, load_profile, name_profile,
                        program)
 from ..providers import cassette
@@ -66,10 +66,15 @@ QUERY_CACHE = "query_cache.db"
 KEYS = {"profile", "db", "index", "arguments", "environment",
         "min_precision", "min_recall"}
 # What both runs are held to, whatever the description says: one request
-# and one document at a time, and sets that iterate the same way twice.
-ONE_AT_A_TIME = {"EXTRACT_LLM_PARALLEL": "1", "EXTRACT_FIELD_PARALLEL": "1",
-                 "EXTRACT_PLAN_PARALLEL": "1", "EXTRACT_BATCH_DOCS": "1",
-                 "EXTRACT_LIMIT_ADAPTIVE": "0", "PYTHONHASHSEED": "0"}
+# and one document at a time (with the limit off a sweep asks one window
+# at a time), and sets that iterate the same way twice. Named by their
+# rules: a rule that is renamed or gone fails here, never in a replay that
+# is quietly no longer one at a time.
+ONE_AT_A_TIME = {
+    **{rules.BY_NAME[name].env: value for name, value in (
+        ("limit_adaptive", "0"), ("documents_in_flight", "1"),
+        ("compute_parallel", "1"))},
+    "PYTHONHASHSEED": "0"}
 # The settings that say how a model is reached, by their names.
 REACHED = re.compile(r"(_PROVIDER|_BASE_URL|_API_KEY)$")
 

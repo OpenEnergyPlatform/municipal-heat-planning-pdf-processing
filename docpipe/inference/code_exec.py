@@ -14,6 +14,8 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+from docpipe import rules
+
 from . import config
 
 log = logging.getLogger(__name__)
@@ -29,13 +31,31 @@ def run_code(code: str, context: Optional[dict] = None,
     """
     Execute `code` in the sandbox with `context` injected as variables.
 
+    The waiting time is *timeout*, else the rule `code_timeout_s`; a run
+    that failed is sent again as often as the rule `code_resend` says, each
+    time for the same time.
+
     Returns {"ok": bool, "stdout": str, "stderr": str, "exit_code": int|None,
     "error": str|None}. Never raises: a disabled sandbox or any transport/HTTP
-    problem comes back as ok=False with an `error`.
+    problem comes back as ok=False with an `error` and `sandbox` True, a
+    failure of the sandbox and not of the code. Only such a failure is sent
+    again: code that failed fails the same way the next time.
     """
     if not config.CODE_EXEC_URL:
         return {"ok": False, "stdout": "", "stderr": "", "exit_code": None,
-                "error": "code-exec disabled"}
+                "error": "code-exec disabled", "sandbox": True}
+    waits = float(timeout or rules.get("code_timeout_s"))
+    out = _send(code, context, waits)
+    for _ in range(int(rules.get("code_resend"))):
+        if not out.get("sandbox"):
+            break
+        out = _send(code, context, waits)
+    return out
+
+
+def _send(code: str, context: Optional[dict], timeout: float) -> dict:
+    """One attempt: the code posted to the sandbox, its answer or why it
+    gave none."""
     body = json.dumps({"code": code, "context": context or {}}).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if config.CODE_EXEC_TOKEN:
@@ -43,11 +63,11 @@ def run_code(code: str, context: Optional[dict] = None,
     req = urllib.request.Request(config.CODE_EXEC_URL, data=body, method="POST",
                                  headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=timeout or config.CODE_EXEC_TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             out = json.loads(resp.read() or b"{}")
         if not isinstance(out, dict):
             return {"ok": False, "stdout": "", "stderr": "", "exit_code": None,
-                    "error": "malformed response"}
+                    "error": "malformed response", "sandbox": True}
         out.setdefault("ok", False)
         out.setdefault("stdout", "")
         out.setdefault("stderr", "")
@@ -55,8 +75,8 @@ def run_code(code: str, context: Optional[dict] = None,
     except urllib.error.HTTPError as e:
         log.warning("code-exec HTTP %s", e.code)
         return {"ok": False, "stdout": "", "stderr": "", "exit_code": None,
-                "error": f"HTTP {e.code}"}
+                "error": f"HTTP {e.code}", "sandbox": True}
     except Exception as e:  # timeout / connection / json
         log.warning("code-exec call failed: %s", e)
         return {"ok": False, "stdout": "", "stderr": "", "exit_code": None,
-                "error": f"{type(e).__name__}: {e}"}
+                "error": f"{type(e).__name__}: {e}", "sandbox": True}

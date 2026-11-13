@@ -51,7 +51,7 @@ refusal would add one to every document's refusal count, and the ratio
 that is read off it is the one this whole report exists for. The same
 holds for the parameter_state lines, and there is one per parameter of
 the spec, so an `else` that swept them into the refusals would report
-fourteen model errors per ar6 document that nobody made.
+fourteen model errors per scenarios document that nobody made.
 
 ### serialize_counts
 
@@ -61,10 +61,10 @@ def serialize_counts(serializer, name: str, tuples: list, records: list) -> dict
 
 Run the profile's serializer and pick the skip counts out of its log.
 
-The counts live in a closure and reach the outside only as a log line, so
-the line is captured rather than the function rewritten: the serializer
-stays the one the corpus run uses, which is the whole point of measuring
-with it.
+The counts reach the outside only as the program's log line ("graph:
+\<document>: left out {reason: rows}"), so the line is captured rather
+than the function rewritten: the serializer stays the one the corpus
+run uses, which is the whole point of measuring with it.
 
 ### trace_costs
 

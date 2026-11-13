@@ -7,12 +7,14 @@ the sentence that tells the model to answer NOW. The core assembles those
 pieces and does not write them: it cannot know whether the reader is holding a
 German heat plan or an English scenario study.
 
-A profile contributes them in `profiles/<name>/inference.py`. A profile that
-extends another one writes only the pieces it words differently: its PHRASES
-are laid over those of the profile it extends.
+A profile writes them in `profiles/<name>/prompts/inference/phrases.json`
+(`docpipe/phrases.py`; a table in its `inference.py` until 2026-11-10). A
+profile that extends another one writes only the pieces it words
+differently: its file is laid over those of the profile it extends.
 
-The words of the app's pages come the same way and from the same file: the
-profile's `UI` table, which a person reads where a model reads PHRASES. That
+The words of the app's pages come the same way, from the profile's
+`inference.py`: its `UI` table, which a person reads where a model reads the
+sentences. That
 includes the picker's labels, the tag after a document's name and the noun
 for one. Both tables are checked for the entries the core asks for
 (`REQUIRED`, `UI_REQUIRED`).
@@ -24,7 +26,10 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from .. import phrases as phrase_files
 from ..profile import ENV_VAR, Profile, active_profile, load_profile
+
+MODULE = "inference"
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +47,7 @@ REQUIRED = frozenset({
     "citation_section", "citation_table", "citation_figure",
     "readoff_value", "exec_none", "image_requested",
     "chat_parameter_question",
+    "pick_outside",
 })
 
 
@@ -73,7 +79,8 @@ UI_REQUIRED = frozenset({
     "values_no_store", "values_no_parameter", "values_no_values",
     "values_where", "values_used", "values_details",
     "reason_exhausted", "reason_unbacked", "reason_unanswered",
-    "reason_conflict", "reason_repaired", "reason_computed",
+    "reason_conflict", "reason_computed", "reason_read_off",
+    "reason_catalogue",
     "reason_not_located", "reason_review_disagree", "reason_page_transcribed",
     "route", "route_help", "route_auto", "route_harvest", "route_graph",
     "route_documents",
@@ -94,6 +101,23 @@ UI_REQUIRED = frozenset({
     "version_current", "version_old", "document_noun_fallback",
 })
 
+
+# What a comment said above a sentence while the sentences were tables in
+# the profiles' modules, each above the sentence it stood before: said once
+# here, and shown there by the editor (`docpipe edit`).
+NOTES = {
+    "compute_guide": (
+        "How a statement about a number the code printed, or one read off a "
+        "requested image, is given: told in the message that brings the "
+        "output or the image, not before (owner decision 2026-11-07: each "
+        "request is told what it is to do)."),
+    "citation_quotes": (
+        "The citation under the answer, which the model also reads as "
+        "`source`."),
+    "readoff_value": (
+        "What the loop splices into a reading, a failed run and an image "
+        "part."),
+}
 
 BUILT_IN = "default"
 _said_fallback: list = []
@@ -141,14 +165,12 @@ def phrases(profile: Optional[Profile] = None) -> dict:
     key = profile.name
     if key in _checked:
         return _checked[key]
-    nearest = _component("PHRASES", profile)
-    got: dict = {}
-    for layer in reversed(profile.layers("inference", "PHRASES")[1:]):
-        got.update(layer)                   # those of the profiles it extends
-    got.update(nearest)
+    got = phrase_files.table(profile, MODULE)
     missing = sorted(REQUIRED - set(got))
     if missing:
-        raise LookupError(f"inference.PHRASES is missing {missing}")
+        raise LookupError(
+            f"the inference sentences of profile {profile.name!r} are "
+            f"missing {missing} ({phrase_files.path_of(profile, MODULE)})")
     _checked[key] = got
     return got
 

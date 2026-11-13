@@ -10,8 +10,10 @@ model in this process on the visible GPUs; `api` asks an embeddings endpoint
 and needs none. A setting of its own beside the query side's
 EMBEDDING_BACKEND, because the two differ in a common setup: the index is
 built once with the model on GPUs and queried through an endpoint ever
-after. An endpoint takes text only, so with it the inputs that carry a
-picture are left out and the index holds the text vectors of a corpus.
+after. An endpoint in the OpenAI form takes text only, so with it the inputs
+that carry a picture are left out and the index holds the text vectors of a
+corpus. A vLLM server in the messages form (EMBEDDING_API_FORMAT) takes the
+picture too, and then every input is embedded.
 
 A batch the embedder could not serve leaves its inputs without a vector. The
 other batches are finished first; the inputs left over are counted by
@@ -112,10 +114,15 @@ def index_ids(index: faiss.Index) -> list:
 
 
 def save_index(index: faiss.Index, index_path: Path) -> None:
-    """Save the FAISS index to disk."""
+    """Save the FAISS index to disk, written whole under a new name first: a
+    job killed while the file is written leaves the last saved index, which
+    the next run resumes from, and not a truncated one it cannot load."""
     import faiss
+    index_path = Path(index_path)
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    faiss.write_index(index, str(index_path))
+    part = index_path.with_name(index_path.name + ".part")
+    faiss.write_index(index, str(part))
+    os.replace(part, index_path)
     log.info("FAISS index saved: %s (%d vectors)", index_path, index.ntotal)
 
 
@@ -139,9 +146,10 @@ class ApiIndexEmbedder:
 
     The index is an inner-product index and the local model hands it unit
     vectors, so these are scaled to length one as well; an endpoint that
-    already returns unit vectors is left as it is by that.
+    already returns unit vectors is left as it is by that. Whether a picture
+    goes along is the wrapped embedder's (`text_only`): the OpenAI form has no
+    place for one, the messages form has.
     """
-    text_only = True
 
     def __init__(self, embedder=None):
         if embedder is None:
@@ -149,6 +157,7 @@ class ApiIndexEmbedder:
             embedder = ApiEmbedder()
         self._embedder = embedder
         self.model = getattr(embedder, "model", None)
+        self.text_only = bool(getattr(embedder, "text_only", True))
 
     def process(self, items):
         vectors = np.asarray(self._embedder.embed(items), dtype=np.float32)
@@ -169,21 +178,21 @@ def load_embedder(model_name: str = EMBEDDING_MODEL):
     The embedder of this run, for the backend EMBEDDING_INDEX_BACKEND names.
 
     `api`: an ApiIndexEmbedder. Otherwise the model itself, data-parallel
-    across all visible GPUs in bf16: a MultiGPUEmbedder, which exposes the
-    same ``process()`` interface as a single Qwen3VLEmbedder.
+    across all visible GPUs in bf16, or on the CPU in fp32 where there is
+    none (`qwen3_vl_embedding.dtype_for`): a MultiGPUEmbedder, which exposes
+    the same ``process()`` interface as a single Qwen3VLEmbedder.
     """
     if index_backend() == "api":
         embedder = ApiIndexEmbedder()
-        log.info("Embedding through the api backend: %s (text inputs only)",
-                 embedder.model)
+        log.info("Embedding through the api backend: %s (%s)", embedder.model,
+                 "text inputs only" if embedder.text_only
+                 else "text and picture inputs")
         return embedder
-    import torch
     from docpipe.chunking.qwen3_vl_embedding import MultiGPUEmbedder
     log.info("Loading embedding model: %s", model_name)
     model = MultiGPUEmbedder(
         model_name_or_path=model_name,
         max_length=MAX_TOKEN_LENGTH,
-        dtype=torch.bfloat16,
     )
     log.info("Embedding model loaded on %d device(s): %s",
              len(model.replicas), model.devices)

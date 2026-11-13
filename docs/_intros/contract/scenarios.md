@@ -28,9 +28,12 @@ the pass that appended its row (`--top-up-parameters`); a missing key means
 the harvest read it (`docpipe/extraction/schema.py:212` to `293`). Four parameters carry
 the same `scenario` axis, `scenario_type`, `scenario_abstract`,
 `scenario_region` and `scenario_year`, each stating which of the
-publication's AR6 scenarios the row belongs to
-(`tests/test_scenarios_extraction.py::
-test_a_document_field_carries_no_axes_and_a_scenario_field_carries_one`).
+publication's scenarios the row belongs to, by the name the publication
+prints. A coordinate or value the spec marks `merged` (the `scenario` axis
+and the value of `scenario_label`) also carries `<name>_means` (`value_means`
+for the value): the entries of the document's list of names that name means, chosen while
+the document is read (`addressed.Reader.name_of`, the `names` request), absent from
+a row read before that or by a top-up pass.
 
 A tuple's `provenance` names where its `quote` sits: `document_id`,
 `owner_kind` and `owner_id` always present, the rest, page and
@@ -39,9 +42,11 @@ section location among them, filled in as the source allows
 `<name>_source` and a refusal's `owner` use the shorter
 `[owner_kind, owner_id]` pair instead (`:147` to `151`).
 
-`x-question` is the sentence, in German, the model was asked for a
-coordinate. `x-kg` is the spec's own `kg` block, published unchanged,
-so this page cannot state something the serializer does not. Where a
+`x-question` is the sentence, in English, the model was asked for a
+coordinate. `x-kg` lists the arrows of the profile's drawing that read the coordinate or
+the field (the box it points at, its class, the property and the brick),
+published as drawn, so this page cannot state something the graph writer
+does not. Where a
 coordinate answers from a closed list, `x-options` names every entry
 with its ontology uri and definition, and its corpus spellings where
 any are recorded. A tuple section closes with the `allOf` rule: a
@@ -50,43 +55,37 @@ coordinate is `null` unless its own `<name>_state` says `read` or
 
 ## The lists this page cannot publish
 
-Seven parameters answer from a list rather than write a wording:
-`scenario_label`, `scenario_type` and `scenario_region`
-(`profiles/scenarios/extraction_spec.json`,
-`tests/test_scenarios_extraction.py::
-test_a_field_with_a_finite_answer_set_is_a_choice_not_a_wording`), and
+Six parameters answer from a list rather than write a wording:
+`scenario_type` and `scenario_region`
+(`profiles/scenarios/extraction_spec.json`), and
 the four tags of a bundle, `study_descriptor`, `study_sector_division`,
 `study_sector` and `study_technology`. Five publish their list as
 `x-options` below: `scenario_type` carries seventeen OEO classes plus
 one `out:` entry for a type none of them cover, and each tag the
 shapes' own list (31, 17, 153 and 43 entries) plus such an entry, for
-every document, so the spec states each list once
-(`tests/test_scenarios_extraction.py::
-test_the_bundle_tag_lists_are_the_ones_the_shapes_accept`).
+every document, so the spec states each list once.
 
-The other two are marked `vocabulary_dynamic` in the spec: their value
-resolves through `_value_uri`, which for a dynamic list types it as a
-plain nullable string with no `x-options`, stating in the
+The other one, `scenario_region`, is marked `vocabulary_dynamic` in the
+spec: its value resolves through `_value_uri`, which for a dynamic list types
+it as a plain nullable string with no `x-options`, stating in the
 `description` that a list exists but is not published here
-(`docpipe/extraction/schema.py:174` to `209`). The `scenario` axis on
-the same four parameters takes a different path: the spec marks it
-`dynamic`, not `vocabulary_dynamic`, and `axis_slots` types it as
-plain text through a path that never calls `_value_uri` at all; that
-call runs earlier in the same function, for the parameter's own
-`value` key (`docpipe/extraction/fields.py:433` to `458`;
-`docpipe/extraction/schema.py:383`, `:402` to `413`).
+(`docpipe/extraction/schema.py`). The scenario is no list: `scenario_label`
+and the `scenario` axis on the four parameters above are free text marked
+`merged`, the name as the publication prints it with its quote. The axis is
+typed as a string, or one of the two `out:` entries the spec lists beside the
+names (`out:status_quo`, `out:several`), published under `x-options` without an
+`enum`; the page says "What it may answer beside a name" and the table "string,
+or 2 out: entries beside".
 
 What the list holds is decided once, before harvest starts, by
-`document_axes` in `profiles/scenarios/extraction.py:172`. It reads
-the AR6 runs the publication documents in the `Scenarios` and
-`DocumentScenarios` tables (`document_scenarios`,
-`profiles/scenarios/extraction.py:149`), and narrows the 249 study
-regions of `profiles/scenarios/regions.json` to the ones the
-publication's own text names (`document_regions`,
-`profiles/scenarios/extraction.py:164`). Both lists always carry
-fixed `out:` entries, three for the region list and two for the
-scenario list (`REGION_OUT`, `SCENARIO_OUT`,
-`profiles/scenarios/extraction.py:69` to `91`). `value_raw` and
+`document_axes` in `profiles/scenarios/extraction.py`. It narrows the 249
+study regions of `profiles/scenarios/regions.json` and the groups of
+countries of `profiles/scenarios/region_aggregates.json` to the ones the
+publication's own text names (`document_regions`); the world is always
+offered. A group's key starts with `aggregate:` and the graph writes its
+member countries. The list always carries two
+fixed `out:` entries, the `beside` entries of the parameter `scenario_region` in the
+spec. `value_raw` and
 `<axis>_raw` keep the publication's own wording beside the resolved
 entry on every tuple, recording what the list held at harvest time.
 No parameter of this spec is numeric, so a bare year or a dotted date is
@@ -101,9 +100,11 @@ Two sections close the page: `## The stamp`, the schema of
 `docpipe`, `document` (the sha256 and size of the PDF) and `producers`,
 plus per-question patterns,
 `docpipe/extraction/schema.py:603` to `765`), and `## The trace`, the
-schema of `<publication>.trace.jsonl`, one `oneOf` branch per event
-kind: eleven, fixed by the schema for every profile rather than drawn
-from this one's spec (`docpipe/extraction/schema.py:768` to `902`). A
+schema of `<publication>.trace.jsonl.gz`, one `oneOf` branch per event
+kind, fixed by the schema for every profile rather than drawn from this
+one's spec (`schema.trace_schema`); an event that reports a model request
+carries it as it was sent and what came back, and a text the requests
+repeat is a `piece` they refer to. A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under
@@ -117,13 +118,12 @@ definitions, so a stamp of this corpus written before that reads stale
 in those keys once: `--remap`, which needs no model, settles them, and
 `--force-stale` first would read the documents again for nothing. A
 document with a wording that no list holds stays stale after the remap,
-and is what `--force-stale` is left for (`stale`,
-`docpipe/extraction/runner.py:4404` to `4449`; `already_done`, `:4494`
-to `4533`). `top_up_file` redoes
+and is what `--force-stale` is left for (`stale` and `already_done` in
+`docpipe/extraction/runner.py`). `top_up_file` redoes
 only the changed question
-(`docpipe/extraction/topup.py:420` to `538`), and `append_document` reads a
+(`docpipe/extraction/topup.py`), and `append_document` reads a
 parameter the spec has gained without reading the document again
-(`docpipe/extraction/topup_parameter.py:336` to `462`); `already_done` names
+(`docpipe/extraction/topup_parameter.py`); `already_done` names
 it in a second warning for such a document. The trace is read by
 `scripts/trace_report.py` and, for cost, by `trace_costs`
-(`scripts/harvest_compare.py:135` to `155`), never by a resume.
+(`scripts/harvest_compare.py`), never by a resume.
