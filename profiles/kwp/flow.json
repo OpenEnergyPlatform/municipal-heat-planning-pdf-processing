@@ -209,11 +209,6 @@
                           "when": {
                             "any": [
                               {
-                                "of": "answer",
-                                "is": "answered",
-                                "not": true
-                              },
-                              {
                                 "of": "coordinate",
                                 "is": "state",
                                 "op": "one_of",
@@ -235,32 +230,117 @@
                                 "all": [
                                   {
                                     "of": "coordinate",
-                                    "is": "state",
-                                    "op": "one_of",
-                                    "value": [
-                                      "unbacked"
-                                    ]
-                                  }
-                                ]
-                              },
-                              "steps": []
-                            },
-                            {
-                              "when": {
-                                "all": [
-                                  {
-                                    "of": "coordinate",
                                     "is": "own_only"
                                   }
                                 ]
                               },
                               "steps": [
                                 {
-                                  "id": "document_own_only",
-                                  "box": "state",
-                                  "set": {
-                                    "mode": "unstated"
-                                  }
+                                  "id": "if_1",
+                                  "if": [
+                                    {
+                                      "when": {
+                                        "all": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "own_value"
+                                          }
+                                        ]
+                                      },
+                                      "steps": [
+                                        {
+                                          "id": "document_own_only",
+                                          "box": "state",
+                                          "set": {
+                                            "mode": "unstated"
+                                          },
+                                          "when": {
+                                            "all": [
+                                              {
+                                                "of": "coordinate",
+                                                "is": "state",
+                                                "op": "one_of",
+                                                "value": [
+                                                  "read",
+                                                  "unbacked"
+                                                ],
+                                                "not": true
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  ],
+                                  "else": [
+                                    {
+                                      "id": "beside_1",
+                                      "box": "beside",
+                                      "set": {
+                                        "own_piece": true
+                                      },
+                                      "rules": {
+                                        "beside_pieces": 0
+                                      }
+                                    },
+                                    {
+                                      "id": "round_1",
+                                      "round": {
+                                        "supply": true
+                                      },
+                                      "steps": [
+                                        {
+                                          "id": "search_1",
+                                          "box": "ask",
+                                          "preset": "search",
+                                          "rules": {
+                                            "max_tokens": 1536
+                                          }
+                                        },
+                                        {
+                                          "id": "about_1",
+                                          "box": "ask",
+                                          "preset": "about",
+                                          "rules": {
+                                            "max_tokens": 256
+                                          }
+                                        }
+                                      ],
+                                      "stop": {
+                                        "all": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "read"
+                                            ]
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "id": "state_1",
+                                      "box": "state",
+                                      "set": {
+                                        "mode": "unstated"
+                                      },
+                                      "when": {
+                                        "all": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "read",
+                                              "unbacked"
+                                            ],
+                                            "not": true
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
                                 }
                               ]
                             }
@@ -277,7 +357,10 @@
                             },
                             {
                               "id": "document_near",
-                              "box": "beside"
+                              "box": "beside",
+                              "set": {
+                                "own_piece": true
+                              }
                             },
                             {
                               "id": "document_beside_round",
@@ -292,14 +375,6 @@
                                     "op": "one_of",
                                     "value": [
                                       "read"
-                                    ]
-                                  },
-                                  {
-                                    "of": "coordinate",
-                                    "is": "state",
-                                    "op": "one_of",
-                                    "value": [
-                                      "unbacked"
                                     ]
                                   }
                                 ]
@@ -336,8 +411,7 @@
                                         "is": "state",
                                         "op": "one_of",
                                         "value": [
-                                          "read",
-                                          "unbacked"
+                                          "read"
                                         ],
                                         "not": true
                                       }
@@ -362,18 +436,31 @@
                                             "value": [
                                               "read"
                                             ]
-                                          },
-                                          {
-                                            "of": "coordinate",
-                                            "is": "state",
-                                            "op": "one_of",
-                                            "value": [
-                                              "unbacked"
-                                            ]
                                           }
                                         ]
                                       },
                                       "steps": [
+                                        {
+                                          "id": "phrase_1",
+                                          "box": "ask",
+                                          "preset": "phrase",
+                                          "when": {
+                                            "all": [
+                                              {
+                                                "of": "round",
+                                                "is": "number",
+                                                "op": "at_least",
+                                                "value": 2
+                                              }
+                                            ]
+                                          },
+                                          "rules": {
+                                            "max_tokens": 300
+                                          },
+                                          "set": {
+                                            "anew": true
+                                          }
+                                        },
                                         {
                                           "id": "document_search",
                                           "box": "ask",
@@ -459,6 +546,31 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "id": "state_2",
+                          "box": "state",
+                          "set": {
+                            "mode": "unanswered"
+                          },
+                          "when": {
+                            "all": [
+                              {
+                                "of": "coordinate",
+                                "is": "unanswered"
+                              },
+                              {
+                                "of": "coordinate",
+                                "is": "state",
+                                "op": "one_of",
+                                "value": [
+                                  "read",
+                                  "unbacked"
+                                ],
+                                "not": true
+                              }
+                            ]
+                          }
                         }
                       ]
                     }
@@ -588,11 +700,6 @@
                       "when": {
                         "any": [
                           {
-                            "of": "answer",
-                            "is": "answered",
-                            "not": true
-                          },
-                          {
                             "of": "coordinate",
                             "is": "state",
                             "op": "one_of",
@@ -614,32 +721,117 @@
                             "all": [
                               {
                                 "of": "coordinate",
-                                "is": "state",
-                                "op": "one_of",
-                                "value": [
-                                  "unbacked"
-                                ]
-                              }
-                            ]
-                          },
-                          "steps": []
-                        },
-                        {
-                          "when": {
-                            "all": [
-                              {
-                                "of": "coordinate",
                                 "is": "own_only"
                               }
                             ]
                           },
                           "steps": [
                             {
-                              "id": "own_only",
-                              "box": "state",
-                              "set": {
-                                "mode": "unstated"
-                              }
+                              "id": "own_value_way",
+                              "if": [
+                                {
+                                  "when": {
+                                    "all": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "own_value"
+                                      }
+                                    ]
+                                  },
+                                  "steps": [
+                                    {
+                                      "id": "own_only",
+                                      "box": "state",
+                                      "set": {
+                                        "mode": "unstated"
+                                      },
+                                      "when": {
+                                        "all": [
+                                          {
+                                            "of": "coordinate",
+                                            "is": "state",
+                                            "op": "one_of",
+                                            "value": [
+                                              "read",
+                                              "unbacked"
+                                            ],
+                                            "not": true
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                }
+                              ],
+                              "else": [
+                                {
+                                  "id": "own_value_beside",
+                                  "box": "beside",
+                                  "set": {
+                                    "own_piece": true
+                                  },
+                                  "rules": {
+                                    "beside_pieces": 0
+                                  }
+                                },
+                                {
+                                  "id": "own_value_round",
+                                  "round": {
+                                    "supply": true
+                                  },
+                                  "steps": [
+                                    {
+                                      "id": "own_value_search",
+                                      "box": "ask",
+                                      "preset": "search",
+                                      "rules": {
+                                        "max_tokens": 1536
+                                      }
+                                    },
+                                    {
+                                      "id": "own_value_about",
+                                      "box": "ask",
+                                      "preset": "about",
+                                      "rules": {
+                                        "max_tokens": 256
+                                      }
+                                    }
+                                  ],
+                                  "stop": {
+                                    "all": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read"
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                },
+                                {
+                                  "id": "own_value_unstated",
+                                  "box": "state",
+                                  "set": {
+                                    "mode": "unstated"
+                                  },
+                                  "when": {
+                                    "all": [
+                                      {
+                                        "of": "coordinate",
+                                        "is": "state",
+                                        "op": "one_of",
+                                        "value": [
+                                          "read",
+                                          "unbacked"
+                                        ],
+                                        "not": true
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
                             }
                           ]
                         }
@@ -656,7 +848,10 @@
                         },
                         {
                           "id": "near",
-                          "box": "beside"
+                          "box": "beside",
+                          "set": {
+                            "own_piece": true
+                          }
                         },
                         {
                           "id": "beside_round",
@@ -671,14 +866,6 @@
                                 "op": "one_of",
                                 "value": [
                                   "read"
-                                ]
-                              },
-                              {
-                                "of": "coordinate",
-                                "is": "state",
-                                "op": "one_of",
-                                "value": [
-                                  "unbacked"
                                 ]
                               }
                             ]
@@ -715,8 +902,7 @@
                                     "is": "state",
                                     "op": "one_of",
                                     "value": [
-                                      "read",
-                                      "unbacked"
+                                      "read"
                                     ],
                                     "not": true
                                   }
@@ -741,18 +927,31 @@
                                         "value": [
                                           "read"
                                         ]
-                                      },
-                                      {
-                                        "of": "coordinate",
-                                        "is": "state",
-                                        "op": "one_of",
-                                        "value": [
-                                          "unbacked"
-                                        ]
                                       }
                                     ]
                                   },
                                   "steps": [
+                                    {
+                                      "id": "search_anew",
+                                      "box": "ask",
+                                      "preset": "phrase",
+                                      "when": {
+                                        "all": [
+                                          {
+                                            "of": "round",
+                                            "is": "number",
+                                            "op": "at_least",
+                                            "value": 2
+                                          }
+                                        ]
+                                      },
+                                      "rules": {
+                                        "max_tokens": 300
+                                      },
+                                      "set": {
+                                        "anew": true
+                                      }
+                                    },
                                     {
                                       "id": "search",
                                       "box": "ask",
@@ -838,6 +1037,31 @@
                           ]
                         }
                       ]
+                    },
+                    {
+                      "id": "no_answer",
+                      "box": "state",
+                      "set": {
+                        "mode": "unanswered"
+                      },
+                      "when": {
+                        "all": [
+                          {
+                            "of": "coordinate",
+                            "is": "unanswered"
+                          },
+                          {
+                            "of": "coordinate",
+                            "is": "state",
+                            "op": "one_of",
+                            "value": [
+                              "read",
+                              "unbacked"
+                            ],
+                            "not": true
+                          }
+                        ]
+                      }
                     }
                   ]
                 }
