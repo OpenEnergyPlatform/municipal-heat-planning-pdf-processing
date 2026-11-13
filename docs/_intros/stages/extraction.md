@@ -1047,8 +1047,8 @@ vector search ranks the plan's passages for the search sentence, and given
 `RERANK_BASE_URL` it hands the reranker, of each kind of that order, the best
 `RERANK_POOL` passages and `RERANK_DRAWN` drawn at random from its places after them up
 to place `RERANK_DRAWN_FROM` (rules `rerank_pool`, `rerank_drawn`, `rerank_drawn_from`:
-the best 30 sections, tables and figures and 20 of each kind's places 31 to 100, owner
-decision 2026-11-13, "30 plus 20 je Art", instead of the best 100 of the decisions of
+the best 15 sections, tables and figures and 10 of each kind's places 16 to 100, owner
+decisions 2026-11-13, "30 plus 20 je Art" and the same evening 15 plus 10, instead of the best 100 of the decisions of
 2026-11-06 and 2026-11-08). The draw is the same for the same document and sentences, so
 a search asked again draws the same passages, and a new sentence draws anew; a kind
 with no more passages than that gives all of them, and a kind the pool leaves at 0

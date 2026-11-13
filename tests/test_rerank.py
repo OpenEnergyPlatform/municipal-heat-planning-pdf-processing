@@ -55,7 +55,12 @@ def test_the_pool_is_reordered_and_the_rest_follows_unsent():
 # and sentences AND another for another sentence, all places where fewer are
 # left AND none for a kind of 0, the reranker of the pieces draws none, AND
 # the rest follow in the vector search's order (owner decision 2026-11-13:
-# "30 plus 20 je Art").
+# "30 plus 20 je Art", the same evening 15 plus 10). The numbers are read
+# from the rules, so the promises hold whatever the standard is.
+
+BEST, DRAWN, UPTO = (rules.get("rerank_pool"), rules.get("rerank_drawn"),
+                     rules.get("rerank_drawn_from"))
+
 
 def many(kind, start, count):
     return [source(kind, start + i) for i in range(count)]
@@ -75,9 +80,9 @@ def test_of_each_kind_the_best_and_some_drawn_from_the_places_up_to_the_last():
     for first in (1, 1001):
         got = {i - first for i in sent_ids(server)
                if first <= i < first + 150}
-        assert len(got) == 50                       # 30 best and 20 drawn
-        assert set(range(30)) <= got                # the best 30
-        assert all(place < 100 for place in got)    # none beyond place 100
+        assert len(got) == BEST + DRAWN             # the best and the drawn
+        assert set(range(BEST)) <= got              # the best
+        assert all(place < UPTO for place in got)   # none beyond the last
     # every score is equal: the pool keeps the vector order, the rest after
     sent = sent_ids(server)
     assert [s.owner_id for s in ordered] == \
@@ -92,10 +97,10 @@ def test_the_draw_is_the_same_for_the_same_search_and_new_for_another():
         server = Server({})
         rerank.Reranker(base_url="http://x", post=server).order(
             document, probes, found)
-        return sent_ids(server) - set(range(1, 31))
+        return sent_ids(server) - set(range(1, BEST + 1))
 
     first = drawn(7, ["a", "b"])
-    assert len(first) == 20
+    assert len(first) == DRAWN
     assert drawn(7, ["b", "a"]) == first            # the same search
     assert drawn(7, ["a", "c"]) != first            # a new sentence
     assert drawn(8, ["a", "b"]) != first            # another document
@@ -103,13 +108,14 @@ def test_the_draw_is_the_same_for_the_same_search_and_new_for_another():
 
 def test_where_fewer_places_are_left_all_are_given_and_a_kind_of_0_none():
     server = Server({})
+    few = BEST + DRAWN // 2                         # fewer left than drawn
     rerank.Reranker(base_url="http://x", post=server).order(
-        7, ["q"], many("table", 1, 40))
-    assert sent_ids(server) == set(range(1, 41))    # 30 and the 10 left
+        7, ["q"], many("table", 1, few))
+    assert sent_ids(server) == set(range(1, few + 1))
     server = Server({})
     with rules.overlaid(rerank_pool_by_kind={"table": 0}):
         rerank.Reranker(base_url="http://x", post=server).order(
-            7, ["q"], many("table", 1, 40) + many("section", 101, 3))
+            7, ["q"], many("table", 1, few) + many("section", 101, 3))
     assert sent_ids(server) == {101, 102, 103}      # no table at all
 
 

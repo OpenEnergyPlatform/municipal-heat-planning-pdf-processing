@@ -9,7 +9,7 @@ reorders, of each kind, the best passages the vector search found (rule
 `rerank_drawn` and `rerank_drawn_from`), all read when the search runs; the
 rest follow in the vector search's order, so a walk down the list still
 reaches every passage (owner decisions 2026-11-06 and 2026-11-08: the
-reranker for the retrieval; 2026-11-13: of each kind the best 30 and 20
+reranker for the retrieval; 2026-11-13: of each kind the best 15 and 10
 drawn from the places up to 100, instead of the best 100). The draw is the
 same for the same document and sentences, so a run asked again draws the
 same passages and the scores the threads share are found again.
