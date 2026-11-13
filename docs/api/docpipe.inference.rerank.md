@@ -7,11 +7,15 @@ rerank.py: The passages of one search, put in order by a reranker.
 The vector search ranks a plan's passages by how close their vectors are to
 the search sentences. A reranker reads each passage with the sentence and
 scores the pair itself (Qwen3-VL-Reranker, served by vLLM's /rerank). It
-reorders the best passages of each kind the vector search found (rule
-`rerank_pool`, read when the search runs); the rest follow in the vector
-search's order, so a walk down the list still reaches every passage (owner
-decisions 2026-11-06 and 2026-11-08: the reranker for the retrieval, 100 per
-kind).
+reorders, of each kind, the best passages the vector search found (rule
+`rerank_pool`) and some drawn at random from the places after them (rules
+`rerank_drawn` and `rerank_drawn_from`), all read when the search runs; the
+rest follow in the vector search's order, so a walk down the list still
+reaches every passage (owner decisions 2026-11-06 and 2026-11-08: the
+reranker for the retrieval; 2026-11-13: of each kind the best 30 and 20
+drawn from the places up to 100, instead of the best 100). The draw is the
+same for the same document and sentences, so a run asked again draws the
+same passages and the scores the threads share are found again.
 
 A search asks with several sentences, and the vector search keeps the best
 score any of them gave a passage. The reranker does the same: each sentence
@@ -111,8 +115,9 @@ so no pair is scored twice for a document, whichever thread asks.
 Server, model, key and pool are read from the rules each time it sends
 or orders, so the step that runs decides; one given here wins.
 *pool_rule* names the rule that says how many passages of each kind it
-scores (`rerank_pool` for a search; the reranker of the pieces of a plan
-has a rule of its own).
+scores (`rerank_pool` for a search, with the passages it draws as
+`DRAWS` names; the reranker of the pieces of a plan has a rule of its
+own and draws none).
 
 #### Reranker.\_\_init\_\_
 
@@ -204,16 +209,39 @@ def pool_size(kind: str, rule: str = "rerank_pool") -> int
 How many passages of *kind* the reranker is given: the rule
 `rerank_pool_by_kind` where it names the kind, else the rule *rule*.
 
+### drawn_of
+
+```python
+def drawn_of(rule: str) -> tuple
+```
+
+(drawn, up to): how many passages of each kind the pool rule *rule*
+draws from the places after its best, and the last place drawn from;
+(0, 0) for a rule that draws none.
+
+### drawing
+
+```python
+def drawing(seed: str, kind: str) -> random.Random
+```
+
+The chance of one search for one kind: the same for the same *seed*
+in every process (Python's own hash is not).
+
 ### pool_of
 
 ```python
 def pool_of(sources: Sequence, size: Optional[int] = None,
-            rule: str = "rerank_pool") -> tuple
+            rule: str = "rerank_pool", drawn: int = 0, upto: int = 0,
+            seed: str = "") -> tuple
 ```
 
-(pool, rest): the first *size* passages of each kind in their order,
-and the others in theirs. Without *size* each kind has the number the
-rules give it (`pool_size`).
+(pool, rest): of each kind its first *size* passages and *drawn* of
+those at its places after them up to place *upto*, drawn at random as
+*seed* says, the pool in the order of *sources* and the others after it
+in theirs. Without *size* each kind has the number the rules give it
+(`pool_size`); a kind whose number is 0 draws none either, and where
+fewer places are left than *drawn*, all of them are taken.
 
 ### document_of
 

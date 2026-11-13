@@ -195,7 +195,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.inference.query_cache](docpipe.inference.query_cache.md): On-disk cache mapping a query to its embedding vector, so an identical query skips the on-demand model load. (5 functions)
 - [docpipe.inference.replies](docpipe.inference.replies.md): The reply each chat request asks for, as a JSON schema. (3 functions)
 - [docpipe.inference.request_log](docpipe.inference.request_log.md): Request logging in a separate SQLite file. (2 functions)
-- [docpipe.inference.rerank](docpipe.inference.rerank.md): The passages of one search, put in order by a reranker. (2 classes, 7 functions)
+- [docpipe.inference.rerank](docpipe.inference.rerank.md): The passages of one search, put in order by a reranker. (2 classes, 9 functions)
 - [docpipe.inference.statements](docpipe.inference.statements.md): Which of the statements a model made the reader is shown. (6 functions)
 - [docpipe.inference.values_index](docpipe.inference.values_index.md): Finds harvested values by what they mean. (1 class, 8 functions)
 - [docpipe.inference.values_route](docpipe.inference.values_route.md): Answers a question for a number from the harvest, before the documents are searched. (3 functions)

@@ -244,7 +244,9 @@ def test_the_gemini_api_reads_its_batch_and_its_key_from_the_rules():
 @pytest.mark.parametrize("env, rule", [
     ("RERANK_BASE_URL", "rerank_base_url"),
     ("RERANK_API_KEY", "rerank_api_key"), ("RERANK_MODEL", "rerank_model"),
-    ("RERANK_POOL", "rerank_pool"), ("CODE_EXEC_TIMEOUT", "code_timeout_s")])
+    ("RERANK_POOL", "rerank_pool"), ("RERANK_DRAWN", "rerank_drawn"),
+    ("RERANK_DRAWN_FROM", "rerank_drawn_from"),
+    ("CODE_EXEC_TIMEOUT", "code_timeout_s")])
 def test_a_setting_that_wins_over_a_rule_has_no_default_of_its_own(env, rule):
     setting = settings.BY_ENV[env]
     assert setting.rule == rule and setting.default is None

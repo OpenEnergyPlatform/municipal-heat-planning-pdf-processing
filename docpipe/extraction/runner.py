@@ -1186,9 +1186,11 @@ def make_search_reranker(image_root: Optional[Path] = None
                                if image_root else source.image_path)
         return None
 
-    log.info("extraction: searches reranked by %s at %s, %d per kind",
+    drawn, upto = rerank_map.drawn_of("rerank_pool")
+    log.info("extraction: searches reranked by %s at %s, the best %d of "
+             "each kind and %d drawn from its places up to %d",
              rerank_map.model_name(), rerank_map.base_url(),
-             rerank_map.pool_size("section"))
+             rerank_map.pool_size("section"), drawn, upto)
     store = rerank_map.Scores()
     return lambda: rerank_map.make_reranker(image_of=figure_image,
                                             store=store)

@@ -31,12 +31,29 @@ RULES: tuple = (
          env="RERANK_MODEL", empty=True, machine=True, steps=SEARCHING,
          where="inference/rerank.py"),
     rule("rerank_pool", "flow", "Search", "whole",
-         "How many passages of each kind (section, table, figure) the "
-         "reranker is given: the best ones of the vector search. The rest "
-         "follow in the order of the vector search, so a walk down the list "
-         "still reaches every passage. A larger number reorders more and "
-         "costs more requests to the reranker. Decided on 2026-11-09.",
-         least=1, env="RERANK_POOL", decided="2026-11-09",
+         "How many of the best passages of each kind (section, table, "
+         "figure) of the vector search the reranker is given, besides those "
+         "it draws at random from the places after them (rerank_drawn). The "
+         "rest follow in the order of the vector search, so a walk down the "
+         "list still reaches every passage. A larger number reorders more "
+         "and costs more requests to the reranker. Decided on 2026-11-13: "
+         "the best 30.",
+         least=1, env="RERANK_POOL", decided="2026-11-13",
+         steps=SEARCHING, where="inference/rerank.py (pool_of)"),
+    rule("rerank_drawn", "flow", "Search", "whole",
+         "How many passages of each kind the reranker is given besides the "
+         "best ones (rerank_pool), drawn at random from the places after "
+         "them up to rerank_drawn_from. The draw is the same for the same "
+         "document and search sentences, a new sentence draws anew. Where "
+         "fewer places are left, all of them are given. 0: only the best. "
+         "Decided on 2026-11-13: 20.",
+         least=0, env="RERANK_DRAWN", decided="2026-11-13",
+         steps=SEARCHING, where="inference/rerank.py (pool_of)"),
+    rule("rerank_drawn_from", "flow", "Search", "whole",
+         "The last place of the vector search, within each kind, that the "
+         "passages of rerank_drawn are drawn from. Decided on 2026-11-13: "
+         "100, so of each kind 20 of the places 31 to 100.",
+         least=0, env="RERANK_DRAWN_FROM", decided="2026-11-13",
          steps=SEARCHING, where="inference/rerank.py (pool_of)"),
     rule("rerank_pool_by_kind", "flow", "Search", "map",
          "The number of passages of one kind the reranker is given, where it "

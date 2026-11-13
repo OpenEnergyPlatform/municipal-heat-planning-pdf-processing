@@ -9,6 +9,7 @@
 """
 from types import SimpleNamespace
 
+from docpipe import rules
 from docpipe.inference import rerank
 
 
@@ -41,10 +42,84 @@ def test_the_pool_is_reordered_and_the_rest_follows_unsent():
     server = Server({("q", "table 2"): 0.9, ("q", "table 1"): 0.1,
                      ("q", "section 5"): 0.8})
     ranker = rerank.Reranker(base_url="http://x", pool=2, post=server)
-    ordered = ranker.order(7, ["q"], found)
+    with rules.overlaid(rerank_drawn=0):            # the best only
+        ordered = ranker.order(7, ["q"], found)
     assert [s.owner_id for s in ordered] == [2, 5, 1, 4, 3]
     sent = server.bodies[0]["documents"]
     assert "table 3" not in sent and len(sent) == 4
+
+
+# Of each kind the reranker is given the best RERANK_POOL passages AND
+# RERANK_DRAWN drawn at random from the places after them up to
+# RERANK_DRAWN_FROM AND none beyond, the draw the same for the same document
+# and sentences AND another for another sentence, all places where fewer are
+# left AND none for a kind of 0, the reranker of the pieces draws none, AND
+# the rest follow in the vector search's order (owner decision 2026-11-13:
+# "30 plus 20 je Art").
+
+def many(kind, start, count):
+    return [source(kind, start + i) for i in range(count)]
+
+
+def sent_ids(server) -> set:
+    return {int(text.split()[1]) for body in server.bodies
+            for text in body["documents"]}
+
+
+def test_of_each_kind_the_best_and_some_drawn_from_the_places_up_to_the_last():
+    tables, sections = many("table", 1, 150), many("section", 1001, 150)
+    found = [s for pair in zip(tables, sections) for s in pair]
+    server = Server({})
+    ordered = rerank.Reranker(base_url="http://x", post=server).order(
+        7, ["q"], found)
+    for first in (1, 1001):
+        got = {i - first for i in sent_ids(server)
+               if first <= i < first + 150}
+        assert len(got) == 50                       # 30 best and 20 drawn
+        assert set(range(30)) <= got                # the best 30
+        assert all(place < 100 for place in got)    # none beyond place 100
+    # every score is equal: the pool keeps the vector order, the rest after
+    sent = sent_ids(server)
+    assert [s.owner_id for s in ordered] == \
+        [s.owner_id for s in found if s.owner_id in sent] + \
+        [s.owner_id for s in found if s.owner_id not in sent]
+
+
+def test_the_draw_is_the_same_for_the_same_search_and_new_for_another():
+    found = many("table", 1, 120)
+
+    def drawn(document, probes):
+        server = Server({})
+        rerank.Reranker(base_url="http://x", post=server).order(
+            document, probes, found)
+        return sent_ids(server) - set(range(1, 31))
+
+    first = drawn(7, ["a", "b"])
+    assert len(first) == 20
+    assert drawn(7, ["b", "a"]) == first            # the same search
+    assert drawn(7, ["a", "c"]) != first            # a new sentence
+    assert drawn(8, ["a", "b"]) != first            # another document
+
+
+def test_where_fewer_places_are_left_all_are_given_and_a_kind_of_0_none():
+    server = Server({})
+    rerank.Reranker(base_url="http://x", post=server).order(
+        7, ["q"], many("table", 1, 40))
+    assert sent_ids(server) == set(range(1, 41))    # 30 and the 10 left
+    server = Server({})
+    with rules.overlaid(rerank_pool_by_kind={"table": 0}):
+        rerank.Reranker(base_url="http://x", post=server).order(
+            7, ["q"], many("table", 1, 40) + many("section", 101, 3))
+    assert sent_ids(server) == {101, 102, 103}      # no table at all
+
+
+def test_the_reranker_of_the_pieces_draws_none():
+    server = Server({})
+    with rules.overlaid(rerank_chunk_pool=2):
+        rerank.Reranker(base_url="http://x", post=server,
+                        pool_rule="rerank_chunk_pool").order(
+            7, ["q"], many("table", 1, 10))
+    assert sent_ids(server) == {1, 2}
 
 
 def test_a_passage_takes_the_best_score_of_any_sentence():

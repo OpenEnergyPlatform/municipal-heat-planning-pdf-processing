@@ -5,9 +5,10 @@ standard gives today's result.
 
 The promises, each with a case that breaks it by construction:
 
-1. The reranker is given as many passages of each kind as `rerank_pool` (or
-   `rerank_pool_by_kind`) says WHEN IT ORDERS, AND the rule of a step wins
-   over the run's, AND the standard is 100.
+1. The reranker is given as many of the best passages of each kind as
+   `rerank_pool` (or `rerank_pool_by_kind`) says WHEN IT ORDERS, AND the rule
+   of a step wins over the run's, AND the standard is the best 30 with 20
+   drawn from the places up to 100.
 2. Sentences are put together as `sentence_fusion` says, in the reranker AND
    in the vector search, from one function.
 3. The vector search takes only the kinds of `search_kinds`, only owners in
@@ -58,7 +59,8 @@ SCENARIO_SPEC = load_spec(json.loads(
 @pytest.fixture(autouse=True)
 def fresh(monkeypatch):
     for name in ("RERANK_BASE_URL", "RERANK_API_KEY", "RERANK_MODEL",
-                 "RERANK_POOL", "CODE_EXEC_TIMEOUT"):
+                 "RERANK_POOL", "RERANK_DRAWN", "RERANK_DRAWN_FROM",
+                 "CODE_EXEC_TIMEOUT"):
         monkeypatch.delenv(name, raising=False)
     rules.reset()
     completion.OFFLINE.clear()
@@ -110,11 +112,12 @@ def test_the_pool_is_read_when_the_search_orders():
     server = Server()
     ranker = rerank.Reranker(base_url="http://x", post=server)
     ranker.order(1, ["q"], FOUND)
-    assert len(sent(server)) == 5                       # the standard: 100
-    assert rules.get("rerank_pool") == 100
+    assert len(sent(server)) == 5                       # the standard: 30
+    assert (rules.get("rerank_pool"), rules.get("rerank_drawn"),
+            rules.get("rerank_drawn_from")) == (30, 20, 100)
     server = Server()
     ranker = rerank.Reranker(base_url="http://x", post=server)
-    with rules.overlaid(rerank_pool=2):
+    with rules.overlaid(rerank_pool=2, rerank_drawn=0):
         ranker.order(2, ["q"], FOUND)                   # the same object
     assert sorted(sent(server)) == ["section 4", "section 5", "table 1",
                                     "table 2"]
@@ -123,16 +126,23 @@ def test_the_pool_is_read_when_the_search_orders():
 def test_a_step_sets_the_pool_for_itself_and_a_kind_has_its_own():
     server = Server()
     ranker = rerank.Reranker(base_url="http://x", post=server)
-    with at("search", rerank_pool=1):
+    with at("search", rerank_pool=1, rerank_drawn=0):
         ranker.order(1, ["q"], FOUND)
     assert sorted(sent(server)) == ["section 4", "table 1"]
     server = Server()
     ranker = rerank.Reranker(base_url="http://x", post=server)
-    with at("search", rerank_pool=1, rerank_pool_by_kind={"table": 3}):
+    with at("search", rerank_pool=1, rerank_drawn=0,
+            rerank_pool_by_kind={"table": 3}):
         ranker.order(1, ["q"], FOUND)
     assert sorted(sent(server)) == ["section 4", "table 1", "table 2",
                                     "table 3"]
-    assert rerank.pool_size("table") == 100             # outside: the run's
+    assert rerank.pool_size("table") == 30              # outside: the run's
+    server = Server()
+    ranker = rerank.Reranker(base_url="http://x", post=server)
+    with at("search", rerank_pool=1, rerank_drawn=1, rerank_drawn_from=2):
+        ranker.order(1, ["q"], FOUND)                   # place 2 is drawn
+    assert sorted(sent(server)) == ["section 4", "section 5", "table 1",
+                                    "table 2"]
 
 
 def test_the_reranker_of_the_pieces_has_a_pool_of_its_own():

@@ -578,9 +578,18 @@ SETTINGS = (
       stages=("extract",), rule="rerank_model"),
     S("RERANK_POOL", "rerank.pool", "int", None,
       "Passages of each kind (section, table, figure) a search hands the "
-      "reranker, the best of the vector search; the rest follow in its "
-      "order.",
+      "reranker, the best of the vector search, besides those it draws "
+      "(RERANK_DRAWN); the rest follow in its order.",
       stages=("extract",), rule="rerank_pool"),
+    S("RERANK_DRAWN", "rerank.drawn", "int", None,
+      "Passages of each kind a search hands the reranker besides the best, "
+      "drawn at random from the places after them up to "
+      "RERANK_DRAWN_FROM.",
+      stages=("extract",), rule="rerank_drawn"),
+    S("RERANK_DRAWN_FROM", "rerank.drawn_from", "int", None,
+      "The last place of each kind of the vector search the passages of "
+      "RERANK_DRAWN are drawn from.",
+      stages=("extract",), rule="rerank_drawn_from"),
     S("DOC_PARALLEL", "run.doc_parallel", "int", "8",
       "Documents processed at once in batch mode of refinement and visuals.",
       stages=("refine", "visuals")),

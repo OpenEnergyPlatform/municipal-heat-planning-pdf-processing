@@ -1043,15 +1043,22 @@ The passages: every search over a plan goes through one function
 (`runner.make_more_sources`): the search of a field a document has once, of the plan's
 settings and years, of an open coordinate and the `similar` fetch of a reply. The
 vector search ranks the plan's passages for the search sentence, and given
-`RERANK_BASE_URL` it hands the best `RERANK_POOL` passages of each kind of that order
-(100 sections, tables and figures, owner decisions 2026-11-06 and 2026-11-08) to the
-reranker. Those passages come back in its order, the rest after them in the vector
+`RERANK_BASE_URL` it hands the reranker, of each kind of that order, the best
+`RERANK_POOL` passages and `RERANK_DRAWN` drawn at random from its places after them up
+to place `RERANK_DRAWN_FROM` (rules `rerank_pool`, `rerank_drawn`, `rerank_drawn_from`:
+the best 30 sections, tables and figures and 20 of each kind's places 31 to 100, owner
+decision 2026-11-13, "30 plus 20 je Art", instead of the best 100 of the decisions of
+2026-11-06 and 2026-11-08). The draw is the same for the same document and sentences, so
+a search asked again draws the same passages, and a new sentence draws anew; a kind
+with no more passages than that gives all of them, and a kind the pool leaves at 0
+draws none. Those passages come back in its order, the rest after them in the vector
 search's, so every passage is still reached. A search asks with several sentences;
 each is one request over the pool, and a passage keeps its best score, as the vector
 search keeps a passage's best. A figure goes with its picture where the run attaches
 figures, any other passage as its text; the server cuts a pair that outgrows the model
-to the model's length. Scores are kept per thread for the document in hand, so a
-search asked again with fewer passages left scores nothing twice. A search, an
+to the model's length. Scores are kept for the document in hand and shared by the
+threads (below), so a search asked again with fewer passages left scores nothing twice.
+A search, an
 embedding or a reranker request that the server failed (no reply, a 429, a 5xx) is
 asked again until it answers or the run halts, `search_retry_most` times at most
 where that rule sets a limit (`runner.persistently`, owner decision 2026-11-09), and
@@ -2496,7 +2503,7 @@ harvest read with.
 | `EXTRACT_PRIOR_MAX` | env var | `24` | Earlier values a request was told it has; it only enters the context budget (`runner.context_budget`) now | `runner.py` |
 | `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text a request was sized for; it only enters the context budget now. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.context_budget`, `runner.make_parents` |
 | `EXTRACT_CODE_ROUNDS` | env var | `2` | Sandbox rounds a compute question may spend on a self-checked value | `runner.make_computer` |
-| `RERANK_BASE_URL` / `RERANK_MODEL` / `RERANK_POOL` / `RERANK_API_KEY` | env var | empty / `Qwen/Qwen3-VL-Reranker-8B` / `100` / `EMPTY` | The vLLM server whose `/rerank` orders the pieces of a plan for each field and every passage search (empty: the vector search's order, the plan's order without the search), the model it serves, and how many of the best passages of each kind a passage search hands it (the order of the pieces scores every piece) | `rerank.py`, `runner.make_more_sources`, `runner.make_chunk_reranker` |
+| `RERANK_BASE_URL` / `RERANK_MODEL` / `RERANK_POOL` / `RERANK_DRAWN` / `RERANK_DRAWN_FROM` / `RERANK_API_KEY` | env var | empty / `Qwen/Qwen3-VL-Reranker-8B` / `30` / `20` / `100` / `EMPTY` | The vLLM server whose `/rerank` orders the pieces of a plan for each field and every passage search (empty: the vector search's order, the plan's order without the search), the model it serves, how many of the best passages of each kind a passage search hands it, how many more of each kind it draws at random and up to which place it draws them (the order of the pieces scores every piece and draws none) | `rerank.py`, `runner.make_more_sources`, `runner.make_chunk_reranker` |
 | `LLM_TOOL_CHOICE` | env var | `none` | The `tool_choice` every request of the pipeline sends; `none` keeps an agent endpoint from calling a tool of its own, empty or `off` sends none | `llm_preflight.request_extras` |
 | `CODE_EXEC_PARALLEL` | env var | `1` | Code runs one run has out at the sandbox at a time; match the service's `KWP_SANDBOX_PARALLEL` | `runner.SANDBOX_SLOTS` |
 | `EXTRACT_FIELD_PARALLEL` | env var | `192` | The rule `compute_parallel`: the questions of the compute step at once. With the adaptive limit on, the limit (`EXTRACT_LIMIT_MAX` at most) bounds the requests, and the finds and coordinates of a survey run on a pool sized to the limit's maximum (see The adaptive request limit); the documents at once are bounded by `EXTRACT_BATCH_DOCS` (`documents_in_flight`) | `runner.make_computer`, `runner.start_limit` |
