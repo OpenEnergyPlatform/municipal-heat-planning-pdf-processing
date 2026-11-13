@@ -567,9 +567,10 @@ not name one by one (see Words for a group).
 
 The reasons an answer does not hold are those of `schema.DROP_REASONS`: the
 harvest's own and the two of an address, `not_an_address` and `words_not_in_line`.
-A coordinate whose own request came to no reply, like one that has no state after
-every request, ends `unanswered` (`pipeline.mark_unanswered`) and is not searched
-for.
+A coordinate whose own request came to no reply is searched on like any other the
+shipped flows have not read (owner decision 2026-11-13) and, where nothing else
+closed it, ends `unanswered` (the state step `no_answer`); one that has no state
+after every request ends `unanswered` as well (`pipeline.mark_unanswered`).
 
 ### Entries of a list
 
@@ -2582,12 +2583,19 @@ unit is treated the same way and never refused (owner decision 2026-11-07): a
 number whose unit is no entry of `units_accepted` stays read with its printed
 unit, flagged `unmapped:unit:<print>`, without `value_target`.
 
-In the search, a find that does not hold ends a coordinate: it is told once with
-its reason in a follow-up and, where it still does not hold, the coordinate is
-`unbacked`; a piece that holds no answer lets the search go on, until every piece of
-the plan was shown (`unstated`) or the budget of pieces is spent with pieces of the
-plan unshown (`exhausted`); a search request that came to no reply goes on with the
-next pieces, and a coordinate request that came to no reply ends `unanswered`. A reply that
+In the search, a find that does not hold is told once with its reason in a
+follow-up and, where it still does not hold, the coordinate is `unbacked`; since
+2026-11-13 that no longer ends the search in the shipped flows: the round beside,
+the search on and the search round stop only at `read`, so an `unbacked`
+coordinate is searched on and keeps that state only where nothing else is read. A
+piece that holds no answer lets the search go on, until every piece of the plan was
+shown (`unstated`) or the budget of pieces is spent with pieces of the plan unshown
+(`exhausted`); a search request that came to no reply goes on with the next pieces.
+From round 2 on the search round writes a new search sentence (`search_anew`). A
+dimension printed only at its line (`own_only`) ends `unstated` where it is printed
+with the number itself (`own_value`) and its line does not give it; any other is
+shown its own chunk whole, without neighbours, in a round of its own first. The
+box beside shows the value's own chunk whole between its neighbours. A reply that
 does not parse, is empty, or arrives as a non-dict is asked again with the cause
 named (`_reply_fault`), and no JSON is repaired.
 
