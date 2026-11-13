@@ -240,10 +240,11 @@ RULES = (
          "The state this step gives a dimension that is still open. By the "
          "search hits: open if chunks of the search were never shown, "
          "else not stated in the document. Not stated in the document: it "
-         "is marked so at once. Not asked: it is marked as excluded by "
+         "is marked so at once. No answer: a request about it got no "
+         "answer in form. Not asked: it is marked as excluded by "
          "another dimension, unless it already has a state. A value set at "
          "the box itself wins over this rule.",
-         choices=("by_supply", "unstated", "out_of_slice"),
+         choices=("by_supply", "unstated", "unanswered", "out_of_slice"),
          where="blocks.py (state), engine.py (box_state)",
          steps=("state",)),
     rule("open_states", "flow", "States", "texts",

@@ -177,10 +177,11 @@ RULES: tuple = (
          least=1, env="CODE_EXEC_TIMEOUT", decided="2026-11-03",
          steps=("compute",), where="inference/code_exec.py"),
     rule("code_resend", "flow", "Calculation", "whole",
-         "How often a calculation that failed is sent to the sandbox again. "
-         "0: never, the failure is the answer. A larger number retries a "
-         "sandbox that is slow or busy, and waits the time above for each "
-         "try.",
+         "How often a calculation is sent to the sandbox again when the "
+         "sandbox failed (no answer, an error of the service), never when "
+         "the code failed. 0: never. Where the sandbox still fails, the "
+         "model is not told, the question ends without a row "
+         "(sandbox_failed) and the log says so.",
          least=0, steps=("compute",), where="inference/code_exec.py"),
     # -- flow: marking in the PDF ---------------------------------------------
     rule("locate_min_score", "flow", "Locating in the PDF", "number",

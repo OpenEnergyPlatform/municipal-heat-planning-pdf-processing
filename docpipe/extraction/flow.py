@@ -1308,19 +1308,16 @@ def problems(tree, known: Optional[dict] = None, profile=None) -> list:
     for kind in PREPARES + ("compute", "catalogue", "sentences", "works"):
         if every.count(kind) > 1:
             check.say({}, f"{kind} stands once at most")
-    # What the runner does once a document is read, in its order.
+    # What the runner does once a document is read, in its order, before
+    # it writes the file (owner decision 2026-11-13, point 12).
     later = list(ENDS)
     if "write" in top:
-        after = top[top.index("write") + 1:]
-        if any(kind not in [None] + later for kind in after) \
-                or any(kind_of(node) != "box" for node in tree[
-                    top.index("write") + 1:] if isinstance(node, dict)):
-            check.say({}, f"write stands at the end; only "
-                      f"{' and '.join(later)} come after it")
-    if "compute" in top and "write" in top \
-            and top.index("compute") < top.index("write"):
-        check.say({}, "compute stands after write: it computes from the "
-                  "rows the reading wrote")
+        at = top.index("write")
+        if any(isinstance(node, dict) for node in tree[at + 1:]):
+            check.say({}, "write stands at the end: nothing comes after it")
+        if any(kind in later for kind in top[at + 1:]):
+            check.say({}, "compute and catalogue stand before write: the "
+                      "run does them before it writes the file")
     ends = [kind for kind in top if kind in later]
     if ends != sorted(ends, key=later.index):
         check.say({}, f"{' and '.join(later)} stand in this order: the run "

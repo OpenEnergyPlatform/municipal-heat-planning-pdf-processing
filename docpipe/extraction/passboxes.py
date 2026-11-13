@@ -613,7 +613,8 @@ def box_read_parameters(run, doc: Doc, node: dict) -> None:
     report = DocumentReport(document_id=doc.document_id,
                             owners_harvested=taken.passages,
                             planned={STAGE: taken.passages},
-                            sources_of=taken.sources_of)
+                            sources_of=taken.sources_of,
+                            uncombed=taken.uncombed)
     runner.fold_answers(taken.answered, report, locate=run.locate,
                         spec=doc.doc_spec)
     drop_repeats(report)
@@ -632,7 +633,8 @@ def box_read_parameters(run, doc: Doc, node: dict) -> None:
     states = parameter_states(only, report.tuples, report.refusals,
                               harvested=report.owners_harvested,
                               answered=taken.replies,
-                              sources_of=report.sources_of)
+                              sources_of=report.sources_of,
+                              uncombed=report.uncombed)
     doc.report = report
     doc.append = {"states": states, "schema": True,
                   "producer": {"parameters": uris, "frame": FRAME_SURVEYED},
@@ -699,7 +701,8 @@ def box_unread(run, doc: Doc, node: dict) -> None:
     report = DocumentReport(document_id=document_id,
                             owners_harvested=taken.passages,
                             planned={STAGE: taken.passages},
-                            sources_of=taken.sources_of)
+                            sources_of=taken.sources_of,
+                            uncombed=taken.uncombed)
     runner.fold_answers(taken.answered, report, locate=run.locate,
                         spec=run.spec)
     drop_repeats(report)

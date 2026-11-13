@@ -264,6 +264,7 @@ def take(req: Request, supply, size: int):
             return None
         req.scope.drew()
         coord.seen.update(c.key for c in batch)
+        coord.whole.update(c.key for c in batch)
         if label == supply.label and supply.ranked is not None:
             coord.ordered.update(c.key for c in batch)
         req.batch, req.label = batch, label

@@ -34,6 +34,8 @@ time for the same time.
 
 Returns {"ok": bool, "stdout": str, "stderr": str, "exit_code": int|None,
 "error": str|None}. Never raises: a disabled sandbox or any transport/HTTP
-problem comes back as ok=False with an `error`.
+problem comes back as ok=False with an `error` and `sandbox` True, a
+failure of the sandbox and not of the code. Only such a failure is sent
+again: code that failed fails the same way the next time.
 
 [Back to the index](../README.md)

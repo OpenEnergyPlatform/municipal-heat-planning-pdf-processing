@@ -611,11 +611,15 @@ environment. The Run section writes the others into `docpipe.toml`
   and stops where its stop condition holds after a turn. A round until the supply
   is used up also ends after a turn that showed nothing of the supply. The box
   that writes the search sentence may write a new one from round 2 on, shown the
-  sentences before.
+  sentences before; the pieces not yet shown are then ordered again with it.
 - **if** takes the first way whose condition holds, else its else way; the ways
   join again below it.
 
 A frame of coordinates has a state box in it: every coordinate ends in a state.
+The state box gives a coordinate that is still open its state: by the search hits
+(open where pieces of the search were never shown, else not stated), not stated,
+no answer (a request about it got no answer in form), or not asked (only where it
+has no state yet).
 
 ### Conditions
 
@@ -625,8 +629,9 @@ of its properties, a comparison and a value, and may be negated ("not"); the row
 are joined by "all" or by "any" (`extraction.conditions`). A property is a yes
 or no, a number, a text or one of a list. What a row can be about is what is
 there at the box's place: the document, the run, the field, the value, the
-coordinate (its state, its kind, whether only its value's own place says it and
-so on), the pieces (shown, left), the round and, after a box that asks, the
+coordinate (its state, its kind, whether only its value's own place says it,
+whether it is printed with the number, whether a request about it got no answer
+in form and so on), the pieces (shown, left), the round and, after a box that asks, the
 answer and its quote. A condition about the answer reads the answer of its own
 item; where no box of that item asked, because it is off or its condition passed
 it by, nothing came back. A row about something there is not yet at its place is

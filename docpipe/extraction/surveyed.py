@@ -107,6 +107,9 @@ class Taken:
     passages: int = 0
     # parameter uri -> the passages it was read in (`trust.parameter_states`).
     sources_of: dict = field(default_factory=dict)
+    # parameter uris of fields of the document that found nothing while
+    # chunks were never shown to them (`Read.uncombed`).
+    uncombed: set = field(default_factory=set)
 
 
 def taken_of(document_id: int, spec, reads: list) -> Taken:
@@ -114,6 +117,8 @@ def taken_of(document_id: int, spec, reads: list) -> Taken:
     sources are the passages it was read in."""
     answered: list = []
     sources_of: dict = {p.uri: set() for p in spec.parameters}
+    uncombed = {r.batch.parameter.uri for r in reads if r.uncombed}
+    reads = [r for r in reads if not r.uncombed]
     for read in reads:
         source = read.batch.items[0].source
         uri = read.batch.parameter.uri
@@ -130,7 +135,7 @@ def taken_of(document_id: int, spec, reads: list) -> Taken:
     replies = sum(1 for read in reads if not read.unread)
     passages = len({(r.batch.items[0].source.owner_kind,
                      r.batch.items[0].source.owner_id) for r in reads})
-    return Taken(reads, answered, replies, passages, sources_of)
+    return Taken(reads, answered, replies, passages, sources_of, uncombed)
 
 
 def locate_value(plan: Plan, source, claim: dict) -> Optional[dict]:

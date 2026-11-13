@@ -431,3 +431,7 @@ class Read:
     # what the check refused of the first replies, by reason
     failed: dict = field(default_factory=dict)
     unanswered: int = 0           # coordinates no reply answered
+    # A field of the document that found nothing while chunks of the
+    # document were never shown to it: no reading, only the mark that its
+    # state is `parameter_uncombed` (owner decision 2026-11-13, point 3).
+    uncombed: bool = False

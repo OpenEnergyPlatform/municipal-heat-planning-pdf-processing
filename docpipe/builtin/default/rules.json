@@ -467,6 +467,8 @@
       "parameter_refused": "unbacked",
       "parameter_cut": "exhausted",
       "parameter_silent": "unstated",
+      "parameter_uncombed": "exhausted",
+      "no_answer": "unanswered",
       "out_of_slice": "out_of_slice",
       "unstated_after_combing": "unstated",
       "exhausted": "exhausted"

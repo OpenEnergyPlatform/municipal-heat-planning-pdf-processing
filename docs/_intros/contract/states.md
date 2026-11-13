@@ -60,7 +60,9 @@ goes on until a find holds or every piece of the plan was shown. `unstated` beco
 permanent only once the search has nothing left to show; if the search has asked its
 budget of requests first, it is written `exhausted`; a coordinate whose own request
 came to no reply, and what no request mentioned, becomes `unanswered`, written once
-at the end by `mark_unanswered`. A pass over a stored harvest (`--top-up`,
+at the end by `mark_unanswered`, or at once by a state box set to "no answer" where a
+request about it got no answer in form (condition `unanswered`, owner decision
+2026-11-13). A pass over a stored harvest (`--top-up`,
 `--top-up-parameters`, `--top-up-open`) asks the same way. See
 [extraction](../stages/extraction.md) (Asking a coordinate of a value and Searching
 for what a value's place does not say) for the requests.

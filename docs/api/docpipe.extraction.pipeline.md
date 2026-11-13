@@ -130,6 +130,7 @@ Fields:
 - `followups: dict = field(default_factory=dict)`: parameter uri -> {"asked": n, "served": m}: how often the model said the passages were not enough, and how often retrieval could answer that.
 - `planned: dict = field(default_factory=dict)`: What the plan was built from, so a run can be read back against the settings it ran under instead of against the ones in the file today.
 - `sources_of: dict = field(default_factory=dict)`: parameter uri -> {(owner kind, owner id)}: what that parameter's own anchors rank. Planned from nothing; it tells a parameter whose passages a cut-off request held from one whose passages were read.
+- `uncombed: set = field(default_factory=set)`: parameter uris of fields of the document that found nothing while chunks were never shown to them (`trust.parameter_states`).
 
 ### Row
 

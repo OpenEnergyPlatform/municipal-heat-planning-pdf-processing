@@ -76,7 +76,9 @@ def number(self, key: str) -> int
 def fetch(self) -> bool
 ```
 
-May the answer ask to see more (`fetches`)?
+May the answer ask to see more (`fetches`)? Not where the rule
+`fetch_rounds` is 0: nothing is fetched then (owner decision
+2026-11-13, point 8).
 
 #### Ask.picture
 

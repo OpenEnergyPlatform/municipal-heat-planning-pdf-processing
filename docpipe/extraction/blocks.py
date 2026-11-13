@@ -309,10 +309,17 @@ LIBRARY = {box.type: box for box in (
         "Takes the chunk right before and the one right after the chunk the "
         "value stands in, as search hits. The question after it shows them "
         "first, so that the model sees what surrounds the value. Example: the "
-        "sentence before a table that says which year the table is about. To "
-        "change it: there is nothing to set; switched off, only the hits of "
-        "the search are shown.",
-        "addressed.Plan.beside", needs=("coordinate",)),
+        "sentence before a table that says which year the table is about. "
+        "How many on each side the rule beside_pieces says, 0 for none. "
+        "Switched on, the value's own chunk comes whole between them: the "
+        "question at the value's place shows only its line and the lines "
+        "around it.",
+        "addressed.Plan.beside", needs=("coordinate",),
+        settings=(Setting("own_piece", SWITCH, "its own chunk whole", False,
+                          help="On: the chunk the value stands in is shown "
+                          "whole, unless a request already showed it "
+                          "whole. Off: only the chunks beside it."),),
+        decided="2026-11-13"),
     # -- ask -----------------------------------------------------------------
     # -- check ---------------------------------------------------------------
     Box("check", "Own check of an answer", "check", "answers", "answers",
@@ -355,15 +362,18 @@ LIBRARY = {box.type: box for box in (
         "this step sets.",
         "engine.Engine.state", needs=("coordinate",),
         settings=(Setting("mode", CHOICE, "state", "by_supply", choices=
-                          ("by_supply", "unstated", "out_of_slice"),
+                          ("by_supply", "unstated", "unanswered", "out_of_slice"),
                           words=("by the search hits",
                                  "not stated in the document",
+                                 "no answer",
                                  "not asked: another dimension excludes "
                                  "the value"),
                           help="By the search hits: the dimension is open "
                           "if chunks of the search were never shown, "
                           "else not stated in the document. Not stated "
-                          "in the document: it is marked so at once. Not "
+                          "in the document: it is marked so at once. No "
+                          "answer: a request about it got no answer in "
+                          "form. Not "
                           "asked: it is marked as excluded by another "
                           "dimension, unless it already has a state.",
                           rule="state_mode"),)),
@@ -555,7 +565,9 @@ IO = {
     "settle": (("fact", "answer"), ("facts",)),
     "state": (("dimension",), ()),
     "write": (("values",), ("rows",)),
-    "catalogue": (("rows",), ("rows",)),
+    # It looks up what the reading's values leave open, before the harvest
+    # is written (owner decision 2026-11-13, point 12).
+    "catalogue": (("values",), ("rows",)),
 }
 LIBRARY = {kind: dataclasses.replace(box, inputs=IO[kind][0],
                                      outputs=IO[kind][1])

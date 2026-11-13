@@ -190,7 +190,8 @@ harvest refused and not how many of those a later pass could read.
 def parameter_states(spec, tuples: list, refusals: list, *,
                      harvested: int = 0,
                      answered: Optional[int] = None,
-                     sources_of: Optional[dict] = None) -> list
+                     sources_of: Optional[dict] = None,
+                     uncombed=()) -> list
 ```
 
 One state per parameter of the spec, in spec order.
@@ -211,5 +212,10 @@ was once marked exhausted by a cut-off table request while its one
 candidate passage had been read in full, and its answer is "the plan
 does not say". Without `sources_of` for a parameter, or for a failed
 request that names no source, a cut anywhere counts for every parameter.
+
+A field of the document that found nothing while chunks of the
+document were never shown to it (*uncombed*) ends in the state of
+`parameter_uncombed`, not "the plan does not say" (owner decision
+2026-11-13, point 3).
 
 [Back to the index](../README.md)

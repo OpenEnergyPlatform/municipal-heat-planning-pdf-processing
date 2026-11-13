@@ -505,8 +505,11 @@ class Ask:
 
     @property
     def fetch(self) -> bool:
-        """May the answer ask to see more (`fetches`)?"""
-        return bool(self.setting("fetch"))
+        """May the answer ask to see more (`fetches`)? Not where the rule
+        `fetch_rounds` is 0: nothing is fetched then (owner decision
+        2026-11-13, point 8)."""
+        return bool(self.setting("fetch")) \
+            and int(rules.get("fetch_rounds")) >= 1
 
     @property
     def picture(self) -> bool:

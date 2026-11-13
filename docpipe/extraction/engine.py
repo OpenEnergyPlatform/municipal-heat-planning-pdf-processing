@@ -205,6 +205,13 @@ class CoordItem:
     # requests saw, each once (owner decision 2026-11-12).
     fetched: list = field(default_factory=list)
     pictures: set = field(default_factory=set)
+    # A request about it got no answer in the expected form: it is not
+    # "not stated" while that request's chunks were never answered (owner
+    # decision 2026-11-13, point 1; the condition "unanswered").
+    unanswered: bool = False
+    # The pieces a request of it showed whole; `seen` also holds the piece
+    # the rule `search_skips_own_piece` leaves out without showing it.
+    whole: set = field(default_factory=set)
 
 
 class ListSupply:
@@ -258,11 +265,17 @@ class SearchSupply:
     (`seen`, the coordinate's) unless the rule `show_twice` says it may be
     shown a second time. *limit* is the most pieces the search shows (the
     flow's number of chunks), *reorder* puts the pieces left in order again
-    with the sentence of the round (the rule `rerank_when`)."""
+    with the sentence of the round: before every request where the rule
+    `rerank_when` says so, and where the round's sentence (*current()*) is
+    no longer the one the order was made with (*sentence*), so that a new
+    sentence from round 2 on (rule `phrase_anew`) searches with it (owner
+    decision 2026-11-13, point 7)."""
 
     def __init__(self, first: list, ranked: Optional[Callable], label: str,
                  limit: Optional[int] = None,
-                 reorder: Optional[Callable] = None):
+                 reorder: Optional[Callable] = None,
+                 sentence: Optional[str] = None,
+                 current: Optional[Callable] = None):
         self.first = list(first)
         self.ranked = ranked
         self.order: Optional[list] = None
@@ -271,6 +284,8 @@ class SearchSupply:
         self.started = False
         self.limit = limit
         self.reorder = reorder
+        self.sentence = sentence
+        self.current = current
         # How often each piece was shown by this supply, the pieces of its
         # order taken, the pieces a reply fetched that were shown, and the
         # rules whose second way a request went through.
@@ -323,10 +338,20 @@ class SearchSupply:
                 left = [c for c in self._ranked()
                         if self._open(c, seen, twice)
                         and not (twice and c.key in self.walked)]
+                now = self.current() if self.current is not None else None
                 if left and rules.get("rerank_when") == "each_round" \
                         and self.reorder is not None:
                     left = self.reorder(left)
                     self.ways.add("rerank_when")
+                    self.sentence = now
+                elif left and self.reorder is not None and now \
+                        and self.sentence is not None \
+                        and now != self.sentence:
+                    # A new sentence of the round: the pieces left in its
+                    # order, once, and again only for the next new one.
+                    left = self.reorder(left)
+                    self.ways.add("phrase_anew")
+                    self.sentence = now
                 if left and counted and self.limit is not None:
                     left = left[:max(0, self.limit - len(self.walked)
                                      - self.fetched_shown)]
@@ -655,6 +680,14 @@ class Engine:
                     # the rule `unit_searched` is on.
                     return own and not (slot.name == fields.UNIT
                                         and rules.get("unit_searched"))
+                if prop == "own_value":
+                    # Printed with the number itself ("ca.", "bis zu"):
+                    # read once with the value, never asked again (owner
+                    # decision 2026-11-06).
+                    return slot.name in tuple(
+                        getattr(coord.group, "own_value", ()) or ())
+                if prop == "unanswered":
+                    return coord.unanswered
                 if prop == "required":
                     return bool(getattr(slot, "keep", False))
                 if prop == "year":
@@ -927,7 +960,14 @@ class Engine:
         value = ValueItem(read, row, [row], clone)
         vscope = scope.child(True, value=value,
                              parameter=read.batch.parameter)
-        item = CoordItem(read, row, slot, group, [], clone)
+        # The coordinates asked before it, as in the run (owner decision
+        # 2026-11-13, point 11): "closed before" holds in a pass as well.
+        before = []
+        for _, one in self.slot_sequence(read.batch.parameter):
+            if one.name == slot.name:
+                break
+            before.append(one)
+        item = CoordItem(read, row, slot, group, before, clone)
         cscope = vscope.child(True, coord=item)
         if self.holds(self.sweep_frame.get("when"), cscope):
             self.run_steps(self.sweep_frame.get("steps") or [], cscope)
@@ -1151,6 +1191,17 @@ class Engine:
                     continue
                 out = self.field_reads(item, child)
                 lost = None if item.found else item.lost
+                supply = child.values.get("supply")
+                if not out and not lost and isinstance(supply, ListSupply) \
+                        and any(c.key not in supply.seen
+                                for c in plan.pieces(item.numbers)):
+                    out.append(Read(Batch(plan.document_id, item.parameter,
+                                          [WorkItem(plan.document_id,
+                                                    item.parameter,
+                                                    self.hole_source(
+                                                        plan, item))],
+                                          spec=self.reader.spec), [],
+                                    uncombed=True))
                 if not out and lost:
                     source = self.hole_source(plan, item)
                     out.append(Read(Batch(plan.document_id, item.parameter,
@@ -1274,14 +1325,10 @@ class Engine:
         return scope.child(True, value=ValueItem(read, row, [row], clone),
                            parameter=read.batch.parameter)
 
-    def each_coordinate(self, node: dict, scope: Scope) -> None:
-        """Each coordinate of the value, in the order of the spec's groups,
-        for the value's row and every row made beside it."""
-        value: ValueItem = scope.get("value")
-        parameter = value.read.batch.parameter
+    def slot_sequence(self, parameter) -> list:
+        """[(group, slot)] of a field's coordinates in the order they are
+        asked: the spec's groups, then the rule `coordinate_order`."""
         slots = slots_of(self.reader.spec, parameter)
-        before: list = []
-        steps = node.get("steps") or []
         sequence = [(group, slot)
                     for group, group_slots in groups_of(self.reader.spec,
                                                         slots)
@@ -1293,7 +1340,16 @@ class Engine:
                 (one for one in sequence if one[1].name in named),
                 key=lambda one: named[one[1].name]) + [
                 one for one in sequence if one[1].name not in named]
-        for group, slot in sequence:
+        return sequence
+
+    def each_coordinate(self, node: dict, scope: Scope) -> None:
+        """Each coordinate of the value, in the order of the spec's groups,
+        for the value's row and every row made beside it."""
+        value: ValueItem = scope.get("value")
+        parameter = value.read.batch.parameter
+        before: list = []
+        steps = node.get("steps") or []
+        for group, slot in self.slot_sequence(parameter):
             for one in list(value.rows):
                 item = CoordItem(value.read, one, slot, group,
                                  list(before), value.clone,
@@ -1366,7 +1422,8 @@ class Engine:
                 again = coord.sentence if coord.sentence is not None \
                     else sentence
                 return reader.rerank_left(plan, [again], left)
-            supply = SearchSupply([], ranked, "found", budget, reordered)
+            supply = SearchSupply([], ranked, "found", budget, reordered,
+                                  sentence, lambda: coord.sentence)
             supply.fetched, coord.fetched = coord.fetched, []
             scope.put("supply", supply)
             return
@@ -1388,12 +1445,24 @@ class Engine:
         scope.put("supply", ListSupply(order))
 
     def box_beside(self, node: dict, scope: Scope) -> None:
+        """The pieces beside the value's own (as many on each side as the
+        rule `beside_pieces` says, 0 for none) and, where the box says so
+        (`own_piece`), its own piece whole between them: the request at the
+        value's place shows only its line and the lines around it (owner
+        decision 2026-11-13, point 4). An own piece the rule
+        `search_skips_own_piece` left out without showing it is shown here;
+        one a request showed whole is not shown again."""
         coord: CoordItem = scope.get("coord")
         plan = scope.get("doc").plan
         self.locate(coord, plan)
         numbers = coord.read.batch.parameter.is_numeric
-        first = plan.beside(coord.chunk, numbers) \
+        own = bool(self.setting(node, "own_piece", "beside")) \
+            and coord.chunk is not None \
+            and coord.chunk.key not in coord.whole
+        first = plan.beside(coord.chunk, numbers, own=own) \
             if coord.chunk is not None else []
+        if own:
+            coord.seen.discard(coord.chunk.key)
         supply = SearchSupply(first, None, "near")
         # What the answer at the value's own place asked to see comes first,
         # before the pieces beside it (owner decision 2026-11-12).
@@ -1417,8 +1486,8 @@ class Engine:
             # The pieces shown for this coordinate in an earlier pass of a
             # round around it are not shown again.
             key = (id(coord.read), coord.row.label, coord.slot.name)
-            coord.seen, coord.ordered = coord.seen_of.setdefault(
-                key, (coord.seen, coord.ordered))
+            coord.seen, coord.ordered, coord.whole = coord.seen_of.setdefault(
+                key, (coord.seen, coord.ordered, coord.whole))
 
     def asking_of(self, node: dict, scope: Scope, steps_after: list
                   ) -> Asking:
@@ -1597,6 +1666,10 @@ class Engine:
             coord.row.claim.setdefault(key, state_for("out_of_slice"))
         elif mode == "unstated":
             coord.row.claim[key] = state_for("unstated_after_combing")
+        elif mode == "unanswered":
+            # A request about it got no answer in the expected form (owner
+            # decision 2026-11-13, point 1).
+            coord.row.claim[key] = state_for("no_answer")
         else:
             self.locate(coord, plan)
             numbers = coord.read.batch.parameter.is_numeric

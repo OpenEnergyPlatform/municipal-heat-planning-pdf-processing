@@ -1149,6 +1149,9 @@ class Plan:
         self.lists: dict = {}
         self.names: dict = {}             # kind -> Names
         self.works_of: dict = {}          # piece key -> PieceWork
+        # Whether the works of the pieces were asked: by their step, or in
+        # a pass that skips it by the first value that asks its work.
+        self.works_built = False
         self.lock = threading.Lock()
         self._locks: dict = {}
         self._headings: dict = {}
@@ -1223,16 +1226,19 @@ class Plan:
         return next((c for c in pieces if number in c.numbers),
                     pieces[0] if pieces else None)
 
-    def beside(self, chunk: Chunk, numbers: bool = False) -> list:
+    def beside(self, chunk: Chunk, numbers: bool = False,
+               own: bool = False) -> list:
         """The pieces right before and after *chunk* among those a field of
         numbers or another field reads, as many on each side as the rule
-        `beside_pieces` says."""
+        `beside_pieces` says, and with *own* the piece itself between
+        them."""
         view = self.pieces(numbers)
         at = self.places_of(numbers).get(chunk.key)
         if at is None:
-            return []
+            return [chunk] if own else []
         near = rules.get("beside_pieces")
         around = [at + d for d in range(-near, 0)] \
+            + ([at] if own else []) \
             + [at + d for d in range(1, near + 1)]
         return [view[i] for i in around if 0 <= i < len(view)]
 

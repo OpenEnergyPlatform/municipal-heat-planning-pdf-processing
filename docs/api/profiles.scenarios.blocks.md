@@ -17,7 +17,7 @@ Author: Felix Vossel
 ### works
 
 ```python
-def works(ask, counts)
+def works(ask, counts, details: bool = True, each=None)
 ```
 
 The works the document presents, compares or cites beside itself
@@ -29,7 +29,36 @@ the document's list of works, piece by piece in the plan's order, and
 each new work asked at its line for what the profile asks of a work
 (its title, its organisation, its year, its short name), side by side:
 values of that work, never of this publication, which the graph does
-not take.
+not take. Without *details* only the list and the works of the pieces
+are built, as a pass needs them for the work of its values; *each* runs
+the pieces' requests side by side, the reader's way where None.
+
+### works_for_pass
+
+```python
+def works_for_pass(ask, counts) -> None
+```
+
+The works of the pieces where their step did not run, as in a pass
+over the places an earlier harvest found, the passages nobody read, or
+a coordinate asked again (owner decision 2026-11-13, point 10): asked
+once, for the first value that asks its work, as the drawing's step
+asks them, without the details of new works; not where the drawing has
+no such step or it is off. The values that wait for them hold the
+run's threads, so the pieces are asked on threads of their own
+(`apart`).
+
+### apart
+
+```python
+def apart(jobs: list, run) -> list
+```
+
+*run(job)* for each of *jobs* on threads of their own, the results
+in the order of the jobs (as `runner.run_each`, which runs them on the
+run's threads): work that jobs on the run's threads wait for cannot
+wait for those threads itself. The requests still go through the run's
+one queue.
 
 ### work_of_value
 

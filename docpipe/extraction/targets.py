@@ -399,6 +399,8 @@ def at_own_place(ask, counts):
                     noted)
             answered = True
             more = [] if held else more
+        else:
+            coord.unanswered = True
     coord.made += made
     state = row.claim.get(f"{slot.name}_state")
     if more and state != READ:
@@ -446,6 +448,8 @@ def over_hits(ask, counts):
                                     pictures, seen,
                                     {**noted, "chunks": len(batch)})
     made, held, more = [], False, []
+    if not isinstance(reply, dict):
+        coord.unanswered = True
     if isinstance(reply, dict):
         own = tuple((row.claim.get("at") or {}).get("owner") or ())
         keeper = engine.attached_of(ask.node, "keep_find")

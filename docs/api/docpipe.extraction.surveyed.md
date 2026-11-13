@@ -53,6 +53,7 @@ Fields:
 - `replies: int = 0`: Readings that came back with a reply: none of them means no reply at all (`runner.not_happened`).
 - `passages: int = 0`
 - `sources_of: dict = field(default_factory=dict)`: parameter uri -> the passages it was read in (`trust.parameter_states`).
+- `uncombed: set = field(default_factory=set)`: parameter uris of fields of the document that found nothing while chunks were never shown to them (`Read.uncombed`).
 
 ### SurveyedHarvest
 

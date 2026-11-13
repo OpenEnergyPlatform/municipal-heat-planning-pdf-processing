@@ -137,6 +137,7 @@ Fields:
 - `lost: list = field(default_factory=list)`: Why each half of a table no reply answered came to nothing, the other halves read: one hole each (`surveyed.taken_of`).
 - `failed: dict = field(default_factory=dict)`: what the check refused of the first replies, by reason
 - `unanswered: int = 0`: coordinates no reply answered
+- `uncombed: bool = False`: A field of the document that found nothing while chunks of the document were never shown to it: no reading, only the mark that its state is `parameter_uncombed` (owner decision 2026-11-13, point 3).
 
 ## Functions
 

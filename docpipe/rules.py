@@ -366,9 +366,12 @@ RULES = (
        "How often the list entry of a name or a detail of a cited work is "
        "asked again with the chunks its answer asked to see, such as the "
        "place that explains a short scenario name or the entry of the list "
-       "of references. 0: such an answer is taken as it is and nothing is "
-       "fetched.",
-       least=0, decided="2026-11-12", where="addressed.py"),
+       "of references. At a dimension, asked at its value's place or over "
+       "the search hits, what the answer asked to see comes first in the "
+       "next request, whatever the number, as long as it is at least 1. "
+       "0: no answer may ask to see more, and nothing is fetched.",
+       least=0, decided="2026-11-12, 2026-11-13",
+       where="addressed.py, targets.py, general.py (Ask.fetch)"),
     _r("question_as_sentence", "flow", "Search", "switch",
        "On: a search sentence that is a question is used, and the run counts "
        "it. Off: such a sentence is replaced by the field's own search "

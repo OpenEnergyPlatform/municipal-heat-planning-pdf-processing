@@ -13,7 +13,7 @@ from docpipe.extraction.presets import VALUE_PLACE, Preset, i
 from docpipe.extraction.targets import Target
 
 
-def works(ask, counts):
+def works(ask, counts, details: bool = True, each=None):
     """The works the document presents, compares or cites beside itself
     (owner decisions 2026-11-08, h, and 2026-11-09): every piece asked once
     which of its lines speak of another work and which line shows the rest
@@ -23,7 +23,9 @@ def works(ask, counts):
     each new work asked at its line for what the profile asks of a work
     (its title, its organisation, its year, its short name), side by side:
     values of that work, never of this publication, which the graph does
-    not take."""
+    not take. Without *details* only the list and the works of the pieces
+    are built, as a pass needs them for the work of its values; *each* runs
+    the pieces' requests side by side, the reader's way where None."""
     from docpipe.extraction.addressed import PieceWork
     from docpipe.extraction.pipeline import Batch, WorkItem
     from docpipe.extraction.reading import Read
@@ -36,8 +38,8 @@ def works(ask, counts):
     shown_field = {"name": field_.get("name", "work"),
                    "means": field_.get("means", "")}
     chunks = list(plan.pieces(False))
-    asked = reader.each(chunks, lambda chunk: _piece(ask, shown_field,
-                                                     chunk, counts))
+    asked = (each or reader.each)(chunks, lambda chunk: _piece(
+        ask, shown_field, chunk, counts))
     names = plan.names["work"]
     new: list = []
     for chunk, got in zip(chunks, asked):
@@ -55,6 +57,11 @@ def works(ask, counts):
                 new.append((number, one, chunk))
             finds.append((reader.covered(chunk, one), number, one))
         plan.works_of[chunk.key] = PieceWork(finds, own, shown.evidence())
+    plan.works_built = True
+    if not details:
+        reader._traced("works", plan.document_id,
+                       works=len(names.entries), new=len(new))
+        return None
     jobs = [(number, one, uri, question, chunk)
             for number, one, chunk in new
             for uri, question in (field_.get("fields") or {}).items()
@@ -181,6 +188,55 @@ def _detail(ask, parameter, question: str, one, label: str, counts, chunk):
     return claim, source
 
 
+def works_for_pass(ask, counts) -> None:
+    """The works of the pieces where their step did not run, as in a pass
+    over the places an earlier harvest found, the passages nobody read, or
+    a coordinate asked again (owner decision 2026-11-13, point 10): asked
+    once, for the first value that asks its work, as the drawing's step
+    asks them, without the details of new works; not where the drawing has
+    no such step or it is off. The values that wait for them hold the
+    run's threads, so the pieces are asked on threads of their own
+    (`apart`)."""
+    from docpipe.extraction import blocks
+    from docpipe.extraction import flow as flow_map
+    from docpipe.extraction.general import nested
+    reader, plan = ask.reader, ask.plan
+    with plan.key_lock(("works",)):
+        if plan.works_built:
+            return
+        node = next((n for n, _frames in flow_map.on(reader.engine.tree)
+                     if blocks.target_of(n) == "works"), None)
+        if node is not None:
+            works(nested(reader, "works", plan, {}, node=node), counts,
+                  details=False, each=apart)
+        plan.works_built = True
+
+
+def apart(jobs: list, run) -> list:
+    """*run(job)* for each of *jobs* on threads of their own, the results
+    in the order of the jobs (as `runner.run_each`, which runs them on the
+    run's threads): work that jobs on the run's threads wait for cannot
+    wait for those threads itself. The requests still go through the run's
+    one queue."""
+    import concurrent.futures
+    import contextvars
+    from docpipe.extraction import runner
+    jobs = list(jobs)
+    if runner.AHEAD is None or runner.LIMIT is None or len(jobs) < 2:
+        return [run(job) for job in jobs]
+    with concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, int(runner.LIMIT.maximum)),
+            thread_name_prefix="works") as pool:
+        futures = [pool.submit(contextvars.copy_context().run, run, job)
+                   for job in jobs]
+        try:
+            return [future.result() for future in futures]
+        except BaseException:
+            for future in futures:
+                future.cancel()
+            raise
+
+
 def work_of_value(ask, counts):
     """The work of one value (owner decisions 2026-11-09): the work of the
     line it stands in where its piece's work request named one
@@ -198,6 +254,8 @@ def work_of_value(ask, counts):
     row, slot = coord.row, coord.slot
     if "work" not in plan.names:
         return None
+    if not plan.works_built:
+        works_for_pass(ask, counts)
     if reader.inherit_work(plan, row, slot) \
             or not shows.has_place(plan, row.claim):
         return Answer(True)

@@ -514,7 +514,9 @@ thirteen publication and study fields, "this publication" or "another work". The
 groups come first, so each is its value's first coordinate. A value read with
 another entry (`fields.kept` False) is asked nothing after it, its other
 coordinates `out_of_slice` (the way `closed` of the default drawing, a state box set to `out_of_slice`); a value whose entry stays open
-asks the coordinates after it. The graph takes a value only where every such entry
+asks the coordinates after it. A pass over a stored harvest asks a coordinate
+knowing those asked before it, as the run does, so a condition on them holds there
+as well (owner decision 2026-11-13). The graph takes a value only where every such entry
 is read as the one to keep (`fields.in_parameter`; the graph's document condition `kept_coordinates`); the others stay
 in the harvest and are counted among what is not in the graph by choice. Nothing
 asks the field's values again after such a value.
@@ -690,6 +692,16 @@ holds (`read`), when an answer does not hold after its follow-ups (`unbacked`), 
 `--top-up-open` sets the budget to every piece (`runner.read_to_end`), so a
 coordinate ends `read` or `unstated` there.
 
+The box beside (`beside`) takes as many pieces on each side of the value's as the
+rule `beside_pieces` says, 0 for none; switched to `own_piece`, it takes the
+value's own piece whole between them, since the request at the value's place shows
+only its line and the lines around it, unless a request of the coordinate already
+showed that piece whole (`Plan.beside`, owner decision 2026-11-13). Where a step
+writes a new search sentence from round 2 on (rule `phrase_anew` or the step's own
+switch), the pieces of the search not yet shown are ordered again with the new
+sentence before the next request, once for each new sentence (`SearchSupply`,
+`Reader.rerank_left`).
+
 ### Fetching what a line points to
 
 Where the document says a missing detail at another place or points to it ("see
@@ -710,6 +722,9 @@ offer `more` with the same ways of fetching, each by its own value of the rule
   the rule `fetch_rounds` says (`Reader.asked_with_fetched`), so that a short
   scenario name meets the sentence that explains it and a short citation the entry
   of the list of references; an answer may name a line of them, checked as always.
+
+Where the rule `fetch_rounds` is 0, none of these requests may ask to see more
+(`general.Ask.fetch`, owner decision 2026-11-13).
 
 A question about a dimension (`coord` at the value's own place, `search`) that shows
 a figure whose picture the run attaches (`attach_images`) may also ask for that
@@ -907,7 +922,10 @@ seems silent. A reading that came to no readable reply goes as a
 sentinel with `_why` cut_off or no_answer and `_parameter`, so a later pass
 knows what to read again. A parameter without a row whose passages were holes
 ends `exhausted` and not `unstated` (`trust.parameter_states`, with every passage the parameter was read in as
-`sources_of`): `unstated` stays a finding about the plan. A request of this flow whose last attempt
+`sources_of`): `unstated` stays a finding about the plan. A field asked once for the
+whole document that found nothing while pieces of the document were never shown to
+it ends as the state rule `parameter_uncombed` says (`exhausted`), not `unstated`
+(`Read.uncombed`, owner decision 2026-11-13). A request of this flow whose last attempt
 ended on a 429, a 5xx or a timeout notes its document (`UNSERVED`,
 `runner.Failures`), which is then not stamped, so a resume redoes it. A
 request that timed out is asked again with the time of a repeat
@@ -1382,7 +1400,8 @@ from the step's inputs, `compute.py`), and works from rows that
 passed `verify_tuple`. The step does not exist for a profile that names no open
 question (`compute.py` of the profile, `questions`) or writes no prompt
 (`extraction/compute`), or for a run without a sandbox: a number the model works
-out itself has no evidence. A stop during the step leaves the document unwritten,
+out itself has no evidence, and the log says that the run computes nothing
+(owner decision 2026-11-13). A stop during the step leaves the document unwritten,
 like one half read.
 
 kwp names two kinds of question (`profiles/kwp/compute.py`):
@@ -1492,8 +1511,16 @@ only different numbers apart, as in the graph, and the number in its target unit
 within the rule `rounding_tolerance`. One plan printed 27 % twice in one table row, and
 both shares came to 116.1 GWh.
 
+A run the sandbox itself fails (no answer, an error of the service) is sent again
+as often as the rule `code_resend` says; code that failed is not, since it fails
+the same way again, and its error goes back to the model. Where the sandbox still
+fails, the model is not told, the question ends `sandbox_failed` without a row,
+and the log and the trace (`error`, `where: compute`) say so
+(`code_exec.run_code`, owner decision 2026-11-13).
+
 The trace has a `code` event per run and a `compute` event per question with how
-it ended: `read`, `refused`, `same`, `none`, `too_long`, `unanswered` or `stopped`,
+it ended: `read`, `refused`, `same`, `none`, `too_long`, `unanswered`, `stopped`
+or `sandbox_failed`,
 and what it fetched, searched, took, was refused to take and misquoted, and how
 many answers the row's check refused (`rejected`) with the last one's `reason`. The
 stats count them as `computed_questions_by_kind_outcome`. The sandbox takes one

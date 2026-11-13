@@ -340,12 +340,14 @@ a line every piece shows is the first piece's.
 #### Plan.beside
 
 ```python
-def beside(self, chunk: Chunk, numbers: bool = False) -> list
+def beside(self, chunk: Chunk, numbers: bool = False,
+           own: bool = False) -> list
 ```
 
 The pieces right before and after *chunk* among those a field of
 numbers or another field reads, as many on each side as the rule
-`beside_pieces` says.
+`beside_pieces` says, and with *own* the piece itself between
+them.
 
 ### Asks
 

@@ -189,6 +189,9 @@ SUBJECTS = {s.name: s for s in (
              "value does not belong to its field"),
         Prop("plan_years", YES, "has base or target years in the "
              "document"),
+        Prop("unanswered", YES, "had a request about it that got no "
+             "answer in form"),
+        Prop("own_value", YES, "is printed with the number"),
     )),
     Subject("answer", "the answer", (
         Prop("answered", YES, "came back in the expected form"),

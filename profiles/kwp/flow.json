@@ -848,10 +848,6 @@
       ]
     },
     {
-      "id": "write",
-      "box": "write"
-    },
-    {
       "id": "compute",
       "box": "ask",
       "preset": "compute",
@@ -863,6 +859,10 @@
     {
       "id": "catalogue",
       "box": "catalogue"
+    },
+    {
+      "id": "write",
+      "box": "write"
     }
   ]
 }

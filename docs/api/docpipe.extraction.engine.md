@@ -221,6 +221,8 @@ Fields:
 - `ways: list = field(default_factory=list)`: The rules whose second way the requests of this coordinate went through (`second_ways`), noted on them.
 - `fetched: list = field(default_factory=list)`: The pieces the request at the value's own place asked to see, shown first by the search that follows it, and the pictures of figures its requests saw, each once (owner decision 2026-11-12).
 - `pictures: set = field(default_factory=set)`
+- `unanswered: bool = False`: A request about it got no answer in the expected form: it is not "not stated" while that request's chunks were never answered (owner decision 2026-11-13, point 1; the condition "unanswered").
+- `whole: set = field(default_factory=set)`: The pieces a request of it showed whole; `seen` also holds the piece the rule `search_skips_own_piece` leaves out without showing it.
 
 ### ListSupply
 
@@ -268,14 +270,20 @@ pieces a reply fetched itself first in the next request; no piece twice
 (`seen`, the coordinate's) unless the rule `show_twice` says it may be
 shown a second time. *limit* is the most pieces the search shows (the
 flow's number of chunks), *reorder* puts the pieces left in order again
-with the sentence of the round (the rule `rerank_when`).
+with the sentence of the round: before every request where the rule
+`rerank_when` says so, and where the round's sentence (*current()*) is
+no longer the one the order was made with (*sentence*), so that a new
+sentence from round 2 on (rule `phrase_anew`) searches with it (owner
+decision 2026-11-13, point 7).
 
 #### SearchSupply.\_\_init\_\_
 
 ```python
 def __init__(self, first: list, ranked: Optional[Callable], label: str,
              limit: Optional[int] = None,
-             reorder: Optional[Callable] = None)
+             reorder: Optional[Callable] = None,
+             sentence: Optional[str] = None,
+             current: Optional[Callable] = None)
 ```
 
 #### SearchSupply.take
@@ -602,6 +610,15 @@ the rows its values came to.
 def value_scope(self, scope: Scope, read: Read, row: Row) -> Scope
 ```
 
+#### Engine.slot_sequence
+
+```python
+def slot_sequence(self, parameter) -> list
+```
+
+[(group, slot)] of a field's coordinates in the order they are
+asked: the spec's groups, then the rule `coordinate_order`.
+
 #### Engine.each_coordinate
 
 ```python
@@ -634,6 +651,14 @@ the budget of them by kind, those already shown left out.
 ```python
 def box_beside(self, node: dict, scope: Scope) -> None
 ```
+
+The pieces beside the value's own (as many on each side as the
+rule `beside_pieces` says, 0 for none) and, where the box says so
+(`own_piece`), its own piece whole between them: the request at the
+value's place shows only its line and the lines around it (owner
+decision 2026-11-13, point 4). An own piece the rule
+`search_skips_own_piece` left out without showing it is shown here;
+one a request showed whole is not shown again.
 
 #### Engine.locate
 

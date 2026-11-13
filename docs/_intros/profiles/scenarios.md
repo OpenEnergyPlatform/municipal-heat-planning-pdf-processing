@@ -382,6 +382,14 @@ publication, else the value asks its work as a choice from the list of works in 
 leaves it `unstated`, and a work is never searched. Only the 13 publication and
 study fields and the scenario name have a `work` coordinate.
 
+The step that asks the works of the pieces runs where the whole document is read.
+A pass that reads only part of it (the passages nobody read, the places an earlier
+harvest found) or asks a coordinate again skips it; there the first value that
+asks its work has the works of the pieces asked as that step asks them, once per
+document and without the details of new works, on threads of their own, since the
+values waiting for them hold the run's threads (`works_for_pass`, owner decision
+2026-11-13). Where the drawing's step is off, nothing is asked.
+
 ## The graph: one report, one bundle, a factsheet per scenario
 
 The target is OEKG, on the Open Energy Platform, written from the drawing in

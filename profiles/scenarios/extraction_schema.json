@@ -11164,7 +11164,8 @@
        "none",
        "too_long",
        "unanswered",
-       "stopped"
+       "stopped",
+       "sandbox_failed"
       ]
      },
      "reason": {

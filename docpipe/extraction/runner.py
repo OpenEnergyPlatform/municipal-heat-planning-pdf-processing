@@ -3280,8 +3280,13 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
 
     open_questions = profile.component("compute", "questions")
     if open_questions is None or code_rounds() < 1 \
-            or not code_exec.is_enabled() \
             or not flow_map.compute_on(flow_map.tree_of(profile)):
+        return None
+    if not code_exec.is_enabled():
+        # The flow computes and the run has no sandbox: said, not left out
+        # quietly (owner decision 2026-11-13, point 9).
+        log.warning("compute: the flow computes, but no sandbox is set "
+                    "(CODE_EXEC_URL): nothing is computed in this run")
         return None
     same = profile.component("compute", "same")
     # The question is asked as its step says: its prompt, and the inputs
@@ -3400,6 +3405,18 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 with sandbox_slots():
                     out = code_exec.run_code(code, context=computing.context(
                         question, shown, gathered.sources))
+                if out.get("sandbox"):
+                    # The sandbox failed, not the code: the model is not
+                    # told, the question ends without a row and the log
+                    # says so (owner decision 2026-11-13, point 9).
+                    log.warning("   compute %s: the sandbox failed (%s), "
+                                "question %s left without a row",
+                                document_id, out.get("error"),
+                                getattr(question, "label", question))
+                    trace.event("error", document_id, where="compute",
+                                kind="sandbox", attempt=attempt,
+                                detail=str(out.get("error"))[:300])
+                    return ended("sandbox_failed")
                 runs.append({"code": code,
                              "stdout": (out.get("stdout") or "")[
                                  :rules.get("code_output_chars")],
@@ -4287,7 +4304,8 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
     states = (parameter_states(spec, report.tuples, report.refusals,
                                harvested=report.owners_harvested,
                                answered=answered,
-                               sources_of=getattr(report, "sources_of", None))
+                               sources_of=getattr(report, "sources_of", None),
+                               uncombed=getattr(report, "uncombed", ()))
               if spec is not None else None)
     if spec is not None:
         check_against_schema(report, name, spec, states)
@@ -5418,7 +5436,8 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
         report = DocumentReport(document_id=document_id,
                                 owners_harvested=taken.passages,
                                 planned={stage: taken.passages},
-                                sources_of=taken.sources_of)
+                                sources_of=taken.sources_of,
+                                uncombed=taken.uncombed)
         with whole.reader_of(spec).engine.step_of("write"):
             stamped = verify((name, report, taken.answered),
                              replies=taken.replies)

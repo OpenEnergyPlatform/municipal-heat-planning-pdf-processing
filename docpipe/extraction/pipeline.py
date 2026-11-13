@@ -151,6 +151,9 @@ class DocumentReport:
     # anchors rank. Planned from nothing; it tells a parameter whose
     # passages a cut-off request held from one whose passages were read.
     sources_of: dict = field(default_factory=dict)
+    # parameter uris of fields of the document that found nothing while
+    # chunks were never shown to them (`trust.parameter_states`).
+    uncombed: set = field(default_factory=set)
 
 
 def group_items(items: list, *, max_sources: Optional[int] = None,

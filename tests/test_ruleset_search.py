@@ -348,6 +348,15 @@ def test_a_failed_calculation_is_sent_again_as_often_as_the_rule_says(
     with at("compute", code_resend=2):
         assert code_exec.run_code("1")["ok"] is True
     assert len(calls) == 2                      # stops at the first success
+    # Code that failed is not the sandbox's failure: it is not sent again,
+    # and the answer does not say the sandbox failed.
+    broken = {"ok": False, "stderr": "NameError", "exit_code": 1}
+    calls = sandbox(monkeypatch, [broken, broken, broken])
+    with at("compute", code_resend=2):
+        out = code_exec.run_code("x")
+    assert len(calls) == 1 and not out.get("sandbox")
+    calls = sandbox(monkeypatch, [fail])
+    assert code_exec.run_code("1")["sandbox"] is True
 
 
 WORDS = [(10, 10, 40, 20, "Der", 0, 0, 0), (45, 10, 90, 20, "Wert", 0, 0, 1),

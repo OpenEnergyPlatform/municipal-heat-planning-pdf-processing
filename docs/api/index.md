@@ -319,7 +319,7 @@ is for and what it hands to what; this is the reference.
 
 ## profiles.scenarios
 
-- [profiles.scenarios.blocks](profiles.scenarios.blocks.md): What only scenario papers ask (owner decisions 2026-11-12: the plan of the general blocks, point 8, and in the evening every question is "Ask the model" with a preset): the works a publication presents, compares or cites, the work of a value, and the entry of a scenario's name in the document's list. (3 functions)
+- [profiles.scenarios.blocks](profiles.scenarios.blocks.md): What only scenario papers ask (owner decisions 2026-11-12: the plan of the general blocks, point 8, and in the evening every question is "Ask the model" with a preset): the works a publication presents, compares or cites, the work of a value, and the entry of a scenario's name in the document's list. (5 functions)
 - [profiles.scenarios.catalog](profiles.scenarios.catalog.md): How the publications present themselves in the picker: by title and year, filtered by year and venue. (1 class)
 - [profiles.scenarios.completion](profiles.scenarios.completion.md): What a publication's own text leaves open of its identity, looked up in an open catalogue (owner decisions 2026-11-04). (18 functions)
 - [profiles.scenarios.config](profiles.scenarios.config.md): Constants for the scenarios profile.
