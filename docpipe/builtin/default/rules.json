@@ -595,7 +595,6 @@
     "rerank_pool": 100,
     "rerank_pool_by_kind": {},
     "rerank_chunk_pool": 1000000,
-    "rerank_timeout_s": 1200,
     "embed_timeout_s": 1200,
     "rerank_truncate_tokens": -1,
     "rerank_with_images": true,

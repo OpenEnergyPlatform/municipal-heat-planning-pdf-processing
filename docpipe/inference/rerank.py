@@ -30,6 +30,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Callable, Optional, Sequence
 
 from docpipe import rules, usage
@@ -108,6 +109,72 @@ def document_of(source, image: Optional[dict]):
     return {"content": content}
 
 
+class Scores:
+    """The scores the rerankers of one run share, per document.
+
+    A pair of sentence and passage is scored once for the document, not
+    once per thread: a thread that wants a pair another one is scoring
+    waits for that answer instead of sending its own (`claim`). A
+    document's scores are kept while a reranker is on it and dropped when
+    the last one moves to another document (`enter`), as each thread
+    dropped its own before. Where the scoring fails, the pairs are given
+    back (`release`) and a waiting thread scores them itself."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.scores: dict = {}
+        self.pending: dict = {}
+        self.on: dict = {}
+
+    def enter(self, left, document_id) -> None:
+        """A reranker moves from document *left* (None: none) to
+        *document_id*."""
+        with self.lock:
+            if left is not None:
+                self.on[left] -= 1
+                if not self.on[left]:
+                    del self.on[left]
+                    self.scores.pop(left, None)
+            self.on[document_id] = self.on.get(document_id, 0) + 1
+            self.scores.setdefault(document_id, {})
+
+    def claim(self, document_id, keys: list) -> tuple:
+        """(mine, waits): the keys this caller scores, now marked as being
+        scored, and the events of those another caller is scoring."""
+        mine, waits = [], []
+        with self.lock:
+            known = self.scores.setdefault(document_id, {})
+            for key in keys:
+                if key in known:
+                    continue
+                event = self.pending.get((document_id, key))
+                if event is not None:
+                    waits.append(event)
+                else:
+                    self.pending[(document_id, key)] = threading.Event()
+                    mine.append(key)
+        return mine, waits
+
+    def put(self, document_id, scored: dict) -> None:
+        with self.lock:
+            self.scores.setdefault(document_id, {}).update(scored)
+            for key in scored:
+                event = self.pending.pop((document_id, key), None)
+                if event is not None:
+                    event.set()
+
+    def release(self, document_id, keys: list) -> None:
+        with self.lock:
+            for key in keys:
+                event = self.pending.pop((document_id, key), None)
+                if event is not None:
+                    event.set()
+
+    def get(self, document_id, key):
+        with self.lock:
+            return self.scores.get(document_id, {}).get(key)
+
+
 class Reranker:
     """order(probes, sources) -> the sources, the pool in the reranker's
     order and the rest after it.
@@ -118,6 +185,8 @@ class Reranker:
     or None. Scores are kept per document, model, sentence and passage, so a
     search asked again with the same sentence and fewer passages left scores
     nothing twice, and a step that names another model scores them again.
+    *store* (`Scores`) is shared by the rerankers of all threads of a run,
+    so no pair is scored twice for a document, whichever thread asks.
 
     Server, model, key and pool are read from the rules each time it sends
     or orders, so the step that runs decides; one given here wins.
@@ -129,7 +198,8 @@ class Reranker:
     def __init__(self, base_url: str = "", model: str = "", pool: int = 0,
                  api_key: str = "", post: Optional[Callable] = None,
                  image_of: Optional[Callable] = None,
-                 pool_rule: str = "rerank_pool"):
+                 pool_rule: str = "rerank_pool",
+                 store: Optional[Scores] = None):
         self._base_url = base_url
         self._model = model
         self._pool = pool
@@ -138,7 +208,7 @@ class Reranker:
         self._post = post
         self.image_of = image_of or (lambda source: None)
         self._document = None
-        self._scores: dict = {}
+        self.store = store if store is not None else Scores()
 
     @property
     def base_url(self) -> str:
@@ -160,33 +230,54 @@ class Reranker:
         response = httpx.post(
             self.base_url + "/rerank", json=body,
             headers={"Authorization": f"Bearer {self.api_key}"},
-            timeout=float(rules.get("rerank_timeout_s")))
+            # No time limit (owner decision 2026-11-13): a request given up
+            # was scored by the server all the same, and asked again it
+            # queued once more behind the ones nobody waited for.
+            timeout=None)
         response.raise_for_status()
         return response.json()
 
     def scores(self, document_id, probe: str, sources: list) -> list:
         """The reranker's score of each of *sources* for *probe*."""
         if self._document != document_id:
-            self._document, self._scores = document_id, {}
+            self.store.enter(self._document, document_id)
+            self._document = document_id
         model = self.model
         pictures = bool(rules.get("rerank_with_images"))
         cut = int(rules.get("rerank_truncate_tokens"))
         key = lambda s: (model, pictures, cut, probe, s.owner_kind,
                          s.owner_id)
-        missing = [s for s in sources if key(s) not in self._scores]
-        if missing:
-            answer = self.post({
-                "model": model, "query": probe,
-                "documents": [document_of(
-                    s, self.image_of(s) if pictures else None)
-                    for s in missing],
-                "truncate_prompt_tokens": cut})
-            tokens = (answer.get("usage") or {}).get("prompt_tokens")
-            usage.add(model, input_tokens=int(tokens or 0), requests=1)
-            for result in answer["results"]:
-                self._scores[key(missing[result["index"]])] = float(
-                    result["relevance_score"])
-        return [self._scores[key(s)] for s in sources]
+        by_key = {key(s): s for s in sources}
+        while True:
+            mine, waits = self.store.claim(document_id, list(by_key))
+            if mine:
+                missing = [by_key[k] for k in mine]
+                try:
+                    answer = self.post({
+                        "model": model, "query": probe,
+                        "documents": [document_of(
+                            s, self.image_of(s) if pictures else None)
+                            for s in missing],
+                        "truncate_prompt_tokens": cut})
+                    tokens = (answer.get("usage") or {}).get(
+                        "prompt_tokens")
+                    usage.add(model, input_tokens=int(tokens or 0),
+                              requests=1)
+                    self.store.put(document_id, {
+                        mine[r["index"]]: float(r["relevance_score"])
+                        for r in answer["results"]})
+                finally:
+                    # Pairs the answer left out, or all of them where it
+                    # failed, go back; a waiting thread scores them.
+                    self.store.release(document_id, mine)
+            for event in waits:
+                event.wait()
+            scores = [self.store.get(document_id, key(s)) for s in sources]
+            if all(score is not None for score in scores):
+                return scores
+            if mine and not waits:
+                raise ValueError("the reranker left passages without a "
+                                 "score")
 
     def order(self, document_id, probes: Sequence[str],
               sources: Sequence) -> list:
@@ -203,10 +294,12 @@ class Reranker:
         return ranked + rest
 
 
-def make_reranker(image_of: Optional[Callable] = None) -> Optional[Reranker]:
+def make_reranker(image_of: Optional[Callable] = None,
+                  store: Optional[Scores] = None) -> Optional[Reranker]:
     """The reranker this run is configured for, or None where the rule
-    `rerank_base_url` names no server."""
+    `rerank_base_url` names no server. Rerankers given the same *store*
+    share their scores."""
     if not base_url():
         return None
-    return Reranker(image_of=image_of)
+    return Reranker(image_of=image_of, store=store)
 

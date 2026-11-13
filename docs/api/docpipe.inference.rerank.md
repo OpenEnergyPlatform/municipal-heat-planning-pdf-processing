@@ -32,6 +32,64 @@ Author: Felix Vossel
 
 ## Classes
 
+### Scores
+
+```python
+class Scores
+```
+
+The scores the rerankers of one run share, per document.
+
+A pair of sentence and passage is scored once for the document, not
+once per thread: a thread that wants a pair another one is scoring
+waits for that answer instead of sending its own (`claim`). A
+document's scores are kept while a reranker is on it and dropped when
+the last one moves to another document (`enter`), as each thread
+dropped its own before. Where the scoring fails, the pairs are given
+back (`release`) and a waiting thread scores them itself.
+
+#### Scores.\_\_init\_\_
+
+```python
+def __init__(self)
+```
+
+#### Scores.enter
+
+```python
+def enter(self, left, document_id) -> None
+```
+
+A reranker moves from document *left* (None: none) to
+*document_id*.
+
+#### Scores.claim
+
+```python
+def claim(self, document_id, keys: list) -> tuple
+```
+
+(mine, waits): the keys this caller scores, now marked as being
+scored, and the events of those another caller is scoring.
+
+#### Scores.put
+
+```python
+def put(self, document_id, scored: dict) -> None
+```
+
+#### Scores.release
+
+```python
+def release(self, document_id, keys: list) -> None
+```
+
+#### Scores.get
+
+```python
+def get(self, document_id, key)
+```
+
 ### Reranker
 
 ```python
@@ -47,6 +105,8 @@ order and the rest after it.
 or None. Scores are kept per document, model, sentence and passage, so a
 search asked again with the same sentence and fewer passages left scores
 nothing twice, and a step that names another model scores them again.
+*store* (`Scores`) is shared by the rerankers of all threads of a run,
+so no pair is scored twice for a document, whichever thread asks.
 
 Server, model, key and pool are read from the rules each time it sends
 or orders, so the step that runs decides; one given here wins.
@@ -60,7 +120,8 @@ has a rule of its own).
 def __init__(self, base_url: str = "", model: str = "", pool: int = 0,
              api_key: str = "", post: Optional[Callable] = None,
              image_of: Optional[Callable] = None,
-             pool_rule: str = "rerank_pool")
+             pool_rule: str = "rerank_pool",
+             store: Optional[Scores] = None)
 ```
 
 #### Reranker.base_url
@@ -166,10 +227,12 @@ where it has one (as the embedder lays out an item).
 ### make_reranker
 
 ```python
-def make_reranker(image_of: Optional[Callable] = None) -> Optional[Reranker]
+def make_reranker(image_of: Optional[Callable] = None,
+                  store: Optional[Scores] = None) -> Optional[Reranker]
 ```
 
 The reranker this run is configured for, or None where the rule
-`rerank_base_url` names no server.
+`rerank_base_url` names no server. Rerankers given the same *store*
+share their scores.
 
 [Back to the index](../README.md)

@@ -182,11 +182,10 @@ def test_the_model_the_picture_the_length_and_the_waiting_are_the_rules():
     assert body["documents"] == ["figure 1", "table 2"]
 
 
-def test_the_server_the_key_and_the_waiting_time_come_from_the_rules(
+def test_the_server_and_the_key_come_from_the_rules_and_nothing_times_out(
         monkeypatch):
     assert rerank.make_reranker() is None               # no server: none
-    with rules.overlaid(rerank_base_url=" http://s/ ", rerank_api_key="k",
-                        rerank_timeout_s=7):
+    with rules.overlaid(rerank_base_url=" http://s/ ", rerank_api_key="k"):
         ranker = rerank.make_reranker()
         assert ranker.base_url == "http://s"
         assert ranker.api_key == "k"
@@ -199,7 +198,7 @@ def test_the_server_the_key_and_the_waiting_time_come_from_the_rules(
         import httpx
         monkeypatch.setattr(httpx, "post", post)
         ranker.post({"documents": []})
-        assert taken["timeout"] == 7.0
+        assert taken["timeout"] is None    # never gives up waiting
         assert taken["url"] == "http://s/rerank"
         assert taken["headers"] == {"Authorization": "Bearer k"}
     assert not hasattr(rerank, "RERANK_BASE_URL")   # no bridge of old names

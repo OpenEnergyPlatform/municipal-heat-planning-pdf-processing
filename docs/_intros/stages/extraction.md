@@ -1072,8 +1072,14 @@ numbers of the flow; `runner.search_budget`), and has the reranker order them on
 sentence (owner decisions 2026-11-08 and 2026-11-09: pieces are ordered by the
 reranker with the same sentence; `Reader.shown_order`). A piece goes as its text, a
 figure's as its transcribed lines. A failed reranker request is asked again
-(`runner.Persistent`), and the pieces never stay in another order for it. Without
-`RERANK_BASE_URL` the vector search's order stands.
+(`runner.Persistent`), and the pieces never stay in another order for it. A request
+to the reranker has no time limit (owner decision 2026-11-13): one given up was
+scored by the server all the same and, asked again, queued once more behind the ones
+nobody waited for. The threads of a run share their scores (`rerank.Scores`): a pair
+of sentence and passage is scored once for a document, a thread wanting a pair
+another one is scoring waits for that answer, and a document's scores go when no
+reranker is on it any more. Without `RERANK_BASE_URL` the vector search's order
+stands.
 
 ### The reply grammar
 

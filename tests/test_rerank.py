@@ -77,3 +77,103 @@ def test_a_pair_scored_once_is_not_sent_again_in_its_document():
     assert len(server.bodies) == 1
     ranker.order(8, ["q"], found[1:])
     assert len(server.bodies) == 2
+
+
+# The rerankers of one run share their scores (plan of 2026-11-13, point 1):
+# a pair is sent once for the document, whichever thread asks for it, AND
+# two documents never share a score, AND a failed scoring leaves the pair to
+# the thread that waits for it, AND a document's scores go when no reranker
+# is on it any more.
+
+def test_two_threads_asking_the_same_pair_send_it_once():
+    import threading
+    found = [source("section", 1)]
+    entered, go = threading.Event(), threading.Event()
+    inner = Server({("q", "section 1"): 0.7})
+
+    def slow(body):
+        entered.set()
+        assert go.wait(5)
+        return inner(body)
+
+    store = rerank.Scores()
+    first = rerank.Reranker(base_url="http://x", pool=10, post=slow,
+                            store=store)
+    second = rerank.Reranker(base_url="http://x", pool=10, post=inner,
+                             store=store)
+    got = []
+    worker = threading.Thread(target=lambda: got.append(
+        first.scores(7, "q", found)))
+    worker.start()
+    assert entered.wait(5)
+    waiter = threading.Thread(target=lambda: got.append(
+        second.scores(7, "q", found)))
+    waiter.start()
+    go.set()
+    worker.join(5)
+    waiter.join(5)
+    assert got == [[0.7], [0.7]]
+    assert len(inner.bodies) == 1
+
+
+def test_two_documents_share_no_score():
+    store = rerank.Scores()
+    server = Server({})
+    one = rerank.Reranker(base_url="http://x", pool=10, post=server,
+                          store=store)
+    two = rerank.Reranker(base_url="http://x", pool=10, post=server,
+                          store=store)
+    one.order(7, ["q"], [source("section", 1), source("section", 2)])
+    two.order(8, ["q"], [source("section", 1), source("section", 2)])
+    assert len(server.bodies) == 2
+
+
+def test_a_failed_scoring_is_left_to_the_waiting_thread():
+    import threading
+    found = [source("section", 1)]
+    entered, go = threading.Event(), threading.Event()
+    good = Server({("q", "section 1"): 0.4})
+
+    def broken(body):
+        entered.set()
+        assert go.wait(5)
+        raise TimeoutError("timed out")
+
+    store = rerank.Scores()
+    first = rerank.Reranker(base_url="http://x", pool=10, post=broken,
+                            store=store)
+    second = rerank.Reranker(base_url="http://x", pool=10, post=good,
+                             store=store)
+    failed, got = [], []
+
+    def ask_first():
+        try:
+            first.scores(7, "q", found)
+        except TimeoutError:
+            failed.append(True)
+
+    worker = threading.Thread(target=ask_first)
+    worker.start()
+    assert entered.wait(5)
+    waiter = threading.Thread(target=lambda: got.append(
+        second.scores(7, "q", found)))
+    waiter.start()
+    go.set()
+    worker.join(5)
+    waiter.join(5)
+    assert failed == [True] and got == [[0.4]] and len(good.bodies) == 1
+
+
+def test_a_document_is_dropped_when_no_reranker_is_on_it():
+    store = rerank.Scores()
+    server = Server({})
+    one = rerank.Reranker(base_url="http://x", pool=10, post=server,
+                          store=store)
+    two = rerank.Reranker(base_url="http://x", pool=10, post=server,
+                          store=store)
+    one.order(7, ["q"], [source("section", 1), source("section", 2)])
+    two.order(7, ["q"], [source("section", 1), source("section", 2)])
+    one.order(8, ["q"], [source("section", 1), source("section", 2)])
+    assert 7 in store.scores
+    two.order(8, ["q"], [source("section", 1), source("section", 2)])
+    assert 7 not in store.scores and len(server.bodies) == 2

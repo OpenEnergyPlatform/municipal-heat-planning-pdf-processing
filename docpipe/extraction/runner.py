@@ -1189,7 +1189,9 @@ def make_search_reranker(image_root: Optional[Path] = None
     log.info("extraction: searches reranked by %s at %s, %d per kind",
              rerank_map.model_name(), rerank_map.base_url(),
              rerank_map.pool_size("section"))
-    return lambda: rerank_map.make_reranker(image_of=figure_image)
+    store = rerank_map.Scores()
+    return lambda: rerank_map.make_reranker(image_of=figure_image,
+                                            store=store)
 
 
 def make_more_sources(db_path: Path, index, id_to_pos: dict,
@@ -2435,8 +2437,9 @@ def make_chunk_reranker() -> Optional[Callable]:
     from docpipe.inference import rerank as rerank_map
     if not rerank_map.base_url():
         return None
+    store = rerank_map.Scores()
     return lambda: Persistent(rerank_map.Reranker(
-        pool_rule="rerank_chunk_pool"))
+        pool_rule="rerank_chunk_pool", store=store))
 
 
 def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
