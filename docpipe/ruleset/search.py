@@ -56,6 +56,12 @@ RULES: tuple = (
          "larger number waits longer for a busy server before the request "
          "fails and is asked again.",
          least=1, steps=SEARCHING, where="inference/rerank.py (post)"),
+    rule("embed_timeout_s", "flow", "Asking again and giving up", "number",
+         "The seconds one request to the embedding server waits for its "
+         "answer, the sentences of a search as well as the passages of the "
+         "index. A larger number waits longer for a busy server before the "
+         "request fails and is asked again.",
+         least=1, steps=SEARCHING, where="embedding/api.py (ApiEmbedder)"),
     rule("rerank_truncate_tokens", "flow", "Search", "whole",
          "How many tokens of a passage and its sentence the reranker reads. "
          "-1: the model's own length, which the server cuts the pair to; "

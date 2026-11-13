@@ -30,7 +30,7 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-from docpipe import providers, usage
+from docpipe import providers, rules, usage
 from docpipe.providers import governor
 
 from . import config
@@ -43,10 +43,6 @@ HOSTED_ATTEMPTS = 6
 # The instruction an item is embedded under when it names none, as the
 # model's own code sets it (Qwen3VLEmbedder in chunking/qwen3_vl_embedding.py).
 DEFAULT_INSTRUCTION = "Represent the user's input."
-
-# How long one request of the messages form may take, the OpenAI client's
-# own default, which the input form waits with.
-REQUEST_SECONDS = 600.0
 
 
 def data_uri(image) -> str:
@@ -124,10 +120,18 @@ class ApiEmbedder:
         """Whether a picture has no place in this embedder's requests."""
         return self.form != "messages"
 
+    @staticmethod
+    def timeout() -> float:
+        """What one request waits for its answer (rule `embed_timeout_s`):
+        a busy server answers late, and a request that gives up too soon
+        is asked again from the start."""
+        return float(rules.get("embed_timeout_s"))
+
     def client(self):
         if self._client is None:
             self._client = providers.client(
-                "embedding", base_url=self.base_url, api_key=self.api_key)
+                "embedding", base_url=self.base_url, api_key=self.api_key,
+                timeout=self.timeout())
         return self._client
 
     def _create(self, batch: list):
@@ -160,7 +164,7 @@ class ApiEmbedder:
         response = httpx.post(
             self.base_url.rstrip("/") + "/embeddings", json=body,
             headers={"Authorization": f"Bearer {self.api_key}"},
-            timeout=REQUEST_SECONDS)
+            timeout=self.timeout())
         response.raise_for_status()
         return response.json()
 

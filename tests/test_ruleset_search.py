@@ -205,6 +205,25 @@ def test_the_server_the_key_and_the_waiting_time_come_from_the_rules(
     assert not hasattr(rerank, "RERANK_BASE_URL")   # no bridge of old names
 
 
+def test_the_embedding_server_waits_as_long_as_the_rule_says(monkeypatch):
+    from docpipe.embedding.api import ApiEmbedder
+    taken = {}
+
+    def post(url, json, headers, timeout):
+        taken["timeout"] = timeout
+        return SimpleNamespace(raise_for_status=lambda: None,
+                               json=lambda: {"data": [{"embedding": [1.0]}]})
+    import httpx
+    monkeypatch.setattr(httpx, "post", post)
+    embedder = ApiEmbedder(base_url="http://s", api_key="k", model="m",
+                           form="messages")
+    with rules.overlaid(embed_timeout_s=7):
+        embedder.embed([{"text": "a sentence"}])
+    assert taken["timeout"] == 7.0
+    embedder.embed([{"text": "a sentence"}])        # the standard otherwise
+    assert taken["timeout"] == float(rules.get("embed_timeout_s")) != 7.0
+
+
 # -- 3: the vector search -----------------------------------------------------
 
 def prepared(owners):

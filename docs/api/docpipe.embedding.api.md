@@ -46,6 +46,17 @@ def text_only(self) -> bool
 
 Whether a picture has no place in this embedder's requests.
 
+#### ApiEmbedder.timeout
+
+```python
+@staticmethod
+def timeout() -> float
+```
+
+What one request waits for its answer (rule `embed_timeout_s`):
+a busy server answers late, and a request that gives up too soon
+is asked again from the start.
+
 #### ApiEmbedder.client
 
 ```python
