@@ -24,7 +24,7 @@ import shutil
 import pytest
 
 from docpipe import graphfile
-from docpipe.editor import graphpage, server
+from docpipe.editor import graphpage, server, sourcespage
 from docpipe.profile import load_profile
 
 
@@ -145,6 +145,10 @@ def test_an_unknown_brick_is_refused_with_its_name(profile):
 
 
 def test_a_property_the_class_does_not_have_is_refused(profile):
+    # the property a class has comes from the fetched shapes, which a tree
+    # without data/upstream (the image's) does not hold
+    if not sourcespage.shape_files(profile):
+        pytest.skip("the shapes are not fetched here")
     data = page_data(profile)
     arrow(data, "publication_doi", "oeo:OEO_00390098")["property"] = \
         "oeo:OEO_00020220"
