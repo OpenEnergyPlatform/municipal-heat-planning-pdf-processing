@@ -19,6 +19,14 @@ def is_enabled() -> bool
 
 True iff a sandbox endpoint is configured.
 
+### disabled
+
+```python
+def disabled() -> dict
+```
+
+What `run_code` answers where no sandbox is set up.
+
 ### run_code
 
 ```python

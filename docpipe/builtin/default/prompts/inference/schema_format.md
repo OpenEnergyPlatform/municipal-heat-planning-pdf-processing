@@ -1,0 +1,1 @@
+Write the given answer ("answer") to the task ("task") as a JSON object in the form the reply schema sets, WITHOUT adding or omitting content. Details the answer does not give = null. Reply with ONLY the JSON object, no markdown, no text before or after it.

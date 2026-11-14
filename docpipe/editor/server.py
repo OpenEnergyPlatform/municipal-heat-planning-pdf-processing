@@ -6,7 +6,8 @@ status and an object out), so every promise of the endpoints can be held to
 without a socket. What an endpoint says comes from the logic beside it
 (`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
 module only reads the file, asks the logic and, where the logic says so,
-writes.
+writes. The drawing of the chat is drawn, checked, saved and tried through
+/api/chat (`chatpage.py`).
 
 `Files` is the one place the editor touches a file: it may write, and take a
 file away, only inside the profile's own folder and read only inside the
@@ -70,6 +71,7 @@ from ..extraction import flow as flow_files
 from ..extraction import passflow
 from ..extraction import trace as trace_files
 from ..profile import available_profiles
+from . import chatpage
 from . import flow as flow_view
 from . import flowtry
 from . import (graphpage, measured, phrases, prompts, rulespage,
@@ -358,6 +360,10 @@ class App:
             "/api/flow/pass": ("GET", self._pass),
             "/api/flow/pass/check": ("POST", self._pass_check),
             "/api/flow/pass/save": ("POST", self._pass_save),
+            "/api/chat": ("GET", self._chat),
+            "/api/chat/check": ("POST", self._chat_check),
+            "/api/chat/save": ("POST", self._chat_save),
+            "/api/chat/try": ("POST", self._chat_try),
             "/api/rules": ("GET", self._rules),
             "/api/rules/check": ("POST", self._rules_check),
             "/api/rules/save": ("POST", self._rules_save),
@@ -852,6 +858,81 @@ class App:
         elif remove:
             self.files.remove(own)
         return report
+
+    # -- the drawing of the chat --
+
+    def _chat_file(self) -> tuple:
+        """(the profile's own drawing of the chat, its bytes or None where
+        it has none), every file of the drawing's line checked by the guard
+        before the chat's loader reads it."""
+        from ..inference import chatflow
+        for _name, path in chatflow.line(self.profile):
+            self.files.checked(path)
+        own = chatflow.path_of(self.profile)
+        return own, (self.files.read(own) if own.is_file() else None)
+
+    def _chat(self, query, body) -> dict:
+        own, raw = self._chat_file()
+        db = self._corpus_db()
+        return {**chatpage.view(self.profile, raw, self.shown),
+                "db": str(db) if db else None}
+
+    def _chat_check(self, query, body) -> dict:
+        own, raw = self._chat_file()
+        report = chatpage.judge(self.profile, raw, self.shown(own),
+                                body.get("tree"))
+        report.pop("text", None)        # the page gets the diff
+        return report
+
+    def _chat_save(self, query, body) -> dict:
+        own, raw = self._chat_file()
+        report, written, remove = chatpage.save(
+            self.profile, raw, body.get("base"), self.shown(own),
+            body.get("tree"))
+        if written is not None:
+            self.files.write(own, written)
+        elif remove:
+            self.files.remove(own)
+        return report
+
+    def _chat_try(self, query, body) -> dict:
+        """One turn of the drawing on the page with made-up answers, on a
+        document of the corpus database or a plan made up from the
+        examples of the spec; nothing sent (`chatpage.try_turn`)."""
+        own, raw = self._chat_file()
+        tree = body.get("tree")
+        if tree is None:
+            tree = chatpage.drawn(self.profile, raw)
+        document = body.get("document")
+        if document is None:
+            spec = None
+            if self.spec_path:
+                from ..extraction import runner as runner_map
+                spec = runner_map.load_spec(specs.parse(
+                    self.files.read(self.spec_path)))
+            sources = chatpage.example_sources(spec)
+            label = chatpage.EXAMPLE_LABEL
+        else:
+            db = self._corpus_db(body)
+            if db is None:
+                raise _Refusal(400, "no corpus database: try the example "
+                                    "plan, or give \"db\"")
+            pages = body.get("pages")
+            sources = flowtry.sources_of(
+                db, int(document), tuple(pages) if isinstance(
+                    pages, list) and len(pages) == 2 else None)
+            label = next((one["title"] for one in flowtry.documents(db)
+                          if one["id"] == int(document)), str(document))
+        try:
+            return chatpage.try_turn(
+                self.profile, tree, sources,
+                question=body.get("question") or "",
+                route=body.get("route") or "auto",
+                as_json=bool(body.get("as_json")),
+                scopes=body.get("scopes"), mode=body.get("mode") or "nothing",
+                label=label)
+        except chatpage.Refused as exc:
+            raise _Refusal(400, str(exc))
 
     def _corpus_db(self, body: Optional[dict] = None) -> Optional[Path]:
         db = (body or {}).get("db") or getattr(self.profile, "db_path", None)

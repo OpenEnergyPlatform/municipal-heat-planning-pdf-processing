@@ -1,0 +1,100 @@
+{
+  "chat": [
+    {
+      "id": "question",
+      "box": "question"
+    },
+    {
+      "id": "route",
+      "note": "Several documents are compared; the graph and the harvest chosen in the sidebar answer alone and say why where they have nothing; any other route searches the documents with the harvest's values beside.",
+      "if": [
+        {
+          "when": {"all": [{"of": "var", "is": "documents.count", "op": "more", "value": 1}]},
+          "steps": [
+            {"id": "compare", "box": "compare"},
+            {"id": "show_comparison", "box": "show"}
+          ]
+        },
+        {
+          "when": {"all": [{"of": "var", "is": "route", "op": "is", "value": "graph"}]},
+          "steps": [
+            {"id": "graph", "box": "graph"},
+            {"id": "show_graph", "box": "show"}
+          ]
+        },
+        {
+          "when": {"all": [{"of": "var", "is": "route", "op": "is", "value": "harvest"}]},
+          "steps": [
+            {"id": "harvest_alone", "box": "harvest", "set": {"alone": true}},
+            {"id": "show_harvest", "box": "show"}
+          ]
+        }
+      ],
+      "else": [
+        {
+          "id": "side_by_side",
+          "together": [
+            {
+              "steps": [
+                {
+                  "id": "harvest_wanted",
+                  "if": [
+                    {
+                      "when": {"all": [
+                        {"of": "var", "is": "image_only", "not": true},
+                        {"of": "var", "is": "route", "op": "is", "value": "documents", "not": true}
+                      ]},
+                      "steps": [
+                        {"id": "harvest_beside", "box": "harvest"}
+                      ]
+                    }
+                  ],
+                  "else": []
+                }
+              ]
+            },
+            {
+              "steps": [
+                {"id": "phrase", "box": "phrase"},
+                {"id": "embed", "box": "embed"},
+                {"id": "search", "box": "search"},
+                {
+                  "id": "found",
+                  "if": [
+                    {
+                      "when": {"all": [{"of": "var", "is": "hits", "op": "empty", "not": true}]},
+                      "steps": [
+                        {"id": "pack", "box": "pack"},
+                        {"id": "statements", "box": "statements"},
+                        {"id": "repeats", "box": "repeats"},
+                        {"id": "readoff", "box": "readoff"},
+                        {"id": "assemble", "box": "assemble"},
+                        {
+                          "id": "json_wanted",
+                          "if": [
+                            {
+                              "when": {"all": [
+                                {"of": "var", "is": "as_json"},
+                                {"of": "var", "is": "answer", "op": "empty", "not": true}
+                              ]},
+                              "steps": [
+                                {"id": "format", "box": "format"}
+                              ]
+                            }
+                          ],
+                          "else": []
+                        }
+                      ]
+                    }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+          ]
+        },
+        {"id": "show", "box": "show"}
+      ]
+    }
+  ]
+}

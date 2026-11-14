@@ -26,6 +26,12 @@ def is_enabled() -> bool:
     return bool(config.CODE_EXEC_URL)
 
 
+def disabled() -> dict:
+    """What `run_code` answers where no sandbox is set up."""
+    return {"ok": False, "stdout": "", "stderr": "", "exit_code": None,
+            "error": "code-exec disabled", "sandbox": True}
+
+
 def run_code(code: str, context: Optional[dict] = None,
              timeout: Optional[float] = None) -> dict:
     """
@@ -42,8 +48,7 @@ def run_code(code: str, context: Optional[dict] = None,
     again: code that failed fails the same way the next time.
     """
     if not config.CODE_EXEC_URL:
-        return {"ok": False, "stdout": "", "stderr": "", "exit_code": None,
-                "error": "code-exec disabled", "sandbox": True}
+        return disabled()
     waits = float(timeout or rules.get("code_timeout_s"))
     out = _send(code, context, waits)
     for _ in range(int(rules.get("code_resend"))):

@@ -54,9 +54,10 @@ which the package imports; without `regex` the editor cannot start. The extra
 `dev` includes `pyshacl`. `pip install -e ".[editor]"` gives everything
 `docpipe edit` needs.
 
-Before it starts the server, `docpipe edit` checks that the package's own
-requirements (`doctor.CORE`) are installed. If one is missing it stops with a
-line naming it and `pip install docpipe`. If the extra `editor` is missing it
+Before it starts the server, `docpipe edit` loads the server's module. If a
+library it imports is missing, it stops with a line naming it and
+`pip install docpipe`; a requirement of the package the editor does not load,
+such as `rapidfuzz`, does not stop it. If the extra `editor` is missing it
 prints one line that the Sources and Graph tabs need `rdflib` and `pyshacl` and
 `pip install "docpipe[editor]"`, and starts anyway; the two tabs say the same
 command where `rdflib` is missing. `docpipe doctor` lists the command `edit`
@@ -768,6 +769,28 @@ switch that starts it. A pass flow is loaded, checked and saved through
 `/api/flow/pass`. It has a library of its own, its boxes and one frame, "for
 each dimension"; it offers no rounds, no branchings, no conditions and no
 numbers, and the page says where no run starts it. Rules at a step work in it as in the main flow.
+
+### The flow of the chat
+
+The flow selector also holds an entry for the chat: the drawing of a chat turn
+(`docpipe/inference/chatflow.py`, `docpipe/editor/chatpage.py`). It is drawn,
+checked and saved like a flow of a follow-up pass, with the library of the chat's
+boxes in groups (start, routes, search, answer, output, logic), the frames each,
+round, branching and side by side, and a condition and a switch at every step. The
+profile's own `chat.json` is written only where the drawing differs from what the
+profile inherits.
+
+- `GET /api/chat` gives the drawing, its library, its variables and where it comes from;
+- `POST /api/chat/check` says every reason the drawing cannot run, each at its step;
+- `POST /api/chat/save` keeps a drawing the check allows, where the file is as the page loaded it;
+- `POST /api/chat/try` is the dry run below.
+
+The chat's dry run asks one question on made-up answers, in one of two modes:
+"nothing" (every part of every answer empty) and "example" (the example of each
+reply's form). The document is one of the corpus database or the plan made up
+from the spec's examples. No model, embedder, reranker or sandbox is asked, and
+nothing of the plan or the question is sent. Each step that ran shows its
+requests.
 
 ### Dry run
 

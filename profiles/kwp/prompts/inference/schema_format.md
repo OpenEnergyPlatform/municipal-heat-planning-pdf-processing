@@ -1,0 +1,1 @@
+Schreibe die gegebene Antwort ("answer") auf den Auftrag ("task") als JSON-Objekt in der Form, die das Antwortschema vorgibt, OHNE Inhalte hinzuzufügen oder wegzulassen. In der Antwort fehlende Angaben = null. Antworte mit NUR dem JSON-Objekt, kein Markdown, kein Text davor oder danach.

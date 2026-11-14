@@ -21,6 +21,11 @@ without a profile.
 
 ## Flow (per query)
 
+The steps below are the default drawing of a turn. The chat runs the profile's
+`chat.json` (else the one it extends, else the package's), a drawing of boxes and
+frames that the editor draws, checks, saves and dry-runs; the sidebar's answer
+routes are the routes that drawing branches on.
+
 1. Filter and pick one document, up to `COMPARE_MAX_DOCUMENTS` to compare, or tick the whole
    corpus.
 2. Pick search scopes (multi-select). Tables and figures are each embedded twice, so each is

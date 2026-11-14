@@ -265,7 +265,11 @@ model than the one that embeds the questions. Retrieval is by meaning and, where
 directory, the app shows the verified values the harvest holds for a question
 before it answers from the documents, found by meaning where `docpipe
 values-index` built their vectors and by closed questions where it did not, and
-has a review page where people decide whether harvested values are right;
+has a review page where people decide whether harvested values are right; a
+turn of the chat is a drawing of boxes and frames, `chat.json` of the profile
+(else of the profile it extends, else the one the package brings, which asks
+what the chat always asked), so a new answer route can be built from boxes
+alone (`docpipe/inference/chatflow.py`);
 `docpipe evaluate` counts against those decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
 documents its configuration.
 
@@ -277,11 +281,11 @@ documents its configuration.
 | --- | --- |
 | Spec | the extraction spec, one form per question, with what an edit costs the next run (with `--harvest`, which stored documents it makes stale) |
 | Prompts | the prompt and sentence files, each shown with the recorded requests as the edit would send them; Try re-sends at most three of them to the endpoint named by `EDIT_TRY_BASE_URL`, `EDIT_TRY_MODEL` and `EDIT_TRY_API_KEY` |
-| Flow | the drawing in `flow.json` and the numbers that bound it; Try runs the drawing on made-up answers and sends nothing |
+| Flow | the drawing in `flow.json` and the numbers that bound it; Try runs the drawing on made-up answers and sends nothing; the flow selector also holds the chat's drawing (`chat.json`), drawn, checked and saved the same way, with a dry run of one question that asks no model, embedder, reranker or sandbox |
 | Sources | `sources.json` |
 | Graph | `graph.json` |
 
-The head of the page switches to any other profile the installation finds; the editor starts again with it at the same address, asking first where edits are not saved. It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node. `pip install -e ".[editor]"` installs everything the command needs; `docpipe edit` stops with a line naming a missing requirement of the package, and says in one line, and starts anyway, that the Sources and Graph tabs need the extra `editor` (`rdflib`, `pyshacl`) where it is missing. Changing the page needs Node: `python scripts/build_editor_page.py` checks the Node on the path against `engines` in `docpipe/editor/ui/package.json`, runs `npm ci` where `node_modules` is missing (or with `--install`), builds into `docpipe/editor/web` and writes the fingerprint of the sources into `web/BUILT_FROM`; `--check` builds nothing and exits 1 where the committed page is not the build of its sources. See [the editor chapter](docs/stages/editor.md).
+The head of the page switches to any other profile the installation finds; the editor starts again with it at the same address, asking first where edits are not saved. It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node. `pip install -e ".[editor]"` installs everything the command needs; `docpipe edit` stops with a line naming a library it loads that is missing (a requirement of the package the editor does not load does not stop it), and says in one line, and starts anyway, that the Sources and Graph tabs need the extra `editor` (`rdflib`, `pyshacl`) where it is missing. Changing the page needs Node: `python scripts/build_editor_page.py` checks the Node on the path against `engines` in `docpipe/editor/ui/package.json`, runs `npm ci` where `node_modules` is missing (or with `--install`), builds into `docpipe/editor/web` and writes the fingerprint of the sources into `web/BUILT_FROM`; `--check` builds nothing and exits 1 where the committed page is not the build of its sources. See [the editor chapter](docs/stages/editor.md).
 
 ## Collaboration
 

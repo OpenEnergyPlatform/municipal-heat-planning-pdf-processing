@@ -52,6 +52,44 @@ follows to it. It needs the `app` extra. The older form, `streamlit run
 scripts/inference_app/app.py`, still works: that file only hands over to the
 package.
 
+## The drawing of a turn
+
+A turn is what the profile's `chat.json` says: a list of steps, each a box or a
+frame (`docpipe/inference/chatflow.py`, run by `chat_turn` in `app.py`). The
+file is the profile's own, else that of the profile it extends, else
+`docpipe/builtin/default/chat.json`, which the profiles `kwp` and `scenarios`
+inherit and which asks exactly what the chat asked before there was a drawing.
+
+The boxes stand in groups: start (the question), routes (choose a way, ask the
+harvest, ask the graph, run a SPARQL query from a variable on the graph,
+compare the documents), search (the search sentence, the embedding, the search,
+rerank), answer (batches, statements with evidence, repeated statements, figure
+read-offs, the answer from the statements, compute in the sandbox), output
+(format the answer as JSON by question, JSON by a schema, a list or a table;
+show the answer, a text with `{{variable}}` and variables shown below it) and
+logic (ask the model with a prompt and a reply schema of the step's own, set,
+filter and merge variables, Python of the profile). The frames are each entry of
+a list, round (at most N times, until a stop condition holds), branching (the
+first way whose condition holds, else the last) and side by side (every way at
+the same time). Any step can carry a condition ("when") and can be switched off.
+
+A turn has variables: those the page gives (the question, the earlier turns, the
+documents, the scopes, an image, the route, whether JSON is wanted) and those the
+boxes give. A box takes its inputs from them and puts its outputs into them. The
+turn ends at "Show the answer".
+
+A drawing is checked before it is used, and the check refuses what a run cannot
+do, each reason at its step: an unknown box, an id used twice, the question not
+at the top, no step that shows the answer, an input no step before gives on every
+way, a condition on a variable not there yet, a setting of the wrong kind, a
+prompt the profile does not have.
+
+The sidebar's answer routes are the routes the drawing branches on: every word a
+condition compares the variable `route` with. A route added to the drawing
+appears by its name, so a new route needs no code. A route that cannot answer
+(no harvest, no graph, the whole corpus for the graph) is not offered. The
+editor draws, checks, saves and dry-runs the drawing (see [the editor](editor.md)).
+
 ## What a turn does
 
 The sidebar offers the picker the profile's catalog builds (its filters, the
@@ -67,7 +105,8 @@ questions (`EMBEDDING_MODEL`), a warning in the profile's words stands above
 the chat and nothing is refused: the vectors only may not compare. The check
 reads the configured model's name, so a backend loaded by import path whose
 real model differs from that name is not noticed. Changing the selection
-resets the history. A turn then runs in this order:
+resets the history. A turn runs through the drawing of the chat, described
+above, and its default drawing runs in this order:
 
 1. If a harvest is configured (`INFERENCE_HARVEST_DIR`) and the question is
    not only an image, the harvest answers, side by side with step 2 and shown

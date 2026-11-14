@@ -5,6 +5,7 @@ import { ActionIcon, Badge, Box, Group, Text, Tooltip } from '@mantine/core';
 import {
   IconArrowsSort, IconBookmark, IconChecks, IconChevronDown, IconChevronRight, IconFileText, IconFlag, IconGitBranch,
   IconMessageQuestion, IconPlayerPlay, IconPlus, IconRefresh, IconRepeat, IconScissors, IconFlagCheck, IconCode,
+  IconArrowsSplit, IconBraces, IconColumns, IconSearch,
 } from '@tabler/icons-react';
 import type { EdgeData, StepData } from './layout';
 import type { Library } from './model';
@@ -23,19 +24,26 @@ export const GROUPS: Record<string, { color: string; icon: (p: { size?: number }
   end: { color: 'green', icon: p => <IconFlagCheck {...p} /> },
   logic: { color: 'lime', icon: p => <IconCode {...p} /> },
   pass: { color: 'pink', icon: p => <IconRefresh {...p} /> },
+  // the groups of the chat's library (inference/chatflow.py)
+  routes: { color: 'pink', icon: p => <IconArrowsSplit {...p} /> },
+  search: { color: 'blue', icon: p => <IconSearch {...p} /> },
+  answer: { color: 'indigo', icon: p => <IconMessageQuestion {...p} /> },
+  output: { color: 'green', icon: p => <IconBraces {...p} /> },
 };
 /* the word of a group of the library; a group the page does not know is shown by its key */
 export const groupWord = (key: string): string => ({
   start: t('Start'), prepare: t('Prepare'), order: t('Search'), ask: t('Questions'), check: t('Check'),
   remember: t('Remember'), state: t('State'), end: t('End'), pass: t('Follow-up pass'), logic: t('Logic'),
+  routes: t('Routes'), search: t('Search'), answer: t('Answer'), output: t('Output'),
 } as Record<string, string>)[key] || key;
 /* loops, rounds and branchings: their colour and sign (their word is frameWord) */
 export const FRAMES: Record<string, { color: string; icon: (p: { size?: number }) => ReactNode }> = {
   each: { color: 'gray', icon: p => <IconRepeat {...p} /> },
   round: { color: 'yellow', icon: p => <IconRefresh {...p} /> },
   if: { color: 'pink', icon: p => <IconGitBranch {...p} /> },
+  together: { color: 'violet', icon: p => <IconColumns {...p} /> },
 };
-export const frameWord = (kind: string): string => ({ each: t('Loop'), round: t('Round'), if: t('Branching') } as Record<string, string>)[kind] || kind;
+export const frameWord = (kind: string): string => ({ each: t('Loop'), round: t('Round'), if: t('Branching'), together: t('Side by side') } as Record<string, string>)[kind] || kind;
 
 export interface FlowCtx {
   lib: Library;
@@ -142,6 +150,7 @@ function frameSays(d: StepData, lib: Library): string {
   if (d.kind === 'each' && n.together) bits.push(t('side by side'));
   if (d.kind === 'each' && n.order) bits.push(t('order: {order}', { order: tr((lib.order_words || {})[n.order] || String(n.order).replace('_', ' ')) }));
   if (d.kind === 'round' && n.stop) bits.push(t('stops when its condition is met'));
+  if (d.kind === 'together') bits.push(t('every way at the same time'));
   if (n.when) bits.push(t('only under a condition'));
   if (n.off) bits.push(t('switched off'));
   return bits.join(' · ') || tn(d.inside ?? 0, '{n} step inside', '{n} steps inside');

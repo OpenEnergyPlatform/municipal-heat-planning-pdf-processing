@@ -1,0 +1,1 @@
+Wähle den Weg, der zur Frage des Nutzers ("task") passt: die Antwort "answer" ist der Name genau eines der Wege in "options", wobei jeder Weg sagt, wann er der richtige ist. Antworte mit NUR dem JSON-Objekt.

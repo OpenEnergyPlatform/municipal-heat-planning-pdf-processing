@@ -56,8 +56,8 @@ from docpipe.app import config, pdf_link
 from docpipe.extraction import gold, trust
 from docpipe.extraction.verify import canonical_number
 from docpipe.inference import (
-    answer, catalog, chunker, compare, faiss_store, kg_route, lexical,
-    llm_client, pool, query_cache, replies, request_log, values_index,
+    answer, catalog, chatflow, chunker, compare, faiss_store, kg_route,
+    lexical, llm_client, query_cache, request_log, values_index,
     values_route, wording,
 )
 from docpipe.inference import db
@@ -258,19 +258,6 @@ def _corpus(image_bytes: bytes | None = None) -> answer.Corpus:
     )
 
 
-def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
-             document_id: int | None, scopes: list[str], as_json: bool = False,
-             history: list | None = None, corpus: answer.Corpus | None = None,
-             progress=None):
-    """One turn, with this app's resources and its spinners attached.
-    `document_id` None asks the whole corpus."""
-    return answer.answer_question(
-        task, corpus or _corpus(image_bytes), document_id, scopes,
-        image_bytes=image_bytes, image_only=image_only, as_json=as_json,
-        history=history, progress=progress or _spinner,
-    )
-
-
 def run_comparison(task: str, documents: list, scopes: list[str],
                    as_json: bool = False, histories: dict | None = None):
     """The same question to every selected document, then one comparison.
@@ -300,15 +287,6 @@ def _ask_coordinate(task: str, slot):
                              slot.answerable() if slot.is_closed else {})
 
 
-def run_values_turn(task: str, document_id: int | None,
-                    history: list | None = None) -> dict | None:
-    """What the harvest holds for the question, or None: no harvest, or
-    the question names nothing it has. `document_id` None asks every
-    document's harvest."""
-    got = values_outcome(task, document_id, history)
-    return got if got is not None and got["route"] == "values" else None
-
-
 def _anchor_vector(task: str, history: list | None):
     """The vector of the question's search anchor: the one sentence the
     documents are searched with too, so a vector made for one is there for
@@ -320,11 +298,13 @@ def _anchor_vector(task: str, history: list | None):
 
 
 def values_outcome(task: str, document_id: int | None,
-                   history: list | None = None) -> dict | None:
+                   history: list | None = None,
+                   how: str = "auto") -> dict | None:
     """The harvest's answer with its reason where it has none
     (`values_route.REASONS`), or None: no harvest, or a document the
-    database does not know. By meaning where the harvest has its vectors,
-    else by closed questions."""
+    database does not know. *how* "auto": by meaning where the harvest has
+    its vectors, else by closed questions; "meaning" by meaning alone (None
+    without vectors), "questions" by closed questions alone."""
     store, _rows = get_values()
     if store is None:
         return None
@@ -334,7 +314,9 @@ def values_outcome(task: str, document_id: int | None,
         if not filename:
             return None
         name = Path(filename).stem
-    index = get_values_index()
+    index = get_values_index() if how != "questions" else None
+    if index is None and how == "meaning":
+        return None
     if index is not None:
         return values_route.answer_from_index(
             task, index, embed=partial(_anchor_vector, history=history),
@@ -386,11 +368,14 @@ def harvest_offered() -> bool:
     return config.HARVEST_DIR is not None and config.HARVEST_DIR.is_dir()
 
 
-def route_words() -> dict:
-    """{route key: its label in the profile's words}."""
-    return {"route_auto": T["route_auto"], "route_harvest": T["route_harvest"],
-            "route_graph": T["route_graph"],
-            "route_documents": T["route_documents"]}
+def route_words(routes: tuple = ()) -> dict:
+    """{route key: its label in the profile's words}; a route of the
+    drawing's own is called by its name."""
+    words = {"route_auto": T["route_auto"],
+             "route_harvest": T["route_harvest"],
+             "route_graph": T["route_graph"],
+             "route_documents": T["route_documents"]}
+    return {**{one: one for one in routes}, **words}
 
 
 def values_reason_words() -> dict:
@@ -401,21 +386,100 @@ def values_reason_words() -> dict:
             "no_values": T["values_no_values"]}
 
 
-def routes_offered(whole: bool) -> list:
-    """The answer routes the sidebar offers, by their UI key. The graph
-    answers for one plan, so not for the whole corpus."""
+# The routes the sidebar knows by name, and the word a drawing compares the
+# variable "route" with.
+ROUTES = {"route_auto": "auto", "route_harvest": "harvest",
+          "route_graph": "graph", "route_documents": "documents"}
+
+
+def chat_drawing() -> list:
+    """The drawing of the chat the profile in force runs (`chatflow.load`):
+    its own `chat.json`, else the one it extends, else the package's."""
+    return chatflow.load(config.PROFILE).tree
+
+
+def routes_offered(whole: bool, drawing: list | None = None) -> list:
+    """The answer routes the sidebar offers, by their UI key: those the
+    drawing of the chat branches on (`chatflow.routes_in`), where they can
+    answer. The graph answers for one plan, so not for the whole corpus; a
+    route of the drawing's own is offered by its name."""
+    named = chatflow.routes_in(chat_drawing() if drawing is None
+                               else drawing)
     routes = ["route_auto"]
-    if harvest_offered():
+    if "harvest" in named and harvest_offered():
         routes.append("route_harvest")
-    if not whole and graph_offered():
+    if "graph" in named and not whole and graph_offered():
         routes.append("route_graph")
-    routes.append("route_documents")
+    if "documents" in named:
+        routes.append("route_documents")
+    routes += [one for one in named if one not in ROUTES.values()]
     return routes
 
 
 def _ask_value_coordinate(task: str, slot):
     return llm_client.choose(get_coordinate_prompt(), task, slot.question,
                              slot.answerable() if slot.is_closed else {})
+
+
+class _Services(chatflow.Services):
+    """This app's resources as a turn of the drawing takes them."""
+
+    @property
+    def words(self) -> dict:
+        return T
+
+    def corpus(self, image):
+        return _corpus(image)
+
+    def values_outcome(self, task, document_id, history, how="auto"):
+        return values_outcome(task, document_id, history, how)
+
+    def values_answer(self, task, got, document_id, history, corpus=None,
+                      progress=None):
+        return run_values_answer(task, got, document_id, history,
+                                 corpus=corpus, progress=progress)
+
+    def values_reason(self, reason):
+        return values_reason_words()[reason]
+
+    def kg_turn(self, task, document_id):
+        return run_kg_turn(task, document_id)
+
+    def kg_note(self, reason):
+        return get_kg_hooks().notes[reason]
+
+    def graph(self):
+        return get_graph()
+
+    def compare(self, task, documents, scopes, as_json, histories):
+        return run_comparison(task, documents, scopes, as_json=as_json,
+                              histories=histories)
+
+    def spinner(self, label):
+        return _spinner(label)
+
+    def in_this_run(self, work):
+        return _in_this_run(work)
+
+    def prompt(self, prompt_id):
+        return prompts.load(prompt_id, WORDS_PROFILE)
+
+
+def chat_turn(task: str, *, image_bytes: bytes | None, image_only: bool,
+              documents: list, whole: bool, scopes: list, as_json: bool,
+              route: str, by_doc: dict, services=None) -> dict:
+    """One turn as the profile's drawing of the chat says (`chatflow.run`):
+    {"message", "result", "remember", "vars"}. *documents* are the
+    (id, label) chosen; *by_doc* the turns before, per document."""
+    doc_id = None if whole else documents[0][0]
+    label = None if whole else documents[0][1]
+    start = {"question": task, "history": by_doc.get(doc_id, []),
+             "histories": by_doc,
+             "documents": [{"id": i, "label": name} for i, name in documents],
+             "document": {"id": doc_id, "label": label}, "scopes": scopes,
+             "image": image_bytes, "image_only": image_only,
+             "route": ROUTES.get(route, route), "as_json": as_json}
+    return chatflow.run(chat_drawing(), start, services or _Services())
 
 
 def _in_this_run(work):
@@ -533,7 +597,7 @@ def chat_page() -> None:
         routes = routes_offered(whole)
         route = "route_auto"
         if len(routes) > 2:
-            words = route_words()
+            words = route_words(routes)
             by_label = {words[key]: key for key in routes}
             route = by_label[st.radio(T["route"], list(by_label),
                                       horizontal=True, help=T["route_help"])]
@@ -589,123 +653,15 @@ def chat_page() -> None:
         st.markdown(user_text)
 
     by_doc = st.session_state.setdefault("turns_by_doc", {})
-
-    if comparing:
-        outcome = run_comparison(task, [(i, by_id[i].label) for i in doc_ids],
-                                 scopes, as_json=as_json, histories=by_doc)
-        with st.chat_message("assistant"):
-            _render_comparison(outcome)
-        history.append({"role": "assistant", "content": "", **outcome})
-        for row in outcome["rows"]:
-            _remember(by_doc, row["document_id"], task, row)
-        return
-
-    route_note = None
-
-    # The graph or the harvest alone: either answers, or says why not and
-    # the documents are not asked. A silent fallback would hide that the
-    # chosen source holds nothing.
-    if route == "route_graph":
-        with _spinner(T["route_graph"]):
-            outcome = run_kg_turn(task, doc_id)
-        if outcome["route"] == "kg":
-            message = {"role": "assistant", "content": "",
-                       "kg_values": outcome["values"], "route": "kg"}
-        else:
-            message = {"role": "assistant", "route": "kg_empty",
-                       "content": get_kg_hooks().notes[outcome["reason"]]}
-        _say(message)
-        history.append(message)
-        return
-    if route == "route_harvest":
-        got = (None if image_only
-               else values_outcome(task, doc_id, by_doc.get(doc_id, [])))
-        if got is not None and got["route"] == "values":
-            harvest = run_values_answer(task, got, doc_id,
-                                        by_doc.get(doc_id, []))
-            message = {"role": "assistant", "content": "",
-                       "harvest": _kept(harvest), "route": "harvest"}
-            _remember(by_doc, doc_id, task, harvest["result"])
-        else:
-            # A question that is only an image names no parameter.
-            reason = ("no_parameter" if image_only
-                      else "no_store" if got is None else got["reason"])
-            message = {"role": "assistant", "route": "harvest_empty",
-                       "content": values_reason_words()[reason]}
-        _say(message)
-        history.append(message)
-        return
-
-    # The answer from the harvest comes first and stands for itself: read
-    # out of the passages the harvest read its values from, not out of the
-    # search below. Not for a question that is only an image: it names
-    # nothing.
-    corpus = _corpus(image_bytes)
-
-    def from_harvest():
-        values = (None if image_only or route == "route_documents"
-                  else run_values_turn(task, doc_id, by_doc.get(doc_id, [])))
-        return None if values is None else _kept(run_values_answer(
-            task, values, doc_id, by_doc.get(doc_id, []), corpus=corpus,
-            progress=answer._silent))
-
-    def from_documents():
-        return run_turn(task, image_bytes, image_only, doc_id, scopes,
-                        as_json=as_json, history=by_doc.get(doc_id, []),
-                        corpus=corpus, progress=answer._silent)
-
-    # The two run side by side, so the one spinner stands for both.
-    with _spinner(T["preparing"]), pool.turn():
-        harvest, result = llm_client.together(
-            [_in_this_run(from_harvest), _in_this_run(from_documents)])
-
-    recheck_note = None
-    if result.get("recheck"):
-        recheck_note = T["recheck"].format(n=result["n_excluded"])
-
-    # Compose assistant reply
-    answered = result["answer"] is not None
-    faults = list(result.get("faults") or [])
-    unread = _unread_replies(result)
-    told: list = []      # faults the reply says itself, and the page not twice
-    if answered:
-        reply = result["answer"]
-    elif result["n_hits"] == 0:
-        reply = (T["all_examined"]
-                 if result.get("recheck") and result.get("n_excluded")
-                 else T["no_hits"])
-    elif unread:
-        reply = T["answer_unreadable"].format(
-            causes=llm_client.describe_faults(unread))
-        told = unread
-    else:
-        reply = T["nothing_backed"]
-    message = {
-        "role": "assistant", "content": reply,
-        "citations": result["citations"] if answered else [],
-        "phrase": result.get("phrase"),
-        "as_json": result["as_json"] if answered else False,
-        "recheck_note": recheck_note, "route_note": route_note,
-        "compute": result.get("compute", []), "harvest": harvest,
-        "made": result.get("statements_made", 0),
-        "dropped": result.get("statements_dropped", 0),
-        "faults": [f for f in faults if f not in told],
-    }
-    with st.chat_message("assistant"):
-        if harvest is not None:
-            _render_harvest(harvest)
-        _render_answer(reply, message["as_json"])
-        _render_dropped(message["made"], message["dropped"])
-        _render_faults(message["faults"])
-        _render_notes(message)
-        _render_compute(message["compute"])
-        # Rendered directly (not inside an expander) so each citation can carry
-        # its own page and context expanders without illegal nesting.
-        for cit in message["citations"]:
-            _render_citation(cit)
+    documents = [] if whole else [(i, by_id[i].label) for i in doc_ids]
+    reply = chat_turn(task, image_bytes=image_bytes, image_only=image_only,
+                      documents=documents, whole=whole, scopes=scopes,
+                      as_json=as_json, route=route, by_doc=by_doc)
+    message = reply["message"]
+    _say(message)
     history.append(message)
-
-    _remember(by_doc, doc_id, task, result)
+    for document_id, result in reply["remember"]:
+        _remember(by_doc, document_id, task, result)
 
 
 def _say(msg: dict) -> None:
@@ -731,18 +687,15 @@ def _say(msg: dict) -> None:
         _render_compute(msg.get("compute"))
         for cit in msg.get("citations", []):
             _render_citation(cit)
+        for shown in msg.get("extra") or []:
+            st.caption(shown["name"])
+            st.json(shown["value"], expanded=False)
 
 
 def _unread_replies(turn: dict) -> list:
-    """The answer requests of a turn that stayed unreadable, where the turn
-    made no statement at all: the model's replies could not be read, so the
-    sources were not looked at, which is not the same as nothing standing in
-    them. A turn that made statements has its answer, and says the rest in
-    the faults under it."""
-    if turn.get("statements_made"):
-        return []
-    return [f for f in turn.get("faults") or []
-            if f["request"] == replies.ANSWER]
+    """The answer requests of a turn that stayed unreadable, where it made
+    no statement at all (`chatflow.unread_replies`)."""
+    return chatflow.unread_replies(turn)
 
 
 def _render_dropped(made, dropped) -> None:

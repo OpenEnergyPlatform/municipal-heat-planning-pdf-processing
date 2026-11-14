@@ -15,7 +15,7 @@ import { CondEditor } from './Conditions';
 import { StepRules } from './StepRules';
 import { OwnAt } from '../rules/OwnAt';
 import { RunSection } from './Run';
-import { kindOf, labelOf, normRow, partsOf, presetOf, presetPart, stepBox, type Cond, type FlowData, type LibSetting,
+import { defaultRow, kindOf, labelOf, partsOf, presetOf, presetPart, stepBox, type Cond, type FlowData, type LibSetting,
   type Step } from './model';
 
 export interface Panel {
@@ -33,6 +33,8 @@ export interface Panel {
   reload(): void;
   /* a flow of a follow-up pass: its boxes take no conditions and its loops only go on or off */
   pass?: boolean;
+  /* the drawing of the chat: its loops go one entry after another, its rounds run at most N times */
+  chat?: boolean;
   /* the variables there before a step (extraction/flow.py availability), as the last check said */
   availableOf(id: string): string[];
 }
@@ -97,7 +99,7 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
         data={orders.map(v => ({ value: v, label: tr((lib.order_words || {})[v] || v.replace('_', ' ')) }))}
         onChange={e => { n.order = e.currentTarget.value; P.edited(); }} /></Field>);
     }
-    out.push(<Field key="together" label={t('side by side')} help={t('On: the items of this loop are read at the same time. Off: they are read one after another.')}>
+    if (!P.chat) out.push(<Field key="together" label={t('side by side')} help={t('On: the items of this loop are read at the same time. Off: they are read one after another.')}>
       <Switch checked={!!n.together} onChange={e => { if (e.currentTarget.checked) n.together = true; else delete n.together; P.edited(); }} /></Field>);
   }
   if (k === 'round') {
@@ -105,8 +107,8 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
     const most = (n.round && n.round.most) || 1;
     out.push(<Field key="runs" label={t('repeats')}>
       <Group gap="xs">
-        <NativeSelect value={supply ? 'supply' : 'most'} data={[{ value: 'most', label: t('at most N times') }, { value: 'supply', label: t('until the search hits are used up') }]}
-          onChange={e => { n.round = e.currentTarget.value === 'supply' ? { supply: true } : { most: Number(most) || 1 }; P.edited(); }} />
+        {P.chat ? <Text size="sm">{t('at most N times')}</Text> : <NativeSelect value={supply ? 'supply' : 'most'} data={[{ value: 'most', label: t('at most N times') }, { value: 'supply', label: t('until the search hits are used up') }]}
+          onChange={e => { n.round = e.currentTarget.value === 'supply' ? { supply: true } : { most: Number(most) || 1 }; P.edited(); }} />}
         {!supply && <NumberBox w={90} min={1} value={String(most)} onText={() => {}} aria-label={t('at most')}
           onCommit={x => { const v = Number(x) || 1; if (n.round && n.round.most === v) return; n.round = { most: v }; P.edited(); }} />}
       </Group></Field>);
@@ -118,14 +120,24 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
       <Field key={'way' + i} label={t('branch {n} when', { n: i + 1 })}>
         <Stack gap={4}>
           <CondEditor subjects={subjects} vars={vars} get={() => w.when || null}
-            set={c => { w.when = c || { all: [normRow(subjects, { of: 'coordinate', is: 'year' })] }; P.edited(); }} />
+            set={c => { w.when = c || { all: [defaultRow(subjects)] }; P.edited(); }} />
           {n.if.length > 1 && <Box><Button size="compact-xs" variant="subtle" color="red" onClick={() => { n.if.splice(i, 1); P.edited(); }}>{t('remove this branch')}</Button></Box>}
         </Stack>
       </Field>));
     out.push(<Box key="addway"><Button size="xs" variant="light" leftSection={<IconPlus size={14} />}
-      onClick={() => { n.if.push({ when: { all: [normRow(subjects, { of: 'coordinate', is: 'year' })] }, steps: [] }); P.edited(); }}>{t('branch')}</Button></Box>);
+      onClick={() => { n.if.push({ when: { all: [defaultRow(subjects)] }, steps: [] }); P.edited(); }}>{t('branch')}</Button></Box>);
     out.push(<Field key="else" label={t('else branch')}><Switch checked={own(n, 'else')}
       onChange={e => { if (e.currentTarget.checked) n.else = n.else || []; else delete n.else; P.edited(); }} /></Field>);
+  }
+  if (k === 'together') {
+    out.push(<Text key="ways" size="sm">{t('Every way runs at the same time; the step after them waits for all. What a way gives, the steps after them can use.')}</Text>);
+    (n.together as { steps: Step[] }[]).forEach((w, i) => out.push(
+      <Group key={'way' + i} justify="space-between" wrap="nowrap">
+        <Text size="sm">{t('way {n}: {count} steps', { n: i + 1, count: w.steps.length })}</Text>
+        {n.together.length > 2 && <Button size="compact-xs" variant="subtle" color="red" onClick={() => { n.together.splice(i, 1); P.edited(); }}>{t('remove this way')}</Button>}
+      </Group>));
+    out.push(<Box key="addway"><Button size="xs" variant="light" leftSection={<IconPlus size={14} />}
+      onClick={() => { n.together.push({ steps: [] }); P.edited(); }}>{t('way')}</Button></Box>);
   }
   if (k !== 'if' && !(b && b.type === 'check') && !P.pass) {
     out.push(<Field key="when" label={t('only when')}><CondEditor subjects={subjects} vars={k === 'each' && n.each === 'list' ? [...vars, String(n.as || 'item')] : vars} get={() => (n.when as Cond) || null}
@@ -138,6 +150,9 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
   const never = b && P.data.never ? P.data.never[n.preset || n.box] : null;
   const bad = P.problemsOf(n.id);
   const tried = P.trial && P.trial.boxes && P.trial.boxes[n.id];
+  // what the chat's dry run did at this step: what it gave and each request it asked
+  const ranHere = P.chat && P.trial && P.trial.steps ? (P.trial.steps as { id: string; gave: unknown }[]).filter(s => s.id === n.id) : [];
+  const askedHere = P.chat && P.trial && P.trial.requests ? (P.trial.requests as { step: string; request: string; prompt: string; reply: unknown }[]).filter(r => r.step === n.id) : [];
   return (
     <Stack gap="md">
       <Group justify="space-between" wrap="nowrap">
@@ -145,12 +160,33 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
           <Title order={4}>{labelOf(lib, n)}</Title>
           <Text size="xs" c="dimmed" className="dp-mono">{n.id}</Text>
         </Box>
-        <Button size="xs" variant="subtle" leftSection={<IconArrowLeft size={14} />} onClick={() => P.select(null)}>{P.pass ? t('overview') : t('numbers')}</Button>
+        <Button size="xs" variant="subtle" leftSection={<IconArrowLeft size={14} />} onClick={() => P.select(null)}>{P.pass || P.chat ? t('overview') : t('numbers')}</Button>
       </Group>
       {never && <Alert color="gray" p="xs">{t('Never taken by this profile: {reason}', { reason: tr(never) })}</Alert>}
       {bad.map((p, i) => <Alert key={i} color="red" p="xs">{rich(trCheck(p.message))}</Alert>)}
       {out}
       <StepRules P={P} n={n} />
+      {(ranHere.length > 0 || askedHere.length > 0) && (
+        <Accordion variant="contained">
+          {ranHere.map((s, i) => (
+            <Accordion.Item key={'gave' + i} value={'gave' + i}>
+              <Accordion.Control>{t('What the dry run gave here')}</Accordion.Control>
+              <Accordion.Panel><pre className="fl-pre">{JSON.stringify(s.gave, null, 2)}</pre></Accordion.Panel>
+            </Accordion.Item>
+          ))}
+          {askedHere.map((r, i) => (
+            <Accordion.Item key={'asked' + i} value={'asked' + i}>
+              <Accordion.Control>{t('Request {n} of the dry run ({kind})', { n: i + 1, kind: r.request })}</Accordion.Control>
+              <Accordion.Panel>
+                <Text size="xs" fw={600}>{t('message')}</Text>
+                <pre className="fl-pre">{r.prompt}</pre>
+                <Text size="xs" fw={600}>{t('made-up answer')}</Text>
+                <pre className="fl-pre">{JSON.stringify(r.reply, null, 2)}</pre>
+              </Accordion.Panel>
+            </Accordion.Item>
+          ))}
+        </Accordion>
+      )}
       {tried && tried.first && (
         <Accordion variant="contained">
           <Accordion.Item value="first">
@@ -186,6 +222,23 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
     const mine = own(sets, s.key);
     return <GeneralField s={s} value={mine ? sets[s.key] : base} put={v => put(s.key, v)} vars={P.availableOf(n.id)}
       data={P.data} reset={preset && mine && part !== undefined ? () => put(s.key, undefined) : undefined} base={base} />;
+  }
+  if (s.kind === 'number' && !s.number) {
+    // a number of the step's own, named by no number of the flow: empty takes the library's
+    const mine = own(sets, s.key);
+    const shown = mine ? String(sets[s.key]) : (base == null ? '' : String(base));
+    return (
+      <Field label={tr(s.label)} help={tr(s.help) || undefined}>
+        <NumberBox w={120} min={0} value={shown} placeholder={base == null ? t('as the chat sets it') : undefined} onText={() => {}} aria-label={tr(s.label)}
+          onCommit={v => {
+            const x = v.trim();
+            const next = x === '' ? undefined : Number(x);
+            if (next !== undefined && Number.isNaN(next)) return;
+            if (next === (mine ? sets[s.key] : undefined)) return;
+            put(s.key, next === undefined || next === base ? undefined : next);
+          }} />
+      </Field>
+    );
   }
   if (s.kind === 'number') {
     const named = P.data.numbers.find(x => x.name === s.number);

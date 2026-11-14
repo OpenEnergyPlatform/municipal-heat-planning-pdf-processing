@@ -1,9 +1,9 @@
 /* Where every step stands. The flow is a nested list, so its picture follows from the nesting: a list is a column from
-   top to bottom, a loop, round or branching is a coloured area around its column, the branches of a branching stand side
-   by side. No position is stored; the page lays the flow out again after every edit. */
+   top to bottom, a loop, round or branching is a coloured area around its column, the branches of a branching and the
+   ways of "side by side" stand side by side. No position is stored; the page lays the flow out again after every edit. */
 import { Position, type Edge, type Node } from '@xyflow/react';
 import { t } from '../lib/i18n';
-import { giveOf, inside, kindOf, labelOf, lists, sentence, type FlowData, type Step } from './model';
+import { giveOf, hasWays, inside, kindOf, labelOf, lists, sentence, type FlowData, type Step } from './model';
 
 export const BOX_W = 300;
 export const BOX_H = 54;
@@ -41,7 +41,7 @@ export function layout(data: FlowData, tree: Step[], decor: Decor): Placed {
   const sizeOf = (n: Step): Size => {
     const k = kindOf(n);
     if (k === 'box' || !decor.open.has(n.id)) return { w: BOX_W, h: BOX_H };
-    const cols = lists(n).map(l => column(l.steps, k === 'if'));
+    const cols = lists(n).map(l => column(l.steps, hasWays(k)));
     const w = cols.reduce((s, c) => s + c.w, 0) + WAY_GAP * Math.max(0, cols.length - 1);
     const h = cols.reduce((m, c) => Math.max(m, c.h), 0);
     return { w: Math.max(BOX_W + 2 * PAD, w + 2 * PAD), h: HEAD + h + FOOT };
@@ -84,12 +84,12 @@ export function layout(data: FlowData, tree: Step[], decor: Decor): Placed {
         selected: decor.selected.has(n.id), data: d, width: s.w, height: s.h, zIndex: open ? depth * 2 : 1000 + depth });
       if (open) {
         const ls = lists(n);
-        const cols = ls.map(l => column(l.steps, k === 'if'));
+        const cols = ls.map(l => column(l.steps, hasWays(k)));
         const total = cols.reduce((sum, c) => sum + c.w, 0) + WAY_GAP * Math.max(0, cols.length - 1);
         let wx = (s.w - total) / 2;
         ls.forEach((l, i) => {
-          const label = k === 'if' ? (l.key.endsWith('#else') ? t('else') : t('only {condition}', { condition: sentence(subjects, l.way && l.way.when) })) : '';
-          place(l.key, l.steps, wx, HEAD, n.id, depth + 1, k === 'if' ? { label } : null);
+          const label = k === 'if' ? (l.key.endsWith('#else') ? t('else') : t('only {condition}', { condition: sentence(subjects, l.way && l.way.when) })) : l.label;
+          place(l.key, l.steps, wx, HEAD, n.id, depth + 1, hasWays(k) ? { label } : null);
           wx += cols[i].w + WAY_GAP;
         });
       }

@@ -9,7 +9,8 @@ status and an object out), so every promise of the endpoints can be held to
 without a socket. What an endpoint says comes from the logic beside it
 (`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
 module only reads the file, asks the logic and, where the logic says so,
-writes.
+writes. The drawing of the chat is drawn, checked, saved and tried through
+/api/chat (`chatpage.py`).
 
 `Files` is the one place the editor touches a file: it may write, and take a
 file away, only inside the profile's own folder and read only inside the

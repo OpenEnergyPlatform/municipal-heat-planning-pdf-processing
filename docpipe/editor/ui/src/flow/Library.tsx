@@ -1,4 +1,5 @@
-/* The library a "+" opens: the loops, rounds, branchings and every kind of step, each with the sentence of what it does, a search over all. */
+/* The library a "+" opens: the loops, rounds, branchings, the ways side by side of the chat and every kind of step, each
+   with the sentence of what it does, a search over all. */
 import { useMemo, useState } from 'react';
 import { Badge, Box, Group, Modal, ScrollArea, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
@@ -7,7 +8,7 @@ import { t, tr, useLang } from '../lib/i18n';
 import type { Library } from './model';
 
 export type Pick = { kind: 'box'; arg: string } | { kind: 'preset'; arg: string } | { kind: 'each'; arg: string }
-  | { kind: 'round' } | { kind: 'if' };
+  | { kind: 'round' } | { kind: 'if' } | { kind: 'together' };
 interface Item { label: string; says: string; pick: Pick; color: string; icon: React.ReactNode; group: string }
 
 export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }: {
@@ -21,8 +22,13 @@ export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }:
     const out: Item[] = [];
     const frames = t('Loops, rounds and branchings');
     for (const [what, says] of Object.entries(lib.each)) out.push({ label: tr((lib.each_titles || {})[what]) || t('For each {name}', { name: what }), says: tr(says), pick: { kind: 'each', arg: what }, color: FRAMES.each.color, icon: FRAMES.each.icon({ size: 18 }), group: frames });
+    if (!loopsOnly && (lib.frames || []).includes('together')) {
+      out.push({ label: frameWord('together'), says: t('Runs every way inside it at the same time and goes on when all of them are done. To change it: put steps into each way, add a way or remove one; what a way gives, the steps after it can use.'), pick: { kind: 'together' }, color: FRAMES.together.color, icon: FRAMES.together.icon({ size: 18 }), group: frames });
+    }
     if (!loopsOnly) {
-      out.push({ label: frameWord('round'), says: t('Runs the steps inside it again and again. To change it: set "at most N times" or "until the search hits are used up" under "repeats", and add a condition under "stop when" that ends the rounds early.'), pick: { kind: 'round' }, color: FRAMES.round.color, icon: FRAMES.round.icon({ size: 18 }), group: frames });
+      out.push({ label: frameWord('round'), says: lib.flow === 'chat'
+        ? t('Runs the steps inside it again, at most N times; inside, the variable "round" says which time it is. To change it: set N under "repeats", and add a condition under "stop when" that ends the rounds early.')
+        : t('Runs the steps inside it again and again. To change it: set "at most N times" or "until the search hits are used up" under "repeats", and add a condition under "stop when" that ends the rounds early.'), pick: { kind: 'round' }, color: FRAMES.round.color, icon: FRAMES.round.icon({ size: 18 }), group: frames });
       out.push({ label: frameWord('if'), says: t('Runs only the first branch whose condition is met. To change it: give each branch its condition, and the last branch, without a condition, runs when no other branch does. All branches join again below.'), pick: { kind: 'if' }, color: FRAMES.if.color, icon: FRAMES.if.icon({ size: 18 }), group: frames });
     }
     for (const b of lib.boxes) {

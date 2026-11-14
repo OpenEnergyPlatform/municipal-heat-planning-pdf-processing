@@ -45,7 +45,9 @@ This package sits downstream of stage 6, the last stage to write under
 `results/` (see [How the parts fit together](../pipeline.md)); it has no
 stage after it in the batch chain, a terminal, on-demand read path.
 
-One turn, start to finish:
+One turn, start to finish, as the package's default drawing asks it (the chat
+runs a turn from a drawing, `chat.json`, which may order, repeat or branch these
+steps differently; see [the chat over the corpus](./app.md)):
 
 ```mermaid
 flowchart LR

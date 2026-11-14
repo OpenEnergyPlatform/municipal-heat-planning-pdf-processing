@@ -221,9 +221,28 @@ def test_the_editor_without_regex_does_not_start():
 
 
 def test_the_command_names_what_the_installation_lacks():
-    absent = {"regex", "rdflib"}
+    def lacking(name):
+        def load():
+            raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+        return load
+
     core, tabs = start.missing_libraries(
-        find=lambda name: None if name in absent else object())
+        find=lambda name: None if name == "rdflib" else object(),
+        load=lacking("regex"))
     assert core == ["regex"]
     assert tabs == ["rdflib"]
-    assert start.missing_libraries(find=lambda name: object()) == ([], [])
+    assert start.missing_libraries(find=lambda name: object(),
+                                   load=lambda: None) == ([], [])
+
+
+def test_a_requirement_the_editor_does_not_load_does_not_stop_it():
+    """rapidfuzz is a requirement of the package that only the chat's PDF
+    links import: an installation without it still starts the editor. The
+    failure by construction: a check of every requirement of the package
+    would name it."""
+    absent = {"rapidfuzz"}
+    core, tabs = start.missing_libraries(
+        find=lambda name: None if name in absent else object(),
+        load=lambda: None)
+    assert core == [] and tabs == []
+    assert [name for name in doctor.CORE if name in absent] == ["rapidfuzz"]
