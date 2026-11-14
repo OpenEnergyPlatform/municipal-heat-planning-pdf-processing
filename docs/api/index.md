@@ -49,7 +49,7 @@ is for and what it hands to what; this is the reference.
 ## docpipe.app
 
 - [docpipe.app](docpipe.app.md): app: The chat over a processed corpus, and the page on which a person decides about harvested values.
-- [docpipe.app.app](docpipe.app.app.md): The chat over a docpipe corpus and the page on which harvested values are reviewed. (33 functions)
+- [docpipe.app.app](docpipe.app.app.md): The chat over a docpipe corpus and the page on which harvested values are reviewed. (30 functions)
 - [docpipe.app.config](docpipe.app.config.md): Central configuration for the chat app.
 - [docpipe.app.pdf_link](docpipe.app.pdf_link.md): Where a citation stands in the source PDF: the deep link into an external viewer, and the page drawn here with the quote marked. (1 class, 8 functions)
 - [docpipe.app.sandbox_service](docpipe.app.sandbox_service.md): Localhost HTTP wrapper around llm-sandbox. (1 class, 4 functions)
@@ -180,19 +180,19 @@ is for and what it hands to what; this is the reference.
 ## docpipe.inference
 
 - [docpipe.inference](docpipe.inference.md): Retrieval and grounded answering, usable from a UI or from a batch job.
-- [docpipe.inference.answer](docpipe.inference.answer.md): Runs one retrieval and answer turn, with no user interface attached. (4 classes, 15 functions)
+- [docpipe.inference.answer](docpipe.inference.answer.md): Runs one retrieval and answer turn, with no user interface attached. (4 classes, 14 functions)
 - [docpipe.inference.catalog](docpipe.inference.catalog.md): Presents a corpus for selection. (2 classes, 4 functions)
-- [docpipe.inference.chatflow](docpipe.inference.chatflow.md): One turn of the chat as the profile's drawing of it says (owner request 2026-11-14: "den Chat Flow so zu bearbeiten, wie auch der Extraktionsflow, sodass man sich sehr einfach einen eigenen Chat Flow bauen kann", and "der Chat sollte aber auch ein paar Extra blöcke bekommen wie outputformat etc., sodass man wirklich auch neue Routen implementieren kann"). (6 classes, 24 functions)
+- [docpipe.inference.chatflow](docpipe.inference.chatflow.md): One turn of the chat as the profile's drawing of it says (owner request 2026-11-14: "den Chat Flow so zu bearbeiten, wie auch der Extraktionsflow, sodass man sich sehr einfach einen eigenen Chat Flow bauen kann", and "der Chat sollte aber auch ein paar Extra blöcke bekommen wie outputformat etc., sodass man wirklich auch neue Routen implementieren kann"). (6 classes, 27 functions)
 - [docpipe.inference.chunker](docpipe.inference.chunker.md): Pack ranked retrieval hits into token-budgeted chunks, each fed to the LLM as one QA attempt. (1 class, 5 functions)
 - [docpipe.inference.code_exec](docpipe.inference.code_exec.md): Client for the sandboxed code execution service. (3 functions)
-- [docpipe.inference.compare](docpipe.inference.compare.md): The same question put to several documents at once. (3 functions)
+- [docpipe.inference.compare](docpipe.inference.compare.md): The same question put to several documents at once. (2 functions)
 - [docpipe.inference.config](docpipe.inference.config.md): Inference settings the core needs: the LLM endpoint, the retrieval budget and the scopes.
 - [docpipe.inference.db](docpipe.inference.db.md): The queries retrieval needs: which vectors belong to a document, and what text sits behind a hit. (1 class, 11 functions)
 - [docpipe.inference.faiss_store](docpipe.inference.faiss_store.md): Loads the global index and runs scoped retrieval against an ephemeral sub-index. (10 functions)
 - [docpipe.inference.hybrid](docpipe.inference.hybrid.md): One ranking out of two searches, over one document or all. (5 functions)
-- [docpipe.inference.kg_route](docpipe.inference.kg_route.md): Answers a question from the graph the harvest wrote, before the documents are searched. (1 class, 12 functions)
+- [docpipe.inference.kg_route](docpipe.inference.kg_route.md): Answers a question from the graph the harvest wrote, before the documents are searched. (1 class, 11 functions)
 - [docpipe.inference.lexical](docpipe.inference.lexical.md): A word index over the corpus, beside the vector index. (7 functions)
-- [docpipe.inference.llm_client](docpipe.inference.llm_client.md): Remote LLM (OpenAI-compatible) for search-phrase generation and batch-by-batch question answering. (1 class, 19 functions)
+- [docpipe.inference.llm_client](docpipe.inference.llm_client.md): Remote LLM (OpenAI-compatible) for search-phrase generation and batch-by-batch question answering. (1 class, 21 functions)
 - [docpipe.inference.pdf_locate](docpipe.inference.pdf_locate.md): Locates where a quote sits on the page of the source PDF. (3 functions)
 - [docpipe.inference.pool](docpipe.inference.pool.md): The places the chat's model requests take, shared by everyone asking. (2 classes, 8 functions)
 - [docpipe.inference.query_cache](docpipe.inference.query_cache.md): On-disk cache mapping a query to its embedding vector, so an identical query skips the on-demand model load. (5 functions)

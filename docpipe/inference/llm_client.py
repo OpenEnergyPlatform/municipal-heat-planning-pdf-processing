@@ -981,6 +981,44 @@ def format_by_schema(task: str, answer_text: str, schema: dict) -> str:
     return json.dumps(obj, ensure_ascii=False, indent=2)
 
 
+# The reply of a request that writes one text: the answer it wrote.
+ONE_TEXT = {"type": "object", "properties": {"answer": {"type": "string"}},
+            "required": ["answer"]}
+
+
+def reshape_answer(task: str, answer_text: str, instruction: str,
+                   temperature: float = 0.0) -> str:
+    """The finished answer reshaped as *instruction* says (the drawing's
+    box "Reshaped by the model", owner request 2026-11-14 evening: "custom
+    formattierungen bei Antworten"), the numbers of its citations kept.
+    Like `format_as_json` it can add or leave out, and nothing checks what
+    it wrote. A request that stays unreadable raises `ReplyError`."""
+    if LLM_STUB_MODE:
+        return answer_text
+    payload = json.dumps({"task": task, "instruction": instruction,
+                          "answer": answer_text}, ensure_ascii=False)
+    messages = [{"role": "user", "content":
+                 f"{_prompt('inference/reshape')}\n\n{payload}"}]
+    obj = _ask(("reshape_reply", ONE_TEXT), messages, temperature=temperature)
+    return str(obj.get("answer") or "")
+
+
+def merge_answers(task: str, answers: list) -> str:
+    """One answer written from *answers* (texts whose citation numbers are
+    already numbered on), the numbers kept with their statements (the
+    drawing's box "Join answers"). Nothing checks what it wrote. A request
+    that stays unreadable raises `ReplyError`."""
+    if LLM_STUB_MODE:
+        return "\n\n".join(answers)
+    payload = json.dumps({"task": task, "answers": list(answers)},
+                         ensure_ascii=False)
+    messages = [{"role": "user", "content":
+                 f"{_prompt('inference/merge_answers')}\n\n{payload}"}]
+    obj = _ask(("merge_reply", ONE_TEXT), messages,
+               temperature=LLM_TEMPERATURE)
+    return str(obj.get("answer") or "")
+
+
 def repeats_among(task: str, texts: list) -> list:
     """Which of the checked *texts* say what an earlier one already said:
     what the model named, [{"statement", "of"}], numbered from 1

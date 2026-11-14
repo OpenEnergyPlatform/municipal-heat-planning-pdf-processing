@@ -13,11 +13,22 @@ The drawing is `chat.json` of the profile, else of the profile it extends,
 else the one the package brings (`builtin/default/chat.json`): a list of
 steps, each a box of the library (`LIBRARY`) or a frame. "if" takes the
 first way whose condition holds, else the last; "each" runs its steps for
-each entry of a list, one after the other; "round" runs its steps again, at
-most N times, until a condition holds; "together" runs every way at the
-same time and goes on when all are done. The run does what the drawing says
-and nothing else. The drawing the package brings is the turn as the code
-asked it before there was a drawing, request for request.
+each entry of a list (`RUNS`: one after the other in the turn, side by side
+each with variables of its own, or ahead of being needed and taken in
+order, the way the batches of an answer are asked); "round" runs its steps
+again, at most N times, until a condition holds; "together" runs every way
+at the same time and goes on when all are done; "part" runs its steps with
+variables of its own and gives back only those it names. The run does what
+the drawing says and nothing else. The drawing the package brings is the
+turn as the code asked it before there was a drawing, request for request
+(owner request 2026-11-14 evening: "wenn die Blöcke etwas feiner wären ...
+Auch schleifen und Logik inklusive Sandbox berechnung"): each box does one
+thing, a request, a search, a run in the sandbox or a reshaping, and every
+loop, every end of one and every joining stands in the drawing.
+
+A step that runs "when a request asks" (the sandbox, a crop) is a tool: it
+does not run where it stands, the request beside it in the same frame calls
+it when its model asks to compute or to see a crop.
 
 A turn has variables (`VARIABLES`): what the page gives it (the question,
 the turns before on the same document, the documents chosen, the parts
@@ -88,12 +99,8 @@ def values_outcome(self, task: str, document_id, history,
                    how: str = "auto") -> Optional[dict]
 ```
 
-#### Services.values_answer
-
-```python
-def values_answer(self, task: str, got: dict, document_id, history,
-                  corpus=None, progress=None) -> dict
-```
+The values the harvest holds for *task* (`app.values_outcome`),
+None where there is no harvest.
 
 #### Services.values_reason
 
@@ -101,11 +108,23 @@ def values_answer(self, task: str, got: dict, document_id, history,
 def values_reason(self, reason: str) -> str
 ```
 
-#### Services.kg_turn
+#### Services.kg_hooks
 
 ```python
-def kg_turn(self, task: str, document_id) -> dict
+def kg_hooks(self)
 ```
+
+What the profile contributes to the graph (`kg_route.Hooks`),
+None where it asks none.
+
+#### Services.kg_plan
+
+```python
+def kg_plan(self, document_id) -> Optional[str]
+```
+
+The IRI of the plan *document_id* in the graph, None where the
+graph does not hold it.
 
 #### Services.kg_note
 
@@ -119,12 +138,7 @@ def kg_note(self, reason: str) -> str
 def graph(self)
 ```
 
-#### Services.compare
-
-```python
-def compare(self, task: str, documents: list, scopes: list,
-            as_json: bool, histories: dict) -> dict
-```
+(the graph, {value IRI: its comment lines}).
 
 #### Services.reranker
 
@@ -199,6 +213,38 @@ What one turn knows while its drawing runs.
 def __init__(self, services: Services, start: dict, trace=None)
 ```
 
+#### Turn.child
+
+```python
+def child(self, put: dict, *, fresh: bool) -> "Turn"
+```
+
+A turn with variables of its own for an entry of a loop or a
+part: the variables there now, and *put*. It shares what the turn
+runs on (the services, the corpus, the trace, what a follow-up
+reads). *fresh*: an answer of its own (a document of a comparison,
+the harvest); else a piece of this turn's answer, which reads its
+batches and statements (a batch asked ahead).
+
+#### Turn.close
+
+```python
+def close(self) -> None
+```
+
+The end of a turn of its own: the log line of its answer, where
+it has one, and its faults in its result (as `run` ends the
+turn).
+
+#### Turn.take
+
+```python
+def take(self, work: Callable) -> None
+```
+
+*work(turn)* done on the turn that takes this one: later, in
+order, where this is an entry asked ahead; now otherwise.
+
 #### Turn.get
 
 ```python
@@ -272,6 +318,26 @@ def var(name: str) -> Optional[Var]
 def variables_catalogue() -> dict
 ```
 
+### is_tool
+
+```python
+def is_tool(node: dict) -> bool
+```
+
+Whether the step is a tool: it runs when a request beside it asks,
+not where it stands.
+
+### templates
+
+```python
+def templates() -> list
+```
+
+The templates of the chat's library (`chat_templates.json` beside
+the package's drawing): each a name, a label, what it does, its group
+and the steps one click puts into the drawing. The coarse steps the
+chat had before are templates of the fine ones.
+
 ### catalogue
 
 ```python
@@ -279,8 +345,9 @@ def catalogue() -> dict
 ```
 
 The library of the chat as the page shows it: its boxes in the
-form of the flow's (`blocks._box_entry`), its frames, its variables
-and what a condition can be about (the variables alone).
+form of the flow's (`blocks._box_entry`), its frames, how a loop can
+run, its templates, its variables and what a condition can be about
+(the variables alone).
 
 ### conditions_catalogue
 
@@ -348,8 +415,8 @@ def kind_of(node) -> str
 def ways_of(node: dict) -> list
 ```
 
-The lists of steps inside a frame: one for "each" and "round", one
-per way of "if" (and its else) and of "together".
+The lists of steps inside a frame: one for "each", "round" and
+"part", one per way of "if" (and its else) and of "together".
 
 ### walk
 
@@ -381,7 +448,8 @@ The value of a box's setting: its own, else the library's default.
 def gives(node: dict) -> set
 ```
 
-The variables a box gives, its settings for a name included.
+The variables a box gives, its settings for a name included; a tool
+gives nothing where it stands.
 
 ### takes
 
@@ -410,6 +478,15 @@ def available_by_id(tree) -> dict
 {id of a step: [the variables there before it], sorted} of every
 step, for the page's choice of a variable; {} for a drawing whose form
 the check refuses.
+
+### given_inside
+
+```python
+def given_inside(nodes: list) -> set
+```
+
+Every variable a step somewhere inside *nodes* gives, on any way:
+what a part can give back and a loop can collect.
 
 ### run
 

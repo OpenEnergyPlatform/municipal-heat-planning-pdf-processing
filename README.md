@@ -269,7 +269,9 @@ has a review page where people decide whether harvested values are right; a
 turn of the chat is a drawing of boxes and frames, `chat.json` of the profile
 (else of the profile it extends, else the one the package brings, which asks
 what the chat always asked), so a new answer route can be built from boxes
-alone (`docpipe/inference/chatflow.py`);
+alone (`docpipe/inference/chatflow.py`); the boxes are fine, with templates for the
+coarse steps, formats of your own for the answer, a box that joins answers, and loops,
+logic and the sandbox drawn in the open;
 `docpipe evaluate` counts against those decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
 documents its configuration.
 

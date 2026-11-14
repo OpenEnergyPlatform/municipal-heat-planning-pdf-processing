@@ -270,6 +270,30 @@ in it; like `format_as_json` it can add or leave out, and nothing
 checks what it wrote. A request that stays unreadable raises
 `ReplyError`.
 
+### reshape_answer
+
+```python
+def reshape_answer(task: str, answer_text: str, instruction: str,
+                   temperature: float = 0.0) -> str
+```
+
+The finished answer reshaped as *instruction* says (the drawing's
+box "Reshaped by the model", owner request 2026-11-14 evening: "custom
+formattierungen bei Antworten"), the numbers of its citations kept.
+Like `format_as_json` it can add or leave out, and nothing checks what
+it wrote. A request that stays unreadable raises `ReplyError`.
+
+### merge_answers
+
+```python
+def merge_answers(task: str, answers: list) -> str
+```
+
+One answer written from *answers* (texts whose citation numbers are
+already numbered on), the numbers kept with their statements (the
+drawing's box "Join answers"). Nothing checks what it wrote. A request
+that stays unreadable raises `ReplyError`.
+
 ### repeats_among
 
 ```python

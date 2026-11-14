@@ -1,0 +1,1 @@
+Reshape the given answer ("answer") to the task ("task") as the instruction ("instruction") says, WITHOUT changing, adding or omitting content. The citation numbers in square brackets, such as [1], stay with their statement. Reply with ONLY the JSON object {"answer": "<the reshaped answer>"}, no markdown, no text before or after it.

@@ -1,0 +1,1 @@
+Forme die gegebene Antwort ("answer") auf den Auftrag ("task") so um, wie die Anweisung ("instruction") es sagt, OHNE Inhalte zu ändern, hinzuzufügen oder wegzulassen. Die Quellennummern in eckigen Klammern, etwa [1], bleiben bei ihrer Aussage. Antworte mit NUR dem JSON-Objekt {"answer": "<die umgeformte Antwort>"}, kein Markdown, kein Text davor oder danach.

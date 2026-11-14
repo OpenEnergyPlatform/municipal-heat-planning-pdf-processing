@@ -8,7 +8,10 @@ A reader who has to know which of five heat plans assumes the higher renovation
 rate does not want five chat sessions and a notepad. What they want is one
 question, one row per plan, and a paragraph that says where the plans differ.
 
-Three decisions carry this module.
+Three decisions carry the comparison, which the chat's drawing runs as steps
+of its own (`chatflow`: "Documents for the comparison", a loop over them side
+by side, "The answer of the document", "Compare the answers"); this module
+holds what those steps and the page share.
 
 Retrieval stays per document. A single search across five plans returns the
 passages that answer best *overall*, and plans do not write at the same length:
@@ -55,28 +58,5 @@ The payload the comparison call is given: a label and a finished answer.
 `answer_text` and not `answer`, because a JSON-formatted answer is the same
 content in a shape written for a machine, and the comparison reasons in
 prose. None means the document produced nothing grounded.
-
-### compare_documents
-
-```python
-def compare_documents(task: str, corpus: Corpus, documents: Sequence,
-                      scopes: list, *, as_json: bool = False,
-                      histories: Optional[dict] = None,
-                      progress: Callable = _silent) -> dict
-```
-
-One question, several documents, one comparison.
-
-`documents` is a sequence of (document_id, label) pairs; `histories` maps a
-document id to that document's earlier turns, so a follow-up and a re-check
-work per plan exactly as they do in a single-plan chat.
-
-Returns {task, rows, comparison, answered, as_json, dropped, faults}:
-`rows` is one answer_question result per document with `document_id` and
-`label` added (each carries its own statement counts and faults),
-`comparison` is prose or None, `dropped` names the documents that did not
-fit the cap, `faults` the requests of the comparison call itself that
-stayed unreadable. A row's `answer_text` holds only statements that stood
-their check, and that is all the comparison is given.
 
 [Back to the index](../README.md)

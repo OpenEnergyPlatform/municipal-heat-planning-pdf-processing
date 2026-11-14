@@ -258,35 +258,6 @@ def _corpus(image_bytes: bytes | None = None) -> answer.Corpus:
     )
 
 
-def run_comparison(task: str, documents: list, scopes: list[str],
-                   as_json: bool = False, histories: dict | None = None):
-    """The same question to every selected document, then one comparison.
-
-    No image: an uploaded picture is a query anchor for one document's index,
-    and the same crop searched across five plans anchors four of them to
-    whatever happens to look similar.
-    """
-    return compare.compare_documents(
-        task, _corpus(), documents, scopes, as_json=as_json,
-        histories=histories, progress=_spinner,
-    )
-
-
-def run_kg_turn(task: str, document_id: int) -> dict:
-    """One question to the graph; `answer_from_graph` decides everything."""
-    graph, comments = get_graph()
-    return kg_route.answer_from_graph(
-        task, get_kg_hooks(), graph, comments, db_path=config.DB_PATH,
-        document=db.document_filename(get_db(), document_id),
-        ask=_ask_coordinate)
-
-
-def _ask_coordinate(task: str, slot):
-    """One closed question to the model, over the spec's own list."""
-    return llm_client.choose(get_kg_hooks().prompt, task, slot.question,
-                             slot.answerable() if slot.is_closed else {})
-
-
 def _anchor_vector(task: str, history: list | None):
     """The vector of the question's search anchor: the one sentence the
     documents are searched with too, so a vector made for one is there for
@@ -330,32 +301,6 @@ def values_outcome(task: str, document_id: int | None,
         level=config.VALUES_LEVEL, limit=config.VALUES_LIMIT,
         parameter_question=wording.phrases(
             WORDS_PROFILE)["chat_parameter_question"])
-
-
-def run_values_answer(task: str, got: dict, document_id: int | None,
-                      history: list | None = None,
-                      corpus: answer.Corpus | None = None,
-                      progress=None) -> dict:
-    """The question answered from the passages the found values were read
-    from (`answer.answer_from_values`), and the values the answer stands on.
-
-    {"answer", "answer_text", "citations", "made", "dropped", "faults",
-     "unread", "values", "shown", "total", "result"}: `values` are the used
-    ones, `shown` how many the answer was given, `total` how many matched.
-    """
-    result = answer.answer_from_values(
-        task, corpus or _corpus(), got["values"], document_id, history=history,
-        progress=progress or _spinner)
-    return {"answer": result["answer"], "answer_text": result["answer_text"],
-            "citations": result["citations"],
-            "made": result.get("statements_made", 0),
-            "dropped": result.get("statements_dropped", 0),
-            "faults": list(result.get("faults") or []),
-            "unread": _unread_replies(result),
-            "values": values_route.used_values(got["values"],
-                                               result["statements"]),
-            "shown": len(got["values"]), "total": got["total"],
-            "result": result}
 
 
 def graph_offered() -> bool:
@@ -434,26 +379,26 @@ class _Services(chatflow.Services):
     def values_outcome(self, task, document_id, history, how="auto"):
         return values_outcome(task, document_id, history, how)
 
-    def values_answer(self, task, got, document_id, history, corpus=None,
-                      progress=None):
-        return run_values_answer(task, got, document_id, history,
-                                 corpus=corpus, progress=progress)
-
     def values_reason(self, reason):
         return values_reason_words()[reason]
 
-    def kg_turn(self, task, document_id):
-        return run_kg_turn(task, document_id)
+    def kg_hooks(self):
+        return get_kg_hooks()
+
+    def kg_plan(self, document_id):
+        """The plan's node in the graph, by the name of its file."""
+        hooks = get_kg_hooks()
+        document = (db.document_filename(get_db(), document_id)
+                    if document_id is not None else None)
+        return hooks.plan_iri(config.DB_PATH, document) \
+            if hooks is not None and document else None
 
     def kg_note(self, reason):
-        return get_kg_hooks().notes[reason]
+        hooks = get_kg_hooks()
+        return hooks.notes[reason] if hooks is not None else reason
 
     def graph(self):
         return get_graph()
-
-    def compare(self, task, documents, scopes, as_json, histories):
-        return run_comparison(task, documents, scopes, as_json=as_json,
-                              histories=histories)
 
     def spinner(self, label):
         return _spinner(label)
@@ -475,7 +420,9 @@ def chat_turn(task: str, *, image_bytes: bytes | None, image_only: bool,
     label = None if whole else documents[0][1]
     start = {"question": task, "history": by_doc.get(doc_id, []),
              "histories": by_doc,
-             "documents": [{"id": i, "label": name} for i, name in documents],
+             "documents": [{"id": i, "label": name,
+                            "history": by_doc.get(i, [])}
+                           for i, name in documents],
              "document": {"id": doc_id, "label": label}, "scopes": scopes,
              "image": image_bytes, "image_only": image_only,
              "route": ROUTES.get(route, route), "as_json": as_json}

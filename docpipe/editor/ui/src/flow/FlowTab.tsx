@@ -24,7 +24,8 @@ import { clone, wrote } from '../lib/util';
 import { Diff } from '../components/Bits';
 import { layout, type Decor } from './layout';
 import {
-  ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, listOf, moveBy, remove, siblingsRun, stepBox, walk,
+  ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, listOf, moveBy, remove, siblingsRun, stepBox, templateSteps,
+  walk,
   wrap, type FlowData, type Step,
 } from './model';
 import { Ctx, DotNode, FrameNode, StepEdge, StepNode, WayNode, frameWord, type FlowCtx } from './nodes';
@@ -408,6 +409,17 @@ function FlowInner() {
   const put = (list: string, at: number, p: Pick) => {
     const steps = listOf(F.tree, list);
     if (!steps || !F.data) return;
+    if (p.kind === 'template') {
+      // a template's steps all go in at once, each with an id of its own
+      const tpl = (F.data.library.templates || []).find(x => x.name === p.arg);
+      if (!tpl) return;
+      const made = templateSteps(F.tree, tpl);
+      steps.splice(at, 0, ...made);
+      for (const m of made) { F.open.add(m.id); for (const a of ancestors(F.tree, m.id)) F.open.add(a); }
+      F.sel = made.length ? made[0].id : null; F.multi = new Set(made.map(m => m.id));
+      edited();
+      return;
+    }
     const n = fresh(F.tree, F.data.conditions, p.kind, 'arg' in p ? p.arg : undefined);
     insertAt(steps, at, n);
     for (const a of ancestors(F.tree, n.id)) F.open.add(a);
@@ -421,7 +433,7 @@ function FlowInner() {
       if (steps === F.tree) return 'root';
       for (const [n] of walk(F.tree)) {
         const k = kindOf(n);
-        if ((k === 'each' || k === 'round') && n.steps === steps) return n.id;
+        if ((k === 'each' || k === 'round' || k === 'part') && n.steps === steps) return n.id;
         if (k === 'if') {
           const i = (n.if || []).findIndex((w: { steps: Step[] }) => w.steps === steps);
           if (i >= 0) return n.id + '#' + i;
@@ -449,7 +461,7 @@ function FlowInner() {
       const ids = F.multi.has(id) && F.multi.size > 1 ? [...F.multi] : [id];
       if (!siblingsRun(F.tree, ids)) { showError(new Error(t('Only steps, loops, rounds and branchings that stand right after one another in the same column can be wrapped together.'))); return; }
       const [kind, each] = (arg || 'round').split(':');
-      const f = wrap(F.tree, F.data.conditions, ids, kind as 'each' | 'round' | 'if' | 'together', each);
+      const f = wrap(F.tree, F.data.conditions, ids, kind as 'each' | 'round' | 'if' | 'together' | 'part', each);
       if (f) { F.open.add(f.id); for (const a of ancestors(F.tree, f.id)) F.open.add(a); F.sel = f.id; F.multi = new Set([f.id]); edited(); }
     }
   };
@@ -605,6 +617,7 @@ function FlowInner() {
             {!loopsOnly && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>{frameWord('round')}</Menu.Item>}
             {!loopsOnly && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>{frameWord('if')}</Menu.Item>}
             {(d.library.frames || []).includes('together') && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'together')}>{frameWord('together')}</Menu.Item>}
+            {(d.library.frames || []).includes('part') && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'part')}>{frameWord('part')}</Menu.Item>}
             {Object.keys(d.library.each).map(e => <Menu.Item key={e} onClick={() => act('wrap', menuStep.n.id, 'each:' + e)}>{rich(tr((d.library.each_titles || {})[e]) || t('For each {name}', { name: e }))}</Menu.Item>)}
             <Menu.Divider />
             {removable(menuStep.n) && <Menu.Item leftSection={<IconPower size={16} />} onClick={() => act('off', menuStep.n.id)}>{menuStep.n.off ? t('Switch on') : t('Switch off')}</Menu.Item>}

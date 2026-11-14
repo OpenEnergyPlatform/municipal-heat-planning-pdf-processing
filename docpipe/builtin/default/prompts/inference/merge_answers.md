@@ -1,0 +1,1 @@
+Join the given answers ("answers") to the task ("task") into ONE answer. Take only what the answers say; what two answers say alike stands once. The citation numbers in square brackets, such as [3], stay with their statement. Reply with ONLY the JSON object {"answer": "<the joined answer>"}, no markdown, no text before or after it.

@@ -482,30 +482,53 @@ def test_every_thread_reads_over_its_own_connection():
 
 # -- several documents ---------------------------------------------------------
 
-def test_the_documents_of_a_comparison_are_asked_at_the_same_time(monkeypatch, wide):
+def comparison_loop():
+    """The documents of a comparison as the chat's drawing goes through
+    them: side by side, each with variables of its own."""
+    return [{"id": "question", "box": "question"},
+            {"id": "each_document", "each": "list", "list": "documents",
+             "as": "document", "run": "side_by_side",
+             "collect": {"from": "label", "into": "labels"},
+             "steps": [{"id": "label", "box": "set",
+                        "set": {"name": "label", "from": "document.label"}}]},
+            {"id": "show", "box": "show", "set": {"text": "{{labels}}"}}]
+
+
+def run_comparison_loop():
+    from docpipe.inference import chatflow
+    start = {"question": "task", "documents": [{"id": 1, "label": "A"},
+                                               {"id": 2, "label": "B"}],
+             "document": {"id": 1}, "scopes": [], "route": "auto",
+             "as_json": False}
+    return chatflow.run(comparison_loop(), start, chatflow.Services())
+
+
+def test_the_documents_of_a_comparison_are_asked_at_the_same_time(
+        monkeypatch, wide):
+    from docpipe.inference import chatflow
     wide(FakeClient())
     # Passes only if both documents are inside their turn at once.
     both = threading.Barrier(2, timeout=2)
+    setting = chatflow.STEPS["set"]
 
-    def asked(task, corpus, document_id, scopes, **kw):
+    def waiting(node, turn):
         both.wait()
-        return {"answer": f"Antwort {document_id}", "answer_text": None}
+        setting(node, turn)
 
-    monkeypatch.setattr(compare, "answer_question", asked)
-    monkeypatch.setattr(llm_client, "compare_answers", lambda task, plans: "x")
-    out = compare.compare_documents("task", None, [(1, "A"), (2, "B")], [])
-    assert [row["label"] for row in out["rows"]] == ["A", "B"]
-    assert out["answered"] == 2
+    monkeypatch.setitem(chatflow.STEPS, "set", waiting)
+    assert run_comparison_loop()["message"]["content"] == '["A", "B"]'
 
 
 def test_with_one_place_the_documents_are_asked_in_turn(monkeypatch):
+    from docpipe.inference import chatflow
     places(monkeypatch, ("a",), 1)
     inside = []
+    setting = chatflow.STEPS["set"]
 
-    def asked(task, corpus, document_id, scopes, **kw):
+    def noted(node, turn):
         inside.append(threading.get_ident())
-        return {"answer": None, "answer_text": None}
+        setting(node, turn)
 
-    monkeypatch.setattr(compare, "answer_question", asked)
-    compare.compare_documents("task", None, [(1, "A"), (2, "B")], [])
+    monkeypatch.setitem(chatflow.STEPS, "set", noted)
+    assert run_comparison_loop()["message"]["content"] == '["A", "B"]'
     assert inside == [threading.get_ident()] * 2

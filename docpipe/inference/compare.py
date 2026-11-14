@@ -5,7 +5,10 @@ A reader who has to know which of five heat plans assumes the higher renovation
 rate does not want five chat sessions and a notepad. What they want is one
 question, one row per plan, and a paragraph that says where the plans differ.
 
-Three decisions carry this module.
+Three decisions carry the comparison, which the chat's drawing runs as steps
+of its own (`chatflow`: "Documents for the comparison", a loop over them side
+by side, "The answer of the document", "Compare the answers"); this module
+holds what those steps and the page share.
 
 Retrieval stays per document. A single search across five plans returns the
 passages that answer best *overall*, and plans do not write at the same length:
@@ -29,10 +32,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-from typing import Callable, Optional, Sequence
-
-from . import config, llm_client, pool
-from .answer import Corpus, _silent, answer_question
+from typing import Sequence
 
 
 def summary(row: dict, limit: int = 300) -> str:
@@ -60,51 +60,3 @@ def plan_answers(rows: Sequence) -> list:
         text = (row.get("answer_text") or row.get("answer") or "").strip()
         out.append({"label": row["label"], "answer": text or None})
     return out
-
-
-def compare_documents(task: str, corpus: Corpus, documents: Sequence,
-                      scopes: list, *, as_json: bool = False,
-                      histories: Optional[dict] = None,
-                      progress: Callable = _silent) -> dict:
-    """One question, several documents, one comparison.
-
-    `documents` is a sequence of (document_id, label) pairs; `histories` maps a
-    document id to that document's earlier turns, so a follow-up and a re-check
-    work per plan exactly as they do in a single-plan chat.
-
-    Returns {task, rows, comparison, answered, as_json, dropped, faults}:
-    `rows` is one answer_question result per document with `document_id` and
-    `label` added (each carries its own statement counts and faults),
-    `comparison` is prose or None, `dropped` names the documents that did not
-    fit the cap, `faults` the requests of the comparison call itself that
-    stayed unreadable. A row's `answer_text` holds only statements that stood
-    their check, and that is all the comparison is given.
-    """
-    wanted = list(documents)
-    kept = wanted[: config.COMPARE_MAX_DOCUMENTS]
-    result = {"task": task, "rows": [], "comparison": None, "answered": 0,
-              "as_json": as_json, "faults": [],
-              "dropped": [label for _id, label in wanted[len(kept):]]}
-
-    def asked(document_id, label) -> Callable:
-        return lambda: {**answer_question(
-            task, corpus, document_id, scopes, as_json=as_json,
-            history=(histories or {}).get(document_id)),
-            "document_id": document_id, "label": label}
-
-    # The documents run side by side, so no stage of one of them can be
-    # shown: the one spinner stands for all of them.
-    with pool.turn(), progress(f"📄 {len(kept)}"):
-        result["rows"] = llm_client.together(
-            [asked(*document) for document in kept])
-
-    answers = plan_answers(result["rows"])
-    result["answered"] = sum(1 for p in answers if p["answer"])
-    # One answer is not a comparison: the table already shows it, and the other
-    # plans' emptiness with it. Below two, the call would only paraphrase.
-    if result["answered"] >= 2:
-        with pool.turn(), progress("⚖️ Comparison"), \
-                llm_client.collecting() as faults:
-            result["comparison"] = llm_client.compare_answers(task, answers)
-        result["faults"] = list(faults)
-    return result

@@ -778,9 +778,19 @@ The flow selector also holds an entry for the chat: the drawing of a chat turn
 (`docpipe/inference/chatflow.py`, `docpipe/editor/chatpage.py`). It is drawn,
 checked and saved like a flow of a follow-up pass, with the library of the chat's
 boxes in groups (start, routes, search, answer, output, logic), the frames each,
-round, branching and side by side, and a condition and a switch at every step. The
+round, branching, side by side and part, the templates (statements, answer,
+harvest, graph, compare, compute) and a condition and a switch at every step. A
+template is put in as the fine boxes it stands for, with ids of its own. The
 profile's own `chat.json` is written only where the drawing differs from what the
 profile inherits.
+
+A loop of the chat has the settings runs (one after another in the turn, side by
+side, or ahead of being needed), entries at most, stop when (not offered side by
+side), collects (a variable of each entry into a list, there after the loop) and
+words beside the spinner. A part has "gives back", the variables that leave it;
+the wrap menu offers Part. The card of a tool step (compute set to run when a
+request asks, crop) says "when a request beside it asks": it does not run where it
+stands, the request beside it calls it.
 
 - `GET /api/chat` gives the drawing, its library, its variables and where it comes from;
 - `POST /api/chat/check` says every reason the drawing cannot run, each at its step;

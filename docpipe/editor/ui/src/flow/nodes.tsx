@@ -5,7 +5,7 @@ import { ActionIcon, Badge, Box, Group, Text, Tooltip } from '@mantine/core';
 import {
   IconArrowsSort, IconBookmark, IconChecks, IconChevronDown, IconChevronRight, IconFileText, IconFlag, IconGitBranch,
   IconMessageQuestion, IconPlayerPlay, IconPlus, IconRefresh, IconRepeat, IconScissors, IconFlagCheck, IconCode,
-  IconArrowsSplit, IconBraces, IconColumns, IconSearch,
+  IconArrowsSplit, IconBox, IconBraces, IconColumns, IconSearch,
 } from '@tabler/icons-react';
 import type { EdgeData, StepData } from './layout';
 import type { Library } from './model';
@@ -42,8 +42,11 @@ export const FRAMES: Record<string, { color: string; icon: (p: { size?: number }
   round: { color: 'yellow', icon: p => <IconRefresh {...p} /> },
   if: { color: 'pink', icon: p => <IconGitBranch {...p} /> },
   together: { color: 'violet', icon: p => <IconColumns {...p} /> },
+  part: { color: 'cyan', icon: p => <IconBox {...p} /> },
 };
-export const frameWord = (kind: string): string => ({ each: t('Loop'), round: t('Round'), if: t('Branching'), together: t('Side by side') } as Record<string, string>)[kind] || kind;
+export const frameWord = (kind: string): string => ({ each: t('Loop'), round: t('Round'), if: t('Branching'), together: t('Side by side'), part: t('Part') } as Record<string, string>)[kind] || kind;
+/* a step that runs when a request beside it asks (inference/chatflow.py is_tool) */
+const isTool = (n: Record<string, any>) => n.box === 'crop' || (n.box === 'compute' && !!n.set && n.set.runs === 'asked');
 
 export interface FlowCtx {
   lib: Library;
@@ -69,7 +72,8 @@ function lookOf(c: FlowCtx, d: StepData) {
     const b = stepBox(c.lib, d.step);
     const g = GROUPS[b ? b.group : ''] || { color: 'gray', icon: (p: { size?: number }) => <IconFileText {...p} /> };
     const word = b ? groupWord(b.group) : '';
-    return { ...g, sub: b && b.asks ? t('prompt: {prompt}', { prompt: b.asks }) : (b ? word : t('unknown step')), never: tr(c.never[d.step.preset || d.step.box] || '') };
+    const sub = isTool(d.step) ? t('when a request beside it asks') : b && b.asks ? t('prompt: {prompt}', { prompt: b.asks }) : (b ? word : t('unknown step'));
+    return { ...g, sub, never: tr(c.never[d.step.preset || d.step.box] || '') };
   }
   const f = FRAMES[d.kind] || FRAMES.each;
   return { ...f, sub: t('{n} inside', { n: d.inside ?? 0 }), never: '' };
@@ -148,6 +152,12 @@ export function FrameNode({ id, data, selected }: NodeProps) {
 function frameSays(d: StepData, lib: Library): string {
   const n = d.step, bits: string[] = [];
   if (d.kind === 'each' && n.together) bits.push(t('side by side'));
+  if (d.kind === 'each' && n.run === 'side_by_side') bits.push(t('side by side, each with its own variables'));
+  if (d.kind === 'each' && n.run === 'ahead') bits.push(t('ahead, taken in order'));
+  if (d.kind === 'each' && n.most) bits.push(t('at most {n} entries', { n: n.most }));
+  if (d.kind === 'each' && n.stop) bits.push(t('stops when its condition is met'));
+  if (d.kind === 'each' && n.collect && n.collect.into) bits.push(t('collects into {list}', { list: n.collect.into }));
+  if (d.kind === 'part') bits.push(t('variables of its own'));
   if (d.kind === 'each' && n.order) bits.push(t('order: {order}', { order: tr((lib.order_words || {})[n.order] || String(n.order).replace('_', ' ')) }));
   if (d.kind === 'round' && n.stop) bits.push(t('stops when its condition is met'));
   if (d.kind === 'together') bits.push(t('every way at the same time'));

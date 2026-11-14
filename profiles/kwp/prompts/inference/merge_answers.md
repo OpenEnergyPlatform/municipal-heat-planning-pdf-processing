@@ -1,0 +1,1 @@
+Führe die gegebenen Antworten ("answers") auf den Auftrag ("task") zu EINER Antwort zusammen. Nimm nur, was in den Antworten steht; was zwei Antworten gleich sagen, steht einmal. Die Quellennummern in eckigen Klammern, etwa [3], bleiben bei ihrer Aussage. Antworte mit NUR dem JSON-Objekt {"answer": "<die zusammengeführte Antwort>"}, kein Markdown, kein Text davor oder danach.

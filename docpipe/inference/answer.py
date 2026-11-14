@@ -212,48 +212,6 @@ def _empty(as_json: bool, faults: list) -> dict:
             "faults": faults}
 
 
-def answer_from_values(task: str, corpus: Corpus, values: list,
-                       document_id: Optional[int], *, as_json: bool = False,
-                       history: Optional[list] = None,
-                       progress: Callable = _silent) -> dict:
-    """The question answered from the passages the harvest read *values*
-    from, as `answer_question` answers it from the passages a search found.
-
-    The harvest decides which passages are read and the model decides which
-    of their numbers answer the question: the total or a carrier, which
-    variant, which year. Every statement stands its check against its
-    passage exactly as in a document turn, and the citations are the same
-    kind. Returns what `answer_question` returns; `n_hits` counts passages.
-    """
-    with pool.turn(), llm_client.collecting() as faults:
-        result = _empty(as_json, faults)
-        start_time = time.time()
-        hits, seen = [], set()
-        for value in values:
-            source = value.get("source") or {}
-            key = (source.get("owner_kind"), source.get("owner_id"))
-            if None in key or key in seen:
-                continue
-            seen.add(key)
-            hit = db.fetch_owner_content(corpus.conn, *key)
-            if hit is None:
-                continue
-            if document_id is None:
-                hit["document_label"] = _whose(corpus, hit.get("document_id"))
-            hits.append(hit)
-        result["n_hits"] = len(hits)
-        if not hits:
-            _log(corpus, document_id, task, "harvest", [], start_time,
-                 n_hits=0, error_message="No passage of the values")
-        else:
-            result = _answer_hits(task, corpus, document_id, [], hits, result,
-                                  faults, mode="harvest", phrase=None,
-                                  start_time=start_time, history=history,
-                                  as_json=as_json, progress=progress)
-    result["faults"] = list(faults)
-    return result
-
-
 @dataclass
 class Anchor:
     """What a turn searches with: how the query is made (`mode`: text,

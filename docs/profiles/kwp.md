@@ -522,8 +522,9 @@ unbound rather than guessed at (`to_coordinates`,
 answer, each value carrying its own evidence and trust line, or a
 fallback naming which reason applied, cheapest checked first: no plan
 costs one SQLite read, no coordinates the closed questions themselves, no
-rows one SPARQL query (`answer_from_graph`,
-`docpipe/inference/kg_route.py:272` to `305`).
+rows one SPARQL query (the steps of the chat's graph route, `graph_plan` to
+`graph_values`, which `docpipe/inference/chatflow.py` runs with the decisions
+of `kg_route`; `no_graph` is set by `graph_plan`).
 The answer app does not offer this route while no corpus graph exists
 (`docpipe/app/app.py`, see [app](../stages/app.md)).
 

@@ -55,13 +55,14 @@ class Refused(ValueError):
 # -- the drawing ------------------------------------------------------------------
 
 def library() -> dict:
-    """The chat's library in the form of the flow's: its boxes, its one
-    loop (each entry of a list), its variables, no presets, forms or
-    targets."""
+    """The chat's library in the form of the flow's: its boxes, its loop
+    (each entry of a list) and how it runs, what a part does, its
+    templates and its variables; no presets, forms or targets."""
     from ..extraction import blocks
     whole = chatflow.catalogue()
     return {"flow": chatflow.FLOW, "boxes": whole["boxes"],
-            "frames": whole["frames"],
+            "frames": whole["frames"], "runs": whole["runs"],
+            "part": whole["part"], "templates": whole["templates"],
             "each": {"list": chatflow.EACH_LIST},
             "each_titles": {"list": blocks.EACH_TITLES["list"]},
             "which": {}, "orders": {}, "order_words": {}, "arrows": {},
@@ -349,8 +350,8 @@ class TryServices(chatflow.Services):
     def values_reason(self, reason):
         return self.words.get("values_" + str(reason)) or str(reason)
 
-    def kg_turn(self, task, document_id):
-        return {"route": "kg_empty", "reason": "not_tried"}
+    def kg_hooks(self):
+        return None
 
     def kg_note(self, reason):
         return "a try asks no graph"
@@ -362,9 +363,6 @@ class TryServices(chatflow.Services):
             raise chatflow.Stop("a try of the graph needs pyoxigraph") \
                 from None
         return Store(), {}
-
-    def compare(self, task, documents, scopes, as_json, histories):
-        return {"content": "a try compares no plans", "rows": []}
 
     def reranker(self):
         return _Ranker()
@@ -413,7 +411,8 @@ def try_turn(profile, tree: list, sources: list, *, question: str,
     document_id = hits[0]["document_id"] if hits else None
     services = TryServices(profile, hits, label)
     start = {"question": question.strip(), "history": [], "histories": {},
-             "documents": [{"id": document_id, "label": label}],
+             "documents": [{"id": document_id, "label": label,
+                            "history": []}],
              "document": {"id": document_id, "label": label},
              "scopes": list(scopes or TRY_SCOPES), "image": None,
              "image_only": False, "route": route or "auto",

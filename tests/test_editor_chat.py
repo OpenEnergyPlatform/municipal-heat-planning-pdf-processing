@@ -64,7 +64,11 @@ def test_the_page_gets_the_drawing_the_profile_runs(tmp_path, profile):
     assert shown["inherited_tree"] == shown["tree"]
     assert shown["problems"] == []
     kinds = {box["type"] for box in shown["library"]["boxes"]}
-    assert {"ask", "format", "graph_query", "choose", "show"} <= kinds
+    assert {"ask", "format_json", "format_template", "merge_answers",
+            "ask_batch", "graph_query", "choose", "show"} <= kinds
+    assert {"each", "part", "together"} <= set(shown["library"]["frames"])
+    assert {one["name"] for one in shown["library"]["templates"]} >= {
+        "statements", "harvest", "graph", "compare", "compute"}
     assert shown["library"]["each"].keys() == {"list"}
     assert shown["routes"] == ["graph", "harvest", "documents"]
     assert "inference/choose_way" in shown["prompt_ids"]

@@ -87,6 +87,38 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
       <TextBox mono value={String(n.as || 'item')} onText={() => {}} aria-label={t('name of its entry')}
         onCommit={v => { const x = v.trim() || 'item'; if (x === n.as) return; n.as = x; P.edited(); }} /></Field>);
   }
+  if (k === 'each' && P.chat) {
+    out.push(<Field key="run" label={t('runs')} help={t('One after another: each entry in the variables of the turn. Side by side: every entry at the same time, each with variables of its own; only what the loop collects comes back. Ahead, taken in order: later entries start before they are needed, each with the variables there when it starts, and are taken in order until the loop stops.')}>
+      <NativeSelect value={String(n.run || 'in_turn')} data={(lib.runs || []).map(r => ({ value: r.value, label: tr(r.label) }))}
+        onChange={e => { const v = e.currentTarget.value; if (v === 'in_turn') delete n.run; else n.run = v; if (v === 'side_by_side') delete n.stop; P.edited(); }} /></Field>);
+    out.push(<Field key="most" label={t('entries, at most')} help={t('Empty: every entry of the list.')}>
+      <NumberBox w={90} min={1} value={n.most ? String(n.most) : ''} onText={() => {}} aria-label={t('entries, at most')}
+        onCommit={x => { const v = Math.floor(Number(x)); if (!String(x).trim() || !(v >= 1)) delete n.most; else n.most = v; P.edited(); }} /></Field>);
+    if (String(n.run || 'in_turn') !== 'side_by_side') {
+      out.push(<Field key="stop" label={t('stop when')} help={t('Read after each entry is taken; the entries after it are not asked.')}><CondEditor subjects={subjects} vars={[...vars, String(n.as || 'item')]} get={() => (n.stop as Cond) || null}
+        set={c => { if (c) n.stop = c; else delete n.stop; P.edited(); }} /></Field>);
+    }
+    const collect = (n.collect || {}) as { from?: string; into?: string };
+    const setCollect = (from: string, into: string) => { if (!from && !into) delete n.collect; else n.collect = { from, into }; P.edited(); };
+    out.push(<Field key="collect" label={t('collects')} help={t('A variable of each entry, gathered into a list that is there after the loop. Empty: nothing.')}>
+      <Group gap="xs" wrap="nowrap">
+        <TextBox mono value={collect.from || ''} placeholder={t('variable of the entry')} onText={() => {}} aria-label={t('variable of the entry')}
+          onCommit={v => { if (v.trim() !== (collect.from || '')) setCollect(v.trim(), collect.into || ''); }} />
+        <Text size="sm">{t('into')}</Text>
+        <TextBox mono value={collect.into || ''} placeholder={t('list')} onText={() => {}} aria-label={t('list')}
+          onCommit={v => { if (v.trim() !== (collect.into || '')) setCollect(collect.from || '', v.trim()); }} />
+      </Group></Field>);
+    out.push(<Field key="label" label={t('words beside the spinner')} help={t('Shown while the loop runs. Empty: none.')}>
+      <TextBox value={String(n.label || '')} onText={() => {}} aria-label={t('words beside the spinner')}
+        onCommit={v => { if (v.trim() === String(n.label || '')) return; if (v.trim()) n.label = v.trim(); else delete n.label; P.edited(); }} /></Field>);
+  }
+  if (k === 'part') {
+    const gives = ((n.part && n.part.gives) || []) as string[];
+    out.push(<Text key="part" size="sm">{rich(tr(lib.part || ''))}</Text>);
+    out.push(<Field key="gives" label={t('gives back')} help={t('The variables of the part that are there after it, separated by commas.')}>
+      <TextBox mono value={gives.join(', ')} onText={() => {}} aria-label={t('gives back')}
+        onCommit={v => { const x = v.split(',').map(s => s.trim()).filter(Boolean); if (x.join(',') === gives.join(',')) return; n.part = { gives: x }; P.edited(); }} /></Field>);
+  }
   if (k === 'each' && !P.pass) {
     if (n.each === 'field') {
       out.push(<Field key="which" label={t('which')}><NativeSelect value={n.which || 'all'}

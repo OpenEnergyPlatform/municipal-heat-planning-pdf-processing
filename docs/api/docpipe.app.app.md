@@ -174,27 +174,6 @@ def embed_query(item: dict, cache_conn, cache_key: str)
 
 Return the query vector, from cache or a fresh on-demand embed.
 
-### run_comparison
-
-```python
-def run_comparison(task: str, documents: list, scopes: list[str],
-                   as_json: bool = False, histories: dict | None = None)
-```
-
-The same question to every selected document, then one comparison.
-
-No image: an uploaded picture is a query anchor for one document's index,
-and the same crop searched across five plans anchors four of them to
-whatever happens to look similar.
-
-### run_kg_turn
-
-```python
-def run_kg_turn(task: str, document_id: int) -> dict
-```
-
-One question to the graph; `answer_from_graph` decides everything.
-
 ### values_outcome
 
 ```python
@@ -208,22 +187,6 @@ The harvest's answer with its reason where it has none
 database does not know. *how* "auto": by meaning where the harvest has
 its vectors, else by closed questions; "meaning" by meaning alone (None
 without vectors), "questions" by closed questions alone.
-
-### run_values_answer
-
-```python
-def run_values_answer(task: str, got: dict, document_id: int | None,
-                      history: list | None = None,
-                      corpus: answer.Corpus | None = None,
-                      progress=None) -> dict
-```
-
-The question answered from the passages the found values were read
-from (`answer.answer_from_values`), and the values the answer stands on.
-
-{"answer", "answer_text", "citations", "made", "dropped", "faults",
- "unread", "values", "shown", "total", "result"}: `values` are the used
-ones, `shown` how many the answer was given, `total` how many matched.
 
 ### graph_offered
 

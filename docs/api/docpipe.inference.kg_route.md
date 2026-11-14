@@ -181,23 +181,6 @@ UNTYPED: the serializer writes the year node's label as a plain string,
 and a number binds as xsd:integer or xsd:double, which matches nothing
 there.
 
-### answer_from_graph
-
-```python
-def answer_from_graph(task: str, hooks: Hooks, graph, comments: dict, *,
-                      db_path, document: Optional[str], ask) -> dict
-```
-
-The graph's answer, or why there is none.
-
-{"route": "kg", "reason": None, "values": [...], "coordinates": {...}}
-when the graph answered, each value carrying the row the query returned
-plus `evidence` (the comment lines above its node) and `trust` (the last
-of them). Otherwise route "rag" with one of REASONS, cheapest checked
-first: no plan node costs one SQLite read, no coordinates costs the field
-requests, no rows one SPARQL. The key is `values`, never `rows`: the app
-dispatches a history entry with `rows` into the comparison render.
-
 ### trust_level
 
 ```python

@@ -62,18 +62,67 @@ file is the profile's own, else that of the profile it extends, else
 `docpipe/builtin/default/chat.json`, which the profiles `kwp` and `scenarios`
 inherit and which asks exactly what the chat asked before there was a drawing.
 
-The boxes stand in groups: start (the question), routes (choose a way, ask the
-harvest, ask the graph, run a SPARQL query from a variable on the graph,
-compare the documents), search (the search sentence, the embedding, the search,
-rerank), answer (batches, statements with evidence, repeated statements, figure
-read-offs, the answer from the statements, compute in the sandbox), output
-(format the answer as JSON by question, JSON by a schema, a list or a table;
-show the answer, a text with `{{variable}}` and variables shown below it) and
-logic (ask the model with a prompt and a reply schema of the step's own, set,
-filter and merge variables, Python of the profile). The frames are each entry of
-a list, round (at most N times, until a stop condition holds), branching (the
-first way whose condition holds, else the last) and side by side (every way at
-the same time). Any step can carry a condition ("when") and can be switched off.
+The boxes stand in groups: start (the question), routes (choose a way; the
+harvest's three steps, pick the values, read their passages and answer from
+them; the graph's five, plan, coordinates, build, query and values; the
+comparison's three, keep the documents, one document's answer and compare the
+answers), search (the search sentence, the embedding, the search, rerank),
+answer (pack the batches, ask a batch for statements, crop, repeated
+statements, figure read-offs, merge the statements, the answer assembled,
+compute in the sandbox), output (a format of your own: JSON by question, JSON by
+a schema, a list, a table or a template, with no model; "reshaped by the
+model", one request with an instruction of yours; "join answers", one after
+another with the citations numbered on, or by the model; show the answer, a
+text with `{{variable}}` and variables shown below it) and logic (ask the model
+with a prompt and a reply schema of the step's own, set, filter and merge
+variables, Python of the profile). The boxes are fine: each does one thing, a
+request, a search, a run in the sandbox or a reshaping, and every loop and its
+end stands in the drawing.
+
+The frames are each entry of a list, round (at most N times, until a stop
+condition holds), branching (the first way whose condition holds, else the
+last), side by side (every way at the same time) and part. A loop over a list
+runs its entries one after another in the turn's variables (the default),
+side by side (every entry at once, each with variables of its own, as the
+documents of a comparison), or ahead (each entry started before it is needed,
+with the variables there when it starts, and taken in order, as the batches of
+an answer are asked). It can stop after an entry is taken (a condition, not
+allowed side by side), take at most N entries, collect a variable of each entry
+into a list that grows as entries are taken and is there after the loop, and
+carry the words its spinner shows. A part runs its steps with variables of its
+own and gives back only those it names. Any step can carry a condition ("when")
+and can be switched off.
+
+Two steps are tools: a compute step set to run "when a request asks" and the
+crop step do not run where they stand. The request beside them in the same
+frame ("Ask a batch for statements") calls them when its model asks to compute
+or to see a crop; with no sandbox beside the request, the request is offered
+none.
+
+The default drawing is built from these boxes. The documents' way is the
+search sentence, the embedding and the search; where there are hits, pack, then
+a loop over the batches run ahead that stops once the answer is complete and a
+statement stood its check (inside, the request for statements with the sandbox
+and the crop beside it), the repeated statements, the figure read-offs and the
+answer assembled, then JSON where it is asked. The harvest beside it is a part
+that gives back `harvest`; the harvest's own route is a part giving back
+`harvest`, `harvest_reason` and `harvest_alone`. The graph's route is the plan,
+then, while there is no answer yet, the coordinates, then the build, the query
+and the values. The comparison keeps the documents, runs a loop over them side
+by side (each with its own history, no picture, its own search and answer),
+collects their rows and compares the answers. The library holds templates
+beside the boxes (statements, answer, harvest, graph, compare and compute, in
+which the model writes Python from the statements, the sandbox runs it and what
+it printed is the answer); they are the former coarse boxes, each now a
+sequence of the fine ones, and a template is put in with ids of its own.
+
+The drawing asks the same requests, shows the same messages and remembers the
+same as the chat did before there was a drawing. That was compared over 29
+turns in both profiles with the graph, the field questions and the query run
+faked, comparisons with JSON, six documents (one left out), earlier turns and a
+single answer, and the harvest with no passage and with two batches: no
+difference in 58 comparisons, and a step taken out on purpose is found by the
+comparison.
 
 A turn has variables: those the page gives (the question, the earlier turns, the
 documents, the scopes, an image, the route, whether JSON is wanted) and those the
@@ -123,8 +172,9 @@ above, and its default drawing runs in this order:
    it asks closed questions instead (`docpipe/serve/values.py`; the parameter
    is chosen with the profile's own question for a person's question,
    `chat_parameter_question`, and not with the extraction's question about a
-   number). `answer.answer_from_values` then answers the question from the
-   passages those values were read from, each passage once. The model decides
+   number). The harvest's steps (`values_pick`, `values_passages`, `values_answer`) then
+   answer the question from the passages those values were read from, each
+   passage once. The model decides
    which of their numbers answer it (the total or a carrier, which variant),
    and every statement stands its check against its passage as in a document
    turn; its citations show their pages the same way. Under the answer stand
@@ -183,8 +233,8 @@ above, and its default drawing runs in this order:
      (`run_label`, "Run 1", "Run 2"), so that the number in the caption can be
      found. A value read off a figure keeps its own caption.
 3. With several documents selected there is no values step and no joint
-   search: `run_comparison` asks each document by itself, all of them side by
-   side under one spinner, and one more call compares the finished answers, since one top-k over several plans would
+   search: the drawing's loop over the documents asks each document by
+   itself, all of them side by side under one spinner, and one more call compares the finished answers, since one top-k over several plans would
    give the longest chapter most of the slots. The comparison is given only
    the statements that stood, as plain text. Each document's own row carries its
    own caption of removed statements and its own warning of unreadable requests,
@@ -376,8 +426,9 @@ the turn's own result.
   left empty or a turn with no scope each stop before retrieval with a message
   of their own.
 - A selection of more documents than `COMPARE_MAX_DOCUMENTS` cannot be made
-  in the sidebar; `compare_documents` names what it leaves out as a second
-  check for any other caller.
+  in the sidebar; the drawing's step "Documents for the comparison"
+  (`compare_kept`) names what it leaves out as a second check for any other
+  caller.
 - A model whose replies cannot be read does not stop a turn. A reply that is
   not the one JSON object is asked again with its cause named, a reply that was
   cut off is split or given more room, and nothing is repaired; what still

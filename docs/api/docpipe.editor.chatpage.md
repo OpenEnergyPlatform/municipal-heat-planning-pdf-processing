@@ -75,9 +75,9 @@ def create(self, **kw)
 def library() -> dict
 ```
 
-The chat's library in the form of the flow's: its boxes, its one
-loop (each entry of a list), its variables, no presets, forms or
-targets.
+The chat's library in the form of the flow's: its boxes, its loop
+(each entry of a list) and how it runs, what a part does, its
+templates and its variables; no presets, forms or targets.
 
 ### view
 
