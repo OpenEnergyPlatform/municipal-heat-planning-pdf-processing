@@ -207,7 +207,8 @@ whole numbers or empty). Every value a form writes fits the same form again.
 - `of` of a plan field is always two selects, the coordinate and its entry.
 - The address of a box in the Graph tab is a folder and a key, and the fields
   (or `@name`, `@key`) its name is made of, with up and down to change the
-  order.
+  order; a field "Needs" beside "Made of" names the fields that must have a
+  reading for the node to be written (owner decision 2026-11-14).
 
 ## Copies and removals
 

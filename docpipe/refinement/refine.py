@@ -535,7 +535,9 @@ def _apply_actions(
     Applies the _action directives returned by the LLM. A section that starts
     on one of *front_pages*, the first page and the title page
     (`_front_pages`), is front matter (title, authors, affiliations, journal
-    line, dates) and is never removed.
+    line, dates) and is never removed. A section of a cover ("cover"), a
+    page the publisher, a repository or the download put in front of the
+    publication, goes whole wherever it stands: text, heading and pictures.
 
     Returns:
         (result_sections, last_kept_section)
@@ -547,6 +549,22 @@ def _apply_actions(
     for sec in processed_sections:
         sec = _coerce_section(sec)
         action = sec.pop("_action", "keep")
+
+        if action == "cover":
+            # A page the publisher, a repository or the download put in front
+            # of the publication is no part of it (owner decision 2026-11-14):
+            # its text, its heading and its pictures go, on the first page
+            # too. 24 of 164 scenario papers began with such a page; kept, the
+            # list "You may also like" of one was made a bibliography under
+            # the paper's own heading, and two papers were read under the
+            # title of a third. The publication's own title page follows the
+            # cover, and its pictures are logos, a licence badge or an advert.
+            log.info("  Dropping a cover page section: %s%s",
+                     str(sec.get("title", "?"))[:80],
+                     "".join(f" ({len(sec.get(key) or [])} {key})"
+                             for key in ("tables", "figures")
+                             if sec.get(key)))
+            continue
 
         if action == "remove":
             # A removal may not take tables or figures with it. They are Stage-2

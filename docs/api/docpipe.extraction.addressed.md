@@ -655,6 +655,20 @@ def earlier_entries(plan: Plan, uri: str, name: str,
 already settled for other wordings, for the rule
 `list_shows_earlier`.
 
+#### Reader.list_holds
+
+```python
+def list_holds(self, kind: str) -> Optional[dict]
+```
+
+What the document's list of *kind* holds, as the request for the
+entry of a name shows it (owner decision 2026-11-14: "Asia", the
+region of a value, became a scenario where the request did not say
+what its list holds): the field whose values are names of that kind
+(`merged`), by its name and what it means, in short where the spec
+writes that; the works by the spec's own words for them. None where
+no field reads names of that kind.
+
 #### Reader.name_of
 
 ```python

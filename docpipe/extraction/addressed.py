@@ -2028,6 +2028,24 @@ class Reader:
 
     # -- names of the document --------------------------------------------------
 
+    def list_holds(self, kind: str) -> Optional[dict]:
+        """What the document's list of *kind* holds, as the request for the
+        entry of a name shows it (owner decision 2026-11-14: "Asia", the
+        region of a value, became a scenario where the request did not say
+        what its list holds): the field whose values are names of that kind
+        (`merged`), by its name and what it means, in short where the spec
+        writes that; the works by the spec's own words for them. None where
+        no field reads names of that kind."""
+        if kind == "work":
+            works = self.works_field or {}
+            return {"name": works.get("name", ""),
+                    "means": works.get("means", "")} \
+                if works.get("means") else None
+        for parameter in getattr(self.spec, "parameters", None) or ():
+            if getattr(parameter, "merged", None) == kind:
+                return field_shown(parameter, False)
+        return None
+
     def name_of(self, plan: Plan, kind: str, words: str,
                 got: Optional[Found], counts: Counts, work: int = 0,
                 besides: tuple = (), group: bool = False,
@@ -2063,7 +2081,8 @@ class Reader:
                 "words": words, "find": got,
                 "work": works.entries[work - 1].label
                 if works is not None and 0 < work <= len(works.entries)
-                else None, "options": listed}, node)
+                else None, "holds": self.list_holds(kind),
+                "options": listed}, node)
             if not ask.asks():
                 return []
             req = ask.request()

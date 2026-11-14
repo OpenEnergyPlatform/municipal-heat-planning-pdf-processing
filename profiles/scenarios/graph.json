@@ -92,6 +92,11 @@
           "folder": "publication",
           "key": "studyreport",
           "from": [
+            "publication_doi",
+            "publication_title"
+          ],
+          "first_present": true,
+          "needs": [
             "publication_title"
           ],
           "fold": true
@@ -108,6 +113,7 @@
           "key": "scenariobundle",
           "from": [
             "study_project_name",
+            "publication_doi",
             "publication_title"
           ],
           "first_present": true,
@@ -223,7 +229,7 @@
         "first_in_file": "skip_other",
         "evidence": true,
         "label": "label",
-        "note": "Mints the study report. Where no project name was read the title also keys the bundle's IRI, never its label; it is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
+        "note": "Mints the study report, named by its DOI where one is read, else by its title, and written only where its title is read (owner decision 2026-11-14). Where no project name was read the DOI, else the title, also keys the bundle's IRI, never its label; the title is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
       },
       {
         "from": "report",
@@ -262,7 +268,7 @@
         "single": true,
         "first_in_file": "skip_other",
         "label": "label",
-        "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication title keys its IRI (owner decision 2026-11-07)."
+        "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication's DOI, else its title, keys its IRI (owner decisions 2026-11-07, 2026-11-14)."
       },
       {
         "from": "study_acronym",

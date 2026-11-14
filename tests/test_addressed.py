@@ -1432,6 +1432,29 @@ def test_a_name_that_names_no_scenario_is_no_entry_and_the_graph_takes_none():
         == ["Source: JRC."]
 
 
+# Promise (owner decision 2026-11-14): the request for the entry of a name
+# says what its list holds, the field whose values are names of that kind by
+# its name and short meaning, AND a list of works by the spec's words for
+# works; a kind no field reads shows nothing.
+def test_the_request_for_a_name_says_what_its_list_holds():
+    label = SCENARIOS.by_uri["scenario_label"]
+    text = Source("section", 4, "The Central scenario reaches net zero.",
+                  {"document_id": 7, "page": 2})
+    model = Model(
+        find=lambda p, n: {"found": [{"at": "1", "words": "Central"}]}
+        if n.get("parameter") == label.uri else {"found": []})
+    reader_of(model, spec=SCENARIOS, works=SCENARIOS.works)(plan_of(text),
+                                                            [label])
+    asked = [p for p, n in model.of("names") if n.get("kind") == "scenario"]
+    assert asked and all(p["holds"] == {"name": label.label,
+                                        "means": label.brief} for p in asked)
+    reader = reader_of(Model(), spec=SCENARIOS, works=SCENARIOS.works)
+    assert reader.list_holds("work") == {"name": SCENARIOS.works["name"],
+                                         "means": SCENARIOS.works["means"]}
+    # the failure by construction: a kind no field reads holds nothing shown
+    assert reader.list_holds("municipality") is None
+
+
 def test_a_name_of_an_entry_takes_its_work_and_one_without_work_stays_apart():
     label = SCENARIOS.by_uri["scenario_label"]
     text = Source("section", 4, "The Delayed case and the Rapid case end in "

@@ -336,7 +336,10 @@ def minted_address(self, doc: Document, box: dict,
                    node: Optional[Node]) -> tuple
 ```
 
-(address, the name it was made from) or (None, None).
+(address, the name it was made from) or (None, None): also None
+where a field the address `needs` has no reading (owner decision
+2026-11-14: a publication is named by its DOI, where one is read,
+and written only where its title is read).
 
 #### Writer.write
 

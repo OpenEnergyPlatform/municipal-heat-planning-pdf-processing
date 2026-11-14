@@ -12,7 +12,9 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 {{example}}
 
 <!-- with: value -->
-The question is about the value under "value": its words and its address under "passage", which shows its line, in a table with the table's title and head, else with the sentences before and after it. The line of the answer has to speak about THIS value: its own line, the head of its column, the title of its table, its sentence and those beside it, the heading of its section.
+The question is about the value under "value": its words and its address. "passage" shows the value's line, in a table with the table's title and head, in text with the sentences before and after it.
+* The answer stands in a line about THIS value: its own line, the head of its column, the title of its table, the sentences around it or the heading of its section.
+* Words that only repeat the value are no answer: asked for the scenario of the region "Asia", "Asia" is the value, not its scenario.
 
 <!-- with: list -->
 <!-- way: answer_with=address -->

@@ -706,7 +706,8 @@ TARGETS: dict = {target.name: target for target in (
            "The entry of the document's list of names a name means, a new "
            "entry where it is not on the list yet, none for 0; once per "
            "name and work.", nested=True,
-           gives=("words", "find", "work", "options"), forms=("name",)),
+           gives=("words", "find", "work", "holds", "options"),
+           forms=("name",)),
 )}
 
 

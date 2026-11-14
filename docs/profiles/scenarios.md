@@ -449,10 +449,10 @@ bundle, an author, an organisation and a funder directly under the base
 with no path segment at all (the `folder` of each box's `address`).
 
 One document mints exactly one study report and one scenario bundle. The
-report's IRI comes from the resolved title; the bundle's comes from
-`study_project_name` where the document names a project, and from the
-title again where it does not (the bundle's `address` lists both and
-takes the first present). That title only
+report's IRI comes from the DOI where one is read, else from the resolved title, and the report is written only where the title is read (`needs`; owner decision 2026-11-14); the bundle's comes from
+`study_project_name` where the document names a project, else from the DOI,
+else from the title (the bundle's `address` lists the three and
+takes the first present). That DOI or title only
 keys the IRI: the bundle is labelled with the study's name the document
 prints and with nothing where it prints none (owner decision 2026-11-07). A node carries
 a has-uuid triple where its box says `uuid`: today the report and the
@@ -729,7 +729,7 @@ The first is one bundle per project. The Turtle mints a bundle from its
 label, so two papers of one project are one bundle with two reports there,
 while the body of each paper alone would make two bundles of one study.
 `merge` joins the documents whose bundle key is the same (the project's
-name, else the title, compared through `kg.normalise`, as the Turtle mints
+name, else the DOI, else the title, compared through `kg.normalise`, as the Turtle mints
 it) into one request with several study reports. The oldest paper leads:
 its spelling of the project's name labels the bundle (no label where no
 paper prints one) and its abstract is the bundle's, of which the shapes allow one;

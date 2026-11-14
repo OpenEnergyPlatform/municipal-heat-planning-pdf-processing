@@ -17,7 +17,7 @@ example, a preprint's line numbers landing inside a sentence: a number
 counting up line after line is removed, one the sentence itself states
 stays.
 
-The front matter of the first page and of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on either. The first page is the lowest page any section carries; the title page is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json` (`_front_pages`). Both count because a cover can stand before the title page, and because the layout detection marks a heading far into a report as its title in 8 of the 164 documents of the scenarios corpus; a `sections.json` without the key protects the first page alone.
+The front matter of the first page and of the title page (title, authors, affiliations, the journal line with volume and year, the DOI, dates and the copyright line) is never refinement's to remove: the prompts say so, and `_apply_actions` refuses a `remove` for any section that starts on either. A section of a page that the publisher, a repository or the download put in front of the publication (a journal's "You may also like" and "To cite this article" page, a publisher's or archive's cover, an accepted-manuscript cover) goes whole through the action `cover`: text, heading, tables and figures, on the first page and before the first heading too, where `remove` is refused by the front matter, synthetic heading and pictures guards. Only the scenarios profile's Stage 4 prompts name it, so KWP's Stage 4 is unchanged (owner decision 2026-11-14: 24 of 164 scenario PDFs begin with such a page, which Stage 4 could not remove on page 1, and two papers were read under the title of a third). The first page is the lowest page any section carries; the title page is the page of the detected document title, which stage 3 hands on as `title_page` in `sections.json` (`_front_pages`). Both count because a cover can stand before the title page, and because the layout detection marks a heading far into a report as its title in 8 of the 164 documents of the scenarios corpus; a `sections.json` without the key protects the first page alone.
 
 Stage 4 also enforces the size limit the embedding step needs: a
 retrieval chunk is one section and one vector, so a section long enough
@@ -338,7 +338,7 @@ an authors' block can be headed by the document's title; the profile's
 figures, and segments into the previous kept section (never into a heading
 left behind by a removal), whether that
 section came from the same window or, via `previous_kept`, the window
-before it. `keep` and `replace` pass the section through as is.
+before it. `cover` drops the section whole, tables, figures and heading included, where it is the first page or the text before the first heading; the guards that refuse `remove` do not apply to it. `keep` and `replace` pass the section through as is.
 
 ### Cleanup and reporting
 

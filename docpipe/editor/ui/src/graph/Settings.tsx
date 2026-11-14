@@ -101,6 +101,8 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
                     data={[...fieldNames, ...SPECIAL_TOKENS]} value={address.from || []} onChange={v => setAddress({ ...address, from: v })} />
                   <Flag label={t('The first one that is present')} help={t('Use only the first of the fields that has a reading.')} checked={!!address.first_present}
                     onChange={v => setAddress({ ...address, first_present: v || undefined })} />
+                  <TagsInput label={t('Needs')} description={t('The fields that must have a reading for the node to be written, besides those that make its address.')}
+                    data={fieldNames} value={address.needs || []} onChange={v => setAddress({ ...address, needs: v.length ? v : undefined })} />
                   <Flag label={t('Fold the words')} help={t('Spell the same name the same way (capitals, accents, legal forms).')} checked={!!address.fold}
                     onChange={v => setAddress({ ...address, fold: v || undefined })} />
                 </>

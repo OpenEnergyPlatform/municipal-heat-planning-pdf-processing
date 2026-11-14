@@ -352,7 +352,7 @@ descriptor, sector division, sector, technology) is asked with its list in the f
 and the docfield request, and the reply names the entry's number beside the
 address and the words: `{"found": [{"entry": n, "at": ..., "words": ...}]}`
 (`addressed.listing`, `Reader.listed`; owner decision 2026-11-09). A list of more
-than `list_meanings` entries (a number of the flow, shown by `Reader.list_of`)
+than `list_meanings` entries (a number of the flow, shown by `Reader.list_of`; 24 in the default profile, 32 in the scenarios profile's `flow.json`, so the 32-entry list of a study's topic keywords is shown with its meanings, owner decision 2026-11-14)
 whose entries name more than one group is shown by its groups, a list of up to
 that many entries with what each means ("(means: ...)"). A number that is no
 number of the list is `not_an_option` and is asked again in the follow-up. A find with its number needs no list request; a
@@ -584,6 +584,16 @@ entry under a number with what it means (`means`: the spec's `gloss` where it ha
 one, one line in the profile's language, else its English definition,
 `fields._options`). The list is shown as it is, each entry by its name and what it
 means and never with how the document named it before (owner decision 2026-11-09).
+The request also says what the list holds (`holds`, `Reader.list_holds(kind)`: for the kind
+`work` the spec's `works` name and meaning, for any other kind the label and short meaning
+of the field whose `merged` is that kind; left out where no field reads such names, so
+KWP's requests are unchanged; owner decision 2026-11-14). Without it the value itself (a
+region, a year, a description) was taken as the scenario of a scenario-level value and made
+a new scenario. The scenarios profile's coordinate question for `with: value` says that
+words which only repeat the value are no answer (asked for the scenario of the region
+"Asia", "Asia" is the value, not its scenario), the names prompt's 0 line names a region
+beside a year, a number, a unit, a source note and a whole sentence, and the document-field
+prompt says an entry is chosen by its meaning, also where the words differ from its name.
 A value of a field with a list does not come to this request where its find named
 the entry (see Finding a field's values in a piece). The reply is `{"entry": n}`, the number of the entry, 0 for
 none, or a list of numbers where several may be meant (`several`). A list of more

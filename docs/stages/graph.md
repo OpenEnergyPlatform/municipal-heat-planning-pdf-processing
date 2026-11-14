@@ -109,7 +109,7 @@ each distinct reading of a field), `per_answer` (one for each entry of a table o
 answers a coordinate was read as), `per_value` (one for each number, addressed
 by a brick), `per_object` (one for each object another arrow wrote). `address`
 says how a node is named: a fixed name made of facts, or a folder and a key
-over the fields (or `@name`, `@key`) the UUID is minted from. `required` leaves
+over the fields (or `@name`, `@key`) the UUID is minted from; `first_present` takes the first of the fields that has a reading, `fold` folds the name to one spelling, and `needs` lists the fields that must have a reading for the node to be written besides those that make its address (`minted_address`; owner decision 2026-11-14). `required` leaves
 a document out of the graph whole where the box has no node, `once` writes a
 node once per file, `same_node` says what happens where a second document mints
 the same node (`warn` or `refuse` the document), and `uuid` writes the node's
@@ -397,8 +397,8 @@ mints nothing. A row whose scenario never resolves reaches no triple, comment
 or number; it is counted `unplaceable`, keyed by state, since without it the gap
 read as zero.
 
-The study report's IRI is minted from the title, the bundle's from
-`study_project_name` or else the title; a second document reusing either IRI is
+The study report's IRI is minted from `publication_doi` where one is read, else from the title, and the report is written only where its title is read (`needs`); the bundle's from
+`study_project_name`, else the DOI, else the title (owner decision 2026-11-14: two papers read under one wrong title had become one publication node); a second document reusing either IRI is
 logged (`same_node: warn`), not refused, its triples landing on the shared
 subject. The bundle takes one triple for each tag entry the model picked off
 the shapes' lists (the arrows with the brick `entry`), and none for an `out:`
