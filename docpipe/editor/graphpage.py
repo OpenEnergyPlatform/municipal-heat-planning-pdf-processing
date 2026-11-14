@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Optional
 
 from docpipe import graphfile, ontology
+from docpipe.editor import RDFLIB_MISSING
 
 CR, LF = "\r", "\n"
 PROBE_FOLDER = "docpipe-graph-probe"
@@ -147,7 +148,7 @@ def classes(profile, made, spec_raw: Optional[dict], files: list,
         from docpipe.compile import shapes
         found, _prefixes = shapes.read(files)
     except ImportError:
-        return {"classes": [], "skipped": "rdflib is not installed"}
+        return {"classes": [], "skipped": RDFLIB_MISSING}
     terms = (snapshot or {}).get("terms") or {}
     out = []
     seen: dict = {}

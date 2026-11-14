@@ -104,7 +104,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.editor.server](docpipe.editor.server.md): The local server of `docpipe edit` and the one file guard. (2 classes, 5 functions)
 - [docpipe.editor.sourcespage](docpipe.editor.sourcespage.md): Where a profile's ontology, shapes and graph come from, as `docpipe edit` shows, fetches and applies them, and what they say differently from the spec. (15 functions)
 - [docpipe.editor.specs](docpipe.editor.specs.md): What the editor does with a profile's extraction spec. (1 class, 18 functions)
-- [docpipe.editor.start](docpipe.editor.start.md): `docpipe edit` itself: it starts the server, and starts it again with the profile the page switches to. (6 functions)
+- [docpipe.editor.start](docpipe.editor.start.md): `docpipe edit` itself: it starts the server, and starts it again with the profile the page switches to. (7 functions)
 - [docpipe.editor.trying](docpipe.editor.trying.md): A recorded request sent once more with a changed prompt, and what the new answer is worth. (1 class, 6 functions)
 
 ## docpipe.embedding
@@ -339,7 +339,8 @@ is for and what it hands to what; this is the reference.
 ## scripts
 
 - [scripts.build_docs](scripts.build_docs.md): Generate the documentation pages from the sources they describe. (1 class, 30 functions)
-- [scripts.change_audit](scripts.change_audit.md): What this change touches that is not in the files it changes. (5 functions)
+- [scripts.build_editor_page](scripts.build_editor_page.md): The page of `docpipe edit`, built from its sources. (9 functions)
+- [scripts.change_audit](scripts.change_audit.md): What this change touches that is not in the files it changes. (6 functions)
 - [scripts.chat_search_recall](scripts.chat_search_recall.md): How often the chat's search puts the passage and the page a harvested value was read from among its hits. (3 classes, 6 functions)
 - [scripts.chat_view](scripts.chat_view.md): Show every model request of an extraction trace as a small chat, in one HTML page. (2 functions)
 - [scripts.curation_list](scripts.curation_list.md): The values a person should look at, and where to look. (4 functions)
@@ -756,6 +757,7 @@ profiles.scenarios.vocabulary
 :hidden:
 
 scripts.build_docs
+scripts.build_editor_page
 scripts.change_audit
 scripts.chat_search_recall
 scripts.chat_view

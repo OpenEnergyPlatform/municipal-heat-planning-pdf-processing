@@ -53,9 +53,12 @@ NEEDS = {
     "chat": (("streamlit",), "app"),
     "graph": (("rdflib", "pyshacl"), "kg"),
     "compile": (("rdflib",), "kg"),
+    "edit": (("rdflib", "pyshacl"), "editor"),
 }
-CORE = ("yaml", "openai", "numpy", "PIL", "fitz", "requests", "tqdm",
-        "jsonschema", "rapidfuzz", "faiss")
+# The package's own requirements, by the name each is imported under; one
+# list with `dependencies` of pyproject.toml (tests/test_declared_libraries).
+CORE = ("yaml", "openai", "httpx", "numpy", "PIL", "fitz", "regex",
+        "requests", "tqdm", "jsonschema", "rapidfuzz", "faiss")
 
 
 @dataclass

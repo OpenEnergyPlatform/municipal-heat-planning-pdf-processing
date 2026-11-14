@@ -72,6 +72,16 @@ The generated pages of docs/ a fresh build renders otherwise than
 they stand (`scripts/build_docs.py --check`, two seconds). [] where
 they agree; the check's own words where it could not run.
 
+### page_drift
+
+```python
+def page_drift() -> bool
+```
+
+Is the editor's page not the build of its sources as they stand
+(`scripts/build_editor_page.py --check`)? False where the tree holds no
+sources of the page.
+
 ### report
 
 ```python

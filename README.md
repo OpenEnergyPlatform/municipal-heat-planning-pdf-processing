@@ -281,7 +281,7 @@ documents its configuration.
 | Sources | `sources.json` |
 | Graph | `graph.json` |
 
-The head of the page switches to any other profile the installation finds; the editor starts again with it at the same address, asking first where edits are not saved. It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node; changing the page needs it (`npm ci` and `npm run build` in `docpipe/editor/ui`). See [the editor chapter](docs/stages/editor.md).
+The head of the page switches to any other profile the installation finds; the editor starts again with it at the same address, asking first where edits are not saved. It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node. `pip install -e ".[editor]"` installs everything the command needs; `docpipe edit` stops with a line naming a missing requirement of the package, and says in one line, and starts anyway, that the Sources and Graph tabs need the extra `editor` (`rdflib`, `pyshacl`) where it is missing. Changing the page needs Node: `python scripts/build_editor_page.py` checks the Node on the path against `engines` in `docpipe/editor/ui/package.json`, runs `npm ci` where `node_modules` is missing (or with `--install`), builds into `docpipe/editor/web` and writes the fingerprint of the sources into `web/BUILT_FROM`; `--check` builds nothing and exits 1 where the committed page is not the build of its sources. See [the editor chapter](docs/stages/editor.md).
 
 ## Collaboration
 

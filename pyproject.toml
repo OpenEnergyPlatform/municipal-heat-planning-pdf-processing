@@ -1,7 +1,8 @@
 # The package and its one command. `pip install .` gives what every stage
 # needs that asks a model over an API; the stages that run a model in this
 # process are extras. requirements.txt stays what it is: the lock the
-# container image is built from.
+# container image is built from. Every library the package imports is in one
+# of these lists (tests/test_declared_libraries.py).
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -17,9 +18,11 @@ authors = [{name = "Felix Vossel"}]
 dependencies = [
     "PyYAML",
     "openai>=1.40",
+    "httpx",
     "numpy",
     "Pillow",
     "PyMuPDF",
+    "regex",
     "requests",
     "tqdm",
     "jsonschema",
@@ -37,13 +40,15 @@ embed = ["torch", "transformers", "qwen-vl-utils"]
 app = ["streamlit", "pyoxigraph"]
 # the graph: snapshot of the ontology, SHACL report
 kg = ["rdflib", "pyshacl"]
+# `docpipe edit`: its Sources and Graph tabs read ontology and shapes
+editor = ["rdflib", "pyshacl"]
 # what the profiles in this repository read their document lists with
 kwp = ["pandas", "openpyxl"]
 sandbox = ["llm-sandbox"]
 # a hosted text or vision model of this provider (openai is a core package,
 # gemini needs none)
 anthropic = ["anthropic>=0.108"]
-dev = ["pytest", "rdflib", "pyoxigraph", "pandas", "openpyxl"]
+dev = ["pytest", "rdflib", "pyshacl", "pyoxigraph", "pandas", "openpyxl"]
 
 [project.scripts]
 docpipe = "docpipe.cli:main"

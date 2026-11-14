@@ -25,6 +25,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import subprocess
@@ -71,6 +72,23 @@ def parser() -> argparse.ArgumentParser:
     made.add_argument("--switch-file", metavar="FILE",
                       help=argparse.SUPPRESS)
     return made
+
+
+TABS_NEED = ('the Sources and Graph tabs need {names}: '
+             'pip install "docpipe[editor]"')
+
+
+def missing_libraries(find: Optional[Callable] = None) -> tuple:
+    """(the package's own requirements that are not installed, those of its
+    extra `editor` that are not), by the names they are imported under: the
+    lists `docpipe doctor` reads (`doctor.CORE`, `doctor.NEEDS`), which are
+    those of pyproject.toml. Without the first the server cannot start;
+    without the second two tabs say what they lack."""
+    from .. import doctor
+    find = find or importlib.util.find_spec
+    core = [name for name in doctor.CORE if find(name) is None]
+    modules, _extra = doctor.NEEDS["edit"]
+    return core, [name for name in modules if find(name) is None]
 
 
 def note_bytes(name: str, port: int) -> bytes:
@@ -159,6 +177,14 @@ def main(rest: Sequence[str]) -> int:
     if not name:
         raise SystemExit(f"docpipe edit needs a profile: pass --profile "
                          f"NAME (or set ${ENV_VAR})")
+    core, tabs = missing_libraries()
+    if core:
+        raise SystemExit(f"docpipe edit cannot start: the installation "
+                         f"lacks {', '.join(core)}, which docpipe itself "
+                         f"requires: pip install docpipe")
+    if tabs:
+        print("docpipe edit: " + TABS_NEED.format(names=", ".join(tabs)),
+              file=sys.stderr)
     try:
         return loop(name, args.port, harvest, not args.no_browser)
     except KeyboardInterrupt:

@@ -1921,7 +1921,7 @@
  "quote": "Zitat",
  "quote not in the source": "Zitat nicht in der Quelle",
  "quote too short": "Zitat zu kurz",
- "rdflib is not installed": "rdflib ist nicht installiert",
+ "rdflib is not installed: pip install \"docpipe[editor]\"": "rdflib ist nicht installiert: pip install \"docpipe[editor]\"",
  "read": "gelesen",
  "reads the whole document (not only the places an earlier harvest found)": "liest das ganze Dokument (nicht nur die Stellen, die eine frühere Ernte gefunden hat)",
  "recorded": "aufgezeichnet",

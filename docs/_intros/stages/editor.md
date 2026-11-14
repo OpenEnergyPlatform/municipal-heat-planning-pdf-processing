@@ -46,6 +46,45 @@ the server, and a server whose command is gone, also a command that was
 killed, ends by itself, because its standard input is a pipe the command
 holds.
 
+## Installing and building the page
+
+The package's own requirements in `pyproject.toml` include `regex` and `httpx`,
+which the package imports; without `regex` the editor cannot start. The extra
+`editor` (`rdflib`, `pyshacl`) holds what the Sources and Graph tabs need, and
+`dev` includes `pyshacl`. `pip install -e ".[editor]"` gives everything
+`docpipe edit` needs.
+
+Before it starts the server, `docpipe edit` checks that the package's own
+requirements (`doctor.CORE`) are installed. If one is missing it stops with a
+line naming it and `pip install docpipe`. If the extra `editor` is missing it
+prints one line that the Sources and Graph tabs need `rdflib` and `pyshacl` and
+`pip install "docpipe[editor]"`, and starts anyway; the two tabs say the same
+command where `rdflib` is missing. `docpipe doctor` lists the command `edit`
+with its extra (`doctor.NEEDS`).
+
+`python scripts/build_editor_page.py` is the one way to build the page from
+`docpipe/editor/ui` into `docpipe/editor/web`. It checks the Node on the path
+against `engines` in `package.json` (`^20.19.0 || >=22.12.0`), runs `npm ci`
+only where `node_modules` is missing or `--install` is given (and refuses
+`--install` where `node_modules` is a link to another checkout), runs
+`npm run build`, writes `web/index.html` with LF line endings, and writes the
+fingerprint of the sources (SHA-256 over every file the build reads, line
+endings normalised) into `web/BUILT_FROM`. `--check` builds nothing and exits 1
+where the committed page is not the build of the sources as they stand.
+
+`tests/test_editor_page_built.py` fails where `web/BUILT_FROM` does not match
+the sources, and `scripts/change_audit.py` reports such a page in its DOCS
+section. `tests/test_declared_libraries.py` holds that every library `docpipe/`
+and `profiles/` import is declared in `pyproject.toml`, that the lists of
+`docpipe doctor` agree with `pyproject.toml`, and that every module of
+`docpipe.editor` imports in a process where each library outside the package's
+own list and the extra `editor` is refused. The workflow `.github/workflows/editor.yml`
+runs on a push to `develop` or `production` and on pull requests that touch the
+editor: Python 3.11 with `.[editor,dev]`, Node 22,
+`python scripts/build_editor_page.py --install`,
+`git diff --exit-code -- docpipe/editor/web`, then the editor's tests and the
+library test. There is no Docker image for the editor.
+
 ## The page
 
 The server binds `127.0.0.1` only, answers a request only if its `Host` is
@@ -63,9 +102,9 @@ committed in `docpipe/editor/web/`: `index.html`, `assets/index-<hash>.js` and
 `.css`, `forms.js` (the form logic the page and the node tests share) and
 `third-party-licenses.md` (name, version, licence and licence text of every
 library inside the built page, written by the build). Running `docpipe edit`
-needs no Node. Node is needed only to change the page: in `docpipe/editor/ui`,
-`npm ci`, then `npm run build` (a type check, then Vite writes into `web/` and
-replaces `web/assets/` whole). `npm run dev` serves the sources and passes
+needs no Node. Node is needed only to change the page, built with
+`scripts/build_editor_page.py` (see above; its `npm run build` is a type check,
+then Vite writes into `web/` and replaces `web/assets/` whole). `npm run dev` serves the sources and passes
 `/api` and `/forms.js` to a running `docpipe edit` (`DOCPIPE_EDIT_URL`, default
 `http://127.0.0.1:8765`).
 

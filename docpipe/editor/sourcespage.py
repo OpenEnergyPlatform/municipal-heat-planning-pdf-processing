@@ -55,6 +55,7 @@ from typing import Optional
 from docpipe import ontology
 from docpipe import sources as source_files
 from docpipe import upstream
+from docpipe.editor import RDFLIB_MISSING
 
 CR, LF = "\r", "\n"
 FETCH_FOLDER = "docpipe-sources-fetch"
@@ -438,7 +439,7 @@ def differences(profile, spec_raw: Optional[dict], snapshot: Optional[dict],
             rows = draft.differences(found, spec_raw,
                                      drawing=graphfile.load(profile).map)
         except ImportError:
-            skipped = "rdflib is not installed"
+            skipped = RDFLIB_MISSING
     by_field: dict = {}
     unasked = []
     for row in rows:
