@@ -25,6 +25,13 @@ owner decision 2026-11-10: the page counts requests per box); a request a
 box asks while it reads an answer (the entry of a list, the name of a
 scenario, a follow-up) is that box's.
 
+Every step that runs is written to the trace when it is through (`step`,
+owner decision 2026-11-14: "sodass eigentlich alles rekonstruierbar ist"):
+its id and kind, where it ran (the field, the value, the dimension, the
+piece, the round), when it began and how long it took, and what it came
+to: a step passed by its condition, the way an "if" took, the turns of a
+round and why it ended, the items of an "each".
+
 A box that checks answers (`about`, an own check, `check`) stands right
 after the question whose answers it checks and is applied while that
 question reads them. An own check refuses an answer where its condition
@@ -46,7 +53,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from .. import rules
-from . import addressed, blocks, conditions, fields, general
+from . import addressed, blocks, conditions, fields, general, trace
 from . import flow as flow_map
 from .addressed import (Asking, Counts, Found, Plan, Read,
                         field_shown_of, years_in)
@@ -293,13 +300,26 @@ class SearchSupply:
         self.walked: set = set()
         self.fetched_shown = 0
         self.ways: set = set()
+        # The search that put the pieces left in their order (its number in
+        # the trace), each piece's place in that order, and of the pieces
+        # the last request took, (search, place) by piece (owner decision
+        # 2026-11-14: a request names the search its pieces come from).
+        self.sid: Optional[int] = None
+        self.places: dict = {}
+        self.taken: dict = {}
 
     def _ranked(self) -> list:
         if self.ranked is None:
             return []
         if self.order is None:
             self.order = list(self.ranked() or [None])
+            self._ordered([c for c in self.order if c is not None])
         return [c for c in self.order if c is not None]
+
+    def _ordered(self, pieces: list) -> None:
+        """The search just made put *pieces* in their order."""
+        self.sid = trace.last_search()
+        self.places = {c.key: at for at, c in enumerate(pieces, 1)}
 
     def _open(self, piece, seen: set, twice: bool) -> bool:
         """May *piece* be shown now? Not if it was shown, or twice where
@@ -342,6 +362,7 @@ class SearchSupply:
                 if left and rules.get("rerank_when") == "each_round" \
                         and self.reorder is not None:
                     left = self.reorder(left)
+                    self._ordered(left)
                     self.ways.add("rerank_when")
                     self.sentence = now
                 elif left and self.reorder is not None and now \
@@ -350,6 +371,7 @@ class SearchSupply:
                     # A new sentence of the round: the pieces left in its
                     # order, once, and again only for the next new one.
                     left = self.reorder(left)
+                    self._ordered(left)
                     self.ways.add("phrase_anew")
                     self.sentence = now
                 if left and counted and self.limit is not None:
@@ -366,6 +388,8 @@ class SearchSupply:
                         self.ways.add("show_twice")
                     for c in left:
                         self.shown[c.key] = self.shown.get(c.key, 0) + 1
+                    self.taken = {c.key: (self.sid, self.places.get(c.key))
+                                  for c in left}
                     return left, self.label
         fetched = {c.key for c in self.fetched}
         if used:
@@ -382,6 +406,7 @@ class SearchSupply:
                                        if c.key in fetched])
         for c in batch:
             self.shown[c.key] = self.shown.get(c.key, 0) + 1
+        self.taken = {}
         return batch, label
 
     def left(self, seen: set) -> int:
@@ -981,6 +1006,71 @@ class Engine:
                 self.run_node(node, scope)
 
     def run_node(self, node: dict, scope: Scope) -> None:
+        if not trace.enabled() or blocks.is_attached(node) \
+                and flow_map.kind_of(node) == "box":
+            self._run_node(node, scope, {})
+            return
+        started = time.time()
+        came: dict = {}
+        try:
+            self._run_node(node, scope, came)
+        except Exception as exc:
+            came["failed"] = type(exc).__name__
+            raise
+        finally:
+            self.traced_step(node, scope, came, started)
+
+    def traced_step(self, node: dict, scope: Scope, came: dict,
+                    started: float) -> None:
+        """A step that ran, in the trace of its document (`step`)."""
+        doc = scope.get("doc")
+        plan = doc.plan if doc is not None else scope.get("plan")
+        document_id = getattr(plan, "document_id", None)
+        if document_id is None:
+            return
+        kind = flow_map.kind_of(node)
+        trace.event("step", document_id, node=node.get("id"), kind=kind,
+                    **({"box": node.get("box")} if kind == "box" else {}),
+                    **self.where(scope), **came,
+                    started_at=round(started, 3),
+                    ms=trace.ms_since(started))
+
+    @staticmethod
+    def where(scope: Scope) -> dict:
+        """Where a step runs, as its trace notes it: the field, the value
+        and its passage, the dimension, the piece and the round."""
+        out: dict = {}
+        coord = scope.get("coord")
+        value = scope.get("value")
+        parameter = scope.get("parameter")
+        item = scope.get("field_item")
+        try:
+            if coord is not None:
+                claim = coord.row.claim
+                out.update(parameter=coord.read.batch.parameter.uri,
+                           coordinate=coord.slot.name, value=coord.row.label,
+                           owner=((claim.get("at") or {}).get("owner")
+                                  or [None, None])[1])
+            elif value is not None:
+                out.update(parameter=value.read.batch.parameter.uri,
+                           value=value.row.label)
+            elif parameter is not None:
+                out["parameter"] = getattr(parameter, "uri", None)
+            elif item is not None:
+                out["parameter"] = item.key
+            chunk = scope.get("chunk")
+            if isinstance(chunk, (list, tuple)) and chunk:
+                chunk = chunk[0]
+            if chunk is not None and hasattr(chunk, "key"):
+                out["chunk"] = list(chunk.key)
+        except AttributeError:
+            pass
+        number = scope.get("round")
+        if number:
+            out["round"] = number
+        return out
+
+    def _run_node(self, node: dict, scope: Scope, came: dict) -> None:
         kind = flow_map.kind_of(node)
         if kind == "box":
             kind = blocks.LIBRARY[node["box"]]
@@ -988,6 +1078,7 @@ class Engine:
                 return          # applied by the question before it
             with self.step(node):
                 if "when" in node and not self.holds(node["when"], scope):
+                    came["passed"] = True
                     return
                 # A box of a profile runs the code its profile gives it
                 # (`blocks.Box.run`), one of the core the engine's own.
@@ -997,19 +1088,26 @@ class Engine:
                     getattr(self, f"box_{node['box']}")(node, scope)
         elif kind == "each":
             with self.step(node):
-                self.each(node, scope)
+                items = self.each(node, scope)
+                if items is not None:
+                    came["items"] = items
         elif kind == "round":
             with self.step(node):
-                self.round(node, scope)
+                came["turns"], came["ended"] = self.round(node, scope)
         elif kind == "if":
             with self.step(node):
-                for way in node.get("if") or []:
+                for at, way in enumerate(node.get("if") or []):
                     if self.holds(way.get("when"), scope):
+                        came["way"] = at
                         self.run_steps(way.get("steps") or [], scope)
                         return
+                came["way"] = "else"
                 self.run_steps(node.get("else") or [], scope)
 
-    def round(self, node: dict, scope: Scope) -> None:
+    def round(self, node: dict, scope: Scope) -> tuple:
+        """(turns, why the round ended: "used_up" its supply, "stop" its
+        condition held, "no_draw" a turn showed nothing of its supply, "most"
+        its most turns)."""
         spec = node.get("round") or {}
         most = spec.get("most")
         # Where a round that has a most of its own may go on after a turn
@@ -1024,14 +1122,15 @@ class Engine:
                                drew=False)
             self.run_steps(node.get("steps") or [], turn)
             if turn.values.get("used_up"):
-                return
+                return number, "used_up"
             if "stop" in node and self.holds(node["stop"], turn):
-                return
+                return number, "stop"
             # A turn that showed nothing of the supply (its question was
             # passed by its condition) cannot use it up: the round ends.
             if spec.get("supply") and not turn.values.get("drew") \
                     and not goes_on:
-                return
+                return number, "no_draw"
+        return number, "most"
 
     # -- each -----------------------------------------------------------------
 
@@ -1123,7 +1222,10 @@ class Engine:
             return out
         raise Stop(f"each {what} is iterated where it stands")
 
-    def each(self, node: dict, scope: Scope) -> None:
+    def each(self, node: dict, scope: Scope) -> Optional[int]:
+        """The items of *node* through its steps: how many its condition
+        let through, None where the frame counts its own (values,
+        dimensions)."""
         what = node["each"]
         if what == "value":
             return self.each_value(node, scope)
@@ -1164,7 +1266,7 @@ class Engine:
                     by_child, lambda own: [run_inner(g) for g in own])
             self.after_items(inner, pooled, scope)
             self.after_items(node, [child for _n, child in jobs], scope)
-            return
+            return len(jobs)
         if node.get("together"):
             self.reader.each([child for _n, child in jobs],
                              lambda child: self.run_steps(steps, child))
@@ -1172,6 +1274,7 @@ class Engine:
             for _node, child in jobs:
                 self.run_steps(steps, child)
         self.after_items(node, [child for _n, child in jobs], scope)
+        return len(jobs)
 
     def after_items(self, node: dict, done: list, scope: Scope) -> None:
         """What a frame does once its items are through: the finds of each

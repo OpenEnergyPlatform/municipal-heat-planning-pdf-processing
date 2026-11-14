@@ -76,6 +76,28 @@ The chunks a request takes from the scope's *supply* (`engine`'s
 `ListSupply` for a field, `SearchSupply` for a dimension), noted on the
 request; None where the supply has nothing left.
 
+### blocks_of
+
+```python
+def blocks_of(shown: Shown) -> dict
+```
+
+{letter: [[kind, passage, first line, last line, first number shown],
+...]} of what *shown* shows, a run of lines per passage: which line of
+which passage each address names (owner decision 2026-11-14). The
+passage's own block stands under "".
+
+### noted_of
+
+```python
+def noted_of(req: "Request") -> dict
+```
+
+What the trace notes of what a request shows, beside its text
+(owner decision 2026-11-14): its lines by letter (`blocks_of`), the
+chunks it shows each with the search it was taken from and its place
+there, and that search's number; {} where nothing is traced.
+
 ### sentences_before
 
 ```python

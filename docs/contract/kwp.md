@@ -120,7 +120,11 @@ which `already_done` names in a second warning for such a document. The
 trace is `<document>.trace.jsonl.gz`: its event kinds are told apart by
 `t` (`schema.trace_schema`). An event that reports a model request carries
 the request as it was sent (`input`) and what came back (`output`), and a
-text the requests repeat is a `piece` they refer to. It is read by
+text the requests repeat is a `piece` they refer to. Since 2026-11-14 the
+trace starts with a `run` event (commit, profile, models, rules, flow), numbers
+its requests (`rid`, `of`) and searches (`sid`), and records them as `search`,
+`vector`, `rerank`, `pick`, `finds`, `step`, `outcome`, `retry` and `fetch`
+events. It is read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
 `scripts/harvest_compare.py`, never by a resume.
 
@@ -5904,37 +5908,37 @@ The parameter/, value/, axis/ and slot/ keys, and the sha256 in `document`, make
 
 One event per line; `t` names it and `doc` the document. An event that reports a model request carries it as sent (`input`) and what came back (`output`); a text the requests repeat is a `piece` they refer to. Read by scripts/trace_report.py.
 
-37 record kinds, told apart by `t`:
+47 record kinds, told apart by `t`:
 
 - `plan`: `chars`, `doc`, `image`, `kind`, `origin`, `owner`, `rank`
 - `anchor`: `doc`, `parameter`, `text`
-- `frame`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `missed`, `ms`, `once`, `output`, `pairs`, `prompt_tokens`, `rejected`, `scenarios`, `sent_at`, `sources`, `status`, `years`
-- `rows`: `answered_at`, `asked_at`, `attempt`, `completion_tokens`, `doc`, `input`, `ms`, `once`, `origins`, `output`, `prompt`, `prompt_tokens`, `ranks`, `rows`, `sent_at`, `sources`, `status`
+- `frame`: `answered_at`, `asked_at`, `attempt`, `blocks`, `completion_tokens`, `doc`, `fetched`, `input`, `missed`, `ms`, `of`, `once`, `output`, `pairs`, `picture`, `pieces`, `prompt_tokens`, `rejected`, `rid`, `scenarios`, `sent_at`, `sid`, `sources`, `status`, `years`
+- `rows`: `answered_at`, `asked_at`, `attempt`, `blocks`, `completion_tokens`, `doc`, `fetched`, `input`, `ms`, `of`, `once`, `origins`, `output`, `picture`, `pieces`, `prompt`, `prompt_tokens`, `ranks`, `rid`, `rows`, `sent_at`, `sid`, `sources`, `status`
 - `code`: `attempt`, `code`, `doc`, `error`, `ok`, `stdout`
 - `compute`: `doc`, `fetched`, `kind`, `misquoted`, `numbers`, `outcome`, `reason`, `rejected`, `runs`, `searched`, `taken`, `untaken`
-- `field`: `anchor`, `answered_at`, `asked_at`, `attempt`, `batches`, `completion_tokens`, `doc`, `filled`, `filled_by`, `input`, `ms`, `once`, `open`, `output`, `parameter`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `sent_at`, `shown`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
+- `field`: `anchor`, `answered_at`, `asked_at`, `attempt`, `batches`, `blocks`, `completion_tokens`, `doc`, `fetched`, `filled`, `filled_by`, `input`, `ms`, `of`, `once`, `open`, `output`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `raw_foreign`, `raw_missing`, `reply`, `rid`, `sent_at`, `shown`, `sid`, `slot`, `stage`, `unbacked`, `unbacked_by`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `window`
 - `sweep`: `anchor`, `asked`, `batches`, `combed`, `doc`, `exhausted`, `filled`, `raw_foreign`, `raw_missing`, `retried`, `rows`, `scope`, `slot`, `unbacked`, `unquoted`, `unstated`, `via_base`, `via_table`, `via_target`, `windows`, `withdrawn`
 - `drop`: `attempt`, `batches`, `doc`, `field`, `given`, `quote`, `raw`, `row`, `slot`, `why`, `window`
-- `error`: `answered_at`, `asked_at`, `attempt`, `cause`, `detail`, `doc`, `finish`, `head`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `sent_at`, `slot`, `sources`, `status`, `tail`, `where`, `why`
+- `error`: `answered_at`, `asked_at`, `attempt`, `blocks`, `cause`, `detail`, `doc`, `fetched`, `finish`, `head`, `input`, `kind`, `ms`, `of`, `once`, `output`, `owner`, `picture`, `pieces`, `rid`, `sent_at`, `sid`, `slot`, `sources`, `status`, `tail`, `where`, `why`
 - `coord`: `doc`, `kind`, `owner`, `parameter`, `states`, `tier`, `unit`, `value`
 - `refusal`: `doc`, `owner`, `parameter`, `reason`
 - `places`: `by_axis`, `by_parameter`, `complete`, `doc`, `dropped`, `passages`, `places`, `unread`, `windows`
 - `invalid`: `detail`, `doc`, `kind`, `where`, `why`
 - `order`: `doc`, `first`, `parameters`, `passages`, `scope`
-- `transcribe_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `find_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `docfield_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `coord_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `list_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `names_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `search_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `check_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `follow_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `work_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `names`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `shows`, `step`, `value`
-- `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `coordinate`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
-- `frame_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
-- `review_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
-- `compute_ask`: `answered_at`, `asked_at`, `attempt`, `box`, `completion_tokens`, `doc`, `input`, `kind`, `ms`, `once`, `output`, `owner`, `parameter`, `prompt_tokens`, `sent_at`, `value`
+- `transcribe_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `find_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `docfield_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `coord_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `list_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `names_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `search_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `check_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `follow_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `work_ask`: `answered_at`, `asked`, `asked_at`, `attempt`, `blocks`, `box`, `chunk`, `chunks`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `names`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `shows`, `sid`, `step`, `value`
+- `phrase_ask`: `answered_at`, `asked_at`, `attempt`, `blocks`, `box`, `completion_tokens`, `coordinate`, `doc`, `fetched`, `input`, `kind`, `ms`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `sid`, `value`
+- `frame_ask`: `answered_at`, `asked_at`, `attempt`, `blocks`, `box`, `completion_tokens`, `doc`, `fetched`, `input`, `kind`, `ms`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `sid`, `value`
+- `review_ask`: `answered_at`, `asked_at`, `attempt`, `blocks`, `box`, `completion_tokens`, `doc`, `fetched`, `input`, `kind`, `ms`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `sid`, `value`
+- `compute_ask`: `answered_at`, `asked_at`, `attempt`, `blocks`, `box`, `completion_tokens`, `doc`, `fetched`, `input`, `kind`, `ms`, `of`, `once`, `output`, `owner`, `parameter`, `picture`, `pieces`, `prompt_tokens`, `rid`, `sent_at`, `sid`, `value`
 - `read`: `asked`, `doc`, `failed`, `kind`, `owner`, `parameter`, `unanswered`, `unread`, `values`, `why`
 - `docfield`: `doc`, `parameter`, `values`, `why`
 - `settled`: `base`, `doc`, `settings`, `target`
@@ -5943,5 +5947,15 @@ One event per line; `t` names it and `doc` the document. An event that reports a
 - `seek_probe`: `doc`, `parameter`, `per`, `text`
 - `completion`: `detail`, `doc`, `filled`, `id`, `key`, `matched`, `open`, `outcome`
 - `piece`: `doc`, `id`, `text`
+- `run`: `code`, `doc`, `flow`, `image`, `models`, `profile`, `rules`, `rules_from`, `rules_sha256`, `started_at`
+- `step`: `box`, `chunk`, `coordinate`, `doc`, `ended`, `failed`, `items`, `kind`, `ms`, `node`, `owner`, `parameter`, `passed`, `round`, `started_at`, `turns`, `value`, `way`
+- `search`: `box`, `budget`, `chunk`, `coordinate`, `doc`, `fetch`, `implicit`, `owner`, `parameter`, `reorder`, `round`, `sentences`, `shares`, `sid`, `value`
+- `vector`: `doc`, `excluded`, `ms`, `of_kind`, `places`, `probes`, `sid`, `vectors`
+- `rerank`: `doc`, `drawn`, `draws`, `level`, `model`, `ms`, `order`, `pairs`, `pool_rule`, `rest`, `seed`, `sentences`, `sid`, `upto`
+- `pick`: `doc`, `pieces`, `ranked`, `sid`
+- `finds`: `box`, `chunk`, `coordinate`, `doc`, `entries`, `of`, `owner`, `parameter`, `round`, `stage`, `value`
+- `outcome`: `answered`, `asked`, `box`, `chunk`, `coordinate`, `doc`, `finds`, `follow_ups`, `other_passage`, `owner`, `parameter`, `refusal`, `refused`, `round`, `target`, `value`, `zero`
+- `retry`: `attempt`, `detail`, `doc`, `wait_s`, `what`, `why`
+- `fetch`: `asks`, `doc`, `of`, `pieces`
 
 [Back to the index](../README.md)

@@ -1664,6 +1664,52 @@ character for character. The readers (`trace.lines`, `trace.files`,
 `trace.path_of`) also read a trace an earlier run wrote uncompressed as
 `<document>.trace.jsonl`, and stop where a killed run left the file.
 
+The trace holds what a run needs to be reconstructed (owner decision
+2026-11-14). It opens with one `run` event per document: the code's true commit
+(read from the archive's export-subst stamp by `docpipe/_revision.py`, so a
+tree without a `.git` still names it), the image's revision, the profile, the
+models of the requests, the embedder and the reranker, every rule in effect
+with where each came from, and the flow's drawing. What the editor never
+shows is written blank: a rule that says it is a secret (`secret`, such as
+`llm_api_key`), and a name no rule defines that ends as a secret's name does
+(`settings.SECRET_NAME`); an address keeps its host but not the user and
+password before it. Every other rule is written whole, `max_tokens` too, and
+a long value is a `piece`.
+
+- **Requests.** Every request event carries `rid`, its number within the
+  document. A follow-up, a re-ask with a picture and a re-ask with fetched
+  pieces carry `of`, the `rid` of the request they follow. A request of "Ask
+  the model" also carries `blocks` (a letter to the kind, passage, first and
+  last line and first number shown), `pieces` (kind, passage, piece index,
+  search id and place of each piece it showed) and `sid`, the search that
+  fetched its pieces.
+- **Searches.** A search has a number, `sid`. `search` holds its sentences,
+  what it is for (a box, parameter, coordinate, value or owner), its budget and
+  its shares. `vector` holds, per kind, the places of the vector search up to
+  the rule `trace_vector_places` (default 100) as passage and similarity, the
+  count per kind, the passages left out, whether the sentence's vectors came
+  from the cache or were embedded, and the milliseconds. `rerank` holds the
+  level (passages or pieces), the model, the pool rule, the drawn passages, the
+  draws, `upto`, the hash of the seed, the pool in its new order with its
+  scores, the count of the rest, the pairs scored, kept and waited for, and the
+  milliseconds. `pick` holds the pieces taken, each with its place in the
+  search order and the vector place of its passage.
+- **Finds.** `finds` says what became of each find of an answer: its address
+  and place, whether it was held or why not and, for a coordinate, the answers
+  and states; `stage` is `values`, `coordinate` or `keep`, and `of` names the
+  request.
+- **Flow.** `step` is written for every node that ran: node id, kind, box,
+  where, whether its condition passed it, the way of an "if", the turns and why
+  a round ended (`used_up`, `stop`, `no_draw` or `most`), the items of an
+  "each", whether it failed, when it started and the milliseconds. `outcome`
+  says what a question of "Ask the model" came to: box, target, the requests
+  asked, the refusals by reason, and whether it was answered, its finds, zero,
+  another passage, follow-ups and any refusal.
+- **Asking again.** `retry` is written each time a request, a search, an
+  embedding or a rerank is asked again: what, the attempt, why (`server`,
+  `refused`, `form` or `ours`) and the seconds waited. `fetch` says what an
+  answer asked to see itself and the pieces each ask gave, `of` the request.
+
 Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
 `_harvest_validators` builds one `jsonschema` validator per branch from
@@ -2333,7 +2379,9 @@ once per open question of the compute step, `code` once per sandbox round,
 `coord` and `refusal` per folded tuple or refusal, `invalid` from the schema
 self-check described under Method, `error`, one `<stage>_ask` per answered
 request of each stage (`ASK_STAGES`), and `piece`, a text the requests of the
-document repeat. The events of the field-by-field flow, `plan`, `anchor`,
+document repeat; since 2026-11-14 also `run`, `search`, `vector`, `rerank`, `pick`,
+`finds`, `step`, `outcome`, `retry` and `fetch` (see The harvest file, the stamp
+and the trace). The events of the field-by-field flow, `plan`, `anchor`,
 `frame`, `rows`, `field`, `sweep`, `drop` and `places`, are written no more and
 stay in the schema for traces of before 2026-11-08. An event that reports a model
 request (every `<stage>_ask`, and an `error` of kind `exception`) carries the
@@ -3101,6 +3149,17 @@ a run traces at all: off, every call to record an event returns immediately.
 `trace_requests` says whether an event carries its request and reply;
 `trace_compress`, `trace_time_places` and `trace_piece_min_chars` the file's
 form (owner decision 2026-11-11). Each is read where it is used.
+
+Everything a run does can be read back from its trace, not only what it asked
+(owner decision 2026-11-14: "sodass eigentlich alles rekonstruierbar ist").
+A document's trace starts with its head (`run`: the commit of the code, the
+image, the profile, the models, every rule in effect with what authenticates
+blanked, the drawing of the flow). Every request is numbered in its document
+(`rid`), and one that asks a request again (a follow-up, the same request
+with a picture or with the pieces its answer fetched) names the one it
+follows (`of`). Every search is numbered too (`sid`, `searching`): the
+vector search, the reranker and the pieces taken write their events under
+its number, and the requests that show its pieces name it.
 
 Author: Felix Vossel
 

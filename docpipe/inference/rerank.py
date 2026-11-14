@@ -29,6 +29,12 @@ own), so no length of our own decides what it reads.
 Every value is read when it is used (`docpipe.rules`), so a step of the flow
 may set its own: the model, the pool, the waiting time.
 
+Each order is written to the trace of its document (`rerank`, owner decision
+2026-11-14), under the search it is part of: which passages were the best of
+their kind and which were drawn, each one's score and the order they came
+to, and how many pairs were scored, taken from the scores the threads share
+or waited for.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -37,6 +43,7 @@ import hashlib
 import logging
 import random
 import threading
+import time
 from typing import Callable, Optional, Sequence
 
 from docpipe import rules, usage
@@ -133,6 +140,62 @@ def pool_of(sources: Sequence, size: Optional[int] = None,
     pool = [s for at, s in enumerate(sources) if at in chosen]
     rest = [s for at, s in enumerate(sources) if at not in chosen]
     return pool, rest
+
+
+def drawn_in(sources: Sequence, pool: Sequence, size: Optional[int] = None,
+             rule: str = "rerank_pool") -> list:
+    """The passages of *pool* (`pool_of`) that were drawn: not among the
+    first of their kind in *sources* that the pool takes as its best."""
+    seen: dict = {}
+    best: set = set()
+    for source in sources:
+        kind = source.owner_kind
+        seen[kind] = seen.get(kind, 0) + 1
+        wanted = size if size is not None else pool_size(kind, rule)
+        if seen[kind] <= wanted:
+            best.add((kind, _named(source.owner_id)))
+    return [source for source in pool
+            if (source.owner_kind, _named(source.owner_id)) not in best]
+
+
+def _named(owner_id):
+    """An owner id as the trace writes it: a passage's number, or a piece's
+    passage and place as a list."""
+    return owner_id if isinstance(owner_id, (int, str)) \
+        else tuple(owner_id)
+
+
+def traced(document_id, reranker: "Reranker", probes: list, sources: list,
+           pool: list, rest: list, scored: list, seed: str, drawn: int,
+           upto: int, tally: dict, started: float) -> None:
+    """One order in the trace of its document (`rerank`), under the search
+    it is part of (`trace.in_search`): passages or pieces, the model, how
+    many sentences, the pool's best of each kind and those drawn up to
+    place *upto*, each one's score in the order they came to, the passages
+    left after the pool, the pairs scored now, kept from before or waited
+    for, and the time it took. Never raises."""
+    try:
+        from docpipe.extraction import trace
+        if not trace.enabled():
+            return
+        pieces = bool(pool) and not isinstance(pool[0].owner_id, (int, str))
+
+        def key(source) -> list:
+            named = _named(source.owner_id)
+            return list(named) if pieces else [source.owner_kind, named]
+        trace.in_search(
+            "rerank", document_id, level="pieces" if pieces else "passages",
+            model=reranker.model, pool_rule=reranker.pool_rule,
+            sentences=len(probes),
+            drawn=[key(s) for s in drawn_in(
+                sources, pool, reranker._pool or None, reranker.pool_rule)],
+            draws=drawn, upto=upto,
+            seed=hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16],
+            order=[[*key(source), round(float(score), 4)]
+                   for score, source in scored],
+            rest=len(rest), pairs=dict(tally), ms=trace.ms_since(started))
+    except Exception as exc:                      # pragma: no cover - defensive
+        log.debug("rerank: trace dropped: %s", exc)
 
 
 def document_of(source, image: Optional[dict]):
@@ -247,6 +310,9 @@ class Reranker:
         self.image_of = image_of or (lambda source: None)
         self._document = None
         self.store = store if store is not None else Scores()
+        # What the order running now took from the shared scores: pairs
+        # scored, kept from before, waited for (`traced`).
+        self._tally: Optional[dict] = None
 
     @property
     def base_url(self) -> str:
@@ -286,8 +352,16 @@ class Reranker:
         key = lambda s: (model, pictures, cut, probe, s.owner_kind,
                          s.owner_id)
         by_key = {key(s): s for s in sources}
+        first = True
         while True:
             mine, waits = self.store.claim(document_id, list(by_key))
+            if self._tally is not None:
+                self._tally["scored"] += len(mine)
+                if first:
+                    self._tally["waited"] += len(waits)
+                    self._tally["kept"] += len(by_key) - len(mine) \
+                        - len(waits)
+            first = False
             if mine:
                 missing = [by_key[k] for k in mine]
                 try:
@@ -323,15 +397,23 @@ class Reranker:
         probes = [p for p in probes if p and p.strip()]
         if not probes or not sources:
             return sources
+        started = time.time()
         drawn, upto = drawn_of(self.pool_rule)
         seed = "\x00".join([str(document_id)] + sorted(set(probes)))
         pool, rest = pool_of(sources, self._pool or None, self.pool_rule,
                              drawn, upto, seed)
-        best = [fused(column) for column in zip(
-            *(self.scores(document_id, probe, pool) for probe in probes))]
+        self._tally = {"scored": 0, "kept": 0, "waited": 0}
+        try:
+            best = [fused(column) for column in zip(
+                *(self.scores(document_id, probe, pool) for probe in probes))]
+            tally = dict(self._tally)
+        finally:
+            self._tally = None
         # Equal scores keep the vector search's order (sorted is stable).
-        ranked = [source for _, source in sorted(
-            zip(best, pool), key=lambda pair: -pair[0])]
+        scored = sorted(zip(best, pool), key=lambda pair: -pair[0])
+        ranked = [source for _, source in scored]
+        traced(document_id, self, probes, sources, pool, rest, scored, seed,
+               drawn, upto, tally, started)
         return ranked + rest
 
 

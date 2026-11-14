@@ -3,3 +3,6 @@
 
 # podman reads a CR as part of the line.
 docker/Containerfile text eol=lf
+
+# git archive writes the commit into the code (docpipe/_revision.py).
+docpipe/_revision.py export-subst

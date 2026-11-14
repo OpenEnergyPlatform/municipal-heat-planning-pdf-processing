@@ -77,7 +77,7 @@ from typing import Callable, Optional, Sequence
 import regex
 
 from .. import rules
-from . import archive, fields, lookup
+from . import archive, fields, lookup, trace
 from . import flow as flow_map
 from .fields import (EXHAUSTED, NUMBER, OUT_OF_SLICE, READ, SAID_UNSTATED,
                      UNBACKED)
@@ -162,6 +162,32 @@ def asking_box() -> Optional[str]:
     """The id of the box asking now, None outside a box."""
     what = ASKING.get()
     return what.box if what is not None else None
+
+
+def searched_for() -> dict:
+    """What a search is for, as its trace names it (owner decision
+    2026-11-14): the box asking now, and where it asks about a value's
+    dimension, the field, the dimension, the value and the passage of the
+    value (as its requests name them)."""
+    what = ASKING.get()
+    out: dict = {}
+    if what is None:
+        return out
+    if what.box:
+        out["box"] = what.box
+    scope = what.scope
+    coord = scope.get("coord") if scope is not None \
+        and hasattr(scope, "get") else None
+    if coord is not None:
+        try:
+            claim = coord.row.claim
+            out.update(parameter=coord.read.batch.parameter.uri,
+                       coordinate=coord.slot.name, value=coord.row.label,
+                       owner=((claim.get("at") or {}).get("owner")
+                              or [None, None])[1])
+        except AttributeError:
+            pass
+    return out
 
 
 # {kind of request: the prompt a step of "Ask the model" asks it with},
@@ -752,6 +778,24 @@ def budgeted(ranked: list, budget: int, shares: dict) -> list:
     return [chunk for chunk in ranked if chunk.key in picked]
 
 
+def trace_pick(document_id: int, ranked: list, picked: list) -> None:
+    """The pieces a search takes (`budgeted`) in its trace (`pick`, owner
+    decision 2026-11-14): each with its place in the search's order and the
+    place of its passage among the passages of its kind in the vector
+    search, where the vector search ran in this search."""
+    if not trace.enabled():
+        return
+    state = trace.search_state(document_id)
+    vector = state["vector"] if state is not None else {}
+    at = {chunk.key: place for place, chunk in enumerate(ranked, 1)}
+    out = []
+    for chunk in picked:
+        place = vector.get(tuple(chunk.owner))
+        out.append([*chunk.key, at.get(chunk.key),
+                    place[0] if place else None])
+    trace.in_search("pick", document_id, ranked=len(ranked), pieces=out)
+
+
 def _fold(text: str) -> str:
     """*text* as the check that words stand in a line compares it: its
     spaces flattened, and its case folded unless the rule `match_case`
@@ -812,6 +856,23 @@ def quoted_elsewhere(passages: dict, quote: str) -> tuple:
         if at is not None:
             return alone, at
     return None, None
+
+
+def found_note(index: int, entry, got: Optional["Found"]) -> dict:
+    """One find of an answer as the trace notes what became of it (owner
+    decision 2026-11-14): its place in the answer's list, the address it
+    gave, the passage and lines that address names (and the cell), and
+    whether the code found it elsewhere than in the shown lines."""
+    out: dict = {"i": index}
+    if isinstance(entry, dict) and entry.get("at") is not None:
+        out["at"] = entry.get("at")
+    if got is not None and got.lines:
+        (first, source), (last, _) = got.lines[0], got.lines[-1]
+        out["place"] = [source.owner_kind, source.owner_id, first.number,
+                        last.number] + ([got.cell] if got.cell else [])
+    if got is not None and got.elsewhere:
+        out["elsewhere"] = True
+    return out
 
 
 def resolve(shown: Shown, entry, passages: dict) -> Found:
@@ -1678,8 +1739,12 @@ class Reader:
         number's words name exactly one number, and a find of a field with
         a list names a number of it (`not_an_option`)."""
         held, refused = [], []
-        for entry in reply.get("found") or ():
+        asked = trace.last_request(plan.document_id)
+        notes: list = []
+        for index, entry in enumerate(reply.get("found") or ()):
             if not isinstance(entry, dict):
+                notes.append({"i": index, "held": False,
+                              "why": "not_an_object"})
                 continue
             got = resolve(shown, entry, plan.passages)
             if got.why is None and numeric \
@@ -1698,14 +1763,25 @@ class Reader:
             checked = own_check(got) if got.why is None else None
             if checked is not None:
                 got.why = checked[0]
+            note = found_note(index, entry, got)
+            note["held"] = got.why is None
             if got.why is None:
                 held.append(got)
+                if got.entry is not None:
+                    note["entry"] = got.entry
+                if got.outside:
+                    note["outside"] = True
             else:
+                note["why"] = got.why
                 given = {key: entry.get(key) for key in
                          ("entry", "at", "quote", "words") if key in entry}
                 if checked is not None:
                     given["told"] = checked[1]
                 refused.append((given, got.why))
+            notes.append(note)
+        if notes:
+            trace.event("finds", plan.document_id, of=asked, stage="values",
+                        entries=notes)
         return held, refused
 
     def claim(self, plan: Plan, parameter, got: Found,
@@ -1776,13 +1852,18 @@ class Reader:
         (`budgeted`), ordered once by the reranker with the same
         sentences."""
         sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
-        ranked = self.search_order(plan.document_id, sentences, pieces)
-        picked = budgeted(ranked, budget or self.budget,
-                          self.shares if shares is None else shares)
-        if not sentences or not rules.get("rerank") \
-                or len(picked) < rules.get("rerank_least_pieces"):
-            return picked
-        return self.rerank(plan.document_id, sentences, picked)
+        budget = budget or self.budget
+        shares = self.shares if shares is None else shares
+        with trace.searching(plan.document_id, sentences=sentences,
+                             budget=budget, shares=dict(shares),
+                             **searched_for()):
+            ranked = self.search_order(plan.document_id, sentences, pieces)
+            picked = budgeted(ranked, budget, shares)
+            trace_pick(plan.document_id, ranked, picked)
+            if not sentences or not rules.get("rerank") \
+                    or len(picked) < rules.get("rerank_least_pieces"):
+                return picked
+            return self.rerank(plan.document_id, sentences, picked)
 
     def rerank_left(self, plan: Plan, sentences: list, pieces: list) -> list:
         """*pieces* ordered by the reranker with *sentences* again, for
@@ -1791,7 +1872,9 @@ class Reader:
         if not rules.get("rerank") \
                 or len(pieces) < rules.get("rerank_least_pieces"):
             return pieces
-        return self.rerank(plan.document_id, sentences, pieces)
+        with trace.searching(plan.document_id, sentences=list(sentences),
+                             reorder=len(pieces), **searched_for()):
+            return self.rerank(plan.document_id, sentences, pieces)
 
     def settled(self, plan: Plan, counts: Counts) -> None:
         """What the plan settles for all its values and its own years, as
@@ -2058,8 +2141,10 @@ class Reader:
             blocks = self.show_fetched(plan, shown, pieces)
             payload = {**payload, "passages": {
                 **(payload.get("passages") or {}), **blocks}}
+            from .shows import blocks_of
             again = self._ask(kind, payload, plan.document_id, shape,
-                              example, counts, **noted,
+                              example, counts, **{
+                                  **noted, "blocks": blocks_of(shown)},
                               fetched=len(pieces))
             if not isinstance(again, dict):
                 break
@@ -2249,10 +2334,19 @@ class Reader:
         evidence = shown.evidence()
         answers: list = []
         failed: list = []
-        for entry in finds:
+        # What became of each find, for the trace (owner decision
+        # 2026-11-14): the request whose answer it is, read before any
+        # request a find asks itself (a name, a list entry, a year).
+        asked = trace.last_request(plan.document_id)
+        notes: list = []
+        of_answer: list = []
+        for index, entry in enumerate(finds):
             got = resolve(shown, entry, plan.passages)
+            note = found_note(index, entry, got)
+            notes.append(note)
             if got.why is not None:
                 counts.fail(got.why)
+                note.update(held=False, why=got.why)
                 failed.append({"at": entry.get("at"),
                                "words": entry.get("words"),
                                "why": told(got.why, entry)})
@@ -2260,23 +2354,34 @@ class Reader:
             checked = own_check(got)
             if checked is not None:
                 counts.fail(checked[0])
+                note.update(held=False, why=checked[0])
                 failed.append({"at": entry.get("at"),
                                "words": entry.get("words"),
                                "why": checked[1]})
                 continue
-            answers += self.answers(plan, parameter, row, slot, got, counts)
+            more = self.answers(plan, parameter, row, slot, got, counts)
+            note["answers"] = [{"value": answer.get("value"),
+                                **({"means": list(means)}
+                                   if means is not None else {})}
+                               for answer, means in more]
+            answers += more
+            of_answer += [note] * len(more)
         if not answers:
+            self._noted_finds(plan, asked, read, slot, row, notes)
             return [], False, failed
         rows = [row] + [clone(row) for _ in answers[1:]]
         made = rows[1:]
         held = False
-        for one, (answer, means) in zip(rows, answers):
+        for one, (answer, means), note in zip(rows, answers, of_answer):
             one.claim.pop(f"{slot.name}_state", None)
             got = merge_field([one], evidence, slot,
                               {"answers": {one.label: answer}},
                               window=window, bases=plan.bases,
                               document=plan.document())
-            if one.claim.get(f"{slot.name}_state") == READ:
+            state = one.claim.get(f"{slot.name}_state")
+            note.setdefault("states", []).append(state)
+            note["held"] = note.get("held", False) or state == READ
+            if state == READ:
                 held = True
                 if means is not None:
                     one.claim[f"{slot.name}_means"] = list(means)
@@ -2284,10 +2389,25 @@ class Reader:
                                   self.span_marks, clone)
             for failure in got["failed"]:
                 counts.fail(failure.get("why") or UNBACKED)
+                note.setdefault("failed", []).append(
+                    failure.get("why") or failure.get("reason") or UNBACKED)
                 failed.append({"words": failure.get("raw")
                                or failure.get("given"),
                                "why": failure.get("reason")})
+        self._noted_finds(plan, asked, read, slot, row, notes)
         return made, held, failed
+
+    @staticmethod
+    def _noted_finds(plan: Plan, asked: Optional[int], read: Read, slot,
+                     row: Row, notes: list) -> None:
+        """What became of the finds of one answer about a dimension, in the
+        trace (`finds`)."""
+        if notes:
+            trace.event("finds", plan.document_id, of=asked,
+                        stage="coordinate",
+                        parameter=read.batch.parameter.uri,
+                        coordinate=slot.name, value=row.label,
+                        entries=notes)
 
     def answers(self, plan: Plan, parameter, row: Row, slot, got: Found,
                 counts: Counts) -> list:
@@ -2449,12 +2569,18 @@ class Reader:
         pieces = plan.pieces(numbers)
         places = plan.places_of(numbers)
         out: list = []
+        # What the model asked to see and what each ask gave, for the
+        # trace (owner decision 2026-11-14), with the request it asked in.
+        asked_in = trace.last_request(plan.document_id)
+        noted: list = []
         for ask in more if isinstance(more, list) else ():
             if not isinstance(ask, dict) or not batch:
                 continue
             get = ask.get("get")
             if get not in fetches():
+                noted.append({"get": get, "refused": "not_fetched"})
                 continue
+            before = len(out)
             if get in ("next", "previous"):
                 anchor = batch[-1] if get == "next" else batch[0]
                 at = places.get(anchor.key)
@@ -2473,16 +2599,26 @@ class Reader:
                     wanted = regex.compile(ask.get("pattern") or "",
                                            regex.I)
                 except (regex.error, TypeError, ValueError):
+                    noted.append({**ask, "refused": "bad_pattern"})
                     continue
                 if wanted.pattern:
                     out += self.matching(wanted, pieces, seen)
             elif get == "similar":
                 text = ask.get("text") or ""
                 if text.strip():
-                    out += [c for c in self.search_order(
-                        plan.document_id, [text], pieces)
-                        if c.key not in seen][:self.per_request]
-        return [c for c in dict.fromkeys(out) if c.key not in seen]
+                    with trace.searching(plan.document_id, sentences=[text],
+                                         fetch=True, **searched_for()) as sid:
+                        out += [c for c in self.search_order(
+                            plan.document_id, [text], pieces)
+                            if c.key not in seen][:self.per_request]
+                    ask = {**ask, "sid": sid}
+            noted.append({**ask, "pieces": [
+                list(c.key) for c in out[before:] if c.key not in seen]})
+        given = [c for c in dict.fromkeys(out) if c.key not in seen]
+        if noted:
+            trace.event("fetch", plan.document_id, of=asked_in,
+                        asks=noted, pieces=[list(c.key) for c in given])
+        return given
 
     def matching(self, wanted, pieces: list, seen: set) -> list:
         """The pieces a pattern the model wrote stands in, not shown yet,
@@ -2772,6 +2908,11 @@ def make_order(reranker: Optional[Callable], rank: Optional[Callable]
         if reranker is None or not sentences \
                 or len(chunks) < rules.get("rerank_least_pieces"):
             return list(chunks)
+        with trace.searching(document_id, sentences=sentences,
+                             **searched_for()):
+            return _rerank(document_id, sentences, chunks)
+
+    def _rerank(document_id: int, sentences: list, chunks: list) -> list:
         if getattr(local, "reranker", None) is None:
             local.reranker = reranker()
         if local.reranker is None:
@@ -2786,6 +2927,12 @@ def make_order(reranker: Optional[Callable], rank: Optional[Callable]
         sentences = [s for s in sentences if isinstance(s, str) and s.strip()]
         if rank is None or not sentences or not chunks:
             return list(chunks)
+        with trace.searching(document_id, sentences=sentences,
+                             **searched_for()):
+            return _search_order(document_id, sentences, chunks)
+
+    def _search_order(document_id: int, sentences: list,
+                      chunks: list) -> list:
         by_owner: dict = collections.defaultdict(list)
         for chunk in chunks:
             by_owner[chunk.owner].append(chunk)

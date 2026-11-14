@@ -987,6 +987,12 @@ def trace_schema() -> dict:
               ("filled", "unquoted", "unbacked", "unstated", "raw_missing",
                "raw_foreign", "via_base", "via_target", "via_table")}
     by_field = {"type": "object", "additionalProperties": {"type": "integer"}}
+    # Where a step, a search or a question ran (owner decision 2026-11-14).
+    where = {"box": {"type": "string"},
+             "parameter": {"type": ["string", "null"]},
+             "coordinate": {"type": "string"}, "value": {},
+             "owner": {"type": ["integer", "null"]},
+             "chunk": {"type": "array"}, "round": {"type": "integer"}}
     kinds = {
         "plan": {"rank": {"type": ["integer", "null"]},
                  "origin": {"enum": ["structure", "retrieval", "rest",
@@ -1239,6 +1245,103 @@ def trace_schema() -> dict:
         # format, a passage, a list of options, a picture), written once
         # before the first event that refers to it by `id` (trace.py).
         "piece": {"id": {"type": "string"}, "text": {"type": "string"}},
+        # What follows makes a run readable back step by step (owner
+        # decision 2026-11-14: "sodass eigentlich alles rekonstruierbar
+        # ist"). The head of a document's trace: the commit of the code, the
+        # image, the profile, the models, every rule in effect (what
+        # authenticates blanked) with where it comes from, and the drawing of
+        # the flow; a long one as a piece ({"piece": id}).
+        "run": {"code": {"type": "string"}, "image": {"type": "string"},
+                "profile": {"type": ["string", "null"]},
+                "started_at": {"type": "number"},
+                "models": {"type": "object"}, "rules": {"type": "object"},
+                "rules_from": {"type": "object"},
+                "rules_sha256": {"type": "string"}, "flow": {}},
+        # One step of the drawing that ran (engine.py): its id and kind,
+        # where it ran, what it came to (passed by its condition, the way
+        # an "if" took, the turns of a round and why it ended, the items of
+        # an "each", the error it ended in), when it began, how long it took.
+        "step": {"node": {"type": ["string", "null"]},
+                 "kind": {"type": "string"}, "box": {"type": "string"},
+                 **where, "passed": {"type": "boolean"},
+                 "way": {"type": ["integer", "string"]},
+                 "turns": {"type": "integer"},
+                 "ended": {"enum": ["used_up", "stop", "no_draw", "most"]},
+                 "items": {"type": "integer"},
+                 "failed": {"type": "string"},
+                 "started_at": {"type": "number"}, "ms": {"type": "integer"}},
+        # One search under its number (`sid`, trace.searching): its
+        # sentences and what it was for; the events of its vector search,
+        # reranker and pieces carry the same number.
+        "search": {"sid": {"type": "integer"},
+                   "sentences": {"type": "array",
+                                 "items": {"type": "string"}},
+                   "budget": {"type": "integer"},
+                   "shares": by_field, **where,
+                   "reorder": {"type": "integer"},
+                   "fetch": {"type": "boolean"},
+                   "implicit": {"type": "boolean"}},
+        # Its vector search: of each kind the places with their similarity
+        # ([passage, score], best first, up to `trace_vector_places`), how
+        # many passages of each kind it ranked, the passages it left out as
+        # taken, the sentence vectors kept from before or embedded now.
+        "vector": {"sid": {"type": "integer"}, "probes": {"type": "integer"},
+                   "places": {"type": "object", "additionalProperties": {
+                       "type": "array", "items": {"type": "array"}}},
+                   "of_kind": by_field,
+                   "excluded": {"type": "array", "items": {"type": "array"}},
+                   "vectors": {"type": "object"}, "ms": {"type": "integer"}},
+        # Its reranker, of passages or of pieces: the model, the rule of the
+        # pool, the passages drawn (the rest of the pool is the best of its
+        # kind), how many it draws and up to which place, the draw's seed,
+        # the pool in the order it came to with each one's score, the
+        # passages after the pool, the pairs scored now, kept from before
+        # or waited for, and the time it took.
+        "rerank": {"sid": {"type": "integer"},
+                   "level": {"enum": ["passages", "pieces"]},
+                   "model": {"type": "string"},
+                   "pool_rule": {"type": "string"},
+                   "sentences": {"type": "integer"},
+                   "drawn": {"type": "array", "items": {"type": "array"}},
+                   "draws": {"type": "integer"}, "upto": {"type": "integer"},
+                   "seed": {"type": "string"},
+                   "order": {"type": "array", "items": {"type": "array"}},
+                   "rest": {"type": "integer"}, "pairs": by_field,
+                   "ms": {"type": "integer"}},
+        # The pieces it takes ([kind, passage, piece, place in the search's
+        # order, place of the passage in its kind's vector search]).
+        "pick": {"sid": {"type": "integer"}, "ranked": {"type": "integer"},
+                 "pieces": {"type": "array", "items": {"type": "array"}}},
+        # What became of the finds of one answer (`of` the request): each
+        # one's address, the passage and lines it names, whether it held or
+        # why not, and for a dimension the answers and states it came to.
+        "finds": {"of": {"type": ["integer", "null"]},
+                  "stage": {"enum": ["values", "coordinate", "keep"]},
+                  **where,
+                  "entries": {"type": "array", "items": {"type": "object"}}},
+        # What a question of "Ask the model" came to (general.py).
+        "outcome": {"box": {"type": ["string", "null"]},
+                    "target": {"type": ["string", "null"]}, **where,
+                    "asked": by_field, "refused": by_field,
+                    "answered": {"type": "boolean"},
+                    "finds": {"type": "integer"},
+                    "zero": {"type": "boolean"},
+                    "other_passage": {"type": "boolean"},
+                    "follow_ups": {"type": "integer"},
+                    "refusal": {"type": "string"}},
+        # A request, search, embedding or reranker asked again: what, the
+        # attempt, why (the server's failure, a refusal, a reply out of its
+        # form, our own code) and the wait before it.
+        "retry": {"what": {"type": "string"},
+                  "attempt": {"type": "integer"},
+                  "why": {"enum": ["server", "refused", "form", "ours"]},
+                  "wait_s": {"type": "number"}, "detail": {"type": "string"}},
+        # What an answer asked to see itself (`of` the request): each ask
+        # with the pieces it gave, the search a sentence of its own ran, and
+        # the pieces shown next.
+        "fetch": {"of": {"type": ["integer", "null"]},
+                  "asks": {"type": "array", "items": {"type": "object"}},
+                  "pieces": {"type": "array", "items": {"type": "array"}}},
     }
     # An event that reports a model request carries the request as it was
     # sent and what came back, the reply or the error (`trace.sent` puts the
@@ -1249,7 +1352,19 @@ def trace_schema() -> dict:
     exchange = {"input": {"type": "object"}, "output": {"type": "object"},
                 "asked_at": {"type": "number"}, "sent_at": {"type": "number"},
                 "answered_at": {"type": "number"},
-                "once": {"type": "boolean"}}
+                "once": {"type": "boolean"},
+                # Its number in the document and the request it asks again
+                # (trace.py), its lines by letter ([kind, passage, first
+                # line, last line, first number shown]), the pieces it shows
+                # ([kind, passage, piece, search, place]) and the search they
+                # come from, the pieces fetched or the picture it carries.
+                "rid": {"type": "integer"}, "of": {"type": "integer"},
+                "sid": {"type": "integer"},
+                "blocks": {"type": "object", "additionalProperties": {
+                    "type": "array", "items": {"type": "array"}}},
+                "pieces": {"type": "array", "items": {"type": "array"}},
+                "fetched": {"type": "integer"},
+                "picture": {"type": "string"}}
     for kind, props in kinds.items():
         if "prompt_tokens" in props or kind == "error":
             props.update(exchange)
@@ -1270,6 +1385,24 @@ def trace_schema() -> dict:
         "asked": {"scope"},
         "read": {"failed", "unanswered", "unread", "why"},
         "completion": {"filled", "id", "key", "matched"},
+        # Of the events that make a run readable back, only what names them
+        # is required.
+        "run": {"code", "image", "profile", "started_at", "models", "rules",
+                "rules_from", "rules_sha256", "flow"},
+        "step": {"node", "box", "parameter", "coordinate", "value", "owner",
+                 "chunk", "round", "passed", "way", "turns", "ended",
+                 "items", "failed"},
+        "search": {"sentences", "budget", "shares", "box", "parameter",
+                   "coordinate", "value", "owner", "chunk", "round",
+                   "reorder", "fetch", "implicit"},
+        "vector": {"excluded", "vectors"},
+        "rerank": {"drawn", "draws", "upto", "seed", "rest", "pairs"},
+        "finds": {"box", "parameter", "coordinate", "value", "owner",
+                  "chunk", "round"},
+        "outcome": {"box", "target", "parameter", "coordinate", "value",
+                    "owner", "chunk", "round", "answered", "finds", "zero",
+                    "other_passage", "follow_ups", "refusal"},
+        "retry": {"detail"},
     }
     # Optional on every event: what the run could not always know. Requiring
     # them would refuse a legitimate record from a request that never reached
@@ -1280,7 +1413,12 @@ def trace_schema() -> dict:
              "rejected", "given", "raw", "quote", "via_base", "via_target",
              "via_table", "scope", "withdrawn",
              "batches", "input", "output", "asked_at", "sent_at",
-             "answered_at", "once", "box", "shows"}
+             "answered_at", "once", "box", "shows",
+             # A request's number in its document and the one it follows,
+             # its lines by letter, the pieces it shows with the search they
+             # come from, and the pieces fetched or the picture it carries
+             # (owner decision 2026-11-14).
+             "rid", "of", "sid", "blocks", "pieces", "fetched", "picture"}
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": f"{BASE_ID}/trace-record",

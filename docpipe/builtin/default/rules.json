@@ -505,6 +505,7 @@
     "trace_compress": true,
     "trace_time_places": 3,
     "trace_piece_min_chars": 32,
+    "trace_vector_places": 100,
     "trace_requests": true,
     "show_unparsable": 20,
     "stats_not_asked_states": [

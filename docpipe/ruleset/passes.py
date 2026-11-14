@@ -59,6 +59,13 @@ RULES: tuple = (
          "that many requests share is not stored again and again. A smaller "
          "number saves more space and makes the record harder to read by "
          "eye.", least=1, where="trace.py (_ref)"),
+    rule("trace_vector_places", "flow", "Trace", "whole",
+         "How many places of the vector search the record keeps for each "
+         "kind of passage, each with its similarity, at every search. 0 "
+         "keeps every place. A larger number shows further down the order "
+         "and makes the record larger. Decided on 2026-11-14.",
+         decided="2026-11-14", least=0,
+         where="runner.py (trace_vector)"),
     rule("trace_requests", "flow", "Trace", "switch",
          "On: the event that reports a request also records the request as "
          "it was sent and the answer or error that came back. Off: the "

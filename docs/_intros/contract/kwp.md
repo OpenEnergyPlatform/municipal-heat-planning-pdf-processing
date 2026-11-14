@@ -116,6 +116,10 @@ which `already_done` names in a second warning for such a document. The
 trace is `<document>.trace.jsonl.gz`: its event kinds are told apart by
 `t` (`schema.trace_schema`). An event that reports a model request carries
 the request as it was sent (`input`) and what came back (`output`), and a
-text the requests repeat is a `piece` they refer to. It is read by
+text the requests repeat is a `piece` they refer to. Since 2026-11-14 the
+trace starts with a `run` event (commit, profile, models, rules, flow), numbers
+its requests (`rid`, `of`) and searches (`sid`), and records them as `search`,
+`vector`, `rerank`, `pick`, `finds`, `step`, `outcome`, `retry` and `fetch`
+events. It is read by
 `scripts/trace_report.py` and, for a cost report, by `trace_costs` in
 `scripts/harvest_compare.py`, never by a resume.

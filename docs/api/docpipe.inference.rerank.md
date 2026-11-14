@@ -32,6 +32,12 @@ own), so no length of our own decides what it reads.
 Every value is read when it is used (`docpipe.rules`), so a step of the flow
 may set its own: the model, the pool, the waiting time.
 
+Each order is written to the trace of its document (`rerank`, owner decision
+2026-11-14), under the search it is part of: which passages were the best of
+their kind and which were drawn, each one's score and the order they came
+to, and how many pairs were scored, taken from the scores the threads share
+or waited for.
+
 Author: Felix Vossel
 
 ## Classes
@@ -242,6 +248,31 @@ those at its places after them up to place *upto*, drawn at random as
 in theirs. Without *size* each kind has the number the rules give it
 (`pool_size`); a kind whose number is 0 draws none either, and where
 fewer places are left than *drawn*, all of them are taken.
+
+### drawn_in
+
+```python
+def drawn_in(sources: Sequence, pool: Sequence, size: Optional[int] = None,
+             rule: str = "rerank_pool") -> list
+```
+
+The passages of *pool* (`pool_of`) that were drawn: not among the
+first of their kind in *sources* that the pool takes as its best.
+
+### traced
+
+```python
+def traced(document_id, reranker: "Reranker", probes: list, sources: list,
+           pool: list, rest: list, scored: list, seed: str, drawn: int,
+           upto: int, tally: dict, started: float) -> None
+```
+
+One order in the trace of its document (`rerank`), under the search
+it is part of (`trace.in_search`): passages or pieces, the model, how
+many sentences, the pool's best of each kind and those drawn up to
+place *upto*, each one's score in the order they came to, the passages
+left after the pool, the pairs scored now, kept from before or waited
+for, and the time it took. Never raises.
 
 ### document_of
 

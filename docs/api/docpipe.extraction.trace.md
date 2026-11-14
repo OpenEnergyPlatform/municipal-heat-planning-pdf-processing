@@ -45,6 +45,17 @@ a run traces at all: off, every call to record an event returns immediately.
 `trace_compress`, `trace_time_places` and `trace_piece_min_chars` the file's
 form (owner decision 2026-11-11). Each is read where it is used.
 
+Everything a run does can be read back from its trace, not only what it asked
+(owner decision 2026-11-14: "sodass eigentlich alles rekonstruierbar ist").
+A document's trace starts with its head (`run`: the commit of the code, the
+image, the profile, the models, every rule in effect with what authenticates
+blanked, the drawing of the flow). Every request is numbered in its document
+(`rid`), and one that asks a request again (a follow-up, the same request
+with a picture or with the pieces its answer fetched) names the one it
+follows (`of`). Every search is numbered too (`sid`, `searching`): the
+vector search, the reranker and the pieces taken write their events under
+its number, and the requests that show its pieces name it.
+
 Author: Felix Vossel
 
 ## Functions
@@ -65,6 +76,31 @@ def open_trace(directory, name_of: Callable) -> None
 ```
 
 Start writing traces under `directory`, naming files via `name_of(id)`.
+
+### set_head
+
+```python
+def set_head(maker: Optional[Callable]) -> None
+```
+
+What every document's trace starts with: *maker()* -> {field: value},
+made once a run, the first time a trace is opened (`run`). None: no
+head.
+
+### blanked
+
+```python
+def blanked(values: dict, known: Optional[dict] = None) -> dict
+```
+
+*values* as a trace may hold them: a trace is read by people a key
+must not reach. What is a secret is what the editor never shows: a rule
+that says it is one (`secret`, of *known*, the rules of the run, the
+core's when not given), and a name no rule defines that ends the way a
+secret's name ends (`settings.SECRET_NAME`); a secret that is set is
+written as `BLANKED`, an empty one stays empty. Every other value is
+written whole, but an address without the user and password before its
+host (`rulespage.masked`).
 
 ### compressed
 
@@ -88,6 +124,65 @@ A thread's next request takes the place of one no event reported.
 None where no queue held the request; *once* says the answer is that of
 the same request sent before and nothing was sent
 (`scheduler.Once`).
+
+### last_request
+
+```python
+def last_request(document_id: Optional[int] = None) -> Optional[int]
+```
+
+The number of the request this thread reported last (`rid`), None
+where it reported none, or none of *document_id*.
+
+### searching
+
+```python
+@contextlib.contextmanager
+def searching(document_id: Optional[int], /, **about)
+```
+
+One search of *document_id* under a number of its own (`sid`): its
+`search` event with *about* (its sentences, what asked it), and the
+events of its vector search, reranker and pieces written under the same
+number (`in_search`). A search inside a search of the same document is
+part of it and takes its number. Yields the number, None where nothing
+is traced.
+
+### search_state
+
+```python
+def search_state(document_id: Optional[int] = None) -> Optional[dict]
+```
+
+The search running here (`searching`), None where none runs or it
+is another document's.
+
+### last_search
+
+```python
+def last_search(document_id: Optional[int] = None) -> Optional[int]
+```
+
+The number of the search this thread began last, None where it began
+none, or none of *document_id*.
+
+### in_search
+
+```python
+def in_search(kind: str, document_id: Optional[int], /, **fields) -> None
+```
+
+An event of the search running here, under its number; one written
+where no search of the document runs begins a search of its own
+(`searching`) and is written under that.
+
+### ms_since
+
+```python
+def ms_since(started: float) -> int
+```
+
+Milliseconds since *started* (`time.time()`).
 
 ### event
 

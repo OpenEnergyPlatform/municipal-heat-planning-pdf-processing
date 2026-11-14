@@ -391,6 +391,18 @@ ways the target goes (rounds over the search hits, halves of a request
 whose answer did not fit, what the answer asks to see, the picture of a
 figure, follow-up questions).
 
+### traced_outcome
+
+```python
+def traced_outcome(engine, node: dict, scope, ask, answer, part) -> None
+```
+
+What a question came to, in the trace of its document (`outcome`,
+owner decision 2026-11-14): its box and target, where it ran, the
+requests it asked and the refusals it met by reason, and its answer
+(answered, finds, none, from another passage, follow-ups, why a find
+was refused).
+
 ### retrieve_step
 
 ```python
