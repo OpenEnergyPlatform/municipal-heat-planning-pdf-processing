@@ -605,9 +605,15 @@ marks a trust line is built from are at
   (see Method above); `--write` without `--closure` returns exit code
   2, and `--check` against a missing `vocabulary.json` returns exit
   code 1. `--refresh` against a source that cannot be resolved, an
-  unset token, no release yet, an unreachable host, prints
-  `refresh failed: ...` and returns exit code 2 before rewriting
-  anything.
+  unset token, no release yet, or a status the server refuses (a 404),
+  prints `refresh failed: ...` and returns exit code 2 before rewriting
+  anything. A server that fails (a status of the rule
+  `server_failure_statuses`: 429, 5xx) and a host that gives no reply (no
+  connection, one that broke off, a timeout) are asked again as a model
+  request is (owner decision 2026-11-14): without a limit, or as often as
+  the rule `server_retry_most` says, each time after the wait of a request
+  whose server failed (`runner.retry_wait`), with a line
+  `upstream: ... asked again in N s` in the log (`upstream._asked`).
 - The SHACL check a `--serialize` run makes never raises and
   never withholds the graph: a profile with no refreshed shapes only
   logs a warning naming the missing `--refresh`, and a graph the

@@ -38,8 +38,11 @@ api.github.com: the API allows 60 unauthenticated requests an hour per
 address, and every user of a shared machine shares one address.
 
 Network access goes through urllib with the proxy settings the environment
-already has. A source that cannot be fetched raises. A run against an old
-ontology that believes it has the current one is what this module prevents.
+already has. A source whose server fails or that gives no reply is asked
+again as a model request is, without a limit (owner decision 2026-11-14,
+`_asked`); a source that cannot be fetched otherwise raises. A run against an
+old ontology that believes it has the current one is what this module
+prevents.
 
 Author: Felix Vossel
 
