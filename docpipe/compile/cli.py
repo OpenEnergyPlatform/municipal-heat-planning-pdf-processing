@@ -395,6 +395,11 @@ def _apply(args) -> int:
             graph.write_text(graphfile.dump(said), encoding="utf-8",
                              newline="\n")
             print(f"{graph}: written")
+        # the draft became the spec: it does not lie beside it any more
+        kept = drafting.set_aside(args.draft, args.out, with_it=(
+            () if args.review else (proposing.review_path(args.draft),)))
+        if kept is not None:
+            print(f"{args.draft}: kept in {kept}")
     return 0
 
 

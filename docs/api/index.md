@@ -84,7 +84,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.compile](docpipe.compile.md): An extraction spec drafted from the shapes and the ontology of a graph.
 - [docpipe.compile.\_\_main\_\_](docpipe.compile.__main__.md): `python -m docpipe.compile`.
 - [docpipe.compile.cli](docpipe.compile.cli.md): `docpipe compile`, from the shapes of a graph to an extraction spec. (3 functions)
-- [docpipe.compile.draft](docpipe.compile.draft.md): An extraction spec drafted from shapes and an ontology, and what an existing spec says differently. (1 class, 10 functions)
+- [docpipe.compile.draft](docpipe.compile.draft.md): An extraction spec drafted from shapes and an ontology, and what an existing spec says differently. (1 class, 11 functions)
 - [docpipe.compile.examples](docpipe.compile.examples.md): Proposes, from the corpus, the example a parameter still lacks. (10 functions)
 - [docpipe.compile.shapes](docpipe.compile.shapes.md): What SHACL shapes say about a graph, read into plain records. (2 classes, 2 functions)
 - [docpipe.compile.terms](docpipe.compile.terms.md): What an ontology calls a term and says it means. (1 class, 1 function)
@@ -126,7 +126,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.blocks](docpipe.extraction.blocks.md): The library of a flow's boxes and frames (owner decisions 2026-11-10 evening: the flow is a drawing of boxes and frames, a library to take them from, and the run does exactly what the drawing says). (2 classes, 11 functions)
 - [docpipe.extraction.bricks](docpipe.extraction.bricks.md): The pieces a drawing of the graph puts on its arrows and boxes. (3 classes, 5 functions)
 - [docpipe.extraction.compute](docpipe.extraction.compute.md): The numbers a plan does not print and its printed numbers yield. (2 classes, 13 functions)
-- [docpipe.extraction.conditions](docpipe.extraction.conditions.md): The conditions a flow's boxes and frames are set with, as `docpipe edit` writes them (owner decisions 2026-11-10 evening: the flow is a free drawing, its conditions written in the page, no JSON typed). (4 classes, 10 functions)
+- [docpipe.extraction.conditions](docpipe.extraction.conditions.md): The conditions a flow's boxes and frames are set with, as `docpipe edit` writes them (owner decisions 2026-11-10 evening: the flow is a free drawing, its conditions written in the page, no JSON typed). (4 classes, 12 functions)
 - [docpipe.extraction.contract](docpipe.extraction.contract.md): The core's half of the extraction prompts: where its templates are, which languages they come in and the facts the code fills into them. (8 functions)
 - [docpipe.extraction.engine](docpipe.extraction.engine.md): The run does what the drawing of its flow says (owner decisions 2026-11-10 evening: "Freie Ablaufgrafik"; plan of 2026-11-10, sections 2, 9 and 10). (10 classes, 3 functions)
 - [docpipe.extraction.evaluate](docpipe.extraction.evaluate.md): Holds a harvest against what people decided about it. (1 class, 11 functions)

@@ -68,8 +68,10 @@ from .. import rules as rule_files
 from .. import settings
 from .. import sources as source_files
 from .. import upstream
+from ..extraction import conditions
 from ..extraction import flow as flow_files
 from ..extraction import passflow
+from ..extraction import spec as spec_module
 from ..extraction import trace as trace_files
 from ..profile import available_profiles
 from . import chatpage
@@ -306,6 +308,22 @@ class App:
             return None
         return done.stdout if done.returncode == 0 else None
 
+    def _spec_entries(self) -> Optional[dict]:
+        """The entries the profile's spec adds to a condition's open
+        properties (its value types, the built-in ones among them), None
+        where it has no spec or draft the page can read."""
+        path = self.spec_path or self.draft_path
+        try:
+            data = json.loads(self.files.read(path)) if path else None
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        own = data.get("value_types")
+        return {"value_types": tuple(spec_module.BUILTIN_TYPES) + tuple(
+            name for name in (own if isinstance(own, dict) else {})
+            if name not in spec_module.BUILTIN_TYPES)}
+
     def _need_spec(self) -> Path:
         if self.spec_path is None and self.draft_path is not None:
             return self.draft_path
@@ -403,7 +421,10 @@ class App:
             raise _Refusal(400, "the body must be a JSON object")
         if path.startswith("/api/spec"):
             self._need_spec()
-        answer = handler(query, body)
+        # a condition about the kind of value of a field is checked against
+        # the value types of the profile's spec (`conditions.added`)
+        with conditions.added(self._spec_entries()):
+            answer = handler(query, body)
         # a handler that answers with another status gives (status, object)
         return answer if isinstance(answer, tuple) else (200, answer)
 
@@ -555,8 +576,12 @@ class App:
         said = drafting.graph_file(data)
         if said and not graph.exists():
             self.files.write(graph, graphfile.dump(said).encode("utf-8"))
+        from ..compile import examples as proposing
+        kept = drafting.set_aside(self.draft_path, spec, self.files, with_it=(
+            proposing.review_path(self.draft_path),))
         self.spec_path, self.draft_path = spec, None
-        report.update(draft=False, spec_written=self.shown(spec))
+        report.update(draft=False, spec_written=self.shown(spec),
+                      **({"draft_kept": self.shown(kept)} if kept else {}))
         return report
 
     def _save(self, query, body) -> dict:

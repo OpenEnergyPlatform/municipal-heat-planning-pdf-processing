@@ -23,7 +23,7 @@ docpipe compile diff --shapes shapes.ttl --profile mine
 | `spec` | one property shape becomes one parameter; the closed list, its labels and definitions, the datatype, the number of values are carried over as they stand, and the graph node, as a box and an arrow of a drawing beside the spec |
 | `check` | lists what the draft still lacks; exit 1 while anything is open |
 | `examples` | proposes the missing examples from a processed corpus into a review file; needs `--profile` (its prompt), the corpus and a model |
-| `apply` | carries the examples somebody accepted into the draft, and writes the spec once nothing is missing, with the draft's drawing as a `graph.json` beside it where there is none |
+| `apply` | carries the examples somebody accepted into the draft, and writes the spec once nothing is missing, with the draft's drawing as a `graph.json` beside it where there is none; a draft that became the spec in its own folder is moved, with the proposals file of its examples where that is the default one beside it, to `archive/draft-<YYYYmmdd-HHMMSS>/` in that folder (`set_aside`) and the command prints "DRAFT: kept in FOLDER"; a draft in another folder stays |
 | `diff` | holds a spec somebody wrote by hand against the shapes and changes nothing |
 
 What shapes and ontology cannot state is left open and listed: how a

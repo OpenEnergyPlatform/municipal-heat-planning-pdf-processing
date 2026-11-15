@@ -773,7 +773,7 @@ def reading_condition_problems(condition) -> list:
     return []
 
 
-def _validate_checks(path: str, raw) -> tuple:
+def _validate_checks(path: str, raw, types=None) -> tuple:
     """The field's own checks, each {"name", "refuse", "sentence"}."""
     if raw is None:
         return ()
@@ -790,7 +790,9 @@ def _validate_checks(path: str, raw) -> tuple:
             _fail(where, f"has no key {extra}")
         for key in ("name", "sentence"):
             _validate_text(where, check, key, True)
-        said = conditions.problems(check.get("refuse"))
+        with conditions.added({"value_types":
+                               tuple(types or BUILTIN_TYPES)}):
+            said = conditions.problems(check.get("refuse"))
         if said:
             _fail(f"{where}.refuse", said[0])
         out.append(dict(check))
@@ -981,7 +983,7 @@ def _validate_parameter(path: str, raw, types: Optional[dict] = None
                                           raw.get("vocabulary")),
                      beside=beside, kind=kind,
                      checks=_validate_checks(f"{path}.checks",
-                                             raw.get("checks")))
+                                             raw.get("checks"), types))
 
 
 def load(source: Union[Path, str, dict]) -> Spec:

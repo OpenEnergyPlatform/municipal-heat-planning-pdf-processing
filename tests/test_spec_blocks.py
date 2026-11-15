@@ -231,3 +231,41 @@ def test_a_field_s_own_check_lets_a_value_it_does_not_refuse_hold():
     claims, _model, counts = checked_read(LONGER, [CHECK])
     assert [c for c in claims if c.get("value") == 300]
     assert "check:kurz" not in counts.failed
+
+
+# -- the kind of value of a field in a condition --------------------------------
+
+def kind_is(*names):
+    return {"all": [{"of": "field", "is": "kind", "op": "one_of",
+                     "value": list(names)}]}
+
+
+def test_a_condition_about_the_kind_of_value_takes_the_spec_s_own_types():
+    from docpipe.extraction import conditions
+    check = {**CHECK, "refuse": kind_is("percent")}
+    assert spec_of(dict(FIELD, checks=[check])).by_uri["share"].checks
+    with pytest.raises(spec.SpecError, match="one of"):
+        spec_of(dict(FIELD, checks=[{**CHECK, "refuse": kind_is("prozent")}]))
+    field = next(s for s in conditions.catalogue(added={
+        "value_types": ("float", "percent")}) if s["name"] == "field")
+    kind = next(p for p in field["props"] if p["name"] == "kind")
+    assert kind["choices"] == ["float", "percent"]
+    assert kind["added_by"] == "value_types"
+
+
+def test_where_no_spec_is_known_the_kind_of_value_is_any_name():
+    from docpipe.extraction import conditions
+    assert conditions.problems(kind_is("percent")) == []
+    assert conditions.problems(kind_is("")) != []
+    with conditions.added({"value_types": tuple(spec.BUILTIN_TYPES)}):
+        assert conditions.problems(kind_is("percent")) != []
+        assert conditions.problems(kind_is("float")) == []
+    assert conditions.problems(kind_is("percent")) == []
+
+
+def test_the_run_compares_the_kind_of_value_by_the_type_s_name():
+    from docpipe.extraction import conditions
+    facts = conditions.Facts(lambda subject, prop: {
+        ("field", "kind"): "percent"}[(subject, prop)])
+    assert conditions.holds(kind_is("percent"), facts)
+    assert not conditions.holds(kind_is("float"), facts)

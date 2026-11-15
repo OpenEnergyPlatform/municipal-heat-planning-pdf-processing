@@ -27,7 +27,8 @@ docpipe status     # which stage has left output for which document
 `docpipe init NAME --shapes [FILE]` also writes the draft of an extraction spec
 into the new profile, from the SHACL shapes in FILE or, without one, from a small
 metadata shape the package brings (it needs `docpipe[kg]`). A draft is no spec:
-`docpipe compile` finishes it, and `docpipe extract` stops until it has. The
+`docpipe compile` finishes it, and `docpipe extract` stops until it has; the finished draft is kept in the profile's
+`archive/` folder. The
 editor (`docpipe edit`) makes a profile too, and edits such a draft; `docpipe
 init` writes through the same code, `docpipe/newprofile.py`.
 

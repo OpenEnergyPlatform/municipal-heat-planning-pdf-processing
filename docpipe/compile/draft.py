@@ -26,8 +26,11 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import copy
+import os
 import re
+import time
 import unicodedata
+from pathlib import Path
 from typing import Optional
 
 from ..extraction import spec as spec_module
@@ -379,6 +382,37 @@ def finished(raw: dict) -> dict:
         if parameter.get("example") is None:
             parameter.pop("example", None)
     return out
+
+
+# Where a draft goes once the spec beside it is written from it.
+ARCHIVE = "archive"
+
+
+def set_aside(draft, spec, files=None, with_it=()) -> Optional[Path]:
+    """A draft that became the spec in its own folder no longer lies beside
+    it (owner request 2026-11-15): it goes, with the files *with_it* that
+    belong to it (the proposals of its examples), to
+    `<folder>/archive/draft-<time>/`, since it holds what the spec does not
+    (its notes, the drawing of the graph where the folder had a graph
+    file). A draft in another folder stays where it is. *files* reads,
+    writes and removes as the editor does (`editor.server.Files`), None
+    moves the files directly. Returns the folder it went to, or None."""
+    draft, spec = Path(draft), Path(spec)
+    if not draft.is_file() or draft.resolve().parent \
+            != spec.resolve().parent:
+        return None
+    target = draft.parent / ARCHIVE / f"draft-{time.strftime('%Y%m%d-%H%M%S')}"
+    for one in (draft, *(Path(p) for p in with_it)):
+        if not one.is_file() or one.resolve().parent \
+                != draft.resolve().parent:
+            continue
+        if files is None:
+            target.mkdir(parents=True, exist_ok=True)
+            os.replace(one, target / one.name)
+        else:
+            files.write(target / one.name, files.read(one))
+            files.remove(one)
+    return target
 
 
 def graph_file(raw: dict) -> dict:

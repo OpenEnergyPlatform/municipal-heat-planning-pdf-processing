@@ -14,6 +14,7 @@ import {
 import { isObj, own, type Obj } from '../lib/util';
 import { rich, t, tr } from '../lib/i18n';
 import { CondEditor } from '../flow/Conditions';
+import type { Subject } from '../flow/model';
 import { markDirty, S } from './state';
 import { EntriesTable, type ListRef } from './entries';
 
@@ -373,6 +374,15 @@ function ValueTypeW({ f, obj }: { f: FormField; obj: Obj }) {
     onChange={e => { const v = e.currentTarget.value; edit(() => writeString(obj, f.key, v)); }} />;
 }
 
+/* what a check's condition can be about, the kind of value of a field one of the value types the spec has now,
+   its own ones added on this page among them */
+function checkSubjects(): Subject[] {
+  const types = (S.library.types || []).map(one => one.name);
+  return ((S.library.conditions || []) as Subject[]).map(s => ({
+    ...s, props: s.props.map(p => p.added_by === 'value_types' ? { ...p, choices: types } : p),
+  }));
+}
+
 /* a field's own checks: a name, a condition under which the answer is refused, the sentence it is asked again with */
 function ChecksW({ f, obj }: { f: FormField; obj: Obj }) {
   const edit = useEdit();
@@ -388,7 +398,7 @@ function ChecksW({ f, obj }: { f: FormField; obj: Obj }) {
               <Tooltip label={t('Remove')}><ActionIcon variant="subtle" color="red" aria-label={t('Remove')} onClick={() => drop(i)}><IconX size={16} /></ActionIcon></Tooltip>
             </Group>
             <Text size="sm">{t('refuse when')}</Text>
-            <CondEditor subjects={S.library.conditions || []} only={null} get={() => c.refuse || null}
+            <CondEditor subjects={checkSubjects()} only={null} get={() => c.refuse || null}
               set={cond => edit(() => { c.refuse = cond; })} />
             <AreaBox minRows={2} label={t('asked again with')} value={str(c.sentence)} onText={v => edit(() => { c.sentence = v; })} />
           </Stack>

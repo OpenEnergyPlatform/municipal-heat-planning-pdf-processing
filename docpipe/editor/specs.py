@@ -1145,7 +1145,9 @@ def library(data: dict) -> dict:
                       for name, settings in type_settings(data).items()],
             "dimensions": DIMENSIONS, "unit": UNIT, "check": CHECK,
             "value_type": VALUE_TYPE,
-            "conditions": conditions.catalogue(), "reading": reading}
+            "conditions": conditions.catalogue(added={
+                "value_types": tuple(type_settings(data))}),
+            "reading": reading}
 
 
 def form(profile=None) -> dict:

@@ -29,6 +29,13 @@ kind, a value missing. `holds` evaluates a condition against what the run
 knows at that place (`Facts`), and `sentence` says it as the page shows it
 at its box ("when the quote is shorter than 20 characters").
 
+A property whose entries a spec adds to (`Prop.added_by`: the kind of
+value of a field, whose entries are the spec's value types, owner request
+2026-11-15) takes the entries of the spec where one is known (`added`,
+`catalogue(added=...)`), and any name where none is: a flow is drawn for
+every spec of its profile's line, and the run compares the field's type by
+its name.
+
 "open" as a state of a coordinate means what `--top-up-open` reads again:
 the states of the rule `open_states` (exhausted, unanswered, unbacked
 unless a step says otherwise); "none" that it has no state yet.
@@ -61,6 +68,7 @@ Fields:
 - `label: str`
 - `choices: tuple = ()`
 - `words: Optional[dict] = None`: choice -> what the page shows
+- `added_by: str = ""`: the list of the spec that adds entries to *choices* ("value_types"): its entries where a spec is known (`added`), any name where none is
 
 ### Subject
 
@@ -110,6 +118,27 @@ def open_states() -> tuple
 
 The states "open" stands for (rule `open_states`), as the step that
 runs reads it.
+
+### added
+
+```python
+@contextlib.contextmanager
+def added(entries: Optional[dict])
+```
+
+Check conditions inside against the entries of a spec: *entries*
+maps `Prop.added_by` ("value_types") to all its names, the built-in
+ones among them. None: no spec is known, any name counts.
+
+### choices_of
+
+```python
+def choices_of(prop: Prop, entries: Optional[dict] = None) -> tuple
+```
+
+The entries *prop* is one of: those of the spec for an open property
+where *entries* (else the spec of `added`) names them, its own
+otherwise.
 
 ### row_problem
 
@@ -181,11 +210,12 @@ One row, for the code that writes a condition.
 ### catalogue
 
 ```python
-def catalogue(graph: bool = False) -> list
+def catalogue(graph: bool = False, added: Optional[dict] = None) -> list
 ```
 
 Every thing a condition can be about with its properties, as the
 page offers them: those of a flow, or with *graph* those of a drawing
-of the graph (`GRAPH_SUBJECTS`).
+of the graph (`GRAPH_SUBJECTS`); an open property with the entries of
+the spec *added* names (`choices_of`).
 
 [Back to the index](../README.md)

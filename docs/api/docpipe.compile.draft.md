@@ -111,6 +111,21 @@ def finished(raw: dict) -> dict
 
 The draft as a spec: without the marks only the drafting needs.
 
+### set_aside
+
+```python
+def set_aside(draft, spec, files=None, with_it=()) -> Optional[Path]
+```
+
+A draft that became the spec in its own folder no longer lies beside
+it (owner request 2026-11-15): it goes, with the files *with_it* that
+belong to it (the proposals of its examples), to
+`<folder>/archive/draft-<time>/`, since it holds what the spec does not
+(its notes, the drawing of the graph where the folder had a graph
+file). A draft in another folder stays where it is. *files* reads,
+writes and removes as the editor does (`editor.server.Files`), None
+moves the files directly. Returns the folder it went to, or None.
+
 ### graph_file
 
 ```python

@@ -219,7 +219,8 @@ placeholder base IRI of the graph and one example for each field. Examples are
 proposed by `docpipe compile examples`, which needs a corpus that `docpipe run`
 has processed and a model, and `docpipe compile apply ... --out
 profiles/NAME/extraction_spec.json` writes the spec only from the proposals a
-person accepted. A spec written some other way does not pass `docpipe
+person accepted; once it is the spec, the draft is moved to
+`profiles/NAME/archive/draft-<time>/`. A spec written some other way does not pass `docpipe
 preflight` as it stands: the eight fields have no closed list, so `out:unstated
 is selectable` fails, the profile's `extraction_schema.json` has to be written
 first (`python -m docpipe.extraction.schema NAME --write`), and the graph's

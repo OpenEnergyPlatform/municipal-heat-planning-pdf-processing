@@ -26,6 +26,13 @@ kind, a value missing. `holds` evaluates a condition against what the run
 knows at that place (`Facts`), and `sentence` says it as the page shows it
 at its box ("when the quote is shorter than 20 characters").
 
+A property whose entries a spec adds to (`Prop.added_by`: the kind of
+value of a field, whose entries are the spec's value types, owner request
+2026-11-15) takes the entries of the spec where one is known (`added`,
+`catalogue(added=...)`), and any name where none is: a flow is drawn for
+every spec of its profile's line, and the run compares the field's type by
+its name.
+
 "open" as a state of a coordinate means what `--top-up-open` reads again:
 the states of the rule `open_states` (exhausted, unanswered, unbacked
 unless a step says otherwise); "none" that it has no state yet.
@@ -34,6 +41,8 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import re
 from dataclasses import dataclass
 from typing import Callable, Optional
@@ -123,6 +132,9 @@ class Prop:
     label: str
     choices: tuple = ()
     words: Optional[dict] = None    # choice -> what the page shows
+    # the list of the spec that adds entries to *choices* ("value_types"):
+    # its entries where a spec is known (`added`), any name where none is
+    added_by: str = ""
 
 
 @dataclass(frozen=True)
@@ -154,7 +166,8 @@ SUBJECTS = {s.name: s for s in (
              "members"),
         Prop("name", TEXT, "name"),
         Prop("unit", TEXT, "unit of its values"),
-        Prop("kind", CHOICE, "kind of value", FIELD_KINDS, FIELD_WORDS),
+        Prop("kind", CHOICE, "kind of value", FIELD_KINDS, FIELD_WORDS,
+             added_by="value_types"),
         Prop("rows", NUMBER, "values read of it so far"),
     )),
     Subject("value", "the value", (
@@ -281,6 +294,33 @@ def _rows(condition) -> tuple:
     return joiner, rows
 
 
+# The entries a spec adds to an open property, by `Prop.added_by`, where
+# the code that checks a condition knows the spec (`added`).
+_ADDED: contextvars.ContextVar = contextvars.ContextVar("added", default=None)
+
+
+@contextlib.contextmanager
+def added(entries: Optional[dict]):
+    """Check conditions inside against the entries of a spec: *entries*
+    maps `Prop.added_by` ("value_types") to all its names, the built-in
+    ones among them. None: no spec is known, any name counts."""
+    token = _ADDED.set(dict(entries) if entries else None)
+    try:
+        yield
+    finally:
+        _ADDED.reset(token)
+
+
+def choices_of(prop: Prop, entries: Optional[dict] = None) -> tuple:
+    """The entries *prop* is one of: those of the spec for an open property
+    where *entries* (else the spec of `added`) names them, its own
+    otherwise."""
+    entries = entries if entries is not None else _ADDED.get()
+    if prop.added_by and entries and prop.added_by in entries:
+        return tuple(entries[prop.added_by])
+    return tuple(prop.choices)
+
+
 def row_problem(row, where) -> Optional[str]:
     """Why one row cannot be evaluated at a place that knows the things
     *where* (names of `SUBJECTS`), None where it can."""
@@ -328,10 +368,19 @@ def row_problem(row, where) -> Optional[str]:
     if prop.kind == CHOICE:
         if not isinstance(value, list) or not value:
             return f"{subject.label} · {prop.label}: pick one at least"
-        wrong = [v for v in value if v not in prop.choices]
+        if prop.added_by and _ADDED.get() is None:
+            # no spec known: any name, the spec's own types among them
+            wrong = [v for v in value if not (isinstance(v, str)
+                                              and v.strip())]
+            if wrong:
+                return (f"{subject.label} · {prop.label} is a name, not "
+                        f"{wrong[0]!r}")
+            return None
+        choices = choices_of(prop)
+        wrong = [v for v in value if v not in choices]
         if wrong:
             return (f"{subject.label} · {prop.label} is one of "
-                    f"{', '.join(prop.choices)}, not {wrong[0]!r}")
+                    f"{', '.join(choices)}, not {wrong[0]!r}")
     return None
 
 
@@ -570,17 +619,19 @@ def one(of: str, is_: str, op: Optional[str] = None, value=None,
     return row
 
 
-def catalogue(graph: bool = False) -> list:
+def catalogue(graph: bool = False, added: Optional[dict] = None) -> list:
     """Every thing a condition can be about with its properties, as the
     page offers them: those of a flow, or with *graph* those of a drawing
-    of the graph (`GRAPH_SUBJECTS`)."""
+    of the graph (`GRAPH_SUBJECTS`); an open property with the entries of
+    the spec *added* names (`choices_of`)."""
     return [{"name": s.name, "label": s.label,
              **({"variable": True, "ops": list(FREE[s.name])}
                 if s.name in FREE else {}),
              "props": [{"name": p.name, "kind": p.kind, "label": p.label,
                         "ops": list(OPS[p.kind]),
-                        **({"choices": list(p.choices)} if p.choices
-                           else {}),
+                        **({"choices": list(choices_of(p, added))}
+                           if p.choices else {}),
+                        **({"added_by": p.added_by} if p.added_by else {}),
                         **({"words": dict(p.words)} if p.words else {})}
                        for p in s.props]}
             for s in SUBJECTS.values()

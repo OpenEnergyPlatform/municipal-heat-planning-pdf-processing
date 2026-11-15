@@ -131,3 +131,66 @@ def test_a_draft_is_edited_and_the_spec_written_once_it_lacks_nothing(
     assert json.loads((folder / "graph.json").read_text(encoding="utf-8")
                       )["rules"]["base"] == "https://example.com/kg/"
     assert "draft" not in editor._spec(None, None)
+
+
+def test_a_draft_that_became_the_spec_goes_to_the_archive_whole(project):
+    app(project)._profile_new(None, {"name": "neu", "draft": "bundled"})
+    editor = app(project, "neu")
+    view = editor._spec(None, None)
+    folder = project / "profiles" / "neu"
+    from docpipe.compile import examples as proposing
+    proposals = proposing.review_path(folder / newprofile.DRAFT_FILE)
+    proposals.write_text("[]", encoding="utf-8")
+    done = finished_draft(view["data"])
+    said = editor._save(None, {"data": done, "base": view["base"]})
+    draft = folder / newprofile.DRAFT_FILE
+    assert not proposals.exists()
+    assert said["spec_written"] and not draft.exists()
+    kept = list((folder / "archive").glob(f"draft-*/{newprofile.DRAFT_FILE}"))
+    assert len(kept) == 1 and said["draft_kept"]
+    assert json.loads(kept[0].read_text(encoding="utf-8")) == done
+
+
+def test_compile_apply_sets_aside_a_draft_only_in_the_spec_s_folder(tmp_path):
+    from docpipe.compile import draft as drafting
+    here, there = tmp_path / "here", tmp_path / "there"
+    here.mkdir()
+    there.mkdir()
+    for folder in (here, there):
+        (folder / "d.json").write_text("{}", encoding="utf-8")
+        (folder / "d.review.json").write_text("[]", encoding="utf-8")
+    assert drafting.set_aside(there / "d.json", here / "spec.json") is None
+    assert (there / "d.json").exists()
+    kept = drafting.set_aside(here / "d.json", here / "spec.json",
+                              with_it=(here / "d.review.json",))
+    assert sorted(p.name for p in kept.iterdir()) == ["d.json",
+                                                      "d.review.json"]
+    assert not (here / "d.json").exists()
+    assert kept.parent == here / drafting.ARCHIVE
+
+
+
+def test_the_page_checks_a_condition_against_the_spec_s_value_types(
+        project, monkeypatch):
+    from docpipe.extraction import conditions
+
+    def kind_problems():
+        return [bool(conditions.problems({"all": [
+            {"of": "field", "is": "kind", "op": "one_of", "value": [name]}]}))
+            for name in ("percent", "prozent")]
+
+    app(project)._profile_new(None, {"name": "neu", "draft": "bundled"})
+    editor = app(project, "neu")
+    folder = project / "profiles" / "neu"
+    draft = json.loads((folder / newprofile.DRAFT_FILE).read_text(
+        encoding="utf-8"))
+    draft["value_types"] = {"percent": {"answer": "number",
+                                        "in_quote": "words"}}
+    (folder / newprofile.DRAFT_FILE).write_text(json.dumps(draft),
+                                                encoding="utf-8")
+    seen = []
+    monkeypatch.setattr(editor, "_state",
+                        lambda query, body: seen.append(kind_problems()) or {})
+    assert editor.call("GET", "/api/state", {}, None)[0] == 200
+    assert seen == [[False, True]]      # the spec's own type, a typo
+    assert kind_problems() == [False, False]    # no spec known: any name

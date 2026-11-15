@@ -43,7 +43,8 @@ export interface Library {
      its loops run, what a part does and its templates */
   flow?: string; frames?: string[]; runs?: { value: string; label: string }[]; part?: string; templates?: LibTemplate[];
 }
-export interface Prop { name: string; kind: string; label: string; ops: string[]; choices?: string[]; words?: Record<string, string> }
+/* added_by: the list of the spec that adds entries to the choices (the value types of the kind of value of a field) */
+export interface Prop { name: string; kind: string; label: string; ops: string[]; choices?: string[]; words?: Record<string, string>; added_by?: string }
 /* a thing a condition is about; "variable" takes any variable by its path and every comparison */
 export interface Subject { name: string; label: string; props: Prop[]; variable?: boolean; ops?: string[] }
 export interface FlowNumber {

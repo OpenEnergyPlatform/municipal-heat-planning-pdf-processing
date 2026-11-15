@@ -118,7 +118,11 @@ export async function doSave(confirm: boolean) {
       if (r.draft) S.missing = r.missing || [];
       try { await loadState(); } catch (e) { showError(e); }
       /* the draft lacked nothing: the spec is written, and the tab edits it from now on */
-      if (r.spec_written) { await loadAll(); showInfo(t('The draft lacks nothing: the spec is written to {file}.', { file: r.spec_written })); }
+      if (r.spec_written) {
+        await loadAll();
+        showInfo(t('The draft lacks nothing: the spec is written to {file}.', { file: r.spec_written })
+          + (r.draft_kept ? ' ' + t('The draft is kept in {folder}.', { folder: r.draft_kept }) : ''));
+      }
     }
     S.panelOpen = true;
   });

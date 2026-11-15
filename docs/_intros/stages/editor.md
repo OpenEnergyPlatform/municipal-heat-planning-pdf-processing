@@ -191,8 +191,12 @@ no spec. A note above the form lists what the draft still lacks
 draft whatever it lacks. Once it lacks nothing, Save also writes
 `extraction_spec.json` (`compile.draft.finished`) and, where the profile has no
 `graph.json`, a `graph.json` (`compile.draft.graph_file`), as `docpipe compile
-apply --out` does; from then on the tab edits the spec, and the draft file is
-left where it is.
+apply --out` does; from then on the tab edits the spec. The draft goes, with the
+proposals file of its examples where that is the default one beside it, to
+`archive/draft-<YYYYmmdd-HHMMSS>/` in the profile's folder
+(`compile.draft.set_aside`), since it holds what the spec does not: its notes
+and the drawing of the graph where the profile already had a `graph.json`. The
+page says where the draft is kept. A draft in another folder stays where it is.
 
 ## New profile
 
@@ -746,6 +750,17 @@ answer and its quote. A condition about the answer reads the answer of its own
 item; where no box of that item asked, because it is off or its condition passed
 it by, nothing came back. A row about something there is not yet at its place is
 a problem of the drawing.
+
+The field's "kind of value" is one of the value types of the profile's spec, its
+own (`value_types`) among them, and not only of the four built-in ones
+(`Prop.added_by`, `conditions.added`, `choices_of`). Where the spec is known the
+row is checked against its types: in the spec's own checks of a field
+(`spec._validate_checks`) and in every request of the editor (`server._route`
+holds the spec of the profile for the handler), so the Flow tab offers and
+checks the spec's types. Where none is known, as in a flow file a run reads, any
+name counts: one flow is drawn for every spec of its profile's line, and the run
+compares the field's type by its name. The check editor of the Spec tab offers
+the value types the page has now, those just added included.
 
 An own check is a box that refuses an answer where its condition holds; the
 answer is asked again with its sentence, as often as the question's follow-ups,
