@@ -57,6 +57,22 @@
       }
     },
     {
+      "id": "node_check_missing_fields",
+      "box": "missing_fields"
+    },
+    {
+      "id": "node_check_read_fields",
+      "box": "read_parameters"
+    },
+    {
+      "id": "node_check_append",
+      "box": "replace",
+      "set": {
+        "how": "append",
+        "producer": "node-check-fields"
+      }
+    },
+    {
       "id": "node_check_carry_stamp",
       "box": "carry_stamp"
     }

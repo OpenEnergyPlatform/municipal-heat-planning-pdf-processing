@@ -490,6 +490,19 @@ def _known(req, value, spec):
     return known or OMIT
 
 
+def _not_held(req, value, spec):
+    """The earlier answer of this dimension that the check of the filled
+    nodes found its text does not carry, with the reason it gave (owner
+    decision 2026-11-15); nothing where there is none, so every other
+    request stays word for word as it was."""
+    from .passboxes import not_held
+    slot, _name = _slot(value)
+    if slot is None:
+        return OMIT
+    said = not_held(_claim(req, value), slot.name)
+    return said or OMIT
+
+
 def _label(req, value, spec):
     return value.label if hasattr(value, "label") else OMIT
 
@@ -761,6 +774,10 @@ SHOWS: dict = {
                       "The dimensions a second reading asks, each with its "
                       "question and its list.",
                       _part_of(_second_reading, "fields")),
+    "not_held": ("the earlier answer that did not hold",
+                 "The answer this dimension had, its quote and why the check "
+                 "of the filled nodes found that its text does not carry "
+                 "it; only when a check found so.", _not_held),
     "node_check_node": ("a filled node",
                         "The node as JSON: its value and each filled "
                         "coordinate, with wording and quote.",

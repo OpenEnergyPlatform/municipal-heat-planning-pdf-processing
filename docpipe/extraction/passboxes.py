@@ -44,6 +44,23 @@ log = logging.getLogger(__name__)
 
 UNREADABLE = fields.LISTS_UNREADABLE
 _UNSET = object()
+# What the check of the filled nodes found does not hold, for the request
+# that asks the dimension again (`shows._not_held`): (value, quote,
+# dimension) -> the earlier answer, its quote and the reason. Kept here and
+# not on the row, whose keys the schema of a tuple fixes; each document
+# takes its own out again once it is summed up (`box_summary`).
+NOT_HELD: dict = {}
+
+
+def not_held_key(claim: dict, name: str) -> tuple:
+    return (json.dumps(claim.get("value"), ensure_ascii=False),
+            claim.get("quote") or "", name)
+
+
+def not_held(claim: dict, name: str) -> Optional[dict]:
+    """The earlier answer of *name* the check found does not hold, or
+    None."""
+    return NOT_HELD.get(not_held_key(claim, name))
 
 
 def _plain(raw: str) -> str:
@@ -99,6 +116,7 @@ class Doc:
         self.reviewed = 0
         self.new_uris: list = []
         self.label = ""
+        self.not_held: list = []        # this document's keys of NOT_HELD
 
     @property
     def tuples(self) -> list:
@@ -215,8 +233,10 @@ def box_open(run, doc: Doc, node: dict) -> None:
     work = open_coordinates(doc.tuples, doc.doc_spec)
     if not work:
         doc.stats["nothing open"] += 1
-        # A row a step before made a refusal still has to be written.
-        doc.stop = not doc.demoted
+        # A row a step before made a refusal still has to be written, and a
+        # field without a row may still be read by a step after this one.
+        doc.stop = not doc.demoted and not missing_fields(doc.stored,
+                                                          doc.doc_spec)
         return
     runner.read_to_end()
     doc.open_mode = True
@@ -300,6 +320,9 @@ def box_demote(run, doc: Doc, node: dict) -> None:
 
 
 def box_summary(run, doc: Doc, node: dict) -> None:
+    for key in doc.not_held:
+        NOT_HELD.pop(key, None)
+    doc.not_held = []
     if doc.open_mode:
         doc.stats["open coordinates left"] += sum(
             len(rows) for _p, _s, rows in open_coordinates(doc.tuples,
@@ -439,6 +462,11 @@ def box_node_check(run, doc: Doc, node: dict) -> None:
             if holds:
                 continue
             stats["dimensions that did not hold"] += 1
+            key = not_held_key(row, slot.name)
+            NOT_HELD[key] = {"answer": row.get(slot.name),
+                             "quote": row.get(f"{slot.name}_quote"),
+                             "why": why}
+            doc.not_held.append(key)
             row[f"{slot.name}_state"] = fields.UNBACKED
             flag = f"node_check:{slot.name}"
             if flag not in row["flags"]:
@@ -472,6 +500,39 @@ def box_node_check(run, doc: Doc, node: dict) -> None:
                     "owner": [provenance.get("owner_kind"),
                               provenance.get("owner_id")]})
         doc.demoted.append(row)
+
+
+def missing_fields(stored, spec) -> list:
+    """The parameters a document has no row of and whose last state is not
+    "the document does not say": never asked, or left open by the run
+    (exhausted, unanswered, unbacked). What it does not say stays empty."""
+    have = {row.get("parameter") for row in stored.tuples}
+    last: dict = {}
+    for state in stored.states:
+        last[state.get("parameter")] = state.get("state")
+    return [parameter for parameter in getattr(spec, "parameters", ())
+            if parameter.uri not in have
+            and (last.get(parameter.uri) is None
+                 or last.get(parameter.uri) in fields.OPEN)]
+
+
+def box_missing_fields(run, doc: Doc, node: dict) -> None:
+    """The fields the file has no row of and the document was not found
+    silent on, read now over the whole plan by the step after this one
+    (`box_read_parameters`) and appended. Read from the file as it lies
+    now, so the steps before it are kept."""
+    doc.stored = read_harvest(doc.path)
+    # The rows appended point at the entry the appending enters, not at the
+    # one the replacing before it entered.
+    doc._position = _UNSET
+    missing = missing_fields(doc.stored, doc.doc_spec)
+    if not missing:
+        doc.stats["documents without a missing field (documents)"] += 1
+        doc.stop = True
+        return
+    doc.new_uris = [parameter.uri for parameter in missing]
+    doc.label = passflow.setting(node, "label") or "node-check-fields"
+    doc.stats["missing fields asked (parameters x documents)"] += len(missing)
 
 
 def box_worklist(run, doc, node: dict) -> None:
@@ -831,4 +892,5 @@ ACTS = {
     "clear_stamps": box_clear_stamps, "classify": box_classify,
     "read_parameters": box_read_parameters, "unread": box_unread,
     "places": box_places, "main_flow": box_main_flow,
+    "missing_fields": box_missing_fields,
 }

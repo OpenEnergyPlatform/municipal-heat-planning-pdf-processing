@@ -181,3 +181,48 @@ def test_the_summary_keeps_the_two_kinds_of_gap_apart():
     passboxes.box_summary(run, doc, {})
     assert doc.stats["open coordinates left"] == 1
     assert doc.stats["coordinates the document does not state"] == 1
+
+
+# 8 -----------------------------------------------------------------------
+
+def test_the_dimension_asked_again_is_shown_why_its_answer_did_not_hold():
+    from docpipe.extraction import shows
+    first = SLOTS[0]
+    row = row_of()
+    _run, doc = doc_of([row], check=verdicts(failing=(first.name,)))
+    passboxes.box_node_check(doc.run, doc, {})
+    claim = {"value": 241, "quote": "| Erdgas | 241 |"}
+    said = passboxes.not_held(claim, first.name)
+    assert said == {"answer": "x", "quote": "| Erdgas | 241 |",
+                    "why": "the text says something else"}
+    value = SimpleNamespace(slot=first, name=first.name)
+    req = SimpleNamespace()
+    shows_row = SimpleNamespace(claim=claim)
+    original = shows._row
+    shows._row = lambda req, value: shows_row
+    try:
+        assert shows._not_held(req, value, None) == said
+        other = SimpleNamespace(slot=SLOTS[-1], name=SLOTS[-1].name)
+        if SLOTS[-1] is not first:
+            assert shows._not_held(req, other, None) is shows.OMIT
+        shows_row.claim = {"value": 999, "quote": "| Erdgas | 241 |"}
+        assert shows._not_held(req, value, None) is shows.OMIT
+    finally:
+        shows._row = original
+    doc.open_mode = False
+    doc.document_id = None
+    passboxes.box_summary(doc.run, doc, {})
+    assert passboxes.not_held(claim, first.name) is None
+
+
+# 9 -----------------------------------------------------------------------
+
+def test_a_field_without_a_row_is_read_unless_the_document_is_silent_on_it():
+    a, b, c, d = SPEC.parameters[:4]
+    stored = SimpleNamespace(
+        tuples=[{"parameter": a.uri}],
+        states=[{"parameter": b.uri, "state": fields.SAID_UNSTATED},
+                {"parameter": c.uri, "state": fields.SAID_UNSTATED},
+                {"parameter": c.uri, "state": fields.EXHAUSTED}])
+    spec = SimpleNamespace(parameters=[a, b, c, d])
+    assert passboxes.missing_fields(stored, spec) == [c, d]

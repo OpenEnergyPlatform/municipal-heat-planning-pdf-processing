@@ -273,7 +273,8 @@ PRESETS = {preset.name: preset for preset in (
         VALUE_PLACE + (
             i("field", "field", "field"),
             i("question", "dimension", "question"),
-            i("known", "dimension", "known")),
+            i("known", "dimension", "known"),
+            i("earlier_answer_not_held", "dimension", "not_held")),
         "place", {"to": "dimension", "where": "own"},
         values={"fetch": True, "picture": True},
         settings=(LINES_AROUND,), needs=("coordinate",),
@@ -318,6 +319,7 @@ PRESETS = {preset.name: preset for preset in (
          i("field", "field", "field"),
          i("question", "dimension", "question"),
          i("known", "dimension", "known"),
+         i("earlier_answer_not_held", "dimension", "not_held"),
          i("passages", "hits", "next_chunks")),
         "place", {"to": "dimension", "where": "hits"},
         values={"fetch": True, "picture": True},

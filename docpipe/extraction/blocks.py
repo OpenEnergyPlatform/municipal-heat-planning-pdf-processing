@@ -929,7 +929,19 @@ LIBRARY.update({box.type: box for box in (
           "the reading was not complete, nothing is written and the "
           "document counts as failed (the rule "
           "`parameter_pass_all_or_nothing`).",
-          "passboxes.box_read_parameters", "chain", after=("classify",)),
+          "passboxes.box_read_parameters", "chain",
+          after=("classify", "missing_fields")),
+    _pass("missing_fields", "Fields without a row", "rows", "rows",
+          "The fields a document has no row of are read over the whole "
+          "plan by the next step and appended, where the run left them "
+          "open or never asked them. A field the document was found "
+          "silent on stays empty. The file is read as it lies now, so the "
+          "steps before are kept. To change it: switch the step off, then "
+          "no field without a row is read again; the rule `open_states` "
+          "says which states are open.",
+          "passboxes.missing_fields", "chain", after=("replace",),
+          settings=(Setting("label", TEXT, "name in the log",
+                            help="The name the log gives this step."),)),
     _pass("unread", "Unread passages", "", "rows",
           "The passages that no reading of the harvest answered, and the "
           "passages where a parameter's reading came to nothing, are "

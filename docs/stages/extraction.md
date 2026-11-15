@@ -2053,6 +2053,15 @@ search, since only then can a search bring anything:
    the old row as its claim.
 3. A node no reply came back for is left as it was, and the stamp is not
    carried on for its document.
+4. A dimension asked again is shown why its earlier answer did not hold:
+   the request carries `earlier_answer_not_held` (the answer, its quote and
+   the reason of the check; show `not_held`, kept in `passboxes.NOT_HELD`
+   and not on the row). Every other request is word for word as before.
+5. A field the document has no row of is read over the whole plan and its
+   rows appended (`missing_fields`, then `read_parameters`, then `replace`
+   with `how: append`, producer `node-check-fields`), where its last state
+   is open or it was never asked. A field whose last state is `unstated`
+   stays empty.
 
 The log line of the pass keeps the gaps apart: those the run did not manage
 (coordinates still open) and those the document does not state

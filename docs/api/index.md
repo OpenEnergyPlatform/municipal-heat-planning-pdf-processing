@@ -143,7 +143,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.extraction.identity](docpipe.extraction.identity.md): Which value a harvested row is, and where its passage is now. (7 functions)
 - [docpipe.extraction.lookup](docpipe.extraction.lookup.md): What the model may ask of the rest of one document, resolved by code. (1 class, 10 functions)
 - [docpipe.extraction.mend](docpipe.extraction.mend.md): The two second ways of reading a reply that the owner decided against on 2026-09-12 ("no JSON is repaired") and that a flow may choose again: `repair_replies` (what is taken off or put right in a reply before it is read) and `cut_off` (the complete entries of a list a reply was cut off in). (3 functions)
-- [docpipe.extraction.passboxes](docpipe.extraction.passboxes.md): What each box of a follow-up pass does (`passflow`, library entries with `flow == "pass"` in `blocks`). (2 classes, 24 functions)
+- [docpipe.extraction.passboxes](docpipe.extraction.passboxes.md): What each box of a follow-up pass does (`passflow`, library entries with `flow == "pass"` in `blocks`). (2 classes, 28 functions)
 - [docpipe.extraction.passflow](docpipe.extraction.passflow.md): The follow-up passes as flows of their own (owner decision 2026-11-11). (2 classes, 18 functions)
 - [docpipe.extraction.pipeline](docpipe.extraction.pipeline.md): What turns the claims of a harvest into verified value tuples. (5 classes, 28 functions)
 - [docpipe.extraction.preflight](docpipe.extraction.preflight.md): A profile, everything a corpus run rests on. (11 functions)
