@@ -621,6 +621,12 @@ def _second_reading(value) -> dict:
                            value.slots)
 
 
+def _node_check(value) -> dict:
+    from .runner import _node_check_payload
+    return _node_check_payload(value.row, value.shown, value.parameter,
+                               value.slots)
+
+
 def _draft_field(req, value, spec):
     """A field as the draft of a spec writes it: its name, what it means,
     its type, its units and the entries of its list."""
@@ -755,6 +761,15 @@ SHOWS: dict = {
                       "The dimensions a second reading asks, each with its "
                       "question and its list.",
                       _part_of(_second_reading, "fields")),
+    "node_check_node": ("a filled node",
+                        "The node as JSON: its value and each filled "
+                        "coordinate, with wording and quote.",
+                        _part_of(_node_check, "node")),
+    "node_check_quotes": ("the text around the quotes of a node",
+                          "Each quote of the node with the characters "
+                          "around it in its passage (rule "
+                          "`node_check_context_chars`).",
+                          _part_of(_node_check, "quotes")),
     "draft_field": ("the field as the draft writes it",
                     "A field of a draft spec: its name, what it means, its "
                     "type, its units and the entries of its list.",

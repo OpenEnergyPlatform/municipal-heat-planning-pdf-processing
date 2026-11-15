@@ -214,6 +214,23 @@ def box_review(run, doc: Doc, node: dict) -> None
 
 Each row of the trust levels in the rule read a second time.
 
+### box_node_check
+
+```python
+def box_node_check(run, doc: Doc, node: dict) -> None
+```
+
+Each filled row held against the text around its quotes (owner
+decision 2026-11-15).
+
+A dimension the model says its text does not carry becomes unbacked: it
+is open now, and the steps after this one ask it again with the search
+(`box_open`, `box_take_back`, `box_better`); where that finds nothing
+better it stays unbacked and out of the graph. A value that does not
+hold is read a second time over its passage and the section above it
+(`review.review_row`); where that reading does not agree, the row is a
+refusal for `unbacked`.
+
 ### box_worklist
 
 ```python

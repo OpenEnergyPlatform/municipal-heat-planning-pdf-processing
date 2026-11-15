@@ -279,6 +279,14 @@ RULES: tuple = (
          choices=("unanswered", "unbacked", "exhausted"),
          where="recheck.py (recheck_row)",
          steps=("recheck",)),
+    # -- flow: the check of the filled nodes --
+    rule("node_check_context_chars", "flow", "Check of the nodes", "whole",
+         "How many characters of its passage the check of a filled node "
+         "shows on each side of each quote, the quote among them. The check "
+         "sees the node as JSON and this text, no search and no other "
+         "passage.", least=0,
+         where="runner.py (_node_check_payload)",
+         steps=("node_check",)),
     # -- flow: the second reading --
     rule("review_axis_reasons", "flow", "Second reading", "texts",
          "The reasons in the trust of a row that name a coordinate. The "

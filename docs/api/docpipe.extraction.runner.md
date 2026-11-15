@@ -1524,6 +1524,29 @@ same model and a narrower window, so what it can find is a reading that
 contradicts itself -- not a reading that is wrong about the picture in the
 same way twice.
 
+### around
+
+```python
+def around(text: str, quote: str, chars: int) -> Optional[str]
+```
+
+*chars* characters of *text* on each side of *quote*, the quote among
+them, or None where *text* does not hold it. Found as it stands, else
+with the white space of both folded to single blanks.
+
+### make_node_check_asker
+
+```python
+def make_node_check_asker() -> Callable
+```
+
+check(row, parameter, slots, shown) -> {name: (holds, why)}, or None.
+
+One filled node, held against its own quotes with a small context: does
+the text around each quote carry the value and each coordinate the node
+has? No search and no pieces; what does not hold is asked again with
+them afterwards (`passboxes.box_node_check`).
+
 ### make_completer
 
 ```python

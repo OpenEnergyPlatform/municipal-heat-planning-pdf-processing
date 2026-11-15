@@ -215,7 +215,8 @@ def box_open(run, doc: Doc, node: dict) -> None:
     work = open_coordinates(doc.tuples, doc.doc_spec)
     if not work:
         doc.stats["nothing open"] += 1
-        doc.stop = True
+        # A row a step before made a refusal still has to be written.
+        doc.stop = not doc.demoted
         return
     runner.read_to_end()
     doc.open_mode = True
@@ -303,6 +304,11 @@ def box_summary(run, doc: Doc, node: dict) -> None:
         doc.stats["open coordinates left"] += sum(
             len(rows) for _p, _s, rows in open_coordinates(doc.tuples,
                                                            doc.doc_spec))
+        # What the document does not say, beside what the run did not
+        # manage: the two kinds of gap the report keeps apart.
+        doc.stats["coordinates the document does not state"] += sum(
+            1 for row in doc.tuples for key, state in row.items()
+            if key.endswith("_state") and state == fields.SAID_UNSTATED)
     if doc.document_id is not None:
         doc.lines.append({"kind": "summary",
                           **document_summary(doc.document_id, doc.tuples,
@@ -394,6 +400,78 @@ def box_review(run, doc: Doc, node: dict) -> None:
     run.reviewed += stats["reviewed"]
     if limit and run.reviewed >= limit:
         run.ended = True
+
+
+def box_node_check(run, doc: Doc, node: dict) -> None:
+    """Each filled row held against the text around its quotes (owner
+    decision 2026-11-15).
+
+    A dimension the model says its text does not carry becomes unbacked: it
+    is open now, and the steps after this one ask it again with the search
+    (`box_open`, `box_take_back`, `box_better`); where that finds nothing
+    better it stays unbacked and out of the graph. A value that does not
+    hold is read a second time over its passage and the section above it
+    (`review.review_row`); where that reading does not agree, the row is a
+    refusal for `unbacked`.
+    """
+    from .review import review_row
+    from .topup import owners_of
+    from .trust import REVIEW_AGREE
+    stats = doc.stats
+    for row in list(doc.tuples):
+        parameter = doc.doc_spec.by_uri.get(row.get("parameter"))
+        if parameter is None:
+            stats["unknown parameter kept"] += 1
+            continue
+        slots = [slot for slot in fields.asked_slots(parameter)
+                 if row.get(f"{slot.name}_state") == fields.READ]
+        pairs = owners_of(row, slots)
+        shown = run.deps["owner_sources"](pairs) if pairs else {}
+        verdicts = run.check(row, parameter, slots, shown)
+        if verdicts is None:
+            stats["nodes not answered"] += 1
+            doc.guard = True
+            continue
+        stats["nodes checked"] += 1
+        row.setdefault("flags", [])
+        for slot in slots:
+            holds, why = verdicts[slot.name]
+            if holds:
+                continue
+            stats["dimensions that did not hold"] += 1
+            row[f"{slot.name}_state"] = fields.UNBACKED
+            flag = f"node_check:{slot.name}"
+            if flag not in row["flags"]:
+                row["flags"].append(flag)
+            log.info("   node check: %s %s of %r does not hold: %s",
+                     doc.name, slot.name, row.get("value"), why)
+        holds, why = verdicts["value"]
+        if holds:
+            continue
+        stats["values that did not hold"] += 1
+        log.info("   node check: %s value %r does not hold: %s", doc.name,
+                 row.get("value"), why)
+        reread = run.sources_for(row) or [] if run.sources_for else []
+        flag = (review_row(row, parameter, [fields.value_slot(parameter)],
+                           reread, run.ask) if reread and run.ask else "")
+        if flag == REVIEW_AGREE:
+            stats["values kept by the second reading"] += 1
+            continue
+        if not flag:
+            # No second reading came back: the row stays as it is and the
+            # stamp is not carried on, so a later run checks it again.
+            stats["values not read again"] += 1
+            doc.guard = True
+            continue
+        stats["values fallen"] += 1
+        provenance = row.get("provenance") or {}
+        claim = dict(row)
+        row.clear()
+        row.update({"kind": "refusal", "parameter": parameter.uri,
+                    "reason": fields.UNBACKED, "claim": claim,
+                    "owner": [provenance.get("owner_kind"),
+                              provenance.get("owner_id")]})
+        doc.demoted.append(row)
 
 
 def box_worklist(run, doc, node: dict) -> None:

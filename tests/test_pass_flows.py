@@ -39,7 +39,7 @@ SPEC = load_spec(json.loads(
     (REPO / "profiles" / "kwp" / "extraction_spec.json").read_text(
         encoding="utf-8")))
 NAMES = ("top_up", "top_up_open", "top_up_parameters", "remap", "recheck",
-         "review", "start_at", "example")
+         "review", "node_check", "start_at", "example")
 
 
 @pytest.fixture

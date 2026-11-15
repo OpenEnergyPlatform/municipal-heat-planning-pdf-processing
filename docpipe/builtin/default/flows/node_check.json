@@ -1,0 +1,64 @@
+{
+  "flow": [
+    {
+      "id": "node_check_stored",
+      "box": "stored",
+      "set": {
+        "files": "to_harvest",
+        "trace": "trace-node-check",
+        "archive": "node-check",
+        "label": "node-check"
+      }
+    },
+    {
+      "id": "node_check_check",
+      "box": "ask",
+      "preset": "node_check",
+      "rules": {
+        "temperature": 0,
+        "max_tokens": 2048
+      }
+    },
+    {
+      "id": "node_check_open",
+      "box": "open"
+    },
+    {
+      "id": "node_check_each_dimension",
+      "each": "dimension",
+      "steps": [
+        {
+          "id": "node_check_take_back",
+          "box": "take_back"
+        },
+        {
+          "id": "node_check_better",
+          "box": "better"
+        },
+        {
+          "id": "node_check_derive",
+          "box": "derive"
+        }
+      ]
+    },
+    {
+      "id": "node_check_demote",
+      "box": "demote"
+    },
+    {
+      "id": "node_check_summary",
+      "box": "summary"
+    },
+    {
+      "id": "node_check_replace",
+      "box": "replace",
+      "set": {
+        "producer": "node-check"
+      }
+    },
+    {
+      "id": "node_check_carry_stamp",
+      "box": "carry_stamp"
+    }
+  ]
+}

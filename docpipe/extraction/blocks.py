@@ -169,7 +169,7 @@ QUESTIONS = ("find", "docfield", "coord", "search", "own")
 # run sends.
 REQUESTS = ("find", "docfield", "coord", "search", "phrase", "check",
             "list", "names", "work", "transcribe", "compute", "review",
-            "example", "own")
+            "node_check", "example", "own")
 
 LIBRARY = {box.type: box for box in (
     # -- start ---------------------------------------------------------------

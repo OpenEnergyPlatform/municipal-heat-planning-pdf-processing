@@ -2944,5 +2944,17 @@
  "This profile has a draft of its spec and no spec yet. Saving keeps the draft; once it lacks nothing, saving also writes the spec.": "Dieses Profil hat einen Entwurf seiner Spec und noch keine Spec. Speichern sichert den Entwurf; sobald ihm nichts mehr fehlt, schreibt Speichern auch die Spec.",
  "It lacks nothing: save to write the spec.": "Es fehlt nichts mehr: Speichern schreibt die Spec.",
  "Files written": "Geschriebene Dateien",
- "New profile …": "Neues Profil …"
+ "New profile …": "Neues Profil …",
+ "A filled row held against the text around its quotes: what does not hold is marked unbacked, asked again by the steps after it, and falls where it does not hold again; asked for each row of a pass, from the row alone.": "Eine gefüllte Zeile, gehalten gegen den Text um ihre Zitate: Was nicht trägt, wird als unbacked markiert, von den Schritten danach neu gefragt und fällt, wo es wieder nicht trägt; gefragt für jede Zeile eines Nachlaufs, aus der Zeile allein.",
+ "Each quote of the node with the characters around it in its passage (rule `node_check_context_chars`).": "Jedes Zitat des Knotens mit den Zeichen um es herum in seiner Passage (Regel `node_check_context_chars`).",
+ "For the value and each filled dimension: whether the text around its quote carries it, and why not.": "Für den Wert und jede gefüllte Koordinate: ob der Text um ihr Zitat sie trägt, und warum nicht.",
+ "The node as JSON: its value and each filled coordinate, with wording and quote.": "Der Knoten als JSON: sein Wert und jede gefüllte Koordinate, mit Wortlaut und Zitat.",
+ "a filled node": "ein gefüllter Knoten",
+ "the check of a filled node": "die Prüfung eines gefüllten Knotens",
+ "the check of a node": "die Prüfung eines Knotens",
+ "the text around the quotes of a node": "der Text um die Zitate eines Knotens",
+ "Check of a filled node": "Prüfung eines gefüllten Knotens",
+ "Each filled row of the harvest is checked once: the model sees the row as JSON and the text around each of its quotes, and says for the value and each read dimension whether that text carries it. A dimension that does not hold is marked unbacked and asked again with the search by the steps after it; a value that does not hold is read a second time over its passage and the section above it, and falls where that reading does not agree. To change it: the rule `node_check_context_chars` sets how much text around a quote is shown; the inputs (the node, the text around its quotes) and the prompt `node_check` shape the question.": "Jede gefüllte Zeile der Ernte wird einmal geprüft: Das Modell sieht die Zeile als JSON und den Text um jedes ihrer Zitate und sagt für den Wert und jede gelesene Koordinate, ob dieser Text sie trägt. Eine Koordinate, die nicht trägt, wird als unbacked markiert und von den Schritten danach mit der Suche neu gefragt; ein Wert, der nicht trägt, wird ein zweites Mal über seine Passage und den Abschnitt darüber gelesen und fällt, wo diese Lesung nicht übereinstimmt. So ändern Sie es: Die Regel `node_check_context_chars` legt fest, wie viel Text um ein Zitat gezeigt wird; die Eingaben (der Knoten, der Text um seine Zitate) und der Prompt `node_check` formen die Frage.",
+ "Check of the nodes": "Prüfung der Knoten",
+ "How many characters of its passage the check of a filled node shows on each side of each quote, the quote among them. The check sees the node as JSON and this text, no search and no other passage.": "Wie viele Zeichen ihrer Passage die Prüfung eines gefüllten Knotens auf jeder Seite jedes Zitats zeigt, das Zitat mittendrin. Die Prüfung sieht den Knoten als JSON und diesen Text, keine Suche und keine andere Passage."
 }

@@ -640,6 +640,9 @@ FLOW = SURVEYED
 # the row may legally quote from. Not in SURVEY_PROMPT_IDS, which are the harvest's
 # own prompts: what the review writes into a stamp goes under `review/`.
 REVIEW_PROMPT_ID = "extraction/review"
+# The check of one filled node with a small context: the node as JSON and the
+# text around each of its quotes (owner decision 2026-11-15).
+NODE_CHECK_PROMPT_ID = "extraction/node_check"
 
 # The anchors.json key of the "which quantity is this" question. It belongs to
 # no single parameter, so it cannot be keyed by one.
@@ -3332,6 +3335,132 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     return ask
 
 
+def around(text: str, quote: str, chars: int) -> Optional[str]:
+    """*chars* characters of *text* on each side of *quote*, the quote among
+    them, or None where *text* does not hold it. Found as it stands, else
+    with the white space of both folded to single blanks."""
+    if not text or not quote:
+        return None
+    at = text.find(quote)
+    if at < 0:
+        text = " ".join(text.split())
+        quote = " ".join(quote.split())
+        at = text.find(quote)
+        if at < 0:
+            return None
+    return text[max(0, at - chars):at + len(quote) + chars]
+
+
+def _node_check_payload(row: dict, shown: dict, parameter, slots) -> dict:
+    """The request body of one node check: the node as JSON (its value and
+    each filled coordinate, with wording and quote) and, for each quote, the
+    text around it in the passage it was read in (rule
+    `node_check_context_chars`)."""
+    chars = int(rules.get("node_check_context_chars"))
+    provenance = row.get("provenance") or {}
+    own = (provenance.get("owner_kind"), provenance.get("owner_id"))
+    node = {"field": getattr(parameter, "name", None) or row.get("parameter"),
+            "value": row.get("value"), "value_quote": row.get("quote")}
+    for key in ("value_raw", "unit", "unit_raw"):
+        if row.get(key) not in (None, ""):
+            node[key] = row.get(key)
+    quotes = []
+
+    def context(name: str, quote, source_key) -> None:
+        if not quote:
+            return
+        pair = own
+        if isinstance(source_key, (list, tuple)) and len(source_key) == 2:
+            pair = (source_key[0], source_key[1])
+        source = shown.get(pair) or shown.get(own)
+        text = around(getattr(source, "text", "") or "", quote, chars)             if source is not None else None
+        entry = {"field": name, "quote": quote}
+        if text is not None:
+            entry["around"] = text
+        quotes.append(entry)
+
+    context("value", row.get("quote"), None)
+    for slot in slots:
+        node[slot.name] = row.get(slot.name)
+        for key in ("_raw", "_quote"):
+            if row.get(f"{slot.name}{key}") not in (None, ""):
+                node[f"{slot.name}{key}"] = row.get(f"{slot.name}{key}")
+        context(slot.name, row.get(f"{slot.name}_quote"),
+                row.get(f"{slot.name}_source"))
+    return {"node": node, "quotes": quotes}
+
+
+def make_node_check_asker() -> Callable:
+    """check(row, parameter, slots, shown) -> {name: (holds, why)}, or None.
+
+    One filled node, held against its own quotes with a small context: does
+    the text around each quote carry the value and each coordinate the node
+    has? No search and no pieces; what does not hold is asked again with
+    them afterwards (`passboxes.box_node_check`).
+    """
+    client = _client()
+    step = step_asking("node_checked", "node_check")
+
+    def check(row: dict, parameter, slots, shown: dict) -> Optional[dict]:
+        with in_home("node_check"):
+            return _check(row, parameter, slots, shown)
+
+    def _check(row, parameter, slots, shown) -> Optional[dict]:
+        prompt, inputs = step_parts(step, NODE_CHECK_PROMPT_ID)
+        payload = json.dumps(shows_map.apart(inputs, {"row": SimpleNamespace(
+            row=row, shown=shown, parameter=parameter, slots=slots)}),
+                             ensure_ascii=False, indent=2)
+        names = ["value"] + [slot.name for slot in slots]
+        document_id = (row.get("provenance") or {}).get("document_id")
+        failures = Failures(noted=False)
+        conversation: list = [{"role": "user", "content": payload}]
+        for attempt in failures.attempts():
+            limit = request_room(prompt.text, conversation,
+                                 request_wanted("node_check"))
+            if limit is None:
+                log.warning("   node check: the prompt leaves less than %d "
+                            "answer token(s) in a window of %d -- not sent",
+                            least_answer_tokens(), model_window())
+                break
+            started = time.time()
+            try:
+                response = send_request(
+                    client, prompt.text, conversation, limit,
+                    failures.faults,
+                    reply_grammar("node_check_reply",
+                                  replies.node_check(names)))
+                failures.answered()
+                reply = response.choices[0]
+                _observe_usage(getattr(response, "usage", None))
+                _asked("node_check", document_id, response, attempt=attempt,
+                       started=started,
+                       parameter=getattr(parameter, "uri", None))
+                answer = _loads_object(reply.message.content, document_id,
+                                       "node_check")
+                said = replies.node_check_verdicts(answer, names)
+                if said is not None:
+                    return said
+                failures.fault()
+                cause, correction = _reply_fault(reply, limit)
+                log.warning("   node check attempt %d: %s reply%s",
+                            attempt, cause, _unparsable(reply))
+                if rules.get("retry_shows_reply"):
+                    conversation.append({
+                        "role": "assistant",
+                        "content": reply.message.content or ""})
+                    conversation.append({"role": "user",
+                                         "content": correction})
+            except Exception as exc:
+                log.warning("   node check attempt %d failed: %s",
+                            attempt, exc)
+                if not failures.failed(exc):
+                    break
+        failures.given_up()
+        return None
+
+    return check
+
+
 def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
     """The step that completes a document's rows from outside the document,
     after its fold and its computing (`profiles/<name>/completion.py:
@@ -4805,10 +4934,12 @@ SWITCH_FLOWS = (("recheck", "recheck"), ("remap", "remap"),
                 ("review", "review"), ("top_up", "top_up"),
                 ("top_up_open", "top_up_open"),
                 ("top_up_parameters", "top_up_parameters"),
+                ("node_check", "node_check"),
                 ("start_at", "start_at"))
 # What a flow without a harvest of its own reads: every document of the
 # database, not only those the harvest would read.
-LISTING_FLOWS = ("top_up", "top_up_open", "top_up_parameters")
+LISTING_FLOWS = ("top_up", "top_up_open", "top_up_parameters",
+                 "node_check")
 
 
 def chosen_flow(args) -> tuple:
@@ -4886,6 +5017,17 @@ def log_follow_up(name: str, stats) -> None:
                  "stamp(s) carried forward, %d blocked", stats["rows"],
                  stats["documents"], stats["stamps carried forward"],
                  stats["blocked"])
+    elif name == "node_check":
+        log.info("node-check: %d node(s) checked over %d document(s): %d "
+                 "dimension(s) and %d value(s) did not hold, %d value(s) "
+                 "fell, %d open coordinate(s) asked; gaps left: %d the run "
+                 "did not manage, %d the document does not state",
+                 stats["nodes checked"], stats["documents"],
+                 stats["dimensions that did not hold"],
+                 stats["values that did not hold"], stats["values fallen"],
+                 stats["open coordinates asked"],
+                 stats["open coordinates left"],
+                 stats["coordinates the document does not state"])
     elif name == "top_up_open":
         log.info("top-up-open: %d open coordinate(s) asked over %d "
                  "document(s), %d still open",
@@ -5003,6 +5145,15 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                              "per C or D value: `python "
                              "scripts/curation_list.py OUT --level C` prints "
                              "that count for free")
+    parser.add_argument("--node-check", action="store_true",
+                        help="over the harvest in --out: check every filled "
+                             "row against the text around its quotes, then "
+                             "ask what does not hold and every dimension "
+                             "left open again with the search, reading each "
+                             "document to its end. A value that does not "
+                             "hold is read a second time and falls where "
+                             "that reading does not agree. Needs the model "
+                             "and the index")
     parser.add_argument("--review-limit", type=int, default=None,
                         metavar="N",
                         help="--review only: stop after N values (0 = all; "
@@ -5019,7 +5170,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                              "without a switch) or a follow-up pass of the "
                              "profile (top_up, top_up_open, "
                              "top_up_parameters, remap, recheck, review, "
-                             "start_at). Each switch above only chooses "
+                             "node_check, start_at). Each switch above only chooses "
                              "its flow, so --top-up and --flow top_up are "
                              "the same run")
     parser.add_argument("--spec", type=Path, default=None, metavar="FILE",
@@ -5036,8 +5187,11 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
     args = parser.parse_args(argv)
     if args.top_up_open and (args.top_up or args.top_up_parameters):
         parser.error("--top-up-open is a pass of its own")
+    if args.node_check and (args.top_up or args.top_up_parameters
+                            or args.top_up_open or args.review):
+        parser.error("--node-check is a pass of its own")
     if args.start_at and (args.top_up or args.top_up_parameters
-                          or args.top_up_open):
+                          or args.top_up_open or args.node_check):
         parser.error("--start-at starts a harvest, it is no top-up")
     chosen, problem = chosen_flow(args)
     if problem:
@@ -5355,7 +5509,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
         top_up=chosen in LISTING_FLOWS or chosen not in (
             passflow.MAIN, "start_at", "recheck", "remap", "review"),
         start_at=bool(args.start_at))
-    if args.top_up_parameters or args.top_up_open:
+    if args.top_up_parameters or args.top_up_open or args.node_check:
         from . import topup_parameter
         documents, unharvested = topup_parameter.with_harvest(documents,
                                                               args.out)
@@ -5576,6 +5730,13 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
             lambda docs, step: harvest_documents(
                 docs, step, in_flight=in_flight, stop=STOP,
                 halted=halt.is_set, room=room))
+        if chosen == "node_check":
+            # The check itself, and the second reading of a value that
+            # does not hold (`passboxes.box_node_check`).
+            follow_up.check = make_node_check_asker()
+            follow_up.ask = make_review_asker(args.image_root)
+            follow_up.sources_for = make_review_sources(args.db,
+                                                        content=content)
     install_stop_handler()
     try:
         if follow_up is None:

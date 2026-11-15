@@ -1773,7 +1773,7 @@ model" there (the presets `review` and `example`, targets `review_marks` and
 `example_proposal`); a pass runs such a step by its target's `pass_run`
 (`passflow.act_of`), and `runner.make_review_asker` and
 `compile.cli.ask_for_example` build their first message from the step's inputs. Each switch of the call (`--top-up`, `--top-up-open`,
-`--top-up-parameters`, `--remap`, `--recheck`, `--review`, `--start-at`) runs
+`--top-up-parameters`, `--remap`, `--recheck`, `--review`, `--node-check`, `--start-at`) runs
 its flow, and `--flow NAME` runs any flow by name, `main` being the harvest. The
 Flow tab of [the editor](editor.md) draws and edits them.
 
@@ -1804,6 +1804,7 @@ flowchart TD
 | `--top-up-parameters` | The model, the FAISS index, the embedder, the database | Nothing that is stored: it appends the rows, refusals and state line of each parameter the spec gained, and builds the summary line again | Writes forward the keys of the parameters it appended and of the questions the addition alone moved, and none for a document it did not read completely |
 | `--top-up-open` | The model, the FAISS index, the embedder, the database and the harvest's traces; a document without a trace is skipped | The coordinates a stored row left `exhausted`, `unanswered` or `unbacked` (an answer replaces the block, a coordinate still open keeps its old one), and it appends the rows of the passages the harvest never asked | Moves no key; enters `top-up-open` and `rest` in `producers`, and a document whose list holds `rest` is not read again |
 | `--review` | The model, and the crops for image-attached prompts | Only a row's `flags` | Adds `review/prompt` and `review/model`, compared by nothing |
+| `--node-check` | The model, the FAISS index, the embedder and the database | Every filled row: a dimension that does not hold becomes `unbacked` and is asked again with the search, as is every coordinate left open; a value that does not hold becomes a refusal for `unbacked` where its second reading does not agree | Moves no key; enters `node-check` in `producers` |
 
 `--recheck` (`recheck.py`) reapplies the answer-in-quote rule to the
 wording and quote already on disk: a coordinate whose quote does not
@@ -2022,6 +2023,39 @@ alone, as in `--recheck`.
 Three further scripts, `curation_list.py`, `harvest_compare.py` and
 `trace_report.py`, read a harvest and print or write a report, described
 under Modules; none writes back into one.
+
+### The check of the filled nodes (`--node-check`)
+
+Owner decision 2026-11-15: every filled row of a harvest is checked once,
+with a small context first. The step "Check of a filled node" (preset
+`node_check`, target `node_checked`, `passboxes.box_node_check`) shows the
+model the row as JSON (its value and each read dimension, with wording and
+quote) and, for each quote, the text around it in its passage, as many
+characters on each side as the rule `node_check_context_chars` says (200);
+no search and no other passage (`runner.make_node_check_asker`,
+`runner._node_check_payload`). The model says for the value and for each
+dimension whether that text carries it, and why not.
+
+What holds stays as it is. Only what does not hold is asked again, with the
+search, since only then can a search bring anything:
+
+1. A dimension that does not hold becomes `unbacked`, an open state. The
+   steps after the check (`open`, then `take_back`, `better` and `derive`
+   for each dimension) ask it again as `--top-up-open` asks an open
+   coordinate, reading the document to its end, together with every
+   coordinate the harvest left `exhausted` or `unanswered`. Where nothing
+   better is found it stays `unbacked` and out of the graph.
+2. A value that does not hold is read a second time over its passage and
+   the section above it (`review.review_row`). Where that reading agrees it
+   stays; where it does not, the row becomes a refusal for `unbacked`, with
+   the old row as its claim.
+3. A node no reply came back for is left as it was, and the stamp is not
+   carried on for its document.
+
+The log line of the pass keeps the gaps apart: those the run did not manage
+(coordinates still open) and those the document does not state
+(`unstated`, never asked again). The graph is written and held against its
+shapes afterwards, as after any pass (`--serialize`).
 
 ### Open coordinates and unread passages (`--top-up-open`)
 

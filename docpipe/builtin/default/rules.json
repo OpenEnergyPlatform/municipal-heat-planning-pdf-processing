@@ -580,6 +580,7 @@
     "recheck_keeps_derived": true,
     "recheck_drop_without_quote": true,
     "recheck_dropped_state": "unanswered",
+    "node_check_context_chars": 200,
     "review_axis_reasons": [
       "exhausted",
       "unbacked"

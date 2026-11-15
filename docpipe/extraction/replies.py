@@ -51,6 +51,38 @@ def review(slots) -> dict:
             "additionalProperties": False}
 
 
+def node_check(names) -> dict:
+    """The reply of a node check: for the value and each filled coordinate,
+    whether the text around its quote carries it, and why not."""
+    return {"type": "object", "properties": {"checks": {
+        "type": "array", "items": {
+            "type": "object",
+            "properties": {"field": {"type": "string", "enum": list(names)},
+                           "holds": {"type": "boolean"}, "why": TEXT},
+            "required": ["field", "holds", "why"],
+            "additionalProperties": False}}},
+        "required": ["checks"], "additionalProperties": False}
+
+
+def node_check_verdicts(answer, names) -> Optional[dict]:
+    """{name: (holds, why)} of a node check's reply, or None where the reply
+    is not one: no list of checks, a field it was not asked, a field twice,
+    a field left out, or a verdict that is not true or false."""
+    if not isinstance(answer, dict) or set(answer) != {"checks"}             or not isinstance(answer["checks"], list):
+        return None
+    out: dict = {}
+    for check in answer["checks"]:
+        if not isinstance(check, dict):
+            return None
+        name, holds = check.get("field"), check.get("holds")
+        if name not in names or name in out or not isinstance(holds, bool):
+            return None
+        out[name] = (holds, str(check.get("why") or ""))
+    if set(out) != set(names):
+        return None
+    return out
+
+
 def compute(labels: list, *, more: Optional[dict] = None,
             take: Optional[dict] = None, quote: bool = False) -> dict:
     """The reply of a compute request: a sandbox action, or the number with
