@@ -60,7 +60,7 @@ export function StepSettings({ P, n }: { P: Panel; n: Step }) {
   if (b) {
     const io = ioOf(lib, n);
     out.push(<Text key="says" size="sm">{rich(tr(b.says))}</Text>);
-    out.push(<Text key="takes" size="xs" c="dimmed">{rich(t('takes {takes}, gives {gives} · in the code: `{code}`', { takes: io.takes.length ? io.takes.join(', ') : t('nothing'), gives: io.gives.length ? io.gives.join(', ') : t('nothing'), code: b.code }))}{b.decided ? t(' · decided on {date}', { date: b.decided }) : ''}</Text>);
+    out.push(<Text key="takes" size="xs" c="dimmed">{rich(t('takes {takes}, gives {gives} · in the code: `{code}`', { takes: io.takes.length ? io.takes.join(', ') : t('nothing'), gives: io.gives.length ? io.gives.join(', ') : t('nothing'), code: b.code }))}</Text>);
     if (b.fixed) out.push(<Alert key="fixed" color="gray" variant="light" p="xs"><Text size="sm">{t('Fixed: {fixed}', { fixed: tr(b.fixed) })}</Text></Alert>);
     if (b.marks && b.marks.length) out.push(<Group key="marks" gap={4}>{b.marks.map(m => <Badge key={m} variant="outline" color="gray" title={t('fixed checks, cannot be removed')}>{rich(tr(m))}</Badge>)}</Group>);
     if (asks && P.data.prompts[asks]) {

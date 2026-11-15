@@ -229,8 +229,8 @@ def _means(name: str) -> dict:
                        f"entry its name is, or the entry of each member "
                        f"where its words name a group; empty where they "
                        f"name a group the field takes no members for, or "
-                       f"where the request found they name no such thing "
-                       f"(owner decision 2026-11-09). The graph writes the "
+                       f"where the request found they name no such thing. "
+                       f"The graph writes the "
                        f"row to each of them, an empty list to none."}
 
 
@@ -442,8 +442,8 @@ def _tuple_schema(spec, parameter, drawing=None) -> dict:
                               "last": {"type": "integer", "minimum": 1}},
                "required": ["owner", "line"],
                "additionalProperties": False,
-               "description": "Where the value stands (owner decisions "
-                              "2026-11-08): its passage, the number of its "
+               "description": "Where the value stands: "
+                              "its passage, the number of its "
                               "line there, the cell of a table row, and "
                               "the last line of a value over several lines. "
                               "The quote is that line."},
@@ -458,8 +458,7 @@ def _tuple_schema(spec, parameter, drawing=None) -> dict:
                                     "read off the figure's image: the "
                                     "reading is its evidence in place of a "
                                     "quote, and the flag read_off goes with "
-                                    "it, a reason of level C (owner "
-                                    "decisions 2026-11-05 and 2026-11-07)."},
+                                    "it, a reason of level C."},
         "reading": {"type": "string", "minLength": 1,
                     "description": "What was read off the figure's image: "
                                    "the element, the number and the unit of "
@@ -489,8 +488,8 @@ def _tuple_schema(spec, parameter, drawing=None) -> dict:
             f"coordinate with its own passage, or null where the unit the "
             f"plan prints means none of them: then unit_raw holds it, the "
             f"flag unmapped:unit:<print> goes with it and the value has no "
-            f"value_target (owner decision 2026-11-07: a unit is never "
-            f"refused). Which entry the document's wording means is the "
+            f"value_target: a unit is never refused. "
+            f"Which entry the document's wording means is the "
             f"model's reading; the wording itself is never looked up. "))
         if parameter.converts:
             props["value_target"] = {
@@ -730,9 +729,7 @@ def harvest_schema(spec, drawing=None) -> dict:
                                        "parameter's list, as the plan prints "
                                        "them, counted: read and not "
                                        "converted, until the list grows and "
-                                       "a top-up asks them again (owner "
-                                       "decision 2026-11-07). Absent in a "
-                                       "file written before.",
+                                       "a top-up asks them again.",
                         "additionalProperties": {"type": "integer"}},
                 },
                 "required": ["kind", "document_id", "tuples", "refusals",

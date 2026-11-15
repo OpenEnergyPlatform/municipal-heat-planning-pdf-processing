@@ -226,7 +226,7 @@ def test_a_file_without_a_drawing_or_with_steps_is_refused():
     assert "draws the flow" in refused(data)
     data = default()
     data["steps"] = data.pop("flow")
-    assert "now a drawing" in refused(data)
+    assert 'drawn under "flow"' in refused(data)
 
 
 def test_a_key_written_twice_is_refused():

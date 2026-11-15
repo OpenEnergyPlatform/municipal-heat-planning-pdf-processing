@@ -58,7 +58,7 @@ NOTES = {
     "kind_whole_number": "why a coordinate's answer was not taken",
     "answer_not_in_quote": (
         "A correction names every way of answering that passes in the "
-        "request (owner decision 2026-11-06): the document's own word as "
+        "request: the document's own word as "
         "the wording where the request asks one, the answer as its quote "
         "prints it where the answer is its own wording; \"not stated\" only "
         "where the request offers it, else leaving it out."),
@@ -71,8 +71,7 @@ NOTES = {
     "not_an_address": "a round of the values of a passage, one value each",
     "not_an_address_quote": (
         "the same two sentences where the rule answer_with has an answer "
-        "name its line by its words, not by its address (owner decision "
-        "2026-11-12)"),
+        "name its line by its words, not by its address"),
     "code_failed": "what the model gets back after a calculation",
     "image_for": "labels inside a request",
 }

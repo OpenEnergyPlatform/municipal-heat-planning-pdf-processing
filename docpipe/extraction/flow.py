@@ -1412,8 +1412,8 @@ def parse(raw: str, where, whole: bool, profile=None) -> dict:
         if key not in ("numbers", "flow"):
             raise FlowError(f"{where}: has no key {key!r}; a flow file "
                             f"holds \"numbers\" and \"flow\""
-                            + (" (the list of steps of before 2026-11-11 "
-                               "is now a drawing, \"flow\")"
+                            + (" (the steps of a flow are drawn under "
+                               "\"flow\")"
                                if key == "steps" else ""))
     numbers = data.get("numbers", {})
     if not isinstance(numbers, dict):

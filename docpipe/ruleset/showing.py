@@ -46,14 +46,14 @@ RULES: tuple = (
        "Whether the request for one dimension of a value shows what the "
        "value has already been read as, in the words of the plan. This helps "
        "the model to read the dimension that is left. Off: the request "
-       "shows nothing of it. Decided on 2026-10-22.",
+       "shows nothing of it.",
        steps=("coord", "search"), decided="2026-10-22",
        where="shows.py (_known)"),
     _r("show_example", "flow", SHOWN, "switch",
        "Whether a request shows an example of the reply it asks for. The "
        "example shows the form of the reply with a placeholder wording. Off: "
        "the request shows none, and the model must find the form in the "
-       "instruction alone. Decided on 2026-11-09.",
+       "instruction alone.",
        steps=(
            "docfield", "works", "find", "coord", "quantity", "work_coordinate",
            "search", "last_year", "names", "about", "each value"),
@@ -61,7 +61,7 @@ RULES: tuple = (
     _r("show_empty_example", "flow", SHOWN, "switch",
        "Whether a request that finds values shows, besides the example with "
        "a find, the example of the reply where nothing shown holds a value. "
-       "Off: only the example with a find is shown. Decided on 2026-11-09.",
+       "Off: only the example with a find is shown.",
        steps=("docfield", "works", "find", "coord", "quantity",
               "work_coordinate", "search", "last_year", "names", "about"),
        decided="2026-11-09", where="addressed.py (shown_example)"),
@@ -139,7 +139,7 @@ RULES: tuple = (
        "Whether a line that a vertical bar divides has cells, wherever it "
        "stands: a figure's line, a sentence, a row of a table. The model "
        "then names a cell by its number. Off: only the rows of a table have "
-       "cells. Decided on 2026-11-09.", decided="2026-11-09",
+       "cells.", decided="2026-11-09",
        steps=("split",),
        where="units.py (line_cells)"),
     _r("table_title_lines", "flow", "Chunks", "switch",
@@ -164,7 +164,7 @@ RULES: tuple = (
        "field of numbers reads the chunks of its numbers and any other field "
        "the chunk of its caption. Caption: every field reads the caption. "
        "Numbers: every field reads the chunks of the numbers, each with the "
-       "caption. Decided on 2026-11-09.",
+       "caption.",
        choices=("by_field", "caption", "numbers"), decided="2026-11-09",
        steps=(
            "sentences", "order", "docfield", "find", "beside", "coord",
@@ -174,27 +174,25 @@ RULES: tuple = (
     _r("title_page_first", "flow", "Chunks", "whole",
        "The page whose first lines are tried first as the title page. The "
        "page of the rule \"the page whose first lines are the title page "
-       "when the first page has none\" is tried after it. Decided on "
-       "2026-11-08.", least=1, decided="2026-11-08", steps=("document",),
+       "when the first page has none\" is tried after it.", least=1, decided="2026-11-08", steps=("document",),
        where="units.py (title_page_of)"),
     _r("title_page_with_figures", "flow", "Chunks", "switch",
        "Whether the lines of a figure may be lines of the title page. Off: "
-       "only text and tables are. Decided on 2026-11-08.",
+       "only text and tables are.",
        decided="2026-11-08", steps=("document",),
        where="units.py (title_page_of)"),
     _r("head_only_full_width", "prompts", "How a place in the document is "
        "shown", "switch",
        "Whether only a head line with as many cells as the rows of the "
        "table gives the heading of a column. Off: every head line does, "
-       "also one with fewer cells, such as a heading over several columns. "
-       "Decided on 2026-11-03.", decided="2026-11-03",
+       "also one with fewer cells, such as a heading over several columns.", decided="2026-11-03",
        steps=("docfield", "works", "find", "each value"),
        where="units.py (Passage.head_of)"),
     # -- flow: giving up on an answer that did not fit ---------------------
     _r("split_cut_off", "flow", "Asking again and giving up", "switch",
        "Whether a request whose answer was cut off at the limit is asked "
        "again in two halves. A cut-off answer is never read. Off: such a "
-       "request is a hole at once. Decided on 2026-09-12.",
+       "request is a hole at once.",
        decided="2026-09-12", steps=("find", "docfield"),
        where="addressed.py (Reader.halves)"),
     _r("split_by", "flow", "Asking again and giving up", "choice",
@@ -220,7 +218,7 @@ RULES: tuple = (
        "begins with one of them. A sentence that ends in a question mark is "
        "a question as well. A question is counted by the run, and is "
        "replaced by the sentence of the field where the rule that allows "
-       "questions says no. Decided on 2026-11-08.",
+       "questions says no.",
        empty=True, decided="2026-11-08", steps=("phrase",),
        where="addressed.py (is_question)"),
     _r("rerank_least_pieces", "flow", "Search", "whole",
@@ -248,13 +246,13 @@ RULES: tuple = (
     _r("beside_pieces", "flow", "Search", "whole",
        "How many chunks before and after the chunk of the value the step "
        "that shows the neighbours shows. 1 shows the chunk before and the "
-       "chunk after. Decided on 2026-11-09.", least=0,
+       "chunk after.", least=0,
        decided="2026-11-09", steps=("beside",),
        where="addressed.py (Plan.beside)"),
     _r("reuse_stored_order", "flow", "Search", "switch",
        "Whether the order of the chunks that an earlier run stored is "
        "used again where the fields and the chunks are the same. Off: the "
-       "chunks are ordered anew in every run. Decided on 2026-11-02.",
+       "chunks are ordered anew in every run.",
        decided="2026-11-02", steps=("sentences", "order"),
        where="addressed.py (Orders)"),
     _r("pattern_timeout_s", "flow", "Search", "number",
@@ -287,7 +285,7 @@ RULES: tuple = (
        "How the words of a find are read where they print several years. "
        "Span ends: a span such as \"2020 bis 2030\" is its first and last "
        "year, any other words their first year. First: always the first "
-       "year. Decided on 2026-11-07.",
+       "year.",
        choices=("span_ends", "first"), decided="2026-11-07",
        steps=("coord", "search"), where="addressed.py (answers)"),
     _r("after_follow_ups", "spec", "What a quote must show", "choice",
@@ -308,7 +306,7 @@ RULES: tuple = (
        where="units.py (short_quote, Shown.around)"),
     _r("quote_may_span_lines", "spec", "What a quote must show", "switch",
        "Whether a quote may stand over several of the lines a request "
-       "showed. Off: a quote must stand in one line. Decided on 2026-11-05.",
+       "showed. Off: a quote must stand in one line.",
        decided="2026-11-05",
        steps=("docfield", "works", "find", "coord", "quantity", "search",
               "last_year", "work_coordinate"),
@@ -318,26 +316,25 @@ RULES: tuple = (
        "Whether a list longer than the number of entries shown with their "
        "meaning, whose entries belong to groups, is asked in two steps: the "
        "group first, then the entry. Off: such a list is shown by the names "
-       "of its entries in one step. Decided on 2026-11-08.",
+       "of its entries in one step.",
        decided="2026-11-08", steps=LISTED + ("each field", "each value"),
        where="addressed.py (listing)"),
     _r("group_without_entries", "flow", "Lists", "choice",
        "What happens where the group a find names has no entry in the "
        "list. All entries: the whole list is shown. None: no entry is "
-       "chosen. Decided on 2026-11-08.", choices=("all_entries", "none"),
+       "chosen.", choices=("all_entries", "none"),
        decided="2026-11-08", steps=LISTED,
        where="addressed.py (Reader._entry)"),
     _r("group_picks_taken", "flow", "Lists", "choice",
        "Which groups of a list asked in two steps count where the answer "
        "names several. First: the first group named. All: every group "
-       "named, and the entry is chosen among the entries of all of them. "
-       "Decided on 2026-11-08.", choices=("first", "all"),
+       "named, and the entry is chosen among the entries of all of them.", choices=("first", "all"),
        decided="2026-11-08", steps=LISTED,
        where="addressed.py (Reader._entry)"),
     _r("same_name_two_entries", "spec", "Lists and wording", "switch",
        "Whether two equal names from two works are two entries of the "
        "document's list, told apart by the work in brackets. Off: equal "
-       "names are one entry. Decided on 2026-11-08.", decided="2026-11-08",
+       "names are one entry.", decided="2026-11-08",
        steps=("works", "coord", "search", "names", "work_coordinate"),
        where="addressed.py (Names.add)"),
     _r("names_list_order", "flow", "Lists", "choice",
@@ -360,32 +357,29 @@ RULES: tuple = (
        "What makes two finds of a request and of its follow-up requests one "
        "find: the same line, the same cell, and the same words (without "
        "regard to capital letters). Take out a part and finds that differ "
-       "only in it count as one. Decided on 2026-11-05.",
+       "only in it count as one.",
        choices=("line", "cell", "words"), decided="2026-11-05",
        steps=("docfield", "works", "find"), where="addressed.py (joined)"),
     _r("work_find_covers_piece", "flow", "Lists", "switch",
        "Whether a line of another work in a heading, in a table's title or "
        "head or in a figure's caption counts for the whole chunk it is "
-       "shown with. Off: it counts for that line only. Decided on "
-       "2026-11-09.", decided="2026-11-09", steps=("works",),
+       "shown with. Off: it counts for that line only.", decided="2026-11-09", steps=("works",),
        where="addressed.py (covered)"),
     _r("quantity_words", "prompts", "How a place in the document is shown",
        "texts",
        "The words of the question that asks what a number is, in their "
        "order: its own designation, the heading of its column and its unit. "
-       "A part that is left out is not asked with. Decided on 2026-11-08.",
+       "A part that is left out is not asked with.",
        choices=("what", "head", "unit"), decided="2026-11-08",
        steps=("quantity",), where="addressed.py (quantity)"),
     _r("quantity_joiner", "prompts", "How a place in the document is shown",
        "text",
-       "What joins the words of the question that asks what a number is. "
-       "Decided on 2026-11-08.", decided="2026-11-08", steps=("quantity",),
+       "What joins the words of the question that asks what a number is.", decided="2026-11-08", steps=("quantity",),
        where="addressed.py (quantity)"),
     _r("document_name_fallback", "prompts", "How a place in the document is "
        "shown", "switch",
        "Whether the first line of the title page names the document where "
        "the profile gives no name of it to the request for the search "
-       "sentence. Off: the request says nothing of the document. Decided on "
-       "2026-11-09.", decided="2026-11-09", steps=("phrase",),
+       "sentence. Off: the request says nothing of the document.", decided="2026-11-09", steps=("phrase",),
        where="shows.py (_about_document)"),
 )

@@ -15,16 +15,14 @@ RULES = (
          "A sum is asked for over the parts of one of these dimensions when "
          "the plan does not print it, and a share looks for its whole over "
          "the same dimensions but the area. Add a dimension to have its "
-         "sums and shares asked for, and remove one to stop it. Decided on "
-         "2026-11-07.",
+         "sums and shares asked for, and remove one to stop it.",
          decided="2026-11-07", steps=("compute",),
          where="profiles/kwp/compute.py"),
     rule("computed_same_once", "flow", "Calculation", "choice",
          "On: two calculated rows that come to the same number with the "
          "same coordinates, whichever questions came to it, are one "
          "statement, and one row of it stays. Off: every calculated row "
-         "stays, however often the same number was worked out. Decided on "
-         "2026-11-03.", choices=("on", "off"),
+         "stays, however often the same number was worked out.", choices=("on", "off"),
          decided="2026-11-03", steps=("compute",),
          where="profiles/kwp/compute.py (same)"),
     rule("compute_least_parts", "flow", "Calculation", "whole",
@@ -65,14 +63,14 @@ RULES = (
     rule("share_ask_without_whole", "flow", "Calculation", "switch",
          "On: a share is asked for even where no total that fits it is "
          "known; the request may find its whole in the plan and take it. "
-         "Off: such a share is not asked for. Decided on 2026-11-05.",
+         "Off: such a share is not asked for.",
          decided="2026-11-05", steps=("compute",),
          where="profiles/kwp/compute.py (open_shares)"),
     rule("compute_mixed_qualifier", "flow", "Calculation", "text",
          "The precision a worked-out number gets when the numbers it is "
          "worked out from are printed with different precision, such as one "
          "with \"ca.\" and one without. It is an entry of the list of the "
-         "qualifier. Decided on 2026-11-06.",
+         "qualifier.",
          decided="2026-11-06", steps=("compute",),
          where="profiles/kwp/compute.py (qualified)"),
     rule("frame_axes", "spec", "Frame", "texts",

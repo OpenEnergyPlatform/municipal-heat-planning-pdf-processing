@@ -225,8 +225,7 @@ LIBRARY = {box.type: box for box in (
                           help="On: every chunk of a table starts with the "
                           "table's title and head, so a row is always read "
                           "under its column headings. Off: only the first "
-                          "chunk of the table has them. Decided on "
-                          "2026-11-02.",
+                          "chunk of the table has them.",
                           rule="split_table_head"),
                   Setting("caption", SWITCH, "a figure's caption goes with "
                           "each of its chunks", True,
@@ -240,8 +239,7 @@ LIBRARY = {box.type: box for box in (
                           help="On: the caption of a figure is a chunk of "
                           "its own and its numbers are chunks of their "
                           "own, each shown with the caption. Off: the "
-                          "lines of a figure are cut like any other lines. "
-                          "Decided on 2026-11-09.",
+                          "lines of a figure are cut like any other lines.",
                           rule="split_figure_numbers"),
                   Setting("headings", NUMBER, "headings shown above a line",
                           number="headings")),
@@ -384,7 +382,7 @@ LIBRARY = {box.type: box for box in (
         "the answer is its target: a variable, values of a field of the "
         "Spec, a dimension of a value, a list entry, a search sentence and "
         "more, each checked as the reading checks it. Every question of the "
-        "flow is this step with a preset (owner decision 2026-11-12), which "
+        "flow is this step with a preset, which "
         "fills in its parts; whatever the step sets of its own wins. "
         "Example: \"Which year does the table speak of?\" with the chunk as "
         "numbered lines, answered as {\"year\": 2021}. To change it: the "

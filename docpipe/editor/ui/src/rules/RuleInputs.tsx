@@ -63,7 +63,6 @@ export function RuleRow({ r, cur, onChange, epoch, extra }: { r: Rule; cur: any;
           <Code fw={600}>{r.name}</Code>
           {r.own || r.declared_here ? <Badge color="teal" variant="light">{t('set in this profile')}</Badge>
             : <Badge color="gray" variant="light">{r.set_in ? t('set in profile {name}', { name: r.set_in }) : t('default')}</Badge>}
-          {r.decided ? <Badge color="gray" variant="outline">{t('decided on {date}', { date: r.decided })}</Badge> : null}
           {r.setting ? <Badge color={wins ? 'orange' : 'gray'} variant="light">
             {wins ? t('setting {setting} is set and takes precedence', { setting: r.setting }) : t('setting {setting} takes precedence where it is set', { setting: r.setting })}</Badge> : null}
           {changed ? <Badge color="orange" variant="filled">{t('edited')}</Badge> : null}

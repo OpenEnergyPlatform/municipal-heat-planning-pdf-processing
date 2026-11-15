@@ -200,7 +200,7 @@ Why values are not an A, counted. A closed list: a reason nobody can enumerate i
 
 ### `unlisted_units`
 
-The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.
+The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again.
 
 ## `publication_abstract`
 
@@ -210,7 +210,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -256,7 +256,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -302,7 +302,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -357,7 +357,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -402,7 +402,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -448,7 +448,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -494,7 +494,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -549,7 +549,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -593,7 +593,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -639,7 +639,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -685,7 +685,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -740,7 +740,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -784,7 +784,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -830,7 +830,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -876,7 +876,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -931,7 +931,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -975,7 +975,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -1021,7 +1021,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1067,7 +1067,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -1122,7 +1122,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -1166,7 +1166,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -1212,7 +1212,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1258,7 +1258,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -1291,7 +1291,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1360,7 +1360,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -1406,7 +1406,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1452,7 +1452,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -1476,7 +1476,7 @@ The wording as the document writes it.
 
 ### `value_means`
 
-The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `value_raw`
 
@@ -1511,7 +1511,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -1555,7 +1555,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -1601,7 +1601,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1647,7 +1647,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -1680,7 +1680,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1740,7 +1740,7 @@ Which source 'value_link_quote' was found in.
 
 ### `value_means`
 
-The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `value_producer`
 
@@ -1788,7 +1788,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -1834,7 +1834,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1880,7 +1880,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -1913,7 +1913,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1973,7 +1973,7 @@ Which source 'value_link_quote' was found in.
 
 ### `value_means`
 
-The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `value_producer`
 
@@ -2055,7 +2055,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -2101,7 +2101,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2147,7 +2147,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -2180,7 +2180,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -2263,7 +2263,7 @@ Which source 'year_kind_link_quote' was found in.
 
 ### `year_kind_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year_kind' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'year_kind' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `year_kind_producer`
 
@@ -2307,7 +2307,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -2353,7 +2353,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2399,7 +2399,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -2454,7 +2454,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -2498,7 +2498,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -2544,7 +2544,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2590,7 +2590,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -2622,7 +2622,7 @@ Which source 'value_link_quote' was found in.
 
 ### `value_means`
 
-The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `value_producer`
 
@@ -2734,7 +2734,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -2779,7 +2779,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -2825,7 +2825,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2871,7 +2871,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -2926,7 +2926,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -2971,7 +2971,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -3017,7 +3017,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -3063,7 +3063,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -3118,7 +3118,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -3162,7 +3162,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -3208,7 +3208,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -3254,7 +3254,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -3309,7 +3309,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -3353,7 +3353,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -3399,7 +3399,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -3445,7 +3445,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -3477,7 +3477,7 @@ Which source 'value_link_quote' was found in.
 
 ### `value_means`
 
-The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `value_producer`
 
@@ -3851,7 +3851,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -3895,7 +3895,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -3941,7 +3941,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -3987,7 +3987,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -4019,7 +4019,7 @@ Which source 'value_link_quote' was found in.
 
 ### `value_means`
 
-The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `value_producer`
 
@@ -4110,7 +4110,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 
@@ -4154,7 +4154,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -4200,7 +4200,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -4246,7 +4246,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -4278,7 +4278,7 @@ Which source 'value_link_quote' was found in.
 
 ### `value_means`
 
-The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `value_producer`
 
@@ -4396,7 +4396,7 @@ Which source 'work_link_quote' was found in.
 
 ### `work_means`
 
-The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `work_producer`
 

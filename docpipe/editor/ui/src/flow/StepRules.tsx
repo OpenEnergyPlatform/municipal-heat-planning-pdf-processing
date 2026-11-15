@@ -113,7 +113,7 @@ function StepRuleRow({ P, n, r }: { P: Panel; n: Step; r: StepRule }) {
       </Box>
       <Group gap={6}>
         <Badge size="sm" variant="light" color={where.from === 'own' ? 'teal' : where.from === 'frame' ? 'indigo' : where.from === 'start' ? 'orange' : 'gray'}>{where.words}</Badge>
-        {r.decided ? <Badge size="sm" variant="outline" color="gray">{t('Standard: your decision of {date}', { date: r.decided })}</Badge> : null}
+        {r.decided ? <Badge size="sm" variant="outline" color="gray">{t('Standard: your decision')}</Badge> : null}
       </Group>
       {differs && <Text size="xs" c="orange">{t('The value here differs from that standard. This locks nothing.')}</Text>}
       <Anchor component="button" type="button" size="xs" style={{ alignSelf: 'flex-start' }} onClick={toTab}>

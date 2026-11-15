@@ -343,7 +343,7 @@
       "additionalProperties": {
        "type": "integer"
       },
-      "description": "The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.",
+      "description": "The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again.",
       "type": "object"
      }
     },
@@ -869,7 +869,7 @@
       "type": "array"
      },
      "aggregation_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -950,7 +950,7 @@
      },
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -1826,7 +1826,7 @@
       "type": "array"
      },
      "carrier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -1968,7 +1968,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2139,7 +2139,7 @@
       "type": "array"
      },
      "qualifier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2264,7 +2264,7 @@
       "type": "array"
      },
      "quantity_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2358,7 +2358,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -2444,7 +2444,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2691,7 +2691,7 @@
       "type": "array"
      },
      "sector_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2838,7 +2838,7 @@
       "type": "array"
      },
      "spatial_scope_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2948,7 +2948,7 @@
       "type": "array"
      },
      "subject_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3178,7 +3178,7 @@
       "type": "array"
      },
      "technology_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3265,7 +3265,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "Gebäude",
        null
@@ -3305,7 +3305,7 @@
       "type": "array"
      },
      "unit_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3423,7 +3423,7 @@
       "type": "array"
      },
      "what_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3540,7 +3540,7 @@
       "type": "array"
      },
      "year_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -4177,7 +4177,7 @@
       "type": "array"
      },
      "aggregation_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -4258,7 +4258,7 @@
      },
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -5134,7 +5134,7 @@
       "type": "array"
      },
      "carrier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5276,7 +5276,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5447,7 +5447,7 @@
       "type": "array"
      },
      "qualifier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5651,7 +5651,7 @@
       "type": "array"
      },
      "quantity_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5745,7 +5745,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -5831,7 +5831,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6078,7 +6078,7 @@
       "type": "array"
      },
      "sector_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6225,7 +6225,7 @@
       "type": "array"
      },
      "spatial_scope_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6335,7 +6335,7 @@
       "type": "array"
      },
      "subject_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6565,7 +6565,7 @@
       "type": "array"
      },
      "technology_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6652,7 +6652,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, g CO2-Äq./kWh, g CO2-Äq/kWh, g CO2/MJ, g CO2/kWh, g CO2e/kWh, g CO2eq/kWh, g/kWh, gCO2/kWh, kg, kg CO2, kg CO2-Äq/MWh, kg CO2/GJ, kg CO2/MWh, kg CO2/a, kg CO2/kWh, kg CO2eq, kg CO2eq/MWh, kg CO2eq/a, kg/MWh, kg/a, kg/kWh, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/MWh, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/GWh, t CO2/MWh, t CO2/TJ, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/MWh, t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, g CO2-Äq./kWh, g CO2-Äq/kWh, g CO2/MJ, g CO2/kWh, g CO2e/kWh, g CO2eq/kWh, g/kWh, gCO2/kWh, kg, kg CO2, kg CO2-Äq/MWh, kg CO2/GJ, kg CO2/MWh, kg CO2/a, kg CO2/kWh, kg CO2eq, kg CO2eq/MWh, kg CO2eq/a, kg/MWh, kg/a, kg/kWh, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/MWh, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/GWh, t CO2/MWh, t CO2/TJ, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/MWh, t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "g CO2/kWh",
        "g/kWh",
@@ -7027,7 +7027,7 @@
       "type": "array"
      },
      "unit_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7145,7 +7145,7 @@
       "type": "array"
      },
      "what_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7262,7 +7262,7 @@
       "type": "array"
      },
      "year_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7899,7 +7899,7 @@
       "type": "array"
      },
      "aggregation_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7980,7 +7980,7 @@
      },
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -8856,7 +8856,7 @@
       "type": "array"
      },
      "carrier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -8998,7 +8998,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9169,7 +9169,7 @@
       "type": "array"
      },
      "qualifier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9471,7 +9471,7 @@
       "type": "array"
      },
      "quantity_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9565,7 +9565,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -9651,7 +9651,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9898,7 +9898,7 @@
       "type": "array"
      },
      "sector_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10045,7 +10045,7 @@
       "type": "array"
      },
      "spatial_scope_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10155,7 +10155,7 @@
       "type": "array"
      },
      "subject_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10385,7 +10385,7 @@
       "type": "array"
      },
      "technology_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10472,7 +10472,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (GJ, GJ/a, GWh, GWh/a, MJ, MJ/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, PJ, PJ/a, TJ, TJ/a, TWh, TWh/a, kJ, kJ/a, kWh, kWh/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (GJ, GJ/a, GWh, GWh/a, MJ, MJ/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, PJ, PJ/a, TJ, TJ/a, TWh, TWh/a, kJ, kJ/a, kWh, kWh/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "kWh",
        "kWh/a",
@@ -10617,7 +10617,7 @@
       "type": "array"
      },
      "unit_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10735,7 +10735,7 @@
       "type": "array"
      },
      "what_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10852,7 +10852,7 @@
       "type": "array"
      },
      "year_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -11489,7 +11489,7 @@
       "type": "array"
      },
      "aggregation_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -11570,7 +11570,7 @@
      },
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -12446,7 +12446,7 @@
       "type": "array"
      },
      "carrier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -12588,7 +12588,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -12759,7 +12759,7 @@
       "type": "array"
      },
      "qualifier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -13026,7 +13026,7 @@
       "type": "array"
      },
      "quantity_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -13120,7 +13120,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -13206,7 +13206,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -13453,7 +13453,7 @@
       "type": "array"
      },
      "sector_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -13600,7 +13600,7 @@
       "type": "array"
      },
      "spatial_scope_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -13710,7 +13710,7 @@
       "type": "array"
      },
      "subject_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -13940,7 +13940,7 @@
       "type": "array"
      },
      "technology_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -14027,7 +14027,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (GW, MW, MWel, MWp, MWth, kW, kWel, kWp, kWth), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (GW, MW, MWel, MWp, MWth, kW, kWel, kWp, kWth), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "kW",
        "kWth",
@@ -14107,7 +14107,7 @@
       "type": "array"
      },
      "unit_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -14225,7 +14225,7 @@
       "type": "array"
      },
      "what_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -14342,7 +14342,7 @@
       "type": "array"
      },
      "year_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -14524,7 +14524,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -14626,7 +14626,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -14723,7 +14723,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -14776,7 +14776,7 @@
       "type": "array"
      },
      "role_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'role' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'role' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -15338,7 +15338,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -16214,7 +16214,7 @@
       "type": "array"
      },
      "carrier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -16356,7 +16356,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -16527,7 +16527,7 @@
       "type": "array"
      },
      "qualifier_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -16728,7 +16728,7 @@
       "type": "array"
      },
      "quantity_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -16822,7 +16822,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -16908,7 +16908,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -17155,7 +17155,7 @@
       "type": "array"
      },
      "sector_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -17302,7 +17302,7 @@
       "type": "array"
      },
      "spatial_scope_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -17412,7 +17412,7 @@
       "type": "array"
      },
      "subject_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -17642,7 +17642,7 @@
       "type": "array"
      },
      "technology_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -17729,7 +17729,7 @@
       ]
      },
      "unit": {
-      "description": "The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
+      "description": "The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. ",
       "enum": [
        "%",
        "Prozent",
@@ -17774,7 +17774,7 @@
       "type": "array"
      },
      "unit_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -17892,7 +17892,7 @@
       "type": "array"
      },
      "what_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -18002,7 +18002,7 @@
       "type": "array"
      },
      "whole_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'whole' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'whole' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -18119,7 +18119,7 @@
       "type": "array"
      },
      "year_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"

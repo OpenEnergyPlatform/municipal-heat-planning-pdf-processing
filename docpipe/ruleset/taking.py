@@ -28,8 +28,7 @@ RULES = (
          "On: a printed sign belongs to the number, so the quote "
          "\"-1.155\" backs -1155, and \"1.155\" does not. Off: the sign "
          "stays outside the number, so a quote backs a number of either "
-         "sign, and \"1.155\" backs -1155 as well as 1155. Decided on "
-         "2026-11-01.", choices=("on", "off"),
+         "sign, and \"1.155\" backs -1155 as well as 1155.", choices=("on", "off"),
          decided="2026-11-01", steps=CHECKED,
          where="verify.py (numbers_in, _times_number)"),
     rule("refused_keeps_quote", "spec", "What a quote must show", "choice",
@@ -37,7 +36,7 @@ RULES = (
          "quote and its source, and its state changes from read to not "
          "backed. Kept: it keeps the quote it was answered with, and the "
          "source that quote stands in where one was found, and its state "
-         "still says it is not backed. Decided on 2026-09-12.",
+         "still says it is not backed.",
          choices=("dropped", "kept"), decided="2026-09-12", steps=CHECKED,
          where="verify.py (verify_tuple)"),
     # -- spec: numbers and years ----------------------------------------------
@@ -53,7 +52,7 @@ RULES = (
          "own, so that \"2.022 MWh\" does not back the year 2022, while a "
          "date such as \"31.12.2022\" does. Off: a whole number is "
          "compared like every other number, with its thousands grouping "
-         "read as a grouping. Decided on 2026-09-23.",
+         "read as a grouping.",
          decided="2026-09-23", steps=CHECKED, where="pipeline.py "
          "(answer_in_quote)"),
     rule("number_axis_whole_only", "spec", "Numbers and years", "switch",
@@ -67,7 +66,7 @@ RULES = (
          "A number whose unit is no entry of the field's list is not "
          "refused: it stays read with the unit as the plan prints it and "
          "without a converted value, and it is flagged. This is the only "
-         "way that exists for now. Decided on 2026-11-07.",
+         "way that exists for now.",
          choices=("kept",), decided="2026-11-07", steps=TAKING,
          where="verify.py (_check_value), pipeline.py (printed_only)"),
     rule("flag_missing_period", "spec", "Numbers and years", "switch",
@@ -81,7 +80,7 @@ RULES = (
          "model and matched: base is the plan's own state and target is "
          "its target scenario. A year that both states carry stands under "
          "each and is cited from the first. Remove a state and its years "
-         "are not offered. Decided on 2026-09-22 and 2026-10-06.",
+         "are not offered.",
          choices=("base", "target"), empty=True,
          decided="2026-09-22, 2026-10-06", steps=TAKING,
          where="pipeline.py (named_years)"),
@@ -93,50 +92,47 @@ RULES = (
          "own wording where its quote is shown and holds that wording, its "
          "entry stays empty, and the wording is noted for the vocabulary "
          "review; the graph writes a node for it only where a rule of the "
-         "graph knows the kind, such as regions. Decided on 2026-09-11.",
+         "graph knows the kind, such as regions.",
          choices=("ask_again", "keep"), decided="2026-09-11",
          steps=TAKING, where="pipeline.py (merge_field), addressed.py "
          "(_finds)"),
     rule("answer_in_quote_spellings", "spec", "Lists and wording", "switch",
          "On: where an answer gives no wording, a choice is looked for in "
          "its quote under its name and under every spelling the spec "
-         "lists for it. Off: only its name is looked for. Decided on "
-         "2026-09-13.", decided="2026-09-13", steps=CHECKED,
+         "lists for it. Off: only its name is looked for.", decided="2026-09-13", steps=CHECKED,
          where="pipeline.py (answer_in_quote)"),
     rule("longest_entry_wins", "spec", "Lists and wording", "switch",
          "On: an entry of a list is backed only where no longer entry of "
          "the same list stands at the same place, so that \"MWh\" in "
          "\"MWh/a\" backs the second one only. Off: a shorter entry is "
-         "backed wherever its letters stand. Decided on 2026-09-23.",
+         "backed wherever its letters stand.",
          decided="2026-09-23", steps=CHECKED,
          where="pipeline.py (stands_in)"),
     rule("mark_foreign_wording", "spec", "Lists and wording", "switch",
          "On: a wording that does not name the chosen entry in whole words "
          "is counted and the row is marked with it; the value stays read. "
          "Off: wordings are not compared with the chosen entry, and no row "
-         "is marked. Decided on 2026-09-13.", decided="2026-09-13",
+         "is marked.", decided="2026-09-13",
          steps=TAKING, where="pipeline.py (merge_field)"),
     rule("entry_once_per_wording", "spec", "Lists and wording", "switch",
          "On: the entry of a list that a wording means is asked once for "
          "each document, field, dimension and wording, and every place the "
          "wording stands in takes that answer. Off: it is asked again for "
          "every place the wording stands in, so two places of one wording "
-         "may get two entries and each is a request. Decided on "
-         "2026-11-08 and 2026-11-09.", decided="2026-11-08, 2026-11-09",
+         "may get two entries and each is a request.", decided="2026-11-08, 2026-11-09",
          steps=LISTED, where="addressed.py (entry)"),
     rule("list_shows_earlier", "spec", "Lists and wording", "switch",
          "Off: the question that asks an entry of a list shows the list "
          "and the words, and never the wordings it settled before. On: it "
          "also shows the wordings of this document already settled for the "
          "same list, each with its entry, so the model answers alike for "
-         "alike wordings; an earlier answer may then steer later ones. "
-         "Decided on 2026-11-09.", decided="2026-11-09", steps=LISTED,
+         "alike wordings; an earlier answer may then steer later ones.", decided="2026-11-09", steps=LISTED,
          where="addressed.py (_entry)"),
     rule("name_may_be_none", "spec", "Lists and wording", "switch",
          "On: the question that asks which entry of the document's list a "
          "name means may answer 0, none, and the name then has no entry. "
          "Off: 0 counts as an answer outside the list, so the question is "
-         "asked again with its reason. Decided on 2026-11-09.",
+         "asked again with its reason.",
          decided="2026-11-09", steps=LISTED + ("works",),
          where="addressed.py (_name_picks)"),
     rule("work_without_line", "spec", "Lists and wording", "switch",
@@ -145,7 +141,7 @@ RULES = (
          "value also takes the one work its piece names, or this "
          "publication where the piece names none, with the value's own "
          "line as its quote; a piece that names two works leaves the value "
-         "to ask. Decided on 2026-11-09.", decided="2026-11-09",
+         "to ask.", decided="2026-11-09",
          steps=("work_coordinate",), where="addressed.py (inherit_work)"),
     # -- spec: defaults where the spec says nothing ---------------------------
     rule("derive_from_unit", "spec", "Defaults where the spec says nothing",
@@ -155,7 +151,7 @@ RULES = (
          "Ask first, then derive: the coordinate is asked, and only where "
          "no answer is read does the spec set it, with the state derived. "
          "Ask only: the spec never sets it, and an unanswered coordinate "
-         "stays open. Decided on 2026-11-07.",
+         "stays open.",
          choices=("ask_first_then_derive", "ask_only"),
          decided="2026-11-07", steps=TAKING + ("state",),
          where="fields.py (derives)"),
@@ -164,8 +160,7 @@ RULES = (
          "On: where exactly one field accepts the unit of a number, the "
          "unit alone decides which field the number is, and the "
          "coordinate is not asked; a wording belongs to the one text "
-         "field. Off: the field of every number is asked. Decided on "
-         "2026-11-05.", decided="2026-11-05",
+         "field. Off: the field of every number is asked.", decided="2026-11-05",
          steps=TAKING + ("state", "classify", "derive"),
          where="fields.py (derive_parameter, parameter_undecidable)"),
     # -- flow: reading from the quote -----------------------------------------
@@ -176,7 +171,7 @@ RULES = (
          "coordinate ends as not stated, and a wording the model "
          "noticed is kept beside it. Off: \"not stated\" must cite a "
          "shown line like any other answer, and without one it is not "
-         "backed. Decided on 2026-11-06.", decided="2026-11-06",
+         "backed.", decided="2026-11-06",
          steps=TAKING, where="pipeline.py (merge_field)"),
     rule("reading_wins", "flow", "Reading from the quote", "choice",
          "Which answer a coordinate keeps when a later request answers it "
@@ -197,8 +192,7 @@ RULES = (
          "On: a number that a figure only draws, as a bar or a point of a "
          "curve, may be read off the image where no text states it, and "
          "the sentence of what was read is its evidence; the value is an "
-         "estimate. Off: such a number needs its quote like any other. "
-         "Decided on 2026-11-05 and 2026-11-07.",
+         "estimate. Off: such a number needs its quote like any other.",
          decided="2026-11-05, 2026-11-07", steps=TAKING,
          where="verify.py (read_off)"),
     # -- flow: calculation ----------------------------------------------------
@@ -207,7 +201,7 @@ RULES = (
          "numbers it names, a share times its whole or the sum of its "
          "parts, to the rounding of its printed places. Off: it counts "
          "when the code printed it and its quote shows its inputs, "
-         "whether or not the inputs make it. Decided on 2026-11-03.",
+         "whether or not the inputs make it.",
          choices=("on", "off"), decided="2026-11-03", steps=CHECKED,
          where="verify.py (computed_from_inputs)"),
     rule("computed_rounding_half_units", "flow", "Calculation", "number",
@@ -233,8 +227,7 @@ RULES = (
     rule("compute_used_if_none", "flow", "Calculation", "choice",
          "Which numbers a calculated row names as its inputs when the "
          "model names none. All: every number the question showed. None: "
-         "no number, and the row has no inputs to stand on. Decided on "
-         "2026-11-03.", choices=("all", "none"), decided="2026-11-03",
+         "no number, and the row has no inputs to stand on.", choices=("all", "none"), decided="2026-11-03",
          steps=("compute",), where="compute.py (used_numbers)"),
     # -- flow: search ---------------------------------------------------------
     rule("pattern_hit_chars", "flow", "Search", "whole",
@@ -254,8 +247,7 @@ RULES = (
          "the table it continues. A table that stands on the same page "
          "or up to this many pages after a table with a head is marked as "
          "its continuation, and inherits its title, head and unit. 0: "
-         "only a table on the same page. Decided on 2026-11-06 and "
-         "2026-11-07.", least=0, decided="2026-11-06, 2026-11-07",
+         "only a table on the same page.", least=0, decided="2026-11-06, 2026-11-07",
          steps=("split", "document"), where="lookup.py (continued)"),
     # -- flow: documents ------------------------------------------------------
     rule("trace_quote_chars", "flow", "Documents", "whole",
@@ -267,7 +259,7 @@ RULES = (
          "does when the document no longer holds one of them. Plan in "
          "full: the document is planned from scratch as a whole. Stop: "
          "the document fails with the reason. A harvest without a stamp "
-         "is never read. Decided on 2026-11-02.",
+         "is never read.",
          choices=("plan_in_full", "stop"), decided="2026-11-02",
          where="found.py (_read)"),
     rule("stale_keys", "flow", "Documents", "texts",
@@ -285,7 +277,7 @@ RULES = (
          "passages. Quote first: the passage that holds the quote gets "
          "the claim, and the label the model named decides only where "
          "several do. Label first: the passage the model named gets the "
-         "claim whenever the name is real. Decided on 2026-11-05.",
+         "claim whenever the name is real.",
          choices=("quote_first", "label_first"), decided="2026-11-05",
          where="pipeline.py (route_claims)"),
     # -- flow: states ---------------------------------------------------------
@@ -338,7 +330,7 @@ RULES = (
          "catalogue, a second reading that disagrees and a conflict are "
          "D, a coordinate nobody read and a number read off an image are "
          "C. The same table is read when the harvest is written and when "
-         "the graph is. Decided on 2026-11-02, 2026-11-04 and 2026-11-07.",
+         "the graph is.",
          of="text", decided="2026-11-02, 2026-11-04, 2026-11-07",
          steps=TRUSTING, where="trust.py (trust, reasons)"),
     rule("trust_image_cap", "graph", "Trust", "choice",

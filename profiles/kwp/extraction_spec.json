@@ -1,19 +1,10 @@
 {
   "_comment": [
-    "Drei Messgroessen und eine Beteiligte. Welche OEO-Klasse ein Wert ist,",
-    "waehlt das Modell auf der Achse `quantity` aus der Liste, mit der",
-    "Definition aus oeo-closure.owl vor sich, als deutsche Zeile (`gloss`). Vorher stand hier je Klasse ein",
-    "eigener Parameter und danach eine Stichworttabelle, die deutsche",
-    "Indikatorbezeichnungen auf die Klassen abbildete. Die Tabelle traf die",
-    "Schreibweisen des Korpus nicht, und der Harvest fragte jede Quelle",
-    "viermal, was das Modell einlud, die CO2-Frage mit einer Energiezahl zu",
-    "beantworten: 95 der 218 an dieser Stelle verworfenen Werte waren",
-    "Endenergie unter Primaerenergie abgelegt.",
+    "Fünf Zahlfelder und ein Textfeld: Energieverbrauch, Emissionen, Leistung, Anteil und Gebäudeanzahl, dazu die Organisation, die den Plan erstellt hat.",
     "",
-    "Die Einheitenfamilie trennt die Zahlparameter: Wh gegen t gegen W.",
-    "Innerhalb der Einheitenfamilie waehlt das Modell die Klasse.",
-    "`quantity` ist NICHT required: was in keine Klasse passt, behaelt seinen",
-    "Wortlaut in quantity_raw und wird gezaehlt, statt verworfen zu werden."
+    "Die Einheit einer Zahl trennt die Zahlfelder, etwa Wh, t oder W. Innerhalb eines Feldes wählt das Modell auf der Dimension quantity, welche OEO-Klasse die Zahl ist, aus der Liste des Feldes und mit der Definition jeder Klasse vor sich.",
+    "",
+    "quantity ist keine Pflicht: Eine Zahl, die in keine Klasse passt, behält ihren Wortlaut und wird gezählt, statt verworfen zu werden."
   ],
   "unit_question": "Welche Einheit druckt der Plan für diese Zahl, und sagt die Stelle, dass die Menge je Jahr gilt?",
   "parameter_question": "Um WELCHE Kennzahl handelt es sich bei dieser Zahl? Entscheide danach, was die Quelle über sie sagt: die Einheit, die Spalten- oder Zeilenbeschriftung und die Tabellen- oder Abschnittsüberschrift. Eine Angabe in t CO2 ist eine Emission, eine Angabe in MWh oder GWh ein Energieverbrauch. Zitiere die Stelle, aus der das hervorgeht. Eine Angabe in kW, MW oder GW ist eine Leistung. Eine Angabe in % ist ein Anteil. Eine Zahl von Gebäuden ist eine Gebäudeanzahl.",
