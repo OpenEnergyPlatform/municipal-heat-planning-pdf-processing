@@ -2521,14 +2521,20 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
     log.info("harvest: pieces of %d lines, figures transcribed once under "
              "%s, orders kept in %s", numbers.piece_lines,
              Path(out) / "transcripts", Path(out) / "survey")
-    return surveyed_map.SurveyedHarvest(
-        spec,
-        lambda doc_spec: make_reader(
+    checking = make_value_checking(db_path, image_root)
+
+    def reader_of(doc_spec):
+        reader = make_reader(
             doc_spec, profile, order, search_order, seek, rerank, context_of,
             # The picture a coordinate request may ask for: the figure's
             # crop where the run attaches images (owner decision
             # 2026-11-12).
-            lambda source: image_path_of(source, image_root)),
+            lambda source: image_path_of(source, image_root))
+        if reader is not None:
+            reader.checking = checking
+        return reader
+    return surveyed_map.SurveyedHarvest(
+        spec, reader_of,
         lambda document_id: every(document_id, set()),
         spec_for=spec_for, transcripts=transcripts, orders=orders,
         numbers=numbers, each=run_each, trace=trace.event)
@@ -3311,6 +3317,21 @@ def _node_check_payload(row: dict, shown: dict, parameter, slots) -> dict:
         context(slot.name, row.get(f"{slot.name}_quote"),
                 row.get(f"{slot.name}_source"))
     return {"node": node, "quotes": quotes}
+
+
+def make_value_checking(db_path: Path, image_root: Optional[Path] = None):
+    """What the check of a value once read asks with
+    (`engine.Engine.box_check_value`): the check of a filled node, the
+    passages its coordinates were read in, and the second reading of a value
+    over its passage and section."""
+    from .review import review_row
+    ask = make_review_asker(image_root)
+    return SimpleNamespace(
+        check=make_node_check_asker(),
+        owner_sources=make_owner_sources(db_path),
+        review_sources=make_review_sources(db_path),
+        review=lambda row, parameter, sources: review_row(
+            row, parameter, [fields.value_slot(parameter)], sources, ask))
 
 
 def make_node_check_asker() -> Callable:

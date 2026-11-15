@@ -340,6 +340,20 @@ LIBRARY = {box.type: box for box in (
                           "to tell the model what was wrong with its "
                           "answer.")),
         decided="2026-11-10"),
+    Box("check_value", "Check a value once read", "check", "values",
+        "values",
+        "Holds each value, once all its dimensions are decided, against the "
+        "text around its quotes: the value as JSON and 200 characters on "
+        "each side of every quote. A dimension that does not hold is asked "
+        "again at once with the reason, through the steps of the value's "
+        "dimensions, and checked once more; where it does not hold again it "
+        "is unbacked and stays out of the graph. A value that does not hold "
+        "is read a second time over its passage and section and is refused "
+        "as unbacked where that reading does not agree. Example: the carrier "
+        "\"natural gas\" of a value whose line says \"district heating\". "
+        "To change it: switch it off, or set the characters around a quote "
+        "with the rule node_check_context_chars.",
+        "engine.Engine.box_check_value", needs=("value",)),
     # -- remember and state --------------------------------------------------
     Box("settle", "Keep for the whole document", "remember", "answers",
         "document",
@@ -562,6 +576,7 @@ IO = {
     "check": (("answer",), ("answer",)),
     "settle": (("fact", "answer"), ("facts",)),
     "state": (("dimension",), ()),
+    "check_value": (("value",), ()),
     "write": (("values",), ("rows",)),
     # It looks up what the reading's values leave open, before the harvest
     # is written (owner decision 2026-11-13, point 12).

@@ -2026,9 +2026,25 @@ Three further scripts, `curation_list.py`, `harvest_compare.py` and
 `trace_report.py`, read a harvest and print or write a report, described
 under Modules; none writes back into one.
 
+### The check of a value once read (step `check_value`)
+
+The harvest checks each value as soon as its dimensions are decided, in the
+value frame right after the coordinate frame (box `check_value`,
+`engine.Engine.box_check_value`, `check_row`), with the same request as the
+pass below: the row as JSON and the text around each quote. A dimension that
+does not hold is asked again at once through the steps of the coordinate
+frame, the request showing `earlier_answer_not_held`, and checked once more;
+where it does not hold again it is `unbacked`. A value that does not hold is
+read a second time over its passage and section (`review.review_row`) and
+refused for `unbacked` where that reading does not agree. A check with no
+reply leaves the row as it is. A field the document has no row of is not
+read again here; the next run asks it. The run gives its reader what the
+check asks with (`runner.make_value_checking`); the pass below stays for
+harvests written before the step.
+
 ### The check of the filled nodes (`--node-check`)
 
-Owner decision 2026-11-15: every filled row of a harvest is checked once,
+Every filled row of a stored harvest is checked once,
 with a small context first. The step "Check of a filled node" (preset
 `node_check`, target `node_checked`, `passboxes.box_node_check`) shows the
 model the row as JSON (its value and each read dimension, with wording and

@@ -1483,6 +1483,17 @@ def around(text: str, quote: str, chars: int) -> Optional[str]
 them, or None where *text* does not hold it. Found as it stands, else
 with the white space of both folded to single blanks.
 
+### make_value_checking
+
+```python
+def make_value_checking(db_path: Path, image_root: Optional[Path] = None)
+```
+
+What the check of a value once read asks with
+(`engine.Engine.box_check_value`): the check of a filled node, the
+passages its coordinates were read in, and the second reading of a value
+over its passage and section.
+
 ### make_node_check_asker
 
 ```python

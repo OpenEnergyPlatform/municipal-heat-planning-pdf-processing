@@ -791,6 +791,36 @@ def after(self, node: dict) -> list
 
 The steps after *node* in its list of steps.
 
+#### Engine.box_check_value
+
+```python
+def box_check_value(self, node: dict, scope: Scope) -> None
+```
+
+Each row of the value, once its dimensions are decided, held
+against the text around its quotes (`reader.checking.check`). A
+dimension that does not hold is asked again at once with the reason,
+through the steps of the value's coordinate frame, and checked once
+more; where it does not hold again it is unbacked. A value that does
+not hold is read a second time over its passage and section, and is
+refused as unbacked where that reading does not agree. Without a
+checking the run gave its reader, nothing is asked.
+
+#### Engine.sibling_frame
+
+```python
+def sibling_frame(self, node: dict, each: str) -> Optional[dict]
+```
+
+The frame of kind *each* beside *node* in the frame it stands in.
+
+#### Engine.check_row
+
+```python
+def check_row(self, checking, scope: Scope, value: ValueItem, row: Row,
+              parameter, coordinate: Optional[dict]) -> None
+```
+
 #### Engine.box_state
 
 ```python

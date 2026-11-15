@@ -530,6 +530,10 @@
                   ]
                 }
               ]
+            },
+            {
+              "id": "document_values_check",
+              "box": "check_value"
             }
           ]
         }
@@ -960,6 +964,10 @@
               ]
             }
           ]
+        },
+        {
+          "id": "values_check",
+          "box": "check_value"
         }
       ]
     },

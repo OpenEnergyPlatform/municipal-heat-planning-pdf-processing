@@ -1777,6 +1777,114 @@ class Engine:
 
     # -- the boxes of a coordinate --------------------------------------------
 
+    # -- the check of a value once read --------------------------------------
+
+    def box_check_value(self, node: dict, scope: Scope) -> None:
+        """Each row of the value, once its dimensions are decided, held
+        against the text around its quotes (`reader.checking.check`). A
+        dimension that does not hold is asked again at once with the reason,
+        through the steps of the value's coordinate frame, and checked once
+        more; where it does not hold again it is unbacked. A value that does
+        not hold is read a second time over its passage and section, and is
+        refused as unbacked where that reading does not agree. Without a
+        checking the run gave its reader, nothing is asked."""
+        checking = getattr(self.reader, "checking", None)
+        value: ValueItem = scope.get("value")
+        parameter = value.read.batch.parameter
+        if checking is None or parameter is None:
+            return
+        coordinate = self.sibling_frame(node, "coordinate")
+        for row in list(value.rows):
+            if row.claim.get("_why"):
+                continue
+            self.check_row(checking, scope, value, row, parameter,
+                           coordinate)
+
+    def sibling_frame(self, node: dict, each: str) -> Optional[dict]:
+        """The frame of kind *each* beside *node* in the frame it stands in."""
+        for frame, _frames in flow_map.walk(self.tree):
+            for _label, steps in flow_map.children(frame):
+                if any(step is node for step in steps):
+                    return next((step for step in steps
+                                 if isinstance(step, dict)
+                                 and step.get("each") == each), None)
+        return None
+
+    def check_row(self, checking, scope: Scope, value: ValueItem, row: Row,
+                  parameter, coordinate: Optional[dict]) -> None:
+        from . import passboxes
+        from .trust import REVIEW_AGREE
+        claim = row.claim
+        source = value.read.batch.items[row.item_index].source
+        own = (source.owner_kind, source.owner_id)
+
+        def seen() -> dict:
+            # The row as the check and the second reading read a stored one:
+            # its own passage is where the harvest found it.
+            return {**claim, "provenance": {
+                "document_id": value.read.batch.document_id,
+                "owner_kind": own[0], "owner_id": own[1]}}
+
+        def verdicts_of(slots: list) -> Optional[dict]:
+            view = seen()
+            pairs = [own] + [tuple(claim[f"{s.name}_source"]) for s in slots
+                             if isinstance(claim.get(f"{s.name}_source"),
+                                           (list, tuple))]
+            shown = checking.owner_sources(
+                [p for p in dict.fromkeys(pairs) if p != own])
+            shown[own] = source
+            return checking.check(view, parameter, slots, shown)
+
+        def read_slots() -> list:
+            return [slot for slot in fields.asked_slots(parameter)
+                    if claim.get(f"{slot.name}_state") == fields.READ]
+
+        verdicts = verdicts_of(read_slots())
+        if verdicts is None:
+            return
+        failing = [slot for slot in read_slots()
+                   if not verdicts[slot.name][0]]
+        keys = []
+        for slot in failing:
+            key = passboxes.not_held_key(claim, slot.name)
+            passboxes.NOT_HELD[key] = {
+                "answer": claim.get(slot.name),
+                "quote": claim.get(f"{slot.name}_quote"),
+                "why": verdicts[slot.name][1]}
+            keys.append(key)
+            claim[f"{slot.name}_state"] = fields.UNBACKED
+            flags = claim.setdefault("flags", [])
+            if f"node_check:{slot.name}" not in flags:
+                flags.append(f"node_check:{slot.name}")
+        try:
+            if failing and coordinate is not None:
+                names = {slot.name for slot in failing}
+                for group, slot in self.slot_sequence(parameter):
+                    if slot.name not in names:
+                        continue
+                    item = CoordItem(value.read, row, slot, group, [],
+                                     value.clone,
+                                     seen_of=scope.get("doc").seen_of)
+                    self.run_steps(coordinate.get("steps") or [],
+                                   scope.child(True, coord=item))
+                    value.rows += item.made
+                again = [slot for slot in failing
+                         if claim.get(f"{slot.name}_state") == fields.READ]
+                second = verdicts_of(again) if again else {}
+                for slot in again:
+                    if second is not None and not second[slot.name][0]:
+                        claim[f"{slot.name}_state"] = fields.UNBACKED
+        finally:
+            for key in keys:
+                passboxes.NOT_HELD.pop(key, None)
+        if verdicts["value"][0]:
+            return
+        view = seen()
+        reread = checking.review_sources(view) or []
+        flag = (checking.review(view, parameter, reread) if reread else "")
+        if flag and flag != REVIEW_AGREE:
+            claim["_why"] = fields.UNBACKED
+
     def box_state(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")
         plan = scope.get("doc").plan

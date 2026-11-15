@@ -567,6 +567,10 @@
               ]
             },
             {
+              "id": "document_values_check",
+              "box": "check_value"
+            },
+            {
               "id": "document_name",
               "box": "ask",
               "preset": "names",
@@ -1033,6 +1037,10 @@
               ]
             }
           ]
+        },
+        {
+          "id": "values_check",
+          "box": "check_value"
         },
         {
           "id": "name",
