@@ -19,6 +19,9 @@ without a model and without a new harvest:
     a brick     on an arrow or a box: the code that turns a reading into
                 the object of a triple (`bricks.py`, and a profile's own in
                 `profiles/<name>/kg.py`)
+    a block     where a brick stands: a condition about the reading, steps
+                one after another, Python of the drawing's own, and an
+                address made of parts (`graphblocks.py`)
 
 What the program does for every drawing, with the rules of the graph file
 it reads (`readings.py`): one reading where the drawing says the shapes
@@ -302,7 +305,8 @@ class Writer
 def __init__(self, drawing: Drawing, *, spec, rules: dict, bricks: dict,
              db_path=None, strict: bool = False,
              extra: Optional[dict] = None,
-             required: Optional[dict] = None)
+             required: Optional[dict] = None,
+             space: Optional[dict] = None)
 ```
 
 #### Writer.brick
@@ -310,6 +314,8 @@ def __init__(self, drawing: Drawing, *, spec, rules: dict, bricks: dict,
 ```python
 def brick(self, ref, kind: str)
 ```
+
+The brick or block *ref* names, for a place of *kind*.
 
 #### Writer.call
 
@@ -333,10 +339,17 @@ def named_address(self, doc: Document, box: dict, entry=None) -> str
 
 ```python
 def minted_address(self, doc: Document, box: dict,
-                   node: Optional[Node]) -> tuple
+                   node: Optional[Node], row: Optional[dict] = None,
+                   label: str = "") -> tuple
 ```
 
-(address, the name it was made from) or (None, None).
+(address, the name it was made from) or (None, None): also None
+where a field the address `needs` has no reading (owner decision
+2026-11-14: a publication is named by its DOI, where one is read,
+and written only where its title is read). Its parts are the names
+of fields and the tokens a drawing has always had, or parts that say
+where they come from, when they count, how they are written and what
+an absent one does (`graphblocks.parts_name`).
 
 #### Writer.write
 
@@ -460,6 +473,16 @@ def required_by_class(profile) -> dict
 more), taken as the Graph tab takes them; {} for a profile without
 shapes, or without the library that reads them.
 
+### arrow_block
+
+```python
+def arrow_block(arrow: dict)
+```
+
+The block an arrow writes its objects with: its brick with the
+arrow's settings (the text brick where it names none), or a block of
+its own.
+
 ### shown_value
 
 ```python
@@ -507,6 +530,15 @@ def make_writer(profile, db_path=None, *, strict: bool = False,
                 drawing: Optional[Drawing] = None,
                 environ=None) -> Writer
 ```
+
+### python_space
+
+```python
+def python_space(profile) -> dict
+```
+
+What the Python of a drawing sees beside its call: the profile's own
+module of the graph (`kg`, the nearest one of its line) and its log.
 
 ### make_serializer
 

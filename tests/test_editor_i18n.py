@@ -451,6 +451,17 @@ PASS_ANSWER = ("library.boxes[].label", "library.boxes[].says",
                "library.presets[].settings[].words.*",
                "library.forms.*.label", "library.forms.*.says",
                "library.targets.*.label", "library.targets.*.says")
+# What the server explains of the drawing of the chat (owner request
+# 2026-11-14): its boxes, loops, variables and what its check says.
+CHAT_ANSWER = ("library.boxes[].label", "library.boxes[].says",
+               "library.boxes[].fixed", "library.boxes[].marks",
+               "library.boxes[].settings[].label",
+               "library.boxes[].settings[].help",
+               "library.boxes[].settings[].words.*", "library.each.*",
+               "library.each_titles.*", "library.checks",
+               "library.variables.*.label", "library.variables.*.says",
+               "conditions[].label", "conditions[].props[].label",
+               "problems[].message")
 
 
 def server_texts() -> dict:
@@ -480,6 +491,10 @@ def server_texts() -> dict:
             assert status == 200, (name, one["name"], shown)
             for text in _texts_of(shown, PASS_ANSWER):
                 out.setdefault(text, f"{name} pass {one['name']}")
+        status, shown = app.call("GET", "/api/chat", {}, None)
+        assert status == 200, (name, shown)
+        for text in _texts_of(shown, CHAT_ANSWER):
+            out.setdefault(text, f"{name} chat")
         for tab in RULE_TABS:
             status, shown = app.call("GET", "/api/rules", {"tab": tab},
                                      None)
@@ -701,6 +716,8 @@ CHECK_SOURCES = {
                                          "_var_problem"},
     "docpipe/extraction/forms.py": {"problem"},
     "docpipe/extraction/general.py": {"schema_problem"},
+    "docpipe/inference/chatflow.py": set(),
+    "docpipe/editor/chatpage.py": {"try_turn"},
 }
 
 

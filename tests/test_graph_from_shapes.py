@@ -283,6 +283,39 @@ def test_a_node_two_documents_describe_keeps_the_first_value_of_a_single_path():
                                                              "Paper B"}
 
 
+# Promise (owner decision 2026-11-14): a publication is named by its DOI
+# where one is read, so two papers read under one title stay two nodes, AND
+# by its title where none is; a document whose title is not read is not
+# written, whatever DOI it has.
+def reports(*documents):
+    serializer = make_serializer(Path("no-such.db"))
+    text = "\n".join(serializer(name, rows) or ""
+                     for name, rows in documents)
+    graph = Graph().parse(data=text, format="turtle")
+    return set(graph.subjects(predicate=None,
+                              object=URIRef(OEO + "OEO_00020012")))
+
+
+def titled(title, doi=None):
+    rows = [{"parameter": "publication_title", "value": title,
+             "quote": title}]
+    if doi:
+        rows.append({"parameter": "publication_doi", "value": doi,
+                     "quote": f"https://doi.org/{doi}"})
+    return rows
+
+
+def test_a_publication_is_named_by_its_doi_and_written_only_with_a_title():
+    same = "Can temporary carbon dioxide removal fix a climate problem?"
+    assert len(reports(("a", titled(same, "10.1088/1748-9326/aac0c1")),
+                       ("b", titled(same, "10.1088/1748-9326/ac0a11")))) == 2
+    # the failure by construction: without a DOI one title names one node
+    assert len(reports(("a", titled(same)), ("b", titled(same)))) == 1
+    doi_only = [{"parameter": "publication_doi", "value": "10.1/x",
+                 "quote": "https://doi.org/10.1/x"}]
+    assert reports(("c", doi_only)) == set()
+
+
 # Promise: a bundle is labelled with the study name the document prints, AND
 # where it prints none the bundle carries no label, never the report's title
 # (owner decision 2026-11-07); two such papers stay two bundles in the upload

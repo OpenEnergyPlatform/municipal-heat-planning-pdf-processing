@@ -12,8 +12,8 @@ and receives an answer, the citations it stands on, how many statements the
 model made and how many of them stood, and follow-up bookkeeping.
 `answer_question` is called directly from two places: the Streamlit app
 documented on [the chat over the corpus](./app.md), and
-`compare.compare_documents`, once per document, itself reached only from the
-app. A document id of `None` asks the whole corpus. Nothing here imports a
+the chat's drawing (`chatflow`), which runs the comparison as a loop over
+the documents, one `answer_question` each. A document id of `None` asks the whole corpus. Nothing here imports a
 UI toolkit.
 
 A question answered here is not the same finding as a value the
@@ -24,13 +24,15 @@ statement of one free-text answer in a quote checked against its passage at ask
 time. A second answer
 path exists once the extraction stage's `--serialize` step has written a
 plan's numbers as a graph (see [The knowledge graph](./graph.md)):
-`kg_route.answer_from_graph` reads that graph directly, with no
-retrieval or free-text generation. A third path reads the harvest itself:
+the chat's drawing reads that graph directly with the steps of the
+graph route (`graph_plan`, `graph_coordinates`, `graph_build`, `graph_query`,
+`graph_values`; the library of `kg_route`), with no retrieval or free-text
+generation. A third path reads the harvest itself:
 `values_route` finds the values the harvest holds for a question, by meaning
 among the vectors `docpipe values-index` made of them (`answer_from_index`)
 or, where there are none, by turning the question into a parameter and the
-coordinates it names (`answer_from_values`), and `answer.answer_from_values`
-answers the question from the passages those values were read from (see
+coordinates it names (`answer_from_values`), and the harvest's steps of the
+drawing (`values_answer`) answer the question from the passages those values were read from (see
 Method).
 
 ## Position in the pipeline
@@ -47,7 +49,9 @@ This package sits downstream of stage 6, the last stage to write under
 `results/` (see [How the parts fit together](../pipeline.md)); it has no
 stage after it in the batch chain, a terminal, on-demand read path.
 
-One turn, start to finish:
+One turn, start to finish, as the package's default drawing asks it (the chat
+runs a turn from a drawing, `chat.json`, which may order, repeat or branch these
+steps differently; see [the chat over the corpus](./app.md)):
 
 ```mermaid
 flowchart LR
@@ -67,7 +71,7 @@ flowchart LR
 `answer_question` (`answer.py:155`) picks one of three modes: `image_only`
 searches on an uploaded image alone, an image with text adds a
 caption-style anchor, and text alone anchors on the plain task
-(`answer.py:257-277`). The anchor, `llm_client.make_search_phrase`, is a
+(`answer.py:215-235`). The anchor, `llm_client.make_search_phrase`, is a
 HyDE-style construction: a short hypothetical passage written as it
 would appear in the corpus, not a question. Whatever non-empty phrase the
 model writes is used as the anchor; the function falls back to the raw
@@ -78,7 +82,7 @@ sets `recheck`, true only when the model marks the task a repetition and
 history is non-empty (`llm_client.py:533`); when true, `answer_question` walks
 history backward, folding every `(owner_kind, owner_id)` pair each turn
 examined into one exclude set, stopping at the first non-recheck turn
-(`answer.py:286-292`).
+(`answer.py:244-250`).
 
 ### Retrieval narrowed to one document
 
@@ -140,7 +144,7 @@ into batches under `ANSWER_CONTEXT_TOKENS` tokens each
 instead of truncation. Token counts come from the tokenizer
 named by `LLM_TOKENIZER_ID`; a char/4 heuristic serves as an offline
 fallback only, since German prose runs 3.0 to 3.5 characters per token,
-denser than a flat divide by 4 assumes (`answer.py:355-360`).
+denser than a flat divide by 4 assumes (`answer.py:313-318`).
 
 ### Several requests at once
 
@@ -187,7 +191,7 @@ told what stood its check when it was started, as `prior`: the text of those
 statements and nothing else, which is those of the batches before it unless it
 was sent ahead (see below). It writes only new statements. What was
 checked is carried forward as it was and the model never rewrites it; a
-statement that was dropped is not in `prior` (`answer.py:370-371`,
+statement that was dropped is not in `prior` (`answer.py:328-329`,
 `statements.texts`). Crops of up to `ANSWER_MAX_IMAGES` items go with the call,
 so a chart value can be read, and `attached_images` says which of them made it
 into the request. `code_exec.py` runs the calculation feature: when
@@ -208,7 +212,7 @@ round budget, `CODE_EXEC_MAX_ROUNDS` plus `REQUEST_IMAGE_MAX`
 (`llm_client.py:866-870`), and the last call of the budget has to answer: its
 schema requires `statements` and offers no action. The batches are taken in in
 their order, and the scan ends when a batch reports complete and at least one
-statement has stood in the turn so far (`answer.py:429-430`); a batch that says
+statement has stood in the turn so far (`answer.py:387-388`); a batch that says
 complete before anything stood does not stop it.
 
 With more than one place for requests (see Several requests at once) the next
@@ -242,7 +246,7 @@ read, it leaves a fault, `repeats_reply`, and every statement stays.
 ### What backs a statement, and what is shown
 
 Each statement is checked on its own against the passage it cites, after its
-batch was answered (`statements.back`, called at `answer.py:417-421`). Nothing is
+batch was answered (`statements.back`, called at `answer.py:375-379`). Nothing is
 checked beyond these rules:
 
 | basis | the statement carries | it is shown only if |
@@ -271,7 +275,7 @@ sentence directly under the answer, "n of m statement(s) removed" in the
 profile's words (`UI["statements_dropped"]`), also where every statement was
 removed; n counts the dropped statements and m every one the model made, the
 repeated ones included. The cause per dropped statement goes to the process log at info level
-(`answer.py:426-427`) and nowhere else; the request log keeps the two counts
+(`answer.py:384-385`) and nowhere else; the request log keeps the two counts
 (see Data model). A dropped statement is in no text a model or a reader is given
 afterwards: it is not in `prior`, not in `answer_text`, and so not in the
 history of a follow-up and not in what a comparison reads.
@@ -289,7 +293,7 @@ stands on it; `requested` lists every crop that was delivered all the same.
 Every visual citation is then re-read in a focused, single-image call,
 `llm_client.read_off_image`, for up to `READOFF_MAX_CALLS` citations per turn,
 side by side: a first pass often misreads a chart (`llm_client.py:668-710`,
-`answer.py:453-468`). The sentence of the focused call is the statement: it
+`answer.py:411-426`). The sentence of the focused call is the statement: it
 replaces the text and the quote of every statement that stands on the citation,
 and the model's first wording of it is not shown. A read-off that
 cannot be made, because the crop cannot be read, its reply stayed unreadable or
@@ -306,7 +310,7 @@ answer and under `answer_text`.
 history of a follow-up and a comparison are given.
 
 A JSON answer is one more call, `llm_client.format_as_json`, over `answer_text`
-(`llm_client.py:920-941`, `answer.py:509-525`). The shape the user's task
+(`llm_client.py:920-941`, `answer.py:467-483`). The shape the user's task
 describes in prose is written by that call, which can add or leave out, and
 nothing checks what it wrote statement by statement. The citations stand under
 it without numbers: the JSON has no marks to refer to, so each citation loses its
@@ -317,7 +321,7 @@ fault `json_format: not_asked`; where its reply stays unreadable it raises
 `ReplyError`, which the turn catches, with the request `json_reply` in the
 faults. In both cases the answer stays the checked prose, `as_json` is `False`
 and the citations keep their numbers. Every turn
-is logged through `request_log.log_request` (`answer.py:546-551`).
+is logged through `request_log.log_request` (`answer.py:504-509`).
 
 ### Reading a model's reply
 
@@ -381,11 +385,13 @@ A request that stayed unreadable is a hole and never "nothing found":
 `answer_from_sources` then returns no statements, `complete` false and the cause
 as `fault`, and the turn does not count that batch's sources as examined (see
 Data model). The turn keeps a record of every request that ended without a reply
-it could read, `llm_client.collecting()` (`answer_question` opens one, and
-`compare_documents` one for its comparison call): a list of `{"request",
+it could read, `llm_client.collecting()` (`answer_question` opens one, and the drawing's
+comparison step one for its comparison call): a list of `{"request",
 "cause"}`, the request being the name of its reply (`answer_reply`,
 `search_phrase_reply`, `choice_reply`, `readoff_reply`, `comparison_reply`,
-`repeats_reply`, `picked_reply`, `json_reply`) or `json_format`. So a caller that swallows the error of a request
+`repeats_reply`, `picked_reply`, `json_reply`, and of the drawing's output
+boxes `schema_format_reply`, `reshape_reply` and `merge_reply`) or
+`json_format`. So a caller that swallows the error of a request
 still leaves a record: the search phrase falls back to the raw task, the
 read-off keeps the reading the batch gave, the comparison comes back `None`. The
 causes are `reading.HOLE_CAUSES` plus `not_asked` (`llm_client.FAULT_CAUSES`) and
@@ -439,7 +445,7 @@ the object it asked for, and a profile that lacks a sentence fails there with a
 
 ### The knowledge-graph route
 
-`kg_route.answer_from_graph` (see Purpose) is offered once the
+The graph route (see Purpose), run by the chat's drawing as steps, is offered once the
 extraction stage's `--serialize` step has written a plan's numbers as a
 Turtle graph. `hooks(profile)` reads a profile's SPARQL query,
 coordinate axes, loaded spec, plan-IRI lookup, value-binding builder,
@@ -448,8 +454,8 @@ absent, so `scenarios` gets no route at all (`kg_route.py:97-124`).
 `to_coordinates` asks one closed
 question per axis over the spec's own vocabulary, side by side once the parameter
 is known (`coordinates_of`), through
-`llm_client.choose` in the app (`llm_client.py:433-457`,
-`docpipe/app/app.py:269-272`); an answer outside the vocabulary leaves the axis
+`llm_client.choose` in the drawing's graph step (`llm_client.py:433-457`,
+`chatflow.py:2318-2320`); an answer outside the vocabulary leaves the axis
 unbound (`kg_route.py:179-221`), and the route proceeds only once a
 coordinate lands on one of the `DECIDING_AXES`, quantity, scenario or
 year (`kg_route.py:63`). It runs the profile's SPARQL over a pyoxigraph
@@ -462,9 +468,9 @@ recovered from the raw Turtle text (`kg_route.py:153-176`); a value with
 no trust comment withholds the whole answer (see Failure modes, and
 [How much of a value the run can stand
 behind](../contract/trust.md)). Every decline is one of five closed
-tokens, `REASONS` (`kg_route.py:59`) (see Failure modes);
-`answer_from_graph` returns only four, the fifth, `no_graph`, left to
-the caller.
+tokens, `REASONS` (`kg_route.py:59`) (see Failure modes); the steps after the
+plan set four of them, the fifth, `no_graph`, is set by the drawing's
+`graph_plan`.
 
 ### Numbers from the harvest
 
@@ -514,8 +520,8 @@ values, as it holds them (see [handing the values on](./serve.md)), limited
 only by the caller's worst trust level and, on the closed questions' way, by
 its count.
 
-`answer.answer_from_values` answers the question from those values: it
-fetches the passage each was read from (`db.fetch_owner_content`, each
+The harvest's steps of the drawing answer the question from those values: they
+fetch the passage each was read from (`db.fetch_owner_content`, each
 passage once, an unknown one skipped) and runs the answer half of a turn
 over them (`_answer_hits`, which a document turn runs over its search
 hits), so the statements, their check and the citations are the same.
@@ -526,9 +532,9 @@ passage is not enough, because a table of twelve carriers is one passage.
 
 ### Comparing several documents
 
-`compare.compare_documents` asks the same question of up to
+The chat's drawing asks the same question of up to
 `COMPARE_MAX_DOCUMENTS` documents (`config.py:63`); documents beyond the
-cap are named in `dropped`, not silently left out (`compare.py:83-87`).
+cap are named in `dropped`, not silently left out (`chatflow.py:2376-2383`).
 The documents run side by side, in one turn, and the page shows one spinner for
 all of them and no stage per document. Each document keeps its own retrieval, its
 own statements and its own counts and
@@ -536,7 +542,7 @@ faults: a row is one `answer_question` result with its `document_id` and `label`
 Once at least two produced an answer, that is, kept at least one statement that
 stood its check, `llm_client.compare_answers` compares the finished prose, given
 only each label and its `answer_text`, so that a dropped statement cannot reach
-it, and never a source passage (`compare.py:51-62`, `compare.py:101-109`). The
+it, and never a source passage (`compare.py:51-62`, `chatflow.py:2406-2411`). The
 comparison call is not told why a row has no answer: it gets `None` for a row
 whose replies could not be read as it does for one whose statements all failed.
 The result's own `faults` holds the requests of that call that stayed unreadable.
@@ -618,8 +624,8 @@ plus what `answer.py` adds:
 | `computed`, `run` | whether it backs a calculated value, and the number in the turn, from 1, of the run that printed it (else `None`) |
 | `n` | the number the `[n]` marks of the answer refer to, from 1; a JSON answer has no marks and its citations have no `n` |
 
-`kg_route.answer_from_graph` returns `{route, reason, values,
-coordinates}` (`kg_route.py:302-335`): `route` is `"kg"` or `"rag"`,
+The graph route's steps give `{route, reason, values,
+coordinates}` (`chatflow.py:2353-2371`, `kg_route.py:313-316`): `route` is `"kg"` or `"rag"`,
 `reason` one of `REASONS` or `None`, `values` one dict per matching row
 with its `evidence` and `trust`.
 
@@ -647,7 +653,7 @@ keeps its rows; the oldest table gets both migrations in one open.
 What `error_message` holds is under Failure modes.
 
 The logged `cache_hit` column is not the turn's own value: `_log` always
-calls `request_log.log_request` with `cache_hit=False` (`answer.py:546-551`),
+calls `request_log.log_request` with `cache_hit=False` (`answer.py:504-509`),
 so a persisted row never reflects the returned dict's `cache_hit` key.
 
 ## Configuration
@@ -686,10 +692,10 @@ chat` lists them all.
 ## Failure modes
 
 An empty hit list is logged as "No hits" and `answer` returns `None`
-before the answer is asked for (`answer.py:310-313`). Where hits exist and no
+before the answer is asked for (`answer.py:268-271`). Where hits exist and no
 statement stood, `answer` comes back `None` too, and three different things end
 a turn there, told apart in the request log's `error_message` and to the reader
-(`answer.py:481-501`):
+(`answer.py:439-459`):
 
 - `No statement backed (n of m statements dropped)`: statements were made and
   none stood its check. The app says that nothing backs an answer.
@@ -728,7 +734,7 @@ the cause as `fault`; the
 request is left in the turn's `faults`, which the app shows under the answer.
 `format_as_json` raises `ReplyError` past its own function and
 `answer.py` catches it, so the answer stays the prose (`llm_client.py:920-941`,
-`answer.py:509-525`). `choose`, the closed question of the values and graph
+`answer.py:467-483`). `choose`, the closed question of the values and graph
 routes, has no wrapper and lets `ReplyError` through to its caller
 (`llm_client.py:433-457`). A cut-off reply is not one of these: it is split or
 given room first (see Reading a model's reply). `code_exec.run_code`
@@ -737,7 +743,7 @@ degrades without raising: any transport or JSON failure comes back
 (`code_exec.py:27-62`).
 
 `kg_route` fails closed on missing trust, withholding the whole answer
-with reason `no_trust` (`kg_route.py:328-333`). A profile that leaves a
+with reason `no_trust` (`chatflow.py:2364-2368`). A profile that leaves a
 `REASONS` token unworded, or words an extra one, raises `LookupError`
 when the route is built (`kg_route.py:82-94`); a Turtle fragment with no
 `@prefix` line is refused outright (`kg_route.py:144-146`).
@@ -786,8 +792,7 @@ only public surface, and loads them on first use and not when the package is
 imported: a command that builds the word index or reads harvested values has
 no use for the answer loop and the libraries it brings. `answer.py` holds
 both, the turn's entry point and the dataclass every step reads. `answer_question` is called directly by
-`docpipe/app/app.py` and by `compare.py`'s
-`compare_documents`, itself reached only from the app.
+`docpipe/app/app.py` and by the chat's drawing (`chatflow`), which also runs the comparison, the graph route and the harvest's answer as steps with the decisions they always had.
 
 `catalog.py` holds the generic `Catalog` class, `load_catalog`,
 `facet_options` and `apply_filters`. `profiles/kwp/catalog.py` and
@@ -810,14 +815,17 @@ app also calls `citation_label` directly.
 `llm_client.py` holds every call to the LLM endpoint: `make_search_phrase`,
 `answer_from_sources`, the grounding checks `grounded_quote` and
 `visual_reading`, `read_off_image`, `format_as_json`, `repeats_among`,
-`compare_answers`, `pick_values` and `choose`. `get_client` hands out the client behind the pool
+`compare_answers`, `pick_values` and `choose`, and for the drawing's output
+boxes `format_by_schema`, `reshape_answer` and `merge_answers`. `get_client` hands out the client behind the pool
 (`pool.over`), and `together` is `pool.together` with the faults of each thread
 kept apart. It holds the way a reply is asked for and read as well: `_chat_json`
 and `_ask`, `ReplyError`, and the record of unreadable requests, `collecting`,
 `note_fault` and `describe_faults` (see Method). `answer.py` calls all of it
-except `compare_answers`, `pick_values` and `choose`; `compare.py` calls
-`compare_answers` and opens its own `collecting`, and the app calls `choose`,
-`pick_values` and `describe_faults` directly.
+except `compare_answers`, `pick_values` and `choose`; the chat's drawing
+(`chatflow`) calls `compare_answers` in its comparison step, which opens its
+own `collecting`, `choose` in its graph and choice steps and the calls of its
+output boxes, and the app calls `choose`, `pick_values` and
+`describe_faults` directly.
 
 `statements.py` holds what a model's statements go through between the model and
 the reader: `back`, the check of each statement against its passage, `texts`,
@@ -856,13 +864,13 @@ Called by `answer.py`, `chunker.py` and, on first use, `llm_client.py`.
 `code_exec.py` holds `is_enabled` and `run_code`, the sandbox client.
 Called by `answer.py` and, for the same feature, `runner.py`.
 
-`compare.py` holds `compare_documents` and `summary`, the multi-document
-path. Called only by the app.
+`compare.py` holds `summary` and `plan_answers`, the multi-document
+helpers. Called by the chat's drawing.
 
-`kg_route.py` holds `hooks`, `answer_from_graph`, `load_graph`,
+`kg_route.py` holds `hooks`, `load_graph`,
 `by_axis`, `trust_level`, `coordinates_of` (the closed questions of the
 coordinates, asked side by side) and `REASONS`, the graph-route contract
-described in Method. Called only by the app, and `coordinates_of` by `values_route.py`.
+described in Method. Called by the chat's drawing, and `coordinates_of` by `values_route.py`.
 
 `hybrid.py` holds `retrieve`, the one ranking out of the search by meaning
 and the search by word, over one document or all; `answer.py` calls it.

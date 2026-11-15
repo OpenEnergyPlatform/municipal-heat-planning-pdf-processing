@@ -138,9 +138,10 @@ function SchemaField({ value, put, data, base }: { value: unknown; put: Put; dat
   const form = named ? forms[value as string] : undefined;
   return (
     <Stack gap={6}>
-      <SegmentedControl size="xs" value={named ? 'named' : 'own'}
+      {/* a form the reading knows only where the library has forms (the chat has none) */}
+      {(named || Object.keys(forms).length > 0) && <SegmentedControl size="xs" value={named ? 'named' : 'own'}
         data={[{ value: 'named', label: t('a form the reading knows') }, { value: 'own', label: t('a form of its own') }]}
-        onChange={v => put(v === 'named' ? (typeof base === 'string' ? undefined : (Object.keys(forms)[0] || undefined)) : ONE_TEXT)} />
+        onChange={v => put(v === 'named' ? (typeof base === 'string' ? undefined : (Object.keys(forms)[0] || undefined)) : ONE_TEXT)} />}
       {named && <NativeSelect value={value as string} aria-label={t('form of the answer')}
         data={Object.entries(forms).map(([k, f]) => ({ value: k, label: tr(f.label) }))}
         onChange={e => put(e.currentTarget.value)} />}
@@ -229,6 +230,26 @@ export function ioOf(lib: Library, n: Step): { takes: string[]; gives: string[] 
   const set = (n.set || {}) as Record<string, any>;
   const root = (p: unknown) => (typeof p === 'string' && p ? p.split('.')[0] : '');
   const uniq = (xs: string[]) => [...new Set(xs.filter(Boolean))];
+  if (lib.flow === 'chat') {
+    // a step of the chat (inference/chatflow.py takes, gives): its box's variables, with those its settings name
+    const fallback = (key: string) => (b.settings.find(s => s.key === key) || { default: undefined }).default;
+    const setting = (key: string) => (Object.prototype.hasOwnProperty.call(set, key) ? set[key] : fallback(key));
+    const gives = new Set<string>(b.outputs || []);
+    for (const key of ['into', 'name']) {
+      const v = setting(key);
+      if (typeof v === 'string' && v) { gives.delete(String(fallback(key))); gives.add(v); }
+    }
+    if (b.type === 'python') for (const o of (setting('outputs') || []) as string[]) gives.add(String(o));
+    const takes = new Set<string>(b.inputs || []);
+    for (const key of ['query', 'from', 'code_from', 'list']) {
+      const v = setting(key);
+      if (typeof v === 'string' && v) { takes.delete(String(fallback(key))); takes.add(root(v)); }
+    }
+    if (['ask', 'python', 'compute'].includes(b.type)) for (const i of (setting('inputs') || []) as string[]) takes.add(root(String(i)));
+    if (b.type === 'merge') for (const l of (setting('lists') || []) as string[]) takes.add(root(String(l)));
+    if (b.type === 'phrase') { takes.delete('image'); takes.delete('image_only'); }
+    return { takes: uniq([...takes]).map(word), gives: uniq([...gives]).map(word) };
+  }
   switch (b.type) {
     case 'ask': {
       // what its target gives the request is not taken (flow.inputs_of), what it makes is given (flow.outputs_of)

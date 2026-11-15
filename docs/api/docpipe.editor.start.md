@@ -36,6 +36,21 @@ def parser() -> argparse.ArgumentParser
 The arguments of `docpipe edit`, of the command and of each server it
 starts.
 
+### missing_libraries
+
+```python
+def missing_libraries(find: Optional[Callable] = None,
+                      load: Optional[Callable] = None) -> tuple
+```
+
+(the library the server cannot start without, where one is missing:
+the one whose import fails when the server's own module is loaded; the
+libraries of the extra `editor` that are not installed (`doctor.NEEDS`),
+by the names they are imported under). The editor refuses only what it
+needs itself: a requirement of the package that only other commands
+import does not keep it from starting. Without the second two tabs say
+what they lack.
+
 ### note_bytes
 
 ```python

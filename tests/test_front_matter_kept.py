@@ -94,3 +94,43 @@ def test_run_refine_keeps_the_title_page_stage_3_names(monkeypatch, tmp_path):
     # the failure by construction: no title page beside the sections
     data = {"sections": [dict(s) for s in COVERED]}
     assert refined(monkeypatch, tmp_path, data) == ["Open access archive"]
+
+
+# Promise (owner decision 2026-11-14): a section the model calls a cover, of
+# a page the publisher, a repository or the download put in front of the
+# publication, goes whole, its heading AND its pictures, on the first page
+# AND before the first heading; a "remove" of the same sections is still
+# refused there, and the publication after the cover stays.
+IOP = [section("Dokument", "LETTER - OPEN ACCESS You may also like", 1),
+       {**section("Ratcheting ambition", "To cite this article: Holz et al",
+                  1), "figures": [{"id": "p1_img0", "caption": "licence"}]},
+       section("Ratcheting ambition to limit warming", "Abstract text", 2)]
+
+
+def cover(sec):
+    return {**sec, "_action": "cover"}
+
+
+def test_a_cover_goes_whole_on_the_first_page_with_its_heading():
+    applied, _ = _apply_actions([cover(IOP[0]), cover(IOP[1]), IOP[2]],
+                                None, _front_pages(IOP, 2))
+    assert [(s["title"], s["content"]) for s in applied] == [
+        ("Ratcheting ambition to limit warming", "Abstract text")]
+
+
+def test_a_remove_of_the_same_cover_is_still_refused():
+    # the failure by construction: the old action keeps the front page
+    applied, _ = _apply_actions([remove(IOP[0]), remove(IOP[1])], None,
+                                _front_pages(IOP, 2))
+    assert [s["content"] for s in applied] == [IOP[0]["content"],
+                                               IOP[1]["content"]]
+
+
+def test_run_refine_leaves_nothing_of_a_cover(monkeypatch, tmp_path):
+    monkeypatch.setattr(refine.providers, "client", lambda *a, **k: object())
+    monkeypatch.setattr(refine, "_ask_window", lambda window, client, prev: [
+        cover(s) if (s.get("segments") or [{}])[0].get("page") == 1
+        else {**s, "_action": "keep"} for s in window])
+    data = {"sections": [dict(s) for s in IOP], "title_page": 2}
+    out = refine.run_refine(tmp_path, data=data, force=True)
+    assert [s["content"] for s in out["sections"]] == ["Abstract text"]

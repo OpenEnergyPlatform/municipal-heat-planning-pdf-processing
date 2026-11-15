@@ -25,6 +25,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import subprocess
@@ -71,6 +72,32 @@ def parser() -> argparse.ArgumentParser:
     made.add_argument("--switch-file", metavar="FILE",
                       help=argparse.SUPPRESS)
     return made
+
+
+TABS_NEED = ('the Sources and Graph tabs need {names}: '
+             'pip install "docpipe[editor]"')
+
+
+def missing_libraries(find: Optional[Callable] = None,
+                      load: Optional[Callable] = None) -> tuple:
+    """(the library the server cannot start without, where one is missing:
+    the one whose import fails when the server's own module is loaded; the
+    libraries of the extra `editor` that are not installed (`doctor.NEEDS`),
+    by the names they are imported under). The editor refuses only what it
+    needs itself: a requirement of the package that only other commands
+    import does not keep it from starting. Without the second two tabs say
+    what they lack."""
+    from .. import doctor
+    find = find or importlib.util.find_spec
+    load = load or (lambda: importlib.import_module("docpipe.editor.server"))
+    core: list = []
+    try:
+        load()
+    except ImportError as exc:
+        name = getattr(exc, "name", None)
+        core = [name.split(".")[0] if name else str(exc)]
+    modules, _extra = doctor.NEEDS["edit"]
+    return core, [name for name in modules if find(name) is None]
 
 
 def note_bytes(name: str, port: int) -> bytes:
@@ -159,6 +186,14 @@ def main(rest: Sequence[str]) -> int:
     if not name:
         raise SystemExit(f"docpipe edit needs a profile: pass --profile "
                          f"NAME (or set ${ENV_VAR})")
+    core, tabs = missing_libraries()
+    if core:
+        raise SystemExit(f"docpipe edit cannot start: the installation "
+                         f"lacks {', '.join(core)}, which docpipe itself "
+                         f"requires: pip install docpipe")
+    if tabs:
+        print("docpipe edit: " + TABS_NEED.format(names=", ".join(tabs)),
+              file=sys.stderr)
     try:
         return loop(name, args.port, harvest, not args.no_browser)
     except KeyboardInterrupt:

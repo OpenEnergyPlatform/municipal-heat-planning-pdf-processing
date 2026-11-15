@@ -12,7 +12,7 @@ reorders, of each kind, the best passages the vector search found (rule
 `rerank_drawn` and `rerank_drawn_from`), all read when the search runs; the
 rest follow in the vector search's order, so a walk down the list still
 reaches every passage (owner decisions 2026-11-06 and 2026-11-08: the
-reranker for the retrieval; 2026-11-13: of each kind the best 30 and 20
+reranker for the retrieval; 2026-11-13: of each kind the best 15 and 10
 drawn from the places up to 100, instead of the best 100). The draw is the
 same for the same document and sentences, so a run asked again draws the
 same passages and the scores the threads share are found again.
@@ -31,6 +31,12 @@ own), so no length of our own decides what it reads.
 
 Every value is read when it is used (`docpipe.rules`), so a step of the flow
 may set its own: the model, the pool, the waiting time.
+
+Each order is written to the trace of its document (`rerank`, owner decision
+2026-11-14), under the search it is part of: which passages were the best of
+their kind and which were drawn, each one's score and the order they came
+to, and how many pairs were scored, taken from the scores the threads share
+or waited for.
 
 Author: Felix Vossel
 
@@ -242,6 +248,31 @@ those at its places after them up to place *upto*, drawn at random as
 in theirs. Without *size* each kind has the number the rules give it
 (`pool_size`); a kind whose number is 0 draws none either, and where
 fewer places are left than *drawn*, all of them are taken.
+
+### drawn_in
+
+```python
+def drawn_in(sources: Sequence, pool: Sequence, size: Optional[int] = None,
+             rule: str = "rerank_pool") -> list
+```
+
+The passages of *pool* (`pool_of`) that were drawn: not among the
+first of their kind in *sources* that the pool takes as its best.
+
+### traced
+
+```python
+def traced(document_id, reranker: "Reranker", probes: list, sources: list,
+           pool: list, rest: list, scored: list, seed: str, drawn: int,
+           upto: int, tally: dict, started: float) -> None
+```
+
+One order in the trace of its document (`rerank`), under the search
+it is part of (`trace.in_search`): passages or pieces, the model, how
+many sentences, the pool's best of each kind and those drawn up to
+place *upto*, each one's score in the order they came to, the passages
+left after the pool, the pairs scored now, kept from before or waited
+for, and the time it took. Never raises.
 
 ### document_of
 

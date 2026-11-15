@@ -99,6 +99,7 @@
  "{label} takes {words}, and no step of the flow gives it",
  "{label} takes {words}, which {given} gives only after it or in another frame",
  "{label} works on what {wanted} gives, so {wanted2} stands before it, and is on",
+ "{label} · {label2} is a name, not {wrong}",
  "{label} · {label2} is a number, not {value}",
  "{label} · {label2} is a text, not {value}",
  "{label} · {label2} is empty: no value",

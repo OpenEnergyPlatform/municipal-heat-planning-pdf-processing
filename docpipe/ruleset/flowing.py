@@ -234,7 +234,9 @@ RULES = (
          "any other entry is the name of a field of the spec, whose "
          "finds are then shown in the block of settings of every later "
          "request. A field left out is not asked before the reading and "
-         "not shown.", where="engine.py (items)", steps=("each settled",)),
+         "not shown. A field of the whole document the spec keeps under a "
+         "key of its own is asked after these.",
+         where="engine.py (items)", steps=("each settled",)),
     # -- flow: states ---------------------------------------------------------
     rule("state_mode", "flow", "States", "choice",
          "The state this step gives a dimension that is still open. By the "

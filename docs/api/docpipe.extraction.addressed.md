@@ -655,6 +655,20 @@ def earlier_entries(plan: Plan, uri: str, name: str,
 already settled for other wordings, for the rule
 `list_shows_earlier`.
 
+#### Reader.list_holds
+
+```python
+def list_holds(self, kind: str) -> Optional[dict]
+```
+
+What the document's list of *kind* holds, as the request for the
+entry of a name shows it (owner decision 2026-11-14: "Asia", the
+region of a value, became a scenario where the request did not say
+what its list holds): the field whose values are names of that kind
+(`merged`), by its name and what it means, in short where the spec
+writes that; the works by the spec's own words for them. None where
+no field reads names of that kind.
+
 #### Reader.name_of
 
 ```python
@@ -1033,6 +1047,17 @@ def asking_box() -> Optional[str]
 
 The id of the box asking now, None outside a box.
 
+### searched_for
+
+```python
+def searched_for() -> dict
+```
+
+What a search is for, as its trace names it (owner decision
+2026-11-14): the box asking now, and where it asks about a value's
+dimension, the field, the dimension, the value and the passage of the
+value (as its requests name them).
+
 ### prompting
 
 ```python
@@ -1405,6 +1430,17 @@ up): the best of each kind of passage up to its share, the shares
 scaled to *budget*, then the best of the rest up to *budget*; in the
 order of *ranked*.
 
+### trace_pick
+
+```python
+def trace_pick(document_id: int, ranked: list, picked: list) -> None
+```
+
+The pieces a search takes (`budgeted`) in its trace (`pick`, owner
+decision 2026-11-14): each with its place in the search's order and the
+place of its passage among the passages of its kind in the vector
+search, where the vector search ran in this search.
+
 ### quoted_address
 
 ```python
@@ -1434,6 +1470,17 @@ def quoted_elsewhere(passages: dict, quote: str) -> tuple
 (the passage shown alone, the address of its lines that hold
 *quote*) of the first of *passages*, in the document's order, whose
 lines hold it (`quoted_address`); (None, None) where none does.
+
+### found_note
+
+```python
+def found_note(index: int, entry, got: Optional["Found"]) -> dict
+```
+
+One find of an answer as the trace notes what became of it (owner
+decision 2026-11-14): its place in the answer's list, the address it
+gave, the passage and lines that address names (and the cell), and
+whether the code found it elsewhere than in the shown lines.
 
 ### resolve
 

@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from typing import Sequence
 
+# What a tab says where the extra `editor` is not installed.
+RDFLIB_MISSING = 'rdflib is not installed: pip install "docpipe[editor]"'
+
 
 def main(rest: Sequence[str]) -> int:
     """`docpipe edit` (start.py). The server is imported only by the process

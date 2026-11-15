@@ -27,6 +27,7 @@ import json
 from typing import Callable, Optional
 
 from .. import rules
+from . import trace
 from .units import (Chunk, Shown, letter_headings, letter_settings,
                     letter_title_page, own_lines, passage_lines)
 
@@ -57,6 +58,10 @@ class Request:
         self.used_up = False
         self.listed = None
         self.place = True           # False: the value has no place
+        # The search the chunks taken from a supply come from (its number in
+        # the trace) and, by chunk, (search, place in its order).
+        self.search = None
+        self.places: dict = {}
 
     def letter_blocks(self, chunks: list) -> dict:
         """{letter: block} of *chunks*, each under a letter of its own (the
@@ -268,6 +273,9 @@ def take(req: Request, supply, size: int):
         if label == supply.label and supply.ranked is not None:
             coord.ordered.update(c.key for c in batch)
         req.batch, req.label = batch, label
+        req.places = dict(getattr(supply, "taken", None) or {})
+        req.search = next((sid for sid, _at in req.places.values()
+                           if sid is not None), None)
         return batch
     taken = supply.take(size)
     if taken is None:
@@ -275,6 +283,47 @@ def take(req: Request, supply, size: int):
     req.scope.drew()
     req.first, req.batch = taken
     return req.batch
+
+
+def blocks_of(shown: Shown) -> dict:
+    """{letter: [[kind, passage, first line, last line, first number shown],
+    ...]} of what *shown* shows, a run of lines per passage: which line of
+    which passage each address names (owner decision 2026-11-14). The
+    passage's own block stands under ""."""
+    out: dict = {}
+    for letter, block in shown.blocks.items():
+        runs: list = []
+        for number, line, source in block.entries:
+            owner = [source.owner_kind, source.owner_id]
+            last = runs[-1] if runs else None
+            if last is not None and last[:2] == owner \
+                    and line.number == last[3] + 1:
+                last[3] = line.number
+                continue
+            runs.append([*owner, line.number, line.number, number])
+        if runs:
+            out[letter] = runs
+    return out
+
+
+def noted_of(req: "Request") -> dict:
+    """What the trace notes of what a request shows, beside its text
+    (owner decision 2026-11-14): its lines by letter (`blocks_of`), the
+    chunks it shows each with the search it was taken from and its place
+    there, and that search's number; {} where nothing is traced."""
+    if not trace.enabled():
+        return {}
+    out: dict = {}
+    blocks = blocks_of(req.shown)
+    if blocks:
+        out["blocks"] = blocks
+    if req.chunks:
+        out["pieces"] = [[*chunk.key, *(req.places.get(chunk.key)
+                                          or (None, None))]
+                         for chunk in req.chunks]
+    if req.search is not None:
+        out["sid"] = req.search
+    return out
 
 
 def _headings(req, value, spec):

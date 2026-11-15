@@ -1,7 +1,9 @@
 /* The Flow tab: the flow of steps, loops, rounds and branchings a run does (extraction/flow.py, engine.py) on a canvas,
    its library, its numbers, checked and saved through /api/flow, run dry on one document with placeholder answers
-   (/api/flow/try). The tree the server sent is kept and edited in place, so a key no control shows goes back as it came;
-   every edit can be undone until the next save. */
+   (/api/flow/try). The same canvas draws the flows of the follow-up passes (/api/flow/pass) and the drawing of the chat
+   (/api/chat, inference/chatflow.py), which a dry run asks one question with made-up answers (/api/chat/try). The tree
+   the server sent is kept and edited in place, so a key no control shows goes back as it came; every edit can be undone
+   until the next save. */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Node,
@@ -22,13 +24,15 @@ import { clone, wrote } from '../lib/util';
 import { Diff } from '../components/Bits';
 import { layout, type Decor } from './layout';
 import {
-  ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, listOf, moveBy, remove, siblingsRun, stepBox, walk,
+  ancestors, duplicate, find, fresh, insertAt, kindOf, labelOf, listOf, moveBy, remove, siblingsRun, stepBox, templateSteps,
+  walk,
   wrap, type FlowData, type Step,
 } from './model';
 import { Ctx, DotNode, FrameNode, StepEdge, StepNode, WayNode, frameWord, type FlowCtx } from './nodes';
 import { LibraryModal, type Pick } from './Library';
 import { NumbersPane, StepSettings, type Panel } from './Settings';
 import { TryPane } from './TryPane';
+import { ChatTryPane, type ChatTryState } from './ChatTry';
 import { HowTo } from './HowTo';
 import './flow.css';
 
@@ -59,6 +63,15 @@ interface PassView {
   name: string; file: string; exists: boolean; base: string | null; tree: Step[]; inherited_tree: Step[] | null;
   library: FlowData['library']; problems: FlowData['problems']; not_started: string | null;
 }
+/* the drawing of the chat as the server sends it (/api/chat) */
+interface ChatView {
+  file: string; exists: boolean; base: string | null; starts_from: string; tree: Step[]; inherited_tree: Step[] | null;
+  library: FlowData['library']; conditions: FlowData['conditions']; problems: FlowData['problems'];
+  available: Record<string, string[]>; prompt_ids: string[]; routes: string[]; modes: string[]; db: string | null;
+  prompts: FlowData['prompts'];
+}
+/* the entry of the drawing of the chat in the choice of the flow shown: no flow of a pass has this name */
+const CHAT = '#chat';
 /* the flows of the follow-up passes in the order the plan of a run takes them */
 const PASS_ORDER = ['top_up', 'top_up_open', 'top_up_parameters', 'remap', 'recheck', 'review', 'start_at', 'example'];
 /* the name of each flow of a follow-up pass, with the switch of the call that starts it */
@@ -79,8 +92,9 @@ interface State {
   meas: any; trial: any; trying: boolean; docs: { id: number | string; title: string }[] | null;
   tryst: { doc: string; pages: string; mode: string }; side: 'numbers' | 'try';
   undo: string[]; redo: string[]; snap: string; fit: number; epoch: number;
-  /* the flow shown: '' the main flow, else the name of a flow of a follow-up pass */
+  /* the flow shown: '' the main flow, CHAT the drawing of the chat, else the name of a flow of a follow-up pass */
   which: string; passes: PassRef[] | null; main: FlowData | null; notStarted: string | null;
+  chat: ChatView | null; chatTry: ChatTryState;
 }
 
 export function FlowTab() {
@@ -94,6 +108,7 @@ function FlowInner() {
     report: null, busy: false, meas: null, trial: null, trying: false, docs: null,
     tryst: { doc: '', pages: '', mode: 'nothing' }, side: 'numbers', undo: [], redo: [], snap: '', fit: 0, epoch: 0,
     which: '', passes: null, main: null, notStarted: null,
+    chat: null, chatTry: { question: '', route: 'auto', as_json: false, mode: 'nothing', doc: '' },
   }).current;
   const [version, touch] = useReducer((x: number) => x + 1, 0);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -181,6 +196,17 @@ function FlowInner() {
       catch { F.passes = []; }
     }
     if (!F.which) { F.notStarted = null; return F.main = await api<FlowData>('GET', '/api/flow'); }
+    if (F.which === CHAT) {
+      const c = F.chat = await api<ChatView>('GET', '/api/chat');
+      F.notStarted = null;
+      return {
+        file: c.file, exists: c.exists, base: c.base, whole: true, starts_from: c.starts_from, drawn_by: c.starts_from,
+        inherited_tree: c.inherited_tree, numbers: [], tree: c.tree, library: c.library, conditions: c.conditions,
+        prompts: c.prompts || {}, never: {}, switches: {}, problems: c.problems || [], notes: [], settings: [],
+        step_rules: { rules: [], kinds: {}, tabs: {} }, run: { machine: [], project: null }, shows: {},
+        prompt_ids: c.prompt_ids, spec_fields: [], available: c.available,
+      };
+    }
     const main = F.main || (F.main = await api<FlowData>('GET', '/api/flow'));
     const p = await api<PassView>('GET', '/api/flow/pass?name=' + encodeURIComponent(F.which));
     const ref = (F.passes || []).find(x => x.name === F.which);
@@ -221,7 +247,8 @@ function FlowInner() {
     if (!F.data || F.busy) return;
     F.busy = true; touch();
     try {
-      F.report = { source: 'check', r: F.which ? await apiR('/api/flow/pass/check', { name: F.which, tree: F.tree })
+      F.report = { source: 'check', r: F.which === CHAT ? await apiR('/api/chat/check', { tree: F.tree })
+        : F.which ? await apiR('/api/flow/pass/check', { name: F.which, tree: F.tree })
         : await apiR('/api/flow/check', { numbers: numbers(), tree: F.tree }) };
     }
     catch (e) { F.report = { source: 'check', error: (e as Error).message }; }
@@ -233,7 +260,8 @@ function FlowInner() {
     let saved: any = null;
     try {
       const base = F.data.base == null ? null : F.data.base;
-      const r = F.which ? await apiR('/api/flow/pass/save', { name: F.which, tree: F.tree, base })
+      const r = F.which === CHAT ? await apiR('/api/chat/save', { tree: F.tree, base })
+        : F.which ? await apiR('/api/flow/pass/save', { name: F.which, tree: F.tree, base })
         : await apiR('/api/flow/save', { numbers: numbers(), tree: F.tree, base });
       if (r.saved) saved = r; else F.report = { source: 'save', r };
     } catch (e) { F.report = { source: 'save', error: (e as Error).message }; }
@@ -255,6 +283,23 @@ function FlowInner() {
   const reload = async () => {
     if (dirty() && !await askConfirm(t('Reload from disk'), t('The flow file changed on disk. Reloading drops the edits.'), t('Drop my edits and reload'))) return;
     await load(false);
+  };
+  /* one question asked of the drawing of the chat on the page, with made-up answers; each step that ran shows how many
+     requests it asked */
+  const tryChat = async () => {
+    if (F.trying || !F.data) return;
+    F.trying = true; touch();
+    const s = F.chatTry;
+    const body: Record<string, unknown> = { tree: F.tree, question: s.question, route: s.route, as_json: s.as_json, mode: s.mode };
+    if (s.doc) body.document = Number(s.doc);
+    try {
+      const r = await apiR('/api/chat/try', body);
+      const boxes: Record<string, { requests: number }> = {};
+      for (const one of r.steps || []) boxes[one.id] = boxes[one.id] || { requests: 0 };
+      for (const one of r.requests || []) if (one.step) (boxes[one.step] = boxes[one.step] || { requests: 0 }).requests++;
+      F.trial = { ...r, boxes };
+    } catch (e) { F.trial = { error: (e as Error).message }; }
+    F.trying = false; touch();
   };
   const tryIt = async () => {
     if (F.trying || !F.data) return;
@@ -364,6 +409,17 @@ function FlowInner() {
   const put = (list: string, at: number, p: Pick) => {
     const steps = listOf(F.tree, list);
     if (!steps || !F.data) return;
+    if (p.kind === 'template') {
+      // a template's steps all go in at once, each with an id of its own
+      const tpl = (F.data.library.templates || []).find(x => x.name === p.arg);
+      if (!tpl) return;
+      const made = templateSteps(F.tree, tpl);
+      steps.splice(at, 0, ...made);
+      for (const m of made) { F.open.add(m.id); for (const a of ancestors(F.tree, m.id)) F.open.add(a); }
+      F.sel = made.length ? made[0].id : null; F.multi = new Set(made.map(m => m.id));
+      edited();
+      return;
+    }
     const n = fresh(F.tree, F.data.conditions, p.kind, 'arg' in p ? p.arg : undefined);
     insertAt(steps, at, n);
     for (const a of ancestors(F.tree, n.id)) F.open.add(a);
@@ -377,11 +433,15 @@ function FlowInner() {
       if (steps === F.tree) return 'root';
       for (const [n] of walk(F.tree)) {
         const k = kindOf(n);
-        if ((k === 'each' || k === 'round') && n.steps === steps) return n.id;
+        if ((k === 'each' || k === 'round' || k === 'part') && n.steps === steps) return n.id;
         if (k === 'if') {
           const i = (n.if || []).findIndex((w: { steps: Step[] }) => w.steps === steps);
           if (i >= 0) return n.id + '#' + i;
           if (n.else === steps) return n.id + '#else';
+        }
+        if (k === 'together') {
+          const i = (n.together || []).findIndex((w: { steps: Step[] }) => w.steps === steps);
+          if (i >= 0) return n.id + '#' + i;
         }
       }
       return 'root';
@@ -401,13 +461,16 @@ function FlowInner() {
       const ids = F.multi.has(id) && F.multi.size > 1 ? [...F.multi] : [id];
       if (!siblingsRun(F.tree, ids)) { showError(new Error(t('Only steps, loops, rounds and branchings that stand right after one another in the same column can be wrapped together.'))); return; }
       const [kind, each] = (arg || 'round').split(':');
-      const f = wrap(F.tree, F.data.conditions, ids, kind as 'each' | 'round' | 'if', each);
+      const f = wrap(F.tree, F.data.conditions, ids, kind as 'each' | 'round' | 'if' | 'together' | 'part', each);
       if (f) { F.open.add(f.id); for (const a of ancestors(F.tree, f.id)) F.open.add(a); F.sel = f.id; F.multi = new Set([f.id]); edited(); }
     }
   };
 
+  /* a flow of a follow-up pass: steps and loops only; the chat has its rounds, branchings and ways side by side too */
+  const isChat = F.which === CHAT;
+  const loopsOnly = !!F.which && !isChat;
   const ctx: FlowCtx | null = F.data ? {
-    lib: F.data.library, never: F.data.never || {}, toggle, loopsOnly: !!F.which,
+    lib: F.data.library, never: F.data.never || {}, toggle, loopsOnly,
     add: (list, at) => setLib({ list, at, after: null }),
   } : null;
 
@@ -430,7 +493,8 @@ function FlowInner() {
     return <Center h="100%">{F.report && F.report.error ? <Alert color="red">{F.report.error}</Alert> : <Loader />}</Center>;
   }
   const d = F.data;
-  const status = F.which ? (d.exists ? t('its own flow') : t('not written yet: the flow comes from {name}', { name: d.starts_from || t('the program') }))
+  const status = isChat ? (d.exists ? t('its own drawing of the chat') : t('not written yet: the chat runs the drawing of {name}', { name: d.starts_from }))
+    : F.which ? (d.exists ? t('its own flow') : t('not written yet: the flow comes from {name}', { name: d.starts_from || t('the program') }))
     : !d.exists ? t('not written yet: the flow and every number come from {name}', { name: d.starts_from })
     : d.whole ? t('the whole flow of this profile') : (d.drawn_by === d.starts_from ? t('numbers of its own, the flow of {name}', { name: d.drawn_by }) : t('its own flow'));
   /* another flow is shown: edits not saved are given up first, as on a reload */
@@ -442,7 +506,7 @@ function FlowInner() {
     await load(false);
   };
   const rank = (name: string) => { const i = PASS_ORDER.indexOf(name); return i < 0 ? PASS_ORDER.length : i; };
-  const flows = [{ value: '', label: t('Main flow') }, ...[...(F.passes || [])]
+  const flows = [{ value: '', label: t('Main flow') }, { value: CHAT, label: t('Chat: how a question is answered') }, ...[...(F.passes || [])]
     .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
     .map(p => ({ value: p.name, label: passWord(p.name) }))];
   const sel = F.sel ? find(F.tree, F.sel) : null;
@@ -452,7 +516,7 @@ function FlowInner() {
     edited,
     numberSet: (name, v) => { F.cur[name] = v; F.report = null; remember(); touch(); measured(); },
     select: id => { F.sel = id; F.multi = new Set(id ? [id] : []); touch(); },
-    focusNumber, reload: () => { load(true); }, pass: !!F.which,
+    focusNumber, reload: () => { load(true); }, pass: loopsOnly, chat: isChat,
     availableOf: id => (((F.report && F.report.r && F.report.r.available) || d.available || {}) as Record<string, string[]>)[id] || [],
   };
   const isDirty = dirty();
@@ -478,7 +542,7 @@ function FlowInner() {
             <Button variant="default" leftSection={<IconCheck size={16} />} loading={F.busy} onClick={check} title={t('Ctrl+Enter')}>{t('Check')}</Button>
             <Button leftSection={<IconDeviceFloppy size={16} />} disabled={F.busy || !isDirty} onClick={save} title={t('Ctrl+S')}>{t('Save')}</Button>
             <Button variant="default" leftSection={<IconX size={16} />} disabled={F.busy || !isDirty} onClick={discard}>{t('Discard')}</Button>
-            {!F.which && <Button variant="light" color="orange" leftSection={<IconPlayerPlay size={16} />} loading={F.trying}
+            {(!F.which || isChat) && <Button variant="light" color="orange" leftSection={<IconPlayerPlay size={16} />} loading={F.trying}
               onClick={() => { F.sel = null; F.multi = new Set(); F.side = 'try'; touch(); }}>{t('Dry run')}</Button>}
           </Group>
         </Group>
@@ -499,7 +563,24 @@ function FlowInner() {
           </Box>
           <ScrollArea w={380} className="fl-side" type="auto">
             <Box p="md">
-              {sel ? <StepSettings key={sel.n.id} P={panel} n={sel.n} /> : F.which ? (
+              {sel ? <StepSettings key={sel.n.id} P={panel} n={sel.n} /> : isChat ? (
+                <Stack gap="md">
+                  <SegmentedControl fullWidth value={F.side} onChange={v => { F.side = v as 'numbers' | 'try'; touch(); }}
+                    data={[{ value: 'numbers', label: t('Overview') }, { value: 'try', label: t('Dry run') }]} />
+                  {F.side === 'numbers' ? (
+                    <Stack gap="sm">
+                      <Text fw={650}>{t('Chat: how a question is answered')}</Text>
+                      <Text size="sm">{t('A turn of the chat runs these steps from the question at the top to the step that shows the answer. A branching takes the first way whose condition holds, "side by side" runs every way at the same time. To build a route of your own: put a branching on the variable "route", give its new way the steps of the route (ask the model, ask the graph, format the answer, ...) and end it with "Show the answer"; the chat page offers every route a condition names.')}</Text>
+                      <Text size="sm" fw={600}>{t('Routes the chat page offers')}</Text>
+                      <Group gap={6}>{(F.chat ? F.chat.routes : []).map(r => <Badge key={r} variant="light">{r}</Badge>)}</Group>
+                    </Stack>
+                  ) : (
+                    <ChatTryPane st={F.chatTry} set={s => { Object.assign(F.chatTry, s); touch(); }} routes={F.chat ? F.chat.routes : []}
+                      db={!!(F.chat && F.chat.db)} docs={F.docs} loadDocs={loadDocs} trying={F.trying} trial={F.trial} run={tryChat}
+                      onStep={reveal} />
+                  )}
+                </Stack>
+              ) : F.which ? (
                 <Stack gap="sm">
                   <Text fw={650}>{passWord(F.which)}</Text>
                   <Text size="sm">{t('A follow-up pass runs on a stored harvest, its steps one after the other in the order shown. The switch of the call in brackets starts it, and so does --flow with its name. To change it: put steps in or take them out, switch them off, or choose a step to set what it does and the values it reads. Where a step needs what another one gives, the check says so.')}</Text>
@@ -519,7 +600,7 @@ function FlowInner() {
           </ScrollArea>
         </Group>
       </Stack>
-      <LibraryModal lib={d.library} opened={!!lib} after={lib ? lib.after : null} onClose={() => setLib(null)} loopsOnly={!!F.which}
+      <LibraryModal lib={d.library} opened={!!lib} after={lib ? lib.after : null} onClose={() => setLib(null)} loopsOnly={loopsOnly}
         onPick={p => { const l = lib; setLib(null); if (l) put(l.list, l.at, p); }} />
       <Menu opened={!!menu} onChange={o => { if (!o) setMenu(null); }} position="bottom-start" withinPortal shadow="md" width={240}
         middlewares={{ flip: true, shift: { padding: 8, crossAxis: true } }}>
@@ -530,11 +611,13 @@ function FlowInner() {
             <Menu.Item leftSection={<IconArrowUp size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === 0} onClick={() => act('up', menuStep.n.id)}>{t('Move up')}</Menu.Item>
             <Menu.Item leftSection={<IconArrowDown size={16} />} disabled={menuStep.steps.indexOf(menuStep.n) === menuStep.steps.length - 1} onClick={() => act('down', menuStep.n.id)}>{t('Move down')}</Menu.Item>
             <Menu.Item leftSection={<IconCopy size={16} />} onClick={() => act('duplicate', menuStep.n.id)}>{t('Duplicate')}</Menu.Item>
-            <Menu.Item leftSection={<IconFrame size={16} />} onClick={() => { const at = listKeyOf(menuStep.n.id); if (at) setLib({ ...at, after: labelOf(d.library, menuStep.n) }); }}>{F.which ? t('Put a step or loop after it…') : t('Put a step, loop, round or branching after it…')}</Menu.Item>
+            <Menu.Item leftSection={<IconFrame size={16} />} onClick={() => { const at = listKeyOf(menuStep.n.id); if (at) setLib({ ...at, after: labelOf(d.library, menuStep.n) }); }}>{loopsOnly ? t('Put a step or loop after it…') : t('Put a step, loop, round or branching after it…')}</Menu.Item>
             <Menu.Divider />
             <Menu.Label>{F.multi.size > 1 && F.multi.has(menuStep.n.id) ? t('Wrap the {n} chosen in', { n: F.multi.size }) : t('Wrap it in')}</Menu.Label>
-            {!F.which && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>{frameWord('round')}</Menu.Item>}
-            {!F.which && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>{frameWord('if')}</Menu.Item>}
+            {!loopsOnly && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'round')}>{frameWord('round')}</Menu.Item>}
+            {!loopsOnly && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'if')}>{frameWord('if')}</Menu.Item>}
+            {(d.library.frames || []).includes('together') && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'together')}>{frameWord('together')}</Menu.Item>}
+            {(d.library.frames || []).includes('part') && <Menu.Item onClick={() => act('wrap', menuStep.n.id, 'part')}>{frameWord('part')}</Menu.Item>}
             {Object.keys(d.library.each).map(e => <Menu.Item key={e} onClick={() => act('wrap', menuStep.n.id, 'each:' + e)}>{rich(tr((d.library.each_titles || {})[e]) || t('For each {name}', { name: e }))}</Menu.Item>)}
             <Menu.Divider />
             {removable(menuStep.n) && <Menu.Item leftSection={<IconPower size={16} />} onClick={() => act('off', menuStep.n.id)}>{menuStep.n.off ? t('Switch on') : t('Switch off')}</Menu.Item>}

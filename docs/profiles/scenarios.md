@@ -269,7 +269,7 @@ An `out:` sentinel is a vocabulary entry offered like any real class, but
 one whose identifier begins with the literal prefix `out:` and names a
 deliberate non-class answer, not a reading the graph can hold. The
 prefix is one definition, `NOT_IN_GRAPH = "out:"` in
-`docpipe/extraction/graphkit.py`, which the bricks of both profiles and the
+`docpipe/extraction/graphkit.py`, which the bricks and presets of both profiles and the
 provenance writer import, so the writer has nothing to keep in step with
 another copy; `bricks.in_graph()` is the
 one guard every later mint, link and type decision runs through, and it refuses
@@ -335,7 +335,7 @@ request shows the name, the lines it stands in, its work and the list, and answe
 the number of the entry, "new" where the list holds none for it, or 0 where the
 words name no such thing (a source note, a year, a number, a sentence): no entry is
 made, the row stays read with an empty `scenario_means` or `value_means` and the
-graph makes no scenario of it (the brick `scenario_names` in `kg.py`, owner decision
+graph makes no scenario of it (the preset `scenario_names` in `kg.py`, owner decision
 2026-11-09); a new name whose work stayed open is an entry of no work. The entries
 beside the names (`out:status_quo`, `out:several`) stand first with what each
 means. A name is an entry where both name the same thing, a short and a long form
@@ -397,7 +397,7 @@ values waiting for them hold the run's threads (`works_for_pass`, owner decision
 The target is OEKG, on the Open Energy Platform, written from the drawing in
 `profiles/scenarios/graph.json` (`map`) by the core's program
 (`docpipe/extraction/graph.py`) through `docpipe/extraction/serialize.py`;
-`profiles/scenarios/kg.py` holds the bricks only this graph needs (scenario
+`profiles/scenarios/kg.py` holds the presets only this graph needs, written out as blocks in `graph.json` (scenario
 names, short name, region, known name, the cross-check against the crawl); the
 walk shared by both profiles, and the ontology audit that checks a spec
 against a pinned snapshot separately from any serialize run, are documented
@@ -449,10 +449,10 @@ bundle, an author, an organisation and a funder directly under the base
 with no path segment at all (the `folder` of each box's `address`).
 
 One document mints exactly one study report and one scenario bundle. The
-report's IRI comes from the resolved title; the bundle's comes from
-`study_project_name` where the document names a project, and from the
-title again where it does not (the bundle's `address` lists both and
-takes the first present). That title only
+report's IRI comes from the DOI where one is read, else from the resolved title, and the report is written only where the title is read (`needs`; owner decision 2026-11-14); the bundle's comes from
+`study_project_name` where the document names a project, else from the DOI,
+else from the title (the bundle's `address` lists the three and
+takes the first present). That DOI or title only
 keys the IRI: the bundle is labelled with the study's name the document
 prints and with nothing where it prints none (owner decision 2026-11-07). A node carries
 a has-uuid triple where its box says `uuid`: today the report and the
@@ -485,7 +485,7 @@ the shapes require at the end of its edge (study region, `OEO_00020032`) and
 the English short name LCC gives it ("Syrian Arab Republic (the)",
 `region_names.json`), an OEO term used as a scenario type or a tag by its
 label in the release the snapshot is pinned to, both as plain strings
-without a language tag (`node_names`, and the brick `known_name`). A region is the LCC country of its own name; one LCC has
+without a language tag (`node_names`, and the preset `known_name`). A region is the LCC country of its own name; one LCC has
 renamed since the OEKG minted it is the one country whose short name is
 among the region's labels (`region/Macedonia` is North Macedonia), and one
 that finds none or two stays unnamed (`vocabulary.region_names`). A node
@@ -508,7 +508,7 @@ for a scenario type. The
 picked IRIs travel on in the study dict as `bundle["tags"]`.
 
 One factsheet is minted per scenario. For every row of a scenario-scope
-parameter, `scenario_names()` in `kg.py` (the brick of the box `scenario`) gives the scenarios the row belongs
+parameter, `scenario_names()` in `kg.py` (the preset of the box `scenario`) gives the scenarios the row belongs
 to: those its name means (`value_means` for a `scenario_label` row,
 `scenario_means` for any other), else the scenario of its own name as
 printed. A name that does not stand in its own quote mints nothing, and the
@@ -521,7 +521,7 @@ factsheet's `rdfs:label` is the name the scenario is called by; its
 `dc:acronym` is the short name the document prints for it, as a row marked
 `value_short` says it (written by the naming step of harvests before
 2026-11-08, none now, owner decision 2026-11-07), and the scenario's own name
-where there is none (the brick `short_name`). Every factsheet
+where there is none (the preset `short_name`). Every factsheet
 also carries a fixed `OEO_00020517` annotation (`graph.json` rule `scenario_types_always`, the brick `fixed`; owner
 decision 2026-11-06: kept) on top of whatever `scenario_type` classes the
 model read off the text.
@@ -529,7 +529,7 @@ model read off the text.
 A study region the list carries is referenced, never minted. A region the
 model matched against the document's own narrowed OEKG list is written as a
 link to that region's existing IRI, described once by LCC's name for it and
-never by the document's wording (above; the brick `region`). A group of
+never by the document's wording (above; the preset `region`). A group of
 countries is written as a link to each of its members, its passage cited once
 above the first (`region_members`, the arrow's `cite_once`). An
 `out:multiregion` or `out:other` choice, or a wording the narrowed list did not
@@ -566,7 +566,7 @@ DOI against `DocumentMeta`, filled in by the crawl, not this profile's
 own extraction; a disagreement is logged and the crawled value is never
 substituted into the graph, since a published value must carry its own
 evidence, and the crawl's copy is only the cross-check
-(the document's `check`, the brick `crawl_crosscheck`).
+(the document's `check`, the preset `crawl_crosscheck`).
 
 What the paper's front pages do not print of its DOI and year, often an
 authors' manuscript, and its authors where they name none, the run looks up
@@ -729,7 +729,7 @@ The first is one bundle per project. The Turtle mints a bundle from its
 label, so two papers of one project are one bundle with two reports there,
 while the body of each paper alone would make two bundles of one study.
 `merge` joins the documents whose bundle key is the same (the project's
-name, else the title, compared through `kg.normalise`, as the Turtle mints
+name, else the DOI, else the title, compared through `kg.normalise`, as the Turtle mints
 it) into one request with several study reports. The oldest paper leads:
 its spelling of the project's name labels the bundle (no label where no
 paper prints one) and its abstract is the bundle's, of which the shapes allow one;
@@ -787,7 +787,7 @@ no study name, since nothing stands in for it (owner decision 2026-11-07).
 A scenario name absent from its own quoted passage is refused as an
 identity for every scenario-scope parameter alike: `scenario_names()`
 returns no name, and the row contributes no factsheet, comment or number
-(the brick `scenario_names`); it used to mint a factsheet anyway, which this check exists to
+(the preset `scenario_names`); it used to mint a factsheet anyway, which this check exists to
 prevent. Rows whose names the `names` request answered with one name land on that
 scenario's factsheet, and a name of several scenarios on each of theirs, so
 two names the model took for one scenario are one factsheet and a wrong answer

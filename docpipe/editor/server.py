@@ -6,7 +6,8 @@ status and an object out), so every promise of the endpoints can be held to
 without a socket. What an endpoint says comes from the logic beside it
 (`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
 module only reads the file, asks the logic and, where the logic says so,
-writes.
+writes. The drawing of the chat is drawn, checked, saved and tried through
+/api/chat (`chatpage.py`).
 
 `Files` is the one place the editor touches a file: it may write, and take a
 file away, only inside the profile's own folder and read only inside the
@@ -61,15 +62,19 @@ from typing import Callable, Optional, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
 from .. import graphfile
+from .. import newprofile
 from .. import phrases as phrase_files
 from .. import rules as rule_files
 from .. import settings
 from .. import sources as source_files
 from .. import upstream
+from ..extraction import conditions
 from ..extraction import flow as flow_files
 from ..extraction import passflow
+from ..extraction import spec as spec_module
 from ..extraction import trace as trace_files
 from ..profile import available_profiles
+from . import chatpage
 from . import flow as flow_view
 from . import flowtry
 from . import (graphpage, measured, phrases, prompts, rulespage,
@@ -228,7 +233,8 @@ class App:
     def __init__(self, profile, harvest: Optional[Path] = None,
                  root: Optional[Path] = None, cache: Optional[Path] = None,
                  fetch_root: Optional[Path] = None,
-                 switch: Optional[Callable[[str], None]] = None):
+                 switch: Optional[Callable[[str], None]] = None,
+                 home: Optional[Path] = None):
         # how a switch to another profile is said to the command that
         # started this server (start.py); None: it offers only its own
         self.switch = switch
@@ -255,6 +261,14 @@ class App:
             self.harvest, lines=lambda path: trace_files.lines(
                 self.files.checked(path)))
         self.spec_path = profile.component("extraction", "SPEC_PATH")
+        # A profile made with a draft of its spec and no spec yet (`docpipe
+        # init --shapes`, a new profile of the page): its Spec tab edits the
+        # draft, and the spec is written once the draft lacks nothing.
+        draft = folder / newprofile.DRAFT_FILE
+        self.draft_path = draft if self.spec_path is None \
+            and draft.is_file() else None
+        # the project a new profile is made in (`newprofile`)
+        self.home = Path(home or settings.project_dir()).resolve()
         self._snapshot: Optional[dict] = None
         self._loaded = False
         # {trace name: (state of its file, what its requests say)}
@@ -294,7 +308,25 @@ class App:
             return None
         return done.stdout if done.returncode == 0 else None
 
+    def _spec_entries(self) -> Optional[dict]:
+        """The entries the profile's spec adds to a condition's open
+        properties (its value types, the built-in ones among them), None
+        where it has no spec or draft the page can read."""
+        path = self.spec_path or self.draft_path
+        try:
+            data = json.loads(self.files.read(path)) if path else None
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        own = data.get("value_types")
+        return {"value_types": tuple(spec_module.BUILTIN_TYPES) + tuple(
+            name for name in (own if isinstance(own, dict) else {})
+            if name not in spec_module.BUILTIN_TYPES)}
+
     def _need_spec(self) -> Path:
+        if self.spec_path is None and self.draft_path is not None:
+            return self.draft_path
         if self.spec_path is None:
             raise _Refusal(404, f"profile {self.profile.name!r} has no "
                                 f"extraction spec")
@@ -329,6 +361,7 @@ class App:
             "/api/state": ("GET", self._state),
             "/api/profile": ("GET", self._profile),
             "/api/profile/switch": ("POST", self._profile_switch),
+            "/api/profile/new": ("POST", self._profile_new),
             "/api/spec": ("GET", self._spec),
             "/api/spec/check": ("POST", self._check),
             "/api/spec/save": ("POST", self._save),
@@ -358,6 +391,10 @@ class App:
             "/api/flow/pass": ("GET", self._pass),
             "/api/flow/pass/check": ("POST", self._pass_check),
             "/api/flow/pass/save": ("POST", self._pass_save),
+            "/api/chat": ("GET", self._chat),
+            "/api/chat/check": ("POST", self._chat_check),
+            "/api/chat/save": ("POST", self._chat_save),
+            "/api/chat/try": ("POST", self._chat_try),
             "/api/rules": ("GET", self._rules),
             "/api/rules/check": ("POST", self._rules_check),
             "/api/rules/save": ("POST", self._rules_save),
@@ -373,6 +410,7 @@ class App:
             "/api/graph/save": ("POST", self._graph_save),
             "/api/graph/probe": ("POST", self._graph_probe),
             "/api/graph/preview": ("POST", self._graph_preview),
+            "/api/graph/try_block": ("POST", self._graph_try_block),
         }
         if path not in routes:
             raise _Refusal(404, f"no such endpoint: {path}")
@@ -383,7 +421,10 @@ class App:
             raise _Refusal(400, "the body must be a JSON object")
         if path.startswith("/api/spec"):
             self._need_spec()
-        answer = handler(query, body)
+        # a condition about the kind of value of a field is checked against
+        # the value types of the profile's spec (`conditions.added`)
+        with conditions.added(self._spec_entries()):
+            answer = handler(query, body)
         # a handler that answers with another status gives (status, object)
         return answer if isinstance(answer, tuple) else (200, answer)
 
@@ -401,7 +442,8 @@ class App:
         return {
             "profile": self.profile.name,
             "profiles": self._profiles(),
-            "spec": self.shown(self.spec_path) if self.spec_path else None,
+            "spec": self.shown(self.spec_path or self.draft_path)
+            if self.spec_path or self.draft_path else None,
             "branch": branch.strip() if branch else None,
             "changed": changed,
             "harvest": self.harvest.as_posix() if self.harvest else None,
@@ -435,12 +477,67 @@ class App:
         self.switched = name
         return {"profile": name, "restart": True}
 
+    def _profile_new(self, query, body) -> dict:
+        """A new profile in the profile folder of the project (owner request
+        2026-11-14, wish 5): empty, extending the profile docpipe brings, or
+        a copy of one the installation finds; the addresses of an ontology,
+        shapes and a graph its sources, fetched before anything is written;
+        a draft of its spec from the shapes fetched or from the small shape
+        docpipe brings, made as `docpipe init --shapes` makes it. Says what
+        was written and what the draft still lacks; the head then switches
+        to it."""
+        if not isinstance(body, dict):
+            raise _Refusal(400, "the body must be a JSON object")
+        name = str(body.get("name") or "").strip()
+        start = body.get("start", "empty")
+        copy_of = body.get("from") if start == "copy" else None
+        drafted = body.get("draft", "none")
+        if start not in ("empty", "copy") \
+                or drafted not in ("none", "shapes", "bundled"):
+            raise _Refusal(400, "start is empty or copy, draft none, shapes "
+                                "or bundled")
+        try:
+            newprofile.check_name(name)
+            if start == "copy" and copy_of not in available_profiles():
+                raise newprofile.ProfileError(
+                    f"no profile {copy_of!r} to copy")
+            sources = newprofile.addressed_sources(body.get("addresses"))
+            if drafted == "shapes" and "shapes" not in sources:
+                raise newprofile.ProfileError(
+                    "a draft from the shapes needs the address of the "
+                    "shapes")
+            # Fetched before anything is written: an address that gives
+            # nothing leaves no half of a profile behind.
+            records = upstream.fetch(sources, self.cache) if sources else {}
+            draft = None
+            if start == "empty" and drafted == "shapes":
+                draft, _ = newprofile.draft_from_shapes(
+                    upstream.files(records["shapes"])[0])
+            elif start == "empty" and drafted == "bundled":
+                draft, _ = newprofile.draft_from_shapes(True)
+            written = newprofile.write_profile(
+                self.home, name, copy_of=copy_of, draft=draft,
+                sources=sources)
+            if records:
+                upstream.write_lock(name, records, self.cache)
+        except (newprofile.ProfileError, upstream.UpstreamError,
+                OSError, IndexError) as exc:
+            raise _Refusal(400, str(exc))
+        return {"profile": name, "written": [self.shown(p) for p in written],
+                "missing": newprofile.missing(draft),
+                "fetched": sorted(records),
+                "switch": self.switch is not None}
+
     def _spec(self, query, body) -> dict:
         raw = self.files.read(self._need_spec())
         data = specs.parse(raw)
         snapshot = self.snapshot()
+        drafting = self._drafting()
         return {"data": data, "base": sha256(raw),
+                **({"draft": True, "missing": newprofile.missing(data)}
+                   if drafting else {}),
                 "form": specs.form(self.profile),
+                "library": specs.library(data),
                 "pin": specs.pin(data, snapshot) if snapshot else {},
                 "notes": specs.notes(data, snapshot) if snapshot else []}
 
@@ -452,6 +549,41 @@ class App:
         report.pop("text", None)        # the page gets the diff
         return report
 
+    def _drafting(self) -> bool:
+        return self.spec_path is None and self.draft_path is not None
+
+    def _save_draft(self, raw: bytes, data: dict) -> dict:
+        """The draft as the page has it, whatever it still lacks; and, once
+        it lacks nothing, the spec and the graph file beside it, as `docpipe
+        compile apply --out` writes them (owner request 2026-11-14, wish 5:
+        the strict check takes the draft once a real example is in)."""
+        from ..compile import draft as drafting
+        report = specs.judge(raw, data, None, None,
+                             self.shown(self.draft_path))
+        text = report.pop("text").encode("utf-8")
+        self.files.write(self.draft_path, text)
+        missing = newprofile.missing(data)
+        report.update(saved=True, base=sha256(text), draft=True,
+                      missing=missing)
+        if missing:
+            return report
+        folder = self.draft_path.parent
+        spec = folder / "extraction_spec.json"
+        self.files.write(spec, (json.dumps(
+            drafting.finished(data), ensure_ascii=False, indent=1)
+            + "\n").encode("utf-8"))
+        graph = folder / graphfile.FILE
+        said = drafting.graph_file(data)
+        if said and not graph.exists():
+            self.files.write(graph, graphfile.dump(said).encode("utf-8"))
+        from ..compile import examples as proposing
+        kept = drafting.set_aside(self.draft_path, spec, self.files, with_it=(
+            proposing.review_path(self.draft_path),))
+        self.spec_path, self.draft_path = spec, None
+        report.update(draft=False, spec_written=self.shown(spec),
+                      **({"draft_kept": self.shown(kept)} if kept else {}))
+        return report
+
     def _save(self, query, body) -> dict:
         data = self._need_data(body)
         spec = self._need_spec()
@@ -460,6 +592,8 @@ class App:
             return {"saved": False, "reason": "moved",
                     "message": "the file changed on disk since the page "
                                "loaded it; reload it before saving"}
+        if self._drafting():
+            return self._save_draft(raw, data)
         report, written = specs.save(
             raw, data, confirm=bool(body.get("confirm")),
             stamps=self._stamps(), snapshot=self.snapshot(),
@@ -853,6 +987,81 @@ class App:
             self.files.remove(own)
         return report
 
+    # -- the drawing of the chat --
+
+    def _chat_file(self) -> tuple:
+        """(the profile's own drawing of the chat, its bytes or None where
+        it has none), every file of the drawing's line checked by the guard
+        before the chat's loader reads it."""
+        from ..inference import chatflow
+        for _name, path in chatflow.line(self.profile):
+            self.files.checked(path)
+        own = chatflow.path_of(self.profile)
+        return own, (self.files.read(own) if own.is_file() else None)
+
+    def _chat(self, query, body) -> dict:
+        own, raw = self._chat_file()
+        db = self._corpus_db()
+        return {**chatpage.view(self.profile, raw, self.shown),
+                "db": str(db) if db else None}
+
+    def _chat_check(self, query, body) -> dict:
+        own, raw = self._chat_file()
+        report = chatpage.judge(self.profile, raw, self.shown(own),
+                                body.get("tree"))
+        report.pop("text", None)        # the page gets the diff
+        return report
+
+    def _chat_save(self, query, body) -> dict:
+        own, raw = self._chat_file()
+        report, written, remove = chatpage.save(
+            self.profile, raw, body.get("base"), self.shown(own),
+            body.get("tree"))
+        if written is not None:
+            self.files.write(own, written)
+        elif remove:
+            self.files.remove(own)
+        return report
+
+    def _chat_try(self, query, body) -> dict:
+        """One turn of the drawing on the page with made-up answers, on a
+        document of the corpus database or a plan made up from the
+        examples of the spec; nothing sent (`chatpage.try_turn`)."""
+        own, raw = self._chat_file()
+        tree = body.get("tree")
+        if tree is None:
+            tree = chatpage.drawn(self.profile, raw)
+        document = body.get("document")
+        if document is None:
+            spec = None
+            if self.spec_path:
+                from ..extraction import runner as runner_map
+                spec = runner_map.load_spec(specs.parse(
+                    self.files.read(self.spec_path)))
+            sources = chatpage.example_sources(spec)
+            label = chatpage.EXAMPLE_LABEL
+        else:
+            db = self._corpus_db(body)
+            if db is None:
+                raise _Refusal(400, "no corpus database: try the example "
+                                    "plan, or give \"db\"")
+            pages = body.get("pages")
+            sources = flowtry.sources_of(
+                db, int(document), tuple(pages) if isinstance(
+                    pages, list) and len(pages) == 2 else None)
+            label = next((one["title"] for one in flowtry.documents(db)
+                          if one["id"] == int(document)), str(document))
+        try:
+            return chatpage.try_turn(
+                self.profile, tree, sources,
+                question=body.get("question") or "",
+                route=body.get("route") or "auto",
+                as_json=bool(body.get("as_json")),
+                scopes=body.get("scopes"), mode=body.get("mode") or "nothing",
+                label=label)
+        except chatpage.Refused as exc:
+            raise _Refusal(400, str(exc))
+
     def _corpus_db(self, body: Optional[dict] = None) -> Optional[Path]:
         db = (body or {}).get("db") or getattr(self.profile, "db_path", None)
         return Path(db) if db and Path(db).is_file() else None
@@ -1120,6 +1329,23 @@ class App:
                 self.profile, body.get("data"), self.harvest,
                 body.get("document"), self._corpus_db(body),
                 bool(body.get("strict")), self._spec_object())
+        except graphpage.PreviewError as exc:
+            raise _Refusal(400, str(exc))
+
+    def _graph_try_block(self, query, body) -> dict:
+        """What one block of the drawing on the page was given and gave
+        while one document of the harvest was written, nothing saved and no
+        model asked."""
+        if self.harvest is None:
+            raise _Refusal(400, "the page was started without a harvest "
+                                "(docpipe edit --harvest DIR): there is "
+                                "nothing to write a graph of")
+        try:
+            return graphpage.try_block(
+                self.profile, body.get("data"), self.harvest,
+                body.get("document"), body.get("where"),
+                self._corpus_db(body), bool(body.get("strict")),
+                self._spec_object())
         except graphpage.PreviewError as exc:
             raise _Refusal(400, str(exc))
 

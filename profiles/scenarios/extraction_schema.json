@@ -10907,6 +10907,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -10914,6 +10923,9 @@
       ]
      },
      "doc": {
+      "type": "integer"
+     },
+     "fetched": {
       "type": "integer"
      },
      "input": {
@@ -10928,6 +10940,9 @@
      "ms": {
       "type": "integer"
      },
+     "of": {
+      "type": "integer"
+     },
      "once": {
       "type": "boolean"
      },
@@ -10936,6 +10951,15 @@
      },
      "pairs": {
       "type": "integer"
+     },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
      },
      "prompt_tokens": {
       "type": [
@@ -10946,6 +10970,9 @@
      "rejected": {
       "type": "integer"
      },
+     "rid": {
+      "type": "integer"
+     },
      "scenarios": {
       "items": {
        "type": "string"
@@ -10954,6 +10981,9 @@
      },
      "sent_at": {
       "type": "number"
+     },
+     "sid": {
+      "type": "integer"
      },
      "sources": {
       "items": {
@@ -11015,6 +11045,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -11024,10 +11063,16 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
      "ms": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -11038,6 +11083,15 @@
      },
      "output": {
       "type": "object"
+     },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
      },
      "prompt": {
       "type": "string"
@@ -11051,11 +11105,17 @@
      "ranks": {
       "type": "array"
      },
+     "rid": {
+      "type": "integer"
+     },
      "rows": {
       "type": "integer"
      },
      "sent_at": {
       "type": "number"
+     },
+     "sid": {
+      "type": "integer"
      },
      "sources": {
       "items": {
@@ -11200,7 +11260,6 @@
      "numbers",
      "outcome",
      "runs",
-     "fetched",
      "searched",
      "taken",
      "untaken",
@@ -11227,6 +11286,15 @@
      "batches": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -11234,6 +11302,9 @@
       ]
      },
      "doc": {
+      "type": "integer"
+     },
+     "fetched": {
       "type": "integer"
      },
      "filled": {
@@ -11251,6 +11322,9 @@
      "ms": {
       "type": "integer"
      },
+     "of": {
+      "type": "integer"
+     },
      "once": {
       "type": "boolean"
      },
@@ -11266,6 +11340,15 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
@@ -11280,6 +11363,9 @@
      },
      "reply": {
       "type": "boolean"
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -11304,6 +11390,9 @@
        "type": "array"
       },
       "type": "array"
+     },
+     "sid": {
+      "type": "integer"
      },
      "slot": {
       "type": "string"
@@ -11532,6 +11621,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "cause": {
       "enum": [
        "cut_off",
@@ -11549,6 +11647,9 @@
       "type": "string"
      },
      "doc": {
+      "type": "integer"
+     },
+     "fetched": {
       "type": "integer"
      },
      "finish": {
@@ -11572,6 +11673,9 @@
       ]
      },
      "ms": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -11598,8 +11702,23 @@
       ],
       "type": "array"
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "rid": {
+      "type": "integer"
+     },
      "sent_at": {
       "type": "number"
+     },
+     "sid": {
+      "type": "integer"
      },
      "slot": {
       "type": [
@@ -11917,6 +12036,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -11938,6 +12066,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -11946,6 +12077,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -11961,11 +12095,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -11976,6 +12122,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12012,6 +12161,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12033,6 +12191,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12041,6 +12202,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12056,11 +12220,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12071,6 +12247,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12107,6 +12286,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12128,6 +12316,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12136,6 +12327,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12151,11 +12345,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12166,6 +12372,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12202,6 +12411,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12223,6 +12441,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12231,6 +12452,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12246,11 +12470,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12261,6 +12497,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12297,6 +12536,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12318,6 +12566,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12326,6 +12577,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12341,11 +12595,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12356,6 +12622,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12392,6 +12661,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12413,6 +12691,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12421,6 +12702,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12436,11 +12720,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12451,6 +12747,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12487,6 +12786,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12508,6 +12816,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12516,6 +12827,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12531,11 +12845,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12546,6 +12872,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12582,6 +12911,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12603,6 +12941,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12611,6 +12952,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12626,11 +12970,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12641,6 +12997,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12677,6 +13036,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12698,6 +13066,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12706,6 +13077,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12721,11 +13095,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12736,6 +13122,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12772,6 +13161,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12793,6 +13191,9 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
@@ -12801,6 +13202,9 @@
       "type": "integer"
      },
      "names": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12816,11 +13220,23 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
+     },
+     "rid": {
+      "type": "integer"
      },
      "sent_at": {
       "type": "number"
@@ -12831,6 +13247,9 @@
        "found",
        "fetched"
       ]
+     },
+     "sid": {
+      "type": "integer"
      },
      "step": {
       "enum": [
@@ -12864,6 +13283,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12879,11 +13307,17 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
      "kind": {},
      "ms": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12899,14 +13333,29 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
      },
+     "rid": {
+      "type": "integer"
+     },
      "sent_at": {
       "type": "number"
+     },
+     "sid": {
+      "type": "integer"
      },
      "t": {
       "const": "phrase_ask"
@@ -12934,6 +13383,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -12946,11 +13404,17 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
      "kind": {},
      "ms": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -12966,14 +13430,29 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
      },
+     "rid": {
+      "type": "integer"
+     },
      "sent_at": {
       "type": "number"
+     },
+     "sid": {
+      "type": "integer"
      },
      "t": {
       "const": "frame_ask"
@@ -13001,6 +13480,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -13013,11 +13501,17 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
      "kind": {},
      "ms": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -13033,14 +13527,29 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
      },
+     "rid": {
+      "type": "integer"
+     },
      "sent_at": {
       "type": "number"
+     },
+     "sid": {
+      "type": "integer"
      },
      "t": {
       "const": "review_ask"
@@ -13068,6 +13577,15 @@
      "attempt": {
       "type": "integer"
      },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
      "box": {
       "type": "string"
      },
@@ -13080,11 +13598,17 @@
      "doc": {
       "type": "integer"
      },
+     "fetched": {
+      "type": "integer"
+     },
      "input": {
       "type": "object"
      },
      "kind": {},
      "ms": {
+      "type": "integer"
+     },
+     "of": {
       "type": "integer"
      },
      "once": {
@@ -13100,14 +13624,29 @@
        "null"
       ]
      },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
      "prompt_tokens": {
       "type": [
        "integer",
        "null"
       ]
      },
+     "rid": {
+      "type": "integer"
+     },
      "sent_at": {
       "type": "number"
+     },
+     "sid": {
+      "type": "integer"
      },
      "t": {
       "const": "compute_ask"
@@ -13415,6 +13954,570 @@
      "doc",
      "id",
      "text"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "code": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "flow": {},
+     "image": {
+      "type": "string"
+     },
+     "models": {
+      "type": "object"
+     },
+     "profile": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "rules": {
+      "type": "object"
+     },
+     "rules_from": {
+      "type": "object"
+     },
+     "rules_sha256": {
+      "type": "string"
+     },
+     "started_at": {
+      "type": "number"
+     },
+     "t": {
+      "const": "run"
+     }
+    },
+    "required": [
+     "t",
+     "doc"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "box": {
+      "type": "string"
+     },
+     "chunk": {
+      "type": "array"
+     },
+     "coordinate": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "ended": {
+      "enum": [
+       "used_up",
+       "stop",
+       "no_draw",
+       "most"
+      ]
+     },
+     "failed": {
+      "type": "string"
+     },
+     "items": {
+      "type": "integer"
+     },
+     "kind": {
+      "type": "string"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "node": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "owner": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "passed": {
+      "type": "boolean"
+     },
+     "round": {
+      "type": "integer"
+     },
+     "started_at": {
+      "type": "number"
+     },
+     "t": {
+      "const": "step"
+     },
+     "turns": {
+      "type": "integer"
+     },
+     "value": {},
+     "way": {
+      "type": [
+       "integer",
+       "string"
+      ]
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kind",
+     "started_at"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "box": {
+      "type": "string"
+     },
+     "budget": {
+      "type": "integer"
+     },
+     "chunk": {
+      "type": "array"
+     },
+     "coordinate": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetch": {
+      "type": "boolean"
+     },
+     "implicit": {
+      "type": "boolean"
+     },
+     "owner": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "reorder": {
+      "type": "integer"
+     },
+     "round": {
+      "type": "integer"
+     },
+     "sentences": {
+      "items": {
+       "type": "string"
+      },
+      "type": "array"
+     },
+     "shares": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "sid": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "search"
+     },
+     "value": {}
+    },
+    "required": [
+     "t",
+     "doc"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "excluded": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "of_kind": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "places": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
+     "probes": {
+      "type": "integer"
+     },
+     "sid": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "vector"
+     },
+     "vectors": {
+      "type": "object"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "probes",
+     "places",
+     "of_kind"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "drawn": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "draws": {
+      "type": "integer"
+     },
+     "level": {
+      "enum": [
+       "passages",
+       "pieces"
+      ]
+     },
+     "model": {
+      "type": "string"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "order": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "pairs": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "pool_rule": {
+      "type": "string"
+     },
+     "rest": {
+      "type": "integer"
+     },
+     "seed": {
+      "type": "string"
+     },
+     "sentences": {
+      "type": "integer"
+     },
+     "sid": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "rerank"
+     },
+     "upto": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "level",
+     "model",
+     "pool_rule",
+     "sentences",
+     "order"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "ranked": {
+      "type": "integer"
+     },
+     "sid": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "pick"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "ranked"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "box": {
+      "type": "string"
+     },
+     "chunk": {
+      "type": "array"
+     },
+     "coordinate": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "entries": {
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "of": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "owner": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "round": {
+      "type": "integer"
+     },
+     "stage": {
+      "enum": [
+       "values",
+       "coordinate",
+       "keep"
+      ]
+     },
+     "t": {
+      "const": "finds"
+     },
+     "value": {}
+    },
+    "required": [
+     "t",
+     "doc",
+     "stage",
+     "entries"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered": {
+      "type": "boolean"
+     },
+     "asked": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "box": {
+      "type": "string"
+     },
+     "chunk": {
+      "type": "array"
+     },
+     "coordinate": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "finds": {
+      "type": "integer"
+     },
+     "follow_ups": {
+      "type": "integer"
+     },
+     "other_passage": {
+      "type": "boolean"
+     },
+     "owner": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "refusal": {
+      "type": "string"
+     },
+     "refused": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "type": "object"
+     },
+     "round": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "outcome"
+     },
+     "target": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "value": {},
+     "zero": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "asked",
+     "refused"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "attempt": {
+      "type": "integer"
+     },
+     "detail": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "retry"
+     },
+     "wait_s": {
+      "type": "number"
+     },
+     "what": {
+      "type": "string"
+     },
+     "why": {
+      "enum": [
+       "server",
+       "refused",
+       "form",
+       "ours"
+      ]
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "what",
+     "attempt",
+     "wait_s"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asks": {
+      "items": {
+       "type": "object"
+      },
+      "type": "array"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "of": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "t": {
+      "const": "fetch"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "asks"
     ],
     "type": "object"
    }

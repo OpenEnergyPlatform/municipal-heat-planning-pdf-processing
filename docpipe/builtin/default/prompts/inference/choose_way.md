@@ -1,0 +1,1 @@
+Choose the way that fits the user's question ("task"): the reply "answer" is the name of exactly one of the ways in "options", where each way says when it is the right one. Reply with ONLY the JSON object.

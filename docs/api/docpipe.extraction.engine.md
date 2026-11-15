@@ -28,6 +28,13 @@ owner decision 2026-11-10: the page counts requests per box); a request a
 box asks while it reads an answer (the entry of a list, the name of a
 scenario, a follow-up) is that box's.
 
+Every step that runs is written to the trace when it is through (`step`,
+owner decision 2026-11-14: "sodass eigentlich alles rekonstruierbar ist"):
+its id and kind, where it ran (the field, the value, the dimension, the
+piece, the round), when it began and how long it took, and what it came
+to: a step passed by its condition, the way an "if" took, the turns of a
+round and why it ended, the items of an "each".
+
 A box that checks answers (`about`, an own check, `check`) stands right
 after the question whose answers it checks and is applied while that
 question reads them. An own check refuses an answer where its condition
@@ -545,11 +552,34 @@ def run_steps(self, steps: list, scope: Scope) -> None
 def run_node(self, node: dict, scope: Scope) -> None
 ```
 
+#### Engine.traced_step
+
+```python
+def traced_step(self, node: dict, scope: Scope, came: dict,
+                started: float) -> None
+```
+
+A step that ran, in the trace of its document (`step`).
+
+#### Engine.where
+
+```python
+@staticmethod
+def where(scope: Scope) -> dict
+```
+
+Where a step runs, as its trace notes it: the field, the value
+and its passage, the dimension, the piece and the round.
+
 #### Engine.round
 
 ```python
-def round(self, node: dict, scope: Scope) -> None
+def round(self, node: dict, scope: Scope) -> tuple
 ```
+
+(turns, why the round ended: "used_up" its supply, "stop" its
+condition held, "no_draw" a turn showed nothing of its supply, "most"
+its most turns).
 
 #### Engine.items
 
@@ -562,8 +592,12 @@ def items(self, node: dict, scope: Scope) -> list
 #### Engine.each
 
 ```python
-def each(self, node: dict, scope: Scope) -> None
+def each(self, node: dict, scope: Scope) -> Optional[int]
 ```
+
+The items of *node* through its steps: how many its condition
+let through, None where the frame counts its own (values,
+dimensions).
 
 #### Engine.after_items
 

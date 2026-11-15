@@ -201,7 +201,7 @@ RULES: tuple = (
          "request that got no answer in time. Every other status 400 to "
          "499 is the server refusing the request itself. Decided on "
          "2026-11-09.", decided="2026-11-09", steps=_ASKS,
-         where="runner.py (unserved, refused)"),
+         where="runner.py (unserved, refused), upstream.py (_asked)"),
     rule("server_retry_most", _FLOW, _AGAIN, "whole",
          "How often a request is asked again after the server's failure "
          "(a rate limit, a server error, a timeout, no connection). 0: "
@@ -210,7 +210,7 @@ RULES: tuple = (
          "is a fault in our own code, asked again as `other_errors_retry` "
          "says. Decided on 2026-11-09 and 2026-11-12.",
          least=0, decided="2026-11-09, 2026-11-12", steps=_ASKS,
-         where="runner.py (Failures)"),
+         where="runner.py (Failures), upstream.py (_asked)"),
     rule("other_errors_retry", _FLOW, _AGAIN, "whole",
          "How often a request is asked again after an error that is neither "
          "the server's failure (no reply, a rate limit, a server error) nor "

@@ -371,14 +371,17 @@ PRESETS = {preset.name: preset for preset in (
         "no such thing. Each name is asked once per document and work. It "
         "stands after the question whose answers name such things; one asked "
         "where no such step stands is asked as the first of them in the flow "
-        "says. Example: \"NDC\" is the entry \"Nationally Determined "
-        "Contributions\" named in chapter 2. To change it: the inputs, what "
-        "the model may ask to see (`fetches`, `fetch_rounds`) and the prompt "
-        "`names`.",
+        "says. The request says what the list holds, by the field whose "
+        "values are such names and what it means. Example: \"NDC\" is the "
+        "entry \"Nationally Determined Contributions\" named in chapter 2; "
+        "\"Asia\", the region of a value, names no scenario. To change it: "
+        "the inputs, what the model may ask to see (`fetches`, "
+        "`fetch_rounds`) and the prompt `names`.",
         "names",
         (i("name", "words", "always"),
          i("lines", "find", "find_lines_if"),
          i("work", "work", "as_is"),
+         i("holds", "holds", "as_is"),
          i("list", "options", "always")),
         "name", {"to": "name"},
         values={"fetch": True},

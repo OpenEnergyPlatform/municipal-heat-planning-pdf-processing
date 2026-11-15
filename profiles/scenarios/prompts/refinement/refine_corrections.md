@@ -38,7 +38,7 @@ Per section:
    Return "title" and the captions in full. Remove numbering and label prefixes with their trailing separator: chapter numbers ("1.", "2.3", "4.1.2", "A.1", "IV."), figure labels ("Figure 1:", "Fig. 3:"), table labels ("Table 4:", "Tab. 2:"), appendix labels ("Appendix A:", "Annex 1:"). Normalise capitalisation ("MITIGATION PATHWAYS" becomes "Mitigation pathways"). Return captions keyed by the table's or figure's id; never return id, path or page_number.
 
 3. SECTIONS NOT KEPT
-   A section that is purely a table of contents, list of figures, list of tables, list of abbreviations or a similar index without substantive prose: "_action": "remove". A section without a real heading that is clearly a broken continuation of the previous one: "_action": "merge_into_previous". Give no edits for either.
+   A section that is purely a table of contents, list of figures, list of tables, list of abbreviations or a similar index without substantive prose: "_action": "remove". A section without a real heading that is clearly a broken continuation of the previous one: "_action": "merge_into_previous". A section of a cover that the publisher, a repository or the download put in front of the publication: "_action": "cover", even where it repeats the publication's title. Such a cover is no bibliography and the publication's first page follows it. It shows, for example, "To cite this article", "You may also like" with other articles, "This content was downloaded from", an archive's notice (HAL, eScholarship) or an accepted manuscript's PII and "Please cite this article as". The publication's own cover or title page is no such cover. Give no edits for any of them.
 
 4. BIBLIOGRAPHY
    A bibliography is a section titled References, Bibliography, Works Cited, Literature Cited or Sources, or whose content is a list of reference entries under any title (numbered "[1] …" or lines like "Author, A. B. (Year). Title. Journal/Publisher, Volume(Issue), pages"). Here, and only here, you write text out: "_action": "replace", title "[LITERATURE]", "content" a JSON array with one BibTeX string for EVERY entry; never truncate, summarise or merge entries. Choose the fitting entry type (@article, @book, @inproceedings, @techreport, @misc). Citation key: first author's last name plus year ("smith2021"). Omit BibTeX fields whose information is missing.
@@ -62,7 +62,7 @@ Reply with ONLY one JSON object, no fences, no text around it:
     }
   ]
 }
-For "replace" the object carries "content" (the BibTeX array) instead of "corrections"; for "remove" and "merge_into_previous" it carries neither.
+For "replace" the object carries "content" (the BibTeX array) instead of "corrections"; for "remove", "merge_into_previous" and "cover" it carries neither.
 
 EXAMPLE 1
 

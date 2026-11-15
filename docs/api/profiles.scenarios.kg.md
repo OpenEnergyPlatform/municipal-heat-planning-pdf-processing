@@ -145,7 +145,8 @@ The bare class of a box of the drawing.
 def property_of(source: str, to: str, brick: Optional[str] = None) -> str
 ```
 
-The property of the drawing's arrow from *source* to *to*.
+The property of the drawing's arrow from *source* to *to*, of the
+one whose block goes by *brick* where it is given (`name_of`).
 
 ### normalise
 

@@ -119,7 +119,8 @@ harvest, `not_happened`). It still waits and stops by the rule.
 #### Failures.\_\_init\_\_
 
 ```python
-def __init__(self, document_id=None, noted: bool = True)
+def __init__(self, document_id=None, noted: bool = True,
+             where: Optional[str] = None)
 ```
 
 #### Failures.attempts
@@ -173,7 +174,11 @@ def wait(self, attempt: int) -> None
 ```
 
 Before asking again after attempt *attempt*: the long curve after
-the server's failure, the short one after a reply.
+the server's failure, the short one after a reply. Each time is in
+the trace of the request's document (`retry`, owner decision
+2026-11-14): the request's kind, the attempt, why (the server's
+failure, a refusal, a reply out of its form, our own code) and the
+wait.
 
 #### Failures.given_up
 
@@ -591,6 +596,36 @@ It used to return a list per probe, which the plan then concatenated. That
 is not a ranking, it is a concatenation of rankings, and it put probe 17's
 best match behind everything probes 1 to 16 had surfaced. Measured over 65
 documents and 15,082 values: median rank 77 that way, 26 this way.
+
+### trace_vector
+
+```python
+def trace_vector(document_id: int, probes: list, exclude: set, hits: list,
+                 vectors: Optional[dict], started: float) -> None
+```
+
+The vector search of the search running in *document_id* in its trace
+(`vector`, owner decision 2026-11-14): of each kind of passage its
+places with their similarity, as many as the rule
+`trace_vector_places` says, and how many passages of the kind it
+ranked; the passages it left out because they were taken (*exclude*);
+the sentences' vectors kept from before or embedded now (*vectors*,
+None where the sentences were the last search's). Every place is kept
+with the search, so that the pieces it takes say where their passage
+stood (`trace.search_state`).
+
+### run_head
+
+```python
+def run_head(profile) -> dict
+```
+
+What a run is, at the head of each document's trace (owner decision
+2026-11-14): the commit of its code (`_revision`) and what the image it
+runs in calls itself, the profile, the models of the requests, the
+embedder and the reranker, every rule in effect with where it comes
+from (what authenticates blanked, `trace.blanked`) and the drawing of
+the flow.
 
 ### make_parents
 

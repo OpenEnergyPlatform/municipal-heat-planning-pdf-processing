@@ -311,7 +311,10 @@ function GraphInner() {
     addNodeArrow, removeBox: id => { void dropBox(id); },
     does: name => { const b = d.bricks.find(x => x.name === name); return b ? tr(b.does) : ''; }, d,
   };
-  const kit: Kit = { d, edit };
+  const kit: Kit = {
+    d, edit, cur,
+    tryBlock: (where, document) => api('POST', '/api/graph/try_block', { data: G.cur, document, where, strict: G.pv.strict, db: G.db || null }),
+  };
   const panel: Panel = { d, cur, kit, remove: removeArrow, removeBox: id => { void dropBox(id); }, select: (k, id) => select(k, id) };
   const selBox = G.sel.kind === 'box' ? (map.boxes || []).find((b: Obj) => b.id === G.sel.id) : null;
   const selArrow = G.sel.kind === 'arrow' ? (map.arrows || []).find((a: Obj) => arrowKey(a) === G.sel.id) : null;

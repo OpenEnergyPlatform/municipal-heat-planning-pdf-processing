@@ -29,6 +29,8 @@ export interface LibTarget {
   label: string; says: string; nested: boolean; gives: string[]; forms: string[]; profile: string; apart?: boolean;
   outputs?: string[];
 }
+/* a template of the chat's library (inference/chat_templates.json): steps one click puts into the drawing */
+export interface LibTemplate { name: string; label: string; says: string; group: string; steps: Step[] }
 /* a variable a step can take: what the page calls it, what it holds, its JSON schema, whether it holds for the whole
    document */
 export interface Variable { label: string; says: string; schema: unknown; lasting: boolean }
@@ -37,8 +39,12 @@ export interface Library {
   arrows: Record<string, string>; each_titles: Record<string, string>; order_words: Record<string, string>;
   variables?: Record<string, Variable>; items?: Record<string, (string | null)[]>; start?: string[];
   presets?: LibPreset[]; forms?: Record<string, LibForm>; targets?: Record<string, LibTarget>;
+  /* the drawing of the chat (inference/chatflow.py): its loops, rounds, branchings, ways side by side and parts, how
+     its loops run, what a part does and its templates */
+  flow?: string; frames?: string[]; runs?: { value: string; label: string }[]; part?: string; templates?: LibTemplate[];
 }
-export interface Prop { name: string; kind: string; label: string; ops: string[]; choices?: string[]; words?: Record<string, string> }
+/* added_by: the list of the spec that adds entries to the choices (the value types of the kind of value of a field) */
+export interface Prop { name: string; kind: string; label: string; ops: string[]; choices?: string[]; words?: Record<string, string>; added_by?: string }
 /* a thing a condition is about; "variable" takes any variable by its path and every comparison */
 export interface Subject { name: string; label: string; props: Prop[]; variable?: boolean; ops?: string[] }
 export interface FlowNumber {
@@ -77,26 +83,33 @@ export interface FlowData {
 }
 
 /* how a rule names the kind of a step (rules.step_kind): a box by its kind, a step of "Ask the model" by its preset's,
-   a frame as "each <what>", "round" or "if" */
+   a frame as "each <what>", "round", "if" or "together" */
 export const stepKind = (n: Step, lib?: Library): string => {
   const k = kindOf(n);
   if (k === 'box') { const p = lib ? presetOf(lib, n) : undefined; return p ? p.kind : n.box; }
   return k === 'each' ? 'each ' + n.each : k;
 };
 
-export type Kind = 'box' | 'each' | 'round' | 'if' | '';
+export type Kind = 'box' | 'each' | 'round' | 'if' | 'together' | 'part' | '';
 export const kindOf = (n: unknown): Kind =>
-  (['box', 'each', 'round', 'if'] as const).find(k => isObj(n) && Object.prototype.hasOwnProperty.call(n, k)) || '';
+  (['box', 'each', 'round', 'if', 'together', 'part'] as const).find(k => isObj(n) && Object.prototype.hasOwnProperty.call(n, k)) || '';
+/* the frames whose lists stand side by side, each under a head of its own: the branches of a branching, the ways of
+   "side by side" */
+export const hasWays = (k: Kind | string) => k === 'if' || k === 'together';
 
-/* the lists of steps inside a loop, round or branching: one for a loop and a round, one per branch of a branching (and its else) */
+/* the lists of steps inside a loop, round or branching: one for a loop and a round, one per branch of a branching (and its
+   else), one per way of "side by side" */
 export interface StepList { key: string; label: string; way?: Way; steps: Step[] }
 export function lists(n: Step): StepList[] {
   const k = kindOf(n);
-  if (k === 'each' || k === 'round') { n.steps = n.steps || []; return [{ key: n.id, label: '', steps: n.steps }]; }
+  if (k === 'each' || k === 'round' || k === 'part') { n.steps = n.steps || []; return [{ key: n.id, label: '', steps: n.steps }]; }
   if (k === 'if') {
     const out: StepList[] = (n.if || []).map((w: Way, i: number) => ({ key: n.id + '#' + i, label: t('branch {n}', { n: i + 1 }), way: w, steps: (w.steps = w.steps || []) }));
     if (Object.prototype.hasOwnProperty.call(n, 'else')) out.push({ key: n.id + '#else', label: t('else'), steps: n.else });
     return out;
+  }
+  if (k === 'together') {
+    return (n.together || []).map((w: Way, i: number) => ({ key: n.id + '#' + i, label: t('way {n}', { n: i + 1 }), steps: (w.steps = w.steps || []) }));
   }
   return [];
 }
@@ -175,6 +188,11 @@ export function labelOf(lib: Library, n: Step): string {
     return n.which ? t('{title} ({which})', { title, which: tr(lib.which[n.which] || n.which) }) : title;
   }
   if (k === 'round') return n.round && n.round.most ? tn(n.round.most, 'Round, at most {n} time', 'Round, at most {n} times') : t('Round, until the search hits are used up');
+  if (k === 'together') return tn((n.together || []).length, 'Side by side, {n} way', 'Side by side, {n} ways');
+  if (k === 'part') {
+    const gives = ((n.part && n.part.gives) || []) as string[];
+    return gives.length ? t('Part, gives back {names}', { names: gives.join(', ') }) : t('Part');
+  }
   return t('Branching (if / else)');
 }
 /* what an arrow after a step carries, in words: a step gives a key of library.arrows, a loop what it goes through */
@@ -195,6 +213,9 @@ export function giveOf(lib: Library, n: Step): string {
 export const opWord = (op: string): string => ({
   is: t('is'), is_not: t('is not'), less: t('less than'), more: t('more than'), at_least: t('at least'), at_most: t('at most'),
   contains: t('contains'), empty: t('is empty'), one_of: t('is one of'),
+  /* only a reading of the graph's drawing */
+  listed: t('is an entry of its list in the spec'), names: t('names something'), answer_of: t('is an answer of the table of the box'),
+  whole: t('is a whole number'), term: t('is the identifier of a term'),
 } as Record<string, string>)[op] || op;
 /* a value of a property of kind "choice", in words */
 export const choiceWord = (p: Prop, v: string): string => tr((p.words || {})[v] || v);
@@ -221,7 +242,7 @@ export function sentence(subjects: Subject[], c: unknown): string {
     if (s.variable) {
       const no = r.not ? t('not') + ' ' : '';
       if (!r.op) return no + r.is;
-      if (r.op === 'empty') return t('{path} {op}', { path: no + r.is, op: opWord('empty') });
+      if (['empty', 'listed', 'names', 'whole', 'term'].includes(r.op)) return t('{path} {op}', { path: no + r.is, op: opWord(r.op) });
       const v = Array.isArray(r.value) ? r.value.join(' ' + t('or') + ' ') : String(r.value);
       return t('{path} {op} {value}', { path: no + r.is, op: opWord(r.op), value: v });
     }
@@ -244,23 +265,44 @@ export function normRow(subjects: Subject[], r: Row): Row {
   return r;
 }
 export function freshRow(subjects: Subject[], of: string): Row { return normRow(subjects, { of, is: firstProp(subjects, of) }); }
+/* the condition of a new branch: about the year of the dimension where the flow knows dimensions, else whether the
+   question is there (the chat, whose conditions are about its variables) */
+export function defaultRow(subjects: Subject[]): Row {
+  if (subjects.some(s => s.name === 'coordinate')) return normRow(subjects, { of: 'coordinate', is: 'year' });
+  return normRow(subjects, { of: subjects.length ? subjects[0].name : 'var', is: 'question' });
+}
 
 /* -- edits ----------------------------------------------------------------------------------------------------- */
 
-export function fresh(tree: Step[], subjects: Subject[], kind: 'box' | 'preset' | 'each' | 'round' | 'if', arg?: string): Step {
+export type Fresh = 'box' | 'preset' | 'each' | 'round' | 'if' | 'together' | 'part';
+export function fresh(tree: Step[], subjects: Subject[], kind: Fresh, arg?: string): Step {
   if (kind === 'box') return { id: newId(tree, arg!), box: arg };
   if (kind === 'preset') return { id: newId(tree, arg!), box: 'ask', preset: arg };
   if (kind === 'each' && arg === 'list') return { id: newId(tree, 'each_list'), each: 'list', list: '', as: 'item', steps: [] };
   if (kind === 'each') return { id: newId(tree, 'each_' + arg), each: arg, steps: [] };
   if (kind === 'round') return { id: newId(tree, 'round'), round: { most: 1 }, steps: [] };
-  return { id: newId(tree, 'if'), if: [{ when: { all: [normRow(subjects, { of: 'coordinate', is: 'year' })] }, steps: [] }], else: [] };
+  if (kind === 'together') return { id: newId(tree, 'together'), together: [{ steps: [] }, { steps: [] }] };
+  if (kind === 'part') return { id: newId(tree, 'part'), part: { gives: [] }, steps: [] };
+  return { id: newId(tree, 'if'), if: [{ when: { all: [defaultRow(subjects)] }, steps: [] }], else: [] };
 }
 export function insertAt(steps: Step[], at: number, n: Step) { steps.splice(at, 0, n); }
+/* the steps of a template, each keeping its id where no step of the tree has it, else a new one */
+export function templateSteps(tree: Step[], tpl: LibTemplate): Step[] {
+  const copy: Step[] = JSON.parse(JSON.stringify(tpl.steps));
+  const ids = new Set([...walk(tree)].map(([n]) => n.id));
+  const taken = new Set<string>();
+  for (const [n] of walk(copy)) {
+    if (ids.has(n.id) || taken.has(n.id)) n.id = newId(tree, n.id, taken);
+    taken.add(n.id);
+  }
+  return copy;
+}
 /* moves a step to another place; false where the place lies inside the step itself */
 export function moveTo(tree: Step[], id: string, steps: Step[], at: number): boolean {
   const got = find(tree, id);
   if (!got) return false;
-  for (const [n] of walk([got.n])) if (n.steps === steps || (n.if || []).some((w: Way) => w.steps === steps) || n.else === steps) return false;
+  for (const [n] of walk([got.n])) if (n.steps === steps || (n.if || []).some((w: Way) => w.steps === steps) || n.else === steps
+    || (n.together || []).some((w: Way) => w.steps === steps)) return false;
   const i = got.steps.indexOf(got.n);
   got.steps.splice(i, 1);
   if (got.steps === steps && i < at) at--;
@@ -303,12 +345,14 @@ export function siblingsRun(tree: Step[], ids: string[]): { steps: Step[]; from:
   return { steps, from: at[0], count: at.length };
 }
 /* a loop, round or branching around steps that stand next to each other: it takes their place and holds them */
-export function wrap(tree: Step[], subjects: Subject[], ids: string[], kind: 'each' | 'round' | 'if', arg?: string): Step | null {
+export function wrap(tree: Step[], subjects: Subject[], ids: string[], kind: 'each' | 'round' | 'if' | 'together' | 'part', arg?: string): Step | null {
   const run = siblingsRun(tree, ids);
   if (!run) return null;
   const frame = fresh(tree, subjects, kind, arg);
   const inner = run.steps.splice(run.from, run.count, frame);
-  if (kind === 'if') frame.if[0].steps = inner; else frame.steps = inner;
+  if (kind === 'if') frame.if[0].steps = inner;
+  else if (kind === 'together') frame.together[0].steps = inner;
+  else frame.steps = inner;
   return frame;
 }
 /* the steps inside a loop, round or branching, all of them, for "N steps inside" */

@@ -46,7 +46,7 @@ from .. import graphfile, rules, settings
 from ..extraction import blocks, conditions, shows
 from ..extraction import flow as flow_map
 from ..extraction import passflow
-from ..extraction.spec import YEAR_FIELDS
+from ..extraction.spec import plan_field_kind
 from . import prompts as prompt_files
 from . import rulespage as rule_page
 
@@ -232,9 +232,11 @@ def _notes(data: Optional[dict]) -> list:
     which no step of a run reads."""
     out = []
     fields = (data or {}).get("plan_fields")
-    for key in YEAR_FIELDS:
-        entry = (fields or {}).get(key) if isinstance(fields, dict) else None
-        rule = entry.get("of") if isinstance(entry, dict) else None
+    for key, entry in (fields.items() if isinstance(fields, dict) else ()):
+        if not isinstance(entry, dict) \
+                or plan_field_kind(key, entry)[0] != "year":
+            continue
+        rule = entry.get("of")
         if not isinstance(rule, dict) or not rule:
             continue
         which = ", ".join(f"{name} = {value}"

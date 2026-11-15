@@ -104,7 +104,9 @@ schema of `<publication>.trace.jsonl.gz`, one `oneOf` branch per event
 kind, fixed by the schema for every profile rather than drawn from this
 one's spec (`schema.trace_schema`); an event that reports a model request
 carries it as it was sent and what came back, and a text the requests
-repeat is a `piece` they refer to. A
+repeat is a `piece` they refer to. Since 2026-11-14 the trace starts with a
+`run` event, numbers requests and searches, and has the kinds `search`,
+`vector`, `rerank`, `pick`, `finds`, `step`, `outcome`, `retry` and `fetch`. A
 `parameter/`, `value/`, `axis/` or `slot/` key differing from today's
 run, or another sha256 of the PDF in `document` than the database now
 names, makes the document eligible for a full re-harvest under

@@ -27,7 +27,10 @@ docpipe status     # which stage has left output for which document
 `docpipe init NAME --shapes [FILE]` also writes the draft of an extraction spec
 into the new profile, from the SHACL shapes in FILE or, without one, from a small
 metadata shape the package brings (it needs `docpipe[kg]`). A draft is no spec:
-`docpipe compile` finishes it, and `docpipe extract` stops until it has.
+`docpipe compile` finishes it, and `docpipe extract` stops until it has; the finished draft is kept in the profile's
+`archive/` folder. The
+editor (`docpipe edit`) makes a profile too, and edits such a draft; `docpipe
+init` writes through the same code, `docpipe/newprofile.py`.
 
 `docpipe run` takes the PDFs put into `data/<name>/pdf` through to a corpus the
 chat can search; `--from`, `--to` and `--skip` choose the stages, and it stops
@@ -174,7 +177,7 @@ Output: `visuals.json`.
 
 ### 7. Reading the values out (`docpipe.extraction` + profile)
 
-The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). A document is read in pieces: the code numbers the sentences and the cells of every table, a piece is at most eight sentences or table rows (a table's head is shown with each of its pieces), and the model answers with addresses (`row.column`) and words, one question per request. A search embeds a search sentence the model writes for each field and document (the embedding server, `EMBEDDING_BASE_URL`), takes from the vector search, of each kind of piece (table, figure, text), the best 30 and 20 drawn at random from its places 31 to 100 (the rules `rerank_pool`, `rerank_drawn`, `rerank_drawn_from`; the draw is seeded by the document and the sentences, so the same search draws the same pieces), orders them with a reranker ([Qwen3-VL-Reranker-8B](https://huggingface.co/Qwen/Qwen3-VL-Reranker-8B) on a vLLM `/rerank` server, `RERANK_BASE_URL`) and shows at most 50 of them, five a request. The run's threads share the reranker's scores per document, so a pair of sentence and piece is scored once, and a request to the reranker has no time limit. A coordinate is searched until it is read: a request without an answer or a quote that does not back its answer lets the search go on, the value's own piece is shown whole first, and from round 2 on the model writes a new search sentence. A field with a closed list is asked with its list and answers with the number of an entry; the work a value belongs to is asked once per piece. A value is accepted only when the quoted line really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty.
+The profile's extraction spec (`profiles/<name>/extraction_spec.json`) says which parameters to look for and which coordinates each value carries (for `kwp`: scenario, year, energy carrier, sector, quantity, aggregation, spatial scope). A document is read in pieces: the code numbers the sentences and the cells of every table, a piece is at most eight sentences or table rows (a table's head is shown with each of its pieces), and the model answers with addresses (`row.column`) and words, one question per request. A search embeds a search sentence the model writes for each field and document (the embedding server, `EMBEDDING_BASE_URL`), takes from the vector search, of each kind of piece (table, figure, text), the best 15 and 10 drawn at random from its places 16 to 100 (the rules `rerank_pool`, `rerank_drawn`, `rerank_drawn_from`; the draw is seeded by the document and the sentences, so the same search draws the same pieces), orders them with a reranker ([Qwen3-VL-Reranker-8B](https://huggingface.co/Qwen/Qwen3-VL-Reranker-8B) on a vLLM `/rerank` server, `RERANK_BASE_URL`) and shows at most 50 of them, five a request. The run's threads share the reranker's scores per document, so a pair of sentence and piece is scored once, and a request to the reranker has no time limit. A coordinate is searched until it is read: a request without an answer or a quote that does not back its answer lets the search go on, the value's own piece is shown whole first, and from round 2 on the model writes a new search sentence. A field with a closed list is asked with its list and answers with the number of an entry; the work a value belongs to is asked once per piece. A value is accepted only when the quoted line really sits in the source and carries the answer; refusals are kept beside the accepted tuples, and every coordinate ends in a named state rather than empty.
 
 The order of these steps is not fixed in code. It is a drawing of boxes and frames (each, round, if) in the profile's `flow.json`, which the run executes exactly as drawn (`docpipe/extraction/engine.py`, `blocks.py`, `conditions.py`); the built-in default holds the whole drawing and the numbers that bound it. A request the server refuses (4xx except 429) is asked three times at most; if the refusal stays, the document is left unfinished and unstamped, and a later run reads it again.
 
@@ -265,7 +268,13 @@ model than the one that embeds the questions. Retrieval is by meaning and, where
 directory, the app shows the verified values the harvest holds for a question
 before it answers from the documents, found by meaning where `docpipe
 values-index` built their vectors and by closed questions where it did not, and
-has a review page where people decide whether harvested values are right;
+has a review page where people decide whether harvested values are right; a
+turn of the chat is a drawing of boxes and frames, `chat.json` of the profile
+(else of the profile it extends, else the one the package brings, which asks
+what the chat always asked), so a new answer route can be built from boxes
+alone (`docpipe/inference/chatflow.py`); the boxes are fine, with templates for the
+coarse steps, formats of your own for the answer, a box that joins answers, and loops,
+logic and the sandbox drawn in the open;
 `docpipe evaluate` counts against those decisions. [`scripts/inference_app/README.md`](scripts/inference_app/README.md)
 documents its configuration.
 
@@ -277,11 +286,11 @@ documents its configuration.
 | --- | --- |
 | Spec | the extraction spec, one form per question, with what an edit costs the next run (with `--harvest`, which stored documents it makes stale) |
 | Prompts | the prompt and sentence files, each shown with the recorded requests as the edit would send them; Try re-sends at most three of them to the endpoint named by `EDIT_TRY_BASE_URL`, `EDIT_TRY_MODEL` and `EDIT_TRY_API_KEY` |
-| Flow | the drawing in `flow.json` and the numbers that bound it; Try runs the drawing on made-up answers and sends nothing |
+| Flow | the drawing in `flow.json` and the numbers that bound it; Try runs the drawing on made-up answers and sends nothing; the flow selector also holds the chat's drawing (`chat.json`), drawn, checked and saved the same way, with a dry run of one question that asks no model, embedder, reranker or sandbox |
 | Sources | `sources.json` |
 | Graph | `graph.json` |
 
-The head of the page switches to any other profile the installation finds; the editor starts again with it at the same address, asking first where edits are not saved. It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node; changing the page needs it (`npm ci` and `npm run build` in `docpipe/editor/ui`). See [the editor chapter](docs/stages/editor.md).
+The head of the page switches to any other profile the installation finds; the editor starts again with it at the same address, asking first where edits are not saved. It writes only inside the profile's folder. The page is built from `docpipe/editor/ui` and the built page is committed in `docpipe/editor/web`, so running `docpipe edit` needs no Node. `pip install -e ".[editor]"` installs everything the command needs; `docpipe edit` stops with a line naming a library it loads that is missing (a requirement of the package the editor does not load does not stop it), and says in one line, and starts anyway, that the Sources and Graph tabs need the extra `editor` (`rdflib`, `pyshacl`) where it is missing. Changing the page needs Node: `python scripts/build_editor_page.py` checks the Node on the path against `engines` in `docpipe/editor/ui/package.json`, runs `npm ci` where `node_modules` is missing (or with `--install`), builds into `docpipe/editor/web` and writes the fingerprint of the sources into `web/BUILT_FROM`; `--check` builds nothing and exits 1 where the committed page is not the build of its sources. See [the editor chapter](docs/stages/editor.md).
 
 ## Collaboration
 

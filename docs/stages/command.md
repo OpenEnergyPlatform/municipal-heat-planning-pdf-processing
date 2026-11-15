@@ -197,7 +197,8 @@ and not for every section retyped; the setting's own default stays off, so a
 project without the line is unchanged. The command ends by saying what to run
 next: `docpipe doctor`, `docpipe run` and `docpipe chat`, with `docpipe ingest
 --source FOLDER` and then `docpipe run --skip ingest` for PDFs lying in
-another folder.
+another folder. The files are written by `docpipe/newprofile.py`, which the
+editor's New profile dialog uses as well (see [the editor](editor.md)).
 
 `docpipe init NAME --shapes [FILE]` also writes the draft of an extraction
 spec, `profiles/NAME/extraction_spec.draft.json`, from SHACL shapes: those in
@@ -220,7 +221,8 @@ placeholder base IRI of the graph and one example for each field. Examples are
 proposed by `docpipe compile examples`, which needs a corpus that `docpipe run`
 has processed and a model, and `docpipe compile apply ... --out
 profiles/NAME/extraction_spec.json` writes the spec only from the proposals a
-person accepted. A spec written some other way does not pass `docpipe
+person accepted; once it is the spec, the draft is moved to
+`profiles/NAME/archive/draft-<time>/`. A spec written some other way does not pass `docpipe
 preflight` as it stands: the eight fields have no closed list, so `out:unstated
 is selectable` fails, the profile's `extraction_schema.json` has to be written
 first (`python -m docpipe.extraction.schema NAME --write`), and the graph's

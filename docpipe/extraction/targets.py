@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from .. import rules
-from . import addressed, conditions, forms, shows
+from . import addressed, conditions, forms, shows, trace
 from .addressed import (Asking, CUT, NO_ANSWER, asked_more, joined,
                         refusals, resolve, second_ways)
 from .fields import READ, UNBACKED
@@ -454,7 +454,9 @@ def over_hits(ask, counts):
         own = tuple((row.claim.get("at") or {}).get("owner") or ())
         keeper = engine.attached_of(ask.node, "keep_find")
         kept = []
-        for entry in reader.coord_finds(reply):
+        asked = trace.last_request(plan.document_id)
+        dropped = []
+        for index, entry in enumerate(reader.coord_finds(reply)):
             got = resolve(req.shown, entry, plan.passages)
             if got.why is None and got.letter in letters_others() \
                     and got.source is not None \
@@ -463,8 +465,18 @@ def over_hits(ask, counts):
                          != own) \
                     and keeper is not None \
                     and not keep_find(ask, keeper, got, counts, noted):
+                dropped.append({**addressed.found_note(index, entry, got),
+                                "held": False, "why": "not_about_value"})
                 continue
             kept.append(entry)
+        if dropped:
+            # A find of another passage the step after the question did
+            # not keep (owner decision 2026-11-14: the trace says why).
+            trace.event("finds", plan.document_id, of=asked, stage="keep",
+                        **{key: noted[key] for key in
+                           ("parameter", "coordinate", "value", "owner")
+                           if key in noted},
+                        entries=dropped)
         more = asked_more(reply)
         if kept:
             # The first find alone is the answer where the rule says so:
@@ -694,7 +706,8 @@ TARGETS: dict = {target.name: target for target in (
            "The entry of the document's list of names a name means, a new "
            "entry where it is not on the list yet, none for 0; once per "
            "name and work.", nested=True,
-           gives=("words", "find", "work", "options"), forms=("name",)),
+           gives=("words", "find", "work", "holds", "options"),
+           forms=("name",)),
 )}
 
 

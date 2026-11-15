@@ -316,42 +316,6 @@ def _fallback(reason: str, coordinates: Optional[dict] = None) -> dict:
             "coordinates": coordinates or {}}
 
 
-def answer_from_graph(task: str, hooks: Hooks, graph, comments: dict, *,
-                      db_path, document: Optional[str], ask) -> dict:
-    """The graph's answer, or why there is none.
-
-    {"route": "kg", "reason": None, "values": [...], "coordinates": {...}}
-    when the graph answered, each value carrying the row the query returned
-    plus `evidence` (the comment lines above its node) and `trust` (the last
-    of them). Otherwise route "rag" with one of REASONS, cheapest checked
-    first: no plan node costs one SQLite read, no coordinates costs the field
-    requests, no rows one SPARQL. The key is `values`, never `rows`: the app
-    dispatches a history entry with `rows` into the comparison render.
-    """
-    plan = hooks.plan_iri(db_path, document) if document else None
-    if plan is None:
-        return _fallback("no_plan")
-    coordinates = to_coordinates(task, hooks.spec, hooks.axes, ask)
-    if not any(axis in coordinates for axis in DECIDING_AXES):
-        return _fallback("no_coordinates", coordinates)
-    text, bindings = hooks.bindings(coordinates)
-    bindings = dict(bindings, PLAN=("iri", plan))
-    rows = run_query(graph, hooks.query.replace(CONSTRAINTS_MARKER, text),
-                     bindings)
-    if not rows:
-        return _fallback("no_rows", coordinates)
-    values = []
-    for row in rows:
-        lines = comments.get(row.get("value") or "")
-        if not lines:
-            # Fails closed: a number with no trust line would be shown as a
-            # number the run stands behind, and nothing said that.
-            return _fallback("no_trust", coordinates)
-        values.append(dict(row, evidence=lines[:-1], trust=lines[-1]))
-    return {"route": "kg", "reason": None, "values": values,
-            "coordinates": coordinates}
-
-
 def trust_level(line: str, prose: dict) -> Optional[str]:
     """The level a trust line states, read by the profile's own wording."""
     for level in LEVELS:

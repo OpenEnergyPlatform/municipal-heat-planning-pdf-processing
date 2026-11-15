@@ -20,7 +20,7 @@ Where no line prints one, in this form:
 {{nothing}}
 
 <!-- with: list -->
-"list" holds the entries a value of this field can be, each under its number. "entry" is the number of the entry a value's words mean, decided by meaning, not by spelling: the most specific entry the words support, 0 where none fits. Where "list" names groups of entries, "entry" is the number of the group.
+"list" holds the entries a value of this field can be, each under its number, with what it means ("means") where the list says so. "entry" is the number of the entry whose meaning the value's words fit, also where they use other words than the entry's name: the most specific such entry, 0 where none fits. Where "list" names groups of entries, "entry" is the number of the group.
 
 <!-- with: title_page -->
 "title_page" are the first lines of the publication's first page, under the letter T.

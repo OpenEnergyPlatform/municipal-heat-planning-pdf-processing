@@ -46,6 +46,16 @@ def __init__(self, cause: str, request: str, attempts: int = 1)
 
 ## Functions
 
+### answered_by
+
+```python
+@contextlib.contextmanager
+def answered_by(client)
+```
+
+Within the block, every request of this context goes to *client*
+instead of the model.
+
 ### get_client
 
 ```python
@@ -53,7 +63,8 @@ def get_client()
 ```
 
 Lazily build the client (own retry loop → max_retries=0), behind the
-places of the pool where there are several.
+places of the pool where there are several; within `answered_by`, the
+client given there.
 
 ### collecting
 
@@ -245,6 +256,43 @@ in, and a model that is asked inside schemas only is not asked for it.
 That is noted as a fault of the turn, so the reader is told that the
 answer stays prose, where it used to get a JSON that was only the answer
 wrapped in a key. A request that stays unreadable raises `ReplyError`.
+
+### format_by_schema
+
+```python
+def format_by_schema(task: str, answer_text: str, schema: dict) -> str
+```
+
+The finished answer written into the shape of *schema*, which the
+drawing of the chat sets (its box "Output format", owner request
+2026-11-14). The schema is the grammar of the request, so the reply is
+in it; like `format_as_json` it can add or leave out, and nothing
+checks what it wrote. A request that stays unreadable raises
+`ReplyError`.
+
+### reshape_answer
+
+```python
+def reshape_answer(task: str, answer_text: str, instruction: str,
+                   temperature: float = 0.0) -> str
+```
+
+The finished answer reshaped as *instruction* says (the drawing's
+box "Reshaped by the model", owner request 2026-11-14 evening: "custom
+formattierungen bei Antworten"), the numbers of its citations kept.
+Like `format_as_json` it can add or leave out, and nothing checks what
+it wrote. A request that stays unreadable raises `ReplyError`.
+
+### merge_answers
+
+```python
+def merge_answers(task: str, answers: list) -> str
+```
+
+One answer written from *answers* (texts whose citation numbers are
+already numbered on), the numbers kept with their statements (the
+drawing's box "Join answers"). Nothing checks what it wrote. A request
+that stays unreadable raises `ReplyError`.
 
 ### repeats_among
 

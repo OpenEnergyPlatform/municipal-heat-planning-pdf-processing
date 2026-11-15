@@ -35,8 +35,11 @@ api.github.com: the API allows 60 unauthenticated requests an hour per
 address, and every user of a shared machine shares one address.
 
 Network access goes through urllib with the proxy settings the environment
-already has. A source that cannot be fetched raises. A run against an old
-ontology that believes it has the current one is what this module prevents.
+already has. A source whose server fails or that gives no reply is asked
+again as a model request is, without a limit (owner decision 2026-11-14,
+`_asked`); a source that cannot be fetched otherwise raises. A run against an
+old ontology that believes it has the current one is what this module
+prevents.
 
 Author: Felix Vossel
 """
@@ -47,14 +50,18 @@ import hashlib
 import http.client
 import io
 import json
+import logging
 import os
 import tarfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from docpipe.profile import ROOT, shared_file
+
+log = logging.getLogger(__name__)
 
 CACHE = Path(os.environ.get("DOCPIPE_UPSTREAM_CACHE")
              or shared_file("upstream", ROOT / "data" / "upstream"))
@@ -81,34 +88,84 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _no_reply(exc: BaseException) -> bool:
+    """A request that got no reply at all: its connection could not be made
+    or broke off (HTTPException covers IncompleteRead, a transfer the
+    connection cut short, which is neither an OSError nor a URLError), or it
+    timed out. These are the failures a model request counts as no reply
+    (`providers.no_reply`), whose client wraps each of them, a name that did
+    not resolve too, in its connection error. A URLError with no failure of
+    the network behind it, such as an address urllib cannot ask ("unknown
+    url type"), is a fault of our own, and asked again it fails again."""
+    if isinstance(exc, urllib.error.URLError) \
+            and not isinstance(exc, urllib.error.HTTPError):
+        return isinstance(exc.reason, OSError)
+    return isinstance(exc, (OSError, http.client.HTTPException))
+
+
+def _asked(url: str, ask: Callable):
+    """What *ask*() returns, asked again as a model request is (owner
+    decision 2026-11-14, "Wiederholen wie Modell"): while the server answers
+    a status of the rule `server_failure_statuses` (429, 5xx) or no reply
+    comes (`_no_reply`), without a limit or as often as the rule
+    `server_retry_most` says, each time after the wait of a request whose
+    server failed (`runner.retry_wait`) and with a line in the log. Any
+    other status, such as a 404, and any other failure raise at once: asked
+    again, a refused request is refused again."""
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            return ask()
+        except urllib.error.HTTPError as exc:
+            failure, cause = UpstreamError(f"{url}: HTTP {exc.code}",
+                                           exc.code), exc
+        except (urllib.error.URLError, OSError,
+                http.client.HTTPException) as exc:
+            if not _no_reply(exc):
+                raise UpstreamError(f"{url}: {exc!r}") from exc
+            failure, cause = UpstreamError(f"{url}: {exc!r}"), exc
+        # Read only when a request failed: the rules of the model requests.
+        from docpipe import rules
+        from docpipe.extraction import runner
+        ranges, _timeout = runner.failure_statuses()
+        if failure.status is not None and not any(
+                low <= failure.status <= high for low, high in ranges):
+            raise failure from cause
+        most = rules.get("server_retry_most")
+        if most and attempt >= most:
+            raise failure from cause
+        wait = runner.retry_wait(attempt, transport=True)
+        log.warning("upstream: %s (attempt %d), asked again in %.0f s",
+                    failure, attempt, wait)
+        time.sleep(wait)
+
+
 def _get(url: str, *, data: Optional[bytes] = None,
          headers: Optional[dict] = None) -> bytes:
     request = urllib.request.Request(url, data=data,
                                      headers={**AGENT, **(headers or {})})
-    try:
+
+    def ask() -> bytes:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return response.read()
-    except urllib.error.HTTPError as exc:
-        raise UpstreamError(f"{url}: HTTP {exc.code}", exc.code) from exc
-    except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
-        # HTTPException covers IncompleteRead: a transfer the connection cut
-        # short is neither an OSError nor a URLError.
-        raise UpstreamError(f"{url}: {exc!r}") from exc
+    return _asked(url, ask)
 
 
 def _location(url: str) -> Optional[str]:
     """Where `url` redirects to, without following it; None if it does not."""
     opener = urllib.request.build_opener(_NoRedirect)
     request = urllib.request.Request(url, headers=AGENT)
-    try:
-        with opener.open(request, timeout=TIMEOUT):
-            return None
-    except urllib.error.HTTPError as exc:
-        if exc.code in (301, 302, 303, 307, 308):
-            return exc.headers.get("Location")
-        raise UpstreamError(f"{url}: HTTP {exc.code}", exc.code) from exc
-    except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
-        raise UpstreamError(f"{url}: {exc!r}") from exc
+
+    def ask() -> Optional[str]:
+        try:
+            with opener.open(request, timeout=TIMEOUT):
+                return None
+        except urllib.error.HTTPError as exc:
+            if exc.code in (301, 302, 303, 307, 308):
+                return exc.headers.get("Location")
+            raise
+    return _asked(url, ask)
 
 
 def sha256(path: Path) -> str:

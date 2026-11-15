@@ -174,6 +174,14 @@ Where this value was read, as comment lines above its node: the
 coordinates in English, the passage, the page, how it was aggregated,
 what was computed, and how far the run stands behind it.
 
+### class_iri
+
+```python
+def class_iri(identifier) -> Optional[str]
+```
+
+The full IRI of an OEO class, None for anything else.
+
 ### trust_prose
 
 ```python

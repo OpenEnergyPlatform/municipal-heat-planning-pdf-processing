@@ -28,9 +28,52 @@ a list the profile closes per document (`beside` of such a parameter). They
 are loaded as strictly as a parameter and are in no fingerprint: a reworded
 one leaves a harvest current, as a reworded prompt does.
 
+What a field's value is and how it is checked is a block with settings
+(owner request 2026-11-14, wish 4b: "Bei der Spec ... sollten die Baublöcke
+und Einstellungsmöglichkeiten genau wie im Flow fein sein"): a value type
+says how the answer is given, whether it has units and is converted onto
+the field's unit, and how it is found in its quote (`ValueType`; the four
+the program has always had are presets a spec may add to under
+`value_types`). A dimension may be derived from a condition about the
+reading as from the unit (`derive`), a field of the whole document says
+what it is (`kind`, `state`) instead of being known by its key, and a field
+may carry checks of its own (`checks`): a condition under which its answer
+is refused and the sentence it is asked again with, as the flow's own check
+does. None of these adds a check of the program's own: the quote must show
+the passage and the answer must stand in the quote, as before.
+
 Author: Felix Vossel
 
 ## Classes
+
+### ValueType
+
+```python
+@dataclass(frozen=True)
+class ValueType
+```
+
+What the value of a field is (owner request 2026-11-14, wish 4b):
+how its answer is given, whether a number has units (`units_accepted`,
+the unit question) and is converted onto the field's unit
+(`value_target`), and how the answer is found in its quote. The four
+built-in types are presets of it; a spec may add its own.
+
+Fields:
+
+- `name: str`
+- `answer: str`
+- `units: bool = False`
+- `converts: bool = False`
+- `in_quote: str = ""`
+
+#### ValueType.settings
+
+```python
+def settings(self) -> dict
+```
+
+The type as a spec writes it under `value_types`.
 
 ### SpecError
 
@@ -69,7 +112,7 @@ Fields:
 - `merged: Optional[str] = None`: A free-text coordinate whose answer is the name the document gives a thing, the kind of thing named here ("scenario", owner decisions 2026-11-06): a value stated for several of them is one row per name, and which of the document's names of that kind mean the same thing is asked while it is read (`addressed.Names`).
 - `beside: Optional[dict] = None`: What such an axis answers instead of a name, uri -> labels like a vocabulary, each an out: entry with its meaning in `definitions` (owner decision 2026-11-07): "status quo" for a value of a past or the current year, which belongs to no scenario, as KWP's closed list has "Bestand". Read with its wording like an entry of a list, and never a name.
 - `question: Optional[str] = None`: The one line the field request asks. It lives on the axis because the harvest asks per field: a rule buried in a prompt that covers sixteen fields at once is a rule the model can skip, and skipping is what cost the corpus run 63.5% of its years.
-- `derive: Optional[dict] = None`: A coordinate the SPEC already decides, so no request asks for it: {"from": "unit", "value": "\<a key of this axis' vocabulary>"}.  Principle one, applied one step further. The structure of a tuple is deterministic, and so is a coordinate every accepted unit of the parameter fixes: measured over Kassel, all 452 aggregations the model answered were `integral`, every one of them evidenced by the unit string it had just been handed. Asking cost a fifth of the reply of every five-field request for a coordinate the spec knew. What the unit does NOT fix stays a question — the profile decides which is which.
+- `derive: Optional[dict] = None`: A coordinate the SPEC already decides, so no request asks for it: {"from": "unit", "value": "\<a key of this axis' vocabulary>"}, or {"if": condition, "value": ...}, a condition about the reading (`conditions`, subject "reading") under which the entry is that (owner request 2026-11-14, wish 4b: "Ableiten aus einer beliebigen Bedingung"; the unit is the preset).  Principle one, applied one step further. The structure of a tuple is deterministic, and so is a coordinate every accepted unit of the parameter fixes: measured over Kassel, all 452 aggregations the model answered were `integral`, every one of them evidenced by the unit string it had just been handed. Asking cost a fifth of the reply of every five-field request for a coordinate the spec knew. What the unit does NOT fix stays a question — the profile decides which is which.
 - `keep: Optional[str] = None`: The entry of this coordinate's list a value must have to be a value of its parameter at all (owner decisions 2026-11-07): "scenario year" for a year, "this publication" for an author. Asked before the coordinates after it; a value read with another entry is asked for its parameter once more, told it was read wrongly, is asked nothing further, and stays out of the graph, as does one whose entry stays open (`fields.kept`).
 - `several: bool = False`: Whether a value the plan states for several entries of this list is one row per entry (owner decision 2026-11-07: "Fernwärme + Gas-NT" is the value once with Fernwärme and once with Gas), as a value stated for several names is (`merged`).
 - `groups: dict = field(default_factory=dict)`: uri -> the group an entry belongs to ("group" of an entry object, owner decision 2026-11-08): a list longer than a request shows with what each entry means is asked group first (`flow.Numbers.list_meanings`).
@@ -112,6 +155,8 @@ Fields:
 - `takes_group: Optional[bool] = None`: Whether a value whose scenario is the words of a group of scenarios ("all scenarios") takes the members the document names, one row each (owner decision 2026-11-08, i): years, regions, types do, a description does not. None where the spec says nothing: the rule `default_takes_group` decides, as the step that reads it has it (`group_taken`).
 - `groups: dict = field(default_factory=dict)`: uri -> the group an entry of the value's list belongs to, as on an axis.
 - `beside: Optional[dict] = None`: The entries a list closed per document always has beside the document's own, uri -> labels like a vocabulary, each an out: entry (spec: "beside", for a parameter with vocabulary_dynamic): "several regions" and "other region" beside the regions one publication names, so the list exists where a document names none. In no fingerprint.
+- `kind: Optional[ValueType] = None`: What the value is (`ValueType`): the built-in type of its name where none is given.
+- `checks: tuple = ()`: The field's own checks (spec: "checks", owner decision 2026-11-12, plan of the general blocks, point 13): [{"name", "refuse": condition, "sentence"}], each refusing an answer where its condition holds and asking it again with its sentence, as the flow's own check does.
 
 #### Parameter.is_numeric
 
@@ -119,6 +164,45 @@ Fields:
 @property
 def is_numeric(self) -> bool
 ```
+
+Is the answer a number?
+
+#### Parameter.is_entry
+
+```python
+@property
+def is_entry(self) -> bool
+```
+
+Is the answer an entry of the field's list?
+
+#### Parameter.has_units
+
+```python
+@property
+def has_units(self) -> bool
+```
+
+Is the answer a number in one of the units it accepts, asked by
+the unit question?
+
+#### Parameter.converts
+
+```python
+@property
+def converts(self) -> bool
+```
+
+Is the number converted onto the field's unit (`value_target`)?
+
+#### Parameter.number_in_quote
+
+```python
+@property
+def number_in_quote(self) -> bool
+```
+
+Is the answer found in its quote as a printed number?
 
 #### Parameter.unit_factor
 
@@ -223,6 +307,17 @@ Fields:
 - `by_uri: dict = field(default_factory=dict)`
 - `plan_fields: dict = field(default_factory=dict)`: What a document settles once for all its values, each asked once in the form of a document's field (spec: "plan_fields", owner decision 2026-11-08): key of `PLAN_FIELDS` -> {"name", "means", "sentence"}. The settings' lines stand beside every value's coordinates, the years are the document's own base and target years. A year may say which pairs of the document's frame are that state of it (`of`, coordinate -> the key of an entry of its list: {"scenario": "status_quo"}, owner decision 2026-11-10): a pass over a stored harvest, which asks no document its years, takes them from the stored pairs by it (`pipeline.state_years`); a run that reads a document asks them and does not read it. Empty where a spec asks none. In no fingerprint.
 - `works: Optional[dict] = None`: The works a document presents, compares, reviews or cites beside itself (spec: "works", owner decision 2026-11-08, h): {"name", "means", "fields": {parameter uri: the question asked at a new work's line}}. None where a spec keeps no list of works. In no fingerprint.
+- `value_types: dict = field(default_factory=lambda: dict(BUILTIN_TYPES))`: name -> ValueType: the built-in types and the spec's own (`value_types`).
+
+#### Spec.plan_field_of
+
+```python
+def plan_field_of(self, kind: str, state: Optional[str] = None
+                  ) -> Optional[tuple]
+```
+
+(key, entry) of the field of the whole document of *kind* (and
+*state* for a year), None where the spec asks none.
 
 #### Spec.groups_read_in
 
@@ -231,6 +326,15 @@ def groups_read_in(self, step: str) -> list
 ```
 
 ## Functions
+
+### plan_field_kind
+
+```python
+def plan_field_kind(key: str, entry: Optional[dict]) -> tuple
+```
+
+(kind, state) of a field of the whole document: its own "kind" and
+"state", else what its key has always meant; (None, None) for neither.
 
 ### fold_label
 
@@ -261,6 +365,16 @@ def group_taken(parameter) -> bool
 Does a value of *parameter* take the members of a group of entries
 ("all scenarios")? The spec's `takes_group` of the field, else the
 rule `default_takes_group` as the step that asks has it.
+
+### reading_condition_problems
+
+```python
+def reading_condition_problems(condition) -> list
+```
+
+Why *condition* cannot be evaluated about one reading, [] where it
+can: rows about the reading only (`conditions`, subject "reading"),
+with the comparisons that need nothing but the reading.
 
 ### load
 

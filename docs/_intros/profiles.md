@@ -413,7 +413,8 @@ word" (see [Running the pipeline](running.md)).
 0. **Start from the default profile.** `docpipe init` writes `docpipe.toml`
    and a profile under `profiles/<name>/` that extends `default`, which
    already has a folder source, English prompts, wording and a
-   catalog. Write only what the project knows better: its title, its filters,
+   catalog. The editor's head makes a profile as well (New profile, empty or a
+   copy of one the installation finds). Write only what the project knows better: its title, its filters,
    a prompt, its fields. The steps below are what a profile that stands alone
    has to supply, and what an extending one replaces.
 

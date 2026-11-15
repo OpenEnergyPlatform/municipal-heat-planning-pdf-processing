@@ -136,9 +136,31 @@ _client = None
 _client_lock = threading.Lock()
 
 
+# A client of its own for the requests of one context (`answered_by`): the
+# editor's try of the chat answers them itself, and nothing is sent. Threads
+# a turn starts run in its context (`pool.together`, `pool.in_order`).
+_OWN_CLIENT: contextvars.ContextVar = contextvars.ContextVar(
+    "llm_client_own", default=None)
+
+
+@contextlib.contextmanager
+def answered_by(client):
+    """Within the block, every request of this context goes to *client*
+    instead of the model."""
+    token = _OWN_CLIENT.set(client)
+    try:
+        yield client
+    finally:
+        _OWN_CLIENT.reset(token)
+
+
 def get_client():
     """Lazily build the client (own retry loop → max_retries=0), behind the
-    places of the pool where there are several."""
+    places of the pool where there are several; within `answered_by`, the
+    client given there."""
+    own = _OWN_CLIENT.get()
+    if own is not None:
+        return own
     global _client
     with _client_lock:
         if _client is None:
@@ -940,6 +962,61 @@ def format_as_json(task: str, answer_text: str) -> Optional[str]:
     messages = [{"role": "user", "content": f"{_prompt('inference/json_format')}\n\n{payload}"}]
     obj = _ask(None, messages, temperature=LLM_TEMPERATURE)
     return json.dumps(obj, ensure_ascii=False, indent=2)
+
+
+def format_by_schema(task: str, answer_text: str, schema: dict) -> str:
+    """The finished answer written into the shape of *schema*, which the
+    drawing of the chat sets (its box "Output format", owner request
+    2026-11-14). The schema is the grammar of the request, so the reply is
+    in it; like `format_as_json` it can add or leave out, and nothing
+    checks what it wrote. A request that stays unreadable raises
+    `ReplyError`."""
+    if LLM_STUB_MODE:
+        return json.dumps({"answer": answer_text}, ensure_ascii=False, indent=2)
+    payload = json.dumps({"task": task, "answer": answer_text}, ensure_ascii=False)
+    messages = [{"role": "user", "content":
+                 f"{_prompt('inference/schema_format')}\n\n{payload}"}]
+    obj = _ask(("schema_format_reply", schema), messages,
+               temperature=LLM_TEMPERATURE)
+    return json.dumps(obj, ensure_ascii=False, indent=2)
+
+
+# The reply of a request that writes one text: the answer it wrote.
+ONE_TEXT = {"type": "object", "properties": {"answer": {"type": "string"}},
+            "required": ["answer"]}
+
+
+def reshape_answer(task: str, answer_text: str, instruction: str,
+                   temperature: float = 0.0) -> str:
+    """The finished answer reshaped as *instruction* says (the drawing's
+    box "Reshaped by the model", owner request 2026-11-14 evening: "custom
+    formattierungen bei Antworten"), the numbers of its citations kept.
+    Like `format_as_json` it can add or leave out, and nothing checks what
+    it wrote. A request that stays unreadable raises `ReplyError`."""
+    if LLM_STUB_MODE:
+        return answer_text
+    payload = json.dumps({"task": task, "instruction": instruction,
+                          "answer": answer_text}, ensure_ascii=False)
+    messages = [{"role": "user", "content":
+                 f"{_prompt('inference/reshape')}\n\n{payload}"}]
+    obj = _ask(("reshape_reply", ONE_TEXT), messages, temperature=temperature)
+    return str(obj.get("answer") or "")
+
+
+def merge_answers(task: str, answers: list) -> str:
+    """One answer written from *answers* (texts whose citation numbers are
+    already numbered on), the numbers kept with their statements (the
+    drawing's box "Join answers"). Nothing checks what it wrote. A request
+    that stays unreadable raises `ReplyError`."""
+    if LLM_STUB_MODE:
+        return "\n\n".join(answers)
+    payload = json.dumps({"task": task, "answers": list(answers)},
+                         ensure_ascii=False)
+    messages = [{"role": "user", "content":
+                 f"{_prompt('inference/merge_answers')}\n\n{payload}"}]
+    obj = _ask(("merge_reply", ONE_TEXT), messages,
+               temperature=LLM_TEMPERATURE)
+    return str(obj.get("answer") or "")
 
 
 def repeats_among(task: str, texts: list) -> list:

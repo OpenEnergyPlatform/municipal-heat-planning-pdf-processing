@@ -174,77 +174,19 @@ def embed_query(item: dict, cache_conn, cache_key: str)
 
 Return the query vector, from cache or a fresh on-demand embed.
 
-### run_turn
-
-```python
-def run_turn(task: str, image_bytes: bytes | None, image_only: bool,
-             document_id: int | None, scopes: list[str], as_json: bool = False,
-             history: list | None = None, corpus: answer.Corpus | None = None,
-             progress=None)
-```
-
-One turn, with this app's resources and its spinners attached.
-`document_id` None asks the whole corpus.
-
-### run_comparison
-
-```python
-def run_comparison(task: str, documents: list, scopes: list[str],
-                   as_json: bool = False, histories: dict | None = None)
-```
-
-The same question to every selected document, then one comparison.
-
-No image: an uploaded picture is a query anchor for one document's index,
-and the same crop searched across five plans anchors four of them to
-whatever happens to look similar.
-
-### run_kg_turn
-
-```python
-def run_kg_turn(task: str, document_id: int) -> dict
-```
-
-One question to the graph; `answer_from_graph` decides everything.
-
-### run_values_turn
-
-```python
-def run_values_turn(task: str, document_id: int | None,
-                    history: list | None = None) -> dict | None
-```
-
-What the harvest holds for the question, or None: no harvest, or
-the question names nothing it has. `document_id` None asks every
-document's harvest.
-
 ### values_outcome
 
 ```python
 def values_outcome(task: str, document_id: int | None,
-                   history: list | None = None) -> dict | None
+                   history: list | None = None,
+                   how: str = "auto") -> dict | None
 ```
 
 The harvest's answer with its reason where it has none
 (`values_route.REASONS`), or None: no harvest, or a document the
-database does not know. By meaning where the harvest has its vectors,
-else by closed questions.
-
-### run_values_answer
-
-```python
-def run_values_answer(task: str, got: dict, document_id: int | None,
-                      history: list | None = None,
-                      corpus: answer.Corpus | None = None,
-                      progress=None) -> dict
-```
-
-The question answered from the passages the found values were read
-from (`answer.answer_from_values`), and the values the answer stands on.
-
-{"answer", "answer_text", "citations", "made", "dropped", "faults",
- "unread", "values", "shown", "total", "result"}: `values` are the used
-ones, `shown` how many the answer was given, `total` how many matched.
+database does not know. *how* "auto": by meaning where the harvest has
+its vectors, else by closed questions; "meaning" by meaning alone (None
+without vectors), "questions" by closed questions alone.
 
 ### graph_offered
 
@@ -264,10 +206,11 @@ def harvest_offered() -> bool
 ### route_words
 
 ```python
-def route_words() -> dict
+def route_words(routes: tuple = ()) -> dict
 ```
 
-{route key: its label in the profile's words}.
+{route key: its label in the profile's words}; a route of the
+drawing's own is called by its name.
 
 ### values_reason_words
 
@@ -278,14 +221,37 @@ def values_reason_words() -> dict
 {reason of values_route.REASONS: why the harvest holds nothing, in
 the profile's words}.
 
+### chat_drawing
+
+```python
+def chat_drawing() -> list
+```
+
+The drawing of the chat the profile in force runs (`chatflow.load`):
+its own `chat.json`, else the one it extends, else the package's.
+
 ### routes_offered
 
 ```python
-def routes_offered(whole: bool) -> list
+def routes_offered(whole: bool, drawing: list | None = None) -> list
 ```
 
-The answer routes the sidebar offers, by their UI key. The graph
-answers for one plan, so not for the whole corpus.
+The answer routes the sidebar offers, by their UI key: those the
+drawing of the chat branches on (`chatflow.routes_in`), where they can
+answer. The graph answers for one plan, so not for the whole corpus; a
+route of the drawing's own is offered by its name.
+
+### chat_turn
+
+```python
+def chat_turn(task: str, *, image_bytes: bytes | None, image_only: bool,
+              documents: list, whole: bool, scopes: list, as_json: bool,
+              route: str, by_doc: dict, services=None) -> dict
+```
+
+One turn as the profile's drawing of the chat says (`chatflow.run`):
+{"message", "result", "remember", "vars"}. *documents* are the
+(id, label) chosen; *by_doc* the turns before, per document.
 
 ### main
 

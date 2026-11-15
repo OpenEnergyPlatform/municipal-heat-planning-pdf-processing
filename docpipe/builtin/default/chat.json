@@ -1,0 +1,729 @@
+{
+  "chat": [
+    {
+      "id": "question",
+      "box": "question"
+    },
+    {
+      "id": "route",
+      "note": "Several documents are compared; the graph and the harvest chosen in the sidebar answer alone and say why where they have nothing; any other route searches the documents with the harvest's values beside.",
+      "if": [
+        {
+          "when": {
+            "all": [
+              {
+                "of": "var",
+                "is": "documents.count",
+                "op": "more",
+                "value": 1
+              }
+            ]
+          },
+          "steps": [
+            {
+              "id": "compare_kept",
+              "box": "compare_kept"
+            },
+            {
+              "id": "each_document",
+              "each": "list",
+              "list": "compared",
+              "as": "document",
+              "run": "side_by_side",
+              "collect": {
+                "from": "row",
+                "into": "rows"
+              },
+              "note": "Each document has its own search, its own batches and its own citations, with its own turns before; the picture of the question is no anchor here.",
+              "steps": [
+                {
+                  "id": "document_history",
+                  "box": "set",
+                  "set": {
+                    "name": "history",
+                    "from": "document.history"
+                  }
+                },
+                {
+                  "id": "no_image",
+                  "box": "set",
+                  "set": {
+                    "name": "image",
+                    "value": null
+                  }
+                },
+                {
+                  "id": "no_image_only",
+                  "box": "set",
+                  "set": {
+                    "name": "image_only",
+                    "value": false
+                  }
+                },
+                {
+                  "id": "document_phrase",
+                  "box": "phrase"
+                },
+                {
+                  "id": "document_embed",
+                  "box": "embed"
+                },
+                {
+                  "id": "document_search",
+                  "box": "search"
+                },
+                {
+                  "id": "document_found",
+                  "if": [
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "var",
+                            "is": "hits",
+                            "op": "empty",
+                            "not": true
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "document_pack",
+                          "box": "pack"
+                        },
+                        {
+                          "id": "document_batches",
+                          "each": "list",
+                          "list": "batches",
+                          "as": "batch",
+                          "run": "ahead",
+                          "stop": {
+                            "all": [
+                              {
+                                "of": "var",
+                                "is": "complete"
+                              },
+                              {
+                                "of": "var",
+                                "is": "statements",
+                                "op": "empty",
+                                "not": true
+                              }
+                            ]
+                          },
+                          "label": "🔍 Answer from the sources",
+                          "note": "Each batch is told the statements taken before it was asked; later batches are asked ahead where places are free and taken in order. The loop stops once the model says the answer is complete and a statement stood its check.",
+                          "steps": [
+                            {
+                              "id": "document_ask_batch",
+                              "box": "ask_batch"
+                            },
+                            {
+                              "id": "document_sandbox",
+                              "box": "compute",
+                              "set": {
+                                "runs": "asked",
+                                "inputs": [
+                                  "batch.tables"
+                                ]
+                              }
+                            },
+                            {
+                              "id": "document_crop",
+                              "box": "crop"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "document_repeats",
+                          "box": "repeats"
+                        },
+                        {
+                          "id": "document_readoff",
+                          "box": "readoff"
+                        },
+                        {
+                          "id": "document_assemble",
+                          "box": "assemble"
+                        },
+                        {
+                          "id": "document_json_wanted",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "var",
+                                    "is": "as_json"
+                                  },
+                                  {
+                                    "of": "var",
+                                    "is": "answer",
+                                    "op": "empty",
+                                    "not": true
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "document_format",
+                                  "box": "format_json"
+                                }
+                              ]
+                            }
+                          ],
+                          "else": []
+                        }
+                      ]
+                    }
+                  ],
+                  "else": []
+                },
+                {
+                  "id": "document_answer",
+                  "box": "document_answer"
+                }
+              ]
+            },
+            {
+              "id": "compare_answers",
+              "box": "compare_answers"
+            },
+            {
+              "id": "show_comparison",
+              "box": "show"
+            }
+          ]
+        },
+        {
+          "when": {
+            "all": [
+              {
+                "of": "var",
+                "is": "route",
+                "op": "is",
+                "value": "graph"
+              }
+            ]
+          },
+          "steps": [
+            {
+              "id": "graph_plan",
+              "box": "graph_plan"
+            },
+            {
+              "id": "graph_known",
+              "if": [
+                {
+                  "when": {
+                    "all": [
+                      {
+                        "of": "var",
+                        "is": "graph",
+                        "op": "empty"
+                      }
+                    ]
+                  },
+                  "steps": [
+                    {
+                      "id": "graph_coordinates",
+                      "box": "graph_coordinates"
+                    },
+                    {
+                      "id": "graph_named",
+                      "if": [
+                        {
+                          "when": {
+                            "all": [
+                              {
+                                "of": "var",
+                                "is": "graph",
+                                "op": "empty"
+                              }
+                            ]
+                          },
+                          "steps": [
+                            {
+                              "id": "graph_build",
+                              "box": "graph_build"
+                            },
+                            {
+                              "id": "graph_query",
+                              "box": "graph_query",
+                              "set": {
+                                "bindings": "bindings"
+                              }
+                            },
+                            {
+                              "id": "graph_values",
+                              "box": "graph_values"
+                            }
+                          ]
+                        }
+                      ],
+                      "else": []
+                    }
+                  ]
+                }
+              ],
+              "else": []
+            },
+            {
+              "id": "show_graph",
+              "box": "show"
+            }
+          ]
+        },
+        {
+          "when": {
+            "all": [
+              {
+                "of": "var",
+                "is": "route",
+                "op": "is",
+                "value": "harvest"
+              }
+            ]
+          },
+          "steps": [
+            {
+              "id": "harvest_alone",
+              "part": {
+                "gives": [
+                  "harvest",
+                  "harvest_reason",
+                  "harvest_alone"
+                ]
+              },
+              "note": "The harvest answers with variables of its own: its passages, batches and statements stay inside, and only its answer comes back.",
+              "steps": [
+                {
+                  "id": "alone_values_pick",
+                  "box": "values_pick",
+                  "set": {
+                    "alone": true
+                  }
+                },
+                {
+                  "id": "alone_values_found",
+                  "note": "The passages of the values are searched in no part of the search.",
+                  "if": [
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "var",
+                            "is": "values_found.route",
+                            "op": "is",
+                            "value": "values"
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "alone_harvest_scopes",
+                          "box": "set",
+                          "set": {
+                            "name": "scopes",
+                            "value": []
+                          }
+                        },
+                        {
+                          "id": "alone_values_passages",
+                          "box": "values_passages"
+                        },
+                        {
+                          "id": "alone_harvest_found",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "var",
+                                    "is": "hits",
+                                    "op": "empty",
+                                    "not": true
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "alone_harvest_pack",
+                                  "box": "pack"
+                                },
+                                {
+                                  "id": "alone_harvest_batches",
+                                  "each": "list",
+                                  "list": "batches",
+                                  "as": "batch",
+                                  "run": "ahead",
+                                  "stop": {
+                                    "all": [
+                                      {
+                                        "of": "var",
+                                        "is": "complete"
+                                      },
+                                      {
+                                        "of": "var",
+                                        "is": "statements",
+                                        "op": "empty",
+                                        "not": true
+                                      }
+                                    ]
+                                  },
+                                  "label": "🔍 Answer from the sources",
+                                  "note": "Each batch is told the statements taken before it was asked; later batches are asked ahead where places are free and taken in order. The loop stops once the model says the answer is complete and a statement stood its check.",
+                                  "steps": [
+                                    {
+                                      "id": "alone_harvest_ask_batch",
+                                      "box": "ask_batch"
+                                    },
+                                    {
+                                      "id": "alone_harvest_sandbox",
+                                      "box": "compute",
+                                      "set": {
+                                        "runs": "asked",
+                                        "inputs": [
+                                          "batch.tables"
+                                        ]
+                                      }
+                                    },
+                                    {
+                                      "id": "alone_harvest_crop",
+                                      "box": "crop"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "id": "alone_harvest_repeats",
+                                  "box": "repeats"
+                                },
+                                {
+                                  "id": "alone_harvest_readoff",
+                                  "box": "readoff"
+                                },
+                                {
+                                  "id": "alone_harvest_assemble",
+                                  "box": "assemble"
+                                }
+                              ]
+                            }
+                          ],
+                          "else": []
+                        },
+                        {
+                          "id": "alone_values_answer",
+                          "box": "values_answer"
+                        }
+                      ]
+                    }
+                  ],
+                  "else": []
+                }
+              ]
+            },
+            {
+              "id": "show_harvest",
+              "box": "show"
+            }
+          ]
+        }
+      ],
+      "else": [
+        {
+          "id": "side_by_side",
+          "together": [
+            {
+              "steps": [
+                {
+                  "id": "harvest_wanted",
+                  "if": [
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "var",
+                            "is": "image_only",
+                            "not": true
+                          },
+                          {
+                            "of": "var",
+                            "is": "route",
+                            "op": "is",
+                            "value": "documents",
+                            "not": true
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "harvest_beside",
+                          "part": {
+                            "gives": [
+                              "harvest"
+                            ]
+                          },
+                          "note": "The harvest answers with variables of its own: its passages, batches and statements stay inside, and only its answer comes back.",
+                          "steps": [
+                            {
+                              "id": "values_pick",
+                              "box": "values_pick"
+                            },
+                            {
+                              "id": "values_found",
+                              "note": "The passages of the values are searched in no part of the search.",
+                              "if": [
+                                {
+                                  "when": {
+                                    "all": [
+                                      {
+                                        "of": "var",
+                                        "is": "values_found.route",
+                                        "op": "is",
+                                        "value": "values"
+                                      }
+                                    ]
+                                  },
+                                  "steps": [
+                                    {
+                                      "id": "harvest_scopes",
+                                      "box": "set",
+                                      "set": {
+                                        "name": "scopes",
+                                        "value": []
+                                      }
+                                    },
+                                    {
+                                      "id": "values_passages",
+                                      "box": "values_passages"
+                                    },
+                                    {
+                                      "id": "harvest_found",
+                                      "if": [
+                                        {
+                                          "when": {
+                                            "all": [
+                                              {
+                                                "of": "var",
+                                                "is": "hits",
+                                                "op": "empty",
+                                                "not": true
+                                              }
+                                            ]
+                                          },
+                                          "steps": [
+                                            {
+                                              "id": "harvest_pack",
+                                              "box": "pack"
+                                            },
+                                            {
+                                              "id": "harvest_batches",
+                                              "each": "list",
+                                              "list": "batches",
+                                              "as": "batch",
+                                              "run": "ahead",
+                                              "stop": {
+                                                "all": [
+                                                  {
+                                                    "of": "var",
+                                                    "is": "complete"
+                                                  },
+                                                  {
+                                                    "of": "var",
+                                                    "is": "statements",
+                                                    "op": "empty",
+                                                    "not": true
+                                                  }
+                                                ]
+                                              },
+                                              "label": "🔍 Answer from the sources",
+                                              "note": "Each batch is told the statements taken before it was asked; later batches are asked ahead where places are free and taken in order. The loop stops once the model says the answer is complete and a statement stood its check.",
+                                              "steps": [
+                                                {
+                                                  "id": "harvest_ask_batch",
+                                                  "box": "ask_batch"
+                                                },
+                                                {
+                                                  "id": "harvest_sandbox",
+                                                  "box": "compute",
+                                                  "set": {
+                                                    "runs": "asked",
+                                                    "inputs": [
+                                                      "batch.tables"
+                                                    ]
+                                                  }
+                                                },
+                                                {
+                                                  "id": "harvest_crop",
+                                                  "box": "crop"
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "harvest_repeats",
+                                              "box": "repeats"
+                                            },
+                                            {
+                                              "id": "harvest_readoff",
+                                              "box": "readoff"
+                                            },
+                                            {
+                                              "id": "harvest_assemble",
+                                              "box": "assemble"
+                                            }
+                                          ]
+                                        }
+                                      ],
+                                      "else": []
+                                    },
+                                    {
+                                      "id": "values_answer",
+                                      "box": "values_answer"
+                                    }
+                                  ]
+                                }
+                              ],
+                              "else": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ],
+                  "else": []
+                }
+              ]
+            },
+            {
+              "steps": [
+                {
+                  "id": "phrase",
+                  "box": "phrase"
+                },
+                {
+                  "id": "embed",
+                  "box": "embed"
+                },
+                {
+                  "id": "search",
+                  "box": "search"
+                },
+                {
+                  "id": "found",
+                  "if": [
+                    {
+                      "when": {
+                        "all": [
+                          {
+                            "of": "var",
+                            "is": "hits",
+                            "op": "empty",
+                            "not": true
+                          }
+                        ]
+                      },
+                      "steps": [
+                        {
+                          "id": "pack",
+                          "box": "pack"
+                        },
+                        {
+                          "id": "batches",
+                          "each": "list",
+                          "list": "batches",
+                          "as": "batch",
+                          "run": "ahead",
+                          "stop": {
+                            "all": [
+                              {
+                                "of": "var",
+                                "is": "complete"
+                              },
+                              {
+                                "of": "var",
+                                "is": "statements",
+                                "op": "empty",
+                                "not": true
+                              }
+                            ]
+                          },
+                          "label": "🔍 Answer from the sources",
+                          "note": "Each batch is told the statements taken before it was asked; later batches are asked ahead where places are free and taken in order. The loop stops once the model says the answer is complete and a statement stood its check.",
+                          "steps": [
+                            {
+                              "id": "ask_batch",
+                              "box": "ask_batch"
+                            },
+                            {
+                              "id": "sandbox",
+                              "box": "compute",
+                              "set": {
+                                "runs": "asked",
+                                "inputs": [
+                                  "batch.tables"
+                                ]
+                              }
+                            },
+                            {
+                              "id": "crop",
+                              "box": "crop"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "repeats",
+                          "box": "repeats"
+                        },
+                        {
+                          "id": "readoff",
+                          "box": "readoff"
+                        },
+                        {
+                          "id": "assemble",
+                          "box": "assemble"
+                        },
+                        {
+                          "id": "json_wanted",
+                          "if": [
+                            {
+                              "when": {
+                                "all": [
+                                  {
+                                    "of": "var",
+                                    "is": "as_json"
+                                  },
+                                  {
+                                    "of": "var",
+                                    "is": "answer",
+                                    "op": "empty",
+                                    "not": true
+                                  }
+                                ]
+                              },
+                              "steps": [
+                                {
+                                  "id": "format",
+                                  "box": "format_json"
+                                }
+                              ]
+                            }
+                          ],
+                          "else": []
+                        }
+                      ]
+                    }
+                  ],
+                  "else": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "show",
+          "box": "show"
+        }
+      ]
+    }
+  ]
+}

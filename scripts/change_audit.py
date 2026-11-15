@@ -152,6 +152,15 @@ def docs_drift() -> list:
     return pages or [(run.stderr or run.stdout).strip()[-300:]]
 
 
+def page_drift() -> bool:
+    """Is the editor's page not the build of its sources as they stand
+    (`scripts/build_editor_page.py --check`)? False where the tree holds no
+    sources of the page."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import build_editor_page as page
+    return (page.UI / "src").is_dir() and not page.current()
+
+
 def report(spec: str | None = None) -> int:
     files, added = changed(spec)
     if not files:
@@ -190,6 +199,13 @@ def report(spec: str | None = None) -> int:
             print(f"  {page}")
         if len(drift) > 20:
             print(f"  ... {len(drift) - 20} more")
+        print()
+        findings += 1
+    if page_drift():
+        print("DOCS — the editor's page (docpipe/editor/web) is not the build "
+              "of its sources (docpipe/editor/ui). Run `python "
+              "scripts/build_editor_page.py` and commit the page with the "
+              "change.")
         print()
         findings += 1
     if not findings:

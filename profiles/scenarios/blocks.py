@@ -319,7 +319,8 @@ TARGETS = (
     Target("value_name", "the entry of a value's name",
            "The entry of the document's list of names each row of a value "
            "names, a new one where it is not on the list yet.", value_names,
-           gives=("words", "find", "work", "options"), forms=("name",),
+           gives=("words", "find", "work", "holds", "options"),
+           forms=("name",),
            outputs=("values",)),
 )
 
@@ -386,17 +387,20 @@ PRESETS = (
         "names", "Ask the list entry of a name",
         "Looks up a value that names a scenario in the document's list: the "
         "entry it is, or a new entry where the name is not on the list yet; 0 "
-        "keeps the value without an entry. Words for several entries (\"all "
-        "scenarios\") become one row per member where the field allows it. "
-        "Example: \"NDC\" in a figure is the entry \"Nationally Determined "
-        "Contributions\" named in chapter 2. To change it: the inputs, what "
-        "the model may ask to see (`fetches`, `fetch_rounds`), and the keys "
-        "`merged` and `takes_group` of the field in the Spec tab, which this "
-        "step needs.",
+        "keeps the value without an entry. The request says what the list "
+        "holds, by the field whose values are such names and what it means. "
+        "Words for several entries (\"all scenarios\") become one row per "
+        "member where the field allows it. Example: \"NDC\" in a figure is "
+        "the entry \"Nationally Determined Contributions\" named in chapter "
+        "2; \"Asia\", the region of a value, names no scenario. To change it: "
+        "the inputs, what the model may ask to see (`fetches`, "
+        "`fetch_rounds`), and the keys `merged` and `takes_group` of the "
+        "field in the Spec tab, which this step needs.",
         "names",
         (i("name", "words", "always"),
          i("lines", "find", "find_lines_if"),
          i("work", "work", "as_is"),
+         i("holds", "holds", "as_is"),
          i("list", "options", "always")),
         "name", {"to": "value_name"},
         values={"fetch": True}, needs=("value",),

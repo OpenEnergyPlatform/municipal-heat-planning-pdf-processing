@@ -27,6 +27,11 @@ what the page draws and decides what a save writes:
   to the run's own checks (`graphfile.map_problem`, `graph.check`) and
   names the box or arrow each problem is about. `preview` writes one
   document of the harvest as the edited drawing says.
+- the blocks (owner request 2026-11-14, wish 4): `view` also returns the
+  presets, blocks ready to put in where a brick stands, and what a
+  condition of the graph can be about; `try_block` writes one document as
+  the edited drawing says and shows what one block of it was given and
+  gave, reading by reading.
 - `probe`: the graph of the harvest the page was given, written twice into
   the temp directory, with the saved file and with the edited one, and what
   differs: per document the nodes kept and left out, per constraint its
@@ -98,6 +103,24 @@ reading the drawing names is a field wherever it comes from.
 ```python
 def bricks_of(profile) -> list
 ```
+
+### presets_of
+
+```python
+def presets_of(profile) -> list
+```
+
+The blocks ready to put in where a brick stands, the core's and the
+profile's own (`bricks.presets`): {name, kind, does, block, own}.
+
+### graph_conditions
+
+```python
+def graph_conditions() -> list
+```
+
+What a condition of the drawing can be about (`conditions.catalogue`
+with graph): the reading by its keys, what is known of the document.
 
 ### harvest_documents
 
@@ -182,6 +205,31 @@ One document of *harvest* written as *data* (the graph file as the
 page has it, drawing and rules) says, with the run's own program, into
 no file of the profile: {"document", "text", "triples", "nodes"}. No
 model is asked; the rows are the harvest's.
+
+### block_at
+
+```python
+def block_at(drawing: dict, where: dict) -> tuple
+```
+
+(the block, the kind it is) at *where* of *drawing*: {"document":
+key, "index"}, {"box": id, "key", "index"} or {"arrow": number from 1}.
+An arrow's brick is made a block of its own first, so it stays the one
+object the writer is given.
+
+### try_block
+
+```python
+def try_block(profile, data, harvest: Optional[Path], document, where,
+              db: Optional[Path] = None, strict: bool = False, spec=None,
+              root: Optional[Path] = None) -> dict
+```
+
+One document written as *data* says, and what the block at *where*
+was given and gave each time it was called, the first `TRIED_MOST`:
+{"document", "kind", "calls", "shown": [{"reading", "gives"}]}; for an
+address made of parts, each number's parts and its address. Nothing is
+saved and no model is asked.
 
 ### probe_root
 

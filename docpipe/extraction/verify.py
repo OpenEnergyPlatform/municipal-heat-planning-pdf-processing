@@ -321,7 +321,7 @@ def times_stated(raw: dict, parameter: Parameter, quote: str) -> int:
     """How often a value stands in its quote for itself: a number as a number
     of its own, a wording where no letter or digit runs on from it ("OECD"
     in "non-OECD" is no second one). The same split `value_in_quote` makes."""
-    if parameter.is_numeric:
+    if parameter.number_in_quote:
         return _times_number(quote, raw.get("value"))
     wording = wording_of(raw, parameter)
     return _times_alone(flat(quote or "").casefold(),
@@ -352,7 +352,7 @@ def _check_value(raw: dict, parameter: Parameter, flags: list, *,
     if parameter.is_numeric:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             return None, Refusal(raw, "value is not a number")
-        if not with_unit:
+        if not with_unit or not parameter.has_units:
             return out, None
         # The unit as the plan prints it, and the entry of units_accepted the
         # unit question chose for it by its meaning, with its own passage.
@@ -380,8 +380,9 @@ def _check_value(raw: dict, parameter: Parameter, flags: list, *,
         if wording and wording != unit:
             out["unit_raw"] = wording
         out["unit"] = unit
-        out["value_target"] = round(float(value) * float(factor),
-                                    rules.get("unit_factor_places"))
+        if parameter.converts:
+            out["value_target"] = round(float(value) * float(factor),
+                                        rules.get("unit_factor_places"))
         return out, None
 
     wording = raw.get("value_raw")
@@ -391,12 +392,12 @@ def _check_value(raw: dict, parameter: Parameter, flags: list, *,
         # to leave the class out rather than force one, so the wording alone is
         # the finding — the same rule an unmapped axis already follows, and the
         # only way the mapping gap is ever measurable.
-        if parameter.value_type == "category" and wording:
+        if parameter.is_entry and wording:
             flags.append(f"unmapped:value:{wording}")
             return {"value": wording, "value_raw": wording, "value_uri": None}, None
         return None, Refusal(raw, f"a {parameter.value_type} parameter needs a "
                                   f"non-empty string value")
-    if parameter.value_type == "category":
+    if parameter.is_entry:
         uri = parameter.value_to_uri().get(fold_label(value.strip()))
         if uri is None:
             # An answer to a closed list that is none of its entries, never
@@ -483,14 +484,17 @@ def wording_of(raw: dict, parameter: Parameter):
     value_raw beside it vouches for nothing but itself (owner decision
     2026-11-04).
     """
-    if parameter.value_type == "category":
+    if parameter.is_entry or (parameter.is_numeric
+                              and not parameter.number_in_quote):
+        # A number found by its words is found by the words it is printed
+        # with (a value type's `in_quote`, owner request 2026-11-14, 4b).
         return raw.get("value_raw") or raw.get("value")
     return raw.get("value")
 
 
 def value_in_quote(raw: dict, parameter: Parameter, quote: str) -> bool:
     """Is the claimed value actually in the passage it cites?"""
-    if parameter.is_numeric:
+    if parameter.number_in_quote:
         return compared(canonical_number(raw.get("value"))) \
             in numbers_in(quote)
     wording = wording_of(raw, parameter)
@@ -680,7 +684,7 @@ def verify_tuple(raw: dict, parameter: Parameter, source_text: str, *,
             # draws, and the quote holds that estimate.
             flags.append(READ_OFF)
 
-    if (parameter.is_numeric and parameter.integrated
+    if (parameter.has_units and parameter.integrated
             and rules.get("flag_missing_period")
             and value_fields.get("unit") is not None
             and not parameter.names_period(value_fields.get("unit"))):

@@ -6,7 +6,7 @@ import { useStore } from '../lib/nav';
 import { t, tn } from '../lib/i18n';
 import { axisKinds, type SpecNode } from '../lib/spec';
 import { isObj, type Obj } from '../lib/util';
-import { copyNode, deleteNode, ensureSel, listCount, nodeObj, S, touch, view } from './state';
+import { copyNode, deleteNode, ensureSel, listCount, nodeObj, removeValueType, S, touch, typeOf, view } from './state';
 import { FlaggedKey, SpecForm, StringsEditor, useEdit } from './widgets';
 import { EntriesTable, refFor } from './entries';
 
@@ -19,6 +19,7 @@ export function titleOf(n: SpecNode): [string, string] {
     case 'param': return [t('Field {uri}', { uri: n.uri }), ''];
     case 'plist': return [n.list === 'beside' ? t('Field {uri} · answers outside the list', { uri: n.uri }) : t('Field {uri} · list', { uri: n.uri }), t('These are the entries of the list. A value the model reads for this field must be one of them. Your edits to the entries are written with the next save.')];
     case 'axis': return [t('Dimension {name} of field {uri}', { name: n.name, uri: n.uri }), ''];
+    case 'vtype': return [t('Value type {name}', { name: n.name }), ''];
   }
 }
 
@@ -38,6 +39,7 @@ function Actions({ n }: { n: SpecNode }) {
   );
   if (n.t === 'plan') return <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('plan_field', n)}>{t('Remove field of the whole document')}</Button>;
   if (n.t === 'works') return <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => deleteNode('works', n)}>{t('Remove works')}</Button>;
+  if (n.t === 'vtype' && !typeOf(n.name)?.builtin) return <Button variant="light" color="red" disabled={busy} leftSection={<IconTrash size={16} />} onClick={() => void removeValueType(n.name)}>{t('Delete value type')}</Button>;
   return null;
 }
 
@@ -135,6 +137,11 @@ export function Main() {
       break;
     case 'plist': body = <EntriesTable lref={refFor(n.uri, null, n.list, S.flag && S.flag.entry)} />; break;
     case 'axis': body = <AxisView n={n} obj={obj} orig={orig} />; break;
+    case 'vtype': body = typeOf(n.name)?.builtin
+      ? <Stack gap="xs"><Text size="sm" c="dimmed">{t('A built-in value type: a preset that cannot be changed. Add a value type of your own to change these settings.')}</Text>
+        {Object.entries(obj || {}).map(([k, v]) => <Text key={k} size="sm"><b>{k}</b>: {String(v)}</Text>)}</Stack>
+      : <SpecForm fields={f.value_type} obj={obj} orig={orig} />;
+      break;
   }
   return (
     <Box ref={el} className="dp-scroll" style={{ flex: 1 }} p="md">

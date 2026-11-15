@@ -559,8 +559,10 @@ def _prune_groups(data: dict) -> None:
     known = {name for parameter in data.get("parameters") or []
              if isinstance(parameter, dict)
              for name in (parameter.get("axes") or {})}
+    types = type_settings(data)
     numeric = any(isinstance(p, dict)
-                  and p.get("value_type", "float") in spec_module.NUMERIC_TYPES
+                  and (types.get(p.get("value_type", "float")) or {})
+                  .get("units")
                   for p in data.get("parameters") or [])
     if data.get("unit_question") and numeric:
         known.add(spec_module.UNIT)
@@ -824,7 +826,14 @@ HELP = {
         "What a value of this field is. float and int are numbers, with "
         "or without decimals, and need a target unit and accepted units. "
         "text is the document's own words. category is one entry of a "
-        "list, which the model must choose from."),
+        "list, which the model must choose from. A value type of the "
+        "Spec's own (under Value types) says the same with its settings."),
+    ("parameter", "checks"): (
+        "Your own checks of the answers of this field: where a condition "
+        "holds, the answer is refused and asked again with its sentence, "
+        "as the flow's own check does. They can only refuse more and "
+        "never accept what the fixed checks refuse; their refusals are "
+        "counted under check:<name>. Empty: no check of its own."),
     ("parameter", "once_per_document"): (
         "Checked: the field is asked once per document, with the title page "
         "and the chunks a search finds best for it. Use this for a field a "
@@ -895,10 +904,11 @@ HELP = {
         "value does not belong to its field\" stops asking such a value "
         "further. Empty: every entry counts."),
     ("axis", "derive"): (
-        "Decides this dimension without asking: its entry follows from "
-        "the unit the number is printed in. No request asks for it. "
-        "Use this only for a dimension that every accepted unit "
-        "fixes. Empty: the dimension is asked."),
+        "Decides this dimension where no request read it: its entry "
+        "follows from the unit the number is printed in, or holds where "
+        "a condition about the reading is met. The dimension is asked "
+        "first, and only an unanswered one is derived (rule "
+        "`derive_from_unit`). Empty: the dimension is only asked."),
     ("entry", "label"): (
         "The name of the entry. This is what the model is offered in the "
         "list and answers with, so it should be the name a reader would "
@@ -946,6 +956,15 @@ HELP = {
         "A sentence as the document would print it. The chunks that the "
         "field is asked over are found with this search sentence, so it "
         "should sound like the document and not like a question."),
+    ("plan_field", "kind"): (
+        "What this field of the whole document is: the settings that hold "
+        "for every value, shown beside them, or a year of the document's "
+        "own. Empty: settings, base_year and target_year say it by their "
+        "key; any other key must say it."),
+    ("plan_field", "state"): (
+        "For a year: the state of the document it is the year of, such as "
+        "base or target. Empty: the state in the key (base_year, "
+        "target_year)."),
     ("plan_field", "of"): (
         "Which stored values have this year: a dimension and an entry of "
         "its list, such as scenario = status_quo. Only a later run over a "
@@ -962,6 +981,24 @@ HELP = {
         "What is asked at the line of a new work: each entry is a field "
         "and the question that asks it, such as the title or the "
         "organisation of the work."),
+    ("value_type", "answer"): (
+        "How the answer is given: a number, an entry of the field's list, "
+        "or the words the document uses."),
+    ("value_type", "in_quote"): (
+        "How the answer is found in its quote, one of the two fixed "
+        "checks: a number as a printed number of its own, or as the words "
+        "it is printed with; an entry by its name or a spelling of its "
+        "list; words as themselves."),
+    ("value_type", "units"): (
+        "For a number: checked, it is in one of the field's accepted "
+        "units, which the unit question asks; not checked, it has no "
+        "unit."),
+    ("value_type", "converts"): (
+        "For a number with units: checked, it is converted onto the "
+        "field's target unit (value_target), which the graph carries; not "
+        "checked, it keeps the unit it is printed in."),
+    ("value_type", "note"): (
+        "What this value type is for, in your words. Shown only here."),
 }
 # What the form says above the two lists that are not fields.
 ABOUT = {
@@ -970,6 +1007,11 @@ ABOUT = {
         "settings, its base year and its target year. Each is asked once "
         "per document, not once per value. Add one here to have the run "
         "read another such fact."),
+    "value_type": (
+        "A value type says what a value of a field is: how its answer is "
+        "given, whether a number has units and is converted, and how the "
+        "answer is found in its quote. float, int, text and category are "
+        "built in; a type of your own is chosen for a field like them."),
     "works": (
         "The other works a document presents, compares, reviews or cites. "
         "A value can belong to one of them instead of to this publication. "
@@ -995,7 +1037,7 @@ _FORM = {
                   ("label", "line", {}),
                   ("description", "text", {}),
                   ("brief", "text", {}),
-                  ("value_type", "choice",
+                  ("value_type", "value_type",
                    {"choices": list(spec_module.VALUE_TYPES),
                     "default": "float"}),
                   ("once_per_document", "bool", {"default": False}),
@@ -1006,7 +1048,8 @@ _FORM = {
                   ("unit_target", "line", {}),
                   ("integrated", "bool", {"default": True}),
                   ("units_accepted", "units", {}),
-                  ("example", "example", {})],
+                  ("example", "example", {}),
+                  ("checks", "checks", {})],
     "axis": [("question", "text", {}),
              ("required", "bool", {"default": False}),
              ("several", "bool", {"default": False}),
@@ -1024,12 +1067,87 @@ _FORM = {
     "plan_field": [("name", "line", {}),
                    ("means", "text", {}),
                    ("sentence", "text", {}),
-                   ("of", "entry_of",
-                    {"only": list(spec_module.YEAR_FIELDS)})],
+                   ("kind", "choice",
+                    {"choices": list(spec_module.PLAN_FIELD_KINDS)}),
+                   ("state", "line", {"year": True}),
+                   ("of", "entry_of", {"year": True})],
+    "value_type": [("answer", "choice",
+                    {"choices": list(spec_module.ANSWERS)}),
+                   ("in_quote", "choice",
+                    {"choices": sorted({one for ways in
+                                        spec_module.IN_QUOTE.values()
+                                        for one in ways})}),
+                   ("units", "bool", {"default": False}),
+                   ("converts", "bool", {"default": False}),
+                   ("note", "text", {})],
     "works": [("name", "line", {}),
               ("means", "text", {}),
               ("fields", "questions", {})],
 }
+
+
+def type_settings(data: dict) -> dict:
+    """name -> settings of every value type a spec *data* may give a field:
+    the built-in ones and those under its `value_types`, as written."""
+    out = {name: kind.settings()
+           for name, kind in spec_module.BUILTIN_TYPES.items()}
+    own = data.get("value_types") if isinstance(data, dict) else None
+    for name, entry in (own.items() if isinstance(own, dict) else ()):
+        if isinstance(entry, dict):
+            out.setdefault(name, entry)
+    return out
+
+
+# What the library offers to put into the tree (owner request 2026-11-14,
+# wish 4b: "Bibliothek wie im Ablauf: Feld je Werttyp, Dimension, Liste,
+# Einheit, eigene Prüfung"): what each puts in, before it is filled.
+DIMENSIONS = {
+    "list": {"vocabulary": {}},
+    "year": {"type": "int"},
+    "words": {"type": "text"},
+    "per_document": {"dynamic": True},
+}
+UNIT = {"factor": 1.0, "names_period": True}
+CHECK = {"name": "", "refuse": None, "sentence": ""}
+VALUE_TYPE = {"answer": "number", "units": True, "converts": True,
+              "in_quote": "number"}
+
+
+def new_field(uri: str, value_type: str, settings: dict) -> dict:
+    """A field of *value_type* as the library puts it in: what the loader
+    asks of such a field, empty, to be filled before it is saved."""
+    out: dict = {"uri": uri, "label": "", "description": "",
+                 "value_type": value_type}
+    answer = settings.get("answer")
+    if answer == "number" and settings.get("units"):
+        out.update(unit_target="", units_accepted={})
+    if answer == "entry":
+        out["vocabulary"] = {}
+    out["example"] = {"source": "", "tuples": []}
+    out["axes"] = {}
+    return out
+
+
+def library(data: dict) -> dict:
+    """What the Spec tab's library offers and what its condition editors
+    know: the value types with their settings, the kinds of a dimension,
+    a unit, a check, and the things a condition of a field's check (as
+    the flow's own check) and of a derived dimension (the reading) is
+    about."""
+    from ..extraction import conditions
+    reading = [dict(one, ops=[op for op in one.get("ops") or ()
+                              if op not in ("listed", "names", "answer_of")])
+               for one in conditions.catalogue(graph=True)
+               if one["name"] == "reading"]
+    return {"types": [{"name": name, "settings": settings,
+                       "builtin": name in spec_module.BUILTIN_TYPES,
+                       "field": new_field("", name, settings)}
+                      for name, settings in type_settings(data).items()],
+            "dimensions": DIMENSIONS, "unit": UNIT, "check": CHECK,
+            "value_type": VALUE_TYPE,
+            "conditions": conditions.catalogue(added={
+                "value_types": tuple(type_settings(data))}),
+            "reading": reading}
 
 
 def form(profile=None) -> dict:

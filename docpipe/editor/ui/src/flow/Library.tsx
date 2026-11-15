@@ -1,4 +1,5 @@
-/* The library a "+" opens: the loops, rounds, branchings and every kind of step, each with the sentence of what it does, a search over all. */
+/* The library a "+" opens: the loops, rounds, branchings, the ways side by side and the parts of the chat, every kind of
+   step and the chat's templates, each with the sentence of what it does, a search over all. */
 import { useMemo, useState } from 'react';
 import { Badge, Box, Group, Modal, ScrollArea, Stack, Text, TextInput, UnstyledButton } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
@@ -7,7 +8,7 @@ import { t, tr, useLang } from '../lib/i18n';
 import type { Library } from './model';
 
 export type Pick = { kind: 'box'; arg: string } | { kind: 'preset'; arg: string } | { kind: 'each'; arg: string }
-  | { kind: 'round' } | { kind: 'if' };
+  | { kind: 'round' } | { kind: 'if' } | { kind: 'together' } | { kind: 'part' } | { kind: 'template'; arg: string };
 interface Item { label: string; says: string; pick: Pick; color: string; icon: React.ReactNode; group: string }
 
 export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }: {
@@ -21,13 +22,26 @@ export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }:
     const out: Item[] = [];
     const frames = t('Loops, rounds and branchings');
     for (const [what, says] of Object.entries(lib.each)) out.push({ label: tr((lib.each_titles || {})[what]) || t('For each {name}', { name: what }), says: tr(says), pick: { kind: 'each', arg: what }, color: FRAMES.each.color, icon: FRAMES.each.icon({ size: 18 }), group: frames });
+    if (!loopsOnly && (lib.frames || []).includes('together')) {
+      out.push({ label: frameWord('together'), says: t('Runs every way inside it at the same time and goes on when all of them are done. To change it: put steps into each way, add a way or remove one; what a way gives, the steps after it can use.'), pick: { kind: 'together' }, color: FRAMES.together.color, icon: FRAMES.together.icon({ size: 18 }), group: frames });
+    }
+    if (!loopsOnly && (lib.frames || []).includes('part')) {
+      out.push({ label: frameWord('part'), says: tr(lib.part || ''), pick: { kind: 'part' }, color: FRAMES.part.color, icon: FRAMES.part.icon({ size: 18 }), group: frames });
+    }
     if (!loopsOnly) {
-      out.push({ label: frameWord('round'), says: t('Runs the steps inside it again and again. To change it: set "at most N times" or "until the search hits are used up" under "repeats", and add a condition under "stop when" that ends the rounds early.'), pick: { kind: 'round' }, color: FRAMES.round.color, icon: FRAMES.round.icon({ size: 18 }), group: frames });
+      out.push({ label: frameWord('round'), says: lib.flow === 'chat'
+        ? t('Runs the steps inside it again, at most N times; inside, the variable "round" says which time it is. To change it: set N under "repeats", and add a condition under "stop when" that ends the rounds early.')
+        : t('Runs the steps inside it again and again. To change it: set "at most N times" or "until the search hits are used up" under "repeats", and add a condition under "stop when" that ends the rounds early.'), pick: { kind: 'round' }, color: FRAMES.round.color, icon: FRAMES.round.icon({ size: 18 }), group: frames });
       out.push({ label: frameWord('if'), says: t('Runs only the first branch whose condition is met. To change it: give each branch its condition, and the last branch, without a condition, runs when no other branch does. All branches join again below.'), pick: { kind: 'if' }, color: FRAMES.if.color, icon: FRAMES.if.icon({ size: 18 }), group: frames });
     }
     for (const b of lib.boxes) {
       const g = GROUPS[b.group] || { color: 'gray', icon: () => null };
       out.push({ label: tr(b.label), says: tr(b.says), pick: { kind: 'box', arg: b.type }, color: g.color, icon: g.icon({ size: 18 }), group: groupWord(b.group) });
+    }
+    // the chat's templates: steps one click puts in (inference/chat_templates.json)
+    for (const tp of lib.templates || []) {
+      const g = GROUPS[tp.group] || { color: 'gray', icon: () => null };
+      out.push({ label: tr(tp.label), says: tr(tp.says), pick: { kind: 'template', arg: tp.name }, color: g.color, icon: g.icon({ size: 18 }), group: t('Templates') });
     }
     // every question the reading asks is "Ask the model" with a preset (extraction/presets.py)
     for (const p of lib.presets || []) {
@@ -58,7 +72,7 @@ export function LibraryModal({ lib, opened, after, onClose, onPick, loopsOnly }:
                       <Group gap="sm" wrap="nowrap" align="flex-start">
                         <Box className="fl-icon" mt={2}>{it.icon}</Box>
                         <Box style={{ minWidth: 0 }}>
-                          <Group gap={6}><Text fw={600} size="sm">{it.label}</Text>{(it.pick.kind === 'box' || it.pick.kind === 'preset') && <Badge size="xs" variant="light" color={it.color}>{it.group}</Badge>}</Group>
+                          <Group gap={6}><Text fw={600} size="sm">{it.label}</Text>{(it.pick.kind === 'box' || it.pick.kind === 'preset' || it.pick.kind === 'template') && <Badge size="xs" variant="light" color={it.color}>{it.group}</Badge>}</Group>
                           <Text size="sm" c="dimmed">{it.says}</Text>
                         </Box>
                       </Group>

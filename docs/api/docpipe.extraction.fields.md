@@ -353,17 +353,36 @@ automatisch geht, soll es das LLM versuchen"); so is a value whose entry
 converts onto a unit of its own, an emission factor in g CO2/kWh being
 no annual amount.
 
+### reading_facts
+
+```python
+def reading_facts(claim: dict)
+```
+
+What a condition about one reading knows (subject "reading"): any
+key of it by its path ("unit", "provenance.page").
+
+### derived_by_condition
+
+```python
+def derived_by_condition(slot, claim: dict) -> bool
+```
+
+Does the condition under which the spec derives *slot* hold for this
+value (`derive` {"if": condition}, owner request 2026-11-14, wish 4b)?
+
 ### derives
 
 ```python
 def derives(slot, claim: dict, parameter) -> bool
 ```
 
-May the spec set *slot* for this value from its unit: the unit
-decides it (`derived_by_unit`), and no request read the coordinate. It
-is asked first, and taken from the unit only where nothing read it
-(owner decision 2026-11-07: "Fragen wir trotzdem und nur im Fallback
-machen wir die Zuordnung").
+May the spec set *slot* for this value: the unit decides it
+(`derived_by_unit`) or the condition it is derived under holds
+(`derived_by_condition`), and no request read the coordinate. It is
+asked first, and derived only where nothing read it (owner decision
+2026-11-07: "Fragen wir trotzdem und nur im Fallback machen wir die
+Zuordnung").
 
 ### apply_derived
 

@@ -74,11 +74,28 @@ vocabulary labels folding to one spelling under two different classes,
 or an axis naming more than one of vocabulary, enum, type or dynamic.
 `SpecError` names the offending field, failing at load time rather than
 partway through a batch. A
-parameter carries one of four value types, `spec.VALUE_TYPES`: `float`
-and `int` take a unit, `category` a closed vocabulary, and `text` a
-plain string compared verbatim rather than mapped to a class; `text` is
-the majority type in the scenarios profile, 11 of its 18 parameters
-(`profiles/scenarios/extraction_spec.json`). Vocabulary labels are
+parameter carries a value type, a block with settings (`spec.ValueType`, owner
+request 2026-11-14): `answer` says how the answer is given (`number`, `entry` of
+the field's list, or `words`), `units` that a number is in one of the units the
+field accepts (the unit question, `units_accepted`, `unit_target`), `converts`
+that it is converted onto that unit (`value_target` is written), and `in_quote`
+how the answer is found in its quote: a number as a printed number or by the
+words it is printed with (`value_raw`), an entry as an entry, words as
+themselves. The four types the program has always had are presets
+(`spec.BUILTIN_TYPES`): `float` and `int` are a number with units that is
+converted, `category` an entry of a closed vocabulary, and `text` words compared
+verbatim rather than mapped to a class; `text` is the majority type in the
+scenarios profile, 11 of its 18 parameters
+(`profiles/scenarios/extraction_spec.json`). A spec may add types of its own
+under a top-level `value_types`, `{name: {answer, units, converts, in_quote,
+note}}`; a built-in name is refused, `units` and `converts` are for a number
+only, `converts` needs `units`, and `in_quote` has to fit the answer. A field's
+`value_type` is any of them. The code reads the settings and not the name
+(`Parameter.is_numeric`, `is_entry`, `has_units`, `converts`,
+`number_in_quote`): a number without units has no unit question and no
+`unit_target`, and a number whose type does not convert keeps its printed unit
+and gets no `value_target`. The built-in types leave every fingerprint as it
+was; a type of the spec's own enters the fingerprint of its fields. Vocabulary labels are
 compared after `fold_label`, not as raw strings. A unit is never
 folded: it is read as its own coordinate, against the literal entries
 of `units_accepted` (`fields.unit_slot`), and `Parameter.unit_factor`
@@ -277,7 +294,12 @@ before its fields (`addressed.Reader.settled`, owner decision 2026-11-08). The
 spec names them in its block `plan_fields` (owner decision 2026-11-10; before, the
 profile's Python held them), each `{name, means, sentence}`:
 `settings`, `base_year` and `target_year` (kwp names all three, scenarios the
-settings only). Each is asked as a field a document has once is (see A field a
+settings only). An entry says what it is with `kind` (`settings` or `year`) and,
+for a year, its `state` (`base`, `target`, any other word), so a key is free
+(owner request 2026-11-14); the three keys say it by their name where the entry
+does not (`spec.plan_field_kind`, `Spec.plan_field_of`). A spec has one field of
+each kind and, for a year, of each state. A field under a key of the spec's own
+is asked after those the rule `settled_fields` names. Each is asked as a field a document has once is (see A field a
 document has once): the title page and the pieces a search with the field's
 sentence finds best.
 
@@ -352,7 +374,7 @@ descriptor, sector division, sector, technology) is asked with its list in the f
 and the docfield request, and the reply names the entry's number beside the
 address and the words: `{"found": [{"entry": n, "at": ..., "words": ...}]}`
 (`addressed.listing`, `Reader.listed`; owner decision 2026-11-09). A list of more
-than `list_meanings` entries (a number of the flow, shown by `Reader.list_of`)
+than `list_meanings` entries (a number of the flow, shown by `Reader.list_of`; 24 in the default profile, 32 in the scenarios profile's `flow.json`, so the 32-entry list of a study's topic keywords is shown with its meanings, owner decision 2026-11-14)
 whose entries name more than one group is shown by its groups, a list of up to
 that many entries with what each means ("(means: ...)"). A number that is no
 number of the list is `not_an_option` and is asked again in the follow-up. A find with its number needs no list request; a
@@ -452,10 +474,16 @@ read once for a whole table, and no request shows a pair (owner decision
 `reading.in_group_order`). The unit comes first for a number: the model copies
 the printed unit into the words and the unit's list request chooses the entry of
 the parameter's list, or `""` where none fits, and it is never refused. A
-coordinate the spec derives from a unit (a `derive` block; kwp's `aggregation`) is
-asked like the others, and is derived from the unit only where no request read it
+coordinate the spec derives (a `derive` block; kwp's `aggregation`) is
+asked like the others, and is derived only where no request read it
 (`fields.derives`, `fields.apply_derived`): the run does that once the reading is
-done (`surveyed.derive_left`), `--top-up` after its sweep.
+done (`surveyed.derive_left`), `--top-up` after its sweep. `derive` is
+`{"from": "unit", "value": ...}`, the entry every accepted unit fixes, or
+`{"if": condition, "value": ...}`, the entry that holds where a condition about
+the reading is met (owner request 2026-11-14; rows about the subject `reading`
+only, no comparison that needs the graph: `spec.reading_condition_problems`,
+`fields.derived_by_condition`, `fields.reading_facts`). A coordinate derived
+under a condition takes the value's own quote and no wording.
 
 **What the request shows** (`addressed.show_value`): the value, its words and its
 address; its own place, which in a table is its row with the table's title and
@@ -584,6 +612,16 @@ entry under a number with what it means (`means`: the spec's `gloss` where it ha
 one, one line in the profile's language, else its English definition,
 `fields._options`). The list is shown as it is, each entry by its name and what it
 means and never with how the document named it before (owner decision 2026-11-09).
+The request also says what the list holds (`holds`, `Reader.list_holds(kind)`: for the kind
+`work` the spec's `works` name and meaning, for any other kind the label and short meaning
+of the field whose `merged` is that kind; left out where no field reads such names, so
+KWP's requests are unchanged; owner decision 2026-11-14). Without it the value itself (a
+region, a year, a description) was taken as the scenario of a scenario-level value and made
+a new scenario. The scenarios profile's coordinate question for `with: value` says that
+words which only repeat the value are no answer (asked for the scenario of the region
+"Asia", "Asia" is the value, not its scenario), the names prompt's 0 line names a region
+beside a year, a number, a unit, a source note and a whole sentence, and the document-field
+prompt says an entry is chosen by its meaning, also where the words differ from its name.
 A value of a field with a list does not come to this request where its find named
 the entry (see Finding a field's values in a piece). The reply is `{"entry": n}`, the number of the entry, 0 for
 none, or a list of numbers where several may be meant (`several`). A list of more
@@ -1047,8 +1085,8 @@ vector search ranks the plan's passages for the search sentence, and given
 `RERANK_BASE_URL` it hands the reranker, of each kind of that order, the best
 `RERANK_POOL` passages and `RERANK_DRAWN` drawn at random from its places after them up
 to place `RERANK_DRAWN_FROM` (rules `rerank_pool`, `rerank_drawn`, `rerank_drawn_from`:
-the best 30 sections, tables and figures and 20 of each kind's places 31 to 100, owner
-decision 2026-11-13, "30 plus 20 je Art", instead of the best 100 of the decisions of
+the best 15 sections, tables and figures and 10 of each kind's places 16 to 100, owner
+decisions 2026-11-13, "30 plus 20 je Art" and the same evening 15 plus 10, instead of the best 100 of the decisions of
 2026-11-06 and 2026-11-08). The draw is the same for the same document and sentences, so
 a search asked again draws the same passages, and a new sentence draws anew; a kind
 with no more passages than that gives all of them, and a kind the pool leaves at 0
@@ -1661,6 +1699,52 @@ its top-level keys first, and `trace.sent` puts each request back together
 character for character. The readers (`trace.lines`, `trace.files`,
 `trace.path_of`) also read a trace an earlier run wrote uncompressed as
 `<document>.trace.jsonl`, and stop where a killed run left the file.
+
+The trace holds what a run needs to be reconstructed (owner decision
+2026-11-14). It opens with one `run` event per document: the code's true commit
+(read from the archive's export-subst stamp by `docpipe/_revision.py`, so a
+tree without a `.git` still names it), the image's revision, the profile, the
+models of the requests, the embedder and the reranker, every rule in effect
+with where each came from, and the flow's drawing. What the editor never
+shows is written blank: a rule that says it is a secret (`secret`, such as
+`llm_api_key`), and a name no rule defines that ends as a secret's name does
+(`settings.SECRET_NAME`); an address keeps its host but not the user and
+password before it. Every other rule is written whole, `max_tokens` too, and
+a long value is a `piece`.
+
+- **Requests.** Every request event carries `rid`, its number within the
+  document. A follow-up, a re-ask with a picture and a re-ask with fetched
+  pieces carry `of`, the `rid` of the request they follow. A request of "Ask
+  the model" also carries `blocks` (a letter to the kind, passage, first and
+  last line and first number shown), `pieces` (kind, passage, piece index,
+  search id and place of each piece it showed) and `sid`, the search that
+  fetched its pieces.
+- **Searches.** A search has a number, `sid`. `search` holds its sentences,
+  what it is for (a box, parameter, coordinate, value or owner), its budget and
+  its shares. `vector` holds, per kind, the places of the vector search up to
+  the rule `trace_vector_places` (default 100) as passage and similarity, the
+  count per kind, the passages left out, whether the sentence's vectors came
+  from the cache or were embedded, and the milliseconds. `rerank` holds the
+  level (passages or pieces), the model, the pool rule, the drawn passages, the
+  draws, `upto`, the hash of the seed, the pool in its new order with its
+  scores, the count of the rest, the pairs scored, kept and waited for, and the
+  milliseconds. `pick` holds the pieces taken, each with its place in the
+  search order and the vector place of its passage.
+- **Finds.** `finds` says what became of each find of an answer: its address
+  and place, whether it was held or why not and, for a coordinate, the answers
+  and states; `stage` is `values`, `coordinate` or `keep`, and `of` names the
+  request.
+- **Flow.** `step` is written for every node that ran: node id, kind, box,
+  where, whether its condition passed it, the way of an "if", the turns and why
+  a round ended (`used_up`, `stop`, `no_draw` or `most`), the items of an
+  "each", whether it failed, when it started and the milliseconds. `outcome`
+  says what a question of "Ask the model" came to: box, target, the requests
+  asked, the refusals by reason, and whether it was answered, its finds, zero,
+  another passage, follow-ups and any refusal.
+- **Asking again.** `retry` is written each time a request, a search, an
+  embedding or a rerank is asked again: what, the attempt, why (`server`,
+  `refused`, `form` or `ours`) and the seconds waited. `fetch` says what an
+  answer asked to see itself and the pieces each ask gave, `of` the request.
 
 Every tuple, refusal, parameter state and summary line is checked
 against the published schema before it is written:
@@ -2331,7 +2415,9 @@ once per open question of the compute step, `code` once per sandbox round,
 `coord` and `refusal` per folded tuple or refusal, `invalid` from the schema
 self-check described under Method, `error`, one `<stage>_ask` per answered
 request of each stage (`ASK_STAGES`), and `piece`, a text the requests of the
-document repeat. The events of the field-by-field flow, `plan`, `anchor`,
+document repeat; since 2026-11-14 also `run`, `search`, `vector`, `rerank`, `pick`,
+`finds`, `step`, `outcome`, `retry` and `fetch` (see The harvest file, the stamp
+and the trace). The events of the field-by-field flow, `plan`, `anchor`,
 `frame`, `rows`, `field`, `sweep`, `drop` and `places`, are written no more and
 stay in the schema for traces of before 2026-11-08. An event that reports a model
 request (every `<stage>_ask`, and an `error` of kind `exception`) carries the
@@ -2373,7 +2459,13 @@ comparison and a value, joined by all or any (`extraction.conditions`). A
 condition about the answer reads the answer of its own item; where no box of that
 item asked, nothing came back. An own check is a box that refuses an answer where
 its condition holds; the answer is asked again with its sentence, and its
-refusals are counted as `check:<name>`.
+refusals are counted as `check:<name>`. A field of the spec may carry checks of
+its own the same way (`checks`: `[{name, refuse, sentence}]`, owner request
+2026-11-14): after the flow's, they refuse a value the questions that find values
+(`find`, `docfield`) came back with, and no question about a dimension is
+checked by them. They only refuse more; the two fixed evidence checks are
+unchanged, and the shipped specs carry none. A field's checks enter its
+fingerprint.
 
 Every step takes named inputs and gives named outputs, the variables of the
 flow (`extraction.variables`: the document, the chunks, a field, the search
@@ -2540,7 +2632,7 @@ harvest read with.
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 | `span_marks` | rule | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
 | `flow.json` | profile file | the default profile's whole flow | The drawing of the reading and the numbers that bound it; a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and the `flow` (the drawing) where it draws otherwise. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
-| `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
+| `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping of a key to `{name, means, sentence, kind, state}` (`settings`, `base_year` and `target_year` say their `kind` by their key, any other key has to say it: `settings` or `year` with a `state`; one field per kind and state; kwp all three, scenarios the settings only; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
 | `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `profiles/scenarios/blocks.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
 | `decimal_mark` | rule | `.` (kwp sets `,`) | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |

@@ -112,9 +112,9 @@ def test_the_pool_is_read_when_the_search_orders():
     server = Server()
     ranker = rerank.Reranker(base_url="http://x", post=server)
     ranker.order(1, ["q"], FOUND)
-    assert len(sent(server)) == 5                       # the standard: 30
+    assert len(sent(server)) == 5                       # the standard: 15
     assert (rules.get("rerank_pool"), rules.get("rerank_drawn"),
-            rules.get("rerank_drawn_from")) == (30, 20, 100)
+            rules.get("rerank_drawn_from")) == (15, 10, 100)
     server = Server()
     ranker = rerank.Reranker(base_url="http://x", post=server)
     with rules.overlaid(rerank_pool=2, rerank_drawn=0):
@@ -136,7 +136,7 @@ def test_a_step_sets_the_pool_for_itself_and_a_kind_has_its_own():
         ranker.order(1, ["q"], FOUND)
     assert sorted(sent(server)) == ["section 4", "table 1", "table 2",
                                     "table 3"]
-    assert rerank.pool_size("table") == 30              # outside: the run's
+    assert rerank.pool_size("table") == 15              # outside: the run's
     server = Server()
     ranker = rerank.Reranker(base_url="http://x", post=server)
     with at("search", rerank_pool=1, rerank_drawn=1, rerank_drawn_from=2):

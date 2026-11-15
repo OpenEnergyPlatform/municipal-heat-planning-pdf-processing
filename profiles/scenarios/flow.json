@@ -1,4 +1,7 @@
 {
+  "numbers": {
+    "list_meanings": 32
+  },
   "flow": [
     {
       "id": "document",

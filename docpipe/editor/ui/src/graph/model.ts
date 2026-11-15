@@ -20,11 +20,15 @@ export interface BrickInfo {
   name: string; kind: string; does: string; takes: string; gives: string; per: string; writes: string; own: boolean;
   settings: BrickSetting[];
 }
+/* a block ready to put in where a brick stands, as the shipped drawings have it */
+export interface PresetInfo { name: string; kind: string; does: string; block: Obj; own: boolean }
 export interface GraphData {
   file: string; exists: boolean; base: string | null; rules: Obj[]; classes: ClassInfo[]; skipped: string | null;
   constraints: Record<string, string>; set: { classes: Obj; constraints: Record<string, string> }; effects: string[];
   map: Obj; map_owner: string; fields: FieldInfo[]; bricks: BrickInfo[]; counts: string[]; harvest: boolean;
   documents: string[]; cost: string; gate: string;
+  /* the blocks: presets, what a condition can be about, how a part of an address is made */
+  presets?: PresetInfo[]; conditions?: any[]; part_from?: string[]; part_forms?: string[]; part_absent?: string[];
 }
 export interface Cur { classes: Obj; constraints: Record<string, string>; rules: Obj; map: Obj }
 export interface Problem { box: string | null; arrow: string | null; message: string }

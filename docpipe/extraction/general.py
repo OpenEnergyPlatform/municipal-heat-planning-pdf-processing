@@ -142,7 +142,7 @@ def view(obj):
             and hasattr(obj, "value_type"):
         from . import fields
         options = fields.value_choice(obj).options \
-            if obj.value_type == "category" else None
+            if getattr(obj, "is_entry", False) else None
         return {"uri": obj.uri, "name": obj.label,
                 "means": obj.description or "",
                 "unit": getattr(obj, "unit_target", "") or "",
@@ -585,7 +585,8 @@ class Ask:
         return noted
 
     def ask(self, req, shape: dict, example, counts, /, **noted):
-        noted = self.noted(noted)
+        from .shows import noted_of
+        noted = {**noted_of(req), **self.noted(noted)}
         with self.prompting():
             return self.reader._ask(self.kind, req.payload,
                                     self.document_id, shape, example,
@@ -593,7 +594,8 @@ class Ask:
 
     def follow(self, req, shape: dict, example, reply, what: list,
                counts, /, **noted):
-        noted = self.noted(noted)
+        from .shows import noted_of
+        noted = {**noted_of(req), **self.noted(noted)}
         with self.prompting():
             return self.reader._follow(self.kind, req.payload,
                                        self.document_id, shape, example,
@@ -644,6 +646,26 @@ def ask_step(engine, node: dict, scope) -> None:
         answer = target.run(ask, part)
     if answer is not None:
         scope.put("answer", answer)
+    traced_outcome(engine, node, scope, ask, answer, part)
+
+
+def traced_outcome(engine, node: dict, scope, ask, answer, part) -> None:
+    """What a question came to, in the trace of its document (`outcome`,
+    owner decision 2026-11-14): its box and target, where it ran, the
+    requests it asked and the refusals it met by reason, and its answer
+    (answered, finds, none, from another passage, follow-ups, why a find
+    was refused)."""
+    from . import trace
+    if not trace.enabled() or ask.document_id is None:
+        return
+    came = {}
+    if answer is not None:
+        came = {"answered": answer.answered, "finds": answer.finds,
+                "zero": answer.zero, "other_passage": answer.other_passage,
+                "follow_ups": answer.follow_ups, "refusal": answer.refusal}
+    trace.event("outcome", ask.document_id, box=node.get("id"),
+                target=ask.into.get("to"), **engine.where(scope),
+                asked=dict(part.asked), refused=dict(part.failed), **came)
 
 
 def retrieve_step(engine, node: dict, scope) -> None:

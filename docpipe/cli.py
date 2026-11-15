@@ -12,7 +12,6 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import json
 import os
 import re
 import runpy
@@ -22,8 +21,8 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from . import __version__, settings
-from .profile import ENV_VAR, ROOT, available_profiles, \
-    bind_command_line, name_profile, profile_locations
+from .profile import ENV_VAR, ROOT, bind_command_line, name_profile, \
+    profile_locations
 
 # command -> (module run as __main__, one line of help)
 STAGES = {
@@ -190,90 +189,20 @@ def _chat(rest: Sequence[str]) -> int:
                             str(app), *rest])
 
 
-PROJECT_TOML = """\
-# The project file. A value here stands unless the environment sets the same
-# name; a key or a token belongs in .env, not here. Every setting, its value
-# and where the value comes from: `docpipe config`.
-profile = "{name}"
-
-[llm]
-# A server of one's own that speaks the OpenAI API, or a hosted model:
-# base_url = "http://localhost:8000/v1"
-# model = ""
-# provider = "openai-compatible"      # or: openai, anthropic, gemini
-
-[vlm]
-# The vision model: reads pages without text, tables and figures.
-# base_url = "http://localhost:8001/v1"
-# model = ""
-# provider = "openai-compatible"
-
-[refine]
-# Ask for corrections (find and replace) instead of every section retyped.
-return_corrections = true
-"""
-
-PROFILE_PY = """\
-\"\"\"{title}: this project's profile.
-
-It extends the profile docpipe brings itself. What is written here, and in
-the files beside this one, replaces that profile's part of the same name: a
-prompt under prompts/<stage>/<name>.md, a word list in preprocessing.py, the
-labels in inference.py, the tables in schema.sql. `docpipe doctor` shows what
-is in effect.
-\"\"\"
-from docpipe.profile import Facet, Profile
-
-PROFILE = Profile(
-    name="{name}",
-    extends="default",
-    title="{title}",
-    document_noun="document",
-    facets=(
-        Facet("folder", "Folder"),
-    ),
-)
-"""
-
-
-EXTRACTION_PY = """\
-\"\"\"Extraction: this project's spec, once there is one.
-
-`docpipe compile spec --shapes ... --out extraction_spec.draft.json` drafts
-it from the shapes of a graph, and `docpipe compile apply ... --out
-extraction_spec.json` (beside this file) writes it when nothing is open.
-\"\"\"
-from pathlib import Path
-
-_SPEC = Path(__file__).with_name("extraction_spec.json")
-SPEC_PATH = _SPEC if _SPEC.is_file() else None
-"""
-
-
-DRAFT_FILE = "extraction_spec.draft.json"
+# What `docpipe init` writes (`newprofile`, owner request 2026-11-14, wish 5:
+# the editor makes a profile with the same code).
+from .newprofile import DRAFT_FILE  # noqa: E402
 
 
 def _draft_from_shapes(given):
     """(the draft of a spec, the shapes file it is from). `given` is a file
     of the user's, or True for the one the package brings. Raises SystemExit
     before anything is written, naming the file that could not be used."""
-    if given == "":
-        # An unset variable in `--shapes "$FILE"`: not the bundled shape.
-        raise SystemExit("--shapes was given an empty file name; nothing "
-                         "was written")
+    from . import newprofile
     try:
-        from .compile import cli as compiling
-        from .compile import shapes
-        path = shapes.BUNDLED if given is True else Path(given).expanduser()
-        return compiling.draft_of(path), path
-    except ModuleNotFoundError as exc:
-        if (exc.name or "").split(".")[0] != "rdflib":
-            raise
-        raise SystemExit("--shapes reads shapes with rdflib, which is not "
-                         "installed: pip install \"docpipe[kg]\"; nothing "
-                         "was written")
-    except SystemExit as exc:
-        raise SystemExit(f"{exc.code}; nothing was written") from None
+        return newprofile.draft_from_shapes(given)
+    except newprofile.ProfileError as exc:
+        raise SystemExit(f"{exc}; nothing was written") from None
 
 
 def _init(rest: Sequence[str]) -> int:
@@ -300,12 +229,11 @@ def _init(rest: Sequence[str]) -> int:
     home = Path(args.dir).expanduser().resolve()
     name = args.name or re.sub(r"[^a-z0-9]+", "_",
                                home.name.lower()).strip("_")
-    if not re.fullmatch(r"[a-z][a-z0-9_]*", name or ""):
-        raise SystemExit(f"{name!r} cannot name a project: lower-case "
-                         f"letters, digits and _, starting with a letter")
-    if name in available_profiles():
-        raise SystemExit(f"a profile named {name!r} exists already "
-                         f"({profile_locations()[name]}); pick another name")
+    from . import newprofile
+    try:
+        newprofile.check_name(name)
+    except newprofile.ProfileError as exc:
+        raise SystemExit(str(exc)) from None
     project = home / settings.PROJECT_FILE
     profile = home / "profiles" / name
     for path in (project, profile):
@@ -315,32 +243,10 @@ def _init(rest: Sequence[str]) -> int:
     # half of a project behind.
     shaped = None if args.shapes is None else _draft_from_shapes(args.shapes)
     pdfs = home / "data" / name / "pdf"
-    pdfs.mkdir(parents=True, exist_ok=True)
-    profile.mkdir(parents=True)
-    title = name.replace("_", " ").capitalize()
-    (profile / "__init__.py").write_text("", encoding="utf-8")
-    (profile / "profile.py").write_text(
-        PROFILE_PY.format(name=name, title=title), encoding="utf-8")
-    (profile / "extraction.py").write_text(EXTRACTION_PY, encoding="utf-8")
-    project.write_text(PROJECT_TOML.format(name=name), encoding="utf-8")
-    written = [project, profile / "profile.py", profile / "extraction.py"]
-    if shaped is not None:
-        draft, source = shaped
-        (profile / DRAFT_FILE).write_text(
-            json.dumps(draft, ensure_ascii=False, indent=1) + "\n",
-            encoding="utf-8")
-        written.append(profile / DRAFT_FILE)
-    example = home / ".env.example"
-    if not example.exists():
-        lines = ["# Keys and tokens. Copy to .env, which is not checked in."]
-        lines += [f"# {s.help}\n# {s.env}=" for s in settings.SETTINGS
-                  if s.secret]
-        example.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        written.append(example)
-    ignore = home / ".gitignore"
-    if not ignore.exists():
-        ignore.write_text(".env\ndata/\n", encoding="utf-8")
-        written.append(ignore)
+    draft, source = shaped if shaped is not None else (None, None)
+    made = newprofile.write_profile(home, name, draft=draft)
+    around = newprofile.write_project(home, name)
+    written = around[:1] + made + around[1:]
     for path in written:
         print(f"wrote {path}")
     print(f"\nPut the PDFs into {pdfs}, say in {settings.PROJECT_FILE} where "

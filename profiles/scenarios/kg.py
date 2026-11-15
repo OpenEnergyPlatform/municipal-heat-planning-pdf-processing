@@ -21,18 +21,16 @@ from __future__ import annotations
 import json
 import logging
 import re
-import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 
 from docpipe import graphfile
 from docpipe.extraction.addressed import SEVERAL
-from docpipe.extraction.bricks import Brick, Call, Setting, in_graph, literal
+from docpipe.extraction.bricks import in_graph
 from docpipe.extraction.graphkit import NOT_IN_GRAPH
 from docpipe.extraction.shapemodel import Model, SchemaError, \
     snapshot_ancestors
-from docpipe.store.schema import readonly_uri
 
 log = logging.getLogger(__name__)
 
@@ -180,23 +178,37 @@ def scenario_names(row: dict, name_in_quote: bool = True) -> list:
     return [name.strip()]
 
 
-# -- the bricks ----------------------------------------------------------------
+# -- the blocks ----------------------------------------------------------------
+#
+# What the drawing of this graph does beyond the core's bricks is Python of
+# the drawing that calls the functions above (owner request 2026-11-14, wish
+# 4: blocks the Graph tab shows and changes). `PRESETS` holds each block as
+# the shipped drawing has it.
 
-def _names(call: Call) -> list:
-    return scenario_names(call.row, bool(call.settings.get("name_in_quote",
-                                                           True)))
+_NAMES = '''def run(call):
+    """The scenarios a row belongs to: a scenario's name by its value, any
+    other row by its scenario dimension, in the words the publication
+    prints; the words of several scenarios name each of them, an out: entry
+    none."""
+    return kg.scenario_names(call.row,
+                             bool(call.settings.get("name_in_quote", True)))
+'''
 
-
-def _short_name(call: Call) -> list:
+_SHORT_NAME = '''def run(call):
+    """The short name the publication prints for the scenario, else its
+    name."""
     shorts = [row for row in call.rows if row.get("value_short")]
     acronym = shorts[0]["value"] if shorts else call.node.name
     return [(literal(acronym), acronym,
              [row for row in shorts if row["value"] == acronym])]
+'''
 
-
-def _region(call: Call) -> list:
+_REGION = '''def run(call):
+    """The regions a region answer stands for: a country itself, a group its
+    members, a region the list does not carry a study region of its own
+    named as the document prints it."""
     names = call.doc.extra.setdefault("names", {})
-    printed = printed_region(call.row)
+    printed = kg.printed_region(call.row)
     if printed:
         place = call.settings.get("unlisted") or {}
         iri = call.doc.mint(place.get("folder", "region"),
@@ -204,20 +216,28 @@ def _region(call: Call) -> list:
                             call.doc.fold(printed))
         names.setdefault(iri, printed)
         return [(f"<{iri}>", iri)]
-    return [(f"<{iri}>", iri) for iri in region_members(
+    return [(f"<{iri}>", iri) for iri in kg.region_members(
         call.row.get("value_uri"), call.doc.extra.get("groups") or {})]
+'''
 
-
-def _known_name(call: Call) -> list:
+_KNOWN_NAME = '''def run(call):
+    """The name the last refresh gives a node the graph points at (a region
+    by the name LCC gives it, an OEO term by its label); a node without one
+    gets none."""
     name = (call.doc.extra.get("names") or {}).get(call.node.iri)
     if not name:
         call.doc.count("nameless")
         return []
     return [(literal(name), name)]
+'''
+
+_CROSSCHECK = '''import sqlite3
+
+from docpipe.store.schema import readonly_uri
 
 
-def _crosscheck(call: Call) -> None:
-    """Say it out loud when the graph's value and the crawl disagree. A
+def run(call):
+    """Says it out loud when the graph's value and the crawl disagree. A
     diagnostic, never a precondition: an unreachable database stops
     nothing."""
     doc = call.doc
@@ -245,38 +265,31 @@ def _crosscheck(call: Call) -> None:
         if got and crawled and doc.fold(got) != doc.fold(crawled):
             log.warning("graph: %s: the graph's %s is %r, the crawl says %r",
                         doc.name, key, got, crawled)
+'''
 
-
-BRICKS = (
-    Brick("scenario_names", "nodes",
-          "Names the scenarios a row belongs to: a scenario's name by its "
-          "value, any other row by its scenario dimension, in the words the "
-          "publication prints; the words of several scenarios name each of "
-          "them, an out: entry none.", "a reading", "names", _names,
-          (Setting("name_in_quote", "flag", "a name counts only where the "
-                   "passage it was read from prints it", True),)),
-    Brick("short_name", "object",
-          "Writes the short name the publication prints for the scenario, "
-          "else its name.", "the readings of a scenario's name", "a text",
-          _short_name, per="node"),
-    Brick("region", "object",
-          "Writes the regions a region answer stands for: a country itself, "
-          "a group its members, a region the list does not carry a study "
-          "region of its own named as the document prints it.",
-          "a reading of a region", "addresses", _region,
-          (Setting("unlisted", "table", "where a region the list does not "
-                   "carry is made: folder and key"),)),
-    Brick("known_name", "object",
-          "Writes the name the last refresh gives a node the graph points "
-          "at (a region by the name LCC gives it, an OEO term by its "
-          "label); a node without one gets none.", "a node", "a text",
-          _known_name, per="node"),
-    Brick("crawl_crosscheck", "check",
-          "Says in the log where the title, year or DOI the graph takes "
-          "differs from the crawl's record of the document.", "a document",
-          "nothing", _crosscheck,
-          (Setting("fields", "fields", "the fields held to the crawl's "
-                   "title, year and DOI"),)),
+PRESETS = (
+    {"name": "scenario_names", "kind": "nodes",
+     "does": "Names the scenarios a row belongs to, in the words the "
+             "publication prints.",
+     "block": {"python": _NAMES, "settings": {"name_in_quote": True}}},
+    {"name": "short_name", "kind": "object",
+     "does": "Writes the short name the publication prints for the "
+             "scenario, else its name.",
+     "block": {"python": _SHORT_NAME, "per": "node"}},
+    {"name": "region", "kind": "object",
+     "does": "Writes the regions a region answer stands for.",
+     "block": {"python": _REGION, "settings": {
+         "unlisted": {"folder": "region", "key": "studyregion"}}}},
+    {"name": "known_name", "kind": "object",
+     "does": "Writes the name the last refresh gives a node the graph points "
+             "at.",
+     "block": {"python": _KNOWN_NAME, "per": "node"}},
+    {"name": "crawl_crosscheck", "kind": "check",
+     "does": "Says in the log where the title, year or DOI the graph takes "
+             "differs from the crawl's record of the document.",
+     "block": {"python": _CROSSCHECK, "settings": {
+         "fields": ["publication_title", "publication_date",
+                    "publication_doi"]}}},
 )
 
 
@@ -369,10 +382,12 @@ def box_class(box_id: str) -> str:
 
 
 def property_of(source: str, to: str, brick: Optional[str] = None) -> str:
-    """The property of the drawing's arrow from *source* to *to*."""
+    """The property of the drawing's arrow from *source* to *to*, of the
+    one whose block goes by *brick* where it is given (`name_of`)."""
+    from docpipe.extraction.graphblocks import name_of
     return next(arrow["property"] for arrow in drawing()["arrows"]
                 if arrow["from"] == source and arrow["to"] == to
-                and (brick is None or arrow.get("brick") == brick))
+                and (brick is None or name_of(arrow.get("brick")) == brick))
 
 
 def normalise(name: str) -> str:

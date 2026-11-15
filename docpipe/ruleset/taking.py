@@ -150,10 +150,11 @@ RULES = (
     # -- spec: defaults where the spec says nothing ---------------------------
     rule("derive_from_unit", "spec", "Defaults where the spec says nothing",
          "choice",
-         "How a coordinate that the spec derives from the unit is read. "
+         "How a coordinate that the spec derives from the unit or under "
+         "a condition is read. "
          "Ask first, then derive: the coordinate is asked, and only where "
-         "no answer is read does the unit set it, with the state derived. "
-         "Ask only: the unit never sets it, and an unanswered coordinate "
+         "no answer is read does the spec set it, with the state derived. "
+         "Ask only: the spec never sets it, and an unanswered coordinate "
          "stays open. Decided on 2026-11-07.",
          choices=("ask_first_then_derive", "ask_only"),
          decided="2026-11-07", steps=TAKING + ("state",),

@@ -41,6 +41,7 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import argparse
+import collections
 import contextvars
 import functools
 import hashlib
@@ -420,7 +421,17 @@ def persistently(what: str, call: Callable) -> Callable:
                         raise
                 log.warning("   %s failed (attempt %d), asked again: %s",
                             what, attempt, exc)
-                time.sleep(retry_wait(attempt, server_side(exc)))
+                wait = retry_wait(attempt, server_side(exc))
+                document_id = args[0] if args and isinstance(args[0], int) \
+                    and not isinstance(args[0], bool) else None
+                # Each time a search, an embedding or the reranker is asked
+                # again, in the trace (owner decision 2026-11-14).
+                trace.event("retry", document_id, what=what, attempt=attempt,
+                            why="refused" if refused(exc)
+                            else "server" if server_side(exc) else "ours",
+                            wait_s=round(float(wait), 3),
+                            detail=str(exc)[:300])
+                time.sleep(wait)
     return again
 
 
@@ -454,9 +465,14 @@ class Failures:
     harvest, `not_happened`). It still waits and stops by the rule.
     """
 
-    def __init__(self, document_id=None, noted: bool = True):
+    def __init__(self, document_id=None, noted: bool = True,
+                 where: Optional[str] = None):
         self.document_id = document_id
         self.noted = noted
+        # The kind of request, for the trace of each time it is asked again
+        # (`wait`), and what its last attempt came to there.
+        self.where = where
+        self.last = ""
         self.transport = False
         self.lost = False
         self.faults = 0
@@ -499,6 +515,8 @@ class Failures:
         no answer, and its document is not finished (`lost`)."""
         self.transport, self.lost = server_side(exc), unserved(exc)
         self.fault_of_ours = None
+        self.last = "refused" if refused(exc) \
+            else "server" if self.transport else "ours"
         if refused(exc):
             self.refusals += 1
             self.lost = True
@@ -529,12 +547,21 @@ class Failures:
     def fault(self) -> int:
         """The reply could not be read: how many such replies so far."""
         self.faults += 1
+        self.last = "form"
         return self.faults
 
     def wait(self, attempt: int) -> None:
         """Before asking again after attempt *attempt*: the long curve after
-        the server's failure, the short one after a reply."""
-        time.sleep(retry_wait(attempt, self.transport))
+        the server's failure, the short one after a reply. Each time is in
+        the trace of the request's document (`retry`, owner decision
+        2026-11-14): the request's kind, the attempt, why (the server's
+        failure, a refusal, a reply out of its form, our own code) and the
+        wait."""
+        wait = retry_wait(attempt, self.transport)
+        trace.event("retry", self.document_id, what=self.where or "request",
+                    attempt=attempt, why=self.last or "server",
+                    wait_s=round(float(wait), 3))
+        time.sleep(wait)
 
     def given_up(self) -> None:
         """The request is asked no more and has no answer. A fault of our
@@ -907,23 +934,102 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
                  limit: Optional[int] = None) -> list:
         """*limit* per call overrides the one given at construction: the
         sweep asks for as many passages as its remaining windows can show."""
+        started = time.time()
         if document[0] != document_id:
             document[:] = [document_id, faiss_store.prepare_document(
                 conn, index, id_to_pos, document_id, all_types)]
             search[:] = [None, None]
         key = (document_id, tuple(probes))
+        vectors = None
         if search[0] != key:
+            embedding = time.time()
+            keys = [query_cache.make_key("text", text=p, image_bytes=None)
+                    for p in probes]
+            kept = sum(query_cache.get(cache_conn, k) is not None
+                       for k in keys) if trace.enabled() else None
             search[:] = [key, faiss_store.search_prepared(
                 document[1], embed_many(list(probes)))]
+            vectors = {"kept": kept, "embedded": None if kept is None
+                       else len(probes) - kept,
+                       "ms": trace.ms_since(embedding)}
         scores, positions = search[1]
         hits = faiss_store.fuse_prepared(
             conn, document[1], scores, positions,
             default_limit if limit is None else limit,
             content_fetcher=content_fetcher, exclude=exclude, probes=probes,
             per_probe_top=per_probe_top)
+        trace_vector(document_id, probes, exclude, hits, vectors, started)
         return [_source_of(hit) for hit in hits]
 
     return retrieve
+
+
+def trace_vector(document_id: int, probes: list, exclude: set, hits: list,
+                 vectors: Optional[dict], started: float) -> None:
+    """The vector search of the search running in *document_id* in its trace
+    (`vector`, owner decision 2026-11-14): of each kind of passage its
+    places with their similarity, as many as the rule
+    `trace_vector_places` says, and how many passages of the kind it
+    ranked; the passages it left out because they were taken (*exclude*);
+    the sentences' vectors kept from before or embedded now (*vectors*,
+    None where the sentences were the last search's). Every place is kept
+    with the search, so that the pieces it takes say where their passage
+    stood (`trace.search_state`)."""
+    if not trace.enabled():
+        return
+    most = int(rules.get("trace_vector_places"))
+    places: dict = {}
+    counted: collections.Counter = collections.Counter()
+    state = trace.search_state(document_id)
+    for at, hit in enumerate(hits, 1):
+        kind = hit["owner_kind"]
+        counted[kind] += 1
+        if state is not None:
+            state["vector"][(kind, hit["owner_id"])] = (counted[kind], at)
+        if not most or counted[kind] <= most:
+            places.setdefault(kind, []).append(
+                [hit["owner_id"], round(float(hit["score"]), 4)])
+    trace.in_search(
+        "vector", document_id, probes=len(probes), places=places,
+        of_kind=dict(counted),
+        excluded=sorted([list(owner) for owner in exclude or ()]),
+        **({"vectors": vectors} if vectors is not None else {}),
+        ms=trace.ms_since(started))
+
+
+IMAGE_REVISION = Path("/opt/docpipe/IMAGE_REVISION")
+
+
+def run_head(profile) -> dict:
+    """What a run is, at the head of each document's trace (owner decision
+    2026-11-14): the commit of its code (`_revision`) and what the image it
+    runs in calls itself, the profile, the models of the requests, the
+    embedder and the reranker, every rule in effect with where it comes
+    from (what authenticates blanked, `trace.blanked`) and the drawing of
+    the flow."""
+    from .. import _revision
+    from ..embedding import config as embedding_config
+    from ..inference import rerank as rerank_map
+    current = rules.current()
+    try:
+        image = IMAGE_REVISION.read_text(encoding="utf-8").strip()
+    except OSError:
+        image = ""
+    try:
+        drawing = flow_map.tree_of(profile)
+    except LookupError:
+        drawing = None
+    return {"code": _revision.revision(), "image": image,
+            "profile": getattr(profile, "name", None),
+            "started_at": round(time.time(), 3),
+            "models": {"requests": llm_model(),
+                       "embedder": embedding_config.EMBEDDING_MODEL,
+                       "reranker": rerank_map.model_name()
+                       if rerank_map.base_url() else None},
+            "rules": trace.blanked(dict(current.values),
+                                   rules.registry(profile)),
+            "rules_from": dict(current.owners),
+            "rules_sha256": current.sha256, "flow": drawing}
 
 
 def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
@@ -1246,6 +1352,14 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
 
     def more_sources(document_id: int, queries: list, exclude: set,
                      limit: int = 0) -> list:
+        # One search in the trace: its vector search and its reranker
+        # write under its number (part of a search already running).
+        with trace.searching(document_id, sentences=list(queries),
+                             **addressed_map.searched_for()):
+            return _more_sources(document_id, queries, exclude, limit)
+
+    def _more_sources(document_id: int, queries: list, exclude: set,
+                      limit: int = 0) -> list:
         retrieve = connections()
         found: list = []
         taken = set(exclude)
@@ -2096,7 +2210,7 @@ def _ask_in_grammar(client, prompt, conversation: list, shape: dict,
     client = _repeating(client)
     wanted = request_wanted(where)
     text = system_text(prompt, example)
-    failures = Failures(document_id)
+    failures = Failures(document_id, where=where)
     for attempt in failures.attempts():
         limit = request_room(text, conversation, wanted)
         if limit is None:
@@ -2860,7 +2974,7 @@ def _parameter_payload(parameter) -> dict:
                "axes": axes, "example": parameter.example}
     # Only what applies to this kind of value: a unit list in front of a
     # category would invite the model to invent one.
-    if parameter.is_numeric:
+    if parameter.has_units:
         payload["units_accepted"] = sorted(parameter.units_accepted)
     elif parameter.vocabulary:
         payload["value_classes"] = {labels[0]: list(labels[1:])
@@ -2938,7 +3052,7 @@ def _quantities_payload(spec) -> list:
         entry = {"uri": parameter.uri, "label": parameter.label,
                  "description": parameter.description,
                  "value_type": parameter.value_type}
-        if parameter.is_numeric:
+        if parameter.has_units:
             entry["units_accepted"] = sorted(parameter.units_accepted)
         elif parameter.vocabulary:
             entry["value_classes"] = {labels[0]: list(labels[1:])
@@ -3106,7 +3220,7 @@ def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
     unit = row.get("unit_raw") or row.get("unit")
     if unit:
         listed["unit"] = unit
-    if parameter.is_numeric:
+    if parameter.has_units:
         # The second reading names its unit as one entry too: the first
         # reading's is compared by factor, and a wording has none.
         listed["units_accepted"] = sorted(parameter.units_accepted)
@@ -4466,7 +4580,7 @@ def field_slots(spec) -> list:
     out = [fields.parameter_slot(spec), fields.unit_slot(spec)]
     for parameter in spec.parameters:
         out += fields.axis_slots(parameter)
-        if parameter.value_type == "category":
+        if parameter.is_entry:
             out.append(fields.value_choice(parameter))
     return [slot for slot in out if slot is not None]
 
@@ -4622,7 +4736,8 @@ def year_states_of(spec: Spec) -> dict:
     by word ("Basisjahr", "Zieljahr") and prints no year, in a pass over a
     stored harvest, which asks no plan its years. None for a state the spec
     does not say it of, which then has no years."""
-    return {state: (spec.plan_fields.get(f"{state}_year") or {}).get("of")
+    return {state: ((spec.plan_field_of("year", state) or (None, {}))[1]
+                    or {}).get("of")
             for state in YEAR_STATES}
 
 
@@ -5321,7 +5436,9 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
     # document's own file, so a redone document overwrites its own trace. A
     # pass over a stored harvest writes beside the harvest's traces and not
     # into them (the setting `trace` of the box that starts it): they say
-    # what the harvest cost, and are opened for writing.
+    # what the harvest cost, and are opened for writing. Each file starts
+    # with what the run is (`run_head`).
+    trace.set_head(lambda: run_head(profile))
     if chosen == passflow.MAIN:
         trace.open_trace(args.out / "trace", document_name.get)
 

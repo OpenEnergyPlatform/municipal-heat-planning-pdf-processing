@@ -48,6 +48,46 @@ the server, and a server whose command is gone, also a command that was
 killed, ends by itself, because its standard input is a pipe the command
 holds.
 
+## Installing and building the page
+
+The package's own requirements in `pyproject.toml` include `regex` and `httpx`,
+which the package imports; without `regex` the editor cannot start. The extra
+`editor` (`rdflib`, `pyshacl`) holds what the Sources and Graph tabs need, and
+`dev` includes `pyshacl`. `pip install -e ".[editor]"` gives everything
+`docpipe edit` needs.
+
+Before it starts the server, `docpipe edit` loads the server's module. If a
+library it imports is missing, it stops with a line naming it and
+`pip install docpipe`; a requirement of the package the editor does not load,
+such as `rapidfuzz`, does not stop it. If the extra `editor` is missing it
+prints one line that the Sources and Graph tabs need `rdflib` and `pyshacl` and
+`pip install "docpipe[editor]"`, and starts anyway; the two tabs say the same
+command where `rdflib` is missing. `docpipe doctor` lists the command `edit`
+with its extra (`doctor.NEEDS`).
+
+`python scripts/build_editor_page.py` is the one way to build the page from
+`docpipe/editor/ui` into `docpipe/editor/web`. It checks the Node on the path
+against `engines` in `package.json` (`^20.19.0 || >=22.12.0`), runs `npm ci`
+only where `node_modules` is missing or `--install` is given (and refuses
+`--install` where `node_modules` is a link to another checkout), runs
+`npm run build`, writes `web/index.html` with LF line endings, and writes the
+fingerprint of the sources (SHA-256 over every file the build reads, line
+endings normalised) into `web/BUILT_FROM`. `--check` builds nothing and exits 1
+where the committed page is not the build of the sources as they stand.
+
+`tests/test_editor_page_built.py` fails where `web/BUILT_FROM` does not match
+the sources, and `scripts/change_audit.py` reports such a page in its DOCS
+section. `tests/test_declared_libraries.py` holds that every library `docpipe/`
+and `profiles/` import is declared in `pyproject.toml`, that the lists of
+`docpipe doctor` agree with `pyproject.toml`, and that every module of
+`docpipe.editor` imports in a process where each library outside the package's
+own list and the extra `editor` is refused. The workflow `.github/workflows/editor.yml`
+runs on a push to `develop` or `production` and on pull requests that touch the
+editor: Python 3.11 with `.[editor,dev]`, Node 22,
+`python scripts/build_editor_page.py --install`,
+`git diff --exit-code -- docpipe/editor/web`, then the editor's tests and the
+library test. There is no Docker image for the editor.
+
 ## The page
 
 The server binds `127.0.0.1` only, answers a request only if its `Host` is
@@ -65,15 +105,17 @@ committed in `docpipe/editor/web/`: `index.html`, `assets/index-<hash>.js` and
 `.css`, `forms.js` (the form logic the page and the node tests share) and
 `third-party-licenses.md` (name, version, licence and licence text of every
 library inside the built page, written by the build). Running `docpipe edit`
-needs no Node. Node is needed only to change the page: in `docpipe/editor/ui`,
-`npm ci`, then `npm run build` (a type check, then Vite writes into `web/` and
-replaces `web/assets/` whole). `npm run dev` serves the sources and passes
+needs no Node. Node is needed only to change the page, built with
+`scripts/build_editor_page.py` (see above; its `npm run build` is a type check,
+then Vite writes into `web/` and replaces `web/assets/` whole). `npm run dev` serves the sources and passes
 `/api` and `/forms.js` to a running `docpipe edit` (`DOCPIPE_EDIT_URL`, default
 `http://127.0.0.1:8765`).
 
 The head shows the profile, as a choice among every profile the installation
 finds (`docpipe profiles`; a server not started by `docpipe edit` shows only
-its own), and the branch, the five tabs **Spec**, **Prompts**,
+its own) with a last entry **New profile …** (where the page cannot switch, a +
+button beside the profile's name opens the same dialog; see New profile), and
+the branch, the five tabs **Spec**, **Prompts**,
 **Flow**, **Sources** and **Graph** as pills with a dot on a tab that holds
 edits not yet saved, a badge that says **Unsaved edits** or **All saved**, a
 **Rules** button on the tabs that have rules, which opens the rules of the tab
@@ -109,9 +151,20 @@ number and request log where the flow file, the code and this page say box,
 frame, piece, coordinate, address and trace (see the glossary).
 
 The rest of this section is the Spec tab. On the left is a tree, on the right
-the form of the selected node:
+the form of the selected node. Above the tree stands a library, as in the Flow
+tab (owner request 2026-11-14): a block is dragged onto a field, or clicked to
+put it into the field selected (`/api/spec` gives it as `library`,
+`specs.library`). It offers a field per value type, a dimension (a list of
+entries, a year, the words of the document, a list per document), an accepted
+unit, a check of the field's own, a value type of the spec's own and a field of
+the whole document (settings, or a year). A dimension, a unit or a check needs a
+field to go into; the page says so where none is dropped on or selected. The
+tree holds:
 
 - the top-level questions (`_comment`, `parameter_question`, `unit_question`);
+- the value types: the four built-in ones (`float`, `int`, `text`, `category`)
+  read-only, and those of the spec's own (`value_types`), which are edited and
+  deleted unless a field uses them;
 - the fields of the whole document (`plan_fields`) and its other
   works (`works`), where the spec has them, with a button to add one it does
   not have;
@@ -122,9 +175,64 @@ the form of the selected node:
 The keys of a form are the ones `docpipe/extraction/spec.py` reads (`specs.form`),
 each with what the page says of it, written for someone who edits the spec,
 not for the code (`specs.HELP`); the lists of the fields of the whole document
-and of the works have a sentence above them (`specs.ABOUT`). A key the form
+and of the works have a sentence above them (`specs.ABOUT`). A field's form has a select of the value type (built-in and own) and a
+list of its own checks, each a name, a condition and a sentence; a value type's
+form has its answer, its units, whether it converts and how the answer is found in
+its quote. A field of the whole document has `kind` (settings or year), for a
+year its `state`, and `of`. A key the form
 does not know stays in the file as it is. An edit is made in the page's copy
 of the spec; nothing is written until Save.
+
+### Draft of a spec
+
+A profile that has `extraction_spec.draft.json` and no `extraction_spec.json`
+(made by `docpipe init --shapes` or by the dialog of New profile) is edited in
+the Spec tab as that draft, and the head shows the draft's file where there is
+no spec. A note above the form lists what the draft still lacks
+(`compile.draft.todo`, as `/api/spec` gives it in `missing`). Save keeps the
+draft whatever it lacks. Once it lacks nothing, Save also writes
+`extraction_spec.json` (`compile.draft.finished`) and, where the profile has no
+`graph.json`, a `graph.json` (`compile.draft.graph_file`), as `docpipe compile
+apply --out` does; from then on the tab edits the spec. The draft goes, with the
+proposals file of its examples where that is the default one beside it, to
+`archive/draft-<YYYYmmdd-HHMMSS>/` in the profile's folder
+(`compile.draft.set_aside`), since it holds what the spec does not: its notes
+and the drawing of the graph where the profile already had a `graph.json`. The
+page says where the draft is kept. A draft in another folder stays where it is.
+
+## New profile
+
+The last entry of the profile choice in the head (or the + button) opens a
+dialog that makes a profile in the profile folder of the project
+(`settings.project_dir()/profiles/<name>`, with the folder for its PDFs at
+`data/<name>/pdf`), by `POST /api/profile/new` (`server._profile_new`, over
+`docpipe/newprofile.py`, the code `docpipe init` writes a project with). It
+asks for:
+
+- a name: lower-case letters, digits and `_`, starting with a letter, and not
+  the name of a profile the installation finds;
+- the start. *Empty* extends the profile docpipe brings (`default`). *Copy of*
+  a profile the installation finds writes a `profile.py` that extends that
+  profile and takes its title with the new name, its document noun, column
+  layout, shareable flag and facets, and copies of its `extraction_spec.json`,
+  `extraction_schema.json`, `flow.json`, `graph.json`, `chat.json`,
+  `rules.json` and `sources.json` where it has them, so an edit leaves the
+  profile copied as it was; every other part is inherited by `extends`;
+- optionally the addresses of an ontology, of shapes and of a graph. They
+  become sources of kind `url` named `ontology`, `shapes` and `graph` in the new
+  profile's `sources.json` (laid over those of a copy) and are fetched
+  (`upstream.fetch` into the cache, its lock written under the new profile's
+  name) before anything is written;
+- for an empty start, a draft of the spec: from the shapes at the address, or
+  from the small shape docpipe brings, made by the code of `docpipe init
+  --shapes`.
+
+The answer lists the files written, what was fetched and what the draft still
+lacks. A name taken or unusable, a profile to copy that does not exist, a draft
+from shapes without their address, an address that is no http(s) address, and a
+fetch or a draft that fails each refuse the request (400) and leave nothing
+behind. The dialog then offers to switch to the new profile. The page has no
+way to delete a profile.
 
 ## Check and Save
 
@@ -200,16 +308,22 @@ whole numbers or empty). Every value a form writes fits the same form again.
   refused by Check with a pointer to the drawing. The settings of a brick in
   the Graph tab are forms of the kinds the brick declares (a text, a list of
   texts, a number, a flag, a class, a rule, a table, labels, fields or prose),
-  a property or class a text field that offers those of the shapes.
-- `derive` is "derived from" a select of the field's coordinates and "value" a
-  select of the entries of the coordinate's own list.
+  a property or class a text field that offers those of the shapes; where a
+  brick stands, a block of another form can stand (see the Graph tab).
+- `derive` is a select of how it is derived, "from the unit (preset)" or "under a
+  condition about the reading", the condition as the rows of a condition (about
+  the reading only), and "value" a select of the entries of the coordinate's own
+  list.
 - `example` is the source as plain text, the defaults as one row of fields and
   the rows as a table with the columns value, quote and the coordinates (and
   their wordings) some row uses; a select adds a column.
 - `of` of a plan field is always two selects, the coordinate and its entry.
-- The address of a box in the Graph tab is a folder and a key, and the fields
-  (or `@name`, `@key`) its name is made of, with up and down to change the
-  order.
+- The address of a box in the Graph tab is a folder and a key, and the parts
+  its name is made of (a field, `@name`, `@key`, a fact, a key of the reading,
+  the address of an answer, the wording), each with its own form, prefix,
+  condition and what an absent one does, with up and down to change the order;
+  a field "Needs" beside "Made of" names the fields that must have a reading
+  for the node to be written (owner decision 2026-11-14).
 
 ## Copies and removals
 
@@ -639,6 +753,17 @@ item; where no box of that item asked, because it is off or its condition passed
 it by, nothing came back. A row about something there is not yet at its place is
 a problem of the drawing.
 
+The field's "kind of value" is one of the value types of the profile's spec, its
+own (`value_types`) among them, and not only of the four built-in ones
+(`Prop.added_by`, `conditions.added`, `choices_of`). Where the spec is known the
+row is checked against its types: in the spec's own checks of a field
+(`spec._validate_checks`) and in every request of the editor (`server._route`
+holds the spec of the profile for the handler), so the Flow tab offers and
+checks the spec's types. Where none is known, as in a flow file a run reads, any
+name counts: one flow is drawn for every spec of its profile's line, and the run
+compares the field's type by its name. The check editor of the Spec tab offers
+the value types the page has now, those just added included.
+
 An own check is a box that refuses an answer where its condition holds; the
 answer is asked again with its sentence, as often as the question's follow-ups,
 then stays unbacked. It never takes what the fixed checks refuse. Its refusals
@@ -730,6 +855,38 @@ switch that starts it. A pass flow is loaded, checked and saved through
 `/api/flow/pass`. It has a library of its own, its boxes and one frame, "for
 each dimension"; it offers no rounds, no branchings, no conditions and no
 numbers, and the page says where no run starts it. Rules at a step work in it as in the main flow.
+
+### The flow of the chat
+
+The flow selector also holds an entry for the chat: the drawing of a chat turn
+(`docpipe/inference/chatflow.py`, `docpipe/editor/chatpage.py`). It is drawn,
+checked and saved like a flow of a follow-up pass, with the library of the chat's
+boxes in groups (start, routes, search, answer, output, logic), the frames each,
+round, branching, side by side and part, the templates (statements, answer,
+harvest, graph, compare, compute) and a condition and a switch at every step. A
+template is put in as the fine boxes it stands for, with ids of its own. The
+profile's own `chat.json` is written only where the drawing differs from what the
+profile inherits.
+
+A loop of the chat has the settings runs (one after another in the turn, side by
+side, or ahead of being needed), entries at most, stop when (not offered side by
+side), collects (a variable of each entry into a list, there after the loop) and
+words beside the spinner. A part has "gives back", the variables that leave it;
+the wrap menu offers Part. The card of a tool step (compute set to run when a
+request asks, crop) says "when a request beside it asks": it does not run where it
+stands, the request beside it calls it.
+
+- `GET /api/chat` gives the drawing, its library, its variables and where it comes from;
+- `POST /api/chat/check` says every reason the drawing cannot run, each at its step;
+- `POST /api/chat/save` keeps a drawing the check allows, where the file is as the page loaded it;
+- `POST /api/chat/try` is the dry run below.
+
+The chat's dry run asks one question on made-up answers, in one of two modes:
+"nothing" (every part of every answer empty) and "example" (the example of each
+reply's form). The document is one of the corpus database or the plan made up
+from the spec's examples. No model, embedder, reranker or sandbox is asked, and
+nothing of the plan or the question is sent. Each step that ran shows its
+requests.
 
 ### Dry run
 
@@ -864,7 +1021,9 @@ one for each name, one for each distinct reading, one for each answer, one for
 each number, one for each object another arrow wrote), how a node is named (its
 address) and what is admitted; an arrow says its property, the brick that makes
 the object of its triple and the brick's settings, whether one reading is
-written, which readings count and a note. A click on a box, an arrow or the
+written, which readings count and a note. Wherever a brick stands (the object
+of an arrow, a condition of `admit`, the name, class, facts, evidence or claims
+of a box or the document), a block can stand instead. A click on a box, an arrow or the
 document opens its settings in a panel; a brick comes from a list that says what
 it does, what it takes and what it gives. The order of the boxes is the order of
 the nodes in the graph, the order of the arrows the order of the properties. The
@@ -884,6 +1043,27 @@ once with the saved file and once with the edit, and compares the two (nodes
 kept and left out, violations by constraint, nodes named anew;
 `graphpage.py`, `graphprobe.py`). A change of the graph needs no model: it takes
 effect the next time the graph is written from the stored harvest.
+
+### Blocks
+
+A place that takes a brick has four forms to choose from
+(`docpipe/editor/ui/src/graph/blocks.tsx`; see [the graph](graph.md), Blocks
+and presets): a brick with its settings; a condition (the flow's condition
+editor over a key of the reading or a fact of the document, with the graph's
+comparisons and the reason the reading is left out); steps, a chain of blocks
+that can be moved earlier or later, added and removed, each taking the value
+the one before gave; and Python, with how often it is called and what it
+writes (for the check against the ontology). A condition may be limited to the
+full or to the strict graph. Presets, the blocks of the core and of the
+profile ready to put in, are listed with what each does; a block put in from
+one shows which preset it came from, and keeps that name when it is changed.
+The address of a box is made of parts, each editable as above.
+
+With a harvest loaded, Try runs one block on one document of it: the page
+writes that document as the edited drawing says, nothing is saved and no model
+is asked, and shows for each call of the block, up to 200, what the reading
+was and what the block gave; for an address made of parts also each part
+(`POST /api/graph/try_block`, `graphpage.try_block`).
 
 ## What the editor does not touch
 
@@ -1093,7 +1273,8 @@ status and an object out), so every promise of the endpoints can be held to
 without a socket. What an endpoint says comes from the logic beside it
 (`specs.py`, `prompts.py`, `phrases.py`, `flow.py`, `measured.py`); this
 module only reads the file, asks the logic and, where the logic says so,
-writes.
+writes. The drawing of the chat is drawn, checked, saved and tried through
+/api/chat (`chatpage.py`).
 
 `Files` is the one place the editor touches a file: it may write, and take a
 file away, only inside the profile's own folder and read only inside the
@@ -1218,6 +1399,11 @@ what the page draws and decides what a save writes:
   to the run's own checks (`graphfile.map_problem`, `graph.check`) and
   names the box or arrow each problem is about. `preview` writes one
   document of the harvest as the edited drawing says.
+- the blocks (owner request 2026-11-14, wish 4): `view` also returns the
+  presets, blocks ready to put in where a brick stands, and what a
+  condition of the graph can be about; `try_block` writes one document as
+  the edited drawing says and shows what one block of it was given and
+  gave, reading by reading.
 - `probe`: the graph of the harvest the page was given, written twice into
   the temp directory, with the saved file and with the edited one, and what
   differs: per document the nodes kept and left out, per constraint its

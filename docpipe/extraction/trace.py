@@ -42,15 +42,29 @@ a run traces at all: off, every call to record an event returns immediately.
 `trace_compress`, `trace_time_places` and `trace_piece_min_chars` the file's
 form (owner decision 2026-11-11). Each is read where it is used.
 
+Everything a run does can be read back from its trace, not only what it asked
+(owner decision 2026-11-14: "sodass eigentlich alles rekonstruierbar ist").
+A document's trace starts with its head (`run`: the commit of the code, the
+image, the profile, the models, every rule in effect with what authenticates
+blanked, the drawing of the flow). Every request is numbered in its document
+(`rid`), and one that asks a request again (a follow-up, the same request
+with a picture or with the pieces its answer fetched) names the one it
+follows (`of`). Every search is numbered too (`sid`, `searching`): the
+vector search, the reranker and the pieces taken write their events under
+its number, and the requests that show its pieces name it.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import gzip
 import hashlib
 import json
 import logging
 import threading
+import time
 import zlib
 from pathlib import Path
 from typing import Callable, Iterable, Iterator, Optional
@@ -84,6 +98,24 @@ _written: dict = {}             # document id -> the pieces its file holds
 _root: Optional[Path] = None
 _name_of: Optional[Callable] = None
 _thread = threading.local()
+# The numbers given in each document so far: {document id: {"rid": n,
+# "sid": n}}.
+_numbers: dict = {}
+_number_lock = threading.Lock()
+# The search running where an event is written (`searching`): {"doc", "sid",
+# "vector"}, the places of the vector search by passage under "vector".
+_SEARCH: contextvars.ContextVar = contextvars.ContextVar("trace_search",
+                                                         default=None)
+# What makes the head of a document's trace (`set_head`), and the head it
+# made, made once a run.
+_head_maker: Optional[Callable] = None
+_head: Optional[dict] = None
+# The fields that say which request an event reports: a request asked again
+# (`AGAIN`) follows the last one of its thread with the same of them.
+SAME_REQUEST = ("parameter", "owner", "value", "coordinate", "box", "chunk",
+                "kind", "step", "names")
+# What a secret's value is written as in the head (`blanked`).
+BLANKED = "(blanked)"
 
 
 def open_trace(directory, name_of: Callable) -> None:
@@ -127,7 +159,75 @@ def _handle(document_id: int):
         handle = open(path, "wt", encoding="utf-8", newline="\n")
     _files[document_id] = handle
     _written[document_id] = set()
+    _write_head(handle, document_id)
     return handle
+
+
+def set_head(maker: Optional[Callable]) -> None:
+    """What every document's trace starts with: *maker()* -> {field: value},
+    made once a run, the first time a trace is opened (`run`). None: no
+    head."""
+    global _head_maker, _head
+    _head_maker, _head = maker, None
+
+
+def blanked(values: dict, known: Optional[dict] = None) -> dict:
+    """*values* as a trace may hold them: a trace is read by people a key
+    must not reach. What is a secret is what the editor never shows: a rule
+    that says it is one (`secret`, of *known*, the rules of the run, the
+    core's when not given), and a name no rule defines that ends the way a
+    secret's name ends (`settings.SECRET_NAME`); a secret that is set is
+    written as `BLANKED`, an empty one stays empty. Every other value is
+    written whole, but an address without the user and password before its
+    host (`rulespage.masked`)."""
+    from .. import settings
+    from ..editor.rulespage import masked
+    known = rules.BY_NAME if known is None else known
+    out: dict = {}
+    for name, value in values.items():
+        one = known.get(name)
+        secret = one.secret if one is not None else bool(
+            settings.SECRET_NAME.search(str(name).upper()))
+        out[name] = BLANKED if secret and value not in (None, "", [], {}) \
+            else masked(value)
+    return out
+
+
+def _write_head(handle, document_id: int) -> None:
+    """The head of a document's trace, its long texts as pieces. A head that
+    could not be made is left out: the trace goes on without it."""
+    global _head
+    if _head_maker is None:
+        return
+    try:
+        if _head is None:
+            _head = dict(_head_maker() or {})
+        pieces: dict = {}
+        record = {"t": "run", "doc": document_id}
+        for name, value in _head.items():
+            text = json.dumps(value, ensure_ascii=False, default=str,
+                              sort_keys=True)
+            ref = _ref(text, pieces) if isinstance(value, (dict, list)) \
+                else None
+            record[name] = {"piece": ref} if ref is not None else value
+        written = _written[document_id]
+        for key, text in pieces.items():
+            handle.write(json.dumps({"t": PIECE, "doc": document_id,
+                                     "id": key, "text": text},
+                                    ensure_ascii=False) + "\n")
+            written.add(key)
+        handle.write(json.dumps(record, ensure_ascii=False, default=str)
+                     + "\n")
+    except Exception as exc:                      # pragma: no cover - defensive
+        log.warning("trace: the head of %s dropped: %s", document_id, exc)
+
+
+def _number(document_id: int, what: str) -> int:
+    """The next number of *what* ("rid", "sid") in the document, from 1."""
+    with _number_lock:
+        held = _numbers.setdefault(document_id, {})
+        held[what] = held.get(what, 0) + 1
+        return held[what]
 
 
 def compressed() -> bool:
@@ -174,6 +274,107 @@ def _reports(kind: str, fields: dict) -> bool:
         kind == "error" and fields.get("kind") == "exception")
 
 
+def _numbered(kind: str, document_id: int, record: dict) -> None:
+    """*record*, an event that reports a request, with the request's number
+    in its document (`rid`), and where it asks a request again (a follow-up,
+    the same request with a picture or with the pieces its answer fetched)
+    the number of the request it follows (`of`): the last one of this
+    thread with the same identity (`SAME_REQUEST`). An attempt that failed
+    is numbered and follows nothing."""
+    rid = _number(document_id, "rid")
+    record["rid"] = rid
+    _thread.last = (document_id, rid)
+    if kind == "error" or not kind.endswith("_ask"):
+        return
+    base = record.get("asked") if kind == "follow_ask" else kind[:-4]
+    key = (document_id, base) + tuple(
+        json.dumps(record.get(name), default=str, sort_keys=True)
+        for name in SAME_REQUEST)
+    held = getattr(_thread, "requests", None)
+    if held is None or len(held) > 20000:
+        held = _thread.requests = {}
+    if kind == "follow_ask" or "picture" in record or "fetched" in record:
+        before = held.get(key)
+        if before is not None:
+            record["of"] = before
+    held[key] = rid
+
+
+def last_request(document_id: Optional[int] = None) -> Optional[int]:
+    """The number of the request this thread reported last (`rid`), None
+    where it reported none, or none of *document_id*."""
+    last = getattr(_thread, "last", None)
+    if last is None or (document_id is not None and last[0] != document_id):
+        return None
+    return last[1]
+
+
+# -- searches -------------------------------------------------------------------
+
+@contextlib.contextmanager
+def searching(document_id: Optional[int], /, **about):
+    """One search of *document_id* under a number of its own (`sid`): its
+    `search` event with *about* (its sentences, what asked it), and the
+    events of its vector search, reranker and pieces written under the same
+    number (`in_search`). A search inside a search of the same document is
+    part of it and takes its number. Yields the number, None where nothing
+    is traced."""
+    current = _SEARCH.get()
+    if current is not None and current["doc"] == document_id:
+        yield current["sid"]
+        return
+    if not enabled() or _root is None or document_id is None:
+        yield None
+        return
+    sid = _number(document_id, "sid")
+    state = {"doc": document_id, "sid": sid, "vector": {}}
+    token = _SEARCH.set(state)
+    _thread.search = (document_id, sid)
+    try:
+        event("search", document_id, sid=sid, **about)
+        yield sid
+    finally:
+        _SEARCH.reset(token)
+
+
+def search_state(document_id: Optional[int] = None) -> Optional[dict]:
+    """The search running here (`searching`), None where none runs or it
+    is another document's."""
+    current = _SEARCH.get()
+    if current is None or (document_id is not None
+                           and current["doc"] != document_id):
+        return None
+    return current
+
+
+def last_search(document_id: Optional[int] = None) -> Optional[int]:
+    """The number of the search this thread began last, None where it began
+    none, or none of *document_id*."""
+    last = getattr(_thread, "search", None)
+    if last is None or (document_id is not None and last[0] != document_id):
+        return None
+    return last[1]
+
+
+def in_search(kind: str, document_id: Optional[int], /, **fields) -> None:
+    """An event of the search running here, under its number; one written
+    where no search of the document runs begins a search of its own
+    (`searching`) and is written under that."""
+    if not enabled() or _root is None or document_id is None:
+        return
+    current = search_state(document_id)
+    if current is not None:
+        event(kind, document_id, sid=current["sid"], **fields)
+        return
+    with searching(document_id, implicit=True) as sid:
+        event(kind, document_id, sid=sid, **fields)
+
+
+def ms_since(started: float) -> int:
+    """Milliseconds since *started* (`time.time()`)."""
+    return int((time.time() - started) * 1000)
+
+
 def event(kind: str, document_id: Optional[int] = None, /, **fields) -> None:
     """One line of trace. Never raises: a broken trace must not kill a harvest.
 
@@ -182,7 +383,8 @@ def event(kind: str, document_id: Optional[int] = None, /, **fields) -> None:
     collide with the signature rather than land in the record.
     """
     pending = None
-    if _reports(kind, fields):
+    reports = _reports(kind, fields)
+    if reports:
         pending = getattr(_thread, "exchange", None)
         _thread.exchange = None
     if not enabled() or _root is None or document_id is None:
@@ -190,6 +392,8 @@ def event(kind: str, document_id: Optional[int] = None, /, **fields) -> None:
     try:
         record = {"t": kind, "doc": document_id}
         record.update(fields)
+        if reports:
+            _numbered(kind, document_id, record)
         pieces: dict = {}
         if pending is not None:
             request, response, error, times, once = pending
@@ -237,6 +441,8 @@ def close() -> None:
                 pass
         _files.clear()
         _written.clear()
+    with _number_lock:
+        _numbers.clear()
 
 
 # -- a request, without what repeats --------------------------------------------
