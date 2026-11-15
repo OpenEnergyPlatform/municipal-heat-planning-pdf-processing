@@ -90,12 +90,14 @@ class Facts
 ```
 
 What the run knows at one place: *get(subject, property)* -> the
-value, a LookupError where the place does not know it.
+value, a LookupError where the place does not know it; *test(subject,
+path, op, value)* -> the truth of a comparison only the place can make
+(`GRAPH_OPS` but `whole` and `term`).
 
 #### Facts.\_\_init\_\_
 
 ```python
-def __init__(self, get: Callable)
+def __init__(self, get: Callable, test: Optional[Callable] = None)
 ```
 
 ## Functions
@@ -171,10 +173,11 @@ One row, for the code that writes a condition.
 ### catalogue
 
 ```python
-def catalogue() -> list
+def catalogue(graph: bool = False) -> list
 ```
 
 Every thing a condition can be about with its properties, as the
-page offers them.
+page offers them: those of a flow, or with *graph* those of a drawing
+of the graph (`GRAPH_SUBJECTS`).
 
 [Back to the index](../README.md)

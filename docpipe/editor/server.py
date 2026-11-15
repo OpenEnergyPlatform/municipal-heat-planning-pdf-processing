@@ -379,6 +379,7 @@ class App:
             "/api/graph/save": ("POST", self._graph_save),
             "/api/graph/probe": ("POST", self._graph_probe),
             "/api/graph/preview": ("POST", self._graph_preview),
+            "/api/graph/try_block": ("POST", self._graph_try_block),
         }
         if path not in routes:
             raise _Refusal(404, f"no such endpoint: {path}")
@@ -1201,6 +1202,23 @@ class App:
                 self.profile, body.get("data"), self.harvest,
                 body.get("document"), self._corpus_db(body),
                 bool(body.get("strict")), self._spec_object())
+        except graphpage.PreviewError as exc:
+            raise _Refusal(400, str(exc))
+
+    def _graph_try_block(self, query, body) -> dict:
+        """What one block of the drawing on the page was given and gave
+        while one document of the harvest was written, nothing saved and no
+        model asked."""
+        if self.harvest is None:
+            raise _Refusal(400, "the page was started without a harvest "
+                                "(docpipe edit --harvest DIR): there is "
+                                "nothing to write a graph of")
+        try:
+            return graphpage.try_block(
+                self.profile, body.get("data"), self.harvest,
+                body.get("document"), body.get("where"),
+                self._corpus_db(body), bool(body.get("strict")),
+                self._spec_object())
         except graphpage.PreviewError as exc:
             raise _Refusal(400, str(exc))
 

@@ -81,6 +81,9 @@ function RowEditor({ subjects, r, only, changed, remove, vars }: {
   );
 }
 
+/* the comparisons that take no value: empty, and those only a reading of the graph's drawing makes */
+const VALUELESS = ['empty', 'listed', 'names', 'whole', 'term'];
+
 /* a row about any variable (owner decision 2026-11-12): its path, such as "answer.finds" or "item.kind", a comparison or
    none ("is there"), and a value: a number for less and more, several values for "is one of", else a text */
 function VarRow({ subjects, r, changed, remove, vars }: {
@@ -107,8 +110,8 @@ function VarRow({ subjects, r, changed, remove, vars }: {
         onChange={v => { r.is = v; changed(); }} />
       <NativeSelect size="xs" value={r.op || ''} aria-label={t('comparison')}
         data={[{ value: '', label: t('is there') }, ...ops.map(o => ({ value: o, label: opWord(o) }))]}
-        onChange={e => { const v = e.currentTarget.value; if (v) r.op = v; else { delete r.op; delete r.value; } if (r.op === 'empty') delete r.value; changed(); }} />
-      {r.op && r.op !== 'empty' && (numeric
+        onChange={e => { const v = e.currentTarget.value; if (v) r.op = v; else { delete r.op; delete r.value; } if (VALUELESS.includes(r.op || '')) delete r.value; changed(); }} />
+      {r.op && !VALUELESS.includes(r.op) && (numeric
         ? <NumberBox w={90} value={shown} onText={() => {}} aria-label={t('value')} onCommit={commit} />
         : <TextBox w={160} value={shown} onText={() => {}} aria-label={t('value')} onCommit={commit}
             placeholder={r.op === 'one_of' ? t('values, separated by commas') : undefined} />)}

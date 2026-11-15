@@ -3,22 +3,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from docpipe.extraction import graphkit, readings
-from docpipe.extraction.bricks import Call
+from docpipe.extraction import graphblocks, graphkit, readings
 from docpipe.extraction.graph import load_drawing
 from docpipe.graphfile import load as load_graph_file
 from docpipe.profile import load_profile
-from profiles.kwp import kg
 
 PROFILE = load_profile("kwp")
 DRAWING = load_drawing(PROFILE)
 RULES = load_graph_file(PROFILE).rules
 VALUE = DRAWING.box["value"]
 # The graph's own folding of a name and the stand-in of a document that
-# mints the coordinates themselves, as the address brick sees them.
+# mints the coordinates themselves, as the parts of the address see them.
 DOC = SimpleNamespace(
     writer=SimpleNamespace(drawing=DRAWING),
     address_of_answer=lambda box, answer: "part",
+    prefixes=DRAWING.prefixes,
     fold=lambda text: graphkit.normalise(str(text), DRAWING.legal_forms),
     mint=lambda folder, key, name: name)
 
@@ -34,8 +33,10 @@ def row(value, subject=None, quote=None, passage=None):
 
 
 def address(one, label=""):
-    return kg._identity(Call(doc=DOC, row=one, label=label,
-                             settings=VALUE["address"]["settings"]))
+    """The coordinates the drawing's address of a number is made of
+    (its parts, `graphblocks.parts_name`), joined as the writer joins them."""
+    return "|".join(graphblocks.parts_name(DOC, VALUE, VALUE["address"]["from"],
+                                           None, one, label))
 
 
 def settled(rows, keep_open=True):

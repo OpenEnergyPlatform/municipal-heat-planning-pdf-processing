@@ -65,7 +65,7 @@ def test_terms_the_pin_lacks_are_named_not_refused():
 
 from types import SimpleNamespace   # noqa: E402
 
-from docpipe.extraction.bricks import Call   # noqa: E402
+
 
 TOTAL = kg.totals(kg.drawing(), "value")
 TABLE = kg._box("part").get("table") or {}
@@ -97,14 +97,20 @@ def test_a_total_sector_is_the_schema_s_parent_and_a_total_carrier_none():
 
 
 def identity(one: dict) -> str:
-    """The coordinates a value's address is minted from (`_identity`),
-    with a document that mints the coordinates themselves."""
+    """The coordinates a value's address is minted from (the parts of the
+    drawing's address of a number), with a document that mints the
+    coordinates themselves."""
+    from docpipe.extraction import graphblocks
+    from docpipe.extraction.graph import Drawing
+    drawing = Drawing(kg.drawing())
     doc = SimpleNamespace(
-        writer=SimpleNamespace(drawing=SimpleNamespace(raw=kg.drawing())),
+        writer=SimpleNamespace(drawing=drawing),
         address_of_answer=lambda box, answer: "plan",
-        fold=str, mint=lambda folder, key, name: name)
-    return kg._identity(Call(doc=doc, row=one,
-                             settings={"part": "part", "box": "value"}))
+        prefixes=drawing.prefixes, fold=str,
+        mint=lambda folder, key, name: name)
+    box = drawing.box["value"]
+    return "|".join(graphblocks.parts_name(doc, box, box["address"]["from"],
+                                           None, one))
 
 
 def test_a_value_without_technology_keeps_its_iri():

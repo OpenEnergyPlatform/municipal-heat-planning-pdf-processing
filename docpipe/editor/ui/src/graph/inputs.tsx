@@ -5,11 +5,13 @@ import { IconPlus, IconX } from '@tabler/icons-react';
 import { TextBox } from '../components/Inputs';
 import { Help } from '../components/Bits';
 import { rich, t, tr } from '../lib/i18n';
-import type { BrickInfo, GraphData, Obj } from './model';
+import type { BrickInfo, Cur, GraphData, Obj } from './model';
+import { BlockEditor, PresetSelect } from './blocks';
 
 export type Edit = (fn: () => void, key?: string) => void;
 
-export interface Kit { d: GraphData; edit: Edit }
+/* what every input of the settings is given: the data, the edit, the drawing as it stands, and the trying of a block */
+export interface Kit { d: GraphData; edit: Edit; cur?: Cur; tryBlock?: (where: Obj, document: string) => Promise<any> }
 
 /* the fields of the harvest, grouped by what they are; the code name stands in the details only */
 export function fieldOptions(d: GraphData, extra: string[] = []) {
@@ -167,9 +169,10 @@ export function PairsEditor({ value, onChange }: { value: Obj; onChange: (next: 
   );
 }
 
-/* a list of bricks of one kind, each with its settings (the bricks a box admits, the checks of a document) */
-export function BrickList({ k, kind, list, onChange, label, help }: {
-  k: Kit; kind: string; list: Obj[]; onChange: (next: Obj[]) => void; label: string; help?: string;
+/* a list of blocks of one kind (what a box admits, the checks of a document): each a brick, a condition or Python, put in
+   from a preset or made here; *where* names the list for the trying of each */
+export function BrickList({ k, kind, list, onChange, label, help, where }: {
+  k: Kit; kind: string; list: Obj[]; onChange: (next: Obj[]) => void; label: string; help?: string; where?: Obj;
 }) {
   return (
     <Stack gap="xs">
@@ -179,14 +182,22 @@ export function BrickList({ k, kind, list, onChange, label, help }: {
         <Box key={i} p="xs" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 8 }}>
           <Group gap="xs" wrap="nowrap" align="flex-start">
             <Box style={{ flex: 1, minWidth: 0 }}>
-              <BrickRefEditor k={k} kind={kind} refer={ref} onChange={next => onChange(list.map((x, j) => (j === i ? next : x)))} withGraph />
+              <BlockEditor k={k} kind={kind} refer={ref} onChange={next => onChange(list.map((x, j) => (j === i ? next : x)))} withGraph
+                where={where ? { ...where, index: i } : undefined} />
             </Box>
             <Tooltip label={t('Remove')}><ActionIcon variant="subtle" color="red" aria-label={t('Remove')} onClick={() => k.edit(() => onChange(list.filter((_, j) => j !== i)))}><IconX size={16} /></ActionIcon></Tooltip>
           </Group>
         </Box>
       ))}
-      <Box><Button size="xs" variant="light" leftSection={<IconPlus size={14} />}
-        onClick={() => k.edit(() => { const first = bricksOf(k.d, kind)[0]; if (first) onChange([...list, { brick: first.name }]); })}>{t('Add a brick')}</Button></Box>
+      <Group gap="xs" align="flex-end">
+        <Button size="xs" variant="light" leftSection={<IconPlus size={14} />}
+          onClick={() => k.edit(() => { const first = bricksOf(k.d, kind)[0]; onChange([...list, first ? { brick: first.name } : { python: 'def run(call):\n    return None\n' }]); })}>{t('Add a brick')}</Button>
+        {kind === 'condition' && (
+          <Button size="xs" variant="light" leftSection={<IconPlus size={14} />}
+            onClick={() => k.edit(() => onChange([...list, { if: { all: [{ of: 'reading', is: 'value', op: 'empty', not: true }] }, reason: 'condition' }]))}>{t('Add a condition')}</Button>
+        )}
+        <PresetSelect k={k} kind={kind} onPick={b => k.edit(() => onChange([...list, b]))} />
+      </Group>
     </Stack>
   );
 }

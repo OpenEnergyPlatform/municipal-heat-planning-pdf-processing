@@ -14,9 +14,9 @@ the file walk and that a refusal line never reaches a serializer, and
 one program, `docpipe/extraction/graph.py`, writes every profile's graph
 from a drawing: the `map` part of the profile's `graph.json`, which says
 which node each field becomes, which property each value is written
-under and which brick turns a reading into the object of a triple. What a
+under and which block turns a reading into the object of a triple. What a
 profile needs beyond the core's bricks is code in its `kg.py`
-(`BRICKS`), and nothing else about its graph. `kwp`'s Turtle
+(`BRICKS`, `PRESETS`), and nothing else about its graph. `kwp`'s Turtle
 file is read back by `docpipe/inference/kg_route.py` when the chat
 (`docpipe/app`) has a graph configured; `scenarios`' `kg.py`
 declares no `COORDINATE_AXES` or `VALUE_QUERY`, so its file has no
@@ -99,7 +99,7 @@ drawing.
 | `document` | `facts` (a brick that looks up what is known of the document beyond its harvest), `admit` (conditions a row must meet to be taken at all), `check` (diagnostics over what was chosen), `front_pages` (the field whose readings find the title pages), `claims` (what the provenance file records), `decisions` (people's decisions are kept beside the values), `strict` (the profile also writes a strict graph) |
 | `evidence` | how a passage is shown above a triple: the `prose` of a trust line, the `join`, the `nodes` an evidence node is addressed with |
 | `boxes` | a class of the graph: `class`, `count`, `address`, `written`, `required`, `once`, `same_node`, `uuid`, `evidence`, `admit`, `table` and the keys a count asks for (below) |
-| `arrows` | from a field, a fact or a box to a box: `property`, `brick` with `settings`, `objects`, `evidence`, `pick`, `first_in_file`, `when`, `note`, `label`, `accepted` |
+| `arrows` | from a field, a fact or a box to a box: `property`, `brick` (or any block, below) with `settings`, `objects`, `evidence`, `pick`, `first_in_file`, `when`, `note`, `label`, `accepted` |
 
 The order of the boxes is the order of the nodes in the graph, and the order of
 the arrows the order of the properties on a node. A box's `count` says how many
@@ -131,15 +131,60 @@ A brick is code that takes one kind of thing and gives one kind back, with a
 sentence saying what it does (`docpipe/extraction/bricks.py`; a profile's own in
 `profiles/<name>/kg.py`, `BRICKS`). The kinds are `object` (on an arrow),
 `condition` (admits or holds back a row, with the reason it was held back),
-`facts`, `nodes`, `address`, `class`, `evidence`, `name`, `check` and `claims`
-(on a box or the document). A name that no brick has, or a brick of another
-kind, is a problem the check lists. Bricks of the core: `text`, `node_name`,
-`year_to_datetime`, `entry`, `fixed`, `template`, `fact`, `decimal`,
-`whole_number`, `answer_class` (`out:total` becomes the class set for a figure
-without the breakdown, an answer outside the list writes nothing and a class the
-property's range does not cover is counted under `outside_root`),
-`kept_coordinates`, `answer_is`, `has_words`, `named`, `trimmed`,
-`without_legal_form`.
+`value` (turns a value into another, a step of a chain), `facts`, `nodes`,
+`address`, `class`, `evidence`, `name`, `check` and `claims` (on a box or the
+document). A name that no brick has, or a brick of another kind, is a problem
+the check lists. Bricks of the core: `text`, `node_name`, `year_to_datetime`,
+`entry`, `fixed`, `template`, `fact`, `decimal`, `whole_number`, `answer_class`
+(`out:total` becomes the class set for a figure without the breakdown, an answer
+outside the list writes nothing and a class the property's range does not cover
+is counted under `outside_root`), `kept_coordinates`, `trimmed`,
+`without_legal_form`, and the value bricks `remove_words` (takes out what a
+pattern finds and, where set, a legal form at the end) and `lookup` (a table
+from a value to what it becomes, `otherwise` keeping or dropping one it does not
+list). `kwp` adds the brick `schema_admits`.
+
+#### Blocks and presets
+
+Wherever a drawing names a brick (`{"brick": name, "settings": {...}}`) it may
+hold a block instead (`docpipe/extraction/graphblocks.py`); every block is run
+as a brick is, and a drawing that names only bricks is written as before.
+
+| Block | What it is |
+|---|---|
+| `{"brick": name, "settings": {...}}` | a named brick |
+| `{"if": condition, "reason": "..."}` | a condition of the flow's toolkit (`docpipe/extraction/conditions.py`) over two free paths: `reading` (any key of the harvest row, and `unit_target`, the unit the number was converted onto, which the spec decides) and `fact` (what is known of the document). Beside the toolkit's comparisons the graph has `listed` (the answer is an entry of the list the spec gives that dimension, and no `out:` entry), `names` (a text that names something once folded), `answer_of` (an answer of the table of a box, the box as value), `whole` (a whole number) and `term` (the identifier of a term, `OEO_00000128`). Where it does not hold, the reading is left out for the reason: `{key}` in it is that key of the reading, `{a|b|'?'}` the first of them that is there, else the quoted words |
+| `{"steps": [block, ...]}` | a chain: each step takes the value the one before gave, the last one writes (on an arrow) or spells the name; the steps are bricks of the kind `object`, `name` or `value` |
+| `{"python": "def run(call): ...", "per", "writes", "settings"}` | Python of the drawing's own, run in the run's process as the flow's Python step is; it sees `kg` (the profile's `kg` module), `log`, `literal`, `in_graph`, `is_class`, `ttl_string`, `NOT_IN_GRAPH` and `re` |
+
+An address (`address` of a box) may be a list of parts, `{"folder", "key",
+"from": [part, ...]}`; a part is a field's name, `@name`, `@key`, `@fact:x`, or
+an object with these keys:
+
+| Key | Values |
+|---|---|
+| `from` | `reading` (default), `chosen` (the document's one reading of the field), `name`, `key`, `fact`, `answer_address` (the address of the answer in the table of `box`), `wording` |
+| `of` | the key of the reading, the field or the fact the part is taken from (not for `name`, `key`, `wording`) |
+| `box` | with `answer_address`, the box whose table holds the answer |
+| `form` | how the part is written: `text` (default), `iri` or `class` (with the `prefix`; `class` only where the value is a class of the `family`), `fold` (the name folded to one spelling) |
+| `total` | a total answer (`out:total`) takes the `total_class` of the arrow that writes that field to this box |
+| `when` | a condition (as above) under which the part is there |
+| `absent` | what a part that is not there does: `refuse` (default, no address), `empty` (an empty part) or `omit` |
+
+The parts are joined by `|` and the UUID is minted over them. A block put in
+from a preset keeps the preset's name under `preset`; `graphblocks.name_of`
+gives a block's name, the brick it names, else its preset, and it is what the
+published `extraction_schema.json` lists under `x-kg` and what the scenarios
+body finds its arrow by. A preset is a block ready to put in
+(`bricks.PRESETS` for the core, `kg.PRESETS` for a profile, `bricks.presets`
+for both); the profile's presets are written out in full in its `graph.json`,
+where they can be changed like any block. Presets of the core: `answer_is`,
+`answer_is_not` (a dimension is, or is not, one answer), `has_words` (a
+dimension holds words), `named` (a text that names something), `listed`, and
+templates for a chain and for Python. `graph.check` holds a block to its place: a condition where a condition
+stands, a chain whose last step writes the object, Python that defines
+`run(call)`, a condition's rows about a reading to the keys a reading can have,
+a part to the sources and forms above.
 
 What the writer does for every drawing, with the rules of the graph file
 (`docpipe/extraction/readings.py`): it takes the one reading the most sources
@@ -284,22 +329,24 @@ node is refused whole, the box saying `same_node: refuse`, rather than merged
 onto it.
 
 The numbers are the box `value`, one node per number. Its `admit` list is the
-gate, in order, each brick naming its reason: `quantity_listed` (the quantity is
-a class, else counted `not_a_class:<quantity>`; first, so such a row never
-reaches the scenario check), `part_known` (the scenario is an answer of the table
-of parts), `scope_listed` (`municipality`, a named `sub_area` or not read),
+gate, in order, each block naming its reason; the gates are presets of `kwp`
+(`kg.PRESETS`) written out as blocks in its `graph.json`: `quantity_listed` (the
+quantity is a class, else counted `not_a_class:<quantity>`; first, so such a row
+never reaches the scenario check), `scenario_read` (the scenario was read, else
+`scenario_unread`), `part_known` (the scenario is an answer of the table of
+parts), `scope_listed` (`municipality`, a named `sub_area` or not read),
 `sub_area_named`, `year_read` (an `int`), `unit_listed` (a numeric row
 without `value_target` is counted `unit_unlisted:<unit_raw>`),
 `unit_in_ontology` (`unit_not_in_ontology:<target>`, for example an emission
 factor in g CO2/kWh, a unit OEO 2.14 lacks) and `aggregation_listed` (where an
-aggregation was read, it is known). A value without an aggregation is written
+aggregation was read, it is known); the brick `schema_admits` follows them. A value without an aggregation is written
 without that edge, and one without a spatial scope is kept in the full graph;
 the strict graph refuses it (owner decision 2026-11-07: no more than the
 ontology and the graph schema demand). A row failing a gate is counted by
 reason in the log, never silently; a plan with no number left is written for
 nothing (`required`).
 
-`value_identity` mints a number's IRI as a UUIDv5 over its part, quantity,
+`value_identity`, a preset whose address is a list of parts, mints a number's IRI as a UUIDv5 over its part, quantity,
 carrier, sector, year and aggregation, plus the area wording for a named sub
 area only, so several wordings of one fact do not split into separate nodes, and
 the technology only where one was read, so a value without one keeps the IRI
@@ -321,9 +368,9 @@ those settles stays in the full graph as a node per number, marked contested and
 counted `conflict:open`, and stays out of the strict graph, counted
 `conflict`. Each winner's comment states what it won over.
 
-`value_class` writes a number as its quantity's OEO class, in the strict graph
+`value_class` (a preset) writes a number as its quantity's OEO class, in the strict graph
 also as the schema's class above it. The arrows write the number as `xsd:float`,
-the unit (`value_unit`, the unit the number was converted onto), the carrier,
+the unit (the preset `value_unit`, the unit the number was converted onto), the carrier,
 sector, technology and aggregation (`answer_class`) and the year (`xsd:integer`,
 `whole_number`, no year node). The carrier, sector and technology edges are the
 MHPKG schema's slots (`refers to energy carrier`, `refers to sector`, `refers to
@@ -406,10 +453,10 @@ entry or an unmapped wording, which are counted. One factsheet is minted for eac
 scenario: `rdfs:label` and `dc:acronym` are the name the scenario is called by
 (`node_name`, `short_name`), each factsheet carrying the fixed type
 `OEO_00020517` (rule `scenario_types_always`, the brick `fixed`) beside the types
-read. The `region` brick writes a matched study region as its existing OEKG
+read. The `region` preset writes a matched study region as its existing OEKG
 IRI, never minted, a group answer as its members, and a region the list does not
 carry as a node of its own with the printed name; a name the graph points at gets
-its label from the last refresh (`known_name`). Authors, organisations and funders
+its label from the last refresh (the preset `known_name`). Authors, organisations and funders
 are one node per distinct name folded to one spelling, each keeping every
 reading of it in its evidence; the authors are those the front pages name, else
 those looked up in the catalogue, else those read anywhere
@@ -551,7 +598,7 @@ prescribes with range `date` where OEO says `xsd:dateTime`.
 
 Every value's trust verdict, `{level, reasons, image_origin,
 corroborated}`, is rendered into one line by the
-`evidence.prose` of the profile's drawing (kwp's brick `value_passage` takes it from its box), written as the last comment above the value's
+`evidence.prose` of the profile's drawing (kwp's preset `value_passage` takes it from its box), written as the last comment above the value's
 node, in English for both `kwp` and `scenarios` (where a person decided
 something about the value, the scenarios graph adds a decision line after it,
 see The provenance file). The level is a floor,
@@ -693,15 +740,15 @@ the lock both `vocabulary.py --refresh` and
 `docpipe preflight` read back; it never imports a profile
 either.
 
-`profiles/kwp/kg.py` holds what only the `kwp` drawing needs: its bricks
-(`BRICKS`: the register lookup, the gates of a number, its identity, class,
-unit, passage and provenance claims), `context`, `has_property` and the
+`profiles/kwp/kg.py` holds what only the `kwp` drawing needs: its brick
+`schema_admits` (`BRICKS`) and its presets (`PRESETS`: the register lookup, the gates
+of a number, its identity, class, unit, passage and provenance claims), `context`, `has_property` and the
 schema helpers. The same module carries the query half `kg_route.py`
 calls when a graph is configured: `COORDINATE_AXES`, `VALUE_QUERY`,
 `value_bindings`, `label_of`, `SPEC` and `heatplan_iri`, the function
 locating a document's plan node; the predicates `VALUE_QUERY` is built from are
-read from the drawing. `profiles/scenarios/kg.py` holds the scenarios bricks
-(scenario names, short name, region, known name, crawl cross-check) and
+read from the drawing. `profiles/scenarios/kg.py` holds the scenarios presets
+(`PRESETS`: scenario names, short name, region, known name, crawl cross-check) and
 `make_study_reader`, which hands the same writer's decisions to the API dry run;
 it declares no `COORDINATE_AXES` or `VALUE_QUERY` (see Purpose). Each
 profile's `vocabulary.py` is otherwise its half of the ontology
@@ -723,7 +770,7 @@ comment. `docpipe/extraction/runner.py`'s `--serialize` branch
 resolves the profile and wires the harvest into `serialize.run` (see
 Method above). `docpipe/profile.py`'s `Profile.component` lazily
 imports a profile module and returns one attribute, or `None` for one
-it lacks; used here to find a profile's bricks (`kg.BRICKS`) and context, and by
+it lacks; used here to find a profile's bricks (`kg.BRICKS`), presets (`kg.PRESETS`) and context, and by
 `kg_route.py`'s `hooks()` to find a `kwp` profile's query pieces,
 named above. `Profile.require` is a distinct method elsewhere that
 raises `LookupError` instead of returning `None`; this stage never
@@ -792,6 +839,9 @@ without a model and without a new harvest:
     a brick     on an arrow or a box: the code that turns a reading into
                 the object of a triple (`bricks.py`, and a profile's own in
                 `profiles/<name>/kg.py`)
+    a block     where a brick stands: a condition about the reading, steps
+                one after another, Python of the drawing's own, and an
+                address made of parts (`graphblocks.py`)
 
 What the program does for every drawing, with the rules of the graph file
 it reads (`readings.py`): one reading where the drawing says the shapes

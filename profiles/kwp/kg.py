@@ -391,7 +391,8 @@ def evidence_comment(row: dict, document: str, prose: dict, join: str, *,
     return lines
 
 
-def _class_iri(identifier) -> Optional[str]:
+def class_iri(identifier) -> Optional[str]:
+    """The full IRI of an OEO class, None for anything else."""
     if not identifier or not is_class(identifier):
         return None
     try:
@@ -400,72 +401,15 @@ def _class_iri(identifier) -> Optional[str]:
         return None
 
 
-# -- the bricks ------------------------------------------------------------------
-
-def _register(call: Call):
-    doc = call.doc
-    identity = document_identity(doc.writer.db_path, doc.name)
-    if identity is None:
-        log.warning("graph: %s: no AGS or publication date -- %d tuple(s) "
-                    "not written", doc.name,
-                    sum(len(rows) for rows in doc.admitted.values()))
-        return None
-    return facts_of(identity)
-
-
-def _quantity_listed(call: Call) -> Optional[str]:
-    quantity = call.row.get("quantity")
-    if quantity in QUANTITIES:
-        return None
-    return f"not_a_class:{quantity or call.row.get('quantity_raw') or '?'}"
-
-
-def _part_known(call: Call) -> Optional[str]:
-    table = call.doc.writer.drawing.box[call.settings.get("box", "part")] \
-        .get("table") or {}
-    scenario = call.row.get("scenario")
-    if scenario in table:
-        return None
-    return "scenario_unread" if not scenario else f"scenario:{scenario}"
-
-
-def _scope_listed(call: Call) -> Optional[str]:
-    scope = call.row.get("spatial_scope")
-    if scope is not None and scope not in (call.settings.get("entries")
-                                           or ()):
-        return "spatial_scope"
-    return None
-
-
-def _sub_area_named(call: Call) -> Optional[str]:
-    if call.row.get("spatial_scope") == "sub_area" \
-            and not (call.row.get("spatial_scope_raw") or "").strip():
-        return "sub_area_unnamed"
-    return None
-
-
-def _year_read(call: Call) -> Optional[str]:
-    return None if isinstance(call.row.get("year"), int) else "year"
-
-
-def _unit_listed(call: Call) -> Optional[str]:
-    if call.row.get("value_target") is None:
-        return f"unit_unlisted:{call.row.get('unit_raw') or '?'}"
-    return None
-
-
-def _unit_in_ontology(call: Call) -> Optional[str]:
-    if unit_of(call.row) is None:
-        return f"unit_not_in_ontology:{target_of(call.row)}"
-    return None
-
-
-def _aggregation_listed(call: Call) -> Optional[str]:
-    aggregation = call.row.get("aggregation")
-    if aggregation and aggregation not in AGGREGATIONS:
-        return f"aggregation:{aggregation}"
-    return None
-
+# -- the blocks ------------------------------------------------------------------
+#
+# What the drawing of this graph does beyond the core's bricks is written in
+# it as blocks (`docpipe/extraction/graphblocks.py`, owner request
+# 2026-11-14, wish 4): conditions about the reading, an address made of
+# parts, steps, and Python that calls the functions above. `PRESETS` holds
+# each as the shipped drawing has it, so the Graph tab can put it in again;
+# one check, whether the MHPKG schema's shapes take a value, stays a brick
+# with settings, since no condition says it.
 
 def _schema_admits(call: Call) -> Optional[str]:
     drawing = call.doc.writer.drawing
@@ -476,157 +420,191 @@ def _schema_admits(call: Call) -> Optional[str]:
     return f"mhpkg:{why}" if why else None
 
 
-def _identity(call: Call) -> str:
-    """mint_slice.py's coordinate list; absent coordinates are empty
-    segments so the arity never varies. A carrier or sector names the node
-    only where it gets an edge; the area only for a sub-area, where it is
-    the identity; the technology only where one was read, so every value
-    without one keeps the IRI it had before the axis existed; *label* only
-    for a node split off by its wording."""
-    doc, row = call.doc, call.row
-    total = totals(doc.writer.drawing.raw, call.settings.get("box", "value"))
-    part = doc.address_of_answer(call.settings.get("part", "part"),
-                                 row["scenario"])
-    area = (doc.fold(row.get("spatial_scope_raw") or "")
-            if row.get("spatial_scope") == "sub_area" else "")
-    carrier = written(row, "carrier", total)
-    sector = written(row, "sector", total)
-    technology = row.get("technology")
-    coordinates = "|".join([
-        part,
-        f"{OEO}{row['quantity']}",
-        f"{OEO}{carrier}" if is_class(carrier) else "",
-        f"{OEO}{sector}" if is_class(sector) else "",
-        str(row["year"]),
-        f"{OEO}{row['aggregation']}" if row.get("aggregation") else "",
-        area,
-    ] + ([f"{OEO}{technology}"] if is_class(technology) else [])
-      + ([call.label] if call.label else []))
-    return doc.mint("value", "value", coordinates)
+BRICKS = (
+    Brick("schema_admits", "condition",
+          "Takes a number only where the MHPKG schema's shapes take it: a "
+          "value class its part holds, every required slot, every answer "
+          "from the schema's closed lists.", "a reading", "a reason",
+          _schema_admits,
+          (Setting("part", "text", "the box of the plan parts", "part"),
+           Setting("box", "text", "the box of the numbers", "value"))),
+)
 
 
-def _value_class(call: Call) -> str:
+def _if(rows: list, reason: str, joined: str = "all") -> dict:
+    return {"if": {joined: rows}, "reason": reason}
+
+
+def _row(path: str, op: Optional[str] = None, value=None,
+         no: bool = False) -> dict:
+    row: dict = {"of": "reading", "is": path}
+    if op is not None:
+        row["op"] = op
+    if value is not None:
+        row["value"] = value
+    if no:
+        row["not"] = True
+    return row
+
+
+_REGISTER = '''def run(call):
+    """The plan in the register: its AGS, its publication date and its
+    municipality ({ags}, {published}, {year}, {place}); a plan without AGS
+    or date is not written."""
+    doc = call.doc
+    identity = kg.document_identity(doc.writer.db_path, doc.name)
+    if identity is None:
+        log.warning("graph: %s: no AGS or publication date -- %d tuple(s) "
+                    "not written", doc.name,
+                    sum(len(rows) for rows in doc.admitted.values()))
+        return None
+    return kg.facts_of(identity)
+'''
+
+_VALUE_CLASS = '''def run(call):
+    """The class the quantity was read as, and in the strict graph also the
+    schema's value class above it."""
     row = call.node.row
-    typed = qualified(row[call.settings.get("coordinate", "quantity")])
+    typed = kg.qualified(row[call.settings.get("coordinate", "quantity")])
     if not call.doc.strict:
         return typed
     part = call.doc.writer.drawing.box[call.settings.get("part", "part")]
-    schema = schema_class_of(row, part.get("table") or {})
-    if schema and SHAPE.cls(schema) != typed:
+    schema = kg.schema_class_of(row, part.get("table") or {})
+    if schema and kg.SHAPE.cls(schema) != typed:
         # A CO2-equivalent value IS a greenhouse gas emission value; a shape
         # without a reasoner only sees the class written.
-        typed += f", {SHAPE.cls(schema)}"
+        typed += f", {kg.SHAPE.cls(schema)}"
     return typed
+'''
 
-
-def _unit(call: Call) -> list:
-    unit = unit_of(call.row)
-    if unit is None:
-        return []
-    return [(qualified(unit), expand(qualified(unit)))]
-
-
-def _passage(call: Call) -> list:
+_PASSAGE = '''def run(call):
+    """Above a number its dimensions in English, the passage, the page, how
+    it was aggregated or computed and its trust level."""
     node = call.node
-    prose = call.settings.get("prose") or {}
-    return evidence_comment(node.row, call.doc.name, prose,
-                            call.settings.get("join") or " · ",
-                            transcribed=call.doc.transcribed,
-                            **(node.data.get("marks") or {}))
+    return kg.evidence_comment(node.row, call.doc.name,
+                               call.settings.get("prose") or {},
+                               call.settings.get("join") or " · ",
+                               transcribed=call.doc.transcribed,
+                               **(node.data.get("marks") or {}))
+'''
 
-
-def _bodies(call: Call) -> dict:
+_BODIES = '''def run(call):
+    """For the provenance file, the node or class each dimension of a
+    number became."""
     doc, row = call.doc, call.node.row
     said = call.settings
-    total = totals(doc.writer.drawing.raw, said.get("box", "value"))
+    total = kg.totals(doc.writer.drawing.raw, said.get("box", "value"))
     whole = (doc.nodes.get(said.get("whole", "municipality")) or [None])[0]
     area = whole.iri if whole else None
     if row.get("spatial_scope") == "sub_area":
         node = doc.node_of(said.get("area", "area"),
                            doc.fold(row["spatial_scope_raw"]))
         area = node.iri if node else area
-    found = {"quantity": _class_iri(row.get("quantity")),
-             "carrier": _class_iri(written(row, "carrier", total)),
-             "sector": _class_iri(written(row, "sector", total)),
-             "technology": _class_iri(row.get("technology")),
-             "aggregation": _class_iri(row.get("aggregation")),
+    found = {"quantity": kg.class_iri(row.get("quantity")),
+             "carrier": kg.class_iri(kg.written(row, "carrier", total)),
+             "sector": kg.class_iri(kg.written(row, "sector", total)),
+             "technology": kg.class_iri(row.get("technology")),
+             "aggregation": kg.class_iri(row.get("aggregation")),
              "scenario": doc.address_of_answer(said.get("part", "part"),
                                                row["scenario"]),
              "spatial_scope": area}
     return {axis: iri for axis, iri in found.items() if iri}
+'''
 
+_SUB_AREA = {"all": [_row("spatial_scope", "is", "sub_area")]}
 
-_CONDITION = ("a reading", "a reason")
-BRICKS = (
-    Brick("plan_register", "facts",
-          "Looks the plan up in the register: its AGS, its publication "
-          "date and its municipality ({ags}, {published}, {year}, "
-          "{place}); a plan without AGS or date is not written.",
-          "a document", "facts", _register),
-    Brick("quantity_listed", "condition",
-          "Takes a number only where its class is one of the classes the "
-          "graph takes (no out: answer).", *_CONDITION, _quantity_listed),
-    Brick("part_known", "condition",
-          "Takes a number only where its scenario is an answer of the table "
-          "of plan parts.", *_CONDITION, _part_known,
-          (Setting("box", "text", "the box of the plan parts", "part"),)),
-    Brick("scope_listed", "condition",
-          "Takes a number only where its area, where one was read, is one "
-          "of the entries.", *_CONDITION, _scope_listed,
-          (Setting("entries", "texts", "the areas the graph takes"),)),
-    Brick("sub_area_named", "condition",
-          "Takes a number of a sub-area only where the plan names the "
-          "sub-area.", *_CONDITION, _sub_area_named),
-    Brick("year_read", "condition",
-          "Takes a number only where its year was read.", *_CONDITION,
-          _year_read),
-    Brick("unit_listed", "condition",
-          "Takes a number only where its unit is listed and it was "
-          "converted.", *_CONDITION, _unit_listed),
-    Brick("unit_in_ontology", "condition",
-          "Takes a number only where the unit it was converted onto is an "
-          "ontology term.", *_CONDITION, _unit_in_ontology),
-    Brick("aggregation_listed", "condition",
-          "Takes a number only where its aggregation, where one was read, "
-          "is listed.", *_CONDITION, _aggregation_listed),
-    Brick("schema_admits", "condition",
-          "Takes a number only where the MHPKG schema's shapes take it: a "
-          "value class its part holds, every required slot, every answer "
-          "from the schema's closed lists.", *_CONDITION, _schema_admits,
-          (Setting("part", "text", "the box of the plan parts", "part"),
-           Setting("box", "text", "the box of the numbers", "value"))),
-    Brick("value_identity", "address",
-          "Makes a number's address from the IRI policy's dimensions: plan "
-          "part, class, carrier, sector, year, aggregation, sub-area and "
-          "technology, and the plan's words where they split it.",
-          "a reading", "an address", _identity,
-          (Setting("part", "text", "the box of the plan parts", "part"),
-           Setting("box", "text", "the box of the numbers", "value"))),
-    Brick("value_class", "class",
-          "Writes a number as the class its quantity was read as, and in "
-          "the strict graph also as the schema's value class above it.",
-          "a number", "classes", _value_class,
-          (Setting("part", "text", "the box of the plan parts", "part"),
-           Setting("coordinate", "text", "the dimension whose answer is "
-                   "the class", "quantity"))),
-    Brick("value_unit", "object",
-          "Writes the unit the number was converted onto.", "a number",
-          "a unit", _unit, writes="key:unit_target"),
-    Brick("value_passage", "evidence",
-          "Writes above a number its dimensions in English, the passage, "
-          "the page, how it was aggregated or computed and its trust "
-          "level.", "a number", "comment lines", _passage,
-          (Setting("prose", "prose", "the words of the trust line"),
-           Setting("join", "text", "what joins its pieces", " · "))),
-    Brick("value_bodies", "claims",
-          "Records for the provenance file the node or class each "
-          "dimension of a number became.", "a number", "dimensions",
-          _bodies,
-          (Setting("part", "text", "the box of the plan parts", "part"),
-           Setting("area", "text", "the box of the sub-areas", "area"),
-           Setting("whole", "text", "the box of the municipality",
-                   "municipality"),
-           Setting("box", "text", "the box of the numbers", "value"))),
+PRESETS = (
+    {"name": "plan_register", "kind": "facts",
+     "does": "Looks the plan up in the register: its AGS, its publication "
+             "date and its municipality; a plan without AGS or date is not "
+             "written.",
+     "block": {"python": _REGISTER}},
+    {"name": "quantity_listed", "kind": "condition",
+     "does": "Takes a number only where its class is one of the classes the "
+             "graph takes (no out: answer).",
+     "block": _if([_row("quantity", "listed")],
+                  "not_a_class:{quantity|quantity_raw|'?'}")},
+    {"name": "scenario_read", "kind": "condition",
+     "does": "Takes a number only where its scenario was read.",
+     "block": _if([_row("scenario", "empty", no=True)], "scenario_unread")},
+    {"name": "part_known", "kind": "condition",
+     "does": "Takes a number only where its scenario is an answer of the "
+             "table of plan parts.",
+     "block": _if([_row("scenario", "answer_of", "part")],
+                  "scenario:{scenario}")},
+    {"name": "scope_listed", "kind": "condition",
+     "does": "Takes a number only where its area, where one was read, is one "
+             "of the entries.",
+     "block": _if([_row("spatial_scope", "empty"),
+                   _row("spatial_scope", "one_of",
+                        ["municipality", "sub_area"])], "spatial_scope",
+                  "any")},
+    {"name": "sub_area_named", "kind": "condition",
+     "does": "Takes a number of a sub-area only where the plan names the "
+             "sub-area.",
+     "block": _if([_row("spatial_scope", "is", "sub_area", no=True),
+                   _row("spatial_scope_raw", "empty", no=True)],
+                  "sub_area_unnamed", "any")},
+    {"name": "year_read", "kind": "condition",
+     "does": "Takes a number only where its year was read.",
+     "block": _if([_row("year", "whole")], "year")},
+    {"name": "unit_listed", "kind": "condition",
+     "does": "Takes a number only where its unit is listed and it was "
+             "converted.",
+     "block": _if([_row("value_target", "empty", no=True)],
+                  "unit_unlisted:{unit_raw|'?'}")},
+    {"name": "unit_in_ontology", "kind": "condition",
+     "does": "Takes a number only where the unit it was converted onto is an "
+             "ontology term.",
+     "block": _if([_row("quantity", "listed"), _row("unit_target", "term")],
+                  "unit_not_in_ontology:{unit_target}")},
+    {"name": "aggregation_listed", "kind": "condition",
+     "does": "Takes a number only where its aggregation, where one was read, "
+             "is listed.",
+     "block": _if([_row("aggregation", "empty"),
+                   _row("aggregation", "listed")],
+                  "aggregation:{aggregation}", "any")},
+    {"name": "value_identity", "kind": "address",
+     "does": "A number's address from the IRI policy's dimensions: plan "
+             "part, class, carrier, sector, year, aggregation, sub-area and "
+             "technology, and the plan's words where they split it.",
+     "block": {"folder": "value", "key": "value", "from": [
+         {"from": "answer_address", "box": "part", "of": "scenario",
+          "absent": "empty"},
+         {"of": "quantity", "form": "iri", "prefix": "oeo"},
+         {"of": "carrier", "total": True, "form": "class", "prefix": "oeo",
+          "family": "OEO_", "absent": "empty"},
+         {"of": "sector", "total": True, "form": "class", "prefix": "oeo",
+          "family": "OEO_", "absent": "empty"},
+         {"of": "year", "form": "text", "absent": "empty"},
+         {"of": "aggregation", "form": "iri", "prefix": "oeo",
+          "absent": "empty"},
+         {"of": "spatial_scope_raw", "when": _SUB_AREA, "form": "fold",
+          "absent": "empty"},
+         {"of": "technology", "form": "class", "prefix": "oeo",
+          "family": "OEO_", "absent": "omit"},
+         {"from": "wording", "absent": "omit"}]}},
+    {"name": "value_class", "kind": "class",
+     "does": "Writes a number as the class its quantity was read as, and in "
+             "the strict graph also as the schema's value class above it.",
+     "block": {"python": _VALUE_CLASS,
+               "settings": {"part": "part", "coordinate": "quantity"}}},
+    {"name": "value_unit", "kind": "object",
+     "does": "Writes the unit the number was converted onto, with the prefix "
+             "of its family.",
+     "block": {"steps": [{"brick": "answer_class", "settings": {
+         "prefix_by_family": {"OEO_": "oeo", "MHPO_": "mhpo", "BFO_": "obo",
+                              "UO_": "obo"}}}],
+         "writes": "key:unit_target"}},
+    {"name": "value_passage", "kind": "evidence",
+     "does": "Writes above a number its dimensions in English, the passage, "
+             "the page, how it was aggregated or computed and its trust "
+             "level.",
+     "block": {"python": _PASSAGE}},
+    {"name": "value_bodies", "kind": "claims",
+     "does": "Records for the provenance file the node or class each "
+             "dimension of a number became.",
+     "block": {"python": _BODIES}},
 )
 
 

@@ -54,7 +54,8 @@
       "front_pages": "publication_title",
       "check": [
         {
-          "brick": "crawl_crosscheck",
+          "preset": "crawl_crosscheck",
+          "python": "import sqlite3\n\nfrom docpipe.store.schema import readonly_uri\n\n\ndef run(call):\n    \"\"\"Says it out loud when the graph's value and the crawl disagree. A\n    diagnostic, never a precondition: an unreachable database stops\n    nothing.\"\"\"\n    doc = call.doc\n    db_path = doc.writer.db_path\n    if db_path is None:\n        return\n    conn = None\n    try:\n        conn = sqlite3.connect(readonly_uri(db_path), uri=True)\n        row = conn.execute(\n            \"SELECT m.title, m.year, m.doi FROM DocumentMeta m \"\n            \"JOIN Documents d ON m.document = d.id \"\n            \"WHERE d.filename LIKE ?\", (f\"{doc.name}.%\",)).fetchone()\n    except sqlite3.Error as exc:\n        log.warning(\"graph: %s: no cross-check against the crawl (%s)\",\n                    doc.name, exc)\n        return\n    finally:\n        if conn is not None:\n            conn.close()\n    if row is None:\n        return\n    for key, crawled in zip(call.settings.get(\"fields\") or (), row):\n        got = doc.picked(key)\n        if got and crawled and doc.fold(got) != doc.fold(crawled):\n            log.warning(\"graph: %s: the graph's %s is %r, the crawl says %r\",\n                        doc.name, key, got, crawled)\n",
           "settings": {
             "fields": [
               "publication_title",
@@ -132,7 +133,8 @@
           "scenario_year"
         ],
         "names": {
-          "brick": "scenario_names",
+          "preset": "scenario_names",
+          "python": "def run(call):\n    \"\"\"The scenarios a row belongs to: a scenario's name by its value, any\n    other row by its scenario dimension, in the words the publication\n    prints; the words of several scenarios name each of them, an out: entry\n    none.\"\"\"\n    return kg.scenario_names(call.row,\n                             bool(call.settings.get(\"name_in_quote\", True)))\n",
           "settings": {
             "name_in_quote": true
           }
@@ -365,7 +367,11 @@
         "from": "scenario_label",
         "to": "scenario",
         "property": "dc:acronym",
-        "brick": "short_name",
+        "brick": {
+          "preset": "short_name",
+          "python": "def run(call):\n    \"\"\"The short name the publication prints for the scenario, else its\n    name.\"\"\"\n    shorts = [row for row in call.rows if row.get(\"value_short\")]\n    acronym = shorts[0][\"value\"] if shorts else call.node.name\n    return [(literal(acronym), acronym,\n             [row for row in shorts if row[\"value\"] == acronym])]\n",
+          "per": "node"
+        },
         "first_in_file": "skip_other",
         "evidence": true
       },
@@ -401,11 +407,14 @@
         "from": "scenario_region",
         "to": "scenario",
         "property": "oeo:OEO_00020220",
-        "brick": "region",
-        "settings": {
-          "unlisted": {
-            "folder": "region",
-            "key": "studyregion"
+        "brick": {
+          "preset": "region",
+          "python": "def run(call):\n    \"\"\"The regions a region answer stands for: a country itself, a group its\n    members, a region the list does not carry a study region of its own\n    named as the document prints it.\"\"\"\n    names = call.doc.extra.setdefault(\"names\", {})\n    printed = kg.printed_region(call.row)\n    if printed:\n        place = call.settings.get(\"unlisted\") or {}\n        iri = call.doc.mint(place.get(\"folder\", \"region\"),\n                            place.get(\"key\", \"studyregion\"),\n                            call.doc.fold(printed))\n        names.setdefault(iri, printed)\n        return [(f\"<{iri}>\", iri)]\n    return [(f\"<{iri}>\", iri) for iri in kg.region_members(\n        call.row.get(\"value_uri\"), call.doc.extra.get(\"groups\") or {})]\n",
+          "settings": {
+            "unlisted": {
+              "folder": "region",
+              "key": "studyregion"
+            }
           }
         },
         "cite_once": true,
@@ -455,7 +464,11 @@
         "from": "described",
         "to": "described",
         "property": "rdfs:label",
-        "brick": "known_name"
+        "brick": {
+          "preset": "known_name",
+          "python": "def run(call):\n    \"\"\"The name the last refresh gives a node the graph points at (a region\n    by the name LCC gives it, an OEO term by its label); a node without one\n    gets none.\"\"\"\n    name = (call.doc.extra.get(\"names\") or {}).get(call.node.iri)\n    if not name:\n        call.doc.count(\"nameless\")\n        return []\n    return [(literal(name), name)]\n",
+          "per": "node"
+        }
       }
     ]
   }

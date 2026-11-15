@@ -4,7 +4,8 @@ from types import SimpleNamespace
 
 from docpipe.extraction import fields, pipeline, runner
 from docpipe.extraction.bricks import Call
-from docpipe.extraction.graph import load_drawing, registry
+from docpipe.extraction import graphblocks
+from docpipe.extraction.graph import load_drawing, python_space, registry
 from docpipe.profile import load_profile
 from docpipe.extraction.spec import load as load_spec
 from profiles.kwp import extraction as kwp, kg
@@ -98,14 +99,15 @@ def test_a_number_of_buildings_is_a_building_count():
 
 
 def typed_as(row):
-    """The class the drawing's `value_class` brick writes a value as (the
-    full graph: its own class only)."""
-    drawing = load_drawing(load_profile("kwp"))
-    ref = drawing.box["value"]["class_brick"]
-    brick = registry(load_profile("kwp"))[ref["brick"]]
+    """The class the drawing's class block writes a value as (the full
+    graph: its own class only)."""
+    profile = load_profile("kwp")
+    ref = load_drawing(profile).box["value"]["class_brick"]
+    brick = graphblocks.resolve(ref, "class", registry(profile),
+                                python_space(profile))
     return brick.run(Call(doc=SimpleNamespace(strict=False),
                           node=SimpleNamespace(row=row),
-                          settings=ref["settings"]))
+                          settings=graphblocks.settings_of(ref)))
 
 
 def test_a_building_count_is_written_as_mhpos_class_in_the_count_unit():

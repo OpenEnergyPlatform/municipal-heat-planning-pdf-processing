@@ -42,7 +42,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import fields
+from . import fields, graphblocks
 from .spec import load as load_spec
 from .trust import (FLAG_REASONS, LEVEL_A, LEVEL_B, LEVEL_C, LEVEL_D, LEVELS,
                     PARAMETER_STATES)
@@ -368,8 +368,7 @@ def _x_kg(drawing, arrows) -> list:
     points at, its class, the property it writes and its brick."""
     out = []
     for arrow in arrows:
-        brick = arrow.get("brick")
-        brick = brick.get("brick") if isinstance(brick, dict) else brick
+        brick = graphblocks.name_of(arrow.get("brick"))
         out.append({key: value for key, value in (
             ("to", arrow["to"]),
             ("class", drawing.box[arrow["to"]].get("class")),

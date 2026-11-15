@@ -10,6 +10,9 @@ reading into the object of a triple. A brick is code: it takes one kind of
 thing, gives one kind of thing back, and says in one sentence what it does.
 The core's bricks are here; a profile adds the ones only it needs in
 `profiles/<name>/kg.py` (`BRICKS`), and a drawing names a brick by its name.
+Each does one thing; what a drawing needs beyond them it builds from blocks
+where a brick stands (`graphblocks.py`: a condition, steps, Python of its
+own, an address of parts), and `PRESETS` holds such blocks ready to put in.
 
 The kinds, by where a drawing puts them:
 
@@ -25,6 +28,7 @@ The kinds, by where a drawing puts them:
   name       on a box: a node's name from its first reading
   check      on the document: a diagnostic over what was chosen
   claims     on a box: what the provenance file records of a node
+  value      a step of a chain: turns the value it is given into another
 
 Every brick is called with one `Call`; what it reads of it depends on its
 kind. An object brick gives [(Turtle term, value)], the value being what
@@ -128,6 +132,16 @@ def is_class(value, family: str = "") -> bool
 
 True for a class identifier (OEO_00000128) of *family*, where one is
 given; false for every deliberate non-class answer.
+
+### presets
+
+```python
+def presets(profile=None) -> list
+```
+
+Every preset: the core's and *profile*'s own (`kg.PRESETS`), its own
+after the core's; each block carries its preset's name under "preset",
+so a drawing that puts it in keeps where it came from.
 
 ### registry
 

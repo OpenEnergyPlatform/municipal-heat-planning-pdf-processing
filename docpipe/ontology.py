@@ -548,6 +548,32 @@ def drawing_terms(drawing: dict) -> dict:
     return {k: v for k, v in sorted(found.items())}
 
 
+def _writes(arrow: dict, bricks: dict) -> tuple:
+    """(what the block of an arrow writes, the settings it writes with):
+    its brick's `writes` with the arrow's settings, or of a block of the
+    arrow's own (`docpipe.extraction.graphblocks`) what it says it writes,
+    else what its last step writes, with that step's settings."""
+    said = arrow.get("brick") or "text"
+    if isinstance(said, str):
+        return (getattr(bricks.get(said), "writes", "") or "",
+                arrow.get("settings") or {})
+    if said.get("writes"):
+        last = (said.get("steps") or [said])[-1]
+        return said["writes"], (last.get("settings") or {}
+                                if isinstance(last, dict) else {})
+    if said.get("steps"):
+        return _writes({"brick": said["steps"][-1].get("brick")
+                        if isinstance(said["steps"][-1], dict)
+                        else said["steps"][-1],
+                        "settings": (said["steps"][-1].get("settings")
+                                     if isinstance(said["steps"][-1], dict)
+                                     else {})}, bricks)
+    if "python" in said:
+        return "", said.get("settings") or {}
+    return (getattr(bricks.get(said.get("brick")), "writes", "") or "",
+            said.get("settings") or {})
+
+
 def drawing_edges(drawing: dict, spec_raw: dict, bricks=None) -> list:
     """Every triple shape a drawing writes: {where, subject, predicate,
     object, datatype, accepted}, the subject's class, the predicate, and the
@@ -622,9 +648,7 @@ def drawing_edges(drawing: dict, spec_raw: dict, bricks=None) -> list:
                 for object_ in subjects(boxes[target]):
                     add(where, subject, arrow, object_)
             continue
-        brick = bricks.get(arrow.get("brick") or "text")
-        writes = getattr(brick, "writes", "") or ""
-        settings = arrow.get("settings") or {}
+        writes, settings = _writes(arrow, bricks)
         datatype = writes if writes.startswith("xsd:") else (
             settings.get("datatype") if writes == "setting:datatype"
             else None)

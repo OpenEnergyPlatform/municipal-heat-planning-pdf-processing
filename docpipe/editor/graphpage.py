@@ -24,6 +24,11 @@ what the page draws and decides what a save writes:
   to the run's own checks (`graphfile.map_problem`, `graph.check`) and
   names the box or arrow each problem is about. `preview` writes one
   document of the harvest as the edited drawing says.
+- the blocks (owner request 2026-11-14, wish 4): `view` also returns the
+  presets, blocks ready to put in where a brick stands, and what a
+  condition of the graph can be about; `try_block` writes one document as
+  the edited drawing says and shows what one block of it was given and
+  gave, reading by reading.
 - `probe`: the graph of the harvest the page was given, written twice into
   the temp directory, with the saved file and with the edited one, and what
   differs: per document the nodes kept and left out, per constraint its
@@ -33,6 +38,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import dataclasses
 import difflib
 import hashlib
 import json
@@ -216,6 +222,11 @@ def view(profile, own_raw: Optional[bytes], shown,
             "effects": list(graphfile.EFFECTS),
             "map": drawing, "map_owner": files_.owners.get("map", ""),
             "fields": lay, "bricks": bricks_of(profile),
+            "presets": presets_of(profile),
+            "conditions": graph_conditions(),
+            "part_from": list(_blocks().PART_FROM),
+            "part_forms": list(_blocks().PART_FORMS),
+            "part_absent": list(_blocks().PART_ABSENT),
             "counts": list(graphfile.COUNTS),
             "harvest": harvest is not None, "documents": documents,
             "cost": COST, "gate": GATE}
@@ -281,6 +292,29 @@ def bricks_of(profile) -> list:
                             key=lambda pair: (pair[1].kind, pair[0])):
         out.append({**one.describe(), "own": name in own})
     return out
+
+
+def _blocks():
+    from docpipe.extraction import graphblocks
+    return graphblocks
+
+
+def presets_of(profile) -> list:
+    """The blocks ready to put in where a brick stands, the core's and the
+    profile's own (`bricks.presets`): {name, kind, does, block, own}."""
+    from docpipe.extraction import bricks
+    own = {one["name"] for one in (profile.component("kg", "PRESETS")
+                                   or ())}
+    return [{"name": one["name"], "kind": one["kind"], "does": one["does"],
+             "block": one["block"], "own": one["name"] in own}
+            for one in bricks.presets(profile)]
+
+
+def graph_conditions() -> list:
+    """What a condition of the drawing can be about (`conditions.catalogue`
+    with graph): the reading by its keys, what is known of the document."""
+    from docpipe.extraction import conditions
+    return conditions.catalogue(graph=True)
 
 
 def harvest_documents(harvest: Optional[Path]) -> list:
@@ -507,6 +541,27 @@ def preview(profile, data, harvest: Optional[Path], document,
     page has it, drawing and rules) says, with the run's own program, into
     no file of the profile: {"document", "text", "triples", "nodes"}. No
     model is asked; the rows are the harvest's."""
+    used = Path(db) if db and Path(db).is_file() else None
+    text, rows = _written(profile, data, harvest, document, used, strict,
+                          spec, root, None)
+    text = text or ""
+    triples = None
+    try:
+        from rdflib import Graph
+        triples = len(Graph().parse(data=text, format="turtle"))
+    except Exception:                  # the text is shown either way
+        pass
+    return {"document": document, "text": text, "tuples": len(rows),
+            "triples": triples, "strict": strict,
+            "database": str(used) if used else None}
+
+
+def _written(profile, data, harvest: Optional[Path], document, used,
+             strict: bool, spec, root: Optional[Path], prepare):
+    """(the Turtle, the rows) of one document of *harvest* written as *data*
+    says, with the run's own program and into no file of the profile;
+    *prepare(writer)* is called before it is written. PreviewError with the
+    reason where it cannot be."""
     from docpipe import jsonl
     from docpipe.extraction import graph
     if harvest is None:
@@ -542,15 +597,17 @@ def preview(profile, data, harvest: Optional[Path], document,
     edited = where / graphfile.FILE
     edited.write_text(graphfile.dump(whole, known), encoding="utf-8",
                       newline="\n")
-    used = None
     with PREVIEW_LOCK:
         was = os.environ.get(graphfile.ENV)
         os.environ[graphfile.ENV] = str(edited)
         graphfile.reset()
         try:
-            used = Path(db) if db and Path(db).is_file() else None
             serializer = graph.make_serializer(profile, used, strict=strict)
-            text = serializer(document, rows)
+            if prepare is not None:
+                prepare(serializer.writer)
+            return serializer(document, rows), rows
+        except PreviewError:
+            raise
         except Exception as exc:       # what the program raises is the reason
             raise PreviewError(f"the drawing cannot be written: {exc}")
         finally:
@@ -559,16 +616,144 @@ def preview(profile, data, harvest: Optional[Path], document,
             else:
                 os.environ[graphfile.ENV] = was
             graphfile.reset()
-    text = text or ""
-    triples = None
-    try:
-        from rdflib import Graph
-        triples = len(Graph().parse(data=text, format="turtle"))
-    except Exception:                  # the text is shown either way
-        pass
-    return {"document": document, "text": text, "tuples": len(rows),
-            "triples": triples, "strict": strict,
-            "database": str(used) if used else None}
+
+
+# -- trying one block --------------------------------------------------------
+
+# What a block of the drawing is called with at each place: the place's key
+# and the kind of block it takes.
+DOCUMENT_PLACES = {"facts": "facts", "admit": "condition", "check": "check",
+                   "claims": "claims"}
+BOX_PLACES = {"admit": "condition", "when": "condition", "names": "nodes",
+              "class_brick": "class", "evidence": "evidence",
+              "name_brick": "name", "address": "address"}
+TRIED_MOST = 200              # calls of one block shown, the first ones
+SHOWN_KEYS = ("parameter", "value", "quantity", "scenario", "year",
+              "carrier", "sector", "technology", "aggregation", "unit",
+              "spatial_scope", "spatial_scope_raw", "role")
+
+
+def block_at(drawing: dict, where: dict) -> tuple:
+    """(the block, the kind it is) at *where* of *drawing*: {"document":
+    key, "index"}, {"box": id, "key", "index"} or {"arrow": number from 1}.
+    An arrow's brick is made a block of its own first, so it stays the one
+    object the writer is given."""
+    where = where or {}
+    if "arrow" in where:
+        arrows = drawing.get("arrows") or []
+        number = int(where["arrow"])
+        if not 1 <= number <= len(arrows):
+            raise PreviewError(f"the drawing has no arrow {number}")
+        arrow = arrows[number - 1]
+        if not isinstance(arrow.get("brick"), dict):
+            arrow["brick"] = {"brick": arrow.get("brick") or "text",
+                              "settings": arrow.pop("settings", None) or {}}
+        return arrow["brick"], "object"
+    if "document" in where:
+        holder, places = drawing.get("document") or {}, DOCUMENT_PLACES
+        key = where["document"]
+    else:
+        holder = next((one for one in drawing.get("boxes") or ()
+                       if one.get("id") == where.get("box")), None)
+        if holder is None:
+            raise PreviewError(f"the drawing has no box {where.get('box')!r}")
+        places, key = BOX_PLACES, where.get("key")
+    if key not in places:
+        raise PreviewError(f"no block stands at {key!r}")
+    said = holder.get(key)
+    if isinstance(said, list):
+        index = int(where.get("index") or 0)
+        if not 0 <= index < len(said):
+            raise PreviewError(f"{key} has no block {index + 1}")
+        said = said[index]
+    if said is None:
+        raise PreviewError(f"no block stands at {key!r}")
+    return said, places[key]
+
+
+def _shown(value, depth: int = 0):
+    """A value as the page shows it: what JSON takes, cut short."""
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value if not isinstance(value, str) else value[:400]
+    if isinstance(value, dict):
+        return {str(k): _shown(v, depth + 1) for k, v in
+                list(value.items())[:40]}
+    if isinstance(value, (list, tuple)):
+        return [_shown(v, depth + 1) for v in list(value)[:40]]
+    return str(value)[:400]
+
+
+def _reading(call) -> dict:
+    """What a block was given, as the page shows it."""
+    if call.row:
+        return {key: _shown(call.row.get(key)) for key in SHOWN_KEYS
+                if call.row.get(key) not in (None, "")}
+    if call.node is not None:
+        return {"node": call.node.iri or call.node.name,
+                "readings": len(call.rows or call.node.rows or ())}
+    if call.value is not None:
+        return {"value": _shown(call.value)}
+    return {"document": getattr(call.doc, "name", None)}
+
+
+def try_block(profile, data, harvest: Optional[Path], document, where,
+              db: Optional[Path] = None, strict: bool = False, spec=None,
+              root: Optional[Path] = None) -> dict:
+    """One document written as *data* says, and what the block at *where*
+    was given and gave each time it was called, the first `TRIED_MOST`:
+    {"document", "kind", "calls", "shown": [{"reading", "gives"}]}; for an
+    address made of parts, each number's parts and its address. Nothing is
+    saved and no model is asked."""
+    graphblocks = _blocks()
+    if not isinstance(data, dict) or not isinstance(data.get("map"), dict):
+        raise PreviewError("the body needs \"data\": the graph file with "
+                           "its drawing")
+    shown: list = []
+    calls = [0]
+    told: dict = {}
+
+    def prepare(writer) -> None:
+        ref, kind = block_at(writer.drawing.raw, where)
+        told["kind"] = kind
+        if kind == "address" and not graphblocks.shape(ref):
+            box = writer.drawing.box[where["box"]]
+            minted = writer.minted_address
+
+            def recorded(doc, of, node, row=None, label=""):
+                made = minted(doc, of, node, row, label)
+                if of is box:
+                    calls[0] += 1
+                    if len(shown) < TRIED_MOST:
+                        parts = graphblocks.parts_name(
+                            doc, of, list(ref.get("from") or ()), node, row,
+                            label)
+                        shown.append({"reading": _reading(
+                            graphblocks_call(row, node)),
+                            "parts": parts, "gives": made[0]})
+                return made
+            writer.minted_address = recorded
+            return
+        found = writer.brick(ref, kind)
+
+        def run(call, original=found.run):
+            out = original(call)
+            calls[0] += 1
+            if len(shown) < TRIED_MOST:
+                shown.append({"reading": _reading(call),
+                              "gives": _shown(out)})
+            return out
+        writer._blocks[(id(ref), kind)] = (ref, dataclasses.replace(
+            found, run=run))
+
+    def graphblocks_call(row, node):
+        from docpipe.extraction.bricks import Call
+        return Call(row=row, node=node)
+
+    used = Path(db) if db and Path(db).is_file() else None
+    _written(profile, data, harvest, document, used, strict, spec, root,
+             prepare)
+    return {"document": document, "kind": told.get("kind"),
+            "calls": calls[0], "shown": shown, "most": TRIED_MOST}
 
 
 # -- the probe --------------------------------------------------------------

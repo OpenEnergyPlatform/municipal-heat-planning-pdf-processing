@@ -7,8 +7,9 @@ import { AreaBox, NumberBox, TextBox } from '../components/Inputs';
 import { Help } from '../components/Bits';
 import { rich, t, tr } from '../lib/i18n';
 import {
-  BrickAbout, BrickList, BrickRefEditor, BrickSelect, Flag, FieldSelect, FieldsSelect, PairsEditor, SettingsEditor, bricksOf, type Kit,
+  BrickList, Flag, FieldSelect, FieldsSelect, PairsEditor, bricksOf, type Kit,
 } from './inputs';
+import { BlockEditor, PartsEditor, PresetSelect, TryBlock, formOf } from './blocks';
 import {
   COUNT_WORDS, arrowKey, boxTitle, fieldsOfBox, kindOfArrow, localName, rowsOf, subjectOf, takesFields, type Cur, type GraphData, type Obj,
 } from './model';
@@ -16,8 +17,6 @@ import {
 export interface Panel {
   d: GraphData; cur: Cur; kit: Kit; remove(arrow: Obj): void; removeBox(id: string): void; select(kind: 'box' | 'arrow', id: string): void;
 }
-
-const SPECIAL_TOKENS = ['@name', '@key'];
 
 /* ---- a box ---- */
 export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
@@ -32,7 +31,7 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
     if (v === undefined || v === null || v === '' || v === false) delete box[key]; else box[key] = v;
   }, typing);
   const address: Obj = box.address || {};
-  const mode = 'brick' in address ? 'brick' : 'name' in address ? 'name' : 'from';
+  const mode = 'brick' in address || 'python' in address ? 'brick' : 'name' in address ? 'name' : 'from';
   const setAddress = (next: Obj | null, typing?: string) => edit(() => { if (next && Object.keys(next).length) box.address = next; else delete box.address; }, typing);
   const classOptions = d.classes.filter(c => c.curie).map(c => ({ value: c.curie as string, label: (c.label || c.id) }));
   if (box.class && !classOptions.some(c => c.value === box.class)) classOptions.push({ value: box.class, label: box.class });
@@ -89,7 +88,7 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
           <Accordion.Panel>
             <Stack gap="sm">
               <SegmentedControl fullWidth size="xs" value={mode} data={[
-                { value: 'from', label: t('Made from fields') }, { value: 'name', label: t('A name template') }, { value: 'brick', label: t('A brick') }]}
+                { value: 'from', label: t('Made of parts') }, { value: 'name', label: t('A name template') }, { value: 'brick', label: t('A brick or Python') }]}
                 onChange={v => setAddress(v === 'name' ? { folder: address.folder || '', name: address.name || '' } : v === 'brick' ? { brick: (bricksOf(d, 'address')[0] || { name: '' }).name } : { folder: address.folder || '', key: address.key || String(box.id), from: address.from || [] })} />
               {mode !== 'brick' && <TextBox label={t('Folder')} description={t('The folder of the address; empty for none.')} mono value={address.folder == null ? '' : String(address.folder)}
                 onText={v => setAddress({ ...address, folder: v }, 'folder')} />}
@@ -97,8 +96,11 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
                 <>
                   <TextBox label={t('Key of the number')} description={t('Names what the number below is made of, so two boxes never share one.')} mono value={address.key == null ? '' : String(address.key)}
                     onText={v => setAddress({ ...address, key: v }, 'key')} />
-                  <TagsInput label={t('Made of')} description={t('The fields, in order, whose readings make the number of the address: a field, @name for the name of the node, @key for its key, @fact:name for a fact of the document.')}
-                    data={[...fieldNames, ...SPECIAL_TOKENS]} value={address.from || []} onChange={v => setAddress({ ...address, from: v })} />
+                  <Box>
+                    <Text size="sm" fw={500}>{t('Made of')}</Text>
+                    <Text size="xs" c="dimmed" mb={4}>{t('The parts, in order, whose values make the number of the address, joined by |: each with where it comes from, how it is written, what an absent one does and when it counts.')}</Text>
+                    <PartsEditor k={kit} parts={address.from || []} onChange={v => setAddress({ ...address, from: v })} />
+                  </Box>
                   <Flag label={t('The first one that is present')} help={t('Use only the first of the fields that has a reading.')} checked={!!address.first_present}
                     onChange={v => setAddress({ ...address, first_present: v || undefined })} />
                   <TagsInput label={t('Needs')} description={t('The fields that must have a reading for the node to be written, besides those that make its address.')}
@@ -110,8 +112,9 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
               {mode === 'name' && <TextBox label={t('Name template')} description={t('Words and {names} of what the harvest knows of the document.')} mono value={address.name == null ? '' : String(address.name)}
                 onText={v => setAddress({ ...address, name: v }, 'name')} />}
               {mode === 'brick' && (
-                <BrickRefEditor k={kit} kind="address" refer={address} onChange={next => setAddress(next)} />
+                <BlockEditor k={kit} kind="address" refer={address} onChange={next => setAddress(next)} where={{ box: box.id, key: 'address' }} />
               )}
+              {mode === 'from' && <TryAddress k={kit} where={{ box: box.id, key: 'address' }} />}
             </Stack>
           </Accordion.Panel>
         </Accordion.Item>
@@ -120,7 +123,7 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
           <Accordion.Control>{t('What is admitted')}</Accordion.Control>
           <Accordion.Panel>
             <BrickList k={kit} kind="condition" list={box.admit || []} label={t('A reading is taken only if all of these let it through')}
-              onChange={next => set('admit', next.length ? next : undefined)} />
+              onChange={next => set('admit', next.length ? next : undefined)} where={{ box: box.id, key: 'admit' }} />
           </Accordion.Panel>
         </Accordion.Item>
 
@@ -168,12 +171,12 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
                 allowDeselect={false} onChange={v => set('order', v)} />
               <Select label={t('Which name stands when a node has several')} data={[{ value: '', label: t('The first') }, { value: 'last', label: t('The last') }]} value={box.name || ''}
                 allowDeselect={false} onChange={v => set('name', v)} />
-              <OptionalBrick k={kit} kind="nodes" label={t('Brick that finds the names')} value={box.names} onChange={v => set('names', v)} />
-              <OptionalBrick k={kit} kind="name" label={t('Brick that spells the name of a node')} value={box.name_brick} onChange={v => set('name_brick', v)} />
-              <OptionalBrick k={kit} kind="class" label={t('Brick that chooses the class of a node')} value={box.class_brick} onChange={v => set('class_brick', v)} />
-              <OptionalBrick k={kit} kind="evidence" label={t('Brick that writes the passages above a node')} value={box.evidence} onChange={v => set('evidence', v)} />
+              <OptionalBrick k={kit} kind="nodes" label={t('Brick that finds the names')} value={box.names} onChange={v => set('names', v)} where={{ box: box.id, key: 'names' }} />
+              <OptionalBrick k={kit} kind="name" label={t('Brick that spells the name of a node')} value={box.name_brick} onChange={v => set('name_brick', v)} where={{ box: box.id, key: 'name_brick' }} />
+              <OptionalBrick k={kit} kind="class" label={t('Brick that chooses the class of a node')} value={box.class_brick} onChange={v => set('class_brick', v)} where={{ box: box.id, key: 'class_brick' }} />
+              <OptionalBrick k={kit} kind="evidence" label={t('Brick that writes the passages above a node')} value={box.evidence} onChange={v => set('evidence', v)} where={{ box: box.id, key: 'evidence' }} />
               <BrickList k={kit} kind="condition" list={box.when || []} label={t('Readings that make a node of this box (all must pass)')}
-                onChange={next => set('when', next.length ? next : undefined)} />
+                onChange={next => set('when', next.length ? next : undefined)} where={{ box: box.id, key: 'when' }} />
               {['settle', 'strict', 'class_by'].filter(key => box[key] !== undefined).map(key => (
                 <Box key={key}>
                   <Text size="sm" fw={500}>{key === 'settle' ? t('How the numbers of one address are settled') : key === 'strict' ? t('What the strict graph requires') : t('Class by field')}</Text>
@@ -192,20 +195,31 @@ const effectWord = (e: string) => ({
   report: t('report'), leave_out_value: t('leave out the value'), leave_out_paper: t('leave out the paper'), stop: t('stop the run'),
 } as Record<string, string>)[e] || e;
 
-function OptionalBrick({ k, kind, label, value, onChange }: { k: Kit; kind: string; label: string; value: Obj | undefined; onChange: (v: Obj | undefined) => void }) {
+/* the parts of an address tried on one document: each number's parts and the address they make */
+function TryAddress({ k, where }: { k: Kit; where: Obj }) {
+  return <TryBlock k={k} where={where} />;
+}
+
+function OptionalBrick({ k, kind, label, value, onChange, where }: {
+  k: Kit; kind: string; label: string; value: Obj | undefined; onChange: (v: Obj | undefined) => void; where?: Obj;
+}) {
   if (!value) {
     return (
       <Box>
         <Text size="sm" fw={500}>{label}</Text>
         <Select placeholder={t('None')} data={bricksOf(k.d, kind).map(b => ({ value: b.name, label: tr(b.does) }))} value={null} onChange={v => v && onChange({ brick: v })}
           comboboxProps={{ width: 460 }} />
+        <Group gap="xs" mt={4}>
+          <PresetSelect k={k} kind={kind} onPick={b => onChange(b)} />
+          <Button size="compact-xs" variant="subtle" onClick={() => onChange({ python: 'def run(call):\n    return None\n' })}>{t('Python')}</Button>
+        </Group>
       </Box>
     );
   }
   return (
     <Box>
       <Group justify="space-between"><Text size="sm" fw={500}>{label}</Text><Button size="compact-xs" variant="subtle" color="red" onClick={() => onChange(undefined)}>{t('Remove')}</Button></Group>
-      <BrickRefEditor k={k} kind={kind} refer={value} onChange={v => onChange(v)} />
+      <BlockEditor k={k} kind={kind} refer={value} onChange={v => onChange(v)} where={where} />
     </Box>
   );
 }
@@ -218,8 +232,17 @@ export function ArrowSettings({ P, arrow }: { P: Panel; arrow: Obj }) {
   const kind = kindOfArrow(map, arrow);
   const subject = (map.boxes || []).find((b: Obj) => b.id === subjectOf(map, arrow)) || {};
   const rows = rowsOf(d, subject);
-  const brickName: string = arrow.brick ? (typeof arrow.brick === 'string' ? arrow.brick : arrow.brick.brick) : '';
-  const brick = d.bricks.find(b => b.name === brickName);
+  const number = (map.arrows || []).indexOf(arrow) + 1;
+  /* the arrow's block: its brick with the arrow's settings, or a block of its own; a block that is a brick again goes back
+     to the brick and settings of the arrow */
+  const block: Obj = arrow.brick && typeof arrow.brick === 'object' ? arrow.brick
+    : { brick: arrow.brick || 'text', ...(arrow.settings ? { settings: arrow.settings } : {}) };
+  const setBlock = (next: Obj) => {
+    if (formOf(next) === 'brick' && Object.keys(next).every(key => key === 'brick' || key === 'settings')) {
+      if (next.brick === 'text' && !next.settings) delete arrow.brick; else arrow.brick = next.brick;
+      if (next.settings && Object.keys(next.settings).length) arrow.settings = next.settings; else delete arrow.settings;
+    } else { arrow.brick = next; delete arrow.settings; }
+  };
   const field = d.fields.find(f => f.name === arrow.from);
   const fromBox = (map.boxes || []).find((b: Obj) => b.id === arrow.from);
   const set = (key: string, v: unknown, typing?: string) => edit(() => {
@@ -256,12 +279,7 @@ export function ArrowSettings({ P, arrow }: { P: Panel; arrow: Obj }) {
         onChange={v => v && edit(() => { arrow.property = v; })} />
 
       {kind !== 'link' && (
-        <Stack gap="xs">
-          <BrickSelect k={kit} kind="object" label={t('Brick: how the reading becomes the object')} none={t('None: write the reading as it is')} value={brickName || null}
-            onChange={v => edit(() => { if (!v) { delete arrow.brick; delete arrow.settings; } else { if (v !== brickName) delete arrow.settings; arrow.brick = v; } })} />
-          {brick ? <BrickAbout brick={brick} /> : <Text size="sm" c="dimmed">{t('Without a brick the reading is written as a text.')}</Text>}
-          {brick && <SettingsEditor k={kit} brick={brick} settings={arrow.settings || {}} onChange={s => { if (Object.keys(s).length) arrow.settings = s; else delete arrow.settings; }} />}
-        </Stack>
+        <BlockEditor k={kit} kind="object" refer={block} onChange={setBlock} label={t('How the reading becomes the object')} where={number ? { arrow: number } : undefined} />
       )}
 
       <Divider />
@@ -326,16 +344,17 @@ export function DocumentSettings({ P }: { P: Panel }) {
                 onChange={v => setDoc('front_pages', v)} />
               <Flag label={t('Strict graph')} help={t('Hold the strict graph to what its bricks and boxes mark as strict.')} checked={!!doc.strict} onChange={v => setDoc('strict', v)} />
               <Flag label={t('Decisions of people')} help={t('Apply the decisions people made on rows of the harvest.')} checked={!!doc.decisions} onChange={v => setDoc('decisions', v)} />
-              <OptionalBrick k={kit} kind="facts" label={t('Brick that finds what is known of the document')} value={doc.facts} onChange={v => setDoc('facts', v)} />
-              <BrickList k={kit} kind="condition" list={doc.admit || []} label={t('Readings the document takes')} onChange={v => setDoc('admit', v)} />
-              <BrickList k={kit} kind="check" list={doc.check || []} label={t('Checks over what was chosen')} onChange={v => setDoc('check', v)} />
+              <OptionalBrick k={kit} kind="facts" label={t('Brick that finds what is known of the document')} value={doc.facts} onChange={v => setDoc('facts', v)} where={{ document: 'facts' }} />
+              <BrickList k={kit} kind="condition" list={doc.admit || []} label={t('Readings the document takes')} onChange={v => setDoc('admit', v)} where={{ document: 'admit' }} />
+              <BrickList k={kit} kind="check" list={doc.check || []} label={t('Checks over what was chosen')} onChange={v => setDoc('check', v)} where={{ document: 'check' }} />
               {doc.claims && (
                 <Box>
                   <Group justify="space-between"><Text size="sm" fw={500}>{t('What the provenance file records')}</Text><Button size="compact-xs" variant="subtle" color="red" onClick={() => setDoc('claims', undefined)}>{t('Remove')}</Button></Group>
                   <Stack gap="xs">
                     <Select label={t('Box of the document')} data={boxOptions} value={doc.claims.document || null} onChange={v => edit(() => { doc.claims.document = v; })} />
                     <Select label={t('Box of the values')} data={boxOptions} value={doc.claims.box || null} onChange={v => edit(() => { doc.claims.box = v; })} />
-                    <BrickRefEditor k={kit} kind="claims" refer={doc.claims} onChange={next => edit(() => { doc.claims = { ...doc.claims, ...next }; })} />
+                    <BlockEditor k={kit} kind="claims" refer={doc.claims} where={{ document: 'claims' }}
+                      onChange={next => { const keep = { document: doc.claims.document, box: doc.claims.box }; doc.claims = { ...next, ...Object.fromEntries(Object.entries(keep).filter(([, v]) => v != null)) }; }} />
                   </Stack>
                 </Box>
               )}

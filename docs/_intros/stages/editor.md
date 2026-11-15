@@ -238,17 +238,20 @@ whole numbers or empty). Every value a form writes fits the same form again.
   refused by Check with a pointer to the drawing. The settings of a brick in
   the Graph tab are forms of the kinds the brick declares (a text, a list of
   texts, a number, a flag, a class, a rule, a table, labels, fields or prose),
-  a property or class a text field that offers those of the shapes.
+  a property or class a text field that offers those of the shapes; where a
+  brick stands, a block of another form can stand (see the Graph tab).
 - `derive` is "derived from" a select of the field's coordinates and "value" a
   select of the entries of the coordinate's own list.
 - `example` is the source as plain text, the defaults as one row of fields and
   the rows as a table with the columns value, quote and the coordinates (and
   their wordings) some row uses; a select adds a column.
 - `of` of a plan field is always two selects, the coordinate and its entry.
-- The address of a box in the Graph tab is a folder and a key, and the fields
-  (or `@name`, `@key`) its name is made of, with up and down to change the
-  order; a field "Needs" beside "Made of" names the fields that must have a
-  reading for the node to be written (owner decision 2026-11-14).
+- The address of a box in the Graph tab is a folder and a key, and the parts
+  its name is made of (a field, `@name`, `@key`, a fact, a key of the reading,
+  the address of an answer, the wording), each with its own form, prefix,
+  condition and what an absent one does, with up and down to change the order;
+  a field "Needs" beside "Made of" names the fields that must have a reading
+  for the node to be written (owner decision 2026-11-14).
 
 ## Copies and removals
 
@@ -935,7 +938,9 @@ one for each name, one for each distinct reading, one for each answer, one for
 each number, one for each object another arrow wrote), how a node is named (its
 address) and what is admitted; an arrow says its property, the brick that makes
 the object of its triple and the brick's settings, whether one reading is
-written, which readings count and a note. A click on a box, an arrow or the
+written, which readings count and a note. Wherever a brick stands (the object
+of an arrow, a condition of `admit`, the name, class, facts, evidence or claims
+of a box or the document), a block can stand instead. A click on a box, an arrow or the
 document opens its settings in a panel; a brick comes from a list that says what
 it does, what it takes and what it gives. The order of the boxes is the order of
 the nodes in the graph, the order of the arrows the order of the properties. The
@@ -955,6 +960,27 @@ once with the saved file and once with the edit, and compares the two (nodes
 kept and left out, violations by constraint, nodes named anew;
 `graphpage.py`, `graphprobe.py`). A change of the graph needs no model: it takes
 effect the next time the graph is written from the stored harvest.
+
+### Blocks
+
+A place that takes a brick has four forms to choose from
+(`docpipe/editor/ui/src/graph/blocks.tsx`; see [the graph](graph.md), Blocks
+and presets): a brick with its settings; a condition (the flow's condition
+editor over a key of the reading or a fact of the document, with the graph's
+comparisons and the reason the reading is left out); steps, a chain of blocks
+that can be moved earlier or later, added and removed, each taking the value
+the one before gave; and Python, with how often it is called and what it
+writes (for the check against the ontology). A condition may be limited to the
+full or to the strict graph. Presets, the blocks of the core and of the
+profile ready to put in, are listed with what each does; a block put in from
+one shows which preset it came from, and keeps that name when it is changed.
+The address of a box is made of parts, each editable as above.
+
+With a harvest loaded, Try runs one block on one document of it: the page
+writes that document as the edited drawing says, nothing is saved and no model
+is asked, and shows for each call of the block, up to 200, what the reading
+was and what the block gave; for an address made of parts also each part
+(`POST /api/graph/try_block`, `graphpage.try_block`).
 
 ## What the editor does not touch
 

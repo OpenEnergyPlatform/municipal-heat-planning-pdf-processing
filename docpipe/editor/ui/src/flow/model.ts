@@ -212,6 +212,9 @@ export function giveOf(lib: Library, n: Step): string {
 export const opWord = (op: string): string => ({
   is: t('is'), is_not: t('is not'), less: t('less than'), more: t('more than'), at_least: t('at least'), at_most: t('at most'),
   contains: t('contains'), empty: t('is empty'), one_of: t('is one of'),
+  /* only a reading of the graph's drawing */
+  listed: t('is an entry of its list in the spec'), names: t('names something'), answer_of: t('is an answer of the table of the box'),
+  whole: t('is a whole number'), term: t('is the identifier of a term'),
 } as Record<string, string>)[op] || op;
 /* a value of a property of kind "choice", in words */
 export const choiceWord = (p: Prop, v: string): string => tr((p.words || {})[v] || v);
@@ -238,7 +241,7 @@ export function sentence(subjects: Subject[], c: unknown): string {
     if (s.variable) {
       const no = r.not ? t('not') + ' ' : '';
       if (!r.op) return no + r.is;
-      if (r.op === 'empty') return t('{path} {op}', { path: no + r.is, op: opWord('empty') });
+      if (['empty', 'listed', 'names', 'whole', 'term'].includes(r.op)) return t('{path} {op}', { path: no + r.is, op: opWord(r.op) });
       const v = Array.isArray(r.value) ? r.value.join(' ' + t('or') + ' ') : String(r.value);
       return t('{path} {op} {value}', { path: no + r.is, op: opWord(r.op), value: v });
     }

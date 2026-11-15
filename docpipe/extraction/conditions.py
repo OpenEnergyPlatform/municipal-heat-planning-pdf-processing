@@ -34,6 +34,7 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -237,12 +238,33 @@ SUBJECTS = {s.name: s for s in (
     # comparison, and with none it holds where the value is there and not
     # empty, 0 or no.
     Subject("var", "the variable", ()),
+    # What a drawing of the graph decides on (owner request 2026-11-14,
+    # wish 4: "die Baublöcke und Einstellungsmöglichkeiten genau wie im Flow
+    # fein"): any key of a reading of the harvest, its answers, wordings and
+    # states ("quantity", "spatial_scope_raw", "year_state"), and what is
+    # known of the document ("place", "ags"), each by its path.
+    Subject("reading", "the reading", ()),
+    Subject("fact", "what is known of the document", ()),
 )}
 # The thing a row about a variable is about.
 VAR = "var"
 # Every comparison, which a row about a variable may make.
 ALL_OPS = ("is", "is_not", "less", "more", "at_least", "at_most",
            "contains", "empty", "one_of")
+# The comparisons only a reading of the graph makes, each without a value
+# but `answer_of` (the box): an entry of the list the spec gives this
+# dimension of the reading's field and no out: entry; a text that names
+# something once its words are folded; an answer of the table of a box; a
+# whole number; an identifier of a term (OEO_00000128).
+GRAPH_OPS = ("listed", "names", "answer_of", "whole", "term")
+OP_WORDS.update({"listed": "is an entry of its list in the spec",
+                 "names": "names something", "answer_of":
+                 "is an answer of the table of the box", "whole":
+                 "is a whole number", "term": "is the identifier of a term"})
+# The things whose property is a path, and the comparisons each takes.
+FREE = {VAR: ALL_OPS, "reading": ALL_OPS + GRAPH_OPS, "fact": ALL_OPS}
+# The things a condition of the graph's drawing is about, and only those.
+GRAPH_SUBJECTS = ("reading", "fact")
 
 
 def _rows(condition) -> tuple:
@@ -270,7 +292,7 @@ def row_problem(row, where) -> Optional[str]:
     subject = SUBJECTS.get(row.get("of"))
     if subject is None:
         return f"{row.get('of')!r} is nothing a condition can be about"
-    if subject.name == VAR:
+    if subject.name in FREE:
         return _var_problem(row, where)
     if where is not None and subject.name not in where:
         return (f"{subject.label} is not known here (no question before it)"
@@ -316,22 +338,33 @@ def row_problem(row, where) -> Optional[str]:
 def _var_problem(row: dict, where) -> Optional[str]:
     """Why a row about a variable cannot be evaluated where the variables
     *where* names ("var:<name>") are there, None where it can."""
+    subject = row.get("of")
     path = row.get("is")
     if not isinstance(path, str) or not path.strip():
-        return "a row about a variable names the variable"
+        return ("a row about a variable names the variable" if subject == VAR
+                else f"a row about {SUBJECTS[subject].label} names what of it")
     root = path.split(".")[0]
-    if where is not None and f"var:{root}" not in where:
-        return f"the variable {root} is not there yet at this place"
+    if subject == VAR:
+        if where is not None and f"var:{root}" not in where:
+            return f"the variable {root} is not there yet at this place"
+    elif where is not None and subject not in where:
+        return f"{SUBJECTS[subject].label} is not known here"
     if "not" in row and not isinstance(row["not"], bool):
         return "not is yes or no"
     op = row.get("op")
     if op is None:
         return None if "value" not in row else \
             f"{path}: a row without a comparison takes no value"
-    if op not in ALL_OPS:
-        return f"{path} takes {', '.join(ALL_OPS)}, not {op!r}"
-    if op == "empty":
-        return None if "value" not in row else f"{path} is empty: no value"
+    ops = FREE[subject]
+    if op not in ops:
+        return f"{path} takes {', '.join(ops)}, not {op!r}"
+    if op == "answer_of":
+        value = row.get("value")
+        return None if isinstance(value, str) and value.strip() else \
+            f"{path} {OP_WORDS[op]}: name the box"
+    if op == "empty" or op in GRAPH_OPS:
+        return None if "value" not in row else f"{path} {OP_WORDS[op]}: " \
+                                                f"no value"
     if "value" not in row:
         return f"{path} {OP_WORDS[op]}: the value is missing"
     value = row["value"]
@@ -365,10 +398,16 @@ def subjects_of(condition) -> set:
 
 class Facts:
     """What the run knows at one place: *get(subject, property)* -> the
-    value, a LookupError where the place does not know it."""
+    value, a LookupError where the place does not know it; *test(subject,
+    path, op, value)* -> the truth of a comparison only the place can make
+    (`GRAPH_OPS` but `whole` and `term`)."""
 
-    def __init__(self, get: Callable):
+    def __init__(self, get: Callable, test: Optional[Callable] = None):
         self.get = get
+        self.test = test
+
+
+_TERM = re.compile(r"[A-Za-z]+_\d+")
 
 
 def _same(have, want) -> bool:
@@ -381,10 +420,18 @@ def _same(have, want) -> bool:
 
 
 def _var_holds(row: dict, facts: Facts) -> bool:
-    have = facts.get(VAR, row["is"])
+    have = facts.get(row["of"], row["is"])
     op, want = row.get("op"), row.get("value")
     if op is None:
         got = bool(have)
+    elif op == "whole":
+        got = isinstance(have, int)
+    elif op == "term":
+        got = bool(_TERM.fullmatch(str(have or "")))
+    elif op in GRAPH_OPS:
+        if facts.test is None:
+            raise ConditionError(f"{OP_WORDS[op]} is not known here")
+        got = bool(facts.test(row["of"], row["is"], op, want))
     elif op == "empty":
         got = have in (None, "", [], {}) or (
             isinstance(have, str) and not have.strip())
@@ -409,7 +456,7 @@ def _var_holds(row: dict, facts: Facts) -> bool:
 
 
 def _row_holds(row: dict, facts: Facts) -> bool:
-    if row.get("of") == VAR:
+    if row.get("of") in FREE:
         return _var_holds(row, facts)
     subject = SUBJECTS[row["of"]]
     prop = subject.prop(row["is"])
@@ -459,14 +506,18 @@ def _said(value) -> str:
 
 
 def row_sentence(row: dict) -> str:
-    if row.get("of") == VAR:
+    if row.get("of") in FREE:
         no = "not " if row.get("not") else ""
         op = row.get("op")
+        what = row.get("is") if row.get("of") == VAR else \
+            f"{SUBJECTS[row['of']].label}'s {row.get('is')}"
         if op is None:
-            return f"{no}{row.get('is')}"
+            return f"{no}{what}"
         if op == "empty":
-            return f"{row.get('is')} is {no}empty"
-        return f"{row.get('is')} {no}{OP_WORDS.get(op, op)} " \
+            return f"{what} is {no}empty"
+        if op in GRAPH_OPS and op != "answer_of":
+            return f"{what} {no}{OP_WORDS.get(op, op)}"
+        return f"{what} {no}{OP_WORDS.get(op, op)} " \
                f"{_said(row.get('value'))}"
     subject = SUBJECTS.get(row.get("of"))
     prop = subject.prop(row.get("is")) if subject else None
@@ -511,16 +562,18 @@ def one(of: str, is_: str, op: Optional[str] = None, value=None,
     return row
 
 
-def catalogue() -> list:
+def catalogue(graph: bool = False) -> list:
     """Every thing a condition can be about with its properties, as the
-    page offers them."""
+    page offers them: those of a flow, or with *graph* those of a drawing
+    of the graph (`GRAPH_SUBJECTS`)."""
     return [{"name": s.name, "label": s.label,
-             **({"variable": True, "ops": list(ALL_OPS)}
-                if s.name == VAR else {}),
+             **({"variable": True, "ops": list(FREE[s.name])}
+                if s.name in FREE else {}),
              "props": [{"name": p.name, "kind": p.kind, "label": p.label,
                         "ops": list(OPS[p.kind]),
                         **({"choices": list(p.choices)} if p.choices
                            else {}),
                         **({"words": dict(p.words)} if p.words else {})}
                        for p in s.props]}
-            for s in SUBJECTS.values()]
+            for s in SUBJECTS.values()
+            if (s.name in GRAPH_SUBJECTS) == graph]

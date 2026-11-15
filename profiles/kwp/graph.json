@@ -31,19 +31,21 @@
     "legal_forms": "(gmbh\\s*&\\s*co\\.?\\s*kg|gmbh|mbh|ag|kg|ohg|e\\.?\\s*v\\.?|gbr|se|ug)",
     "document": {
       "facts": {
-        "brick": "plan_register"
+        "preset": "plan_register",
+        "python": "def run(call):\n    \"\"\"The plan in the register: its AGS, its publication date and its\n    municipality ({ags}, {published}, {year}, {place}); a plan without AGS\n    or date is not written.\"\"\"\n    doc = call.doc\n    identity = kg.document_identity(doc.writer.db_path, doc.name)\n    if identity is None:\n        log.warning(\"graph: %s: no AGS or publication date -- %d tuple(s) \"\n                    \"not written\", doc.name,\n                    sum(len(rows) for rows in doc.admitted.values()))\n        return None\n    return kg.facts_of(identity)\n"
       },
       "strict": true,
       "claims": {
-        "brick": "value_bodies",
-        "document": "plan",
-        "box": "value",
+        "preset": "value_bodies",
+        "python": "def run(call):\n    \"\"\"For the provenance file, the node or class each dimension of a\n    number became.\"\"\"\n    doc, row = call.doc, call.node.row\n    said = call.settings\n    total = kg.totals(doc.writer.drawing.raw, said.get(\"box\", \"value\"))\n    whole = (doc.nodes.get(said.get(\"whole\", \"municipality\")) or [None])[0]\n    area = whole.iri if whole else None\n    if row.get(\"spatial_scope\") == \"sub_area\":\n        node = doc.node_of(said.get(\"area\", \"area\"),\n                           doc.fold(row[\"spatial_scope_raw\"]))\n        area = node.iri if node else area\n    found = {\"quantity\": kg.class_iri(row.get(\"quantity\")),\n             \"carrier\": kg.class_iri(kg.written(row, \"carrier\", total)),\n             \"sector\": kg.class_iri(kg.written(row, \"sector\", total)),\n             \"technology\": kg.class_iri(row.get(\"technology\")),\n             \"aggregation\": kg.class_iri(row.get(\"aggregation\")),\n             \"scenario\": doc.address_of_answer(said.get(\"part\", \"part\"),\n                                               row[\"scenario\"]),\n             \"spatial_scope\": area}\n    return {axis: iri for axis, iri in found.items() if iri}\n",
         "settings": {
           "part": "part",
           "area": "area",
           "whole": "municipality",
           "box": "value"
-        }
+        },
+        "document": "plan",
+        "box": "value"
       }
     },
     "boxes": [
@@ -106,37 +108,151 @@
         "required": true,
         "admit": [
           {
-            "brick": "quantity_listed"
-          },
-          {
-            "brick": "part_known",
-            "settings": {
-              "box": "part"
-            }
-          },
-          {
-            "brick": "scope_listed",
-            "settings": {
-              "entries": [
-                "municipality",
-                "sub_area"
+            "preset": "quantity_listed",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "quantity",
+                  "op": "listed"
+                }
               ]
-            }
+            },
+            "reason": "not_a_class:{quantity|quantity_raw|'?'}"
           },
           {
-            "brick": "sub_area_named"
+            "preset": "scenario_read",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "scenario",
+                  "op": "empty",
+                  "not": true
+                }
+              ]
+            },
+            "reason": "scenario_unread"
           },
           {
-            "brick": "year_read"
+            "preset": "part_known",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "scenario",
+                  "op": "answer_of",
+                  "value": "part"
+                }
+              ]
+            },
+            "reason": "scenario:{scenario}"
           },
           {
-            "brick": "unit_listed"
+            "preset": "scope_listed",
+            "if": {
+              "any": [
+                {
+                  "of": "reading",
+                  "is": "spatial_scope",
+                  "op": "empty"
+                },
+                {
+                  "of": "reading",
+                  "is": "spatial_scope",
+                  "op": "one_of",
+                  "value": [
+                    "municipality",
+                    "sub_area"
+                  ]
+                }
+              ]
+            },
+            "reason": "spatial_scope"
           },
           {
-            "brick": "unit_in_ontology"
+            "preset": "sub_area_named",
+            "if": {
+              "any": [
+                {
+                  "of": "reading",
+                  "is": "spatial_scope",
+                  "op": "is",
+                  "value": "sub_area",
+                  "not": true
+                },
+                {
+                  "of": "reading",
+                  "is": "spatial_scope_raw",
+                  "op": "empty",
+                  "not": true
+                }
+              ]
+            },
+            "reason": "sub_area_unnamed"
           },
           {
-            "brick": "aggregation_listed"
+            "preset": "year_read",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "year",
+                  "op": "whole"
+                }
+              ]
+            },
+            "reason": "year"
+          },
+          {
+            "preset": "unit_listed",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "value_target",
+                  "op": "empty",
+                  "not": true
+                }
+              ]
+            },
+            "reason": "unit_unlisted:{unit_raw|'?'}"
+          },
+          {
+            "preset": "unit_in_ontology",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "quantity",
+                  "op": "listed"
+                },
+                {
+                  "of": "reading",
+                  "is": "unit_target",
+                  "op": "term"
+                }
+              ]
+            },
+            "reason": "unit_not_in_ontology:{unit_target}"
+          },
+          {
+            "preset": "aggregation_listed",
+            "if": {
+              "any": [
+                {
+                  "of": "reading",
+                  "is": "aggregation",
+                  "op": "empty"
+                },
+                {
+                  "of": "reading",
+                  "is": "aggregation",
+                  "op": "listed"
+                }
+              ]
+            },
+            "reason": "aggregation:{aggregation}"
           },
           {
             "brick": "schema_admits",
@@ -148,11 +264,75 @@
           }
         ],
         "address": {
-          "brick": "value_identity",
-          "settings": {
-            "part": "part",
-            "box": "value"
-          }
+          "preset": "value_identity",
+          "folder": "value",
+          "key": "value",
+          "from": [
+            {
+              "from": "answer_address",
+              "box": "part",
+              "of": "scenario",
+              "absent": "empty"
+            },
+            {
+              "of": "quantity",
+              "form": "iri",
+              "prefix": "oeo"
+            },
+            {
+              "of": "carrier",
+              "total": true,
+              "form": "class",
+              "prefix": "oeo",
+              "family": "OEO_",
+              "absent": "empty"
+            },
+            {
+              "of": "sector",
+              "total": true,
+              "form": "class",
+              "prefix": "oeo",
+              "family": "OEO_",
+              "absent": "empty"
+            },
+            {
+              "of": "year",
+              "form": "text",
+              "absent": "empty"
+            },
+            {
+              "of": "aggregation",
+              "form": "iri",
+              "prefix": "oeo",
+              "absent": "empty"
+            },
+            {
+              "of": "spatial_scope_raw",
+              "when": {
+                "all": [
+                  {
+                    "of": "reading",
+                    "is": "spatial_scope",
+                    "op": "is",
+                    "value": "sub_area"
+                  }
+                ]
+              },
+              "form": "fold",
+              "absent": "empty"
+            },
+            {
+              "of": "technology",
+              "form": "class",
+              "prefix": "oeo",
+              "family": "OEO_",
+              "absent": "omit"
+            },
+            {
+              "from": "wording",
+              "absent": "omit"
+            }
+          ]
         },
         "settle": {
           "wording": [
@@ -163,14 +343,16 @@
           ]
         },
         "class_brick": {
-          "brick": "value_class",
+          "preset": "value_class",
+          "python": "def run(call):\n    \"\"\"The class the quantity was read as, and in the strict graph also the\n    schema's value class above it.\"\"\"\n    row = call.node.row\n    typed = kg.qualified(row[call.settings.get(\"coordinate\", \"quantity\")])\n    if not call.doc.strict:\n        return typed\n    part = call.doc.writer.drawing.box[call.settings.get(\"part\", \"part\")]\n    schema = kg.schema_class_of(row, part.get(\"table\") or {})\n    if schema and kg.SHAPE.cls(schema) != typed:\n        # A CO2-equivalent value IS a greenhouse gas emission value; a shape\n        # without a reasoner only sees the class written.\n        typed += f\", {kg.SHAPE.cls(schema)}\"\n    return typed\n",
           "settings": {
             "part": "part",
             "coordinate": "quantity"
           }
         },
         "evidence": {
-          "brick": "value_passage",
+          "preset": "value_passage",
+          "python": "def run(call):\n    \"\"\"Above a number its dimensions in English, the passage, the page, how\n    it was aggregated or computed and its trust level.\"\"\"\n    node = call.node\n    return kg.evidence_comment(node.row, call.doc.name,\n                               call.settings.get(\"prose\") or {},\n                               call.settings.get(\"join\") or \" · \",\n                               transcribed=call.doc.transcribed,\n                               **(node.data.get(\"marks\") or {}))\n",
           "settings": {
             "prose": {
               "level": "Trust: {level}",
@@ -191,14 +373,32 @@
         "of": "planning_organisation",
         "when": [
           {
-            "brick": "answer_is",
-            "settings": {
-              "coordinate": "role",
-              "not": "municipality"
-            }
+            "preset": "answer_is_not",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "role",
+                  "op": "is",
+                  "value": "municipality",
+                  "not": true
+                }
+              ]
+            },
+            "reason": "role:{role}"
           },
           {
-            "brick": "named"
+            "preset": "named",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "value",
+                  "op": "names"
+                }
+              ]
+            },
+            "reason": "unnamed"
           }
         ],
         "name_brick": {
@@ -222,17 +422,32 @@
         "value": "spatial_scope_raw",
         "when": [
           {
-            "brick": "answer_is",
-            "settings": {
-              "coordinate": "spatial_scope",
-              "is": "sub_area"
-            }
+            "preset": "answer_is",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "spatial_scope",
+                  "op": "is",
+                  "value": "sub_area"
+                }
+              ]
+            },
+            "reason": "spatial_scope:{spatial_scope}"
           },
           {
-            "brick": "has_words",
-            "settings": {
-              "coordinate": "spatial_scope_raw"
-            }
+            "preset": "has_words",
+            "if": {
+              "all": [
+                {
+                  "of": "reading",
+                  "is": "spatial_scope_raw",
+                  "op": "empty",
+                  "not": true
+                }
+              ]
+            },
+            "reason": "spatial_scope_raw_unnamed"
           }
         ],
         "name": "last",
@@ -333,7 +548,23 @@
         "from": "unit_target",
         "to": "value",
         "property": "oeo:OEO_00040010",
-        "brick": "value_unit",
+        "brick": {
+          "preset": "value_unit",
+          "steps": [
+            {
+              "brick": "answer_class",
+              "settings": {
+                "prefix_by_family": {
+                  "OEO_": "oeo",
+                  "MHPO_": "mhpo",
+                  "BFO_": "obo",
+                  "UO_": "obo"
+                }
+              }
+            }
+          ],
+          "writes": "key:unit_target"
+        },
         "label": "has unit"
       },
       {

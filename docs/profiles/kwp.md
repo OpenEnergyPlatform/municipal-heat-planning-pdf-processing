@@ -347,7 +347,9 @@ first used, under the names they had as module constants
 The drawing in `profiles/kwp/graph.json` (`map`) turns an accepted harvest into
 MHPKG Turtle, the target graph on the Open Energy Platform, written by the
 core's program (`docpipe/extraction/graph.py`); `profiles/kwp/kg.py` holds the
-bricks only this graph needs. The terms come from the MHPKG LinkML data
+brick `schema_admits` and the presets only this graph needs (blocks written out
+in `graph.json`: the register lookup, the gates of a number, its identity,
+class, unit, passage and provenance claims). The terms come from the MHPKG LinkML data
 schema (`mhpkg/schema/mhpkg_target_scenario.yaml` of the OEKG repository):
 `python -m profiles.kwp.vocabulary --refresh` pulls it each time into
 `profiles/kwp/mhpkg_schema.yaml` beside the OEO and MHPO snapshots; the
@@ -410,8 +412,8 @@ the scenario part's IRI, the quantity class, the carrier and sector
 classes where they are real OEO classes (`is_class`; a deliberate
 `out:` answer or an unmapped wording is left out exactly like an
 absent one), the year, the aggregation, and, only for a named sub area,
-the normalised area wording (`profiles/kwp/kg.py`, the brick
-`value_identity`). These are the same seven coordinates the schema
+the normalised area wording (`profiles/kwp/kg.py`, the preset
+`value_identity`, an address of parts). These are the same seven coordinates the schema
 repository's own `mint_slice.py` mints: part, quantity, carrier, sector,
 year, aggregation and the sub-area, so two runs over one document mint
 byte-identical IRIs with no deviation from the published list, which
@@ -431,7 +433,7 @@ from the same six marks `docpipe/extraction/trust.py` defines for every
 profile, in English here, checked against the core's own list at import
 (`check_prose`, applied to the `evidence.prose` of the box). Comments only,
 never triples: MHPKG's shapes are `sh:closed`, and an unanticipated triple
-would invalidate the node it documents (the brick `value_passage`,
+would invalidate the node it documents (the preset `value_passage`,
 `evidence_comment`).
 
 Each serialize call writes two graphs. `<graph>.ttl` holds everything that

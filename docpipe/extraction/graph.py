@@ -16,6 +16,9 @@ without a model and without a new harvest:
     a brick     on an arrow or a box: the code that turns a reading into
                 the object of a triple (`bricks.py`, and a profile's own in
                 `profiles/<name>/kg.py`)
+    a block     where a brick stands: a condition about the reading, steps
+                one after another, Python of the drawing's own, and an
+                address made of parts (`graphblocks.py`)
 
 What the program does for every drawing, with the rules of the graph file
 it reads (`readings.py`): one reading where the drawing says the shapes
@@ -37,7 +40,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from . import graphkit
+from . import graphblocks, graphkit
 from .bricks import Call, literal, registry
 from .fields import COORDINATE_KEYS
 from .graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
@@ -174,18 +177,20 @@ class Drawing:
         for arrow in self.arrows:
             names.add(arrow["from"])
             strings(arrow.get("settings"))
+            names.update(graphblocks.names_in(arrow.get("brick")))
         for box in self.boxes:
             for key in ("of", "value", "name", "among", "settle"):
                 strings(box.get(key))
-            strings((box.get("address") or {}).get("from"))
+            for part in (box.get("address") or {}).get("from") or ():
+                strings(part.get("of") if isinstance(part, dict) else part)
+                if isinstance(part, dict):
+                    names.update(graphblocks.names_in(
+                        {"if": part["when"]} if part.get("when") else None))
             for key in ("names", "class_brick", "evidence", "name_brick",
                         "address"):
-                said = box.get(key)
-                if isinstance(said, dict):
-                    strings(said.get("settings"))
+                names.update(graphblocks.names_in(box.get(key)))
             for ref in (box.get("admit") or []) + (box.get("when") or []):
-                if isinstance(ref, dict):
-                    strings(ref.get("settings"))
+                names.update(graphblocks.names_in(ref))
         return names
 
 
@@ -369,8 +374,13 @@ class Writer:
     def __init__(self, drawing: Drawing, *, spec, rules: dict, bricks: dict,
                  db_path=None, strict: bool = False,
                  extra: Optional[dict] = None,
-                 required: Optional[dict] = None):
+                 required: Optional[dict] = None,
+                 space: Optional[dict] = None):
         self.drawing = drawing
+        # What the Python of the drawing sees beside its call (the
+        # profile's own module), and the blocks made of the drawing.
+        self.space = space or {}
+        self._blocks: dict = {}
         # {class: {property}} the shapes demand (min count 1 or more),
         # names without prefix or namespace; read once, not per document.
         self.required = required or {}
@@ -392,17 +402,16 @@ class Writer:
 
     # -- bricks
     def brick(self, ref, kind: str):
-        name = ref.get("brick") if isinstance(ref, dict) else ref
-        found = self.bricks.get(name)
-        if found is None or found.kind != kind:
-            raise GraphError(f"no {kind} brick {name!r}")
-        return found
+        """The brick or block *ref* names, for a place of *kind*."""
+        try:
+            return graphblocks.resolve(ref, kind, self.bricks, self.space,
+                                       self._blocks)
+        except graphblocks.BlockError as exc:
+            raise GraphError(str(exc)) from exc
 
     def call(self, ref, kind: str, **given):
         found = self.brick(ref, kind)
-        settings = dict(ref.get("settings") or {}) \
-            if isinstance(ref, dict) else {}
-        return found.run(Call(settings=settings, **given))
+        return found.run(Call(settings=graphblocks.settings_of(ref), **given))
 
     def _applies(self, ref) -> bool:
         graph = ref.get("graph", "both") if isinstance(ref, dict) else "both"
@@ -429,34 +438,36 @@ class Writer:
             f"{self.base}{name}"
 
     def minted_address(self, doc: Document, box: dict,
-                       node: Optional[Node]) -> tuple:
+                       node: Optional[Node], row: Optional[dict] = None,
+                       label: str = "") -> tuple:
         """(address, the name it was made from) or (None, None): also None
         where a field the address `needs` has no reading (owner decision
         2026-11-14: a publication is named by its DOI, where one is read,
-        and written only where its title is read)."""
+        and written only where its title is read). Its parts are the names
+        of fields and the tokens a drawing has always had, or parts that say
+        where they come from, when they count, how they are written and what
+        an absent one does (`graphblocks.parts_name`)."""
         address = box.get("address") or {}
         if any(doc.chosen(field_) in (None, "")
                for field_ in address.get("needs") or ()):
             return None, None
-        parts = []
-        for token in address.get("from") or ():
-            if token == "@name":
-                parts.append(None if node is None else node.name)
-            elif token == "@key":
-                parts.append(None if node is None else node.key)
-            elif token.startswith("@fact:"):
-                parts.append(doc.facts.get(token[len("@fact:"):]))
-            else:
-                parts.append(doc.chosen(token))
+        tokens = list(address.get("from") or ())
         if address.get("first_present"):
-            parts = [next((one for one in parts if one), None)]
-        if any(one in (None, "") for one in parts):
-            return None, None
+            values = [graphblocks.part_written(
+                doc, one, graphblocks.part_value(doc, box, one, node, row,
+                                                 label)) for one in tokens]
+            parts = [next((one for one in values if one), None)]
+            if parts[0] in (None, ""):
+                return None, None
+        else:
+            parts = graphblocks.parts_name(doc, box, tokens, node, row, label)
+            if parts is None:
+                return None, None
         name = "|".join(str(one) for one in parts)
         if address.get("fold"):
             name = doc.fold(name)
         return (doc.mint(address.get("folder") or "", address.get("key")
-                         or box["id"], name), parts[0])
+                         or box["id"], name), parts[0] if parts else None)
 
     # -- one document
     def write(self, name: str, rows: list,
@@ -698,11 +709,18 @@ class Writer:
         ref = box.get("address") or {}
 
         def address(row: dict, label: str = "") -> str:
-            return self.call(ref, "address", doc=doc, row=row, label=label)
+            if graphblocks.shape(ref):
+                return self.call(ref, "address", doc=doc, row=row,
+                                 label=label)
+            return self.minted_address(doc, box, None, row, label)[0]
 
         claims: dict = {}
         for row in doc.admitted.get(box["id"]) or ():
-            claims.setdefault(address(row), []).append(row)
+            iri = address(row)
+            if iri is None:
+                doc.held["address"] += 1
+                continue
+            claims.setdefault(iri, []).append(row)
         settings = box.get("settle") or {}
         values, marks = {}, {}
         for iri, group in claims.items():
@@ -877,7 +895,8 @@ class Writer:
             elif kind == "node":
                 found = [(term, value, [])
                          for term, value, *_ in self.call(
-                             arrow, "object", doc=doc, node=node)]
+                             arrow_block(arrow), "object", doc=doc,
+                             node=node)]
             else:
                 found = self._readings(doc, box, node, arrow)
             node.values.setdefault(arrow_key(arrow), [])
@@ -914,8 +933,9 @@ class Writer:
         """[(term, value, evidence rows)] an arrow from a reading writes."""
         source = arrow["from"]
         rows = self.rows_of(doc, node, box, source)
-        brick = self.brick(arrow.get("brick") or "text", "object")
-        settings = dict(arrow.get("settings") or {})
+        ref = arrow_block(arrow)
+        brick = self.brick(ref, "object")
+        settings = graphblocks.settings_of(ref)
         reads = "value" if source in self.spec.by_uri else source
         if arrow.get("pick") == "one_reading":
             if box["count"] == "per_document":
@@ -939,7 +959,8 @@ class Writer:
         grouped: dict = {}
         for row in rows:
             for term, made, *_ in brick.run(Call(
-                    doc=doc, node=node, row=row, value=row.get(reads),
+                    doc=doc, node=node, row=row,
+                    value=graphblocks.value_at(doc, row, reads),
                     settings=settings, source=source)):
                 if term not in grouped:
                     grouped[term] = [made, []]
@@ -1016,6 +1037,16 @@ class Writer:
                 " ".join(str(round(v, 2)) for v in rect)) + " ;")
         block[-1] = block[-1].rstrip(" ;") + " ."
         return f"    oekgprov:hasEvidence <{iri}> ;", NL.join(block) + NL
+
+
+def arrow_block(arrow: dict):
+    """The block an arrow writes its objects with: its brick with the
+    arrow's settings (the text brick where it names none), or a block of
+    its own."""
+    said = arrow.get("brick") or "text"
+    if isinstance(said, dict):
+        return said
+    return {"brick": said, "settings": arrow.get("settings") or {}}
 
 
 def _owner(row: dict) -> tuple:
@@ -1203,24 +1234,65 @@ def check(drawing: Drawing, profile, spec=None, bricks=None) -> list:
     axes = {name for parameter in spec.by_uri.values()
             for name in (getattr(parameter, "axes", None) or {})}
     axes |= {f"{name}_raw" for name in axes}
+    from . import conditions
+    # Every key of a reading a block may read: a dimension, its wording, its
+    # state and quote, and the keys of the value.
+    reading_keys = axes | {f"{name}{end}" for name in axes
+                           for end in ("_state", "_quote")} | set(ROW_KEYS) \
+        | {"parameter", "quote", "tier", "flags", "provenance"}
     boxes = set(drawing.box)
     problems: list = []
 
     def brick(ref, kind: str, where: str) -> None:
         if ref is None:
             return
-        name = ref.get("brick") if isinstance(ref, dict) else ref
-        found = bricks.get(name)
-        if found is None:
-            problems.append(f"{where}: no brick {name!r}"
-                            + _close(name, bricks))
-        elif found.kind != kind:
-            problems.append(f"{where}: brick {name!r} is a {found.kind} "
-                            f"brick, not a {kind} brick")
+        form = graphblocks.shape(ref)
+        if form == "brick":
+            name = ref.get("brick") if isinstance(ref, dict) else ref
+            found = bricks.get(name)
+            if found is None:
+                problems.append(f"{where}: no brick {name!r}"
+                                + _close(name, bricks))
+            elif found.kind != kind and not (
+                    kind == "step" and found.kind in graphblocks.STEP_KINDS):
+                problems.append(f"{where}: brick {name!r} is a {found.kind} "
+                                f"brick, not a {kind} brick")
+            return
+        if form == "steps":
+            steps = ref.get("steps")
+            if not isinstance(steps, list) or not steps:
+                problems.append(f"{where}: a chain has one step at least")
+                return
+            for number, step in enumerate(steps, 1):
+                brick(step, "step", f"{where}, step {number}")
+            last = steps[-1]
+            name = last.get("brick") if isinstance(last, dict) else last
+            if kind == "object" and graphblocks.shape(last) == "brick" \
+                    and getattr(bricks.get(name), "kind", "object") \
+                    != "object":
+                problems.append(f"{where}: the last step writes the object, "
+                                f"{name!r} does not")
+            return
+        if form == "if":
+            if kind != "condition":
+                problems.append(f"{where}: a condition stands where a {kind} "
+                                f"block stands")
+                return
+            for said in conditions.problems(ref["if"],
+                                            conditions.GRAPH_SUBJECTS):
+                problems.append(f"{where}: {said}")
+            for name in graphblocks.names_in({"if": ref["if"]}):
+                field(name, where, coordinates=True)
+            return
+        if form == "python":
+            said = graphblocks.python_problem(ref.get("python"))
+            if said:
+                problems.append(f"{where}: {said}")
+            return
+        problems.append(f"{where}: no brick and no block: {ref!r}")
 
     def field(name, where: str, coordinates: bool = False) -> None:
-        if name in fields or (coordinates and (name in axes
-                                               or name in ROW_KEYS)):
+        if name in fields or (coordinates and name in reading_keys):
             return
         problems.append(f"{where}: {name!r} is no field of the spec"
                         + _close(name, fields | (axes if coordinates
@@ -1256,9 +1328,18 @@ def check(drawing: Drawing, profile, spec=None, bricks=None) -> list:
         for ref in (box.get("admit") or []) + (box.get("when") or []):
             brick(ref, "condition", where)
         address = box.get("address") or {}
-        if "brick" in address:
+        if graphblocks.shape(address):
             brick(address, "address", where)
         for token in address.get("from") or ():
+            if isinstance(token, dict):
+                said = graphblocks.part_problem(token, fields, drawing.box)
+                if said:
+                    problems.append(f"{where}: {said}")
+                elif (token.get("from") or "reading") == "reading":
+                    field(token.get("of"), where, coordinates=True)
+                elif token.get("from") == "chosen":
+                    field(token.get("of"), where)
+                continue
             if token in _SPECIAL or str(token).startswith("@fact:"):
                 continue
             field(token, where)
@@ -1272,7 +1353,7 @@ def check(drawing: Drawing, profile, spec=None, bricks=None) -> list:
         if drawing.kind_of(arrow) == "field":
             field(arrow["from"], where, coordinates=True)
         if arrow.get("brick"):
-            brick(arrow["brick"], "object", where)
+            brick(arrow_block(arrow), "object", where)
         if has_property is None:
             continue
         subject = drawing.box[drawing.subject_of(arrow)]
@@ -1326,7 +1407,20 @@ def make_writer(profile, db_path=None, *, strict: bool = False,
         extra = {**context(db_path), **extra}
     return Writer(drawing, spec=spec, rules=dict(made.rules), bricks=bricks,
                   db_path=db_path, strict=strict, extra=extra,
-                  required=required_by_class(profile))
+                  required=required_by_class(profile),
+                  space=python_space(profile))
+
+
+def python_space(profile) -> dict:
+    """What the Python of a drawing sees beside its call: the profile's own
+    module of the graph (`kg`, the nearest one of its line) and its log."""
+    import sys
+    name = profile.component("kg", "__name__") if profile is not None \
+        else None
+    module = sys.modules.get(name) if name else None
+    if module is None:
+        return {}
+    return {"kg": module, "log": logging.getLogger(module.__name__)}
 
 
 def make_serializer(profile, db_path=None, *, strict: bool = False,
