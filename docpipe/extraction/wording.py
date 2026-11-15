@@ -41,7 +41,7 @@ REQUIRED = frozenset({
     "shorter_review", "reasoning_only", "empty", "no_object", "syntax",
     "outside_text", "not_an_object", "key_missing", "key_not_a_list",
     "wrong_shape", "code_failed", "code_error_unknown", "code_silent",
-    "code_output", "image_for", "anchor_parameter", "anchor_unit",
+    "code_output", "image_for",
     "value_in_several_rows", "compute_output", "compute_needs_code",
     "not_an_address", "words_not_in_line", "not_an_address_quote",
     "words_not_in_line_quote", "compute_taken",

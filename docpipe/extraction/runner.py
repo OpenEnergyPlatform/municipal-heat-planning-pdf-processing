@@ -619,7 +619,6 @@ def image_max_side() -> int:
 
 
 
-ANCHORS_PROMPT_ID = "extraction/anchors"
 # The one sentence a document is searched with, written for THAT document.
 PHRASE_PROMPT_ID = "extraction/phrase"
 # The prompts of a harvest piece by piece (addressed.py), the run's own
@@ -644,11 +643,6 @@ REVIEW_PROMPT_ID = "extraction/review"
 # text around each of its quotes (owner decision 2026-11-15).
 NODE_CHECK_PROMPT_ID = "extraction/node_check"
 
-# The anchors.json key of the "which quantity is this" question. It belongs to
-# no single parameter, so it cannot be keyed by one.
-PARAMETER_ANCHOR = "#parameter"
-# The same for "which entry of the unit lists is this", asked before it.
-UNIT_ANCHOR = "#unit"
 # How many calculation questions run at once is the rule `compute_parallel`.
 # What a search shows are numbers of the flow (`NUMBERS`, owner decisions
 # 2026-11-09: "Bei 5 bleiben und das mit 50 passt", "Ja als Einstellung"):
@@ -1517,77 +1511,6 @@ def document_specs(db_path, spec: Spec, document_axes: Optional[Callable]):
         yield make_document_spec(conn, spec, document_axes)
     finally:
         conn.close()
-
-
-# Bumped when the SET of anchor targets changes, not just their wording: an
-# anchors.json written for three parameters must not be read back as if it
-# also held the twenty-two question anchors this version asks for.
-ANCHOR_SCHEMA = "per-question-1"
-
-
-def _key16(raw: str) -> str:
-    """Sixteen hex characters. Long enough that two configurations do not
-    collide, short enough to read in a stamp beside twenty-nine other keys."""
-    import hashlib
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def anchors_key() -> str:
-    """Everything an anchor set depends on that is NOT one question: the
-    anchor prompt, the model and the version of the target SET. The cache is
-    stored under it and the stamp records it.
-
-    Not the questions, though it used to hash them. Everything a target tuple
-    carries is already a stamp key of its own -- a parameter's label and
-    description in `parameter/<uri>`, an axis' question in
-    `axis/<uri>/<name>`, the spec's own question and the parameter list in
-    `slot/parameter`, the unit question and its lists in `slot/unit` -- and
-    the anchor prompt and the model are stamp keys too
-    (`extraction/anchors`, `model`). Hashing the targets in here as well made
-    every document in the corpus stale over ONE changed question, which is
-    exactly what the per-question keys were written to stop.
-
-    The empty last field held the sha of a file of anchors a profile could
-    freeze. That file is gone, and the field stays empty rather than going,
-    so a harvest that never had one keeps its key.
-    """
-    versions = prompts.versions((ANCHORS_PROMPT_ID,))
-    return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{llm_model()}"
-                  f"|{ANCHOR_SCHEMA}|")
-
-
-def anchor_key(parameter_uri: str, slot_name: Optional[str] = None) -> str:
-    """The anchors.json key of one question: the value's, or one axis's."""
-    return parameter_uri if not slot_name else f"{parameter_uri}#{slot_name}"
-
-
-def anchor_targets(spec: Spec) -> list:
-    """(key, label, description, question) for every question the run asks.
-
-    One anchor set per QUESTION, not per parameter. An anchor is a sentence as
-    the document would write it, and the sentence that states a value and the
-    sentence that states its reference year are not the same sentence. Six
-    anchors written from "Endenergieverbrauch" find tables of consumption and
-    say nothing about where a bilanz year is printed, which is why the field
-    sweep searched with the raw question and found captions by accident.
-
-    The value itself has no set here. The plan searches with the one short
-    sentence `document_anchor` writes for the document it plans, and a set
-    written once for the whole corpus was never searched with.
-    """
-    out: list = [(PARAMETER_ANCHOR, say("anchor_parameter"), "",
-                  spec.parameter_question),
-                 (UNIT_ANCHOR, say("anchor_unit"), "",
-                  spec.unit_question)]
-    for parameter in spec.parameters:
-        # asked_slots, not axis_slots: an anchor is a sentence to search
-        # with, and a coordinate the spec derives is never searched for.
-        for slot in fields.asked_slots(parameter):
-            out.append((anchor_key(parameter.uri, slot.name),
-                        f"{parameter.label} / {slot.name}",
-                        parameter.description, slot.question))
-    return [t for t in out
-            if t[0] not in (PARAMETER_ANCHOR, UNIT_ANCHOR) or t[3]]
 
 
 # What a field's sentence request may carry (`phrase_payload`).
@@ -4080,11 +4003,10 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
 # Resume stamps and the per-document run
 # ---------------------------------------------------------------------------
 
-def _stamp_current(spec_sha: str, anchors_sha: str = "",
-                   spec: Optional[Spec] = None) -> dict:
+def _stamp_current(spec_sha: str, spec: Optional[Spec] = None) -> dict:
     """What a harvest was produced by, key by key.
 
-    The model, the anchors and every prompt are written so a reader can
+    The model and every prompt are written so a reader can
     place a harvest, and never compared: the owner decided on 2026-09-10
     that a stamp rests on the KG/ontology parameters alone.
 
@@ -4109,7 +4031,7 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     over a stored harvest neither carries them forward nor finds them
     changed.
     """
-    return {"spec": spec_sha, "model": llm_model(), "anchors": anchors_sha,
+    return {"spec": spec_sha, "model": llm_model(),
             **prompts.versions(survey_prompt_ids()),
             **(fingerprints(spec) if spec is not None else {})}
 
@@ -4383,7 +4305,7 @@ def stale(stamp_path: Path, current: dict) -> list:
 
 def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
                          force: bool = False, force_stale: bool = False,
-                         anchors_sha: str = "", spec: Optional[Spec] = None,
+                         spec: Optional[Spec] = None,
                          top_up: bool = False,
                          start_at: bool = False) -> list:
     """Which of these documents this run has work for.
@@ -4400,7 +4322,7 @@ def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
     return [(did, fn) for did, fn in documents
             if not already_done(Path(fn).stem, out_dir, spec_sha,
                                 force=force, force_stale=force_stale,
-                                anchors_sha=anchors_sha, spec=spec,
+                                spec=spec,
                                 start_at=start_at)]
 
 
@@ -4417,7 +4339,7 @@ def read_in_part(stamp_path: Path) -> bool:
 
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "", spec: Optional[Spec] = None,
+                 spec: Optional[Spec] = None,
                  start_at: bool = False) -> bool:
     """True when this document needs no work: harvested under the current
     ontology keys — or stale with nobody asking for the redo. A document read
@@ -4440,7 +4362,7 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         log.info("extraction: %s was read at its found places alone — "
                  "harvested again", name)
         return False
-    changed = stale(stamp_path, {**_stamp_current(spec_sha, anchors_sha, spec),
+    changed = stale(stamp_path, {**_stamp_current(spec_sha, spec),
                                  **document_current(name)})
     if not changed:
         log.info("extraction: %s is current — skipped", name)
@@ -4503,7 +4425,7 @@ def not_happened(report, *, answered: Optional[int] = None,
 
 
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
-                    anchors_sha: str = "", answered: Optional[int] = None,
+                    answered: Optional[int] = None,
                     spec: Optional[Spec] = None,
                     questions: Optional[dict] = None,
                     lost: int = 0) -> bool:
@@ -4578,7 +4500,7 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
         return False
     archive.keep(stamp)
     stamp.write_text(
-        json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
+        json.dumps({**_stamp_current(spec_sha, spec),
                     **recorded_questions(questions),
                     **stamp_record(name, found_places.PASS
                                    if found_places.STAGE
@@ -5439,7 +5361,6 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
         return 1 if unheld_requests() else 0
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
     # A harvest passage by passage writes no anchors, and its stamps say so.
-    anchors_sha = ""
     # Optional: (connection, document_id) -> {axis name: {uri: [labels]}} for
     # the axes the spec declares dynamic.
     document_axes = profile.component("extraction", "document_axes")
@@ -5505,7 +5426,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
 
     documents = documents_to_harvest(
         documents, args.out, spec_sha, force=args.force,
-        force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
+        force_stale=args.force_stale, spec=spec,
         top_up=chosen in LISTING_FLOWS or chosen not in (
             passflow.MAIN, "start_at", "recheck", "remap", "review"),
         start_at=bool(args.start_at))
@@ -5627,7 +5548,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                   else nullcontext()):
                 completer(report, spec)
         stamped = finish_document(report, name, args.out, spec_sha,
-                                  anchors_sha, answered=replies, spec=spec,
+                                  answered=replies, spec=spec,
                                   lost=UNSERVED.of(report.document_id))
         trace.flush(report.document_id)
         return stamped
@@ -5722,7 +5643,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
     follow_up = None
     if chosen != passflow.MAIN:
         follow_up = follow_up_run(
-            args, spec, _stamp_current(spec_sha, anchors_sha, spec),
+            args, spec, _stamp_current(spec_sha, spec),
             documents, document_name, whole, every, locate, document_axes,
             frame_axes, year_states, pass_sweep(),
             make_owner_sources(args.db, content=content), in_flight, room,

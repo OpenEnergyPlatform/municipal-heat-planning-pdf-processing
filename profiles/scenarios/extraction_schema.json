@@ -10808,8 +10808,7 @@
   },
   "required": [
    "spec",
-   "model",
-   "anchors"
+   "model"
   ],
   "title": "docpipe extraction resume stamp",
   "type": "object"

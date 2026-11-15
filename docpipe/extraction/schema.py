@@ -963,7 +963,7 @@ def stamp_schema() -> dict:
                                "nothing else."}},
         # The prompts a stamp names are those of the flow it was harvested
         # with, so none of them is required.
-        "required": ["spec", "model", "anchors"],
+        "required": ["spec", "model"],
         "additionalProperties": False,
     }
 

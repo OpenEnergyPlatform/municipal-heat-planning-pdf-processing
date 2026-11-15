@@ -441,7 +441,7 @@ def sweeping(monkeypatch, refusal=True):
            "provenance": {"owner_kind": "section", "owner_id": 1,
                           "document_id": 1}}
 
-    def sweep(batch, entries, slots, anchor_id):
+    def sweep(batch, entries, slots):
         for entry in entries:
             entry.claim["carrier_state"] = "read"
             entry.claim["carrier"] = "OEO_00000292"

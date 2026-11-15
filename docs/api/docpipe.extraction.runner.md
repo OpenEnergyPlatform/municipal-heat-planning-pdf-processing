@@ -857,57 +857,6 @@ def document_specs(db_path, spec: Spec, document_axes: Optional[Callable])
 long as the pass runs. None when the profile closes no list per document:
 such a pass needs no database.
 
-### anchors_key
-
-```python
-def anchors_key() -> str
-```
-
-Everything an anchor set depends on that is NOT one question: the
-anchor prompt, the model and the version of the target SET. The cache is
-stored under it and the stamp records it.
-
-Not the questions, though it used to hash them. Everything a target tuple
-carries is already a stamp key of its own -- a parameter's label and
-description in `parameter/<uri>`, an axis' question in
-`axis/<uri>/<name>`, the spec's own question and the parameter list in
-`slot/parameter`, the unit question and its lists in `slot/unit` -- and
-the anchor prompt and the model are stamp keys too
-(`extraction/anchors`, `model`). Hashing the targets in here as well made
-every document in the corpus stale over ONE changed question, which is
-exactly what the per-question keys were written to stop.
-
-The empty last field held the sha of a file of anchors a profile could
-freeze. That file is gone, and the field stays empty rather than going,
-so a harvest that never had one keeps its key.
-
-### anchor_key
-
-```python
-def anchor_key(parameter_uri: str, slot_name: Optional[str] = None) -> str
-```
-
-The anchors.json key of one question: the value's, or one axis's.
-
-### anchor_targets
-
-```python
-def anchor_targets(spec: Spec) -> list
-```
-
-(key, label, description, question) for every question the run asks.
-
-One anchor set per QUESTION, not per parameter. An anchor is a sentence as
-the document would write it, and the sentence that states a value and the
-sentence that states its reference year are not the same sentence. Six
-anchors written from "Endenergieverbrauch" find tables of consumption and
-say nothing about where a bilanz year is printed, which is why the field
-sweep searched with the raw question and found captions by accident.
-
-The value itself has no set here. The plan searches with the one short
-sentence `document_anchor` writes for the document it plans, and a set
-written once for the whole corpus was never searched with.
-
 ### phrase_told
 
 ```python
@@ -1870,7 +1819,7 @@ it was no longer compared.
 ```python
 def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
                          force: bool = False, force_stale: bool = False,
-                         anchors_sha: str = "", spec: Optional[Spec] = None,
+                         spec: Optional[Spec] = None,
                          top_up: bool = False,
                          start_at: bool = False) -> list
 ```
@@ -1898,7 +1847,7 @@ nothing having read the rest of it since.
 ```python
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "", spec: Optional[Spec] = None,
+                 spec: Optional[Spec] = None,
                  start_at: bool = False) -> bool
 ```
 
@@ -1932,7 +1881,7 @@ and the pass for a new parameter writes nothing.
 
 ```python
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
-                    anchors_sha: str = "", answered: Optional[int] = None,
+                    answered: Optional[int] = None,
                     spec: Optional[Spec] = None,
                     questions: Optional[dict] = None,
                     lost: int = 0) -> bool

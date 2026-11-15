@@ -234,7 +234,7 @@ def remapped(tmp_path, document, spec_for, wording="EU28"):
             {"kind": "summary", "document_id": document}]
     path.write_text("\n".join(json.dumps(r) for r in rows) + "\n",
                     encoding="utf-8")
-    current = runner._stamp_current("spec", "", spec)
+    current = runner._stamp_current("spec", spec)
     stats = remap.remap_file(path, spec, current,
                              spec_for and (lambda d: spec_for(spec, d)))
     stored = [json.loads(line) for line in path.read_text(

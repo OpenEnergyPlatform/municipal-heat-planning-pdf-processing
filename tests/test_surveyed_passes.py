@@ -350,14 +350,14 @@ def test_a_request_that_ended_on_a_429_writes_nothing_and_counts_a_failure(
 
 # -- append_parameters -------------------------------------------------------
 
-CURRENT = runner._stamp_current("sha", "", SPEC)
+CURRENT = runner._stamp_current("sha", SPEC)
 
 
 def params_started(folder, *records, gained=True):
     """A harvest whose stamp predates the office parameter."""
     old = topup_parameter.without(SPEC, [OFFICE]) if gained else SPEC
     path = write_harvest(folder, *records)
-    write_stamp(folder, {**runner._stamp_current("sha", "", old),
+    write_stamp(folder, {**runner._stamp_current("sha", old),
                          "producers": [{"pass": "harvest"}]})
     return path
 

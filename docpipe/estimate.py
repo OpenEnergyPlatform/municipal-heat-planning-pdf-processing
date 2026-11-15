@@ -552,7 +552,6 @@ def extract(where: Where) -> Estimate:
     spec_path = Path(spec_path)
     spec = runner.load_spec(spec_path)
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
-    anchors_sha = runner.anchors_key()
     est = Estimate("extract", "stage 7: harvest values",
                    model=runner.llm_model())
     with _readonly(where.db) as conn:
@@ -574,11 +573,9 @@ def extract(where: Where) -> Estimate:
         runner.note_documents(where.db)
         with _quiet("docpipe.extraction.runner"):
             pending = runner.documents_to_harvest(
-                documents, where.out, spec_sha, anchors_sha=anchors_sha,
-                spec=spec)
+                documents, where.out, spec_sha, spec=spec)
             everything = runner.documents_to_harvest(
-                documents, where.out, spec_sha, force_stale=True,
-                anchors_sha=anchors_sha, spec=spec)
+                documents, where.out, spec_sha, force_stale=True, spec=spec)
     ids = [doc_id for doc_id, _ in pending]
     sections = sum(sections_of.get(i, 0) for i in ids)
     est.work = [(len(pending), "documents"),

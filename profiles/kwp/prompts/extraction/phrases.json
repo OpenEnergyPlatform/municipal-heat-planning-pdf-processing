@@ -47,7 +47,5 @@
   "code_error_unknown": "unbekannt",
   "code_silent": "Der Code lief, hat aber nichts ausgegeben. Gib jedes Ergebnis mit print() aus, oder antworte ohne Berechnung.",
   "code_output": "Ausgabe des Codes:\n{output}\n\nAntworte jetzt mit dem Tupel-Objekt. Berechnete Werte tragen \"computed\": true.",
-  "image_for": "Bild zu {label}:",
-  "anchor_parameter": "Kennzahl",
-  "anchor_unit": "Einheit"
+  "image_for": "Bild zu {label}:"
 }

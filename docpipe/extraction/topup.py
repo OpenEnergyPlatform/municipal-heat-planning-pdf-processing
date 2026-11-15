@@ -527,12 +527,6 @@ def sweep_ask(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
     for batch in sweep.batches:
         # The document's, not the request's: they hold for every passage.
         batch.bases = tuple(bases)
-    from . import runner
-    # The unit's set is written once for all parameters, under its own
-    # key; a per-parameter id would find no set and search with the
-    # question instead.
-    anchor_id = (runner.UNIT_ANCHOR if slot.name == fields.UNIT
-                 else runner.anchor_key(parameter.uri, slot.name))
     for index, batch in enumerate(sweep.batches):
         listed = sweep.by_batch.get(index) or []
         if not listed:
@@ -540,7 +534,7 @@ def sweep_ask(rows: list, parameter, slot, doc_spec: Spec, deps: dict,
         entries = [entry for _row, entry in listed]
         sweep.taken[index] = {entry.label: reopen(entry.claim, slot)
                               for entry in entries}
-        deps["sweep"](batch, entries, slots, anchor_id)
+        deps["sweep"](batch, entries, slots)
     return sweep
 
 
