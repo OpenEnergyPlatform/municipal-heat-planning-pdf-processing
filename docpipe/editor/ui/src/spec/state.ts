@@ -15,6 +15,8 @@ export const S = {
   sel: { t: 'spec' } as SpecNode, dirty: false, expanded: new Set<string>(), result: null as Result | null, stale: false,
   generate: null as any, busy: false, panelOpen: true, flag: null as Flag | null, rev: 0, resetScroll: false,
   library: {} as Library,
+  /* a profile with only a draft of its spec: what the draft still lacks before the strict check takes it */
+  draft: false, missing: [] as string[],
 };
 
 /* what the library offers (the server's specs.library): the value types with their settings and the field each puts in,
@@ -85,6 +87,7 @@ export async function loadAll() {
   S.data = spec.data; S.orig = clone(spec.data); S.base = spec.base;
   S.form = spec.form || {}; S.pin = spec.pin || {}; S.notes = spec.notes || [];
   S.library = spec.library || {};
+  S.draft = !!spec.draft; S.missing = spec.missing || [];
   S.dirty = false; S.result = null; S.stale = false; S.generate = null; S.flag = null; S.loaded = true;
   setDirty('spec', false);
   ensureSel(); S.rev++; touch();
@@ -112,7 +115,10 @@ export async function doSave(confirm: boolean) {
     if (r.saved) {
       S.base = r.base; S.orig = clone(S.data); S.dirty = false;
       setDirty('spec', false);
+      if (r.draft) S.missing = r.missing || [];
       try { await loadState(); } catch (e) { showError(e); }
+      /* the draft lacked nothing: the spec is written, and the tab edits it from now on */
+      if (r.spec_written) { await loadAll(); showInfo(t('The draft lacks nothing: the spec is written to {file}.', { file: r.spec_written })); }
     }
     S.panelOpen = true;
   });

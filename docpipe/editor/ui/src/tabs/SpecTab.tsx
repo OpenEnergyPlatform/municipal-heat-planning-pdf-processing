@@ -12,6 +12,20 @@ import { Main } from '../spec/Main';
 import { ResultPanel } from '../spec/Panel';
 import '../spec/spec.css';
 
+/* a profile with only a draft of its spec: what it still lacks, said above the form */
+function DraftNote() {
+  useStore(meta);
+  if (!S.draft) return null;
+  return (
+    <Alert color="yellow" mx="md" mt="xs" title={t('A draft of the spec')}>
+      {t('This profile has a draft of its spec and no spec yet. Saving keeps the draft; once it lacks nothing, saving also writes the spec.')}
+      {S.missing.length ? (
+        <Box component="ul" my={4}>{S.missing.map((m, i) => <li key={i}>{m}</li>)}</Box>
+      ) : <Box mt={4}>{t('It lacks nothing: save to write the spec.')}</Box>}
+    </Alert>
+  );
+}
+
 function Toolbar() {
   useStore(meta);
   return (
@@ -45,6 +59,7 @@ export function SpecTab() {
       <Tree />
       <Box style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <Toolbar />
+        <DraftNote />
         <ResultPanel />
         <Main />
       </Box>

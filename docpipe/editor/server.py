@@ -62,6 +62,7 @@ from typing import Callable, Optional, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
 from .. import graphfile
+from .. import newprofile
 from .. import phrases as phrase_files
 from .. import rules as rule_files
 from .. import settings
@@ -230,7 +231,8 @@ class App:
     def __init__(self, profile, harvest: Optional[Path] = None,
                  root: Optional[Path] = None, cache: Optional[Path] = None,
                  fetch_root: Optional[Path] = None,
-                 switch: Optional[Callable[[str], None]] = None):
+                 switch: Optional[Callable[[str], None]] = None,
+                 home: Optional[Path] = None):
         # how a switch to another profile is said to the command that
         # started this server (start.py); None: it offers only its own
         self.switch = switch
@@ -257,6 +259,14 @@ class App:
             self.harvest, lines=lambda path: trace_files.lines(
                 self.files.checked(path)))
         self.spec_path = profile.component("extraction", "SPEC_PATH")
+        # A profile made with a draft of its spec and no spec yet (`docpipe
+        # init --shapes`, a new profile of the page): its Spec tab edits the
+        # draft, and the spec is written once the draft lacks nothing.
+        draft = folder / newprofile.DRAFT_FILE
+        self.draft_path = draft if self.spec_path is None \
+            and draft.is_file() else None
+        # the project a new profile is made in (`newprofile`)
+        self.home = Path(home or settings.project_dir()).resolve()
         self._snapshot: Optional[dict] = None
         self._loaded = False
         # {trace name: (state of its file, what its requests say)}
@@ -297,6 +307,8 @@ class App:
         return done.stdout if done.returncode == 0 else None
 
     def _need_spec(self) -> Path:
+        if self.spec_path is None and self.draft_path is not None:
+            return self.draft_path
         if self.spec_path is None:
             raise _Refusal(404, f"profile {self.profile.name!r} has no "
                                 f"extraction spec")
@@ -331,6 +343,7 @@ class App:
             "/api/state": ("GET", self._state),
             "/api/profile": ("GET", self._profile),
             "/api/profile/switch": ("POST", self._profile_switch),
+            "/api/profile/new": ("POST", self._profile_new),
             "/api/spec": ("GET", self._spec),
             "/api/spec/check": ("POST", self._check),
             "/api/spec/save": ("POST", self._save),
@@ -408,7 +421,8 @@ class App:
         return {
             "profile": self.profile.name,
             "profiles": self._profiles(),
-            "spec": self.shown(self.spec_path) if self.spec_path else None,
+            "spec": self.shown(self.spec_path or self.draft_path)
+            if self.spec_path or self.draft_path else None,
             "branch": branch.strip() if branch else None,
             "changed": changed,
             "harvest": self.harvest.as_posix() if self.harvest else None,
@@ -442,11 +456,65 @@ class App:
         self.switched = name
         return {"profile": name, "restart": True}
 
+    def _profile_new(self, query, body) -> dict:
+        """A new profile in the profile folder of the project (owner request
+        2026-11-14, wish 5): empty, extending the profile docpipe brings, or
+        a copy of one the installation finds; the addresses of an ontology,
+        shapes and a graph its sources, fetched before anything is written;
+        a draft of its spec from the shapes fetched or from the small shape
+        docpipe brings, made as `docpipe init --shapes` makes it. Says what
+        was written and what the draft still lacks; the head then switches
+        to it."""
+        if not isinstance(body, dict):
+            raise _Refusal(400, "the body must be a JSON object")
+        name = str(body.get("name") or "").strip()
+        start = body.get("start", "empty")
+        copy_of = body.get("from") if start == "copy" else None
+        drafted = body.get("draft", "none")
+        if start not in ("empty", "copy") \
+                or drafted not in ("none", "shapes", "bundled"):
+            raise _Refusal(400, "start is empty or copy, draft none, shapes "
+                                "or bundled")
+        try:
+            newprofile.check_name(name)
+            if start == "copy" and copy_of not in available_profiles():
+                raise newprofile.ProfileError(
+                    f"no profile {copy_of!r} to copy")
+            sources = newprofile.addressed_sources(body.get("addresses"))
+            if drafted == "shapes" and "shapes" not in sources:
+                raise newprofile.ProfileError(
+                    "a draft from the shapes needs the address of the "
+                    "shapes")
+            # Fetched before anything is written: an address that gives
+            # nothing leaves no half of a profile behind.
+            records = upstream.fetch(sources, self.cache) if sources else {}
+            draft = None
+            if start == "empty" and drafted == "shapes":
+                draft, _ = newprofile.draft_from_shapes(
+                    upstream.files(records["shapes"])[0])
+            elif start == "empty" and drafted == "bundled":
+                draft, _ = newprofile.draft_from_shapes(True)
+            written = newprofile.write_profile(
+                self.home, name, copy_of=copy_of, draft=draft,
+                sources=sources)
+            if records:
+                upstream.write_lock(name, records, self.cache)
+        except (newprofile.ProfileError, upstream.UpstreamError,
+                OSError, IndexError) as exc:
+            raise _Refusal(400, str(exc))
+        return {"profile": name, "written": [self.shown(p) for p in written],
+                "missing": newprofile.missing(draft),
+                "fetched": sorted(records),
+                "switch": self.switch is not None}
+
     def _spec(self, query, body) -> dict:
         raw = self.files.read(self._need_spec())
         data = specs.parse(raw)
         snapshot = self.snapshot()
+        drafting = self._drafting()
         return {"data": data, "base": sha256(raw),
+                **({"draft": True, "missing": newprofile.missing(data)}
+                   if drafting else {}),
                 "form": specs.form(self.profile),
                 "library": specs.library(data),
                 "pin": specs.pin(data, snapshot) if snapshot else {},
@@ -460,6 +528,37 @@ class App:
         report.pop("text", None)        # the page gets the diff
         return report
 
+    def _drafting(self) -> bool:
+        return self.spec_path is None and self.draft_path is not None
+
+    def _save_draft(self, raw: bytes, data: dict) -> dict:
+        """The draft as the page has it, whatever it still lacks; and, once
+        it lacks nothing, the spec and the graph file beside it, as `docpipe
+        compile apply --out` writes them (owner request 2026-11-14, wish 5:
+        the strict check takes the draft once a real example is in)."""
+        from ..compile import draft as drafting
+        report = specs.judge(raw, data, None, None,
+                             self.shown(self.draft_path))
+        text = report.pop("text").encode("utf-8")
+        self.files.write(self.draft_path, text)
+        missing = newprofile.missing(data)
+        report.update(saved=True, base=sha256(text), draft=True,
+                      missing=missing)
+        if missing:
+            return report
+        folder = self.draft_path.parent
+        spec = folder / "extraction_spec.json"
+        self.files.write(spec, (json.dumps(
+            drafting.finished(data), ensure_ascii=False, indent=1)
+            + "\n").encode("utf-8"))
+        graph = folder / graphfile.FILE
+        said = drafting.graph_file(data)
+        if said and not graph.exists():
+            self.files.write(graph, graphfile.dump(said).encode("utf-8"))
+        self.spec_path, self.draft_path = spec, None
+        report.update(draft=False, spec_written=self.shown(spec))
+        return report
+
     def _save(self, query, body) -> dict:
         data = self._need_data(body)
         spec = self._need_spec()
@@ -468,6 +567,8 @@ class App:
             return {"saved": False, "reason": "moved",
                     "message": "the file changed on disk since the page "
                                "loaded it; reload it before saving"}
+        if self._drafting():
+            return self._save_draft(raw, data)
         report, written = specs.save(
             raw, data, confirm=bool(body.get("confirm")),
             stamps=self._stamps(), snapshot=self.snapshot(),

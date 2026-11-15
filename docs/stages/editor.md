@@ -113,7 +113,9 @@ then Vite writes into `web/` and replaces `web/assets/` whole). `npm run dev` se
 
 The head shows the profile, as a choice among every profile the installation
 finds (`docpipe profiles`; a server not started by `docpipe edit` shows only
-its own), and the branch, the five tabs **Spec**, **Prompts**,
+its own) with a last entry **New profile …** (where the page cannot switch, a +
+button beside the profile's name opens the same dialog; see New profile), and
+the branch, the five tabs **Spec**, **Prompts**,
 **Flow**, **Sources** and **Graph** as pills with a dot on a tab that holds
 edits not yet saved, a badge that says **Unsaved edits** or **All saved**, a
 **Rules** button on the tabs that have rules, which opens the rules of the tab
@@ -180,6 +182,53 @@ its quote. A field of the whole document has `kind` (settings or year), for a
 year its `state`, and `of`. A key the form
 does not know stays in the file as it is. An edit is made in the page's copy
 of the spec; nothing is written until Save.
+
+### Draft of a spec
+
+A profile that has `extraction_spec.draft.json` and no `extraction_spec.json`
+(made by `docpipe init --shapes` or by the dialog of New profile) is edited in
+the Spec tab as that draft, and the head shows the draft's file where there is
+no spec. A note above the form lists what the draft still lacks
+(`compile.draft.todo`, as `/api/spec` gives it in `missing`). Save keeps the
+draft whatever it lacks. Once it lacks nothing, Save also writes
+`extraction_spec.json` (`compile.draft.finished`) and, where the profile has no
+`graph.json`, a `graph.json` (`compile.draft.graph_file`), as `docpipe compile
+apply --out` does; from then on the tab edits the spec, and the draft file is
+left where it is.
+
+## New profile
+
+The last entry of the profile choice in the head (or the + button) opens a
+dialog that makes a profile in the profile folder of the project
+(`settings.project_dir()/profiles/<name>`, with the folder for its PDFs at
+`data/<name>/pdf`), by `POST /api/profile/new` (`server._profile_new`, over
+`docpipe/newprofile.py`, the code `docpipe init` writes a project with). It
+asks for:
+
+- a name: lower-case letters, digits and `_`, starting with a letter, and not
+  the name of a profile the installation finds;
+- the start. *Empty* extends the profile docpipe brings (`default`). *Copy of*
+  a profile the installation finds writes a `profile.py` that extends that
+  profile and takes its title with the new name, its document noun, column
+  layout, shareable flag and facets, and copies of its `extraction_spec.json`,
+  `extraction_schema.json`, `flow.json`, `graph.json`, `chat.json`,
+  `rules.json` and `sources.json` where it has them, so an edit leaves the
+  profile copied as it was; every other part is inherited by `extends`;
+- optionally the addresses of an ontology, of shapes and of a graph. They
+  become sources of kind `url` named `ontology`, `shapes` and `graph` in the new
+  profile's `sources.json` (laid over those of a copy) and are fetched
+  (`upstream.fetch` into the cache, its lock written under the new profile's
+  name) before anything is written;
+- for an empty start, a draft of the spec: from the shapes at the address, or
+  from the small shape docpipe brings, made by the code of `docpipe init
+  --shapes`.
+
+The answer lists the files written, what was fetched and what the draft still
+lacks. A name taken or unusable, a profile to copy that does not exist, a draft
+from shapes without their address, an address that is no http(s) address, and a
+fetch or a draft that fails each refuse the request (400) and leave nothing
+behind. The dialog then offers to switch to the new profile. The page has no
+way to delete a profile.
 
 ## Check and Save
 

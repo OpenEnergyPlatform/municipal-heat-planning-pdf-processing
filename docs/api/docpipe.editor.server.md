@@ -134,7 +134,8 @@ The endpoints of CONTRACT section 3, without a socket.
 def __init__(self, profile, harvest: Optional[Path] = None,
              root: Optional[Path] = None, cache: Optional[Path] = None,
              fetch_root: Optional[Path] = None,
-             switch: Optional[Callable[[str], None]] = None)
+             switch: Optional[Callable[[str], None]] = None,
+             home: Optional[Path] = None)
 ```
 
 #### App.shown

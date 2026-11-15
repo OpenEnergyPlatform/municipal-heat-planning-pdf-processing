@@ -15,6 +15,7 @@ import {
 } from './lib/nav';
 import { get, post } from './lib/api';
 import { askConfirm, showError } from './lib/dialogs';
+import { askNewProfile, NewProfile } from './tabs/NewProfile';
 import { SpecTab } from './tabs/SpecTab';
 import { PromptsTab } from './tabs/PromptsTab';
 import { FlowTab } from './flow/FlowTab';
@@ -82,6 +83,9 @@ async function switchProfile(name: string) {
   throw new Error(t('The editor did not start again with {name}; the terminal it runs in says why.', { name }));
 }
 
+/* the entry of the choice that makes a new profile instead (tabs/NewProfile.tsx) */
+const NEW = '\u0000new';
+
 /* the profile: a choice where the editor can switch, else its name */
 function ProfileSwitch({ st }: { st: PageState }) {
   const names = st.profiles || [st.profile];
@@ -90,9 +94,10 @@ function ProfileSwitch({ st }: { st: PageState }) {
   }
   return (
     <Tooltip label={t('The profile: another one starts the editor again with it')} openDelay={500}>
-      <Select size="sm" w={`${Math.max(...names.map(n => n.length)) + 5}ch`} data={names} value={st.profile}
+      <Select size="sm" w={`${Math.max(...names.map(n => n.length)) + 5}ch`} value={st.profile}
+        data={[...names, { value: NEW, label: t('New profile …') }]} comboboxProps={{ width: 'max-content' }}
         allowDeselect={false} aria-label={t('Profile')} style={{ flexShrink: 0 }}
-        onChange={v => { if (v && v !== st.profile) switchProfile(v).catch(showError); }} />
+        onChange={v => { if (v === NEW) askNewProfile(); else if (v && v !== st.profile) switchProfile(v).catch(showError); }} />
     </Tooltip>
   );
 }
@@ -108,6 +113,7 @@ function Head() {
       <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
         <Text fw={700} size="lg" style={{ whiteSpace: 'nowrap' }}>docpipe edit</Text>{/* i18n-ignore: the program's name */}
         <ProfileSwitch st={st} />
+        <NewProfile st={st} onSwitch={name => switchProfile(name).catch(showError)} />
         <Tooltip label={t('The spec file of this profile')}>
           <Group gap={4} wrap="nowrap" visibleFrom="xl"><IconFileText size={16} /><Code>{st.spec}</Code></Group>
         </Tooltip>

@@ -195,7 +195,8 @@ and not for every section retyped; the setting's own default stays off, so a
 project without the line is unchanged. The command ends by saying what to run
 next: `docpipe doctor`, `docpipe run` and `docpipe chat`, with `docpipe ingest
 --source FOLDER` and then `docpipe run --skip ingest` for PDFs lying in
-another folder.
+another folder. The files are written by `docpipe/newprofile.py`, which the
+editor's New profile dialog uses as well (see [the editor](editor.md)).
 
 `docpipe init NAME --shapes [FILE]` also writes the draft of an extraction
 spec, `profiles/NAME/extraction_spec.draft.json`, from SHACL shapes: those in
