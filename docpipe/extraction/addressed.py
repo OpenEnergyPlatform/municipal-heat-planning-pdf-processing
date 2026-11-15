@@ -1727,7 +1727,7 @@ class Reader:
         """The list a field's finds name their entry in (`list_of`), None
         for a field without one (owner decision 2026-11-09: a field with a
         list is asked with it, the answer the number of its entry)."""
-        if parameter.value_type != "category":
+        if not parameter.is_entry:
             return None
         options = fields.value_choice(parameter).options
         return self.list_of(options) if options else None
@@ -1804,7 +1804,7 @@ class Reader:
                 return None
             claim["value"] = int(value) if value.is_integer() else value
             claim["value_raw"] = got.words
-        elif parameter.value_type == "category":
+        elif parameter.is_entry:
             slot = fields.value_choice(parameter)
             entry = ""
             if slot.options and got.entry is not None:

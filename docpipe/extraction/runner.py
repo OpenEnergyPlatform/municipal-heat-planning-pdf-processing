@@ -2974,7 +2974,7 @@ def _parameter_payload(parameter) -> dict:
                "axes": axes, "example": parameter.example}
     # Only what applies to this kind of value: a unit list in front of a
     # category would invite the model to invent one.
-    if parameter.is_numeric:
+    if parameter.has_units:
         payload["units_accepted"] = sorted(parameter.units_accepted)
     elif parameter.vocabulary:
         payload["value_classes"] = {labels[0]: list(labels[1:])
@@ -3052,7 +3052,7 @@ def _quantities_payload(spec) -> list:
         entry = {"uri": parameter.uri, "label": parameter.label,
                  "description": parameter.description,
                  "value_type": parameter.value_type}
-        if parameter.is_numeric:
+        if parameter.has_units:
             entry["units_accepted"] = sorted(parameter.units_accepted)
         elif parameter.vocabulary:
             entry["value_classes"] = {labels[0]: list(labels[1:])
@@ -3220,7 +3220,7 @@ def _review_payload(row: dict, shown: list, parameter, slots) -> dict:
     unit = row.get("unit_raw") or row.get("unit")
     if unit:
         listed["unit"] = unit
-    if parameter.is_numeric:
+    if parameter.has_units:
         # The second reading names its unit as one entry too: the first
         # reading's is compared by factor, and a wording has none.
         listed["units_accepted"] = sorted(parameter.units_accepted)
@@ -4580,7 +4580,7 @@ def field_slots(spec) -> list:
     out = [fields.parameter_slot(spec), fields.unit_slot(spec)]
     for parameter in spec.parameters:
         out += fields.axis_slots(parameter)
-        if parameter.value_type == "category":
+        if parameter.is_entry:
             out.append(fields.value_choice(parameter))
     return [slot for slot in out if slot is not None]
 
@@ -4736,7 +4736,8 @@ def year_states_of(spec: Spec) -> dict:
     by word ("Basisjahr", "Zieljahr") and prints no year, in a pass over a
     stored harvest, which asks no plan its years. None for a state the spec
     does not say it of, which then has no years."""
-    return {state: (spec.plan_fields.get(f"{state}_year") or {}).get("of")
+    return {state: ((spec.plan_field_of("year", state) or (None, {}))[1]
+                    or {}).get("of")
             for state in YEAR_STATES}
 
 

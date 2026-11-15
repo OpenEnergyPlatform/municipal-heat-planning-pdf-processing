@@ -21,6 +21,13 @@
 .dp-spec-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dp-spec-sub { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 400; color: var(--mantine-color-dimmed); }
 .dp-spec-caret { flex: none; width: 18px; display: inline-flex; justify-content: center; color: var(--mantine-color-dimmed); }
+.dp-spec-lib { display: flex; flex-direction: column; gap: 4px; margin: 0 4px 6px; }
+.dp-spec-block {
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 13px; cursor: grab;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); border-radius: var(--mantine-radius-sm);
+  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+.dp-spec-block:hover { border-color: var(--mantine-primary-color-filled); }
 
 .dp-spec-row[data-sel="true"] > td { background: var(--mantine-primary-color-light); }
 .dp-spec-table td, .dp-spec-table th { vertical-align: top; }

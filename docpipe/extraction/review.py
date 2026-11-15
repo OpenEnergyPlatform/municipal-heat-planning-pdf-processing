@@ -153,6 +153,13 @@ def _value_agrees(row: dict, parameter, reply: dict, shown: list) -> Optional[bo
             mapped = parameter.value_to_uri().get(fold_label(given))
             return mapped is not None and mapped == row.get("value_uri")
         return fold_label(given) == fold_label(row.get("value"))
+    if not parameter.converts:
+        # A number its type does not convert is compared as it is printed
+        # (a value type's settings, owner request 2026-11-14, wish 4b).
+        try:
+            return float(given) == float(row.get("value"))
+        except (TypeError, ValueError):
+            return None
     factor = parameter.unit_factor(reply.get("unit"))
     try:
         target = round(float(given) * float(factor),

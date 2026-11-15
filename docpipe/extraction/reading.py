@@ -75,7 +75,8 @@ def slots_of(spec, parameter) -> list:
     where the unit question chose no entry of the parameter's list
     (`fields.derived_by_unit`)."""
     out = []
-    unit = fields.unit_slot(spec, parameter) if parameter.is_numeric else None
+    unit = fields.unit_slot(spec, parameter) if parameter.has_units \
+        else None
     if unit is not None:
         out.append(unit)
     return out + fields.axis_slots(parameter)

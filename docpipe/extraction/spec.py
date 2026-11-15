@@ -25,6 +25,20 @@ a list the profile closes per document (`beside` of such a parameter). They
 are loaded as strictly as a parameter and are in no fingerprint: a reworded
 one leaves a harvest current, as a reworded prompt does.
 
+What a field's value is and how it is checked is a block with settings
+(owner request 2026-11-14, wish 4b: "Bei der Spec ... sollten die Baublöcke
+und Einstellungsmöglichkeiten genau wie im Flow fein sein"): a value type
+says how the answer is given, whether it has units and is converted onto
+the field's unit, and how it is found in its quote (`ValueType`; the four
+the program has always had are presets a spec may add to under
+`value_types`). A dimension may be derived from a condition about the
+reading as from the unit (`derive`), a field of the whole document says
+what it is (`kind`, `state`) instead of being known by its key, and a field
+may carry checks of its own (`checks`): a condition under which its answer
+is refused and the sentence it is asked again with, as the flow's own check
+does. None of these adds a check of the program's own: the quote must show
+the passage and the answer must stand in the quote, as before.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -44,6 +58,45 @@ from .. import rules
 # number — by the passage they stand in.
 NUMERIC_TYPES = ("float", "int")
 VALUE_TYPES = NUMERIC_TYPES + ("text", "category")
+# How the answer of a value type is given: a number, an entry of the field's
+# list, or the words the document uses.
+ANSWERS = ("number", "entry", "words")
+# How such an answer is found in its quote: a number as a printed number of
+# its own (a sign part of it, owner decision 2026-11-01), or as the words
+# the document prints for it (`value_raw`); an entry by its name or a
+# spelling its list gives (`answer_in_quote`, owner decision 2026-09-13);
+# words as themselves.
+IN_QUOTE = {"number": ("number", "words"), "entry": ("entry",),
+            "words": ("words",)}
+
+
+@dataclass(frozen=True)
+class ValueType:
+    """What the value of a field is (owner request 2026-11-14, wish 4b):
+    how its answer is given, whether a number has units (`units_accepted`,
+    the unit question) and is converted onto the field's unit
+    (`value_target`), and how the answer is found in its quote. The four
+    built-in types are presets of it; a spec may add its own."""
+    name: str
+    answer: str
+    units: bool = False
+    converts: bool = False
+    in_quote: str = ""
+
+    def settings(self) -> dict:
+        """The type as a spec writes it under `value_types`."""
+        out = {"answer": self.answer, "in_quote": self.in_quote}
+        if self.answer == "number":
+            out.update(units=self.units, converts=self.converts)
+        return out
+
+
+BUILTIN_TYPES = {
+    "float": ValueType("float", "number", True, True, "number"),
+    "int": ValueType("int", "number", True, True, "number"),
+    "text": ValueType("text", "words", in_quote="words"),
+    "category": ValueType("category", "entry", in_quote="entry"),
+}
 # The step that reads a group of coordinates: the reading of each value
 # (owner decision 2026-11-07); the survey that read a group per passage is
 # gone (owner decisions 2026-11-08).
@@ -59,6 +112,26 @@ PLAN_FIELDS = ("settings", "base_year", "target_year")
 # Those of them that are a year of the document's own, each a state of it
 # that a spec can say which pairs of the frame are (`of`).
 YEAR_FIELDS = ("base_year", "target_year")
+# What a field of the whole document is (spec: "kind" of a plan field, owner
+# request 2026-11-14, wish 4b: the keys are free): the settings that hold
+# for every value, or a year of the document's own in one of its states
+# ("state": "base", "target"). A key of `PLAN_FIELDS` says it by its name
+# where the entry does not.
+PLAN_FIELD_KINDS = ("settings", "year")
+
+
+def plan_field_kind(key: str, entry: Optional[dict]) -> tuple:
+    """(kind, state) of a field of the whole document: its own "kind" and
+    "state", else what its key has always meant; (None, None) for neither."""
+    entry = entry or {}
+    kind = entry.get("kind")
+    if kind is None:
+        if key == "settings":
+            return "settings", None
+        if key in YEAR_FIELDS:
+            return "year", entry.get("state") or key[:-len("_year")]
+        return None, None
+    return kind, (entry.get("state") if kind == "year" else None)
 
 
 def fold_label(raw) -> str:
@@ -133,7 +206,11 @@ class Axis:
     # the corpus run 63.5% of its years.
     question: Optional[str] = None
     # A coordinate the SPEC already decides, so no request asks for it:
-    # {"from": "unit", "value": "<a key of this axis' vocabulary>"}.
+    # {"from": "unit", "value": "<a key of this axis' vocabulary>"}, or
+    # {"if": condition, "value": ...}, a condition about the reading
+    # (`conditions`, subject "reading") under which the entry is that
+    # (owner request 2026-11-14, wish 4b: "Ableiten aus einer beliebigen
+    # Bedingung"; the unit is the preset).
     #
     # Principle one, applied one step further. The structure of a tuple is
     # deterministic, and so is a coordinate every accepted unit of the
@@ -245,10 +322,45 @@ class Parameter:
     # regions" and "other region" beside the regions one publication names,
     # so the list exists where a document names none. In no fingerprint.
     beside: Optional[dict] = None
+    # What the value is (`ValueType`): the built-in type of its name where
+    # none is given.
+    kind: Optional[ValueType] = None
+    # The field's own checks (spec: "checks", owner decision 2026-11-12,
+    # plan of the general blocks, point 13): [{"name", "refuse": condition,
+    # "sentence"}], each refusing an answer where its condition holds and
+    # asking it again with its sentence, as the flow's own check does.
+    checks: tuple = ()
+
+    def __post_init__(self):
+        if self.kind is None:
+            self.kind = BUILTIN_TYPES.get(self.value_type) \
+                or ValueType(self.value_type, "words", in_quote="words")
 
     @property
     def is_numeric(self) -> bool:
-        return self.value_type in NUMERIC_TYPES
+        """Is the answer a number?"""
+        return self.kind.answer == "number"
+
+    @property
+    def is_entry(self) -> bool:
+        """Is the answer an entry of the field's list?"""
+        return self.kind.answer == "entry"
+
+    @property
+    def has_units(self) -> bool:
+        """Is the answer a number in one of the units it accepts, asked by
+        the unit question?"""
+        return self.is_numeric and self.kind.units
+
+    @property
+    def converts(self) -> bool:
+        """Is the number converted onto the field's unit (`value_target`)?"""
+        return self.has_units and self.kind.converts
+
+    @property
+    def number_in_quote(self) -> bool:
+        """Is the answer found in its quote as a printed number?"""
+        return self.kind.in_quote == "number"
 
     def unit_factor(self, unit) -> Optional[float]:
         """Factor onto unit_target for one entry of units_accepted, as listed.
@@ -372,6 +484,18 @@ class Spec:
     # "fields": {parameter uri: the question asked at a new work's line}}.
     # None where a spec keeps no list of works. In no fingerprint.
     works: Optional[dict] = None
+    # name -> ValueType: the built-in types and the spec's own
+    # (`value_types`).
+    value_types: dict = field(default_factory=lambda: dict(BUILTIN_TYPES))
+
+    def plan_field_of(self, kind: str, state: Optional[str] = None
+                      ) -> Optional[tuple]:
+        """(key, entry) of the field of the whole document of *kind* (and
+        *state* for a year), None where the spec asks none."""
+        for key, entry in self.plan_fields.items():
+            if plan_field_kind(key, entry) == (kind, state):
+                return key, entry
+        return None
 
     def __post_init__(self) -> None:
         self.by_uri = {p.uri: p for p in self.parameters}
@@ -456,12 +580,19 @@ def _validate_axis(path: str, name: str, raw) -> Axis:
     if derive is not None:
         if not isinstance(derive, dict):
             _fail(path, "derive must be an object")
-        if derive.get("from") != "unit":
-            _fail(path, "derive.from must be 'unit' (nothing else derives yet)")
+        if "if" in derive:
+            said = reading_condition_problems(derive["if"])
+            if said:
+                _fail(f"{path}.derive.if", said[0])
+            extra = set(derive) - {"if", "value"}
+        else:
+            if derive.get("from") != "unit":
+                _fail(path, "derive is from the unit ({\"from\": \"unit\"}) "
+                            "or under a condition ({\"if\": ...})")
+            extra = set(derive) - {"from", "value"}
         if not isinstance(vocabulary, dict) or derive.get("value") not in vocabulary:
             _fail(path, f"derive.value {derive.get('value')!r} is not a key of "
                         f"this axis' vocabulary")
-        extra = set(derive) - {"from", "value"}
         if extra:
             _fail(path, f"derive has no key {sorted(extra)}")
     kinds = sum(x is not None for x in (vocabulary, axis_type, enum)) + int(dynamic)
@@ -551,7 +682,8 @@ def _validate_out_entries(path: str, entries: dict) -> None:
 
 
 def _validate_example(path: str, raw, value_type: str,
-                      units_accepted: dict) -> dict:
+                      units_accepted: dict,
+                      kind: Optional[ValueType] = None) -> dict:
     if not isinstance(raw, dict):
         _fail(path, "example is required: a real corpus snippet plus the "
                     "tuples it must yield (it becomes the prompt's few-shot "
@@ -565,7 +697,9 @@ def _validate_example(path: str, raw, value_type: str,
     if not isinstance(tuples, list) or not tuples:
         _fail(f"{path}.tuples", "must be a non-empty list")
     defaults = raw.get("defaults") if isinstance(raw.get("defaults"), dict) else {}
-    numeric = value_type in NUMERIC_TYPES
+    kind = kind or BUILTIN_TYPES.get(value_type)
+    numeric = kind is not None and kind.answer == "number"
+    units_of = numeric and kind.units
     for i, t in enumerate(tuples):
         if not isinstance(t, dict):
             _fail(f"{path}.tuples[{i}]", "each tuple must be an object")
@@ -580,7 +714,7 @@ def _validate_example(path: str, raw, value_type: str,
         # the unit and may be anything, `unit` is the choice the example
         # shows the model making and the verifier holds to the list.
         unit = t.get("unit", defaults.get("unit"))
-        if numeric and unit is not None and unit not in units_accepted:
+        if units_of and unit is not None and unit not in units_accepted:
             _fail(f"{path}.tuples[{i}].unit",
                   f"{unit!r} is not in units_accepted")
     return raw
@@ -622,7 +756,90 @@ def _validate_unit_entry(path: str, raw, integrated: bool) -> tuple:
     return factor, statement, target
 
 
-def _validate_parameter(path: str, raw) -> Parameter:
+def reading_condition_problems(condition) -> list:
+    """Why *condition* cannot be evaluated about one reading, [] where it
+    can: rows about the reading only (`conditions`, subject "reading"),
+    with the comparisons that need nothing but the reading."""
+    from . import conditions
+    said = conditions.problems(condition, ("reading",))
+    if said:
+        return said
+    for row in conditions.rows_of(condition):
+        if row.get("of") != "reading":
+            return [f"{row.get('of')!r} is not known about a reading"]
+        if row.get("op") in ("listed", "names", "answer_of"):
+            return [f"{conditions.OP_WORDS[row['op']]} is known in the graph "
+                    f"only"]
+    return []
+
+
+def _validate_checks(path: str, raw) -> tuple:
+    """The field's own checks, each {"name", "refuse", "sentence"}."""
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        _fail(path, "a list of checks, each {name, refuse, sentence}")
+    from . import conditions
+    out = []
+    for i, check in enumerate(raw):
+        where = f"{path}[{i}]"
+        if not isinstance(check, dict):
+            _fail(where, "a check is an object")
+        extra = sorted(set(check) - {"name", "refuse", "sentence"})
+        if extra:
+            _fail(where, f"has no key {extra}")
+        for key in ("name", "sentence"):
+            _validate_text(where, check, key, True)
+        said = conditions.problems(check.get("refuse"))
+        if said:
+            _fail(f"{where}.refuse", said[0])
+        out.append(dict(check))
+    return tuple(out)
+
+
+def _validate_value_types(raw) -> dict:
+    """name -> ValueType: the built-in types and the spec's own."""
+    out = dict(BUILTIN_TYPES)
+    if raw is None:
+        return out
+    if not isinstance(raw, dict) or not raw:
+        _fail("spec.value_types", "a non-empty object of name -> type when "
+                                  "given")
+    for name, entry in raw.items():
+        path = f"spec.value_types.{name}"
+        if name in BUILTIN_TYPES:
+            _fail(path, "is a built-in type; give yours a name of its own")
+        if not isinstance(entry, dict):
+            _fail(path, "must be an object")
+        extra = sorted(set(entry) - {"answer", "units", "converts",
+                                     "in_quote", "note"})
+        if extra:
+            _fail(path, f"has no key {extra}")
+        answer = entry.get("answer")
+        if answer not in ANSWERS:
+            _fail(f"{path}.answer", f"one of {ANSWERS}")
+        in_quote = entry.get("in_quote", IN_QUOTE[answer][0])
+        if in_quote not in IN_QUOTE[answer]:
+            _fail(f"{path}.in_quote", f"for an answer that is a {answer}, "
+                                      f"one of {IN_QUOTE[answer]}")
+        units, converts = entry.get("units", False), entry.get("converts",
+                                                               False)
+        for key, value in (("units", units), ("converts", converts)):
+            if not isinstance(value, bool):
+                _fail(f"{path}.{key}", "true or false")
+            if value and answer != "number":
+                _fail(f"{path}.{key}", "for a number only")
+        if converts and not units:
+            _fail(f"{path}.converts", "a number is converted onto the "
+                                      "field's unit from one of its units")
+        if "note" in entry:
+            _validate_text(path, entry, "note", False)
+        out[name] = ValueType(name, answer, units, converts, in_quote)
+    return out
+
+
+def _validate_parameter(path: str, raw, types: Optional[dict] = None
+                        ) -> Parameter:
     if not isinstance(raw, dict):
         _fail(path, "parameter must be an object")
     for key in ("uri", "label", "description"):
@@ -635,8 +852,10 @@ def _validate_parameter(path: str, raw) -> Parameter:
         _fail(f"{path}.description", f"too short to define the parameter "
                                      f"for the model (under {least} words)")
     value_type = raw.get("value_type", "float")
-    if value_type not in VALUE_TYPES:
-        _fail(f"{path}.value_type", f"must be one of {VALUE_TYPES}")
+    types = types or BUILTIN_TYPES
+    if value_type not in types:
+        _fail(f"{path}.value_type", f"must be one of {tuple(types)}")
+    kind = types[value_type]
 
     # A unit belongs to a measured quantity, a vocabulary to a category.
     # Demanding either from the other kind was what kept this contract
@@ -652,7 +871,8 @@ def _validate_parameter(path: str, raw) -> Parameter:
     if merged is not None and (not isinstance(merged, str)
                                or not merged.strip()):
         _fail(f"{path}.merged", "names the kind of thing, a non-empty string")
-    if merged and (value_type != "text" or vocabulary or vocabulary_dynamic):
+    if merged and (kind.answer != "words" or vocabulary
+                   or vocabulary_dynamic):
         _fail(f"{path}.merged", "for a free-text value only")
     brief = raw.get("brief")
     if brief is not None and (not isinstance(brief, str)
@@ -668,7 +888,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
         _validate_out_entries(f"{path}.beside", beside)
         value_definitions = {**value_definitions, **beside_definitions}
         value_glosses = {**value_glosses, **beside_glosses}
-    if value_type in NUMERIC_TYPES:
+    if kind.answer == "number" and kind.units:
         if not isinstance(unit_target, str) or not unit_target.strip():
             _fail(f"{path}.unit_target",
                   "required for a numeric parameter, non-empty string")
@@ -696,7 +916,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
         if unit_target is not None or raw.get("units_accepted") is not None:
             _fail(f"{path}.unit_target",
                   f"a {value_type} parameter carries no unit")
-        if value_type == "category":
+        if kind.answer == "entry":
             if vocabulary_dynamic:
                 if vocabulary is not None:
                     _fail(f"{path}.vocabulary",
@@ -736,7 +956,7 @@ def _validate_parameter(path: str, raw) -> Parameter:
             _fail(f"{path}.axes.{name}.derive",
                   f"unless_read {unless!r} is not an axis of this parameter")
     example = _validate_example(f"{path}.example", raw.get("example"),
-                                value_type, units)
+                                value_type, units, kind)
     for key in ("once_per_document", "takes_group"):
         if key in raw and not isinstance(raw[key], bool):
             _fail(f"{path}.{key}", "true or false")
@@ -744,7 +964,8 @@ def _validate_parameter(path: str, raw) -> Parameter:
     return Parameter(uri=raw["uri"], label=raw["label"],
                      description=raw["description"], value_type=value_type,
                      unit_target=unit_target, units_accepted=units,
-                     integrated=bool(raw.get("integrated", True)),
+                     integrated=bool(raw.get("integrated", True))
+                     and kind.answer == "number" and kind.units,
                      unit_names_period=unit_names_period,
                      unit_targets=unit_targets,
                      vocabulary=vocabulary, definitions=value_definitions,
@@ -758,7 +979,9 @@ def _validate_parameter(path: str, raw) -> Parameter:
                      takes_group=raw.get("takes_group"),
                      groups=_entry_groups(f"{path}.vocabulary",
                                           raw.get("vocabulary")),
-                     beside=beside)
+                     beside=beside, kind=kind,
+                     checks=_validate_checks(f"{path}.checks",
+                                             raw.get("checks")))
 
 
 def load(source: Union[Path, str, dict]) -> Spec:
@@ -778,7 +1001,9 @@ def load(source: Union[Path, str, dict]) -> Spec:
     raw_parameters = data.get("parameters")
     if not isinstance(raw_parameters, list) or not raw_parameters:
         _fail("spec.parameters", "required, non-empty list")
-    parameters = [_validate_parameter(f"spec.parameters[{i}]", p)
+    value_types = _validate_value_types(data.get("value_types"))
+    parameters = [_validate_parameter(f"spec.parameters[{i}]", p,
+                                      value_types)
                   for i, p in enumerate(raw_parameters)]
     uris = [p.uri for p in parameters]
     if len(set(uris)) != len(uris):
@@ -798,7 +1023,8 @@ def load(source: Union[Path, str, dict]) -> Spec:
                 unit_question=(unit_question or None), groups=groups,
                 plan_fields=_validate_plan_fields(data.get("plan_fields"),
                                                   parameters, groups),
-                works=_validate_works(data.get("works"), parameters))
+                works=_validate_works(data.get("works"), parameters),
+                value_types=value_types)
 
 
 def _validate_text(path: str, raw: dict, key: str, required: bool) -> None:
@@ -854,15 +1080,26 @@ def _validate_plan_fields(raw, parameters=(), groups=None) -> dict:
         _fail("spec.plan_fields", "a non-empty object of key -> field when "
                                   "given")
     out: dict = {}
+    taken: dict = {}
     for key, entry in raw.items():
         path = f"spec.plan_fields.{key}"
-        if key not in PLAN_FIELDS:
-            _fail(path, f"no step asks it; one of {PLAN_FIELDS}")
         if not isinstance(entry, dict):
             _fail(path, "must be an object")
-        known = {"name", "means", "sentence"}
-        if key in YEAR_FIELDS:
-            known.add("of")
+        if "kind" in entry and entry["kind"] not in PLAN_FIELD_KINDS:
+            _fail(f"{path}.kind", f"one of {PLAN_FIELD_KINDS}")
+        kind, state = plan_field_kind(key, entry)
+        if kind is None:
+            _fail(path, f"says what it is: kind, one of {PLAN_FIELD_KINDS} "
+                        f"(the keys {PLAN_FIELDS} say it by their name)")
+        if kind == "year" and not (isinstance(state, str) and state.strip()):
+            _fail(f"{path}.state", "the state of the document the year is "
+                                   "of, such as base or target")
+        if (kind, state) in taken:
+            _fail(path, f"says what {taken[(kind, state)]} says already")
+        taken[(kind, state)] = key
+        known = {"name", "means", "sentence", "kind"}
+        if kind == "year":
+            known |= {"of", "state"}
         extra = sorted(set(entry) - known)
         if extra:
             _fail(path, f"has no key {extra}")
@@ -916,7 +1153,7 @@ def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
     if not isinstance(raw, dict) or not raw:
         _fail("spec.groups", "must be a non-empty object of name -> group")
     known = {name for parameter in parameters for name in parameter.axes}
-    if asks_unit and any(parameter.is_numeric for parameter in parameters):
+    if asks_unit and any(parameter.has_units for parameter in parameters):
         known.add(UNIT)
     groups: dict = {}
     owner: dict = {}
@@ -1044,6 +1281,13 @@ def parameter_fingerprint(parameter: "Parameter") -> str:
         **({"once_per_document": True}
            if parameter.once_per_document else {}),
         **({"takes_group": False} if not group_taken(parameter) else {}),
+        # A type of the spec's own and the field's own checks change what
+        # is asked and what is taken; the built-in types and no checks
+        # leave every key of a field as it was.
+        **({"kind": parameter.kind.settings()}
+           if parameter.kind != BUILTIN_TYPES.get(parameter.value_type)
+           else {}),
+        **({"checks": list(parameter.checks)} if parameter.checks else {}),
     })
 
 
@@ -1114,7 +1358,7 @@ def unit_slot_fingerprint(spec: "Spec") -> str:
     unit of every row and leaves the rest of the document as it was.
     """
     units = sorted((p.uri, unit) for p in spec.parameters
-                   if p.is_numeric for unit in p.units_accepted)
+                   if p.has_units for unit in p.units_accepted)
     if not units:
         return ""
     return _digest({"question": spec.unit_question, "options": units})

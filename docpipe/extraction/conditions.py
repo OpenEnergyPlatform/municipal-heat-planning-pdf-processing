@@ -387,6 +387,14 @@ def problems(condition, where=None) -> list:
             if said]
 
 
+def rows_of(condition) -> list:
+    """The rows of a condition, [] where it is none."""
+    try:
+        return [row for row in _rows(condition)[1] if isinstance(row, dict)]
+    except ConditionError:
+        return []
+
+
 def subjects_of(condition) -> set:
     """The things a condition is about."""
     try:

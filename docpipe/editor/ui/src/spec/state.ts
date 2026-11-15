@@ -5,7 +5,7 @@ import { askConfirm, askText, showError, showInfo } from '../lib/dialogs';
 import { t } from '../lib/i18n';
 import { errText, get, post } from '../lib/api';
 import { loadState, setDirty, Store } from '../lib/nav';
-import { clone, isObj, type Obj } from '../lib/util';
+import { clone, isObj, own, type Obj } from '../lib/util';
 import { locate, type Flag, type Note, type SpecNode } from '../lib/spec';
 
 export interface Result { source: 'check' | 'save'; r: any }
@@ -14,7 +14,17 @@ export const S = {
   loaded: false, data: {} as Obj, orig: {} as Obj, base: '', form: {} as Obj, pin: {} as Obj, notes: [] as Note[],
   sel: { t: 'spec' } as SpecNode, dirty: false, expanded: new Set<string>(), result: null as Result | null, stale: false,
   generate: null as any, busy: false, panelOpen: true, flag: null as Flag | null, rev: 0, resetScroll: false,
+  library: {} as Library,
 };
+
+/* what the library offers (the server's specs.library): the value types with their settings and the field each puts in,
+   the kinds of a dimension, a unit, a check, a value type of one's own, and what a condition of a check and of a derived
+   dimension is about */
+export interface TypeInfo { name: string; settings: Obj; builtin: boolean; field: Obj }
+export interface Library {
+  types?: TypeInfo[]; dimensions?: Record<string, Obj>; unit?: Obj; check?: Obj; value_type?: Obj;
+  conditions?: any[]; reading?: any[];
+}
 
 export const view = new Store(0);
 export const meta = new Store(0);
@@ -32,6 +42,12 @@ export function nodeObj(data: Obj, n: SpecNode): any {
     case 'param': return findParam(data, n.uri);
     case 'plist': return findParam(data, n.uri);
     case 'axis': { const p = findParam(data, n.uri); return p && p.axes && p.axes[n.name]; }
+    case 'vtype': {
+      const own = data.value_types && data.value_types[n.name];
+      if (own) return own;
+      const built = (S.library.types || []).find(x => x.builtin && x.name === n.name);
+      return built ? built.settings : undefined;
+    }
   }
 }
 export const nodeKey = (n: SpecNode) => JSON.stringify(n);
@@ -68,6 +84,7 @@ export async function loadAll() {
   const [, spec] = await Promise.all([loadState(), get('/api/spec')]);
   S.data = spec.data; S.orig = clone(spec.data); S.base = spec.base;
   S.form = spec.form || {}; S.pin = spec.pin || {}; S.notes = spec.notes || [];
+  S.library = spec.library || {};
   S.dirty = false; S.result = null; S.stale = false; S.generate = null; S.flag = null; S.loaded = true;
   setDirty('spec', false);
   ensureSel(); S.rev++; touch();
@@ -154,10 +171,88 @@ export async function deleteNode(kind: 'field' | 'coordinate' | 'plan_field' | '
     showInfo(t('Removed {what} here. It is written with the next confirmed save.', { what }));
   });
 }
-export function addPlanField(k: string) {
+export function addPlanField(k: string, kind?: string) {
   if (!isObj(S.data.plan_fields)) S.data.plan_fields = {};
-  S.data.plan_fields[k] = { name: '', means: '' };
+  S.data.plan_fields[k] = kind ? { name: '', means: '', kind } : { name: '', means: '' };
   markDirty(); select({ t: 'plan', key: k });
+}
+/* a field of the whole document under a key of one's own: it says what it is (kind) */
+export async function addOwnPlanField(kind: string) {
+  const k = await askText(t('Add field of the whole document'), t('New key'), '');
+  if (!k) return;
+  if (isObj(S.data.plan_fields) && own(S.data.plan_fields, k)) { showError(new Error(t('The key {key} is taken.', { key: k }))); return; }
+  addPlanField(k, kind);
+}
+
+/* ---------- the library: what it puts into the tree ---------- */
+
+export const typeOf = (name: string) => (S.library.types || []).find(x => x.name === name);
+
+/* a new field of a value type, after the field *after* (the end where none) */
+export async function addField(typeName: string, after?: string) {
+  const info = typeOf(typeName);
+  if (!info) return;
+  const uri = await askText(t('New field'), t('New key'), '');
+  if (!uri) return;
+  const ps: Obj[] = S.data.parameters || (S.data.parameters = []);
+  if (ps.some(p => p.uri === uri)) { showError(new Error(t('The key {key} is taken.', { key: uri }))); return; }
+  const field = clone(info.field);
+  field.uri = uri;
+  const at = after ? ps.findIndex(p => p.uri === after) : -1;
+  ps.splice(at < 0 ? ps.length : at + 1, 0, field);
+  markDirty();
+  select({ t: 'param', uri });
+  showInfo(t('A new field is empty: write its label, description and example before saving.'));
+}
+/* a new dimension of a kind into a field */
+export async function addAxis(uri: string, kind: string) {
+  const p = findParam(S.data, uri);
+  const made = (S.library.dimensions || {})[kind];
+  if (!p || !made) return;
+  const name = await askText(t('New dimension'), t('New key'), '');
+  if (!name) return;
+  if (!isObj(p.axes)) p.axes = {};
+  if (own(p.axes, name)) { showError(new Error(t('The key {key} is taken.', { key: name }))); return; }
+  p.axes[name] = clone(made);
+  markDirty(); select({ t: 'axis', uri, name });
+}
+/* a new accepted unit into a field with units */
+export async function addUnit(uri: string) {
+  const p = findParam(S.data, uri);
+  if (!p) return;
+  if (!(typeOf(p.value_type || 'float')?.settings || {}).units) { showError(new Error(t('A field of this value type has no units.'))); return; }
+  const unit = await askText(t('New unit'), t('The unit as the field accepts it, such as MWh/a'), '');
+  if (!unit) return;
+  if (!isObj(p.units_accepted)) p.units_accepted = {};
+  p.units_accepted[unit] = clone(S.library.unit || { factor: 1 });
+  markDirty(); select({ t: 'param', uri }, { field: 'units_accepted', entry: null });
+}
+/* a new check of its own into a field */
+export function addCheck(uri: string) {
+  const p = findParam(S.data, uri);
+  if (!p) return;
+  if (!Array.isArray(p.checks)) p.checks = [];
+  p.checks.push(clone(S.library.check || { name: '', refuse: null, sentence: '' }));
+  markDirty(); select({ t: 'param', uri }, { field: 'checks', entry: null });
+}
+/* a value type of one's own */
+export async function addValueType() {
+  const name = await askText(t('New value type'), t('New key'), '');
+  if (!name) return;
+  if (typeOf(name) || (isObj(S.data.value_types) && own(S.data.value_types, name))) { showError(new Error(t('The key {key} is taken.', { key: name }))); return; }
+  if (!isObj(S.data.value_types)) S.data.value_types = {};
+  S.data.value_types[name] = clone(S.library.value_type || { answer: 'number' });
+  S.library.types = [...(S.library.types || []), { name, settings: S.data.value_types[name], builtin: false, field: { uri: '', label: '', description: '', value_type: name, unit_target: '', units_accepted: {}, example: { source: '', tuples: [] }, axes: {} } }];
+  markDirty(); select({ t: 'vtype', name });
+}
+export async function removeValueType(name: string) {
+  const used = (S.data.parameters || []).filter((p: Obj) => p.value_type === name).map((p: Obj) => p.uri);
+  if (used.length) { showError(new Error(t('The value type {name} is the type of {fields}.', { name, fields: used.join(', ') }))); return; }
+  if (!await askConfirm(t('Delete'), t('Delete {what}?\nIt is removed here and written with the next confirmed save.', { what: name }), t('Delete'))) return;
+  delete S.data.value_types[name];
+  if (!Object.keys(S.data.value_types).length) delete S.data.value_types;
+  S.library.types = (S.library.types || []).filter(x => x.name !== name);
+  markDirty(); select({ t: 'spec' });
 }
 export function addWorks() {
   S.data.works = { name: '', means: '', fields: {} };

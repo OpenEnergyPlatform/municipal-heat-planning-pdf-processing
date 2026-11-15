@@ -235,6 +235,36 @@ The terms of the snapshot whose identifier, label and alternative
 labels together contain every word of *query*, for choosing a new
 entry: {"terms", "total"}.
 
+### type_settings
+
+```python
+def type_settings(data: dict) -> dict
+```
+
+name -> settings of every value type a spec *data* may give a field:
+the built-in ones and those under its `value_types`, as written.
+
+### new_field
+
+```python
+def new_field(uri: str, value_type: str, settings: dict) -> dict
+```
+
+A field of *value_type* as the library puts it in: what the loader
+asks of such a field, empty, to be filled before it is saved.
+
+### library
+
+```python
+def library(data: dict) -> dict
+```
+
+What the Spec tab's library offers and what its condition editors
+know: the value types with their settings, the kinds of a dimension,
+a unit, a check, and the things a condition of a field's check (as
+the flow's own check) and of a derived dimension (the reading) is
+about.
+
 ### form
 
 ```python

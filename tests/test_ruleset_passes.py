@@ -642,7 +642,8 @@ def test_a_cell_of_the_working_list_holds_as_many_characters_as_the_rule():
 
 def test_a_second_number_is_rounded_to_the_places_the_rule_says(monkeypatch):
     monkeypatch.setattr(review, "backed", lambda *a, **k: True)
-    parameter = SimpleNamespace(is_numeric=True, unit_factor=lambda unit: 1)
+    parameter = SimpleNamespace(is_numeric=True, converts=True,
+                                unit_factor=lambda unit: 1)
     row = {"value_target": 1.234568}
     reply = {"value": 1.23456789}
     assert review._value_agrees(row, parameter, reply, []) is True

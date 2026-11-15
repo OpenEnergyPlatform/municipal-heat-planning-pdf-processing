@@ -129,6 +129,14 @@ def problems(condition, where=None) -> list
 Why *condition* cannot be evaluated at a place that knows the things
 *where* (None: anywhere), [] where it can.
 
+### rows_of
+
+```python
+def rows_of(condition) -> list
+```
+
+The rows of a condition, [] where it is none.
+
 ### subjects_of
 
 ```python

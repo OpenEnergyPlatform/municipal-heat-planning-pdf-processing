@@ -61,7 +61,7 @@ from .fields import NUMBER, state_for
 from .pipeline import (Batch, Row, Source, WorkItem, mark_unanswered,
                        row_label)
 from .reading import groups_of, in_group_order, link_ranges, slots_of
-from .spec import group_taken
+from .spec import PLAN_FIELDS, group_taken, plan_field_kind
 
 
 class Stop(Exception):
@@ -1146,28 +1146,36 @@ class Engine:
             out = []
             year = next((slot for slot in reader.frame_slots
                          if slot.kind == NUMBER), None)
-            for name in rules.get("settled_fields"):
+            named = list(rules.get("settled_fields"))
+            # A field of the whole document under a key of the spec's own
+            # (owner request 2026-11-14, wish 4b) is asked after those the
+            # rule names.
+            named += [key for key in reader.plan_fields
+                      if key not in named and key not in PLAN_FIELDS]
+            for name in named:
                 field_ = reader.plan_fields.get(name)
-                if name == "settings":
-                    if field_:
-                        out.append(FieldItem(
-                            "settings", field_shown_of(field_),
-                            [field_.get("sentence") or field_["name"]],
-                            settled=field_))
-                elif name in ("base_year", "target_year"):
-                    if field_ and year is not None:
+                kind, state = plan_field_kind(name, field_)
+                if field_ is None and name in PLAN_FIELDS:
+                    continue
+                if kind == "settings":
+                    out.append(FieldItem(
+                        name, field_shown_of(field_),
+                        [field_.get("sentence") or field_["name"]],
+                        settled={**field_, "_kind": "settings"}))
+                elif kind == "year":
+                    if year is not None:
                         out.append(FieldItem(
                             name, field_shown_of(field_),
                             [field_.get("sentence") or field_["name"]],
                             settled={**field_, "_year": year,
-                                     "_state": name.split("_")[0]}))
+                                     "_state": state}))
                 else:
                     parameter = next((p for p in reader.spec.parameters
                                       if p.uri == name), None)
                     if parameter is None:
                         raise Stop(f"settled_fields names {name!r}, which "
-                                   f"is neither settings, base_year, "
-                                   f"target_year nor a field of the spec")
+                                   f"is neither a field of the whole "
+                                   f"document nor a field of the spec")
                     out.append(FieldItem(
                         parameter.uri, None,
                         None, parameter.is_numeric,
@@ -1470,7 +1478,8 @@ class Engine:
         request after it."""
         item: FieldItem = scope.get("field_item")
         plan = scope.get("doc").plan
-        if item.key == "settings" or item.settled.get("_field"):
+        if item.settled.get("_kind") == "settings" \
+                or item.settled.get("_field"):
             lines: list = list(plan.settings)
             for got in item.found:
                 for line, source in got.lines:
@@ -1612,6 +1621,14 @@ class Engine:
                 checks.append((self.setting(after, "name"),
                                self.setting(after, "refuse"),
                                self.setting(after, "sentence"), after["id"]))
+        # The checks of the field whose values the question finds, after
+        # the flow's (spec: "checks", owner request 2026-11-14, wish 4b);
+        # a question about a dimension is not checked by them.
+        if rules.step_kind(node) in ("find", "docfield"):
+            item = scope.get("field_item")
+            parameter = scope.get("parameter")                 or getattr(item, "parameter", None)
+            checks += [(check["name"], check["refuse"], check["sentence"],
+                        None) for check in getattr(parameter, "checks", ())]
         engine = self
 
         def refused(got: Found) -> Optional[tuple]:

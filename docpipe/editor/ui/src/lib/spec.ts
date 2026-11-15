@@ -101,7 +101,8 @@ export function axisKinds(axis: unknown): string[] {
 /* a node of the tree: the top-level questions, a plan field, the works, a group, a field, a field's list, a coordinate */
 export type SpecNode =
   | { t: 'spec' } | { t: 'plan'; key: string } | { t: 'works' } | { t: 'group'; name: string }
-  | { t: 'param'; uri: string } | { t: 'plist'; uri: string; list: string } | { t: 'axis'; uri: string; name: string };
+  | { t: 'param'; uri: string } | { t: 'plist'; uri: string; list: string } | { t: 'axis'; uri: string; name: string }
+  | { t: 'vtype'; name: string };
 export interface Flag { field: string | null; entry: string | null }
 
 /* names that may contain dots are matched as prefixes, the longest first */
@@ -152,6 +153,11 @@ export function locate(where: string, data: Obj): { node: SpecNode; field: strin
     const k = isObj(data.plan_fields) ? matchPrefix(Object.keys(data.plan_fields), r) : null;
     if (!k) return { node: { t: 'spec' }, field: null, entry: null };
     return { node: { t: 'plan', key: k.name }, field: k.rest ? firstSeg(k.rest) : null, entry: null };
+  }
+  if (w.startsWith('value_types.')) {
+    const r = w.slice(12);
+    const k = isObj(data.value_types) ? matchPrefix(Object.keys(data.value_types), r) : null;
+    if (k) return { node: { t: 'vtype', name: k.name }, field: k.rest ? firstSeg(k.rest) : null, entry: null };
   }
   if (w === 'works' || w.startsWith('works.')) {
     const r = w === 'works' ? '' : w.slice(6);

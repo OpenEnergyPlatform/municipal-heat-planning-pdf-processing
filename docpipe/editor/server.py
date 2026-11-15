@@ -448,6 +448,7 @@ class App:
         snapshot = self.snapshot()
         return {"data": data, "base": sha256(raw),
                 "form": specs.form(self.profile),
+                "library": specs.library(data),
                 "pin": specs.pin(data, snapshot) if snapshot else {},
                 "notes": specs.notes(data, snapshot) if snapshot else []}
 

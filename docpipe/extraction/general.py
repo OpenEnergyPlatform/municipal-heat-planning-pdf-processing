@@ -142,7 +142,7 @@ def view(obj):
             and hasattr(obj, "value_type"):
         from . import fields
         options = fields.value_choice(obj).options \
-            if obj.value_type == "category" else None
+            if getattr(obj, "is_entry", False) else None
         return {"uri": obj.uri, "name": obj.label,
                 "means": obj.description or "",
                 "unit": getattr(obj, "unit_target", "") or "",

@@ -346,7 +346,7 @@ def holds(parameter: Parameter, claim: dict) -> bool:
     fits, and fits every category parameter. A text or numeric parameter
     holds any value here; its own checks are elsewhere.
     """
-    if parameter.value_type != "category":
+    if not parameter.is_entry:
         return True
     value = claim.get("value")
     if not isinstance(value, str) or not value.strip():
@@ -553,14 +553,40 @@ def derived_by_unit(claim: dict, parameter) -> bool:
             and parameter.target_of(unit) == parameter.unit_target)
 
 
+def reading_facts(claim: dict):
+    """What a condition about one reading knows (subject "reading"): any
+    key of it by its path ("unit", "provenance.page")."""
+    from .conditions import Facts
+
+    def get(subject: str, path: str):
+        if subject != "reading":
+            raise LookupError(f"{subject} is not known about a reading")
+        value = claim
+        for key in str(path).split("."):
+            value = value.get(key) if isinstance(value, dict) else None
+        return value
+    return Facts(get)
+
+
+def derived_by_condition(slot, claim: dict) -> bool:
+    """Does the condition under which the spec derives *slot* hold for this
+    value (`derive` {"if": condition}, owner request 2026-11-14, wish 4b)?"""
+    from .conditions import holds
+    return holds(slot.derive["if"], reading_facts(claim))
+
+
 def derives(slot, claim: dict, parameter) -> bool:
-    """May the spec set *slot* for this value from its unit: the unit
-    decides it (`derived_by_unit`), and no request read the coordinate. It
-    is asked first, and taken from the unit only where nothing read it
-    (owner decision 2026-11-07: "Fragen wir trotzdem und nur im Fallback
-    machen wir die Zuordnung")."""
-    if (not slot.derive or not derived_by_unit(claim, parameter)
-            or rules.get("derive_from_unit") != "ask_first_then_derive"):
+    """May the spec set *slot* for this value: the unit decides it
+    (`derived_by_unit`) or the condition it is derived under holds
+    (`derived_by_condition`), and no request read the coordinate. It is
+    asked first, and derived only where nothing read it (owner decision
+    2026-11-07: "Fragen wir trotzdem und nur im Fallback machen wir die
+    Zuordnung")."""
+    if not slot.derive \
+            or rules.get("derive_from_unit") != "ask_first_then_derive":
+        return False
+    if not (derived_by_condition(slot, claim) if "if" in slot.derive
+            else derived_by_unit(claim, parameter)):
         return False
     return claim.get(f"{slot.name}_state") not in (READ, DERIVED,
                                                    OUT_OF_SLICE)
@@ -587,12 +613,16 @@ def apply_derived(rows: list, slot: Slot) -> int:
             row.claim.pop(f"{slot.name}{suffix}", None)
         row.claim[slot.name] = slot.derive["value"]
         row.claim[f"{slot.name}_state"] = DERIVED
-        wording = row.claim.get("unit_raw") or row.claim.get("unit")
+        by_unit = "if" not in slot.derive
+        wording = (row.claim.get("unit_raw") or row.claim.get("unit")) \
+            if by_unit else None
         if wording:
             row.claim[f"{slot.name}_raw"] = wording
         # The passage the unit was read in, where the unit question read one;
-        # the value's own passage where the unit slot was not answered.
-        quote = row.claim.get("unit_quote") or row.claim.get("quote")
+        # the value's own passage where the unit slot was not answered, or
+        # where a condition about the reading derived it.
+        quote = (row.claim.get("unit_quote") if by_unit else None) \
+            or row.claim.get("quote")
         if quote:
             row.claim[f"{slot.name}_quote"] = quote
         done += 1

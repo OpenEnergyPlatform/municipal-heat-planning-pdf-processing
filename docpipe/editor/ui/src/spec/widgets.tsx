@@ -13,10 +13,11 @@ import {
 } from '../lib/spec';
 import { isObj, own, type Obj } from '../lib/util';
 import { rich, t, tr } from '../lib/i18n';
+import { CondEditor } from '../flow/Conditions';
 import { markDirty, S } from './state';
 import { EntriesTable, type ListRef } from './entries';
 
-export interface FormField { key: string; widget: string; help?: string; choices?: string[]; default?: any; of?: string; only?: string[] }
+export interface FormField { key: string; widget: string; help?: string; choices?: string[]; default?: any; of?: string; year?: boolean }
 export interface WidgetCtx {
   coordNames?: string[];
   onUri?: (v: string) => void;
@@ -116,8 +117,44 @@ function parameterOf(obj: Obj): Obj | undefined {
 
 const RECORD_FROM_VALUE: Kind = { k: 'record', fields: [{ key: 'from', kind: { k: 'text' }, help: '' }, { key: 'value', kind: { k: 'text' }, help: '' }] };
 
-/* derive: "derived from [coordinate]", "value [an entry of this coordinate's list]" */
+/* derive under a condition about the reading: the condition and the entry it sets (owner request 2026-11-14, wish 4b) */
+function DeriveIfW({ obj }: { obj: Obj }) {
+  const edit = useEdit();
+  const d: Obj = obj.derive;
+  const voc = isObj(obj.vocabulary) ? obj.vocabulary : {};
+  return (
+    <Stack gap="xs">
+      <Text size="sm">{t('derived where this holds of the reading')}</Text>
+      <CondEditor subjects={S.library.reading || []} only="reading"
+        get={() => d.if || null}
+        set={c => edit(() => { d.if = c || { all: [{ of: 'reading', is: 'unit', op: 'empty', not: true }] }; })} />
+      <Box><Text size="sm">{t('value')}</Text>
+        <NativeSelect value={d.value == null ? '' : String(d.value)}
+          data={[{ value: '', label: t('(choose)') }, ...Object.keys(voc).map(k => ({ value: k, label: entryParts(voc[k]).name ? entryParts(voc[k]).name + ' (' + k + ')' : k }))]}
+          onChange={e => { const v = e.currentTarget.value; edit(() => { d.value = v; }); }} /></Box>
+    </Stack>
+  );
+}
+
+/* derive: from the unit (its preset) or under a condition */
 function DeriveW({ f, obj }: { f: FormField; obj: Obj }) {
+  const edit = useEdit();
+  const mode = isObj(obj.derive) && 'if' in obj.derive ? 'if' : 'unit';
+  const modes = (
+    <NativeSelect w={300} value={mode} aria-label={t('derived how')}
+      data={[{ value: 'unit', label: t('from the unit (preset)') }, { value: 'if', label: t('under a condition about the reading') }]}
+      onChange={e => { const v = e.currentTarget.value; edit(() => {
+        if (v === 'unit' && !isObj(obj.derive)) return false;
+        const value = isObj(obj.derive) ? obj.derive.value : undefined;
+        obj.derive = v === 'if' ? { if: { all: [{ of: 'reading', is: 'unit', op: 'empty', not: true }] }, value } : { from: 'unit', value };
+        if (value === undefined) delete obj.derive.value;
+      }); }} />
+  );
+  return <Stack gap="xs">{modes}{mode === 'if' ? <DeriveIfW obj={obj} /> : <DeriveUnitW f={f} obj={obj} />}</Stack>;
+}
+
+/* derive: "derived from [coordinate]", "value [an entry of this coordinate's list]" */
+function DeriveUnitW({ f, obj }: { f: FormField; obj: Obj }) {
   const p = parameterOf(obj);
   const coords = ['unit'].concat(p && isObj(p.axes) ? Object.keys(p.axes) : []);
   const voc = isObj(obj.vocabulary) ? obj.vocabulary : {};
@@ -326,6 +363,43 @@ function EntryOfW({ f, obj }: { f: FormField; obj: Obj }) {
   );
 }
 
+/* the value type of a field: a built-in one or one of the spec's own */
+function ValueTypeW({ f, obj }: { f: FormField; obj: Obj }) {
+  const edit = useEdit();
+  const names = (S.library.types || []).map(x => x.name);
+  const cur = obj[f.key] == null ? '' : String(obj[f.key]);
+  if (cur && !names.includes(cur)) names.push(cur);
+  return <NativeSelect value={cur} data={[{ value: '', label: own(obj, f.key) ? t('(remove)') : t('(not set; default {value})', { value: String(f.default) }) }, ...names.map(o => ({ value: o, label: o }))]}
+    onChange={e => { const v = e.currentTarget.value; edit(() => writeString(obj, f.key, v)); }} />;
+}
+
+/* a field's own checks: a name, a condition under which the answer is refused, the sentence it is asked again with */
+function ChecksW({ f, obj }: { f: FormField; obj: Obj }) {
+  const edit = useEdit();
+  const list: Obj[] = Array.isArray(obj[f.key]) ? obj[f.key] : [];
+  const drop = (i: number) => edit(() => { list.splice(i, 1); if (!list.length) delete obj[f.key]; });
+  return (
+    <Stack gap="sm">
+      {list.map((c, i) => (
+        <Box key={i} p="xs" style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 6 }}>
+          <Stack gap={6}>
+            <Group gap="xs" align="flex-end" wrap="nowrap">
+              <TextBox style={{ flex: 1 }} label={t('name')} value={str(c.name)} onText={v => edit(() => { c.name = v; })} />
+              <Tooltip label={t('Remove')}><ActionIcon variant="subtle" color="red" aria-label={t('Remove')} onClick={() => drop(i)}><IconX size={16} /></ActionIcon></Tooltip>
+            </Group>
+            <Text size="sm">{t('refuse when')}</Text>
+            <CondEditor subjects={S.library.conditions || []} only={null} get={() => c.refuse || null}
+              set={cond => edit(() => { c.refuse = cond; })} />
+            <AreaBox minRows={2} label={t('asked again with')} value={str(c.sentence)} onText={v => edit(() => { c.sentence = v; })} />
+          </Stack>
+        </Box>
+      ))}
+      <Box><Button size="xs" variant="light" leftSection={<IconPlus size={14} />}
+        onClick={() => edit(() => { if (!Array.isArray(obj[f.key])) obj[f.key] = []; obj[f.key].push({ name: '', refuse: null, sentence: '' }); })}>{t('Add a check')}</Button></Box>
+    </Stack>
+  );
+}
+
 function Widget({ f, obj, orig, ctx }: { f: FormField; obj: Obj; orig: Obj | null; ctx: WidgetCtx }) {
   switch (f.widget) {
     case 'line': return <LineW f={f} obj={obj} ctx={ctx} />;
@@ -336,6 +410,8 @@ function Widget({ f, obj, orig, ctx }: { f: FormField; obj: Obj; orig: Obj | nul
     case 'number': return <NumberW f={f} obj={obj} />;
     case 'strings': return <StringsEditor obj={obj} k={f.key} list={ctx.coordNames} />;
     case 'derive': return <DeriveW f={f} obj={obj} />;
+    case 'value_type': return <ValueTypeW f={f} obj={obj} />;
+    case 'checks': return <ChecksW f={f} obj={obj} />;
     case 'example': return <ExampleW f={f} obj={obj} />;
     case 'units': return <UnitsW f={f} obj={obj} orig={orig} />;
     case 'questions': return <QuestionsW f={f} obj={obj} />;
@@ -348,6 +424,9 @@ function Widget({ f, obj, orig, ctx }: { f: FormField; obj: Obj; orig: Obj | nul
   }
 }
 
+/* is a field of the whole document a year: its own kind, else its key (base_year, target_year) */
+const planIsYear = (key: string, obj: Obj) => (obj && obj.kind ? obj.kind === 'year' : key === 'base_year' || key === 'target_year');
+
 /* the form of one object: every key the description names, then a line for the keys it does not */
 export function SpecForm({ fields, obj, orig, ctx }: { fields: FormField[] | undefined; obj: Obj; orig: Obj | null; ctx?: WidgetCtx }) {
   const c = ctx || {};
@@ -356,7 +435,7 @@ export function SpecForm({ fields, obj, orig, ctx }: { fields: FormField[] | und
   const parts: ReactNode[] = [];
   for (const f of fields || []) {
     if (skip.has(f.key)) { shown.add(f.key); continue; }
-    if (f.only && !(S.sel.t === 'plan' && f.only.includes(S.sel.key))) continue;
+    if (f.year && !(S.sel.t === 'plan' && planIsYear(S.sel.key, obj))) continue;
     shown.add(f.key);
     parts.push(<FieldWrap key={f.key} k={f.key} help={f.help}><Widget f={f} obj={obj} orig={orig} ctx={c} /></FieldWrap>);
   }

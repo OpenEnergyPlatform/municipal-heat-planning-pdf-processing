@@ -197,7 +197,7 @@ def _value_uri(parameter) -> dict:
     """
     doc = ("The entry of the parameter's own vocabulary the wording resolved "
            "to. Null when the list does not hold it. ")
-    if parameter.value_type != "category":
+    if not parameter.is_entry:
         return {"type": ["string", "null"],
                 "description": doc + "Only a category parameter has a "
                                      "vocabulary. This one never writes "
@@ -473,11 +473,12 @@ def _tuple_schema(spec, parameter, drawing=None) -> dict:
                     "then": {"required": ["reading"]},
                     "else": {"required": ["quote"]}}]
     if parameter.is_numeric:
-        units = ", ".join(sorted(parameter.units_accepted))
         props["value"] = {
             "type": "number",
             "description": "The number as the document prints it, with the "
                            "grouping removed and a decimal point."}
+    if parameter.has_units:
+        units = ", ".join(sorted(parameter.units_accepted))
         # A coordinate of its own: one entry of the list, read with its own
         # passage, the document's spelling beside it in unit_raw. A tuple
         # only exists with the unit read, so its state is always 'read'.
@@ -491,23 +492,25 @@ def _tuple_schema(spec, parameter, drawing=None) -> dict:
             f"value_target (owner decision 2026-11-07: a unit is never "
             f"refused). Which entry the document's wording means is the "
             f"model's reading; the wording itself is never looked up. "))
-        props["value_target"] = {
-            "type": "number",
-            "description": f"value x factor(unit), in the spec's unit_target "
-                           f"{parameter.unit_target}. This is the number the "
-                           f"graph carries; absent where the unit is no "
-                           f"entry of units_accepted."}
+        if parameter.converts:
+            props["value_target"] = {
+                "type": "number",
+                "description": f"value x factor(unit), in the spec's unit_target "
+                               f"{parameter.unit_target}. This is the number the "
+                               f"graph carries; absent where the unit is no "
+                               f"entry of units_accepted."}
         required += ["unit", "unit_state"]
         # Read as an entry and converted, or read as the plan prints it,
         # without an entry and unconverted.
         unit_rule = _slot_rules("unit", unit_slot)
         unit_rule["then"] = {"anyOf": [
             {"properties": {"unit": {"type": "string"}},
-             "required": ["unit", "value_target"]},
+             "required": ["unit"] + (["value_target"]
+                                     if parameter.converts else [])},
             {"properties": {"unit": {"type": "null"}},
              "required": ["unit", "unit_raw"]}]}
         rules.append(unit_rule)
-    else:
+    if not parameter.is_numeric:
         props["value"] = {
             "type": "string", "minLength": 1,
             "description": "The wording as the document writes it."}
@@ -519,7 +522,7 @@ def _tuple_schema(spec, parameter, drawing=None) -> dict:
         props["value_uri"] = _value_uri(parameter)
         if getattr(parameter, "merged", None):
             props["value_means"] = _means("value")
-        if parameter.value_type == "category":
+        if parameter.is_entry:
             # Where the rows request wrote a wording the list does not hold,
             # the value was asked again as one of its entries, a coordinate
             # with its own passage (`fields.value_choice`).

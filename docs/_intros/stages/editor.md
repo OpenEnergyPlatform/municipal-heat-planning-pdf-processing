@@ -147,9 +147,20 @@ number and request log where the flow file, the code and this page say box,
 frame, piece, coordinate, address and trace (see the glossary).
 
 The rest of this section is the Spec tab. On the left is a tree, on the right
-the form of the selected node:
+the form of the selected node. Above the tree stands a library, as in the Flow
+tab (owner request 2026-11-14): a block is dragged onto a field, or clicked to
+put it into the field selected (`/api/spec` gives it as `library`,
+`specs.library`). It offers a field per value type, a dimension (a list of
+entries, a year, the words of the document, a list per document), an accepted
+unit, a check of the field's own, a value type of the spec's own and a field of
+the whole document (settings, or a year). A dimension, a unit or a check needs a
+field to go into; the page says so where none is dropped on or selected. The
+tree holds:
 
 - the top-level questions (`_comment`, `parameter_question`, `unit_question`);
+- the value types: the four built-in ones (`float`, `int`, `text`, `category`)
+  read-only, and those of the spec's own (`value_types`), which are edited and
+  deleted unless a field uses them;
 - the fields of the whole document (`plan_fields`) and its other
   works (`works`), where the spec has them, with a button to add one it does
   not have;
@@ -160,7 +171,11 @@ the form of the selected node:
 The keys of a form are the ones `docpipe/extraction/spec.py` reads (`specs.form`),
 each with what the page says of it, written for someone who edits the spec,
 not for the code (`specs.HELP`); the lists of the fields of the whole document
-and of the works have a sentence above them (`specs.ABOUT`). A key the form
+and of the works have a sentence above them (`specs.ABOUT`). A field's form has a select of the value type (built-in and own) and a
+list of its own checks, each a name, a condition and a sentence; a value type's
+form has its answer, its units, whether it converts and how the answer is found in
+its quote. A field of the whole document has `kind` (settings or year), for a
+year its `state`, and `of`. A key the form
 does not know stays in the file as it is. An edit is made in the page's copy
 of the spec; nothing is written until Save.
 
@@ -240,8 +255,10 @@ whole numbers or empty). Every value a form writes fits the same form again.
   texts, a number, a flag, a class, a rule, a table, labels, fields or prose),
   a property or class a text field that offers those of the shapes; where a
   brick stands, a block of another form can stand (see the Graph tab).
-- `derive` is "derived from" a select of the field's coordinates and "value" a
-  select of the entries of the coordinate's own list.
+- `derive` is a select of how it is derived, "from the unit (preset)" or "under a
+  condition about the reading", the condition as the rows of a condition (about
+  the reading only), and "value" a select of the entries of the coordinate's own
+  list.
 - `example` is the source as plain text, the defaults as one row of fields and
   the rows as a table with the columns value, quote and the coordinates (and
   their wordings) some row uses; a select adds a column.

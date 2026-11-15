@@ -74,11 +74,28 @@ vocabulary labels folding to one spelling under two different classes,
 or an axis naming more than one of vocabulary, enum, type or dynamic.
 `SpecError` names the offending field, failing at load time rather than
 partway through a batch. A
-parameter carries one of four value types, `spec.VALUE_TYPES`: `float`
-and `int` take a unit, `category` a closed vocabulary, and `text` a
-plain string compared verbatim rather than mapped to a class; `text` is
-the majority type in the scenarios profile, 11 of its 18 parameters
-(`profiles/scenarios/extraction_spec.json`). Vocabulary labels are
+parameter carries a value type, a block with settings (`spec.ValueType`, owner
+request 2026-11-14): `answer` says how the answer is given (`number`, `entry` of
+the field's list, or `words`), `units` that a number is in one of the units the
+field accepts (the unit question, `units_accepted`, `unit_target`), `converts`
+that it is converted onto that unit (`value_target` is written), and `in_quote`
+how the answer is found in its quote: a number as a printed number or by the
+words it is printed with (`value_raw`), an entry as an entry, words as
+themselves. The four types the program has always had are presets
+(`spec.BUILTIN_TYPES`): `float` and `int` are a number with units that is
+converted, `category` an entry of a closed vocabulary, and `text` words compared
+verbatim rather than mapped to a class; `text` is the majority type in the
+scenarios profile, 11 of its 18 parameters
+(`profiles/scenarios/extraction_spec.json`). A spec may add types of its own
+under a top-level `value_types`, `{name: {answer, units, converts, in_quote,
+note}}`; a built-in name is refused, `units` and `converts` are for a number
+only, `converts` needs `units`, and `in_quote` has to fit the answer. A field's
+`value_type` is any of them. The code reads the settings and not the name
+(`Parameter.is_numeric`, `is_entry`, `has_units`, `converts`,
+`number_in_quote`): a number without units has no unit question and no
+`unit_target`, and a number whose type does not convert keeps its printed unit
+and gets no `value_target`. The built-in types leave every fingerprint as it
+was; a type of the spec's own enters the fingerprint of its fields. Vocabulary labels are
 compared after `fold_label`, not as raw strings. A unit is never
 folded: it is read as its own coordinate, against the literal entries
 of `units_accepted` (`fields.unit_slot`), and `Parameter.unit_factor`
@@ -277,7 +294,12 @@ before its fields (`addressed.Reader.settled`, owner decision 2026-11-08). The
 spec names them in its block `plan_fields` (owner decision 2026-11-10; before, the
 profile's Python held them), each `{name, means, sentence}`:
 `settings`, `base_year` and `target_year` (kwp names all three, scenarios the
-settings only). Each is asked as a field a document has once is (see A field a
+settings only). An entry says what it is with `kind` (`settings` or `year`) and,
+for a year, its `state` (`base`, `target`, any other word), so a key is free
+(owner request 2026-11-14); the three keys say it by their name where the entry
+does not (`spec.plan_field_kind`, `Spec.plan_field_of`). A spec has one field of
+each kind and, for a year, of each state. A field under a key of the spec's own
+is asked after those the rule `settled_fields` names. Each is asked as a field a document has once is (see A field a
 document has once): the title page and the pieces a search with the field's
 sentence finds best.
 
@@ -452,10 +474,16 @@ read once for a whole table, and no request shows a pair (owner decision
 `reading.in_group_order`). The unit comes first for a number: the model copies
 the printed unit into the words and the unit's list request chooses the entry of
 the parameter's list, or `""` where none fits, and it is never refused. A
-coordinate the spec derives from a unit (a `derive` block; kwp's `aggregation`) is
-asked like the others, and is derived from the unit only where no request read it
+coordinate the spec derives (a `derive` block; kwp's `aggregation`) is
+asked like the others, and is derived only where no request read it
 (`fields.derives`, `fields.apply_derived`): the run does that once the reading is
-done (`surveyed.derive_left`), `--top-up` after its sweep.
+done (`surveyed.derive_left`), `--top-up` after its sweep. `derive` is
+`{"from": "unit", "value": ...}`, the entry every accepted unit fixes, or
+`{"if": condition, "value": ...}`, the entry that holds where a condition about
+the reading is met (owner request 2026-11-14; rows about the subject `reading`
+only, no comparison that needs the graph: `spec.reading_condition_problems`,
+`fields.derived_by_condition`, `fields.reading_facts`). A coordinate derived
+under a condition takes the value's own quote and no wording.
 
 **What the request shows** (`addressed.show_value`): the value, its words and its
 address; its own place, which in a table is its row with the table's title and
@@ -2431,7 +2459,13 @@ comparison and a value, joined by all or any (`extraction.conditions`). A
 condition about the answer reads the answer of its own item; where no box of that
 item asked, nothing came back. An own check is a box that refuses an answer where
 its condition holds; the answer is asked again with its sentence, and its
-refusals are counted as `check:<name>`.
+refusals are counted as `check:<name>`. A field of the spec may carry checks of
+its own the same way (`checks`: `[{name, refuse, sentence}]`, owner request
+2026-11-14): after the flow's, they refuse a value the questions that find values
+(`find`, `docfield`) came back with, and no question about a dimension is
+checked by them. They only refuse more; the two fixed evidence checks are
+unchanged, and the shipped specs carry none. A field's checks enter its
+fingerprint.
 
 Every step takes named inputs and gives named outputs, the variables of the
 flow (`extraction.variables`: the document, the chunks, a field, the search
@@ -2598,7 +2632,7 @@ harvest read with.
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 | `span_marks` | rule | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
 | `flow.json` | profile file | the default profile's whole flow | The drawing of the reading and the numbers that bound it; a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and the `flow` (the drawing) where it draws otherwise. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
-| `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping `settings`, `base_year` and `target_year` to `{name, means, sentence}` (kwp all three, scenarios the settings only; a key no step asks is refused; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
+| `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping of a key to `{name, means, sentence, kind, state}` (`settings`, `base_year` and `target_year` say their `kind` by their key, any other key has to say it: `settings` or `year` with a `state`; one field per kind and state; kwp all three, scenarios the settings only; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
 | `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `profiles/scenarios/blocks.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
 | `decimal_mark` | rule | `.` (kwp sets `,`) | `,` or `.`: how the profile's documents write the decimal, which decides what the digits alone leave open ("3,251" is 3.251 or 3251); any other value is an error | `verify.decimal_mark` |
