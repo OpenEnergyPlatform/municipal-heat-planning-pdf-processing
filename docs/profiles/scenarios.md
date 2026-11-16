@@ -57,8 +57,8 @@ table gives this profile's own answer.
 | The answer app | `inference.py`, `prompts/inference/*.md`, `prompts/inference/phrases.json` | `READOFF_MARKER`, `READOFF_NOTE`, 32 sentences, 11 prompt ids of its own | the English chat wording and the answer loop's own prompts; the twelfth, `json_format`, is the built-in profile's, inherited byte for byte, so the text, its hash and the request are what the copy gave |
 
 A run harvests a publication piece by piece (owner decisions 2026-11-04,
-2026-11-08, see [extraction](../stages/extraction.md)): the spec names three
-groups, `work`, `year_kind` and `scenario`, each a coordinate of its own, and
+2026-11-08, see [extraction](../stages/extraction.md)): the spec's
+`coordinates.order` names three coordinates, `work`, `year_kind` and `scenario`, and
 English prompts serve it. The publication is cut into pieces of at most `piece_lines`
 numbered lines (a number of the flow, which the profile inherits from the default), its figures are written once per run into a caption and numbers
 (`extraction/transcribe`), and every piece is read for every parameter, the

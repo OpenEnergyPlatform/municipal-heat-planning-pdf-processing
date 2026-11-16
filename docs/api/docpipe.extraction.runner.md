@@ -5,13 +5,13 @@
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
 A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
-stops the run where the spec names no groups or the profile lacks a prompt
-of the harvest): every piece asked for every field in the order a reranker
-gives it, each coordinate of each value found asked on its own, and a
-coordinate its place does not state searched for (`addressed.py`, run per
-document by `surveyed.py`), then the fold, the compute step and the file
-with its stamp as below. The passes over a
-stored harvest run on the same steps.
+stops the run where the spec names no order of its coordinates or the
+profile lacks a prompt of the harvest): every piece asked for every field in
+the order a reranker gives it, each coordinate of each value found asked on
+its own, and a coordinate its place does not state searched for
+(`addressed.py`, run per document by `surveyed.py`), then the fold, the
+compute step and the file with its stamp as below. The passes over a stored
+harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the model calls, and locating a quote on
@@ -1303,8 +1303,8 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
 ```
 
 The reading of a document piece by piece (`addressed.Reader`), or
-None where its spec names no groups or the profile writes no prompts
-for it. What is asked once of a plan beside its fields
+None where its spec names no order of its coordinates or the profile
+writes no prompts for it. What is asked once of a plan beside its fields
 (`Spec.plan_fields`) and the field that names other works
 (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
 a search shows (`search_budget`) and every other number that bounds the
@@ -1351,8 +1351,7 @@ def frame_slots_of(spec: Spec) -> list
 ```
 
 The coordinates of the plan's frame, which its base and target years
-date a value by: the pair of each group that names one
-(`spec.Group.paired`).
+date a value by (spec: "coordinates": "frame").
 
 ### dates_by_plan
 
@@ -1673,13 +1672,14 @@ from another passage, the names request.
 def surveyed_flow(spec: Spec, profile=None) -> bool
 ```
 
-Whether a run can harvest piece by piece: its spec names groups. A
-spec without groups cannot be harvested (`main` stops on it).
+Whether a run can harvest piece by piece: its spec names the order
+of its coordinates. A spec without it cannot be harvested (`main` stops
+on it).
 
-A spec with groups whose profile lacks a prompt of the harvest is a
+A spec with an order whose profile lacks a prompt of the harvest is a
 broken profile: the run stops and names the prompt, as `spec.load`
-stops at a broken group (owner decision 2026-11-04), before a request
-is sent rather than at the first plan's reading.
+stops at a broken order, before a request is sent rather than at the
+first plan's reading.
 
 ### names_asked
 

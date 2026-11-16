@@ -245,51 +245,34 @@ def value_to_uri(self) -> dict
 
 Corpus label (folded) -> URI, for a category parameter.
 
-### Group
+### Coordinates
 
 ```python
 @dataclass
-class Group
+class Coordinates
 ```
 
-Coordinates a plan prints together, and the step that reads them.
+How the coordinates of a value are asked (spec: "coordinates"), one
+request each.
 
-The ontology says what a value is; it does not say where a plan writes
-it. A number and its unit stand in one cell or one sentence, a scenario
-and its year in a title or a heading above a whole table. Asked one
-coordinate per request, the same passage went out once for each of them:
-245,762 field requests for 100 plans in corpus_m8_100. A group is asked
-in one request, each coordinate still answered and quoted for itself.
+`order` is the order they are asked in, every coordinate of the spec in
+it once; the rule `coordinate_order` may put some of them first. Three
+lists name the coordinates asked otherwise than the rest.
 
 Fields:
 
-- `name: str`
-- `coordinates: tuple`
-- `read_in: str`
-- `where: str`: Where a plan prints the group, in the words the prompts show.
-- `full_definition: bool = False`: Whether its requests show a parameter's full definition rather than its `brief` (spec: "definition": "full"): the group that classifies a value needs every distinction the definition draws, the others only what a value of the parameter is (owner decision 2026-11-05, ticket 26).
-- `own_passage: tuple = ()`: Coordinates only the value's own passage states, such as what the number counts: asked again with the passages around it, never searched for in the rest of the plan (spec: "own_passage", owner decision 2026-11-06).
-- `own_value: tuple = ()`: Coordinates printed with the number itself, such as "ca." or "bis zu": read once with the value, its "not stated" an answer that nothing qualifies the number, never asked again (spec: "own_value", owner decision 2026-11-06).
-- `pair: tuple = ()`: The plan's frame (spec: "pair"): the scenario and the year, which the plan's base and target years date a value by (`addressed.Plan`). The reading asks them per value (owner decision 2026-11-07: each value is asked its own scenario and year, none takes its passage's).
+- `order: tuple`
+- `own_passage: tuple = ()`: Coordinates only the value's own passage states, such as what the number counts: asked again with the passages around it, never searched for in the rest of the plan (owner decision 2026-11-06).
+- `own_value: tuple = ()`: Coordinates printed with the number itself, such as "ca." or "bis zu": read once with the value, its "not stated" an answer that nothing qualifies the number, never asked again (owner decision 2026-11-06).
+- `frame: tuple = ()`: The plan's frame: the scenario and the year, which the plan's base and target years date a value by (`addressed.Plan`). The reading asks them per value (owner decision 2026-11-07: each value is asked its own scenario and year, none takes its passage's).
 
-#### Group.paired
+#### Coordinates.in_order
 
 ```python
-@property
-def paired(self) -> tuple
+def in_order(self, slots: list) -> list
 ```
 
-The coordinates of the frame: its pair, else all of the group's
-coordinates.
-
-#### Group.asked_near
-
-```python
-def asked_near(self, slots: list) -> list
-```
-
-The slots the second reading asks again with the passages around
-a value: all but those printed with the number itself.
+*slots* in the order they are asked.
 
 ### Spec
 
@@ -303,7 +286,7 @@ Fields:
 - `parameters: list`
 - `parameter_question: Optional[str] = None`: The one line that asks which parameter a value belongs to. The harvest reads a passage once and finds the numbers in it; WHICH quantity each number is, is a coordinate like any other and is asked for like any other, with its own closed list and its own evidence. Reading the same table once per parameter is how the plan came to be three times the document.
 - `unit_question: Optional[str] = None`: The one line that asks which entry of units_accepted a number is in. A coordinate like the parameter, asked before it and with the lists of every numeric parameter, because the entry is what settles the parameter. Only a spec with a numeric parameter has a use for it.
-- `groups: dict = field(default_factory=dict)`: name -> Group; empty for a spec read the old way only.
+- `coordinates: Optional[Coordinates] = None`: How the coordinates of a value are asked (`Coordinates`); None for a spec read the old way only.
 - `by_uri: dict = field(default_factory=dict)`
 - `plan_fields: dict = field(default_factory=dict)`: What a document settles once for all its values, each asked once in the form of a document's field (spec: "plan_fields", owner decision 2026-11-08): key of `PLAN_FIELDS` -> {"name", "means", "sentence"}. The settings' lines stand beside every value's coordinates, the years are the document's own base and target years. A year may say which pairs of the document's frame are that state of it (`of`, coordinate -> the key of an entry of its list: {"scenario": "status_quo"}, owner decision 2026-11-10): a pass over a stored harvest, which asks no document its years, takes them from the stored pairs by it (`pipeline.state_years`); a run that reads a document asks them and does not read it. Empty where a spec asks none. In no fingerprint.
 - `works: Optional[dict] = None`: The works a document presents, compares, reviews or cites beside itself (spec: "works", owner decision 2026-11-08, h): {"name", "means", "fields": {parameter uri: the question asked at a new work's line}}. None where a spec keeps no list of works. In no fingerprint.
@@ -318,12 +301,6 @@ def plan_field_of(self, kind: str, state: Optional[str] = None
 
 (key, entry) of the field of the whole document of *kind* (and
 *state* for a year), None where the spec asks none.
-
-#### Spec.groups_read_in
-
-```python
-def groups_read_in(self, step: str) -> list
-```
 
 ## Functions
 
@@ -365,6 +342,28 @@ def group_taken(parameter) -> bool
 Does a value of *parameter* take the members of a group of entries
 ("all scenarios")? The spec's `takes_group` of the field, else the
 rule `default_takes_group` as the step that asks has it.
+
+### axes_of
+
+```python
+def axes_of(data: dict, parameter: dict) -> dict
+```
+
+name -> the dimension a field of the raw spec *data* asks: its own,
+or for one given as "shared" the spec's shared one of that name
+(`SHARED`). The very objects of *data*, so what is written into one is
+written into the file; a reference to no shared dimension is left out.
+
+### expanded
+
+```python
+def expanded(data: dict) -> dict
+```
+
+A copy of the raw spec *data* in which every field carries each of
+its dimensions itself, as a spec without shared dimensions does, and
+"shared_axes" is gone. Whatever reads the raw spec reads this: a field
+asks the same of a shared dimension as of its own copy.
 
 ### reading_condition_problems
 

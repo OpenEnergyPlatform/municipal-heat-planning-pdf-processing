@@ -93,7 +93,8 @@ def run(failing_rounds, *, review=REVIEW_AGREE, answer=True):
         review_sources=lambda row: [SOURCE],
         review=lambda row, parameter, sources: review)
     fake = SimpleNamespace(
-        slot_sequence=lambda parameter: [(None, slot) for slot in SLOTS],
+        slot_sequence=lambda parameter: list(SLOTS),
+        reader=SimpleNamespace(spec=SimpleNamespace(coordinates=None)),
         run_steps=again)
     value = SimpleNamespace(
         read=SimpleNamespace(batch=SimpleNamespace(

@@ -18,7 +18,8 @@ test of its own, with a case that breaks it by construction:
    as it stands or, where the server fills in names, by one of the
    server's templates (i18n/templates.json).
 4. A German entry keeps the {names} of its English key; a template is none
-   of the page's own texts AND has words of its own besides its names.
+   of the page's own texts AND has words of its own besides its names; every
+   German entry speaks to the reader as "Sie", never with "du" or its forms.
 5. Every sentence the page is told about the request logs (the numbers of
    the flow, `measured.SAID`) comes in each of its forms AND finds its German
    by its template.
@@ -702,6 +703,29 @@ def test_a_german_entry_keeps_the_names_of_its_key():
     # the failure by construction: a name lost in the German
     key, said = "Saved {file}.", "Gespeichert."
     assert sorted(NAME.findall(key)) != sorted(NAME.findall(said))
+
+
+# "du" and its forms; what stands in backticks is code and not addressed
+DU = re.compile(r"\b(?:[Dd]u|[Dd]ein\w*|[Dd]ich|[Dd]ir)\b")
+CODE_SPAN = re.compile(r"`[^`]*`")
+
+
+def says_du(text: str) -> bool:
+    return bool(DU.search(CODE_SPAN.sub("", text or "")))
+
+
+def test_the_german_speaks_to_the_reader_as_sie():
+    wrong = [key for key, said in catalogue().items() if says_du(said)]
+    assert not wrong, "addressed with du:\n" + "\n".join(wrong)
+    # the failure by construction: the reader addressed with du, in each
+    # form; words that only begin like it, and code, stay
+    for text in ("So schreibst du das, mit Beispielen",
+                 "Du wählst die Liste.", "mit deinem Satz",
+                 "was dich interessiert", "zeigt dir die Liste"):
+        assert says_du(text), text
+    for text in ("So schreiben Sie das, mit Beispielen", "ein Duplikat",
+                 "die duale Liste", "Dirigent", "der Schlüssel `dir`"):
+        assert not says_du(text), text
 
 
 # -- 7. the reasons of the check of a flow -----------------------------------

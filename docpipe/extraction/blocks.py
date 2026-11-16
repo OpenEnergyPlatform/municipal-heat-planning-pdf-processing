@@ -1019,11 +1019,11 @@ WHICH = {"once": "the fields asked once per document",
          "all": "every field"}
 ORDERS = {"piece": ("best_first", "document"),
           "value": ("names_first", "document"),
-          "coordinate": ("groups",),
+          "coordinate": ("spec",),
           "settled": ("spec",), "field": ("spec",)}
 ORDER_WORDS = {"best_first": "best first", "document": "as in the document",
                "names_first": "names first",
-               "groups": "by the spec's groups", "spec": "as in the spec"}
+               "spec": "as in the spec"}
 FRAMES = ("each", "round", "if")
 
 

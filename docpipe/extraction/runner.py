@@ -2,13 +2,13 @@
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
 A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
-stops the run where the spec names no groups or the profile lacks a prompt
-of the harvest): every piece asked for every field in the order a reranker
-gives it, each coordinate of each value found asked on its own, and a
-coordinate its place does not state searched for (`addressed.py`, run per
-document by `surveyed.py`), then the fold, the compute step and the file
-with its stamp as below. The passes over a
-stored harvest run on the same steps.
+stops the run where the spec names no order of its coordinates or the
+profile lacks a prompt of the harvest): every piece asked for every field in
+the order a reranker gives it, each coordinate of each value found asked on
+its own, and a coordinate its place does not state searched for
+(`addressed.py`, run per document by `surveyed.py`), then the fold, the
+compute step and the file with its stamp as below. The passes over a stored
+harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the model calls, and locating a quote on
@@ -622,8 +622,8 @@ def image_max_side() -> int:
 # The one sentence a document is searched with, written for THAT document.
 PHRASE_PROMPT_ID = "extraction/phrase"
 # The prompts of a harvest piece by piece (addressed.py), the run's own
-# wherever the profile writes them and its spec names groups
-# (`surveyed_flow`); the check of a find from another passage is the
+# wherever the profile writes them and its spec names the order of its
+# coordinates (`surveyed_flow`); the check of a find from another passage is the
 # profile's choice, and the names request is asked only by a run that
 # builds a list of names (`addressed.OPTIONAL`, `names_asked`).
 SURVEY_PROMPT_IDS = tuple(prompt_id for kind, prompt_id
@@ -2438,13 +2438,13 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
                 context: Optional[Callable] = None,
                 image_of: Optional[Callable] = None):
     """The reading of a document piece by piece (`addressed.Reader`), or
-    None where its spec names no groups or the profile writes no prompts
-    for it. What is asked once of a plan beside its fields
+    None where its spec names no order of its coordinates or the profile
+    writes no prompts for it. What is asked once of a plan beside its fields
     (`Spec.plan_fields`) and the field that names other works
     (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
     a search shows (`search_budget`) and every other number that bounds the
     reading from the run's flow (`NUMBERS`)."""
-    if not spec.groups:
+    if spec.coordinates is None:
         return None
     asks = make_asks(profile)
     if asks is None:
@@ -2542,10 +2542,10 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
 
 def frame_slots_of(spec: Spec) -> list:
     """The coordinates of the plan's frame, which its base and target years
-    date a value by: the pair of each group that names one
-    (`spec.Group.paired`)."""
-    return [slot for group in spec.groups.values() if group.pair
-            for slot in fields.frame_slots(spec, group.paired)]
+    date a value by (spec: "coordinates": "frame")."""
+    if spec.coordinates is None or not spec.coordinates.frame:
+        return []
+    return list(fields.frame_slots(spec, spec.coordinates.frame))
 
 
 def dates_by_plan(spec: Spec) -> bool:
@@ -4072,14 +4072,15 @@ def survey_prompt_ids(profile=None) -> tuple:
 
 
 def surveyed_flow(spec: Spec, profile=None) -> bool:
-    """Whether a run can harvest piece by piece: its spec names groups. A
-    spec without groups cannot be harvested (`main` stops on it).
+    """Whether a run can harvest piece by piece: its spec names the order
+    of its coordinates. A spec without it cannot be harvested (`main` stops
+    on it).
 
-    A spec with groups whose profile lacks a prompt of the harvest is a
+    A spec with an order whose profile lacks a prompt of the harvest is a
     broken profile: the run stops and names the prompt, as `spec.load`
-    stops at a broken group (owner decision 2026-11-04), before a request
-    is sent rather than at the first plan's reading."""
-    if not spec.groups:
+    stops at a broken order, before a request is sent rather than at the
+    first plan's reading."""
+    if spec.coordinates is None:
         return False
     wanted = list(SURVEY_PROMPT_IDS)
     if names_asked(spec):
@@ -4089,7 +4090,8 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
             prompts.load(prompt_id, profile)
         except (FileNotFoundError, LookupError) as exc:
             raise LookupError(
-                f"the spec names groups, so the profile "
+                f"the spec names the order of its coordinates, so the "
+                f"profile "
                 f"{getattr(profile, 'name', None) or 'in use'!r} must write "
                 f"every prompt of the harvest, and {prompt_id!r} is missing: "
                 f"{exc}") from exc
@@ -5322,11 +5324,12 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
     spec_path = Path(raw_spec_path)
     spec = load_spec(spec_path)
     # Every run reads each plan passage by passage, so the spec must name
-    # groups (`surveyed_flow`). Recorded in each pass's producer entry.
+    # the order of its coordinates (`surveyed_flow`). Recorded in each
+    # pass's producer entry.
     if not surveyed_flow(spec, profile):
-        parser.error(f"the spec {spec_path} names no groups: a spec needs "
-                     f"groups, since every run reads each plan passage by "
-                     f"passage")
+        parser.error(f"the spec {spec_path} names no order of its "
+                     f"coordinates (coordinates.order): a spec needs one, "
+                     f"since every run reads each plan passage by passage")
     global FLOW
     FLOW = SURVEYED
     if args.review:

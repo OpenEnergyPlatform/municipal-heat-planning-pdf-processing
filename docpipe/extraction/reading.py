@@ -1,6 +1,6 @@
 """
 reading.py: What the reading of a plan shares with the steps around it: the
-coordinates a value of a field is asked, in the order of the spec's groups;
+coordinates a value of a field is asked, in the order the spec asks them;
 a value stated for a span of years as one row per year; the two ends of a
 range linked; what a request fetches of the rest of a plan itself
 (`Gathered`, the compute step's tools); and what reading one field in one
@@ -82,22 +82,13 @@ def slots_of(spec, parameter) -> list:
     return out + fields.axis_slots(parameter)
 
 
-def in_group_order(group, group_slots: list) -> list:
-    """A group's coordinates in the order its spec entry names them: the
-    order they are asked in, one request each."""
-    order = list(group.coordinates)
-    return sorted(group_slots, key=lambda slot: order.index(slot.name)
-                  if slot.name in order else len(order))
-
-
-def groups_of(spec, slots: list) -> list:
-    """[(group, its slots)] of *slots*, in the order of the spec's groups
-    (owner decision 2026-11-04). The spec puts every coordinate in exactly
-    one group (`spec._validate_groups`)."""
-    return [(group, [slot for slot in slots
-                     if slot.name in group.coordinates])
-            for group in spec.groups.values()
-            if any(slot.name in group.coordinates for slot in slots)]
+def in_order(spec, slots: list) -> list:
+    """*slots* in the order the spec asks them, one request each (spec:
+    "coordinates": "order", which names every coordinate once,
+    `spec._validate_coordinates`); as given where the spec names no order."""
+    if spec.coordinates is None:
+        return list(slots)
+    return spec.coordinates.in_order(slots)
 
 
 def shown_as(source: Optional[Source], text) -> list:

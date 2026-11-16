@@ -82,8 +82,8 @@ from . import flow as flow_map
 from .fields import (EXHAUSTED, NUMBER, OUT_OF_SLICE, READ, SAID_UNSTATED,
                      UNBACKED)
 from .pipeline import Row, Source, merge_field, row_label
-from .reading import (CUT, GETS, NO_ANSWER, Read, groups_of,
-                      in_group_order, link_ranges, slots_of, span_rows)
+from .reading import (CUT, GETS, NO_ANSWER, Read, link_ranges, slots_of,
+                      span_rows)
 from .units import (Chunk, Cut, Line, cut_pieces, letter_headings,
                     letter_settings, letter_title_page,
                     Passage, Shown, address_of, chunks_of, own_lines,
@@ -2226,13 +2226,12 @@ class Reader:
 
     # -- coordinates ---------------------------------------------------------------
 
-    def coordinate(self, plan: Plan, read: Read, row: Row, group, slot,
+    def coordinate(self, plan: Plan, read: Read, row: Row, slot,
                    counts: Counts, clone: Callable) -> list:
         """One coordinate of one value as the drawing's frame of
         coordinates asks it (`engine.Engine.coordinate`): [the rows made
         beside it]."""
-        return self.engine.coordinate(plan, read, row, group, slot, counts,
-                                      clone)
+        return self.engine.coordinate(plan, read, row, slot, counts, clone)
 
     def pictures(self, shown: Shown, seen: set) -> dict:
         """{letter: picture} of the figures *shown* shows whose picture the

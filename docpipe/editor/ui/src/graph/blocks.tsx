@@ -4,7 +4,7 @@
    puts in a block as the shipped drawings have it, to be changed here. An address of a box may be made of parts, each with
    where it comes from, when it counts, how it is written and what an absent one does. Every block can be tried on one
    document of the loaded harvest: what it was given and what it gave, reading by reading. */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActionIcon, Alert, Badge, Box, Button, Code, Group, Loader, NativeSelect, Paper, ScrollArea, Select, SegmentedControl, Stack, Text, Tooltip,
 } from '@mantine/core';
@@ -12,8 +12,9 @@ import { IconArrowDown, IconArrowUp, IconMinus, IconPlayerPlay, IconPlus, IconX 
 import { AreaBox, TextBox } from '../components/Inputs';
 import { t, tr } from '../lib/i18n';
 import { CondEditor } from '../flow/Conditions';
+import { PythonHelp, type PyExample } from '../components/PythonHelp';
 import { BrickAbout, BrickSelect, FieldSelect, Flag, SettingsEditor, PairsEditor, bricksOf, type Kit } from './inputs';
-import type { Obj } from './model';
+import type { BrickInfo, Obj } from './model';
 
 /* which form a block has */
 export const formOf = (ref: unknown): 'brick' | 'if' | 'steps' | 'python' | '' => {
@@ -54,6 +55,34 @@ function fresh(k: Kit, kind: string, form: string, was: Obj): Obj {
   return { ...keep, brick: first ? first.name : '' };
 }
 
+/* a brick as the server sends it: with its own logic as Python */
+type PyBrick = BrickInfo & { python?: string };
+
+/* what a block would be in another form, to show and not to store: the drawing changes where it is edited. *made* is
+   the block as Python that does the same, as the server writes it for steps and a condition */
+function viewOf(k: Kit, kind: string, form: string, was: Obj, made: { python?: string; per?: string; writes?: string } | null): Obj {
+  const keep: Obj = {};
+  for (const key of ['graph', 'document', 'box']) if (key in was) keep[key] = was[key];
+  if (form === 'python' && made && made.python) {
+    const own: Obj = { ...keep, python: made.python };
+    if (kind === 'object' && made.per && made.per !== 'row') own.per = made.per;
+    if (kind === 'object' && made.writes) own.writes = made.writes;
+    return own;
+  }
+  const brick = formOf(was) === 'brick' ? (k.d.bricks as PyBrick[]).find(b => b.name === was.brick) : undefined;
+  const carried: Obj = {};
+  if (was.settings && typeof was.settings === 'object' && Object.keys(was.settings).length) carried.settings = was.settings;
+  if (form === 'brick') return { ...keep, brick: '' };
+  if (form === 'steps' && brick) return { ...keep, steps: [{ brick: brick.name, ...carried }] };
+  if (form === 'python' && brick && brick.python) {
+    const own: Obj = { ...keep, python: brick.python, ...carried };
+    if (kind === 'object' && brick.per && brick.per !== 'row') own.per = brick.per;
+    if (kind === 'object' && brick.writes) own.writes = brick.writes;
+    return own;
+  }
+  return fresh(k, kind, form, was);
+}
+
 /* the presets of a kind, offered to put in */
 export function PresetSelect({ k, kind, onPick, label }: { k: Kit; kind: string; onPick: (block: Obj) => void; label?: string }) {
   const list = (k.d.presets || []).filter(p => p.kind === kind);
@@ -78,27 +107,46 @@ function PresetFrom({ k, name }: { k: Kit; name: string }) {
 export function BlockEditor({ k, kind, refer, onChange, label, withGraph, where }: {
   k: Kit; kind: string; refer: Obj; onChange: (next: Obj) => void; label?: string; withGraph?: boolean; where?: Obj;
 }) {
-  const form = formOf(refer) || 'brick';
+  const stored = formOf(refer) || 'brick';
   const forms = FORMS_OF[kind] || ['brick', 'python'];
-  const put = (next: Obj) => k.edit(() => onChange(next));
+  /* the form shown, for the block as it is stored: choosing one changes nothing in the drawing, only what is shown; an edit
+     there stores the block in that form */
+  const sig = JSON.stringify(refer);
+  const [chosen, setChosen] = useState<{ form: string; sig: string } | null>(null);
+  const form = chosen && chosen.sig === sig ? chosen.form : stored;
+  const previewing = form !== stored;
+  /* steps and a condition as Python: the server writes them, the page waits for it */
+  const [made, setMade] = useState<{ sig: string; got: { python?: string; per?: string; writes?: string } } | null>(null);
+  const asks = previewing && form === 'python' && (stored === 'steps' || stored === 'if') && !!k.pythonOf;
+  useEffect(() => {
+    if (!asks || (made && made.sig === sig)) return;
+    let live = true;
+    k.pythonOf!(refer, kind).then(got => { if (live) setMade({ sig, got: got || {} }); }, () => { if (live) setMade({ sig, got: {} }); });
+    return () => { live = false; };
+  }, [asks, sig]); // eslint-disable-line react-hooks/exhaustive-deps
+  const waiting = asks && !(made && made.sig === sig);
+  const shown = previewing ? viewOf(k, kind, form, refer, made && made.sig === sig ? made.got : null) : refer;
+  const put = (next: Obj) => { setChosen(null); k.edit(() => onChange(next)); };
+  const edited = (next: Obj) => { setChosen(null); onChange(next); };
   return (
     <Stack gap="xs">
       {label && <Text size="sm" fw={500}>{label}</Text>}
       <Group gap="xs" align="flex-end" wrap="wrap">
         <SegmentedControl size="xs" value={form} data={forms.map(f => ({ value: f, label: formWord(f) }))}
-          onChange={v => v !== form && put(fresh(k, kind, v, refer))} />
+          onChange={v => setChosen(v === stored ? null : { form: v, sig })} />
         <PresetSelect k={k} kind={kind} onPick={b => put({ ...b, ...(refer.graph ? { graph: refer.graph } : {}) })} />
       </Group>
-      {refer.preset && form !== 'brick' && <PresetFrom k={k} name={refer.preset} />}
-      {form === 'brick' && <BrickPart k={k} kind={kind} refer={refer} onChange={onChange} />}
-      {form === 'if' && <IfPart k={k} refer={refer} onChange={onChange} />}
-      {form === 'steps' && <StepsPart k={k} kind={kind} refer={refer} onChange={onChange} />}
-      {form === 'python' && <PythonPart k={k} kind={kind} refer={refer} onChange={onChange} />}
+      {previewing && <Text size="xs" c="orange">{t('Preview: nothing in the drawing changes until you edit here.')}</Text>}
+      {refer.preset && !previewing && form !== 'brick' && <PresetFrom k={k} name={refer.preset} />}
+      {form === 'brick' && <BrickPart k={k} kind={kind} refer={shown} onChange={edited} />}
+      {form === 'if' && <IfPart k={k} refer={shown} onChange={edited} />}
+      {form === 'steps' && <StepsPart k={k} kind={kind} refer={shown} onChange={edited} />}
+      {form === 'python' && (waiting ? <Loader size="sm" /> : <PythonPart k={k} kind={kind} refer={shown} onChange={edited} />)}
       {withGraph && (
         <Select size="xs" label={t('Which graph')} data={[{ value: 'both', label: t('Both the full and the strict graph') }, { value: 'strict', label: t('Only the strict graph') }, { value: 'full', label: t('Only the full graph') }]}
           value={refer.graph || 'both'} onChange={v => k.edit(() => { const next = { ...refer }; if (!v || v === 'both') delete next.graph; else next.graph = v; onChange(next); })} />
       )}
-      {where && <TryBlock k={k} where={where} />}
+      {where && !previewing && <TryBlock k={k} where={where} />}
     </Stack>
   );
 }
@@ -158,8 +206,13 @@ function StepsPart({ k, kind, refer, onChange }: { k: Kit; kind: string; refer: 
               <Badge variant="light" color="gray">{i + 1}</Badge>
               <Box style={{ flex: 1, minWidth: 0 }}>
                 {formOf(step) === 'python'
-                  ? <AreaBox label={t('Python of this step')} minRows={4} mono value={step.python || ''}
-                      onText={v => k.edit(() => setSteps(steps.map((x, j) => (j === i ? { ...x, python: v } : x))), 'step-py' + i)} />
+                  ? (
+                    <Stack gap={4}>
+                      <AreaBox label={t('Python of this step')} minRows={4} code value={step.python || ''}
+                        onText={v => k.edit(() => setSteps(steps.map((x, j) => (j === i ? { ...x, python: v } : x))), 'step-py' + i)} />
+                      <PythonHelp where="step" onPut={ex => k.edit(() => setSteps(steps.map((x, j) => (j === i ? { ...x, python: ex.code } : x))))} />
+                    </Stack>
+                  )
                   : (
                     <Stack gap={4}>
                       <Select size="xs" searchable data={offered.map(b => ({ value: b.name, label: tr(b.does) }))} value={step.brick || null}
@@ -205,7 +258,12 @@ function PythonPart({ k, kind, refer, onChange }: { k: Kit; kind: string; refer:
   return (
     <Stack gap="xs">
       <Text size="xs" c="dimmed">{t('The code defines run(call). call has doc, node, row, value, settings, label, source and rows; beside it stand kg (the profile\'s own module of the graph), log, literal, in_graph, is_class and ttl_string. It runs in the run\'s own process.')}</Text>
-      <AreaBox label={t('Python')} minRows={8} mono value={refer.python || ''} onText={v => k.edit(() => onChange({ ...refer, python: v }), 'python')} />
+      <AreaBox label={t('Python')} minRows={8} code value={refer.python || ''} onText={v => k.edit(() => onChange({ ...refer, python: v }), 'python')} />
+      <PythonHelp where={kind} onPut={(ex: PyExample) => k.edit(() => {
+        const next: Obj = { ...refer, python: ex.code };
+        if (kind === 'object') { if (ex.per) next.per = ex.per; else delete next.per; }
+        onChange(next);
+      })} />
       {kind === 'object' && (
         <NativeSelect size="xs" label={t('Called')} value={refer.per || 'row'}
           data={[{ value: 'row', label: t('once per reading') }, { value: 'node', label: t('once per node, with all its readings') }]}

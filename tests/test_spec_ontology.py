@@ -49,7 +49,7 @@ def missing_classes(raw: dict) -> list:
     out = []
     for parameter in raw["parameters"]:
         for axis, root in ROOTS.items():
-            offered = ((parameter.get("axes") or {}).get(axis) or {}) \
+            offered = (spec_module.axes_of(raw, parameter).get(axis) or {}) \
                 .get("vocabulary")
             if offered is None:
                 continue
@@ -64,8 +64,8 @@ def foreign_definitions(raw: dict) -> list:
     out = []
     for parameter in raw["parameters"]:
         for axis in ROOTS:
-            offered = ((parameter.get("axes") or {}).get(axis) or {}) \
-                .get("vocabulary") or {}
+            offered = (spec_module.axes_of(raw, parameter).get(axis)
+                       or {}).get("vocabulary") or {}
             for uri, entry in offered.items():
                 own = (terms.get(uri) or {}).get("definition")
                 if own and isinstance(entry, dict) \
@@ -78,12 +78,21 @@ def test_every_list_offers_every_class_under_its_root():
     assert missing_classes(RAW) == []
 
 
+def asking(raw: dict, axis: str) -> list:
+    """The fields that ask the shared dimension *axis*."""
+    return [p["uri"] for p in raw["parameters"]
+            if (p.get("axes") or {}).get(axis) == spec_module.SHARED]
+
+
 def test_a_list_short_of_one_class_is_found():
     short = copy.deepcopy(RAW)
-    carriers = short["parameters"][0]["axes"]["carrier"]["vocabulary"]
+    carriers = spec_module.axes_of(short, short["parameters"][0])[
+        "carrier"]["vocabulary"]
     del carriers["OEO_00010242"]                       # diesel fuel
+    # The shared list is short of it in every field that asks it.
     assert missing_classes(short) == [
-        ("energy_consumption", "carrier", "OEO_00010242")]
+        (uri, "carrier", "OEO_00010242") for uri in asking(short, "carrier")]
+    assert "energy_consumption" in asking(short, "carrier")
 
 
 def test_every_entry_carries_the_ontology_s_definition():
@@ -92,10 +101,12 @@ def test_every_entry_carries_the_ontology_s_definition():
 
 def test_a_definition_of_our_own_is_found():
     rewritten = copy.deepcopy(RAW)
-    carriers = rewritten["parameters"][0]["axes"]["carrier"]["vocabulary"]
+    carriers = spec_module.axes_of(rewritten, rewritten["parameters"][0])[
+        "carrier"]["vocabulary"]
     carriers["OEO_00010242"]["definition"] = "Kraftstoff für Dieselmotoren."
     assert foreign_definitions(rewritten) == [
-        ("energy_consumption", "carrier", "OEO_00010242")]
+        (uri, "carrier", "OEO_00010242")
+        for uri in asking(rewritten, "carrier")]
 
 
 # -- the aggregation the unit sets ------------------------------------------------
@@ -141,8 +152,8 @@ def test_a_derive_takes_no_exception_of_its_own():
     # The exception for a span of years went with its coordinate (owner
     # decision 2026-11-07): a derive is "from" and "value" only.
     broken = copy.deepcopy(RAW)
-    broken["parameters"][0]["axes"]["aggregation"]["derive"][
-        "unless_read"] = "no_such_axis"
+    spec_module.axes_of(broken, broken["parameters"][0])["aggregation"][
+        "derive"]["unless_read"] = "no_such_axis"
     with pytest.raises(spec_module.SpecError):
         spec_module.load(broken)
 

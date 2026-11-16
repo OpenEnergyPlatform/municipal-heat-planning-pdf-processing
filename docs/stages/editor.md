@@ -8,9 +8,11 @@ document and the examples. It is a long file, and one line of it can make a
 stored harvest stale. A profile also holds its prompts, the files a model is
 told its task in, and the sentences its stages say to the model outside them.
 `docpipe edit` shows these as a page in the browser with five tabs and a Rules
-drawer. The Spec tab shows the spec, one form per question, and says what an
-edit costs the next run before it is written. The Prompts tab edits the prompt
-files and the sentence files of the profile; with a harvest folder it also shows
+drawer. The Spec tab lists the fields, shared dimensions and parts of the spec, draws
+a field with the lists of the ontology its answers come from and the entries the
+model chooses from, edits each with a form, and says what an edit costs the next run before it is written. The Prompts tab
+edits the prompt files and the sentence files of the profile; with a harvest
+folder it also shows
 what an edit does to the requests recorded there, and it can send a few of them
 once more. The Flow tab draws how a document is read, as steps, loops, rounds
 and branchings, edits that flow, the numbers that bound it and the rules each
@@ -150,27 +152,77 @@ breaks it. The page says step, loop, round and branching, chunk, dimension, line
 number and request log where the flow file, the code and this page say box,
 frame, piece, coordinate, address and trace (see the glossary).
 
-The rest of this section is the Spec tab. On the left is a tree, on the right
-the form of the selected node. Above the tree stands a library, as in the Flow
-tab (owner request 2026-11-14): a block is dragged onto a field, or clicked to
-put it into the field selected (`/api/spec` gives it as `library`,
-`specs.library`). It offers a field per value type, a dimension (a list of
-entries, a year, the words of the document, a list per document), an accepted
-unit, a check of the field's own, a value type of the spec's own and a field of
-the whole document (settings, or a year). A dimension, a unit or a check needs a
-field to go into; the page says so where none is dropped on or selected. The
-tree holds:
+The rest of this section is the Spec tab (`docpipe/editor/ui/src/tabs/SpecTab.tsx`
+and `ui/src/spec/`). It has three parts:
 
-- the top-level questions (`_comment`, `parameter_question`, `unit_question`);
-- the value types: the four built-in ones (`float`, `int`, `text`, `category`)
-  read-only, and those of the spec's own (`value_types`), which are edited and
-  deleted unless a field uses them;
-- the fields of the whole document (`plan_fields`) and its other
-  works (`works`), where the spec has them, with a button to add one it does
-  not have;
-- the groups, and the fields. A field opens into its own list (`vocabulary`),
-  the entries a list closed per document always has beside the document's
-  own (`beside`) and its dimensions (`coordinates`), each with its own list.
+- left, a list of what the spec has: the fields (`parameters`) with label, key and
+  value type; the shared dimensions (`shared_axes`) with how many fields ask each;
+  and "the spec as a whole": the order of the questions (`coordinates`), the
+  fields of the whole document (`plan_fields`) with the works (`works`), the value
+  types (the four built-in ones and the spec's own `value_types`), and the questions
+  and note of the spec;
+- in the middle, what is chosen there: a field as a drawing, a shared dimension as a
+  dictionary, or one of the pages of the spec as a whole;
+- right, the settings of what is selected, as forms; clicking a box, a row or an
+  entry selects it.
+
+**A field** is drawn in three columns, laid out anew after every edit
+(`spec/layout.ts`). Left stand the lists of the ontology the field's rows take
+their entries from, each with its root term, how many terms of the ontology stand
+under it and which rows it gives entries to (`specs.ontology_lists`, which
+`/api/spec` sends as `ontology`), and the field's units. In the middle stands the
+field with one row for each thing it asks of each value: its units, then each
+dimension in the order of the questions, a shared one marked "shared". On the
+right stand the entries of the list of the row chosen, each with its name, its
+ontology identifier or "own entry", and the words of the plans (the spellings);
+the entries without a word of the plans are folded into one box that counts them
+and can be opened. A field whose value is itself chosen from a list (its own
+`vocabulary`, such as `scenario_type` of the scenarios profile) shows that list as
+its first row, "What falls under the field" (`VALUE` in `spec/model.ts`), and
+shows it on the right by default. The arrows run from a list of the ontology into
+each row it gives entries to, from the units into the unit row, dashed from the
+units into each dimension the unit decides (`derive: {"from": "unit"}`), named
+with the entry, and from the chosen row to the entries.
+
+Clicking a row shows its list on the right and its settings in the panel; clicking
+the field, the units or a list of the ontology shows theirs. A word is dragged onto
+another entry to move it there, typed in to add one, and taken out with its x. A
+list (a field's or a dimension's list, its answers outside the list) opens wide
+over the page with the table of its entries ("Edit the whole list…").
+
+**Untangle arrows** orders the left column so that fewer arrows cross
+(`lib/untangle.ts`) and says "Crossings: before → after". Every box can be dragged
+elsewhere; the frame of the entries takes its entries along (`lib/moved.ts`).
+The order and the places hold until the page is loaded again, or, for the places,
+until the arrows are untangled; they never go into a file, and moving a box is no
+edit.
+
+**A shared dimension** opens as a dictionary: its question, the fields that ask
+it, whether a list of the ontology holds its entries, a search over entries and
+words, the entries with their words (those without words behind a switch) and
+"Edit the whole list…". In the panel of a field's dimension, a shared one can be
+changed for this field only (the field gets its own copy, `unshare` in
+`spec/model.ts`), a field's own copy of a shared one can ask the shared one again
+(`share`; the same button makes a dimension only one field asks a shared one),
+and "Ask one more dimension" offers a field the shared dimensions it does not ask
+yet (`giveShared`). Edits of a
+shared dimension reach every field that asks it.
+
+**The order of the questions** is a table: the order (arrows up and down), each
+dimension with its German name and key, how many fields ask it, and three marks:
+asked only at the value's place (`own_passage`), read once with the number
+(`own_value`), and the plan's frame (`frame`). The first two exclude each other
+(`setSpecial`), and the order takes only an order of the same dimensions
+(`setOrder`). The page shows each dimension by a German name with a sentence on
+what it is for (`spec/names.ts`); the file keeps the English keys.
+
+The toolbar has Undo (Ctrl+Z), Redo (Ctrl+Y), Show the whole drawing and Untangle
+arrows (both where a field is drawn), Check, Save and Discard. The typing in one
+form within a moment is one undo step. Below the toolbar stand the note of a draft
+(see below) and the result of the last check or save. A problem the check names
+selects the matching field, dimension or page, and so does a link from another tab
+(the settings of the Flow tab). The button Reload from disk is offered only when
+the file changed on disk since the page loaded it.
 
 The keys of a form are the ones `docpipe/extraction/spec.py` reads (`specs.form`),
 each with what the page says of it, written for someone who edits the spec,
@@ -181,14 +233,15 @@ form has its answer, its units, whether it converts and how the answer is found 
 its quote. A field of the whole document has `kind` (settings or year), for a
 year its `state`, and `of`. A key the form
 does not know stays in the file as it is. An edit is made in the page's copy
-of the spec; nothing is written until Save.
+of the spec; nothing is written until Save. Opening and saving without an edit
+writes the file byte for byte as it was; the drawing only reads the spec.
 
 ### Draft of a spec
 
 A profile that has `extraction_spec.draft.json` and no `extraction_spec.json`
 (made by `docpipe init --shapes` or by the dialog of New profile) is edited in
 the Spec tab as that draft, and the head shows the draft's file where there is
-no spec. A note above the form lists what the draft still lacks
+no spec. A note above the drawing lists what the draft still lacks
 (`compile.draft.todo`, as `/api/spec` gives it in `missing`). Save keeps the
 draft whatever it lacks. Once it lacks nothing, Save also writes
 `extraction_spec.json` (`compile.draft.finished`) and, where the profile has no
@@ -255,7 +308,7 @@ given, or the folder holds no `*.stamp.json`.
 Save writes the spec only if the loader takes it. An edit that takes
 something away is written only after the page has listed it and it is
 confirmed: a field, a coordinate, an entry of a list, a name or a spelling of
-an entry, a unit, a choice of a coordinate, a group, a key of `plan_fields`,
+an entry, a unit, a choice of a coordinate, a key of `plan_fields`,
 the `works` block, one of the two questions at the top. A changed text is no
 removal. A file that changed on disk since the page loaded it is not
 overwritten: the page says so and offers to reload. The file is written whole
@@ -332,13 +385,13 @@ blank and no slash, since a stamp names a question by `<field>/<coordinate>`,
 and it may not be taken. A copied field stands right after its original with
 all its coordinates and lists and has no example, so the loader refuses the
 spec until the copy has one of its own. A copied coordinate stands right after
-its original and joins the group of the original, in every list of the group
-that names the original.
+its original and joins every list of `coordinates` (`order`, `own_passage`,
+`own_value`, `frame`) that names the original.
 
 A removal is made in the page's copy and written with the next confirmed
 Save. What follows from it goes with it, so the spec still loads: a
-coordinate that no field has any more leaves its group, a group left without
-coordinates goes, and a question the `works` block asks of a removed field
+coordinate that no field has any more leaves the lists of `coordinates`, a
+shared dimension that no field asks any more goes, and a question the `works` block asks of a removed field
 leaves the block.
 
 A new entry of a list is chosen from the profile's ontology snapshot
@@ -721,7 +774,8 @@ environment. The Run section writes the others into `docpipe.toml`
 - **each** repeats its boxes for each thing the document settles, each field
   (all, the fields the document has once, or the fields read in pieces), each
   piece of a field, each value or each coordinate of a value, in an order the
-  frame names, and only for the items a condition holds for, where it has one.
+  frame names (the loop over a value's coordinates takes "as in the spec", the
+order of `coordinates.order`), and only for the items a condition holds for, where it has one.
   "Side by side" asks the items together instead of one after the other.
 - **round** runs its boxes again, at most N times or until the supply is used up,
   and stops where its stop condition holds after a turn. A round until the supply
@@ -795,7 +849,9 @@ and the condition of the step it leads to. A frame opens and closes with its
 arrow button or a double click; toolbar buttons open or close every frame and
 show the whole drawing, and the first view shows the top of the drawing at a
 readable size. The layout is computed from the nesting; no position is stored in
-the flow file. Ctrl+Z undoes an edit and Ctrl+Y does it again, until the next
+the flow file. A step, and an open loop, round or branching (which takes its steps
+along), can be dragged elsewhere; the places hold until the page is loaded again or
+another flow is shown, and moving changes neither the order nor the file. Ctrl+Z undoes an edit and Ctrl+Y does it again, until the next
 save. A short guide, "How to use this tab", stands above the canvas, folded
 until opened. A problem is marked red at its box and listed above the canvas; a
 click on it opens the frames around that box and brings it into view. A card
@@ -967,7 +1023,7 @@ token) is never sent to the page, and what an address carries before its host
 (a user, a password) is replaced by `***@`.
 
 The Spec tab's form of a plan field that is a year has the key `of`: a coordinate
-of a group's pair and an entry of its list.
+of the frame (`coordinates.frame`) and an entry of its list.
 
 ## Rules
 
@@ -1031,6 +1087,17 @@ rules of the program (the graph file's `rules`) are in the Rules drawer; the
 effect of a constraint (report, leave out the value, leave out the paper, stop)
 is set in the settings of the box whose properties it holds.
 
+A class shows each of its properties once: what several property shapes say of
+one path, in one shape or in several shapes of the class, is one property with the
+greater minimum, the smaller maximum and the constraints of both
+(`graphpage.classes`, `graphpage._merge_property`). "Untangle arrows" in the
+toolbar reorders the fields (within their kind) and the boxes (within their
+column) so that fewer arrows cross and says "Crossings: before → after"
+(`untangleInput`, `keptFrom` in `graph/model.ts`). A field or a box can be dragged
+elsewhere. The order and the places hold until the page is loaded again (the
+places also until the arrows are untangled), never go into a file, and moving is no
+edit.
+
 Check holds the edited drawing to the run's own checks (`graphfile.map_problem`,
 `graph.check`) and names the box or arrow each problem is about; Save writes
 `map` into `graph.json` if the checks pass; Discard and Reload from disk return
@@ -1053,7 +1120,18 @@ editor over a key of the reading or a fact of the document, with the graph's
 comparisons and the reason the reading is left out); steps, a chain of blocks
 that can be moved earlier or later, added and removed, each taking the value
 the one before gave; and Python, with how often it is called and what it
-writes (for the check against the ontology). A condition may be limited to the
+writes (for the check against the ontology). A form chosen in the switch is only
+shown: nothing in the drawing changes until something is edited there ("Preview:
+nothing in the drawing changes until you edit here."). Python shows the block's
+logic as Python: a brick's own function with the imports it needs
+(`graphblocks.python_of`, sent with each brick as `python` by
+`graphpage.bricks_of`), a condition as its test and the reason it gives, steps as
+each step's code chained with its settings (`graphblocks.python_block`,
+`graphpage.python_of_block`, `POST /api/graph/python`). Every place where Python is
+written (a block of the Graph tab, a step inside steps, the Python step of the
+Flow tab) has "How to write this, with examples" (`components/PythonHelp.tsx`):
+what the code receives, what it gives back, the names at hand, and examples that
+can be put in. A code field keeps its own line breaks and does not wrap. A condition may be limited to the
 full or to the strict graph. Presets, the blocks of the core and of the
 profile ready to put in, are listed with what each does; a block put in from
 one shows which preset it came from, and keeps that name when it is changed.

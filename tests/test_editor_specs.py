@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from docpipe.editor import specs
-from docpipe.extraction.spec import fingerprints, load
+from docpipe.extraction.spec import SHARED, axes_of, expanded, fingerprints, load
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {name: ROOT / "profiles" / name / "extraction_spec.json"
@@ -38,7 +38,7 @@ def edited(change, name: str = "kwp") -> dict:
 
 def quantity(data: dict) -> dict:
     """The list of the coordinate that says which quantity a number is."""
-    return data["parameters"][0]["axes"]["quantity"]["vocabulary"]
+    return axes_of(data, data["parameters"][0])["quantity"]["vocabulary"]
 
 
 def one_more_spelling(data: dict) -> None:
@@ -71,7 +71,7 @@ def test_a_spec_that_still_says_what_a_field_becomes_is_refused():
     # the graph is drawn in graph.json: a `kg` block of a field or of one of
     # its coordinates is named and refused, the spec without one loads
     for put in (lambda d: d["parameters"][0].update({"kg": {"node": "x"}}),
-                lambda d: d["parameters"][0]["axes"]["carrier"].update(
+                lambda d: axes_of(d, d["parameters"][0])["carrier"].update(
                     {"kg": {"role": "type"}})):
         refused = specs.problem(edited(put))
         assert refused["where"].endswith(".kg"), refused
@@ -243,7 +243,7 @@ def test_every_key_of_the_form_says_what_it_is(monkeypatch):
     # keys unexplained.
     kinds = {"vocabulary", "type", "enum", "dynamic", "beside"}
     used = {key for raw in RAW.values()
-            for parameter in specs.parse(raw)["parameters"]
+            for parameter in expanded(specs.parse(raw))["parameters"]
             for axis in parameter["axes"].values() for key in axis}
     assert used <= set(by_key) | kinds
 
@@ -274,16 +274,24 @@ def test_a_copied_field_needs_a_key_and_an_example_of_its_own():
     assert report["removed"] == []
 
 
-def test_a_copied_coordinate_joins_the_group_of_its_original():
+def test_a_copied_coordinate_stands_beside_its_original_and_is_its_own():
     copied = specs.copy_coordinate(KWP, "energy_consumption", "carrier",
                                    "carrier_of_origin")
-    axes = list(copied["parameters"][0]["axes"])
+    field = copied["parameters"][0]
+    axes = list(field["axes"])
     assert axes[axes.index("carrier") + 1] == "carrier_of_origin"
-    (group,) = [name for name, group in KWP["groups"].items()
-                if "carrier" in group["coordinates"]]
-    listed = copied["groups"][group]["coordinates"]
+    listed = copied["coordinates"]["order"]
     assert listed[listed.index("carrier") + 1] == "carrier_of_origin"
+    # The copy of a shared dimension is the field's own, with what the
+    # shared one says; the original stays shared.
+    assert field["axes"]["carrier"] == SHARED
+    assert field["axes"]["carrier_of_origin"] == \
+        copied["shared_axes"]["carrier"]
     assert specs.problem(copied) is None
+    # the failure by construction: a copy left out of the order of the
+    # questions is refused
+    copied["coordinates"]["order"].remove("carrier_of_origin")
+    assert "carrier_of_origin" in specs.problem(copied)["message"]
     with pytest.raises(specs.Refused, match="taken"):
         specs.copy_coordinate(KWP, "energy_consumption", "carrier", "sector")
 
@@ -321,17 +329,26 @@ def test_what_follows_from_a_removal_goes_with_it():
     assert set(specs.removed(scenarios, without)) == {
         "field study_acronym",
         "question for study_acronym of the list of other works"}
-    # A coordinate only one field has leaves its group with the field.
+    # A coordinate only one field has leaves the order with the field.
     lone = specs.remove(KWP, "coordinate", field="share", coordinate="whole")
-    assert all("whole" not in group["coordinates"]
-               for group in lone["groups"].values())
+    assert "whole" not in lone["coordinates"]["order"]
     assert specs.problem(lone) is None
-    # One that other fields still have stays in its group.
+    # One that other fields still have stays in the order, and so does
+    # the shared dimension they ask.
     shared = specs.remove(KWP, "coordinate", field="share",
                           coordinate="carrier")
-    assert any("carrier" in group["coordinates"]
-               for group in shared["groups"].values())
+    assert "carrier" in shared["coordinates"]["order"]
+    assert "carrier" in shared["shared_axes"]
     assert specs.problem(shared) is None
+    # A shared dimension no field asks any more goes with the last one.
+    last = KWP
+    for uri in [p["uri"] for p in KWP["parameters"]
+                if p.get("axes", {}).get("subject") == SHARED]:
+        last = specs.remove(last, "coordinate", field=uri,
+                            coordinate="subject")
+    assert "subject" not in last.get("shared_axes", {})
+    assert "subject" not in last["coordinates"]["order"]
+    assert specs.problem(last) is None
     with pytest.raises(specs.Refused, match="no such field"):
         specs.remove(KWP, "field", field="colour")
     with pytest.raises(specs.Refused, match="its name is changed"):

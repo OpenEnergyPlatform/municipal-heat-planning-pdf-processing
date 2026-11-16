@@ -17,6 +17,7 @@ import {
 import { isObj, own, type Obj } from '../lib/util';
 import { t, tn } from '../lib/i18n';
 import { findParam, markDirty, removeOnServer, S, structural } from './state';
+import { axisOf } from './model';
 import { SpecForm } from './widgets';
 
 export interface ListRef {
@@ -26,8 +27,8 @@ export interface ListRef {
 export function refFor(uri: string, coordinate: string | null, key: string, markEntry?: string | null): ListRef {
   return {
     uri, coordinate, key, markEntry,
-    holder: () => { const p = findParam(S.data, uri); return coordinate == null ? p : (p && p.axes && p.axes[coordinate]); },
-    orig: () => { const p = findParam(S.orig, uri); return coordinate == null ? p : (p && p.axes && p.axes[coordinate]); },
+    holder: () => (coordinate == null ? findParam(S.data, uri) : axisOf(S.data, uri, coordinate)),
+    orig: () => (coordinate == null ? findParam(S.orig, uri) : axisOf(S.orig, uri, coordinate)),
   };
 }
 

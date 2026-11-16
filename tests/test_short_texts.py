@@ -61,18 +61,9 @@ def test_a_gloss_needs_a_definition_and_some_words():
             load_spec(raw)
 
 
-def test_a_group_shows_the_brief_unless_it_says_full_and_nothing_else():
-    assert {name for name, group in SPEC.groups.items()
-            if group.full_definition} == {"context"}
-    for word, full in (("full", True), ("brief", False)):
-        raw = copy.deepcopy(RAW)
-        raw["groups"]["number"]["definition"] = word
-        assert load_spec(raw).groups["number"].full_definition is full
-    # the failures by construction: another word, or an empty brief
-    raw = copy.deepcopy(RAW)
-    raw["groups"]["number"]["definition"] = "short"
-    with pytest.raises(SpecError):
-        load_spec(raw)
+def test_a_brief_is_some_words_or_none():
+    assert load_spec(RAW).by_uri[emission(RAW)["uri"]].brief
+    # the failure by construction: an empty brief
     raw = copy.deepcopy(RAW)
     emission(raw)["brief"] = " "
     with pytest.raises(SpecError):

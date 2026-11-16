@@ -161,15 +161,14 @@ def test_a_switch_lists_what_the_spec_says_and_leads_into_it():
     assert [item["label"] for item in taken["items"]] == ["scenario_abstract"]
     switches = view(load_profile("kwp"))["switches"]
     assert [item["label"] for item in switches["own_passage"]["items"]] == [
-        "unit (number)", "what (number)", "subject (number)",
-        "aggregation (context)", "role (context)"]
+        "unit", "what", "subject", "aggregation", "role"]
     assert [item["label"] for item in switches["own_value"]["items"]] == [
-        "qualifier (number)"]
+        "qualifier"]
+    assert switches["own_value"]["items"][0]["to"] == {"t": "coordinates"}
     # the failure by construction: a spec that marks nothing lists nothing
     # and says so
     bare = copy.deepcopy(SPEC["kwp"])
-    for group in bare["groups"].values():
-        group.pop("own_passage", None)
+    bare["coordinates"].pop("own_passage", None)
     first = view(load_profile("kwp"), bare)["switches"]["own_passage"]
     assert first["items"] == [] and first["none"]
 

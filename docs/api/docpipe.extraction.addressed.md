@@ -730,7 +730,7 @@ in none (a heading, the title page).
 #### Reader.coordinate
 
 ```python
-def coordinate(self, plan: Plan, read: Read, row: Row, group, slot,
+def coordinate(self, plan: Plan, read: Read, row: Row, slot,
                counts: Counts, clone: Callable) -> list
 ```
 

@@ -26,27 +26,51 @@
       "study_acronym": "Which shown line gives the short name or acronym of this work? Not every work has one. Answer with its address and the words, 0 if it has none."
     }
   },
-  "groups": {
+  "coordinates": {
+    "order": [
+      "work",
+      "year_kind",
+      "scenario"
+    ]
+  },
+  "shared_axes": {
     "work": {
-      "coordinates": [
-        "work"
-      ],
-      "read_in": "reading",
-      "where": "The value's own passage, the heading of its section and the text shown around it."
-    },
-    "year_kind": {
-      "coordinates": [
-        "year_kind"
-      ],
-      "read_in": "reading",
-      "where": "The year's own passage, the heading of its section and the text shown around it."
+      "vocabulary": {
+        "work:this_publication": {
+          "label": "this publication",
+          "spellings": [],
+          "definition": "This document itself, the study it reports and the scenarios it presents."
+        },
+        "out:another_work": {
+          "label": "another work",
+          "spellings": [],
+          "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
+        }
+      },
+      "keep": "work:this_publication",
+      "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
     },
     "scenario": {
-      "coordinates": [
-        "scenario"
-      ],
-      "read_in": "reading",
-      "where": "The scenario a value refers to is named in the value's own sentence, in the heading of its section, in the title, a column head or a row label of its table, or in the caption of its figure."
+      "type": "text",
+      "merged": "scenario",
+      "required": false,
+      "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
+      "beside": {
+        "out:status_quo": {
+          "label": "status quo",
+          "spellings": [
+            "historical"
+          ],
+          "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
+        },
+        "out:several": {
+          "label": "several scenarios",
+          "spellings": [
+            "all scenarios"
+          ],
+          "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
+        }
+      }
     }
   },
   "parameters": [
@@ -56,22 +80,7 @@
       "description": "The title of this document, the study report: the whole title as the document prints it. Only this document's own title, never that of a study, report or article it cites, presents or compares.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "Global Energy and Climate Outlook 2023: Transforming Energy Systems for a Net Zero Future. JRC Science for Policy Report.",
@@ -91,22 +100,7 @@
       "description": "An author of this document, one tuple each, spelled as the document prints it: whoever wrote this document. Never the authors or the publisher of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "Keramidas, K., Fosse, F., Diaz Vazquez, A., Dowling, P., Garaffa, R., Després, J.",
@@ -130,22 +124,7 @@
       "description": "The year this document was published in, four digits and exactly as it stands in the document. Not the year of the data, not a year projected in the text, and never the year of a study, report or article the document cites, presents or compares.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
@@ -165,22 +144,7 @@
       "description": "The Digital Object Identifier of this document. Only the DOI itself, without the prefix doi: and without the URL before it. Never the DOI of a study, report, article or dataset the document cites, presents, compares or uses.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "Publications Office of the European Union, Luxembourg, 2023, doi:10.2760/58255, JRC135619.",
@@ -200,22 +164,7 @@
       "description": "A summary of this document and its study, word for word and complete as the document prints it. Do not write a summary of your own.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "Abstract This report presents the results of the 2023 edition of the Global Energy and Climate Outlook, which assesses the implications of current climate pledges for the global energy system.",
@@ -235,22 +184,7 @@
       "description": "An organisation in which this document was created, one tuple per organisation, spelled as in the document.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "European Commission, Joint Research Centre (JRC), Seville, Spain, and Potsdam Institute for Climate Impact Research (PIK).",
@@ -274,22 +208,7 @@
       "description": "A funder of the work: a body that supports it by giving money. Only who pays, not who contributed to the content.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "This work was funded by the German Federal Ministry of Education and Research under grant 01LA1809A.",
@@ -309,22 +228,7 @@
       "description": "The name of the study this document reports on, as the document prints it. A study is a project with the goal to methodologically investigate something. The title of this document is the report's, not the study's name.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
@@ -344,22 +248,7 @@
       "description": "The short name (acronym) of the study this document reports on, as the document prints it.",
       "value_type": "text",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "example": {
         "source": "This report was prepared within the project Enabling Ambitious Climate Policy Assessment (ENGAGE), funded under Horizon 2020.",
@@ -379,22 +268,7 @@
       "description": "A keyword that describes the study, chosen from value_classes. These are the keywords the OEKG allows for a study; the spellings beside them come from the ontology itself. 'none of these keywords' means the text names a topic of the study but no keyword covers it; that is a finding and is counted. value_raw takes the document's wording. One tuple per keyword; a study may carry several.",
       "value_type": "category",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000143": {
@@ -608,22 +482,7 @@
       "description": "A sector division the study is based on, chosen from value_classes: a specific way to subdivide a system, such as the CRF of the IPCC guidelines for national greenhouse gas inventories, NACE, an energy balance, the annex of the German Climate Protection Act (KSG) or the study's own list of sectors. A sector itself is no division. Take the most specific entry the text supports: 'CRF sectors (IPCC 2006)' for the 2006 Guidelines or CRF tables from 2015 on, 'CRF sectors (IPCC 1996)' for the Revised 1996 Guidelines or CRF tables until 2014, 'CRF sector division' for the CRF without its version. A division no narrower entry matches, such as a model's own sectors or the study's own list of sectors, is 'sector division'. value_raw takes the document's wording of the division. One tuple per division.",
       "value_type": "category",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000368": {
@@ -736,22 +595,7 @@
       "description": "A sector the study covers, chosen from value_classes. These are the sectors the OEKG allows for this field; many belong to a particular sector division and carry its name in front (CRF, KSG, NC/BR, RED). Take the most specific class the text supports. 'none of these sectors' means the text names a sector that none of the classes matches. value_raw takes the document's wording. One tuple per sector.",
       "value_type": "category",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000367": {
@@ -1745,22 +1589,7 @@
       "description": "A technology the study covers, chosen from value_classes. These are the technology classes the OEKG allows for this field. Take the most specific class the text supports: where it says offshore wind, that is 'offshore wind power technology' and not merely 'wind power technology'. 'none of these technologies' means the text names a technology that none of the classes matches; that is a finding and is counted. value_raw takes the document's wording. One tuple per technology.",
       "value_type": "category",
       "axes": {
-        "work": {
-          "vocabulary": {
-            "work:this_publication": {
-              "label": "this publication",
-              "spellings": [],
-              "definition": "This document itself, the study it reports and the scenarios it presents."
-            },
-            "out:another_work": {
-              "label": "another work",
-              "spellings": [],
-              "definition": "A study, report, article or model other than this document that the document presents, compares, reviews or cites."
-            }
-          },
-          "keep": "work:this_publication",
-          "question": "Which work is this a value of, this publication or a study, report or article it presents, compares, reviews or cites, by the words that show it, such as “this report”, “we” or the name of the other work?"
-        }
+        "work": "shared"
       },
       "vocabulary": {
         "https://openenergyplatform.org/ontology/oeo/OEO_00000407": {
@@ -2198,28 +2027,7 @@
         }
       },
       "axes": {
-        "scenario": {
-          "type": "text",
-          "merged": "scenario",
-          "required": false,
-          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
-          "beside": {
-            "out:status_quo": {
-              "label": "status quo",
-              "spellings": [
-                "historical"
-              ],
-              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
-            },
-            "out:several": {
-              "label": "several scenarios",
-              "spellings": [
-                "all scenarios"
-              ],
-              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
-            }
-          }
-        }
+        "scenario": "shared"
       },
       "example": {
         "source": "The CurPol scenario includes only those climate policies that had been adopted and implemented by the end of 2021, and reports greenhouse gas emission trajectories to 2100.",
@@ -2246,28 +2054,7 @@
       "description": "The description of what a single scenario assumes or depicts, word for word from the document.",
       "value_type": "text",
       "axes": {
-        "scenario": {
-          "type": "text",
-          "merged": "scenario",
-          "required": false,
-          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
-          "beside": {
-            "out:status_quo": {
-              "label": "status quo",
-              "spellings": [
-                "historical"
-              ],
-              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
-            },
-            "out:several": {
-              "label": "several scenarios",
-              "spellings": [
-                "all scenarios"
-              ],
-              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
-            }
-          }
-        }
+        "scenario": "shared"
       },
       "example": {
         "source": "The CurPol scenario assumes that no additional climate policies are introduced beyond those already legislated by the end of 2021.",
@@ -2288,28 +2075,7 @@
       "description": "The region a scenario studies: its study region, the spatial focus of the investigation, not a region it only interacts with and not every one mentioned. Choose it from value_classes: the study regions of the OEKG, narrowed to those this document names, and groups of countries: the regions of the integrated assessment models (such as 'Europe (R10)' or 'Asia (R5)') and the UN's world regions (such as 'Sub-Saharan Africa' or 'Western Europe'). Choose a group where the scenario covers that group, not each of its countries; a group stands for its members. For a worldwide scenario choose 'global'. A region the list does not carry, such as 'OECD Europe', a federal state or a city, is 'several regions' where it is a group of countries and 'other region' otherwise, with value_raw its name as the document prints it: it becomes a study region of its own. Naming a single country instead would be invented. One tuple per statement.",
       "value_type": "category",
       "axes": {
-        "scenario": {
-          "type": "text",
-          "merged": "scenario",
-          "required": false,
-          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
-          "beside": {
-            "out:status_quo": {
-              "label": "status quo",
-              "spellings": [
-                "historical"
-              ],
-              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
-            },
-            "out:several": {
-              "label": "several scenarios",
-              "spellings": [
-                "all scenarios"
-              ],
-              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
-            }
-          }
-        }
+        "scenario": "shared"
       },
       "example": {
         "source": "The NDC-LTT scenario covers the EU27, China, India and the United States at national resolution.",
@@ -2378,28 +2144,7 @@
           "keep": "https://openenergyplatform.org/ontology/oeo/OEO_00020097",
           "question": "Is this year part of the period a scenario of this publication investigates, or another year, by the words that show it?"
         },
-        "scenario": {
-          "type": "text",
-          "merged": "scenario",
-          "required": false,
-          "question": "Which scenario of this publication does this value refer to, by its name as printed, by words for several of its scenarios such as “all scenarios”, or by words that the value is measured or balanced for a past or the current year?",
-          "beside": {
-            "out:status_quo": {
-              "label": "status quo",
-              "spellings": [
-                "historical"
-              ],
-              "definition": "Measured, observed or balanced for a past or the current year: data of the time the publication describes as its present or past, not the result or the assumption of a scenario. Such a value belongs to no scenario."
-            },
-            "out:several": {
-              "label": "several scenarios",
-              "spellings": [
-                "all scenarios"
-              ],
-              "definition": "Stated for several scenarios of the publication, or for all of them, that the text shown does not name one by one: the scenarios of a study, of a figure or of a table, or a group the publication describes, such as \"the low-demand scenarios\". Such a value goes to the scenarios the publication says these words stand for, and to none where it does not say."
-            }
-          }
-        }
+        "scenario": "shared"
       },
       "example": {
         "source": "Results for the CurPol scenario are reported for 2030, 2050 and 2070.",

@@ -173,9 +173,8 @@ def test_a_field_of_the_whole_document_that_is_unclear_is_refused(fields_,
 
 
 def test_the_years_of_a_state_are_read_off_the_field_of_its_kind():
-    groups = {"frame": {"coordinates": ["kind", "year"], "read_in": "reading",
-                        "where": "Der Titel.", "pair": ["kind", "year"]}}
-    loaded = spec_of(groups=groups, plan_fields={
+    coordinates = {"order": ["kind", "year"], "frame": ["kind", "year"]}
+    loaded = spec_of(coordinates=coordinates, plan_fields={
         "reference": {"name": "Bezugsjahr", "means": "Das Jahr.",
                       "kind": "year", "state": "base", "of": {"kind": "a"}}})
     assert runner.year_states_of(loaded) == {"base": {"kind": "a"},

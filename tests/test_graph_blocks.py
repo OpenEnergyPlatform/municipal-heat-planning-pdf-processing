@@ -193,6 +193,82 @@ def test_python_without_run_is_refused():
     assert any("run(call)" in one for one in problems)
 
 
+# -- any block as Python --------------------------------------------------------
+#
+# The promise, in one sentence: a condition written as Python gives nothing
+# where the condition holds and its reason where it does not, AND steps
+# written as Python give what the chain of their steps gives, each step with
+# its settings, a step of Python as well as a brick.
+
+def as_python(block, kind) -> dict:
+    code = graphblocks.python_block(block, kind, bricks.registry(PROFILE),
+                                    graph.python_space(PROFILE))
+    assert code
+    return {"python": code}
+
+
+def chained(block, value):
+    found = document().writer.brick(block, "object")
+    return found.run(bricks.Call(doc=document(), value=value, settings={}))
+
+
+def test_a_condition_as_python_gives_what_the_condition_gives():
+    block = {"if": {"all": [{"of": "reading", "is": "quantity",
+                             "op": "listed"}]},
+             "reason": "not_a_class:{quantity|quantity_raw|'?'}"}
+    doc, py = document(), as_python(block, "condition")
+    rows = (reading(), reading(quantity="out:potential"),
+            reading(quantity=None, quantity_raw="Wärme"))
+    assert [condition(doc, py, row) for row in rows] \
+        == [condition(doc, block, row) for row in rows] \
+        == [None, "not_a_class:out:potential", "not_a_class:Wärme"]
+    # the failure by construction: the test turned round
+    spoiled = {"python": py["python"].replace("if conditions.holds",
+                                              "if not conditions.holds")}
+    assert [condition(doc, spoiled, row) for row in rows] \
+        != [condition(doc, block, row) for row in rows]
+
+
+def test_steps_as_python_give_what_the_chain_gives():
+    block = {"steps": [{"brick": "remove_words",
+                        "settings": {"legal_forms": True}},
+                       {"brick": "text", "settings": {"form": "line"}}]}
+    py = as_python(block, "object")
+    values = ("Stadtwerke Nord GmbH", "Gemeinde Musterstadt")
+    assert [chained(py, v) for v in values] \
+        == [chained(block, v) for v in values]
+    assert [value for _term, value in chained(py, values[0])] \
+        == ["Stadtwerke Nord"]
+    # the failure by construction: the settings of the first step lost
+    spoiled = {"python": py["python"].replace("{'legal_forms': True}", "{}")}
+    assert chained(spoiled, values[0]) != chained(block, values[0])
+
+
+def test_a_step_of_python_stays_its_own_code_in_the_chain():
+    block = {"steps": [{"python": "def run(call):\n"
+                                  "    return call.value.upper()\n"},
+                       {"brick": "text", "settings": {"form": "line"}}]}
+    py = as_python(block, "object")
+    assert chained(py, "nord") == chained(block, "nord")
+    assert [value for _term, value in chained(py, "nord")] == ["NORD"]
+    # the failure by construction: the step of Python left out
+    spoiled = {"python": py["python"].replace("return call.value.upper()",
+                                              "return call.value")}
+    assert chained(spoiled, "nord") != chained(block, "nord")
+
+
+def test_no_block_of_the_kind_has_no_python_for_the_page():
+    from docpipe.editor import graphpage
+    said = graphpage.python_of_block(
+        PROFILE, {"steps": [{"brick": "text"}, {"brick": "lookup"}]},
+        "object")
+    assert said == {"python": ""}
+    said = graphpage.python_of_block(
+        PROFILE, {"steps": [{"brick": "remove_words"},
+                            {"brick": "text"}]}, "object")
+    assert "def run(call):" in said["python"]
+
+
 # -- an address made of parts -------------------------------------------------
 
 def parts(doc, the_parts, row, label=""):

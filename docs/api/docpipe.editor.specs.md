@@ -136,7 +136,8 @@ def removed(old: dict, new: dict) -> list
 
 What the edited spec no longer has that the spec on disk has, in
 words: fields, coordinates, entries of lists, names and spellings, units,
-groups, and the blocks of what a document settles and of its works.
+and the blocks of what a document settles and of its works. A shared
+dimension is held field by field, as each field asks it.
 
 A changed text is no removal. These are the things a harvest was read
 against or asked through, so taking one away is confirmed before it is
@@ -188,8 +189,9 @@ def copy_coordinate(data: dict, uri: str, name: str, key: str) -> dict
 ```
 
 The spec with a copy of a coordinate of a field under a new name,
-right after it, in the group of its original and with what the group
-says of the original.
+right after it, the field's own (a copy of a shared dimension is no
+longer shared), and beside its original in the order of the questions
+with what the order says of the original.
 
 ### remove
 
@@ -201,8 +203,9 @@ The spec without one thing: a field, a coordinate, an entry of a
 list, a spelling, something a document settles, or the works block.
 
 Nothing is written here. What follows from a removal goes with it, so
-the result still loads: a coordinate no field has any more leaves its
-group, and a question the works block asks of a removed field leaves the
+the result still loads: a coordinate no field has any more leaves the
+order of the questions, a shared dimension no field asks any more goes,
+and a question the works block asks of a removed field leaves the
 block.
 
 ### pin
@@ -213,6 +216,20 @@ def pin(data: dict, snapshot: dict) -> dict
 
 {entry: the snapshot's term} for every entry of the spec's lists that
 is a term of the profile's ontology snapshot.
+
+### ontology_lists
+
+```python
+def ontology_lists(snapshot: Optional[dict], profile=None) -> dict
+```
+
+What the Spec tab shows of where the spec's lists come from: each
+list of the profile's sources with the root it is drawn from, the root's
+label and definition and the terms the snapshot carries under it
+({"sets": {name: {"root", "kind", "label", "definition", "members"}}}),
+and which dimension the sources say draws from which list
+({"axis_sets": {dimension: list name}}). Empty where the profile has no
+snapshot.
 
 ### notes
 

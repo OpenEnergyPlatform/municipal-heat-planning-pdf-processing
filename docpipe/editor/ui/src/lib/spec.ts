@@ -98,11 +98,16 @@ export function axisKinds(axis: unknown): string[] {
   return ['vocabulary', 'type', 'enum', 'dynamic'].filter(x => own(axis, x));
 }
 
-/* a node of the tree: the top-level questions, a plan field, the works, a group, a field, a field's list, a coordinate */
+/* what the Spec tab shows: the top-level questions, a plan field, the works, the order of the questions, a field, a
+   field's units, a field's list, a dimension of a field, a shared dimension, a value type, an entry of a list (of a
+   field: name null; of a shared dimension: uri null), a list of the ontology a dimension draws from */
 export type SpecNode =
-  | { t: 'spec' } | { t: 'plan'; key: string } | { t: 'works' } | { t: 'group'; name: string }
-  | { t: 'param'; uri: string } | { t: 'plist'; uri: string; list: string } | { t: 'axis'; uri: string; name: string }
-  | { t: 'vtype'; name: string };
+  | { t: 'spec' } | { t: 'plan'; key: string } | { t: 'works' } | { t: 'coordinates' }
+  | { t: 'param'; uri: string } | { t: 'units'; uri: string } | { t: 'plist'; uri: string; list: string }
+  | { t: 'axis'; uri: string; name: string } | { t: 'shared'; name: string } | { t: 'vtype'; name: string }
+  | { t: 'entry'; uri: string | null; name: string | null; key: string; id: string } | { t: 'root'; set: string };
+/* the keys of a field that its units box shows, where it has units */
+export const UNIT_KEYS = ['unit_target', 'units_accepted', 'integrated'];
 export interface Flag { field: string | null; entry: string | null }
 
 /* names that may contain dots are matched as prefixes, the longest first */
@@ -135,13 +140,17 @@ export function locate(where: string, data: Obj): { node: SpecNode; field: strin
       const ax = isObj(param.axes) ? matchPrefix(Object.keys(param.axes), r) : null;
       if (!ax) return { node: { t: 'param', uri: param.uri }, field: null, entry: null };
       const field = ax.rest ? firstSeg(ax.rest) : null;
+      /* a dimension the field shares is fixed where the shared one stands */
+      const shared = param.axes[ax.name] === 'shared';
+      const held = shared ? (isObj(data.shared_axes) ? data.shared_axes[ax.name] : null) : param.axes[ax.name];
       let entry: string | null = null;
-      if ((field === 'vocabulary' || field === 'beside') && ax.rest.length > field.length + 1) {
-        entry = entryIn(param.axes[ax.name][field], ax.rest.slice(field.length + 1));
+      if ((field === 'vocabulary' || field === 'beside') && ax.rest.length > field.length + 1 && isObj(held)) {
+        entry = entryIn(held[field], ax.rest.slice(field.length + 1));
       }
-      return { node: { t: 'axis', uri: param.uri, name: ax.name }, field, entry };
+      return { node: shared ? { t: 'shared', name: ax.name } : { t: 'axis', uri: param.uri, name: ax.name }, field, entry };
     }
     const seg = rest ? firstSeg(rest) : null;
+    if (seg && UNIT_KEYS.includes(seg) && isObj(param.units_accepted)) return { node: { t: 'units', uri: param.uri }, field: seg, entry: null };
     if (seg === 'vocabulary' || seg === 'beside') {
       const entry = rest.length > seg.length + 1 ? entryIn(param[seg], rest.slice(seg.length + 1)) : null;
       return { node: { t: 'plist', uri: param.uri, list: seg }, field: seg, entry };
@@ -163,11 +172,22 @@ export function locate(where: string, data: Obj): { node: SpecNode; field: strin
     const r = w === 'works' ? '' : w.slice(6);
     return { node: { t: 'works' }, field: r ? firstSeg(r) : null, entry: null };
   }
-  if (w === 'groups' || w.startsWith('groups.')) {
-    const r = w === 'groups' ? '' : w.slice(7);
-    const g = isObj(data.groups) ? matchPrefix(Object.keys(data.groups), r) : null;
-    if (!g) return { node: { t: 'spec' }, field: null, entry: null };
-    return { node: { t: 'group', name: g.name }, field: g.rest ? firstSeg(g.rest) : null, entry: null };
+  if (w === 'coordinates' || w.startsWith('coordinates.')) {
+    const r = w === 'coordinates' ? '' : w.slice(12);
+    return { node: { t: 'coordinates' }, field: r ? firstSeg(r) : null, entry: null };
+  }
+  if (w === 'shared_axes' || w.startsWith('shared_axes.')) {
+    const r = w === 'shared_axes' ? '' : w.slice(12);
+    const s = isObj(data.shared_axes) ? matchPrefix(Object.keys(data.shared_axes), r) : null;
+    if (!s) return { node: { t: 'spec' }, field: 'shared_axes', entry: null };
+    const field = s.rest ? firstSeg(s.rest) : null;
+    let entry: string | null = null;
+    const held = data.shared_axes[s.name];
+    if ((field === 'vocabulary' || field === 'beside') && s.rest.length > field.length + 1 && isObj(held) && isObj(held[field])) {
+      const f = matchPrefix(Object.keys(held[field]), s.rest.slice(field.length + 1));
+      entry = f ? f.name : null;
+    }
+    return { node: { t: 'shared', name: s.name }, field, entry };
   }
   return { node: { t: 'spec' }, field: firstSeg(w) || null, entry: null };
 }

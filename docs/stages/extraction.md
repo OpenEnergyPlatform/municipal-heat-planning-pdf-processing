@@ -128,31 +128,36 @@ an evidence rule is refused at load time (`spec.py`): a
 coordinate is checked for its quote and its answer, wherever the
 passage stands.
 
-A spec names `groups`: the coordinates a plan prints together, each group
-with the step that reads it (`read_in`, which can only be `reading`) and a sentence
-on where a plan prints it (`where`; no request of the flow shows it any more).
-kwp has three: `frame` (scenario and year, the pair that dates a value), `number`
-(unit, `what`, the number's own name in the plan's words, `subject` and
-`qualifier`) and `context` (the other axes). A value's coordinates are asked in the
-order of the groups and of each group's coordinates, each for this value alone:
-nothing is taken over for a whole table or section (owner decision 2026-11-07; see
-Asking a coordinate of a value). scenarios has three, `work` (whether the value is
-this publication's or another work's), `year_kind` (what kind of year a year is) and
-`scenario` (the scenario a value refers to). `spec.load` refuses a coordinate in no
-group or in two, a name that is no coordinate, and a step other than `reading`. A
-spec without groups stops the run (see The run harvests from the survey). A group
-may say `"definition": "full"`, which `spec.load` reads into `Group.full_definition`
-and no request of the flow consults any more: a request shows a field by its `brief`
-where the spec writes one, else by its description, and only a field asked once of
-a document is shown in full. A group may name a
-`pair`, which only says that those coordinates are the plan's frame, the ones its
-base and target years date a value by (`Group.paired`; kwp's `frame` does). A group
-may also say which coordinates the search does not ask (owner decision
-2026-11-06): `own_passage` names those only the place of the value can state, asked
-at the value's place and never searched, and `own_value` those printed with the
-number itself, whatever else answers (`Group.own_passage`, `Group.own_value`); a
-coordinate is in one of them or neither. kwp: `unit`, `what`, `subject`,
-`aggregation` and `role` are `own_passage`, `qualifier` is `own_value`.
+A spec names `coordinates` (`spec.Coordinates`, checked by
+`spec._validate_coordinates`): `order`, every coordinate of the spec once, is the
+order a value's coordinates are asked in, each for this value alone: nothing is
+taken over for a whole table or section (owner decision 2026-11-07; see Asking a
+coordinate of a value); the rule `coordinate_order` may put some first. `own_passage`
+names the coordinates only the place of the value can state, asked at the value's
+place and never searched (owner decision 2026-11-06), `own_value` those printed
+with the number itself, whatever else answers; a coordinate is in one of them or
+neither. `frame` names the coordinates of the plan's frame, the scenario and year
+pair that the plan's base and target years date a value by
+(`addressed.Plan`). `spec.load` refuses a coordinate missing from `order` or named
+twice in it, a name that is no coordinate, and a coordinate in both `own_passage`
+and `own_value`. A spec without `coordinates` stops the run (see The run harvests
+from the survey). A spec with `groups` is refused with a sentence that says where
+its parts are. kwp: `unit`, `what`, `subject`, `aggregation` and `role` are
+`own_passage`, `qualifier` is `own_value`, `scenario` and `year` are the `frame`; the
+order is `unit`, `what`, `subject`, `qualifier`, `scenario`, `year` and the other
+axes. scenarios asks `work` (whether the value is this publication's or another
+work's), `year_kind` (what kind of year a year is) and `scenario` (the scenario a
+value refers to), in that order. A request shows a field by its `brief` where the
+spec writes one, else by its description, and only a field asked once of a document
+is shown in full (`addressed.field_shown`).
+
+A spec may write a dimension once for all the fields that ask it alike:
+`shared_axes` maps a dimension name to the dimension object, and a field's `axes`
+entry given as the string `"shared"` (`spec.SHARED`) is that dimension
+(`spec.axes_of`). Every reader of the raw spec reads the expanded copy
+(`spec.expanded`), so a field asks the same of a shared dimension as of its own
+copy. `spec.load` refuses a shared dimension that is no object or that no field
+asks, and a `"shared"` that names none.
 
 A parameter may say `"once_per_document": true`, which has it asked once per
 document and not in every piece (see A field a document has once), and
@@ -321,7 +326,7 @@ profile's Python said it): kwp's `base_year` has `{"scenario": "status_quo"}` an
 its `target_year` `{"scenario": "target"}`; scenarios has none, and a plan field
 without `of` has no years of that state. `of` is allowed only at the two year
 fields (`spec.YEAR_FIELDS`) and is checked strictly (`spec._validate_of`): each
-coordinate has to be one of a group's pair, and each entry a key of its list in
+coordinate has to be one of `coordinates.frame`, and each entry a key of its list in
 every field that carries it. It is in no fingerprint and reaches no request. Only
 the passes over a stored harvest (`--top-up`, `--top-up-open`) read it, through
 `runner.year_states_of` and `topup.named_years_of`; a run that reads a document
@@ -467,13 +472,13 @@ in one probe the title in 17 documents, the abstract in 132 of 164.
 Every found value is then asked its coordinates (the frame of each coordinate and its step, the preset `coord`, target `dimension`
 with `where: own`: `targets.at_own_place`, prompt
 `extraction/coord`, owner decisions 2026-11-05, 2026-11-07 and 2026-11-08): each
-on its own, one request for each, in the order of the spec's groups and of
-each group's coordinates, side by side with every other value. A request has no
+on its own, one request for each, in the order of the spec's
+`coordinates.order`, side by side with every other value. A request has no
 history. Every coordinate is asked, scenario and year included, each for this
 value alone: nothing is taken over from its table or its section, no coordinate is
 read once for a whole table, and no request shows a pair (owner decision
-2026-11-07). A coordinate the parameter lacks is skipped (`reading.groups_of`,
-`reading.in_group_order`). The unit comes first for a number: the model copies
+2026-11-07). A coordinate the parameter lacks is skipped (`reading.slots_of`,
+`reading.in_order`). The unit comes first for a number: the model copies
 the printed unit into the words and the unit's list request chooses the entry of
 the parameter's list, or `""` where none fits, and it is never refused. A
 coordinate the spec derives (a `derive` block; kwp's `aggregation`) is
@@ -511,8 +516,8 @@ reasons (see Asking again: follow-ups), and then ends `unbacked`.
 **What a `0` leads to.** A coordinate whose own place does not state it goes on
 to the search (see Searching for what a value's place does not say), which goes
 with a sentence a request of its own writes (the preset `phrase`, target `sentence`), unless only
-the place of the value can say it: the coordinates a group names under
-`own_passage` or `own_value` (owner decision 2026-11-06; kwp: `unit`, `what`,
+the place of the value can say it: the coordinates the spec names under
+`coordinates.own_passage` or `coordinates.own_value` (owner decision 2026-11-06; kwp: `unit`, `what`,
 `subject`, `aggregation` and `role` are `own_passage`, `qualifier` is `own_value`)
 are never searched and end `unstated` where their place does not state them. A
 number's year still open after the search is asked last with the plan's years:
@@ -540,8 +545,8 @@ a value must have to be a value of its parameter at all, under the spec key
 `"keep"` (`spec.Axis.keep`, owner decisions 2026-11-07); the spec refuses one that
 is no entry of the list. The scenarios profile has two: the kind of a scenario
 year, "scenario year" (OEO_00020097) or "other year", and the work of each of its
-thirteen publication and study fields, "this publication" or "another work". Their
-groups come first, so each is its value's first coordinate. A value read with
+thirteen publication and study fields, "this publication" or "another work". Each
+stands first in `coordinates.order`, so it is its value's first coordinate. A value read with
 another entry (`fields.kept` False) is asked nothing after it, its other
 coordinates `out_of_slice` (the way `closed` of the default drawing, a state box set to `out_of_slice`); a value whose entry stays open
 asks the coordinates after it. A pass over a stored harvest asks a coordinate
@@ -562,9 +567,7 @@ a number (`fields.wording_asked`); a free-text answer is its own wording, and th
 row keeps it beside the answer as `<coordinate>_raw` (`pipeline.merge_field`, owner
 decision 2026-11-06). The parameter is shown by its `brief`, a paragraph on what a
 value of it is, where the spec writes one, else by its description; a field asked
-once of a document is shown in full (`addressed.field_shown`). `spec.load` still asks each
-group for its `read_in` (only `reading`) and a `where`, a sentence on where a plan
-prints it; no request of this flow shows that sentence.
+once of a document is shown in full (`addressed.field_shown`).
 
 A free-text coordinate or value the spec marks `merged` (`"merged": "<kind>"`,
 owner decisions 2026-11-06; scenarios marks the `scenario` axis and the value of
@@ -902,9 +905,9 @@ The prompts are one for each kind of request, `extraction/<kind>`: `transcribe`,
 `find`, `docfield`, `coord`, `list`, `search`, `follow` and, where a profile
 writes them, `check`, `phrase` (the sentence a search goes with; without it the
 search goes with the field's sentence), and `names` and `work` for a run that builds
-lists of names and works (`addressed.KINDS`, `addressed.OPTIONAL`). A profile whose spec names groups and
+lists of names and works (`addressed.KINDS`, `addressed.OPTIONAL`). A profile whose spec names coordinates and
 lacks one of the required ones is broken, and the run stops at the start and names
-the prompt, as `spec.load` stops at a broken group (owner decision 2026-11-04;
+the prompt, as `spec.load` stops at a broken spec (owner decision 2026-11-04;
 `runner.surveyed_flow`). The prompts are compact, the result first, and none shows a backtick in its
 example, which the prompt says (owner decision 2026-11-06); no test reads a
 prompt (owner decision 2026-11-05).
@@ -920,16 +923,16 @@ guard or the run's timeout.
 ### The run harvests from the survey
 
 A run harvests each plan piece by piece (`runner.surveyed_flow`: its spec must
-name groups), and then the profile must write the prompts `extraction/transcribe`,
+name coordinates), and then the profile must write the prompts `extraction/transcribe`,
 `find`, `docfield`, `coord`, `list`, `search` and `follow`
 (`runner.SURVEY_PROMPT_IDS`), `extraction/names` where its spec merges names or
 its spec keeps a list of works (`runner.names_asked`, which reads the spec only), and may write
 `extraction/check`, `extraction/phrase` and `extraction/work`
 (`runner.survey_prompt_ids` lists the ones a profile has).
-kwp and scenarios do, scenarios with `names`. A profile whose spec names groups
+kwp and scenarios do, scenarios with `names`. A profile whose spec names coordinates
 and lacks a required one is broken, and the run stops at the start and names
-the prompt, for every run and every probe, as `spec.load` stops at a broken group
-(owner decision 2026-11-04). A spec without groups stops the run with an error,
+the prompt, for every run and every probe, as `spec.load` stops at a broken spec
+(owner decision 2026-11-04). A spec without coordinates stops the run with an error,
 and `docpipe doctor`'s extract line fails on it as well (owner decision
 2026-11-08: the field-by-field flow is gone).
 
@@ -2252,9 +2255,9 @@ would not be read, since the graph is written from the profile's own spec (kwp's
 writer fails on a parameter it does not know), and `--serialize` with `--spec`
 says so in a warning and goes on. Other limits of a column:
 
-- A spec without `groups` stops the run (see The run harvests from the survey),
+- A spec without `coordinates` stops the run (see The run harvests from the survey),
   and the draft `docpipe column` writes names none, nor does `compile apply` add
-  any: until the spec names a group, a column of one's own cannot be harvested.
+  any: until the spec names them, a column of one's own cannot be harvested.
   The prompts are the profile's, German for kwp.
 - Under scenarios the `document_axes` hook reads the corpus database's section,
   table and image texts of every document, so the run needs the database layout
@@ -2983,13 +2986,13 @@ Author: Felix Vossel
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
 A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
-stops the run where the spec names no groups or the profile lacks a prompt
-of the harvest): every piece asked for every field in the order a reranker
-gives it, each coordinate of each value found asked on its own, and a
-coordinate its place does not state searched for (`addressed.py`, run per
-document by `surveyed.py`), then the fold, the compute step and the file
-with its stamp as below. The passes over a
-stored harvest run on the same steps.
+stops the run where the spec names no order of its coordinates or the
+profile lacks a prompt of the harvest): every piece asked for every field in
+the order a reranker gives it, each coordinate of each value found asked on
+its own, and a coordinate its place does not state searched for
+(`addressed.py`, run per document by `surveyed.py`), then the fold, the
+compute step and the file with its stamp as below. The passes over a stored
+harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the model calls, and locating a quote on

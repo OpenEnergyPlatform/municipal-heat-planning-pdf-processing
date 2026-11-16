@@ -3,7 +3,7 @@
 `docpipe/extraction/reading.py`, read with `ast` by `scripts/build_docs.py`. The docstrings are the code's own: edit them there, not here.
 
 reading.py: What the reading of a plan shares with the steps around it: the
-coordinates a value of a field is asked, in the order of the spec's groups;
+coordinates a value of a field is asked, in the order the spec asks them;
 a value stated for a span of years as one row per year; the two ends of a
 range linked; what a request fetches of the rest of a plan itself
 (`Gathered`, the compute step's tools); and what reading one field in one
@@ -167,24 +167,15 @@ every axis, one the spec derives from the unit included, which is asked
 where the unit question chose no entry of the parameter's list
 (`fields.derived_by_unit`).
 
-### in_group_order
+### in_order
 
 ```python
-def in_group_order(group, group_slots: list) -> list
+def in_order(spec, slots: list) -> list
 ```
 
-A group's coordinates in the order its spec entry names them: the
-order they are asked in, one request each.
-
-### groups_of
-
-```python
-def groups_of(spec, slots: list) -> list
-```
-
-[(group, its slots)] of *slots*, in the order of the spec's groups
-(owner decision 2026-11-04). The spec puts every coordinate in exactly
-one group (`spec._validate_groups`).
+*slots* in the order the spec asks them, one request each (spec:
+"coordinates": "order", which names every coordinate once,
+`spec._validate_coordinates`); as given where the spec names no order.
 
 ### shown_as
 

@@ -123,6 +123,33 @@ def compiled(code: str, space: dict) -> Callable
 
 run(call) of *code*, with the names of *space* beside it.
 
+### python_of
+
+```python
+def python_of(brick: Brick, names=BLOCK_NAMES) -> str
+```
+
+The logic of a brick as the Python of a block: its own function with
+the def line `def run(call):`, and an import line for every name its body
+uses that a block does not have (*names*), taken from the brick's own
+module, so the code runs as it stands. Relative imports in the body are
+written out in full. The empty text where the source is not to be had.
+
+### python_block
+
+```python
+def python_block(ref, kind: str, bricks: dict, space: Optional[dict] = None
+                 ) -> str
+```
+
+Any block of a drawing as the Python of a block that does the same:
+a brick as its own logic (`python_of`), a condition as the test and the
+reason it gives, steps as each step's code in a function of its own and
+the chain that hands each step what the step before gave, its settings
+beside it. The code runs as it stands where a block of Python runs.
+The empty text where a step's source is not to be had; BlockError where
+*ref* is no block of *kind*.
+
 ### resolve
 
 ```python

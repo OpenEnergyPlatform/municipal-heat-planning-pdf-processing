@@ -214,7 +214,7 @@ Fields:
 - `read: Read`
 - `row: Row`
 - `slot: object`
-- `group: object`
+- `coordinates: object`: How the spec asks a value's coordinates (`spec.Coordinates`): which are read only at the value's own passage or with the number itself.
 - `before: list`
 - `clone: Callable`
 - `made: list = field(default_factory=list)`
@@ -532,7 +532,7 @@ fields)* makes it where the drawing orders them (`sentences`).
 #### Engine.coordinate
 
 ```python
-def coordinate(self, plan: Plan, read: Read, row: Row, group, slot,
+def coordinate(self, plan: Plan, read: Read, row: Row, slot,
                counts: Counts, clone: Callable) -> list
 ```
 
@@ -650,8 +650,8 @@ def value_scope(self, scope: Scope, read: Read, row: Row) -> Scope
 def slot_sequence(self, parameter) -> list
 ```
 
-[(group, slot)] of a field's coordinates in the order they are
-asked: the spec's groups, then the rule `coordinate_order`.
+A field's coordinates in the order they are asked: the rule
+`coordinate_order` first, then the order of the spec.
 
 #### Engine.each_coordinate
 
@@ -659,8 +659,8 @@ asked: the spec's groups, then the rule `coordinate_order`.
 def each_coordinate(self, node: dict, scope: Scope) -> None
 ```
 
-Each coordinate of the value, in the order of the spec's groups,
-for the value's row and every row made beside it.
+Each coordinate of the value, in the order of the spec, for the
+value's row and every row made beside it.
 
 #### Engine.box_settle
 

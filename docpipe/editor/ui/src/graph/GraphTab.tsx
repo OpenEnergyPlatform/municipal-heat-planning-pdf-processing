@@ -2,17 +2,18 @@
    right the boxes (a class each) with the properties the shapes give it; arrows from a field to a property, from a field
    to a box (it makes the box's nodes) and from a box to a box over a property. A click opens the settings of a box, an
    arrow or the document; below, with a harvest loaded, the triples of one document as the run would write them. The
-   drawing (`map` of the graph file) is edited in place and sent whole by Check and Save; no position is kept. */
+   drawing (`map` of the graph file) is edited in place and sent whole by Check and Save; no position is kept in it: a
+   field or box dragged elsewhere stays there while the page is open. */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
-  Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Connection, type Edge, type Node,
+  Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Connection, type Edge, type Node, type NodeChange,
 } from '@xyflow/react';
 import {
   Accordion, ActionIcon, Alert, Anchor, Badge, Box, Button, Center, Code, Collapse, Drawer, Group, List, Loader, Modal, ScrollArea, Select, Stack,
   Switch, Text, TextInput, Tooltip, UnstyledButton,
 } from '@mantine/core';
 import {
-  IconArrowBackUp, IconArrowForwardUp, IconBox, IconCheck, IconChevronDown, IconChevronUp, IconDeviceFloppy, IconFocusCentered,
+  IconArrowBackUp, IconArrowForwardUp, IconArrowsShuffle, IconBox, IconCheck, IconChevronDown, IconChevronUp, IconDeviceFloppy, IconFocusCentered,
   IconPlayerPlay, IconPlus, IconSearch, IconSettings, IconX,
 } from '@tabler/icons-react';
 import { api, apiR } from '../lib/api';
@@ -20,14 +21,16 @@ import { askConfirm, showError, showInfo } from '../lib/dialogs';
 import { loadState, setDirty, tabStore, useRequests, useTabActions } from '../lib/nav';
 import { rich, t, tn, tr, useLang } from '../lib/i18n';
 import { wrote } from '../lib/util';
+import { shownNodes, takeMoves, type Moved } from '../lib/moved';
+import { untangle } from '../lib/untangle';
 import { Diff } from '../components/Bits';
 import { TextBox } from '../components/Inputs';
 import { GroupedRules } from '../rules/RuleInputs';
 import { Put } from '../prompts/Reports';
 import type { Edit, Kit } from './inputs';
 import {
-  arrowKey, clone, curOf, freshBoxId, isRed, layout, localName, removeBox, rowsOf, takesFields,
-  type Cur, type Decor, type GraphData, type Obj, type Problem,
+  arrowKey, clone, curOf, freshBoxId, isRed, keptFrom, layout, localName, removeBox, rowsOf, takesFields, untangleInput,
+  type Cur, type Decor, type GraphData, type Kept, type Obj, type Problem,
 } from './model';
 import { ArrowEdge, BoxNode, Ctx, FieldNode, LabelNode, type GraphCtx } from './nodes';
 import { ArrowSettings, BoxSettings, DocumentSettings, type Panel } from './Settings';
@@ -55,6 +58,10 @@ interface State {
   data: GraphData | null; cur: Cur | null; error: string | null; undo: string[]; redo: string[]; snap: string; was: string;
   lastKey: string | null; lastAt: number; sel: Sel; expanded: Set<string>; report: Report | null; busy: boolean; fit: number;
   pv: Preview; probe: any; probing: boolean; db: string;
+  /* the order of fields and boxes "Untangle arrows" found; lives until the page is reloaded, never in a file */
+  kept: Kept | null;
+  /* the fields and boxes dragged elsewhere by hand (lib/moved), until the page is reloaded or the arrows are untangled */
+  moved: Moved;
 }
 
 export function GraphTab() {
@@ -66,7 +73,7 @@ function GraphInner() {
   const G = useRef<State>({
     data: null, cur: null, error: null, undo: [], redo: [], snap: '', was: '', lastKey: null, lastAt: 0, sel: { kind: null, id: null },
     expanded: new Set(), report: null, busy: false, fit: 0,
-    pv: { open: true, doc: null, strict: false, seq: 0, loading: false, result: null, error: null }, probe: null, probing: false, db: '',
+    pv: { open: true, doc: null, strict: false, seq: 0, loading: false, result: null, error: null }, probe: null, probing: false, db: '', kept: null, moved: new Map(),
   }).current;
   const [version, touch] = useReducer((x: number) => x + 1, 0);
   const [adding, setAdding] = useState(false);
@@ -171,9 +178,22 @@ function GraphInner() {
 
   const placed = useMemo(() => {
     if (!G.data || !G.cur) return { nodes: [] as Node[], edges: [] as Edge[] };
-    const decor: Decor = { selected: G.sel, problems, expanded: G.expanded, d: G.data, map: G.cur.map };
+    const decor: Decor = { selected: G.sel, problems, expanded: G.expanded, d: G.data, map: G.cur.map, kept: G.kept || undefined };
     return layout(G.data, decor);
   }, [version, problems, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the drawing as shown: a box moved by hand at its new place; while it moves, only this is done again */
+  const [movedAt, movedTouch] = useReducer((x: number) => x + 1, 0);
+  const shown = useMemo(() => shownNodes(placed.nodes, G.moved), [placed, movedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onNodesChange = (changes: NodeChange[]) => { if (takeMoves(changes, shown, G.moved)) movedTouch(); };
+
+  const untangleArrows = () => {
+    if (!G.data) return;
+    const r = untangle(untangleInput(G.data, placed.nodes, placed.edges));
+    G.kept = keptFrom(r);
+    G.moved.clear();
+    showInfo(t('Crossings: {before} → {after}', { before: r.before, after: r.after }));
+    touch();
+  };
 
   const fitAll = useCallback((duration = 300) => { flow.fitView({ padding: 0.08, maxZoom: 1, duration }); }, [flow]);
   useEffect(() => {
@@ -314,6 +334,7 @@ function GraphInner() {
   const kit: Kit = {
     d, edit, cur,
     tryBlock: (where, document) => api('POST', '/api/graph/try_block', { data: G.cur, document, where, strict: G.pv.strict, db: G.db || null }),
+    pythonOf: (ref, kind) => api('POST', '/api/graph/python', { ref, kind }),
   };
   const panel: Panel = { d, cur, kit, remove: removeArrow, removeBox: id => { void dropBox(id); }, select: (k, id) => select(k, id) };
   const selBox = G.sel.kind === 'box' ? (map.boxes || []).find((b: Obj) => b.id === G.sel.id) : null;
@@ -334,6 +355,7 @@ function GraphInner() {
             <Tooltip label={t('Undo (Ctrl+Z)')}><ActionIcon variant="default" size="lg" disabled={!G.undo.length} onClick={undo} aria-label={t('Undo')}><IconArrowBackUp size={18} /></ActionIcon></Tooltip>
             <Tooltip label={t('Redo (Ctrl+Y)')}><ActionIcon variant="default" size="lg" disabled={!G.redo.length} onClick={redo} aria-label={t('Redo')}><IconArrowForwardUp size={18} /></ActionIcon></Tooltip>
             <Tooltip label={t('Show the whole drawing')}><ActionIcon variant="default" size="lg" onClick={() => fitAll()} aria-label={t('Show the whole drawing')}><IconFocusCentered size={18} /></ActionIcon></Tooltip>
+            <Button variant="default" leftSection={<IconArrowsShuffle size={16} />} disabled={!(map.boxes || []).length} onClick={untangleArrows}>{t('Untangle arrows')}</Button>
             <Button variant="default" leftSection={<IconBox size={16} />} onClick={() => setAdding(true)}>{t('Add a box')}</Button>
             <Button variant="default" leftSection={<IconSettings size={16} />} onClick={() => setRulesOpen(true)}>{t('Rules')}</Button>
             {d.harvest && <Button variant="light" color="orange" leftSection={<IconPlayerPlay size={16} />} loading={G.probing} onClick={() => { setProbeOpen(true); }}>{t('Test write')}</Button>}
@@ -349,8 +371,8 @@ function GraphInner() {
               {!(map.boxes || []).length && (
                 <Center className="gr-empty"><Alert color="blue" title={t('Nothing is drawn yet')}>{t('Add a box for a class of the shapes, then draw arrows from the fields on the left to its properties.')}</Alert></Center>
               )}
-              <ReactFlow nodes={placed.nodes} edges={placed.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} defaultEdgeOptions={edgeDefaults}
-                nodesDraggable={false} nodesConnectable elementsSelectable deleteKeyCode={['Backspace', 'Delete']} selectionKeyCode={null}
+              <ReactFlow nodes={shown} edges={placed.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} defaultEdgeOptions={edgeDefaults}
+                nodesDraggable onNodesChange={onNodesChange} nodesConnectable elementsSelectable deleteKeyCode={['Backspace', 'Delete']} selectionKeyCode={null}
                 multiSelectionKeyCode={null} panOnScroll zoomOnDoubleClick={false} minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }}
                 ariaLabelConfig={flowWords()} onConnect={connect} isValidConnection={isValid} onEdgesDelete={onEdgesDelete}
                 onEdgeClick={(_, e) => { const dd = e.data as Obj; if (dd.kind === 'of') select('box', dd.box); else select('arrow', dd.key); }}

@@ -411,6 +411,7 @@ class App:
             "/api/graph/probe": ("POST", self._graph_probe),
             "/api/graph/preview": ("POST", self._graph_preview),
             "/api/graph/try_block": ("POST", self._graph_try_block),
+            "/api/graph/python": ("POST", self._graph_python),
         }
         if path not in routes:
             raise _Refusal(404, f"no such endpoint: {path}")
@@ -539,7 +540,8 @@ class App:
                 "form": specs.form(self.profile),
                 "library": specs.library(data),
                 "pin": specs.pin(data, snapshot) if snapshot else {},
-                "notes": specs.notes(data, snapshot) if snapshot else []}
+                "notes": specs.notes(data, snapshot) if snapshot else [],
+                "ontology": specs.ontology_lists(snapshot, self.profile)}
 
     def _check(self, query, body) -> dict:
         data = self._need_data(body)
@@ -1348,6 +1350,12 @@ class App:
                 self._spec_object())
         except graphpage.PreviewError as exc:
             raise _Refusal(400, str(exc))
+
+    def _graph_python(self, query, body) -> dict:
+        """A block of the drawing on the page as Python that does the same,
+        nothing saved."""
+        return graphpage.python_of_block(self.profile, body.get("ref"),
+                                         body.get("kind"))
 
     def _graph_save(self, query, body) -> dict:
         own, raw = self._graph_file()

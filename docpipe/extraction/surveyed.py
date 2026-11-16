@@ -320,8 +320,6 @@ class SurveyedHarvest:
         reader = self.reader_of(spec)
         plan, counts = self.plan_of(document_id)
         read = Read(batch, [])
-        groups = {name: group for group in spec.groups.values()
-                  for name in group.coordinates}
         made = {"n": 0}
 
         def clone(row: Row) -> Row:
@@ -336,8 +334,7 @@ class SurveyedHarvest:
             row.claim["at"] = at
             for slot in slots:
                 row.claim.pop(f"{slot.name}_state", None)
-                reader.coordinate(plan, read, row, groups.get(slot.name),
-                                  slot, counts, clone)
+                reader.coordinate(plan, read, row, slot, counts, clone)
 
 
 def take_found(whole: SurveyedHarvest, document_id: int, kept: list,

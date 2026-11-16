@@ -44,6 +44,7 @@ from typing import Callable, Optional
 
 from .. import graphfile, rules, settings
 from ..extraction import blocks, conditions, shows
+from ..extraction import spec as spec_module
 from ..extraction import flow as flow_map
 from ..extraction import passflow
 from ..extraction.spec import plan_field_kind
@@ -88,15 +89,16 @@ def _works(data: dict) -> list:
     return [{"label": works.get("name") or "works", "to": {"t": "works"}}]
 
 
-def _of_group(key: str) -> Callable:
+def _of_coordinates(key: str) -> Callable:
+    """The dimensions the spec's order of the questions marks with *key*
+    (spec: "coordinates")."""
     def items(data: dict) -> list:
-        groups = data.get("groups")
-        return [{"label": f"{coordinate} ({name})",
-                 "to": {"t": "group", "name": name}}
-                for name, group in (groups if isinstance(groups, dict)
-                                    else {}).items()
-                for coordinate in (group.get(key) or ()
-                                   if isinstance(group, dict) else ())]
+        coordinates = data.get("coordinates")
+        listed = (coordinates.get(key) if isinstance(coordinates, dict)
+                  else None)
+        return [{"label": coordinate, "to": {"t": "coordinates"}}
+                for coordinate in (listed if isinstance(listed, list)
+                                   else ())]
     return items
 
 
@@ -107,7 +109,7 @@ def _names(data: dict) -> list:
     out = [_field(p) for p in _fields(data) if p.get("merged")]
     seen: set = set()
     for parameter in _fields(data):
-        for name, axis in (parameter.get("axes") or {}).items():
+        for name, axis in spec_module.axes_of(data, parameter).items():
             if isinstance(axis, dict) and axis.get("merged") \
                     and name not in seen:
                 seen.add(name)
@@ -145,17 +147,17 @@ SWITCHES = {
                       if p.get("once_per_document")]),
     "own_passage": (
         "dimensions stated only where the value stands, so never searched",
-        "No group of the spec names a dimension that is stated only where "
-        "the value stands. To change it: list the dimension under "
-        "`own_passage` of a group in the Spec tab.",
-        _of_group("own_passage")),
+        "The spec marks no dimension as stated only where the value stands. "
+        "To change it: mark the dimension in the order of the questions in "
+        "the Spec tab.",
+        _of_coordinates("own_passage")),
     "own_value": (
         "dimensions printed with the number itself, asked once and never "
         "searched",
-        "No group of the spec names a dimension that is printed with the "
-        "number itself. To change it: list the dimension under `own_value` "
-        "of a group in the Spec tab.",
-        _of_group("own_value")),
+        "The spec marks no dimension as printed with the number itself. To "
+        "change it: mark the dimension in the order of the questions in the "
+        "Spec tab.",
+        _of_coordinates("own_value")),
     "takes_group": (
         "fields that keep the words of a group as they stand",
         "Every field splits the words of a group into its members, so no "

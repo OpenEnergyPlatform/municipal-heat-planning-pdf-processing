@@ -1,34 +1,95 @@
-/* The Spec tab: the tree, the marked rows. Colours from Mantine's variables, so both schemes hold. */
-.dp-spec-tree {
-  width: 320px; flex: none; min-height: 0; overflow: auto; padding: 8px;
-  border-right: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+/* The Spec tab: what the spec has on the left, the field's drawing or a page in the middle, the settings on the right.
+   Colours from Mantine's variables, so both schemes hold. */
+.sp-body { display: flex; flex: 1; min-height: 0; margin-top: 8px; }
+.sp-nav {
+  width: 270px; flex: none; min-height: 0;
+  border-right: 1px solid var(--mantine-color-default-border); background: var(--mantine-color-body);
 }
-.dp-spec-head {
-  margin: 14px 6px 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--mantine-color-dimmed);
+.sp-center { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.sp-center-page { flex: 1; min-height: 0; overflow: auto; }
+.sp-panel {
+  width: 470px; flex: none; min-height: 0; display: flex; flex-direction: column;
+  border-left: 1px solid var(--mantine-color-default-border); background: var(--mantine-color-body);
 }
-.dp-spec-node {
-  display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 10px; border: 0; background: none;
-  border-radius: var(--mantine-radius-md); text-align: left; color: inherit; cursor: pointer; font: inherit; font-size: 15px;
-}
-.dp-spec-node:hover { background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6)); }
-.dp-spec-node[data-sel="true"] {
-  background: var(--mantine-primary-color-light); color: var(--mantine-primary-color-light-color); font-weight: 600;
-  box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled);
-}
-.dp-spec-node.l1 { padding-left: 38px; }
-.dp-spec-node.add { color: var(--mantine-color-dimmed); font-style: italic; }
-.dp-spec-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dp-spec-sub { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 400; color: var(--mantine-color-dimmed); }
-.dp-spec-caret { flex: none; width: 18px; display: inline-flex; justify-content: center; color: var(--mantine-color-dimmed); }
-.dp-spec-lib { display: flex; flex-direction: column; gap: 4px; margin: 0 4px 6px; }
-.dp-spec-block {
-  display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 13px; cursor: grab;
-  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4)); border-radius: var(--mantine-radius-sm);
-  background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
-}
-.dp-spec-block:hover { border-color: var(--mantine-primary-color-filled); }
+.sp-side-panel { flex: 1; min-height: 0; overflow: auto; }
+.sp-hint { border-top: 1px solid var(--mantine-color-default-border); }
 
+/* the whole list over the page and the result of a check */
 .dp-spec-row[data-sel="true"] > td { background: var(--mantine-primary-color-light); }
 .dp-spec-table td, .dp-spec-table th { vertical-align: top; }
-.dp-spec-panel { max-height: 42vh; overflow: auto; }
+.dp-spec-panel { max-height: 26vh; overflow: auto; }
+
+/* the boxes of a field's drawing */
+.sp-label { line-height: 34px; white-space: nowrap; letter-spacing: 0.04em; }
+.sp-box {
+  box-sizing: border-box; width: 100%; height: 100%; border-radius: 12px; cursor: pointer; overflow: hidden;
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+  background: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.sp-box:hover { box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14); }
+.sp-box.is-sel, .sp-row.is-sel, .sp-field-head.is-sel {
+  outline: 2px solid var(--mantine-primary-color-filled); outline-offset: -2px;
+}
+.sp-root, .sp-units { padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.sp-root { border-left: 6px solid var(--mantine-color-blue-6); }
+.sp-units { border-left: 6px solid var(--mantine-color-orange-6); }
+.sp-field { cursor: default; border-top: 6px solid var(--mantine-color-teal-6); }
+.sp-field-head {
+  box-sizing: border-box; padding: 8px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+}
+.sp-row {
+  box-sizing: border-box; display: flex; align-items: center; padding: 0 12px; cursor: pointer; position: relative;
+  border-bottom: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+.sp-row:hover { background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-5)); }
+.sp-row.is-pick { background: var(--mantine-primary-color-light); box-shadow: inset 4px 0 0 var(--mantine-primary-color-filled); }
+.sp-row-text { flex: 1; min-width: 0; }
+.sp-frame {
+  box-sizing: border-box; width: 100%; height: 100%; padding: 8px 14px; border-radius: 16px;
+  border: 2px solid color-mix(in srgb, var(--mantine-color-indigo-5) 45%, transparent);
+  background: color-mix(in srgb, var(--mantine-color-indigo-5) 6%, transparent);
+}
+.sp-entry { padding: 8px 12px; border-left: 4px solid var(--mantine-color-indigo-4); }
+.sp-more { padding: 10px 12px; cursor: default; border-style: dashed; }
+
+/* a word of the plans an entry gathers: dragged onto another entry to move it there */
+.sp-words { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sp-word {
+  display: inline-flex; align-items: center; gap: 2px; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+  line-height: 18px; cursor: grab; user-select: none;
+  background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+  border: 1px solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+}
+.sp-word-x {
+  display: inline-flex; border: 0; background: none; padding: 0; margin-left: 2px; cursor: pointer;
+  color: var(--mantine-color-dimmed);
+}
+.sp-word-x:hover { color: var(--mantine-color-red-6); }
+
+/* the arrows: a list of the ontology gives a row its entries, the units give the unit and what it decides, a row its
+   entries on the right */
+.sp-edge-root { stroke: var(--mantine-color-blue-5) !important; stroke-width: 1.8 !important; }
+.sp-edge-unit { stroke: var(--mantine-color-orange-5) !important; stroke-width: 1.8 !important; }
+.sp-edge-derive { stroke-dasharray: 6 5; stroke: var(--mantine-color-orange-6) !important; stroke-width: 1.8 !important; }
+.sp-edge-entries { stroke: var(--mantine-color-indigo-5) !important; stroke-width: 2 !important; }
+.sp-edge-label {
+  position: absolute; pointer-events: none; font-size: 11px; padding: 1px 6px; border-radius: 6px; white-space: nowrap;
+  background: var(--mantine-color-body); border: 1px solid var(--mantine-color-default-border); color: var(--mantine-color-dimmed);
+}
+.sp-edge-label-derive { color: var(--mantine-color-orange-7); border-color: var(--mantine-color-orange-4); }
+
+/* a shared dimension as a dictionary */
+.sp-dict-row {
+  display: grid; grid-template-columns: minmax(180px, 280px) 1fr; gap: 12px; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid transparent;
+}
+.sp-dict-row:hover { background: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6)); }
+.sp-dict-row.is-sel { border-color: var(--mantine-primary-color-filled); background: var(--mantine-primary-color-light); }
+.sp-dict-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sp-dict-words { align-content: flex-start; }
+
+/* the cards of the pages */
+.sp-card { cursor: pointer; }
+.sp-card.is-sel { border-color: var(--mantine-primary-color-filled); box-shadow: 0 0 0 1px var(--mantine-primary-color-filled); }

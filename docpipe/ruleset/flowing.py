@@ -190,9 +190,9 @@ RULES = (
     # -- flow: order ----------------------------------------------------------
     rule("coordinate_order", "flow", "Order", "texts",
          "The order in which the dimensions of a value are asked. Empty: "
-         "the order of the spec's groups. Otherwise the dimensions named "
-         "here come first, in this order, and the other dimensions follow "
-         "in the order of the spec's groups.", empty=True,
+         "the order of the questions in the spec (coordinates.order). "
+         "Otherwise the dimensions named here come first, in this order, "
+         "and the other dimensions follow in the spec's order.", empty=True,
          where="engine.py (each_coordinate)", steps=("each coordinate",)),
     rule("names_first", "flow", "Order", "switch",
          "On: the values that name a scenario of the document are asked "

@@ -6,7 +6,7 @@
    until the next save. */
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
-  Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Node,
+  Background, Controls, MarkerType, MiniMap, ReactFlow, ReactFlowProvider, useReactFlow, type Node, type NodeChange,
 } from '@xyflow/react';
 import {
   Accordion, ActionIcon, Alert, Anchor, Badge, Box, Button, Center, Code, Group, List, Loader, Menu, ScrollArea,
@@ -21,6 +21,7 @@ import { rich, t, tr, trCheck, useLang } from '../lib/i18n';
 import { askConfirm, showError, showInfo } from '../lib/dialogs';
 import { loadState, setDirty, tabStore, useRequests, useTabActions } from '../lib/nav';
 import { clone, wrote } from '../lib/util';
+import { shownNodes, takeMoves, type Moved } from '../lib/moved';
 import { Diff } from '../components/Bits';
 import { layout, type Decor } from './layout';
 import {
@@ -95,6 +96,8 @@ interface State {
   /* the flow shown: '' the main flow, CHAT the drawing of the chat, else the name of a flow of a follow-up pass */
   which: string; passes: PassRef[] | null; main: FlowData | null; notStarted: string | null;
   chat: ChatView | null; chatTry: ChatTryState;
+  /* the steps dragged elsewhere by hand (lib/moved), until the page is reloaded or another flow is shown; never in a file */
+  moved: Moved;
 }
 
 export function FlowTab() {
@@ -108,7 +111,7 @@ function FlowInner() {
     report: null, busy: false, meas: null, trial: null, trying: false, docs: null,
     tryst: { doc: '', pages: '', mode: 'nothing' }, side: 'numbers', undo: [], redo: [], snap: '', fit: 0, epoch: 0,
     which: '', passes: null, main: null, notStarted: null,
-    chat: null, chatTry: { question: '', route: 'auto', as_json: false, mode: 'nothing', doc: '' },
+    chat: null, chatTry: { question: '', route: 'auto', as_json: false, mode: 'nothing', doc: '' }, moved: new Map(),
   }).current;
   const [version, touch] = useReducer((x: number) => x + 1, 0);
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null);
@@ -356,24 +359,28 @@ function FlowInner() {
     };
     return layout(F.data, F.tree, decor);
   }, [version, problems, lang]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the flow as shown: a step moved by hand at its new place; while it moves, only this is done again */
+  const [movedAt, movedTouch] = useReducer((x: number) => x + 1, 0);
+  const shown = useMemo(() => shownNodes(placed.nodes, F.moved), [placed, movedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onNodesChange = (changes: NodeChange[]) => { if (takeMoves(changes, shown, F.moved)) movedTouch(); };
   useEffect(() => {
     const a = anchor.current;
     anchor.current = null;
-    placedNow.current = placed.nodes;
+    placedNow.current = shown;
     if (!a) return;
     const vp = flow.getViewport();
     for (const p of a) {
-      const now = absolute(placed.nodes, p.id);
+      const now = absolute(shown, p.id);
       if (now) { flow.setViewport({ x: p.x - now.x * vp.zoom, y: p.y - now.y * vp.zoom, zoom: vp.zoom }); return; }
     }
-  }, [placed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* the first view: the whole flow if it can be read whole, else its top at a size that can be read, scrolled down
      with the wheel */
   const canvas = useRef<HTMLDivElement>(null);
   const showTop = (duration: number) => {
     const el = canvas.current;
-    const top = placed.nodes.filter(n => !n.parentId);
+    const top = shown.filter(n => !n.parentId);
     if (!el || !top.length) return;
     const W = el.clientWidth, H = el.clientHeight;
     const b = flow.getNodesBounds(top);
@@ -501,7 +508,7 @@ function FlowInner() {
   const choose = async (name: string) => {
     if (name === F.which || F.busy) return;
     if (dirty() && !await askConfirm(t('Show another flow'), t('The flow shown has changes that are not saved. Showing another flow drops them.'), t('Drop my edits'))) return;
-    F.which = name; F.sel = null; F.multi = new Set(); F.open = new Set(); F.trial = null; F.meas = null;
+    F.which = name; F.sel = null; F.multi = new Set(); F.open = new Set(); F.trial = null; F.meas = null; F.moved = new Map();
     F.side = 'numbers';
     await load(false);
   };
@@ -550,8 +557,8 @@ function FlowInner() {
         <ReportStrip R={F.report} problems={d.problems} onStep={reveal} onNumber={focusNumber} onReload={reload} />
         <Group gap={0} wrap="nowrap" style={{ flex: 1, minHeight: 0 }} align="stretch">
           <Box ref={canvas} style={{ flex: 1, minWidth: 0, position: 'relative' }} className="fl-canvas">
-            <ReactFlow nodes={placed.nodes} edges={placed.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-              defaultEdgeOptions={edgeDefaults} nodesDraggable={false} nodesConnectable={false} elementsSelectable
+            <ReactFlow nodes={shown} edges={placed.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+              defaultEdgeOptions={edgeDefaults} nodesDraggable onNodesChange={onNodesChange} nodesConnectable={false} elementsSelectable
               deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null} panOnScroll zoomOnDoubleClick={false}
               minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }} ariaLabelConfig={flowWords()}
               onNodeClick={onNodeClick} onNodeContextMenu={onNodeContextMenu}
