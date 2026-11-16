@@ -80,7 +80,7 @@ export function layout(data: FlowData, tree: Step[], decor: Decor): Placed {
         tried: decor.tried ? decor.tried[n.id] ?? null : null,
         triedShare: decor.tried && decor.triedMost ? (decor.tried[n.id] || 0) / decor.triedMost : 0,
       };
-      out.nodes.push({ id: n.id, type: open ? 'frame' : 'step', position: { x: nx, y: cy }, parentId: parent, draggable: false,
+      out.nodes.push({ id: n.id, type: open ? 'frame' : 'step', position: { x: nx, y: cy }, parentId: parent,
         selected: decor.selected.has(n.id), data: d, width: s.w, height: s.h, zIndex: open ? depth * 2 : 1000 + depth });
       if (open) {
         const ls = lists(n);

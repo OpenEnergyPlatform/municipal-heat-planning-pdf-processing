@@ -3,6 +3,7 @@
    arrow, where everything stands). No position is stored in the file: the page lays out again after every edit. */
 import { Position, type Edge, type Node } from '@xyflow/react';
 import { t } from '../lib/i18n';
+import type { UInput, UResult } from '../lib/untangle';
 
 export type Obj = Record<string, any>;
 
@@ -143,7 +144,11 @@ export interface Decor {
   expanded: Set<string>;
   d: GraphData;
   map: Obj;
+  /* the order the page keeps after "Untangle arrows"; what it does not name stands where the layout puts it */
+  kept?: Kept;
 }
+/* the order of the fields (within a kind) and of the boxes (within a column) the page keeps */
+export interface Kept { fields: string[]; boxes: string[] }
 export interface FieldData extends Record<string, unknown> { f: FieldInfo }
 export interface BoxData extends Record<string, unknown> {
   box: Obj; cls: ClassInfo | null; rows: Row[]; shown: Row[]; hidden: number; foldable: boolean; expanded: boolean; bad: boolean; missing: number;
@@ -162,6 +167,15 @@ export function countSentence(box: Obj, d: GraphData): string {
   return of.length ? t('{count}, of {fields}', { count: base, fields: of.join(', ') }) : base;
 }
 
+/* the entries of `list` that `kept` names stand in the order of `kept`, in the places the named ones took; the rest stay where they are */
+function keep<T>(list: T[], name: (x: T) => string, kept: string[] | undefined): T[] {
+  if (!kept || !kept.length) return list;
+  const rank = new Map(kept.map((n, i) => [n, i]));
+  const named = list.filter(x => rank.has(name(x))).sort((p, q) => rank.get(name(p))! - rank.get(name(q))!);
+  let next = 0;
+  return list.map(x => (rank.has(name(x)) ? named[next++] : x));
+}
+
 export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge[]; boxHeights: Record<string, number> } {
   const map = decor.map;
   const nodes: Node[] = [];
@@ -173,9 +187,9 @@ export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge
 
   /* the fields, in spec order, by what they are */
   const groups: { title: string; list: FieldInfo[] }[] = [
-    { title: t('Fields of the harvest'), list: d.fields.filter(f => f.kind === 'field') },
-    { title: t('What a number says (its dimensions)'), list: d.fields.filter(f => f.kind === 'dimension') },
-    { title: t('What a reading carries of itself'), list: d.fields.filter(f => f.kind === 'reading') },
+    { title: t('Fields of the harvest'), list: keep(d.fields.filter(f => f.kind === 'field'), f => f.name, decor.kept?.fields) },
+    { title: t('What a number says (its dimensions)'), list: keep(d.fields.filter(f => f.kind === 'dimension'), f => f.name, decor.kept?.fields) },
+    { title: t('What a reading carries of itself'), list: keep(d.fields.filter(f => f.kind === 'reading'), f => f.name, decor.kept?.fields) },
   ];
   let y = 0;
   for (const g of groups) {
@@ -184,7 +198,7 @@ export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge
     y += LABEL_H;
     for (const f of g.list) {
       nodes.push({
-        id: 'f:' + f.name, type: 'field', position: { x: 0, y }, data: { f } as FieldData, draggable: false,
+        id: 'f:' + f.name, type: 'field', position: { x: 0, y }, data: { f } as FieldData,
         selected: decor.selected.kind === 'field' && decor.selected.id === f.name, width: FIELD_W, height: FIELD_H,
         measured: { width: FIELD_W, height: FIELD_H },
         handles: [{ type: 'source', position: Position.Right, id: 'out', x: FIELD_W - 1, y: FIELD_H / 2 - 0.5, width: 1, height: 1 }],
@@ -231,7 +245,7 @@ export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge
   const x0 = FIELD_W + COLUMN_GAP;
   const positions = new Map<string, { x: number; y: number }>();
   for (const [col, list] of [...columns.entries()].sort((a, b) => a[0] - b[0])) {
-    const sorted = list.map((b, i) => ({ b, i, v: bary(b) })).sort((p, q) => (p.v === q.v ? p.i - q.i : p.v - q.v));
+    const sorted = keep(list.map((b, i) => ({ b, i, v: bary(b) })).sort((p, q) => (p.v === q.v ? p.i - q.i : p.v - q.v)), x => String(x.b.id), decor.kept?.boxes);
     let cy = 0;
     for (const { b, v } of sorted) {
       const want = v === Infinity ? cy : Math.max(cy, v - HEAD_H / 2);
@@ -260,7 +274,7 @@ export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge
     });
     boxHeights[b.id] = info.h;
     nodes.push({
-      id: 'b:' + b.id, type: 'box', position: pos, data, draggable: false, selected: data.selected, width: BOX_W, height: info.h,
+      id: 'b:' + b.id, type: 'box', position: pos, data, selected: data.selected, width: BOX_W, height: info.h,
       measured: { width: BOX_W, height: info.h }, handles: handles as any,
     });
   }
@@ -300,4 +314,34 @@ export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge
     }
   }
   return { nodes, edges, boxHeights };
+}
+
+/* ---- untangling the arrows ---- */
+/* the drawing as columns for lib/untangle: the fields (grouped by kind) left, then the box columns, each arrow from the height of its port to the height of its port */
+export function untangleInput(d: GraphData, nodes: Node[], edges: Edge[]): UInput {
+  const fields = nodes.filter(n => n.type === 'field').sort((p, q) => p.position.y - q.position.y);
+  const boxes = nodes.filter(n => n.type === 'box');
+  const kind = new Map(d.fields.map(f => [f.name, f.kind]));
+  const xs = [...new Set(boxes.map(n => n.position.x))].sort((p, q) => p - q);
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const columns = [
+    fields.map(n => ({ id: n.id, height: n.height ?? FIELD_H, group: kind.get(n.id.slice(2)) })),
+    ...xs.map(x => boxes.filter(n => n.position.x === x).sort((p, q) => p.position.y - q.position.y).map(n => ({ id: n.id, height: n.height ?? HEAD_H }))),
+  ];
+  const portY = (id: string, handle: string | null | undefined): number => {
+    const n = byId.get(id);
+    const h = n && ((n as Obj).handles as { id?: string | null; y: number }[] | undefined)?.find(x => x.id === handle);
+    return h ? h.y + 0.5 : HEAD_H / 2;
+  };
+  return {
+    columns,
+    edges: edges.map(e => ({ from: e.source, fromY: portY(e.source, e.sourceHandle), to: e.target, toY: portY(e.target, e.targetHandle) })),
+  };
+}
+/* what to keep of an untangled drawing */
+export function keptFrom(r: UResult): Kept {
+  return {
+    fields: (r.columns[0] || []).map(id => id.slice(2)),
+    boxes: r.columns.slice(1).flat().map(id => id.slice(2)),
+  };
 }

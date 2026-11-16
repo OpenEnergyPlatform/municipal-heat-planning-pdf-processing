@@ -487,11 +487,15 @@ def differences(profile, spec_raw: Optional[dict], snapshot: Optional[dict],
             "targets": merge_targets(spec_raw)}
 
 
-def _list_of(parameter: dict, axis: Optional[str]) -> Optional[dict]:
+def _list_of(data: dict, parameter: dict,
+             axis: Optional[str]) -> Optional[dict]:
+    """The list of a field or of one of its dimensions in *data*, the
+    shared dimension's own list where the field asks a shared one."""
+    from docpipe.extraction.spec import axes_of
     if axis in (None, "", "value"):
         owner = parameter
     else:
-        owner = (parameter.get("axes") or {}).get(axis)
+        owner = axes_of(data, parameter).get(axis)
         if not isinstance(owner, dict):
             return None
     if not isinstance(owner.get("vocabulary"), dict):
@@ -595,7 +599,7 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
                 refused.append({"id": row_id, "why": "no such field, or the "
                                 "pinned ontology does not carry the entry"})
                 continue
-            listing = _list_of(parameter, axis or None)
+            listing = _list_of(data, parameter, axis or None)
             if listing is None:
                 refused.append({"id": row_id,
                                 "why": f"{field} has no dimension {axis}"})
@@ -609,7 +613,8 @@ def take(spec_raw: dict, chosen: list, snapshot: Optional[dict],
         elif kind.startswith("definition_") and len(parts) == 4:
             _kind, field, axis, key = parts
             parameter = parameters.get(field)
-            listing = _list_of(parameter, axis or None) if parameter else None
+            listing = (_list_of(data, parameter, axis or None)
+                       if parameter else None)
             term = _term(snapshot, key)
             match = [one for one in (listing or {})
                      if ontology.identifier(one) == key]

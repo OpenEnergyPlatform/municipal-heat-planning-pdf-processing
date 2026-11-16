@@ -36,7 +36,5 @@
   "code_error_unknown": "unknown",
   "code_silent": "The code ran but printed nothing. Print every result with print(), or answer without a calculation.",
   "code_output": "Output of the code:\n{output}\n\nAnswer now with the tuple object. Calculated values carry \"computed\": true.",
-  "image_for": "Image for {label}:",
-  "anchor_parameter": "Field",
-  "anchor_unit": "Unit"
+  "image_for": "Image for {label}:"
 }

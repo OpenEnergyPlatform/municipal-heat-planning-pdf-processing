@@ -83,14 +83,8 @@ SCENARIOS = load_spec(json.loads((ROOT / "profiles" / "scenarios"
 # A spec of one number with a unit, a wording, a year and a list.
 SPEC = load_spec({
     "unit_question": "Welche Einheit druckt der Plan für diese Zahl?",
-    "groups": {
-        "number": {"coordinates": ["unit", "what"], "read_in": "reading",
-                   "own_passage": ["unit", "what"],
-                   "where": "Die Zeile der Zahl."},
-        "frame": {"coordinates": ["year"], "read_in": "reading",
-                  "where": "Der Titel der Tabelle."},
-        "context": {"coordinates": ["carrier"], "read_in": "reading",
-                    "where": "Die Zeilenbeschriftung."}},
+    "coordinates": {"order": ["unit", "what", "year", "carrier"],
+                    "own_passage": ["unit", "what"]},
     "parameters": [{
         "uri": "energy", "label": "Energieverbrauch",
         "description": "Eine Energiemenge, die der Plan für seine Gemeinde "

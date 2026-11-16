@@ -132,6 +132,15 @@ def review(req, slots: tuple = ()) -> tuple
 A second reading's answer: each dimension asked with its words and
 its quote (`replies.review`).
 
+### node_check
+
+```python
+def node_check(req, names: tuple = ()) -> tuple
+```
+
+A node check's answer: for the value and each filled dimension,
+whether the text around its quote carries it (`replies.node_check`).
+
 ### example
 
 ```python

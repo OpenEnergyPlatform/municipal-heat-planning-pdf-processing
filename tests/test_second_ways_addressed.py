@@ -343,7 +343,8 @@ def test_an_open_unit_is_searched_only_where_the_rule_says():
     engine, scope, _doc = scope_of()
     coord = scope.get("coord")
     coord.slot = fields.unit_slot(SPEC, ENERGY)
-    coord.group = types.SimpleNamespace(own_passage=("unit",), own_value=())
+    coord.coordinates = types.SimpleNamespace(own_passage=("unit",),
+                                              own_value=())
     row = conditions.one("coordinate", "own_only")
 
     def own_only():
@@ -353,8 +354,8 @@ def test_an_open_unit_is_searched_only_where_the_rule_says():
         assert not own_only()
         # a dimension of the same group stays asked at its place
         coord.slot = SLOTS["carrier"]
-        coord.group = types.SimpleNamespace(own_passage=("carrier",),
-                                            own_value=())
+        coord.coordinates = types.SimpleNamespace(own_passage=("carrier",),
+                                                  own_value=())
         assert own_only()
 
 

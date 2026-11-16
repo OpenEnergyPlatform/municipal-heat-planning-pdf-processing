@@ -15,6 +15,9 @@ construction:
 4. A required property without an arrow is not refused.
 5. The preview of a document is the document written as the edited drawing
    says: with an arrow removed, its triple is gone.
+6. A class shows each of its properties once: what several property shapes
+   say of one path, in one shape or in several, is one property with the
+   greater minimum, the smaller maximum AND the constraints of both.
 
 Author: Felix Vossel
 """
@@ -208,3 +211,52 @@ def test_a_preview_of_no_document_or_no_harvest_is_refused(profile, tmp_path):
         graphpage.preview(profile, data, None, "doc")
     with pytest.raises(graphpage.PreviewError):
         graphpage.preview(profile, data, tmp_path, "missing")
+
+
+# -- 6. one row per property ---------------------------------------------------
+
+SHAPES = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix ex: <http://example.org/> .
+
+ex:PlanShape a sh:NodeShape ;
+    sh:targetClass ex:Plan ;
+    sh:property [ sh:path ex:hasPart ; sh:class ex:Part ; sh:minCount 1 ] ,
+                [ sh:path ex:hasPart ; sh:class ex:Annex ; sh:maxCount 3 ] ,
+                [ sh:path ex:title ; sh:maxCount 1 ] .
+
+ex:MorePlanShape a sh:NodeShape ;
+    sh:targetClass ex:Plan ;
+    sh:property [ sh:path ex:title ; sh:minCount 1 ; sh:maxCount 2 ] .
+"""
+
+
+def plan_properties(profile, tmp_path, text=SHAPES) -> list:
+    shapes = tmp_path / "shapes.ttl"
+    shapes.write_text(text, encoding="utf-8")
+    made = graphfile.load(profile, environ={})
+    found = graphpage.classes(profile, made, None, [shapes], None,
+                              {"ex": "http://example.org/"})
+    plan = next(one for one in found["classes"] if one["id"] == "Plan")
+    return plan["properties"]
+
+
+def test_a_class_shows_each_of_its_properties_once(profile, tmp_path):
+    # two property shapes of one shape on ex:hasPart, and two shapes of the
+    # class on ex:title: each path is one property, as both say it
+    props = plan_properties(profile, tmp_path)
+    assert sorted(one["path"] for one in props) == ["hasPart", "title"]
+    part, title = (next(one for one in props if one["path"] == path)
+                   for path in ("hasPart", "title"))
+    assert (part["min"], part["max"]) == (1, 3)
+    assert sorted(one["says"] for one in part["constraints"]
+                  if one["component"] == "Class") == [["Annex"], ["Part"]]
+    assert (title["min"], title["max"]) == (1, 1)
+    # the failure by construction: the paths as the shapes list them, one
+    # row each, give the page a property twice
+    from docpipe.compile import shapes as shapes_module
+    (tmp_path / "raw.ttl").write_text(SHAPES, encoding="utf-8")
+    listed = [graphfile.local(prop.path)
+              for shape in shapes_module.read([tmp_path / "raw.ttl"])[0]
+              if shape.target_class for prop in shape.properties]
+    assert len(listed) > len(set(listed))

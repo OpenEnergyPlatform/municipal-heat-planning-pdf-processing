@@ -142,6 +142,20 @@ def _label(prop, terms: dict) -> str:
     return prop.name or term.get("label") or _humane(local)
 
 
+def _merge_property(known: dict, one: dict) -> None:
+    """What two property shapes of one class say of one path, as the one
+    property they are on the page: both hold, so the greater minimum, the
+    smaller maximum, and the constraints of both."""
+    if (one["min"] or 0) > (known["min"] or 0):
+        known["min"] = one["min"]
+    if one["max"] is not None and (known["max"] is None
+                                   or one["max"] < known["max"]):
+        known["max"] = one["max"]
+    for said in one["constraints"]:
+        if said not in known["constraints"]:
+            known["constraints"].append(said)
+
+
 def classes(profile, made, spec_raw: Optional[dict], files: list,
             snapshot: Optional[dict],
             prefixes: Optional[dict] = None) -> dict:
@@ -162,31 +176,31 @@ def classes(profile, made, spec_raw: Optional[dict], files: list,
         if not shape.target_class:
             continue
         klass = graphfile.local(shape.target_class)
-        mine = [{
-            "path": graphfile.local(prop.path), "iri": str(prop.path),
-            "curie": curie(prop.path, prefixes or {}),
-            "label": _label(prop, terms), "min": prop.min_count,
-            "max": prop.max_count,
-            "constraints": _constraints(prop, klass, made)}
-            for prop in shape.properties]
-        if klass in seen:
-            # several shapes may target one class: it is one box on the page
-            known = {one["path"]: one for one in seen[klass]["properties"]}
-            for one in mine:
-                if one["path"] not in known:
-                    seen[klass]["properties"].append(one)
-                elif (one["min"] or 0) > (known[one["path"]]["min"] or 0):
-                    known[one["path"]]["min"] = one["min"]
-            continue
-        seen[klass] = {
-            "id": klass, "shape": shape.name,
-            "iri": str(shape.target_class),
-            "curie": curie(shape.target_class, prefixes or {}),
-            "label": (terms.get(ontology.identifier(klass) or "") or {})
-            .get("label"),
-            "written": made.written(klass), "address": made.address(klass),
-            "properties": mine}
-        out.append(seen[klass])
+        if klass not in seen:
+            seen[klass] = {
+                "id": klass, "shape": shape.name,
+                "iri": str(shape.target_class),
+                "curie": curie(shape.target_class, prefixes or {}),
+                "label": (terms.get(ontology.identifier(klass) or "") or {})
+                .get("label"),
+                "written": made.written(klass),
+                "address": made.address(klass), "properties": []}
+            out.append(seen[klass])
+        # several shapes may target one class, and one shape may say several
+        # things of one path: it is one box with one row per property
+        known = {one["path"]: one for one in seen[klass]["properties"]}
+        for prop in shape.properties:
+            one = {
+                "path": graphfile.local(prop.path), "iri": str(prop.path),
+                "curie": curie(prop.path, prefixes or {}),
+                "label": _label(prop, terms), "min": prop.min_count,
+                "max": prop.max_count,
+                "constraints": _constraints(prop, klass, made)}
+            if one["path"] in known:
+                _merge_property(known[one["path"]], one)
+            else:
+                known[one["path"]] = one
+                seen[klass]["properties"].append(one)
     for klass, said in made.classes.items():
         if klass not in seen:
             out.append({"id": klass, "shape": None, "label": None,
@@ -290,13 +304,35 @@ def bricks_of(profile) -> list:
     out = []
     for name, one in sorted(bricks.registry(profile).items(),
                             key=lambda pair: (pair[1].kind, pair[0])):
-        out.append({**one.describe(), "own": name in own})
+        # The brick's own logic as the Python of a block, for the page to
+        # show where the form of a block is changed.
+        out.append({**one.describe(), "own": name in own,
+                    "python": _blocks().python_of(one)})
     return out
 
 
 def _blocks():
     from docpipe.extraction import graphblocks
     return graphblocks
+
+
+def python_of_block(profile, ref, kind) -> dict:
+    """A block of the drawing as the Python of a block that does the same,
+    for the page to show when the form "Python" is chosen:
+    {"python", "per", "writes"}; {"python": ""} where *ref* is no block of
+    *kind* or a step's source is not to be had."""
+    from docpipe.extraction import bricks, graph
+    graphblocks = _blocks()
+    kind = str(kind or "")
+    try:
+        registry = bricks.registry(profile)
+        space = graph.python_space(profile)
+        found = graphblocks.resolve(ref, kind, registry, space)
+        code = graphblocks.python_block(ref, kind, registry, space)
+    except graphblocks.BlockError:
+        return {"python": ""}
+    return {"python": code, "per": found.per or "row",
+            "writes": found.writes or ""}
 
 
 def presets_of(profile) -> list:

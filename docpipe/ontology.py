@@ -82,6 +82,14 @@ def identifier(value) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def as_written(spec_raw):
+    """The raw spec with every field's shared dimension in place
+    (`spec.expanded`): what this module reads of a field is what the field
+    asks."""
+    from docpipe.extraction.spec import expanded
+    return expanded(spec_raw) if isinstance(spec_raw, dict) else spec_raw
+
+
 def read(paths: list):
     from rdflib import Graph
     graph = Graph()
@@ -265,7 +273,7 @@ def spec_terms(spec_raw: dict) -> dict:
             if name:
                 found[name].append(where)
 
-    for parameter in spec_raw.get("parameters", []):
+    for parameter in as_written(spec_raw).get("parameters", []):
         walk(parameter, str(parameter.get("uri")))
     return {k: v for k, v in sorted(found.items())}
 
@@ -590,6 +598,7 @@ def drawing_edges(drawing: dict, spec_raw: dict, bricks=None) -> list:
     """
     drawing = drawing or {}
     bricks = bricks or {}
+    spec_raw = as_written(spec_raw)
     parameters = {one["uri"]: one for one in spec_raw.get("parameters") or ()
                   if isinstance(one, dict) and one.get("uri")}
     boxes = {box["id"]: box for box in drawing.get("boxes") or ()
@@ -809,7 +818,7 @@ def set_problems(spec_raw: dict, snapshot: dict, rules: dict) -> list:
     """
     terms, sets = snapshot["terms"], snapshot["sets"]
     problems: list = []
-    for parameter in spec_raw.get("parameters", []):
+    for parameter in as_written(spec_raw).get("parameters", []):
         axes = parameter.get("axes") or {}
         for axis_name, set_name in rules.items():
             axis = axes.get(axis_name) or {}
@@ -831,7 +840,7 @@ def _listed(spec_raw: dict):
     The lists of the axes and the list of a parameter's own value, where
     `where` is "<parameter>.<axis>" or "<parameter>.value".
     """
-    for parameter in spec_raw.get("parameters", []):
+    for parameter in as_written(spec_raw).get("parameters", []):
         lists = [(name, (axis.get("vocabulary") or {}))
                  for name, axis in (parameter.get("axes") or {}).items()]
         lists.append(("value", parameter.get("vocabulary") or {}))

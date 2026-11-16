@@ -29,7 +29,7 @@ from docpipe import graphfile, rules
 from docpipe.extraction.bricks import Brick, Call, Setting
 from docpipe.extraction.fields import DERIVED
 from docpipe.extraction.graphkit import NOT_IN_GRAPH, ttl_comment
-from docpipe.extraction.spec import load as load_spec
+from docpipe.extraction.spec import expanded, load as load_spec
 from docpipe.extraction.trust import check_prose, render, trust
 from docpipe.store.schema import readonly_uri
 from profiles.kwp import mhpkg
@@ -41,9 +41,10 @@ OEO = "https://openenergyplatform.org/ontology/oeo/"
 # The MHPKG schema the last refresh pulled (mhpkg.py): the closed lists and
 # the value classes of the strict graph are its.
 SHAPE = mhpkg.load()
-_SPEC = json.loads(
+# Each field with its shared dimensions in place (`spec.expanded`).
+_SPEC = expanded(json.loads(
     Path(__file__).with_name("extraction_spec.json").read_text(
-        encoding="utf-8"))
+        encoding="utf-8")))
 
 
 def spec():

@@ -218,7 +218,7 @@
         "class_by": {
           "scenario_region": "oeo:OEO_00020032"
         },
-        "note": "The nodes the graph points at and does not make, each described once per file (OEKG team, 2026-11-04): a region by the class the shapes require at the end of its edge and the name LCC gives it, an OEO term by its label in the pinned release."
+        "note": "The nodes the graph points at and does not make, each described once per file: a region by the class the shapes require at the end of its edge and the name LCC gives it, an OEO term by its label in the pinned release."
       }
     ],
     "arrows": [
@@ -231,7 +231,7 @@
         "first_in_file": "skip_other",
         "evidence": true,
         "label": "label",
-        "note": "Mints the study report, named by its DOI where one is read, else by its title, and written only where its title is read (owner decision 2026-11-14). Where no project name was read the DOI, else the title, also keys the bundle's IRI, never its label; the title is half of every scenario factsheet's IRI. Mint recipes are prose here, not keys: see the _comment."
+        "note": "Mints the study report, named by its DOI where one is read, else by its title, and written only where its title is read. Where no project name was read the DOI, else the title, also keys the bundle's IRI, never its label; the title is half of every scenario factsheet's IRI."
       },
       {
         "from": "report",
@@ -270,7 +270,7 @@
         "single": true,
         "first_in_file": "skip_other",
         "label": "label",
-        "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication's DOI, else its title, keys its IRI (owner decisions 2026-11-07, 2026-11-14)."
+        "note": "Mints the bundle and labels it with the study's name the document prints. Where it prints none the bundle has no label and the publication's DOI, else its title, keys its IRI."
       },
       {
         "from": "study_acronym",
@@ -351,7 +351,7 @@
         "to": "scenario",
         "property": "obo:BFO_0000051",
         "label": "has part",
-        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them (`scenario_means`, docpipe/extraction/addressed.py)."
+        "note": "Which factsheet holds the value. Unlike the kwp `parent` axis there is no map from the answer to a container class: the answer IS the identity of a node minted per document from the name the publication prints. Names of one scenario are one factsheet, called by the name the others mean, and a name of several scenarios puts the value on each of them."
       },
       {
         "from": "scenario_label",
@@ -361,7 +361,7 @@
         "first_in_file": "skip_other",
         "evidence": true,
         "label": "label",
-        "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. A name is the entry of the publication's list of scenarios it was asked to be, and labels that entry's factsheet (`value_means`, docpipe/extraction/addressed.py)."
+        "note": "The name the publication prints labels the factsheet, and the acronym beside it carries the same string. A name is the entry of the publication's list of scenarios it was asked to be, and labels that entry's factsheet."
       },
       {
         "from": "scenario_label",
@@ -420,8 +420,8 @@
         "cite_once": true,
         "evidence": true,
         "label": "has study region",
-        "accepted": "the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario (owner decision 2026-10-22)",
-        "note": "The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints (owner decision 2026-11-07); the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch (owner decision 2026-10-22), which is the ontology side's to settle."
+        "accepted": "the closed ScenarioShape names this path on the factsheet, and the shapes win over its declared domain scenario",
+        "note": "The object is an OEKG region individual that already exists over there and is only referenced; a group of countries is written as its members. A region the list did not hold ('several regions', 'other region') is a study region node of its own, minted from and labelled with the words the document prints; the shapes ask only for a node of the class study region. The predicate is the one the closed ScenarioShape names. Its declared domain is oeo:OEO_00000364 scenario and the subject here is the scenario FACTSHEET; the shapes win over that mismatch, which is the ontology side's to settle."
       },
       {
         "from": "scenario_year",

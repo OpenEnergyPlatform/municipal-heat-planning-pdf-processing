@@ -5,13 +5,13 @@
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
 A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
-stops the run where the spec names no groups or the profile lacks a prompt
-of the harvest): every piece asked for every field in the order a reranker
-gives it, each coordinate of each value found asked on its own, and a
-coordinate its place does not state searched for (`addressed.py`, run per
-document by `surveyed.py`), then the fold, the compute step and the file
-with its stamp as below. The passes over a
-stored harvest run on the same steps.
+stops the run where the spec names no order of its coordinates or the
+profile lacks a prompt of the harvest): every piece asked for every field in
+the order a reranker gives it, each coordinate of each value found asked on
+its own, and a coordinate its place does not state searched for
+(`addressed.py`, run per document by `surveyed.py`), then the fold, the
+compute step and the file with its stamp as below. The passes over a stored
+harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the model calls, and locating a quote on
@@ -857,57 +857,6 @@ def document_specs(db_path, spec: Spec, document_axes: Optional[Callable])
 long as the pass runs. None when the profile closes no list per document:
 such a pass needs no database.
 
-### anchors_key
-
-```python
-def anchors_key() -> str
-```
-
-Everything an anchor set depends on that is NOT one question: the
-anchor prompt, the model and the version of the target SET. The cache is
-stored under it and the stamp records it.
-
-Not the questions, though it used to hash them. Everything a target tuple
-carries is already a stamp key of its own -- a parameter's label and
-description in `parameter/<uri>`, an axis' question in
-`axis/<uri>/<name>`, the spec's own question and the parameter list in
-`slot/parameter`, the unit question and its lists in `slot/unit` -- and
-the anchor prompt and the model are stamp keys too
-(`extraction/anchors`, `model`). Hashing the targets in here as well made
-every document in the corpus stale over ONE changed question, which is
-exactly what the per-question keys were written to stop.
-
-The empty last field held the sha of a file of anchors a profile could
-freeze. That file is gone, and the field stays empty rather than going,
-so a harvest that never had one keeps its key.
-
-### anchor_key
-
-```python
-def anchor_key(parameter_uri: str, slot_name: Optional[str] = None) -> str
-```
-
-The anchors.json key of one question: the value's, or one axis's.
-
-### anchor_targets
-
-```python
-def anchor_targets(spec: Spec) -> list
-```
-
-(key, label, description, question) for every question the run asks.
-
-One anchor set per QUESTION, not per parameter. An anchor is a sentence as
-the document would write it, and the sentence that states a value and the
-sentence that states its reference year are not the same sentence. Six
-anchors written from "Endenergieverbrauch" find tables of consumption and
-say nothing about where a bilanz year is printed, which is why the field
-sweep searched with the raw question and found captions by accident.
-
-The value itself has no set here. The plan searches with the one short
-sentence `document_anchor` writes for the document it plans, and a set
-written once for the whole corpus was never searched with.
-
 ### phrase_told
 
 ```python
@@ -1354,8 +1303,8 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
 ```
 
 The reading of a document piece by piece (`addressed.Reader`), or
-None where its spec names no groups or the profile writes no prompts
-for it. What is asked once of a plan beside its fields
+None where its spec names no order of its coordinates or the profile
+writes no prompts for it. What is asked once of a plan beside its fields
 (`Spec.plan_fields`) and the field that names other works
 (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
 a search shows (`search_budget`) and every other number that bounds the
@@ -1402,8 +1351,7 @@ def frame_slots_of(spec: Spec) -> list
 ```
 
 The coordinates of the plan's frame, which its base and target years
-date a value by: the pair of each group that names one
-(`spec.Group.paired`).
+date a value by (spec: "coordinates": "frame").
 
 ### dates_by_plan
 
@@ -1523,6 +1471,40 @@ One stored value, read again over the two passages it may quote from. The
 same model and a narrower window, so what it can find is a reading that
 contradicts itself -- not a reading that is wrong about the picture in the
 same way twice.
+
+### around
+
+```python
+def around(text: str, quote: str, chars: int) -> Optional[str]
+```
+
+*chars* characters of *text* on each side of *quote*, the quote among
+them, or None where *text* does not hold it. Found as it stands, else
+with the white space of both folded to single blanks.
+
+### make_value_checking
+
+```python
+def make_value_checking(db_path: Path, image_root: Optional[Path] = None)
+```
+
+What the check of a value once read asks with
+(`engine.Engine.box_check_value`): the check of a filled node, the
+passages its coordinates were read in, and the second reading of a value
+over its passage and section.
+
+### make_node_check_asker
+
+```python
+def make_node_check_asker() -> Callable
+```
+
+check(row, parameter, slots, shown) -> {name: (holds, why)}, or None.
+
+One filled node, held against its own quotes with a small context: does
+the text around each quote carry the value and each coordinate the node
+has? No search and no pieces; what does not hold is asked again with
+them afterwards (`passboxes.box_node_check`).
 
 ### make_completer
 
@@ -1690,13 +1672,14 @@ from another passage, the names request.
 def surveyed_flow(spec: Spec, profile=None) -> bool
 ```
 
-Whether a run can harvest piece by piece: its spec names groups. A
-spec without groups cannot be harvested (`main` stops on it).
+Whether a run can harvest piece by piece: its spec names the order
+of its coordinates. A spec without it cannot be harvested (`main` stops
+on it).
 
-A spec with groups whose profile lacks a prompt of the harvest is a
+A spec with an order whose profile lacks a prompt of the harvest is a
 broken profile: the run stops and names the prompt, as `spec.load`
-stops at a broken group (owner decision 2026-11-04), before a request
-is sent rather than at the first plan's reading.
+stops at a broken order, before a request is sent rather than at the
+first plan's reading.
 
 ### names_asked
 
@@ -1847,7 +1830,7 @@ it was no longer compared.
 ```python
 def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
                          force: bool = False, force_stale: bool = False,
-                         anchors_sha: str = "", spec: Optional[Spec] = None,
+                         spec: Optional[Spec] = None,
                          top_up: bool = False,
                          start_at: bool = False) -> list
 ```
@@ -1875,7 +1858,7 @@ nothing having read the rest of it since.
 ```python
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "", spec: Optional[Spec] = None,
+                 spec: Optional[Spec] = None,
                  start_at: bool = False) -> bool
 ```
 
@@ -1909,7 +1892,7 @@ and the pass for a new parameter writes nothing.
 
 ```python
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
-                    anchors_sha: str = "", answered: Optional[int] = None,
+                    answered: Optional[int] = None,
                     spec: Optional[Spec] = None,
                     questions: Optional[dict] = None,
                     lost: int = 0) -> bool

@@ -247,6 +247,16 @@ Each row of the trust levels in the rule read a second time
 (`passboxes.box_review`), its request built from the step's inputs
 (`runner.make_review_asker`).
 
+### node_checked
+
+```python
+def node_checked(run, doc, node) -> None
+```
+
+Each filled row checked with a small context
+(`passboxes.box_node_check`), its request built from the step's inputs
+(`runner.make_node_check_asker`).
+
 ### register
 
 ```python

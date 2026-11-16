@@ -2,13 +2,13 @@
 runner.py: Wires the pure harvest loop of `pipeline.py` to the live stack.
 
 A run reads each plan in pieces of numbered lines (`surveyed_flow`, which
-stops the run where the spec names no groups or the profile lacks a prompt
-of the harvest): every piece asked for every field in the order a reranker
-gives it, each coordinate of each value found asked on its own, and a
-coordinate its place does not state searched for (`addressed.py`, run per
-document by `surveyed.py`), then the fold, the compute step and the file
-with its stamp as below. The passes over a
-stored harvest run on the same steps.
+stops the run where the spec names no order of its coordinates or the
+profile lacks a prompt of the harvest): every piece asked for every field in
+the order a reranker gives it, each coordinate of each value found asked on
+its own, and a coordinate its place does not state searched for
+(`addressed.py`, run per document by `surveyed.py`), then the fold, the
+compute step and the file with its stamp as below. The passes over a stored
+harvest run on the same steps.
 
 This module supplies the loop's expensive dependencies from the real world:
 FAISS retrieval with owner exclusion, the model calls, and locating a quote on
@@ -619,12 +619,11 @@ def image_max_side() -> int:
 
 
 
-ANCHORS_PROMPT_ID = "extraction/anchors"
 # The one sentence a document is searched with, written for THAT document.
 PHRASE_PROMPT_ID = "extraction/phrase"
 # The prompts of a harvest piece by piece (addressed.py), the run's own
-# wherever the profile writes them and its spec names groups
-# (`surveyed_flow`); the check of a find from another passage is the
+# wherever the profile writes them and its spec names the order of its
+# coordinates (`surveyed_flow`); the check of a find from another passage is the
 # profile's choice, and the names request is asked only by a run that
 # builds a list of names (`addressed.OPTIONAL`, `names_asked`).
 SURVEY_PROMPT_IDS = tuple(prompt_id for kind, prompt_id
@@ -640,12 +639,10 @@ FLOW = SURVEYED
 # the row may legally quote from. Not in SURVEY_PROMPT_IDS, which are the harvest's
 # own prompts: what the review writes into a stamp goes under `review/`.
 REVIEW_PROMPT_ID = "extraction/review"
+# The check of one filled node with a small context: the node as JSON and the
+# text around each of its quotes (owner decision 2026-11-15).
+NODE_CHECK_PROMPT_ID = "extraction/node_check"
 
-# The anchors.json key of the "which quantity is this" question. It belongs to
-# no single parameter, so it cannot be keyed by one.
-PARAMETER_ANCHOR = "#parameter"
-# The same for "which entry of the unit lists is this", asked before it.
-UNIT_ANCHOR = "#unit"
 # How many calculation questions run at once is the rule `compute_parallel`.
 # What a search shows are numbers of the flow (`NUMBERS`, owner decisions
 # 2026-11-09: "Bei 5 bleiben und das mit 50 passt", "Ja als Einstellung"):
@@ -1514,77 +1511,6 @@ def document_specs(db_path, spec: Spec, document_axes: Optional[Callable]):
         yield make_document_spec(conn, spec, document_axes)
     finally:
         conn.close()
-
-
-# Bumped when the SET of anchor targets changes, not just their wording: an
-# anchors.json written for three parameters must not be read back as if it
-# also held the twenty-two question anchors this version asks for.
-ANCHOR_SCHEMA = "per-question-1"
-
-
-def _key16(raw: str) -> str:
-    """Sixteen hex characters. Long enough that two configurations do not
-    collide, short enough to read in a stamp beside twenty-nine other keys."""
-    import hashlib
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def anchors_key() -> str:
-    """Everything an anchor set depends on that is NOT one question: the
-    anchor prompt, the model and the version of the target SET. The cache is
-    stored under it and the stamp records it.
-
-    Not the questions, though it used to hash them. Everything a target tuple
-    carries is already a stamp key of its own -- a parameter's label and
-    description in `parameter/<uri>`, an axis' question in
-    `axis/<uri>/<name>`, the spec's own question and the parameter list in
-    `slot/parameter`, the unit question and its lists in `slot/unit` -- and
-    the anchor prompt and the model are stamp keys too
-    (`extraction/anchors`, `model`). Hashing the targets in here as well made
-    every document in the corpus stale over ONE changed question, which is
-    exactly what the per-question keys were written to stop.
-
-    The empty last field held the sha of a file of anchors a profile could
-    freeze. That file is gone, and the field stays empty rather than going,
-    so a harvest that never had one keeps its key.
-    """
-    versions = prompts.versions((ANCHORS_PROMPT_ID,))
-    return _key16(f"{versions.get(ANCHORS_PROMPT_ID)}|{llm_model()}"
-                  f"|{ANCHOR_SCHEMA}|")
-
-
-def anchor_key(parameter_uri: str, slot_name: Optional[str] = None) -> str:
-    """The anchors.json key of one question: the value's, or one axis's."""
-    return parameter_uri if not slot_name else f"{parameter_uri}#{slot_name}"
-
-
-def anchor_targets(spec: Spec) -> list:
-    """(key, label, description, question) for every question the run asks.
-
-    One anchor set per QUESTION, not per parameter. An anchor is a sentence as
-    the document would write it, and the sentence that states a value and the
-    sentence that states its reference year are not the same sentence. Six
-    anchors written from "Endenergieverbrauch" find tables of consumption and
-    say nothing about where a bilanz year is printed, which is why the field
-    sweep searched with the raw question and found captions by accident.
-
-    The value itself has no set here. The plan searches with the one short
-    sentence `document_anchor` writes for the document it plans, and a set
-    written once for the whole corpus was never searched with.
-    """
-    out: list = [(PARAMETER_ANCHOR, say("anchor_parameter"), "",
-                  spec.parameter_question),
-                 (UNIT_ANCHOR, say("anchor_unit"), "",
-                  spec.unit_question)]
-    for parameter in spec.parameters:
-        # asked_slots, not axis_slots: an anchor is a sentence to search
-        # with, and a coordinate the spec derives is never searched for.
-        for slot in fields.asked_slots(parameter):
-            out.append((anchor_key(parameter.uri, slot.name),
-                        f"{parameter.label} / {slot.name}",
-                        parameter.description, slot.question))
-    return [t for t in out
-            if t[0] not in (PARAMETER_ANCHOR, UNIT_ANCHOR) or t[3]]
 
 
 # What a field's sentence request may carry (`phrase_payload`).
@@ -2512,13 +2438,13 @@ def make_reader(spec: Spec, profile, order: Callable, search_order: Callable,
                 context: Optional[Callable] = None,
                 image_of: Optional[Callable] = None):
     """The reading of a document piece by piece (`addressed.Reader`), or
-    None where its spec names no groups or the profile writes no prompts
-    for it. What is asked once of a plan beside its fields
+    None where its spec names no order of its coordinates or the profile
+    writes no prompts for it. What is asked once of a plan beside its fields
     (`Spec.plan_fields`) and the field that names other works
     (`Spec.works`) come from the spec (owner decision 2026-11-10); how much
     a search shows (`search_budget`) and every other number that bounds the
     reading from the run's flow (`NUMBERS`)."""
-    if not spec.groups:
+    if spec.coordinates is None:
         return None
     asks = make_asks(profile)
     if asks is None:
@@ -2595,14 +2521,20 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
     log.info("harvest: pieces of %d lines, figures transcribed once under "
              "%s, orders kept in %s", numbers.piece_lines,
              Path(out) / "transcripts", Path(out) / "survey")
-    return surveyed_map.SurveyedHarvest(
-        spec,
-        lambda doc_spec: make_reader(
+    checking = make_value_checking(db_path, image_root)
+
+    def reader_of(doc_spec):
+        reader = make_reader(
             doc_spec, profile, order, search_order, seek, rerank, context_of,
             # The picture a coordinate request may ask for: the figure's
             # crop where the run attaches images (owner decision
             # 2026-11-12).
-            lambda source: image_path_of(source, image_root)),
+            lambda source: image_path_of(source, image_root))
+        if reader is not None:
+            reader.checking = checking
+        return reader
+    return surveyed_map.SurveyedHarvest(
+        spec, reader_of,
         lambda document_id: every(document_id, set()),
         spec_for=spec_for, transcripts=transcripts, orders=orders,
         numbers=numbers, each=run_each, trace=trace.event)
@@ -2610,10 +2542,10 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
 
 def frame_slots_of(spec: Spec) -> list:
     """The coordinates of the plan's frame, which its base and target years
-    date a value by: the pair of each group that names one
-    (`spec.Group.paired`)."""
-    return [slot for group in spec.groups.values() if group.pair
-            for slot in fields.frame_slots(spec, group.paired)]
+    date a value by (spec: "coordinates": "frame")."""
+    if spec.coordinates is None or not spec.coordinates.frame:
+        return []
+    return list(fields.frame_slots(spec, spec.coordinates.frame))
 
 
 def dates_by_plan(spec: Spec) -> bool:
@@ -3332,6 +3264,147 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     return ask
 
 
+def around(text: str, quote: str, chars: int) -> Optional[str]:
+    """*chars* characters of *text* on each side of *quote*, the quote among
+    them, or None where *text* does not hold it. Found as it stands, else
+    with the white space of both folded to single blanks."""
+    if not text or not quote:
+        return None
+    at = text.find(quote)
+    if at < 0:
+        text = " ".join(text.split())
+        quote = " ".join(quote.split())
+        at = text.find(quote)
+        if at < 0:
+            return None
+    return text[max(0, at - chars):at + len(quote) + chars]
+
+
+def _node_check_payload(row: dict, shown: dict, parameter, slots) -> dict:
+    """The request body of one node check: the node as JSON (its value and
+    each filled coordinate, with wording and quote) and, for each quote, the
+    text around it in the passage it was read in (rule
+    `node_check_context_chars`)."""
+    chars = int(rules.get("node_check_context_chars"))
+    provenance = row.get("provenance") or {}
+    own = (provenance.get("owner_kind"), provenance.get("owner_id"))
+    node = {"field": getattr(parameter, "name", None) or row.get("parameter"),
+            "value": row.get("value"), "value_quote": row.get("quote")}
+    for key in ("value_raw", "unit", "unit_raw"):
+        if row.get(key) not in (None, ""):
+            node[key] = row.get(key)
+    quotes = []
+
+    def context(name: str, quote, source_key) -> None:
+        if not quote:
+            return
+        pair = own
+        if isinstance(source_key, (list, tuple)) and len(source_key) == 2:
+            pair = (source_key[0], source_key[1])
+        source = shown.get(pair) or shown.get(own)
+        text = around(getattr(source, "text", "") or "", quote, chars)             if source is not None else None
+        entry = {"field": name, "quote": quote}
+        if text is not None:
+            entry["around"] = text
+        quotes.append(entry)
+
+    context("value", row.get("quote"), None)
+    for slot in slots:
+        node[slot.name] = row.get(slot.name)
+        for key in ("_raw", "_quote"):
+            if row.get(f"{slot.name}{key}") not in (None, ""):
+                node[f"{slot.name}{key}"] = row.get(f"{slot.name}{key}")
+        context(slot.name, row.get(f"{slot.name}_quote"),
+                row.get(f"{slot.name}_source"))
+    return {"node": node, "quotes": quotes}
+
+
+def make_value_checking(db_path: Path, image_root: Optional[Path] = None):
+    """What the check of a value once read asks with
+    (`engine.Engine.box_check_value`): the check of a filled node, the
+    passages its coordinates were read in, and the second reading of a value
+    over its passage and section."""
+    from .review import review_row
+    ask = make_review_asker(image_root)
+    return SimpleNamespace(
+        check=make_node_check_asker(),
+        owner_sources=make_owner_sources(db_path),
+        review_sources=make_review_sources(db_path),
+        review=lambda row, parameter, sources: review_row(
+            row, parameter, [fields.value_slot(parameter)], sources, ask))
+
+
+def make_node_check_asker() -> Callable:
+    """check(row, parameter, slots, shown) -> {name: (holds, why)}, or None.
+
+    One filled node, held against its own quotes with a small context: does
+    the text around each quote carry the value and each coordinate the node
+    has? No search and no pieces; what does not hold is asked again with
+    them afterwards (`passboxes.box_node_check`).
+    """
+    client = _client()
+    step = step_asking("node_checked", "node_check")
+
+    def check(row: dict, parameter, slots, shown: dict) -> Optional[dict]:
+        with in_home("node_check"):
+            return _check(row, parameter, slots, shown)
+
+    def _check(row, parameter, slots, shown) -> Optional[dict]:
+        prompt, inputs = step_parts(step, NODE_CHECK_PROMPT_ID)
+        payload = json.dumps(shows_map.apart(inputs, {"row": SimpleNamespace(
+            row=row, shown=shown, parameter=parameter, slots=slots)}),
+                             ensure_ascii=False, indent=2)
+        names = ["value"] + [slot.name for slot in slots]
+        document_id = (row.get("provenance") or {}).get("document_id")
+        failures = Failures(noted=False)
+        conversation: list = [{"role": "user", "content": payload}]
+        for attempt in failures.attempts():
+            limit = request_room(prompt.text, conversation,
+                                 request_wanted("node_check"))
+            if limit is None:
+                log.warning("   node check: the prompt leaves less than %d "
+                            "answer token(s) in a window of %d -- not sent",
+                            least_answer_tokens(), model_window())
+                break
+            started = time.time()
+            try:
+                response = send_request(
+                    client, prompt.text, conversation, limit,
+                    failures.faults,
+                    reply_grammar("node_check_reply",
+                                  replies.node_check(names)))
+                failures.answered()
+                reply = response.choices[0]
+                _observe_usage(getattr(response, "usage", None))
+                _asked("node_check", document_id, response, attempt=attempt,
+                       started=started,
+                       parameter=getattr(parameter, "uri", None))
+                answer = _loads_object(reply.message.content, document_id,
+                                       "node_check")
+                said = replies.node_check_verdicts(answer, names)
+                if said is not None:
+                    return said
+                failures.fault()
+                cause, correction = _reply_fault(reply, limit)
+                log.warning("   node check attempt %d: %s reply%s",
+                            attempt, cause, _unparsable(reply))
+                if rules.get("retry_shows_reply"):
+                    conversation.append({
+                        "role": "assistant",
+                        "content": reply.message.content or ""})
+                    conversation.append({"role": "user",
+                                         "content": correction})
+            except Exception as exc:
+                log.warning("   node check attempt %d failed: %s",
+                            attempt, exc)
+                if not failures.failed(exc):
+                    break
+        failures.given_up()
+        return None
+
+    return check
+
+
 def make_completer(profile, db: Optional[Path] = None) -> Optional[Callable]:
     """The step that completes a document's rows from outside the document,
     after its fold and its computing (`profiles/<name>/completion.py:
@@ -3951,11 +4024,10 @@ def make_locate(db_path: Path, pdf_root: Optional[Path]) -> Optional[Callable]:
 # Resume stamps and the per-document run
 # ---------------------------------------------------------------------------
 
-def _stamp_current(spec_sha: str, anchors_sha: str = "",
-                   spec: Optional[Spec] = None) -> dict:
+def _stamp_current(spec_sha: str, spec: Optional[Spec] = None) -> dict:
     """What a harvest was produced by, key by key.
 
-    The model, the anchors and every prompt are written so a reader can
+    The model and every prompt are written so a reader can
     place a harvest, and never compared: the owner decided on 2026-09-10
     that a stamp rests on the KG/ontology parameters alone.
 
@@ -3980,7 +4052,7 @@ def _stamp_current(spec_sha: str, anchors_sha: str = "",
     over a stored harvest neither carries them forward nor finds them
     changed.
     """
-    return {"spec": spec_sha, "model": llm_model(), "anchors": anchors_sha,
+    return {"spec": spec_sha, "model": llm_model(),
             **prompts.versions(survey_prompt_ids()),
             **(fingerprints(spec) if spec is not None else {})}
 
@@ -4000,14 +4072,15 @@ def survey_prompt_ids(profile=None) -> tuple:
 
 
 def surveyed_flow(spec: Spec, profile=None) -> bool:
-    """Whether a run can harvest piece by piece: its spec names groups. A
-    spec without groups cannot be harvested (`main` stops on it).
+    """Whether a run can harvest piece by piece: its spec names the order
+    of its coordinates. A spec without it cannot be harvested (`main` stops
+    on it).
 
-    A spec with groups whose profile lacks a prompt of the harvest is a
+    A spec with an order whose profile lacks a prompt of the harvest is a
     broken profile: the run stops and names the prompt, as `spec.load`
-    stops at a broken group (owner decision 2026-11-04), before a request
-    is sent rather than at the first plan's reading."""
-    if not spec.groups:
+    stops at a broken order, before a request is sent rather than at the
+    first plan's reading."""
+    if spec.coordinates is None:
         return False
     wanted = list(SURVEY_PROMPT_IDS)
     if names_asked(spec):
@@ -4017,7 +4090,8 @@ def surveyed_flow(spec: Spec, profile=None) -> bool:
             prompts.load(prompt_id, profile)
         except (FileNotFoundError, LookupError) as exc:
             raise LookupError(
-                f"the spec names groups, so the profile "
+                f"the spec names the order of its coordinates, so the "
+                f"profile "
                 f"{getattr(profile, 'name', None) or 'in use'!r} must write "
                 f"every prompt of the harvest, and {prompt_id!r} is missing: "
                 f"{exc}") from exc
@@ -4254,7 +4328,7 @@ def stale(stamp_path: Path, current: dict) -> list:
 
 def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
                          force: bool = False, force_stale: bool = False,
-                         anchors_sha: str = "", spec: Optional[Spec] = None,
+                         spec: Optional[Spec] = None,
                          top_up: bool = False,
                          start_at: bool = False) -> list:
     """Which of these documents this run has work for.
@@ -4271,7 +4345,7 @@ def documents_to_harvest(documents, out_dir: Path, spec_sha: str, *,
     return [(did, fn) for did, fn in documents
             if not already_done(Path(fn).stem, out_dir, spec_sha,
                                 force=force, force_stale=force_stale,
-                                anchors_sha=anchors_sha, spec=spec,
+                                spec=spec,
                                 start_at=start_at)]
 
 
@@ -4288,7 +4362,7 @@ def read_in_part(stamp_path: Path) -> bool:
 
 def already_done(name: str, out_dir: Path, spec_sha: str, *,
                  force: bool = False, force_stale: bool = False,
-                 anchors_sha: str = "", spec: Optional[Spec] = None,
+                 spec: Optional[Spec] = None,
                  start_at: bool = False) -> bool:
     """True when this document needs no work: harvested under the current
     ontology keys — or stale with nobody asking for the redo. A document read
@@ -4311,7 +4385,7 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         log.info("extraction: %s was read at its found places alone — "
                  "harvested again", name)
         return False
-    changed = stale(stamp_path, {**_stamp_current(spec_sha, anchors_sha, spec),
+    changed = stale(stamp_path, {**_stamp_current(spec_sha, spec),
                                  **document_current(name)})
     if not changed:
         log.info("extraction: %s is current — skipped", name)
@@ -4374,7 +4448,7 @@ def not_happened(report, *, answered: Optional[int] = None,
 
 
 def finish_document(report, name: str, out_dir: Path, spec_sha: str,
-                    anchors_sha: str = "", answered: Optional[int] = None,
+                    answered: Optional[int] = None,
                     spec: Optional[Spec] = None,
                     questions: Optional[dict] = None,
                     lost: int = 0) -> bool:
@@ -4449,7 +4523,7 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
         return False
     archive.keep(stamp)
     stamp.write_text(
-        json.dumps({**_stamp_current(spec_sha, anchors_sha, spec),
+        json.dumps({**_stamp_current(spec_sha, spec),
                     **recorded_questions(questions),
                     **stamp_record(name, found_places.PASS
                                    if found_places.STAGE
@@ -4805,10 +4879,12 @@ SWITCH_FLOWS = (("recheck", "recheck"), ("remap", "remap"),
                 ("review", "review"), ("top_up", "top_up"),
                 ("top_up_open", "top_up_open"),
                 ("top_up_parameters", "top_up_parameters"),
+                ("node_check", "node_check"),
                 ("start_at", "start_at"))
 # What a flow without a harvest of its own reads: every document of the
 # database, not only those the harvest would read.
-LISTING_FLOWS = ("top_up", "top_up_open", "top_up_parameters")
+LISTING_FLOWS = ("top_up", "top_up_open", "top_up_parameters",
+                 "node_check")
 
 
 def chosen_flow(args) -> tuple:
@@ -4886,6 +4962,17 @@ def log_follow_up(name: str, stats) -> None:
                  "stamp(s) carried forward, %d blocked", stats["rows"],
                  stats["documents"], stats["stamps carried forward"],
                  stats["blocked"])
+    elif name == "node_check":
+        log.info("node-check: %d node(s) checked over %d document(s): %d "
+                 "dimension(s) and %d value(s) did not hold, %d value(s) "
+                 "fell, %d open coordinate(s) asked; gaps left: %d the run "
+                 "did not manage, %d the document does not state",
+                 stats["nodes checked"], stats["documents"],
+                 stats["dimensions that did not hold"],
+                 stats["values that did not hold"], stats["values fallen"],
+                 stats["open coordinates asked"],
+                 stats["open coordinates left"],
+                 stats["coordinates the document does not state"])
     elif name == "top_up_open":
         log.info("top-up-open: %d open coordinate(s) asked over %d "
                  "document(s), %d still open",
@@ -5003,6 +5090,15 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                              "per C or D value: `python "
                              "scripts/curation_list.py OUT --level C` prints "
                              "that count for free")
+    parser.add_argument("--node-check", action="store_true",
+                        help="over the harvest in --out: check every filled "
+                             "row against the text around its quotes, then "
+                             "ask what does not hold and every dimension "
+                             "left open again with the search, reading each "
+                             "document to its end. A value that does not "
+                             "hold is read a second time and falls where "
+                             "that reading does not agree. Needs the model "
+                             "and the index")
     parser.add_argument("--review-limit", type=int, default=None,
                         metavar="N",
                         help="--review only: stop after N values (0 = all; "
@@ -5019,7 +5115,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                              "without a switch) or a follow-up pass of the "
                              "profile (top_up, top_up_open, "
                              "top_up_parameters, remap, recheck, review, "
-                             "start_at). Each switch above only chooses "
+                             "node_check, start_at). Each switch above only chooses "
                              "its flow, so --top-up and --flow top_up are "
                              "the same run")
     parser.add_argument("--spec", type=Path, default=None, metavar="FILE",
@@ -5036,8 +5132,11 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
     args = parser.parse_args(argv)
     if args.top_up_open and (args.top_up or args.top_up_parameters):
         parser.error("--top-up-open is a pass of its own")
+    if args.node_check and (args.top_up or args.top_up_parameters
+                            or args.top_up_open or args.review):
+        parser.error("--node-check is a pass of its own")
     if args.start_at and (args.top_up or args.top_up_parameters
-                          or args.top_up_open):
+                          or args.top_up_open or args.node_check):
         parser.error("--start-at starts a harvest, it is no top-up")
     chosen, problem = chosen_flow(args)
     if problem:
@@ -5225,11 +5324,12 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
     spec_path = Path(raw_spec_path)
     spec = load_spec(spec_path)
     # Every run reads each plan passage by passage, so the spec must name
-    # groups (`surveyed_flow`). Recorded in each pass's producer entry.
+    # the order of its coordinates (`surveyed_flow`). Recorded in each
+    # pass's producer entry.
     if not surveyed_flow(spec, profile):
-        parser.error(f"the spec {spec_path} names no groups: a spec needs "
-                     f"groups, since every run reads each plan passage by "
-                     f"passage")
+        parser.error(f"the spec {spec_path} names no order of its "
+                     f"coordinates (coordinates.order): a spec needs one, "
+                     f"since every run reads each plan passage by passage")
     global FLOW
     FLOW = SURVEYED
     if args.review:
@@ -5285,7 +5385,6 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
         return 1 if unheld_requests() else 0
     spec_sha = hashlib.sha256(spec_path.read_bytes()).hexdigest()
     # A harvest passage by passage writes no anchors, and its stamps say so.
-    anchors_sha = ""
     # Optional: (connection, document_id) -> {axis name: {uri: [labels]}} for
     # the axes the spec declares dynamic.
     document_axes = profile.component("extraction", "document_axes")
@@ -5351,11 +5450,11 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
 
     documents = documents_to_harvest(
         documents, args.out, spec_sha, force=args.force,
-        force_stale=args.force_stale, anchors_sha=anchors_sha, spec=spec,
+        force_stale=args.force_stale, spec=spec,
         top_up=chosen in LISTING_FLOWS or chosen not in (
             passflow.MAIN, "start_at", "recheck", "remap", "review"),
         start_at=bool(args.start_at))
-    if args.top_up_parameters or args.top_up_open:
+    if args.top_up_parameters or args.top_up_open or args.node_check:
         from . import topup_parameter
         documents, unharvested = topup_parameter.with_harvest(documents,
                                                               args.out)
@@ -5473,7 +5572,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                   else nullcontext()):
                 completer(report, spec)
         stamped = finish_document(report, name, args.out, spec_sha,
-                                  anchors_sha, answered=replies, spec=spec,
+                                  answered=replies, spec=spec,
                                   lost=UNSERVED.of(report.document_id))
         trace.flush(report.document_id)
         return stamped
@@ -5568,7 +5667,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
     follow_up = None
     if chosen != passflow.MAIN:
         follow_up = follow_up_run(
-            args, spec, _stamp_current(spec_sha, anchors_sha, spec),
+            args, spec, _stamp_current(spec_sha, spec),
             documents, document_name, whole, every, locate, document_axes,
             frame_axes, year_states, pass_sweep(),
             make_owner_sources(args.db, content=content), in_flight, room,
@@ -5576,6 +5675,13 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
             lambda docs, step: harvest_documents(
                 docs, step, in_flight=in_flight, stop=STOP,
                 halted=halt.is_set, room=room))
+        if chosen == "node_check":
+            # The check itself, and the second reading of a value that
+            # does not hold (`passboxes.box_node_check`).
+            follow_up.check = make_node_check_asker()
+            follow_up.ask = make_review_asker(args.image_root)
+            follow_up.sources_for = make_review_sources(args.db,
+                                                        content=content)
     install_stop_handler()
     try:
         if follow_up is None:

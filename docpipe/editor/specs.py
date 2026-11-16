@@ -161,7 +161,7 @@ def _lists_of(data: dict, key: str) -> Optional[tuple]:
         block = {k: parameter.get(k) for k in ("vocabulary",
                                                "vocabulary_dynamic")}
     elif parts[0] == "axis" and len(parts) == 3:
-        block = (parameter.get("axes") or {}).get(parts[2])
+        block = spec_module.axes_of(data, parameter).get(parts[2])
         if not isinstance(block, dict):
             return None
     else:
@@ -353,13 +353,15 @@ def _by_uri(data: dict) -> dict:
 def removed(old: dict, new: dict) -> list:
     """What the edited spec no longer has that the spec on disk has, in
     words: fields, coordinates, entries of lists, names and spellings, units,
-    groups, and the blocks of what a document settles and of its works.
+    and the blocks of what a document settles and of its works. A shared
+    dimension is held field by field, as each field asks it.
 
     A changed text is no removal. These are the things a harvest was read
     against or asked through, so taking one away is confirmed before it is
     written.
     """
     out: list = []
+    old, new = spec_module.expanded(old), spec_module.expanded(new)
     now = _by_uri(new)
     for uri, parameter in _by_uri(old).items():
         if uri not in now:
@@ -388,9 +390,6 @@ def removed(old: dict, new: dict) -> list:
             out += [f"choice {choice!r} of {where}"
                     for choice in (axis or {}).get("enum") or []
                     if choice not in kept]
-    for name in (old.get("groups") or {}):
-        if name not in (new.get("groups") or {}):
-            out.append(f"group {name}")
     for key in (old.get("plan_fields") or {}):
         if key not in (new.get("plan_fields") or {}):
             out.append(f"what a document settles: {key}")
@@ -534,8 +533,9 @@ def copy_field(data: dict, uri: str, key: str) -> dict:
 
 def copy_coordinate(data: dict, uri: str, name: str, key: str) -> dict:
     """The spec with a copy of a coordinate of a field under a new name,
-    right after it, in the group of its original and with what the group
-    says of the original."""
+    right after it, the field's own (a copy of a shared dimension is no
+    longer shared), and beside its original in the order of the questions
+    with what the order says of the original."""
     out = copy.deepcopy(data)
     _, parameter = _field(out, uri)
     axes = parameter.get("axes") or {}
@@ -543,19 +543,22 @@ def copy_coordinate(data: dict, uri: str, name: str, key: str) -> dict:
         raise Refused(f"coordinate {uri}.{name}",
                       "the field has no such coordinate")
     key = _new_key(f"coordinate {uri}.{name}", key, axes)
-    parameter["axes"] = _after(axes, name, key, copy.deepcopy(axes[name]))
-    for group in (out.get("groups") or {}).values():
-        for listed in ("coordinates", "own_passage", "own_value", "pair"):
-            members = group.get(listed)
-            if isinstance(members, list) and name in members \
-                    and key not in members:
-                members.insert(members.index(name) + 1, key)
+    asked = spec_module.axes_of(out, parameter).get(name, axes[name])
+    parameter["axes"] = _after(axes, name, key, copy.deepcopy(asked))
+    coordinates = out.get("coordinates")
+    for listed in spec_module.COORDINATE_KEYS:
+        members = (coordinates.get(listed) if isinstance(coordinates, dict)
+                   else None)
+        if isinstance(members, list) and name in members \
+                and key not in members:
+            members.insert(members.index(name) + 1, key)
     return out
 
 
-def _prune_groups(data: dict) -> None:
-    """Takes out of the groups every coordinate no field has any more, and a
-    group left without one: the loader refuses both."""
+def _prune_coordinates(data: dict) -> None:
+    """Takes out of the order of the questions every coordinate no field
+    has any more, and out of the shared dimensions every one no field asks:
+    the loader refuses both."""
     known = {name for parameter in data.get("parameters") or []
              if isinstance(parameter, dict)
              for name in (parameter.get("axes") or {})}
@@ -566,16 +569,22 @@ def _prune_groups(data: dict) -> None:
                   for p in data.get("parameters") or [])
     if data.get("unit_question") and numeric:
         known.add(spec_module.UNIT)
-    groups = data.get("groups")
-    if not isinstance(groups, dict):
-        return
-    for name in list(groups):
-        group = groups[name]
-        for listed in ("coordinates", "own_passage", "own_value", "pair"):
-            if isinstance(group.get(listed), list):
-                group[listed] = [c for c in group[listed] if c in known]
-        if not group.get("coordinates"):
-            del groups[name]
+    coordinates = data.get("coordinates")
+    if isinstance(coordinates, dict):
+        for listed in spec_module.COORDINATE_KEYS:
+            if isinstance(coordinates.get(listed), list):
+                coordinates[listed] = [c for c in coordinates[listed]
+                                       if c in known]
+    shared = data.get("shared_axes")
+    if isinstance(shared, dict):
+        asked = {name for parameter in data.get("parameters") or []
+                 if isinstance(parameter, dict)
+                 for name, axis in (parameter.get("axes") or {}).items()
+                 if axis == spec_module.SHARED}
+        for name in [n for n in shared if n not in asked]:
+            del shared[name]
+        if not shared:
+            del data["shared_axes"]
 
 
 def _list_of(data: dict, uri: str, coordinate: Optional[str],
@@ -588,7 +597,7 @@ def _list_of(data: dict, uri: str, coordinate: Optional[str],
     where = f"field {uri}"
     block = parameter
     if coordinate is not None:
-        block = (parameter.get("axes") or {}).get(coordinate)
+        block = spec_module.axes_of(data, parameter).get(coordinate)
         where = f"coordinate {uri}.{coordinate}"
         if not isinstance(block, dict):
             raise Refused(where, "the field has no such coordinate")
@@ -603,8 +612,9 @@ def remove(data: dict, kind: str, **named) -> dict:
     list, a spelling, something a document settles, or the works block.
 
     Nothing is written here. What follows from a removal goes with it, so
-    the result still loads: a coordinate no field has any more leaves its
-    group, and a question the works block asks of a removed field leaves the
+    the result still loads: a coordinate no field has any more leaves the
+    order of the questions, a shared dimension no field asks any more goes,
+    and a question the works block asks of a removed field leaves the
     block.
     """
     out = copy.deepcopy(data)
@@ -614,7 +624,7 @@ def remove(data: dict, kind: str, **named) -> dict:
         fields = (out.get("works") or {}).get("fields")
         if isinstance(fields, dict):
             fields.pop(named.get("field"), None)
-        _prune_groups(out)
+        _prune_coordinates(out)
     elif kind == "coordinate":
         uri, name = named.get("field"), named.get("coordinate")
         _, parameter = _field(out, uri)
@@ -622,7 +632,7 @@ def remove(data: dict, kind: str, **named) -> dict:
             raise Refused(f"coordinate {uri}.{name}",
                           "the field has no such coordinate")
         del parameter["axes"][name]
-        _prune_groups(out)
+        _prune_coordinates(out)
     elif kind in ("entry", "spelling"):
         where, listed = _list_of(out, named.get("field"),
                                  named.get("coordinate"),
@@ -669,8 +679,9 @@ def _folded(text) -> str:
 
 
 def _all_lists(data: dict):
-    """(where, the uri of the field, the coordinate or None, list key, the
-    list) for every closed list of the spec."""
+    """(where, the uri of the field or None, the coordinate or None, list
+    key, the list) for every closed list of the spec: a shared dimension's
+    once, where "shared.<name>"."""
     for parameter in data.get("parameters") or []:
         if not isinstance(parameter, dict):
             continue
@@ -682,6 +693,11 @@ def _all_lists(data: dict):
             for key in ("vocabulary", "beside"):
                 if isinstance(axis, dict) and isinstance(axis.get(key), dict):
                     yield f"{uri}.{name}", uri, name, key, axis[key]
+    shared = data.get("shared_axes")
+    for name, axis in (shared.items() if isinstance(shared, dict) else ()):
+        for key in ("vocabulary", "beside"):
+            if isinstance(axis, dict) and isinstance(axis.get(key), dict):
+                yield f"shared.{name}", None, name, key, axis[key]
 
 
 def pin(data: dict, snapshot: dict) -> dict:
@@ -695,6 +711,32 @@ def pin(data: dict, snapshot: dict) -> dict:
             if term is not None and entry not in out:
                 out[entry] = _term(ontology.identifier(entry), term)
     return out
+
+
+def ontology_lists(snapshot: Optional[dict], profile=None) -> dict:
+    """What the Spec tab shows of where the spec's lists come from: each
+    list of the profile's sources with the root it is drawn from, the root's
+    label and definition and the terms the snapshot carries under it
+    ({"sets": {name: {"root", "kind", "label", "definition", "members"}}}),
+    and which dimension the sources say draws from which list
+    ({"axis_sets": {dimension: list name}}). Empty where the profile has no
+    snapshot."""
+    from .. import sources as sources_module
+    if not snapshot:
+        return {"sets": {}, "axis_sets": {}}
+    made = sources_module.load(profile) if profile is not None \
+        else sources_module.Sources()
+    terms = snapshot.get("terms") or {}
+    held = snapshot.get("sets") or {}
+    out: dict = {}
+    for name, one in (made.lists or {}).items():
+        root = ontology.identifier(one.get("root")) or ""
+        term = terms.get(root) or {}
+        out[name] = {"root": root, "kind": one.get("kind"),
+                     "label": term.get("label"),
+                     "definition": term.get("definition"),
+                     "members": sorted(held.get(name) or [])}
+    return {"sets": out, "axis_sets": dict(made.axis_lists or {})}
 
 
 def _term(key: str, term: dict) -> dict:
@@ -769,41 +811,27 @@ HELP = {
         "units a number is printed. It is shown with the units of every "
         "field of numbers. It must not be empty as soon as the spec has a "
         "field of numbers; without such a field it is not used."),
-    ("group", "coordinates"): (
-        "The dimensions this group reads together. Every dimension of the "
-        "spec belongs to exactly one group, so adding a dimension to this "
-        "group takes it out of another. A dimension that is in no group "
-        "makes the spec invalid."),
-    ("group", "where"): (
-        "Where a document prints the dimensions of this group, in the "
-        "words the requests show. The model looks there for them. It must "
-        "not be empty."),
-    ("group", "read_in"): (
-        "The step of the flow that reads this group. The only choice is "
-        "reading: every value of the group is read by its own request, "
-        "and each dimension is answered and quoted for itself."),
-    ("group", "definition"): (
-        "Which description of a field the requests of this group show. "
-        "Brief: the short description (the key `brief` of the field). "
-        "Full: the field's whole definition, which a group needs when it "
-        "tells values apart by every distinction the definition makes."),
-    ("group", "own_passage"): (
-        "The dimensions of this group that are stated only where the value "
-        "stands, such as what a number counts. They are asked again with "
-        "the lines around the value and are never searched for elsewhere in "
-        "the document. Empty: no dimension is read this way. A dimension "
-        "cannot be here and in `own_value`."),
-    ("group", "own_value"): (
-        "The dimensions of this group that are printed with the number "
-        "itself, such as \"ca.\" or \"bis zu\". They are read once with the "
-        "value and never asked again; \"not stated\" is then the answer "
-        "that nothing qualifies the number. Empty: no dimension is read "
-        "this way. A dimension cannot be here and in `own_passage`."),
-    ("group", "pair"): (
-        "The dimensions that make up the pair of a value, normally its "
+    ("coordinates", "order"): (
+        "The order in which the dimensions of a value are asked, one "
+        "request each. Every dimension of the spec stands in it once; a "
+        "dimension that is missing makes the spec invalid. The rule "
+        "`coordinate_order` may put some of them first."),
+    ("coordinates", "own_passage"): (
+        "The dimensions that are stated only where the value stands, such "
+        "as what a number counts. They are asked again with the lines "
+        "around the value and are never searched for elsewhere in the "
+        "document. A dimension cannot be here and in `own_value`."),
+    ("coordinates", "own_value"): (
+        "The dimensions that are printed with the number itself, such as "
+        "\"ca.\" or \"bis zu\". They are read once with the value and never "
+        "asked again; \"not stated\" is then the answer that nothing "
+        "qualifies the number. A dimension cannot be here and in "
+        "`own_passage`."),
+    ("coordinates", "frame"): (
+        "The dimensions that make up the frame of a value, normally its "
         "scenario and its year. The document's base and target years refer "
-        "to this pair, and every value is asked its own scenario and year. "
-        "Empty: the pair is made of all dimensions of the group."),
+        "to this pair, and every value is asked its own scenario and "
+        "year."),
     ("parameter", "uri"): (
         "The key of the field. It names the field in every stamp and in "
         "every row of a harvest, so changing it makes the harvests that "
@@ -820,8 +848,7 @@ HELP = {
     ("parameter", "brief"): (
         "What a value of this field is, in one paragraph. Most requests "
         "show this short description instead of the full definition. "
-        "Empty: the requests show the full description. A group whose "
-        "`definition` is Full always shows the full description."),
+        "Empty: the requests show the full description."),
     ("parameter", "value_type"): (
         "What a value of this field is. float and int are numbers, with "
         "or without decimals, and need a target unit and accepted units. "
@@ -1002,6 +1029,11 @@ HELP = {
 }
 # What the form says above the two lists that are not fields.
 ABOUT = {
+    "coordinates": (
+        "The order in which the dimensions of a value are asked, and the "
+        "dimensions that are read otherwise than the rest: only where the "
+        "value stands, once with the number itself, or as the frame that "
+        "the base and target years date a value by."),
     "plan_field": (
         "Fields of the whole document hold for all its values, such as its "
         "settings, its base year and its target year. Each is asked once "
@@ -1024,15 +1056,10 @@ _FORM = {
     "spec": [("_comment", "lines", {}),
              ("parameter_question", "text", {}),
              ("unit_question", "text", {})],
-    "group": [("coordinates", "strings", {}),
-              ("where", "text", {}),
-              ("read_in", "choice", {"choices": list(spec_module.READ_IN)}),
-              ("definition", "choice",
-               {"choices": list(spec_module.DEFINITIONS),
-                "default": "brief"}),
-              ("own_passage", "strings", {}),
-              ("own_value", "strings", {}),
-              ("pair", "strings", {})],
+    "coordinates": [("order", "strings", {}),
+                    ("own_passage", "strings", {}),
+                    ("own_value", "strings", {}),
+                    ("frame", "strings", {})],
     "parameter": [("uri", "line", {}),
                   ("label", "line", {}),
                   ("description", "text", {}),

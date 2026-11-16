@@ -94,6 +94,21 @@ is, so it is asked for before anything is entered.
 
 ## Functions
 
+### not_held_key
+
+```python
+def not_held_key(claim: dict, name: str) -> tuple
+```
+
+### not_held
+
+```python
+def not_held(claim: dict, name: str) -> Optional[dict]
+```
+
+The earlier answer of *name* the check found does not hold, or
+None.
+
 ### files_of
 
 ```python
@@ -213,6 +228,44 @@ def box_review(run, doc: Doc, node: dict) -> None
 ```
 
 Each row of the trust levels in the rule read a second time.
+
+### box_node_check
+
+```python
+def box_node_check(run, doc: Doc, node: dict) -> None
+```
+
+Each filled row held against the text around its quotes (owner
+decision 2026-11-15).
+
+A dimension the model says its text does not carry becomes unbacked: it
+is open now, and the steps after this one ask it again with the search
+(`box_open`, `box_take_back`, `box_better`); where that finds nothing
+better it stays unbacked and out of the graph. A value that does not
+hold is read a second time over its passage and the section above it
+(`review.review_row`); where that reading does not agree, the row is a
+refusal for `unbacked`.
+
+### missing_fields
+
+```python
+def missing_fields(stored, spec) -> list
+```
+
+The parameters a document has no row of and whose last state is not
+"the document does not say": never asked, or left open by the run
+(exhausted, unanswered, unbacked). What it does not say stays empty.
+
+### box_missing_fields
+
+```python
+def box_missing_fields(run, doc: Doc, node: dict) -> None
+```
+
+The fields the file has no row of and the document was not found
+silent on, read now over the whole plan by the step after this one
+(`box_read_parameters`) and appended. Read from the file as it lies
+now, so the steps before it are kept.
 
 ### box_worklist
 

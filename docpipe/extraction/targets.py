@@ -638,6 +638,14 @@ def review_marks(run, doc, node) -> None:
     box_review(run, doc, node)
 
 
+def node_checked(run, doc, node) -> None:
+    """Each filled row checked with a small context
+    (`passboxes.box_node_check`), its request built from the step's inputs
+    (`runner.make_node_check_asker`)."""
+    from .passboxes import box_node_check
+    box_node_check(run, doc, node)
+
+
 TARGETS: dict = {target.name: target for target in (
     Target("var", "a variable",
            "The answer as a variable of the step's name, for this item or "
@@ -669,6 +677,13 @@ TARGETS: dict = {target.name: target for target in (
            "list; asked for each row of a pass, from the row alone.",
            gives=("row",), forms=("review",), outputs=(), apart=True,
            pass_run=review_marks),
+    Target("node_checked", "the check of a filled node",
+           "A filled row held against the text around its quotes: what "
+           "does not hold is marked unbacked, asked again by the steps "
+           "after it, and falls where it does not hold again; asked for "
+           "each row of a pass, from the row alone.",
+           gives=("row",), forms=("node_check",), outputs=(), apart=True,
+           pass_run=node_checked),
     Target("example_proposal", "a proposed example",
            "The values one passage holds of a field of a draft spec, "
            "proposed as its example; asked while a spec is compiled, from "

@@ -97,12 +97,12 @@ BUILTIN_TYPES = {
     "text": ValueType("text", "words", in_quote="words"),
     "category": ValueType("category", "entry", in_quote="entry"),
 }
-# The step that reads a group of coordinates: the reading of each value
-# (owner decision 2026-11-07); the survey that read a group per passage is
-# gone (owner decisions 2026-11-08).
-READ_IN = ("reading",)
-# Which definition of a parameter a group's requests show (`Group`).
-DEFINITIONS = ("brief", "full")
+# A field's dimension given as this word instead of an object is the spec's
+# shared dimension of that name (spec: "shared_axes"): what several fields ask
+# alike stands in the file once.
+SHARED = "shared"
+# The keys of the spec's "coordinates" (`Coordinates`).
+COORDINATE_KEYS = ("order", "own_passage", "own_value", "frame")
 # The coordinate that names a number's entry of units_accepted.
 UNIT = "unit"
 # What a document can settle once for all its values, the keys of
@@ -402,52 +402,76 @@ class Parameter:
 
 
 @dataclass
-class Group:
-    """Coordinates a plan prints together, and the step that reads them.
+class Coordinates:
+    """How the coordinates of a value are asked (spec: "coordinates"), one
+    request each.
 
-    The ontology says what a value is; it does not say where a plan writes
-    it. A number and its unit stand in one cell or one sentence, a scenario
-    and its year in a title or a heading above a whole table. Asked one
-    coordinate per request, the same passage went out once for each of them:
-    245,762 field requests for 100 plans in corpus_m8_100. A group is asked
-    in one request, each coordinate still answered and quoted for itself.
+    `order` is the order they are asked in, every coordinate of the spec in
+    it once; the rule `coordinate_order` may put some of them first. Three
+    lists name the coordinates asked otherwise than the rest.
     """
-    name: str
-    coordinates: tuple
-    read_in: str
-    # Where a plan prints the group, in the words the prompts show.
-    where: str
-    # Whether its requests show a parameter's full definition rather than
-    # its `brief` (spec: "definition": "full"): the group that classifies a
-    # value needs every distinction the definition draws, the others only
-    # what a value of the parameter is (owner decision 2026-11-05, ticket 26).
-    full_definition: bool = False
+    order: tuple
     # Coordinates only the value's own passage states, such as what the
     # number counts: asked again with the passages around it, never searched
-    # for in the rest of the plan (spec: "own_passage", owner decision
-    # 2026-11-06).
+    # for in the rest of the plan (owner decision 2026-11-06).
     own_passage: tuple = ()
     # Coordinates printed with the number itself, such as "ca." or "bis zu":
     # read once with the value, its "not stated" an answer that nothing
-    # qualifies the number, never asked again (spec: "own_value", owner
-    # decision 2026-11-06).
+    # qualifies the number, never asked again (owner decision 2026-11-06).
     own_value: tuple = ()
-    # The plan's frame (spec: "pair"): the scenario and the year, which the
-    # plan's base and target years date a value by (`addressed.Plan`). The
-    # reading asks them per value (owner decision 2026-11-07: each value is
-    # asked its own scenario and year, none takes its passage's).
-    pair: tuple = ()
+    # The plan's frame: the scenario and the year, which the plan's base and
+    # target years date a value by (`addressed.Plan`). The reading asks them
+    # per value (owner decision 2026-11-07: each value is asked its own
+    # scenario and year, none takes its passage's).
+    frame: tuple = ()
 
-    @property
-    def paired(self) -> tuple:
-        """The coordinates of the frame: its pair, else all of the group's
-        coordinates."""
-        return self.pair or self.coordinates
+    def in_order(self, slots: list) -> list:
+        """*slots* in the order they are asked."""
+        order = list(self.order)
+        return sorted(slots, key=lambda slot: order.index(slot.name)
+                      if slot.name in order else len(order))
 
-    def asked_near(self, slots: list) -> list:
-        """The slots the second reading asks again with the passages around
-        a value: all but those printed with the number itself."""
-        return [slot for slot in slots if slot.name not in self.own_value]
+
+def axes_of(data: dict, parameter: dict) -> dict:
+    """name -> the dimension a field of the raw spec *data* asks: its own,
+    or for one given as "shared" the spec's shared one of that name
+    (`SHARED`). The very objects of *data*, so what is written into one is
+    written into the file; a reference to no shared dimension is left out.
+    """
+    shared = data.get("shared_axes") if isinstance(data, dict) else None
+    shared = shared if isinstance(shared, dict) else {}
+    out: dict = {}
+    axes = parameter.get("axes") if isinstance(parameter, dict) else None
+    for name, axis in (axes if isinstance(axes, dict) else {}).items():
+        if axis == SHARED:
+            axis = shared.get(name)
+            if not isinstance(axis, dict):
+                continue
+        out[name] = axis
+    return out
+
+
+def expanded(data: dict) -> dict:
+    """A copy of the raw spec *data* in which every field carries each of
+    its dimensions itself, as a spec without shared dimensions does, and
+    "shared_axes" is gone. Whatever reads the raw spec reads this: a field
+    asks the same of a shared dimension as of its own copy."""
+    import copy
+    out = copy.deepcopy(data)
+    if not isinstance(out, dict):
+        return out
+    shared = out.pop("shared_axes", None)
+    shared = shared if isinstance(shared, dict) else {}
+    for parameter in out.get("parameters") or ():
+        axes = parameter.get("axes") if isinstance(parameter, dict) else None
+        if not isinstance(axes, dict):
+            continue
+        parameter["axes"] = {
+            name: (copy.deepcopy(shared[name])
+                   if axis == SHARED and isinstance(shared.get(name), dict)
+                   else axis)
+            for name, axis in axes.items()}
+    return out
 
 @dataclass
 class Spec:
@@ -464,8 +488,9 @@ class Spec:
     # every numeric parameter, because the entry is what settles the
     # parameter. Only a spec with a numeric parameter has a use for it.
     unit_question: Optional[str] = None
-    # name -> Group; empty for a spec read the old way only.
-    groups: dict = field(default_factory=dict)
+    # How the coordinates of a value are asked (`Coordinates`); None for a
+    # spec read the old way only.
+    coordinates: Optional[Coordinates] = None
     by_uri: dict = field(default_factory=dict)
     # What a document settles once for all its values, each asked once in
     # the form of a document's field (spec: "plan_fields", owner decision
@@ -499,10 +524,6 @@ class Spec:
 
     def __post_init__(self) -> None:
         self.by_uri = {p.uri: p for p in self.parameters}
-
-    def groups_read_in(self, step: str) -> list:
-        return [group for group in self.groups.values()
-                if group.read_in == step]
 
 
 def _vocabulary(path: str, raw):
@@ -1000,6 +1021,15 @@ def load(source: Union[Path, str, dict]) -> Spec:
         data = source
     if not isinstance(data, dict):
         _fail("spec", "top level must be an object")
+    if "groups" in data:
+        # Refused rather than ignored, so that a spec written for the
+        # blocks says where their parts went.
+        _fail("spec.groups", "a spec has no groups: the order the "
+                             "coordinates of a value are asked in is "
+                             "spec.coordinates.order, and own_passage, "
+                             "own_value and frame (the pair the base and "
+                             "target years date a value by) stand beside it")
+    data = _with_shared_axes(data)
     raw_parameters = data.get("parameters")
     if not isinstance(raw_parameters, list) or not raw_parameters:
         _fail("spec.parameters", "required, non-empty list")
@@ -1018,15 +1048,49 @@ def load(source: Union[Path, str, dict]) -> Spec:
     if unit_question is not None and not (isinstance(unit_question, str)
                                           and unit_question.strip()):
         _fail("spec.unit_question", "must be a non-empty string")
-    groups = _validate_groups(data.get("groups"), parameters,
-                              bool(unit_question))
+    coordinates = _validate_coordinates(data.get("coordinates"), parameters,
+                                        bool(unit_question))
     return Spec(parameters=parameters,
                 parameter_question=(question or None),
-                unit_question=(unit_question or None), groups=groups,
+                unit_question=(unit_question or None),
+                coordinates=coordinates,
                 plan_fields=_validate_plan_fields(data.get("plan_fields"),
-                                                  parameters, groups),
+                                                  parameters, coordinates),
                 works=_validate_works(data.get("works"), parameters),
                 value_types=value_types)
+
+
+def _with_shared_axes(data: dict) -> dict:
+    """*data* with every field's shared dimension in place (`expanded`),
+    after the shared dimensions are checked: each an object, each used by a
+    field, and every field's "shared" naming one of them."""
+    shared = data.get("shared_axes")
+    if shared is not None and not isinstance(shared, dict):
+        _fail("spec.shared_axes", "an object of dimension name -> the "
+                                  "dimension, as a field writes its own")
+    shared = shared or {}
+    for name, axis in shared.items():
+        if not isinstance(axis, dict):
+            _fail(f"spec.shared_axes.{name}", "must be an object")
+    used: set = set()
+    for i, parameter in enumerate(data.get("parameters") or ()):
+        axes = parameter.get("axes") if isinstance(parameter, dict) else None
+        for name, axis in (axes if isinstance(axes, dict) else {}).items():
+            if axis != SHARED:
+                continue
+            if name not in shared:
+                _fail(f"spec.parameters[{i}].axes.{name}",
+                      f"is {SHARED!r}, and spec.shared_axes has no "
+                      f"{name!r}")
+            used.add(name)
+    unused = sorted(set(shared) - used)
+    if unused:
+        # A text written for the model that no request shows, as an unused
+        # key of plan_fields.
+        _fail("spec.shared_axes", f"no field asks {', '.join(unused)}: "
+                                  f"give it to a field as {SHARED!r} or "
+                                  f"take it out")
+    return expanded(data) if shared else data
 
 
 def _validate_text(path: str, raw: dict, key: str, required: bool) -> None:
@@ -1038,25 +1102,26 @@ def _validate_text(path: str, raw: dict, key: str, required: bool) -> None:
               else "a non-empty string when given")
 
 
-def _validate_of(path: str, raw, parameters: list, groups: dict) -> None:
+def _validate_of(path: str, raw, parameters: list,
+                 coordinates: Optional[Coordinates]) -> None:
     """`of` of a document's base or target year: coordinate -> the key of
     an entry of its list, what a pair of the document's frame reads on its
     other coordinates to be that state of it (`pipeline.state_years`).
 
-    A coordinate outside every group's pair or an entry its list does not
-    hold would match no pair, and the state would silently have no years;
-    so it is refused here.
+    A coordinate outside the frame or an entry its list does not hold would
+    match no pair, and the state would silently have no years; so it is
+    refused here.
     """
     where = f"{path}.of"
     if not isinstance(raw, dict) or not raw:
         _fail(where, "a non-empty object of coordinate -> the key of an "
                      "entry of its list when given")
-    paired = sorted({name for group in groups.values()
-                     for name in group.pair})
+    paired = sorted(coordinates.frame) if coordinates else []
     for name, entry in raw.items():
         if name not in paired:
-            _fail(f"{where}.{name}", f"is no coordinate of a group's pair; "
-                                     f"one of {paired}")
+            _fail(f"{where}.{name}", f"is no coordinate of the frame "
+                                     f"(spec.coordinates.frame); one of "
+                                     f"{paired}")
         lists = [parameter.axes[name].vocabulary for parameter in parameters
                  if name in parameter.axes
                  and parameter.axes[name].vocabulary]
@@ -1068,7 +1133,7 @@ def _validate_of(path: str, raw, parameters: list, groups: dict) -> None:
                                      f"in every parameter that carries it")
 
 
-def _validate_plan_fields(raw, parameters=(), groups=None) -> dict:
+def _validate_plan_fields(raw, parameters=(), coordinates=None) -> dict:
     """key -> {"name", "means", "sentence"} of what a document settles once,
     and for a year of its own which pairs of its frame are that state of it
     (`of`).
@@ -1109,7 +1174,7 @@ def _validate_plan_fields(raw, parameters=(), groups=None) -> dict:
         _validate_text(path, entry, "means", True)
         _validate_text(path, entry, "sentence", False)
         if "of" in entry:
-            _validate_of(path, entry["of"], list(parameters), groups or {})
+            _validate_of(path, entry["of"], list(parameters), coordinates)
         out[key] = dict(entry)
     return out
 
@@ -1144,68 +1209,52 @@ def _validate_works(raw, parameters: list) -> Optional[dict]:
     return {**raw, "fields": dict(fields)} if "fields" in raw else dict(raw)
 
 
-def _validate_groups(raw, parameters: list, asks_unit: bool) -> dict:
-    """name -> Group, each coordinate of the spec in exactly one of them.
+def _validate_coordinates(raw, parameters: list,
+                          asks_unit: bool) -> Optional[Coordinates]:
+    """How the coordinates of a value are asked, every coordinate of the
+    spec once in the order; None where the spec says nothing of it.
 
-    A coordinate in no group would be read by no step, and one in two would
-    be read twice with two answers to choose from.
+    A coordinate missing from the order would be asked by no step, and one
+    named twice would be asked twice with two answers to choose from.
     """
     if raw is None:
-        return {}
-    if not isinstance(raw, dict) or not raw:
-        _fail("spec.groups", "must be a non-empty object of name -> group")
+        return None
+    path = "spec.coordinates"
+    if not isinstance(raw, dict):
+        _fail(path, f"an object with {', '.join(COORDINATE_KEYS)}")
+    extra = sorted(set(raw) - set(COORDINATE_KEYS))
+    if extra:
+        _fail(path, f"has no key {extra}")
     known = {name for parameter in parameters for name in parameter.axes}
     if asks_unit and any(parameter.has_units for parameter in parameters):
         known.add(UNIT)
-    groups: dict = {}
-    owner: dict = {}
-    for name, entry in raw.items():
-        path = f"spec.groups.{name}"
-        if not isinstance(entry, dict):
-            _fail(path, "must be an object")
-        coordinates = entry.get("coordinates")
-        if (not isinstance(coordinates, list) or not coordinates
-                or not all(isinstance(c, str) and c.strip()
-                           for c in coordinates)):
-            _fail(f"{path}.coordinates", "non-empty list of coordinate names")
-        for coordinate in coordinates:
-            if coordinate not in known:
-                _fail(f"{path}.coordinates",
-                      f"{coordinate!r} is no coordinate of the spec")
-            if coordinate in owner:
-                _fail(f"{path}.coordinates",
-                      f"{coordinate!r} is already in group {owner[coordinate]!r}")
-            owner[coordinate] = name
-        read_in = entry.get("read_in")
-        if read_in not in READ_IN:
-            _fail(f"{path}.read_in", f"must be one of {READ_IN}")
-        where = entry.get("where")
-        if not isinstance(where, str) or not where.strip():
-            _fail(f"{path}.where", "required, non-empty string")
-        definition = entry.get("definition", "brief")
-        if definition not in DEFINITIONS:
-            _fail(f"{path}.definition", f"must be one of {DEFINITIONS}")
-        own = {}
-        for key in ("own_passage", "own_value"):
-            listed = entry.get(key, [])
-            if not isinstance(listed, list) or any(
-                    c not in coordinates for c in listed):
-                _fail(f"{path}.{key}", "a list of the group's coordinates")
-            own[key] = tuple(listed)
-        if set(own["own_passage"]) & set(own["own_value"]):
-            _fail(f"{path}.own_value", "a coordinate is in own_passage or "
-                                       "own_value, not both")
-        pair = entry.get("pair", [])
-        if not isinstance(pair, list) or any(c not in coordinates
-                                             for c in pair):
-            _fail(f"{path}.pair", "a list of the group's coordinates")
-        groups[name] = Group(name, tuple(coordinates), read_in, where.strip(),
-                             full_definition=definition == "full",
-                             pair=tuple(pair), **own)
-    missing = sorted(known - set(owner))
+    order = raw.get("order")
+    if (not isinstance(order, list) or not order
+            or not all(isinstance(c, str) and c.strip() for c in order)):
+        _fail(f"{path}.order", "a non-empty list of coordinate names")
+    seen: set = set()
+    for coordinate in order:
+        if coordinate not in known:
+            _fail(f"{path}.order", f"{coordinate!r} is no coordinate of the "
+                                   f"spec")
+        if coordinate in seen:
+            _fail(f"{path}.order", f"{coordinate!r} is named twice")
+        seen.add(coordinate)
+    missing = sorted(known - seen)
     if missing:
-        _fail("spec.groups", f"in no group: {', '.join(missing)}")
-    return groups
+        _fail(f"{path}.order", f"not in the order: {', '.join(missing)}")
+    lists = {}
+    for key in ("own_passage", "own_value", "frame"):
+        listed = raw.get(key, [])
+        if not isinstance(listed, list) or any(c not in seen for c in listed):
+            _fail(f"{path}.{key}", "a list of coordinates of the order")
+        if len(set(listed)) != len(listed):
+            _fail(f"{path}.{key}", "names a coordinate twice")
+        lists[key] = tuple(listed)
+    if set(lists["own_passage"]) & set(lists["own_value"]):
+        _fail(f"{path}.own_value", "a coordinate is in own_passage or "
+                                   "own_value, not both")
+    return Coordinates(tuple(order), **lists)
 
 
 def _digest(parts) -> str:

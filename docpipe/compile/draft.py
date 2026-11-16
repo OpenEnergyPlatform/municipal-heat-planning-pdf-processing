@@ -563,6 +563,7 @@ def drawn(drawing: Optional[dict], spec_raw: dict) -> tuple:
     drawing's structure and no field's: it only says the property is
     written."""
     drawing = drawing or {}
+    spec_raw = spec_module.expanded(spec_raw)
     parameters = {one["uri"]: one for one in spec_raw.get("parameters") or ()
                   if isinstance(one, dict) and one.get("uri")}
     boxes = {box["id"]: box for box in drawing.get("boxes") or ()
@@ -684,7 +685,7 @@ def differences(shapes: list, spec_raw: dict,
             row["axis"] = axis          # whose list: an axis, or the value
         out.append(row)
 
-    for parameter in spec_raw.get("parameters") or ():
+    for parameter in spec_module.expanded(spec_raw).get("parameters") or ():
         if not isinstance(parameter, dict):
             continue
         name = parameter.get("uri")

@@ -82,7 +82,7 @@ def a_list(data: dict):
     for parameter in data["parameters"]:
         if len(parameter.get("vocabulary") or {}) > 1:
             return parameter["uri"], None, parameter["vocabulary"]
-        for name, axis in (parameter.get("axes") or {}).items():
+        for name, axis in spec_module.axes_of(data, parameter).items():
             if len(axis.get("vocabulary") or {}) > 1:
                 return parameter["uri"], name, axis["vocabulary"]
     raise AssertionError("the spec has no list of several entries")
@@ -91,7 +91,7 @@ def a_list(data: dict):
 def removable(data: dict):
     """(field, coordinate, entry) of an entry the spec loads without."""
     for parameter in data["parameters"]:
-        for name, axis in (parameter.get("axes") or {}).items():
+        for name, axis in spec_module.axes_of(data, parameter).items():
             for entry in axis.get("vocabulary") or {}:
                 made = specs.remove(data, "entry", field=parameter["uri"],
                                     coordinate=name, entry=entry)

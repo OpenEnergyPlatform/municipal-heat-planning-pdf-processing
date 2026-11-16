@@ -29,6 +29,7 @@ from docpipe import graphfile
 from docpipe.extraction.addressed import SEVERAL
 from docpipe.extraction.bricks import in_graph
 from docpipe.extraction.graphkit import NOT_IN_GRAPH
+from docpipe.extraction.spec import expanded
 from docpipe.extraction.shapemodel import Model, SchemaError, \
     snapshot_ancestors
 
@@ -351,8 +352,9 @@ def study_of(written) -> dict:
 # drawing's: what the Turtle writes for a field is what a body sends. Each is
 # read when a body is made, from the drawing as the graph file has it then.
 
-_SPEC = json.loads(Path(__file__).with_name("extraction_spec.json")
-                   .read_text(encoding="utf-8"))
+# Each field with its shared dimensions in place (`spec.expanded`).
+_SPEC = expanded(json.loads(Path(__file__).with_name("extraction_spec.json")
+                            .read_text(encoding="utf-8")))
 
 
 def drawing() -> dict:

@@ -68,6 +68,16 @@ A profile's own word is never one: `out:not_in_list` and `status_quo`
 fail the shape, and so does an identifier inside a sentence, because the
 match has to run to the end of the string.
 
+### as_written
+
+```python
+def as_written(spec_raw)
+```
+
+The raw spec with every field's shared dimension in place
+(`spec.expanded`): what this module reads of a field is what the field
+asks.
+
 ### read
 
 ```python

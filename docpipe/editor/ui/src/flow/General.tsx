@@ -10,6 +10,7 @@ import {
 } from '@mantine/core';
 import { IconMinus, IconPlus } from '@tabler/icons-react';
 import { AreaBox, TextBox } from '../components/Inputs';
+import { PythonHelp } from '../components/PythonHelp';
 import { rich, t, tr, useLang } from '../lib/i18n';
 import { partsOf, stepBox, type FlowData, type Library, type LibSetting, type Step } from './model';
 
@@ -49,8 +50,13 @@ export function GeneralField({ s, value, put, vars, data, reset, base }: {
       onChange={v => put(v.length ? v : undefined)} />;
   } else if (s.kind === 'json') body = <JsonField value={value} put={put} label={tr(s.label)} />;
   else if (s.kind === 'code') {
-    body = <AreaBox mono minRows={8} maxRows={30} value={String(value ?? '')} onText={() => {}} aria-label={tr(s.label)}
-      placeholder={'def run(inputs):\n    return {"result": inputs}'} onCommit={v => put(v.trim() ? v : undefined)} />;
+    body = (
+      <Stack gap={6}>
+        <AreaBox code minRows={8} maxRows={30} value={String(value ?? '')} onText={() => {}} aria-label={tr(s.label)}
+          placeholder={'def run(inputs):\n    return {"result": inputs}'} onCommit={v => put(v.trim() ? v : undefined)} />
+        <PythonHelp where="flow" onPut={ex => put(ex.code)} />
+      </Stack>
+    );
   } else if (s.kind === 'multi') {
     const on = new Set(Array.isArray(value) ? value as string[] : []);
     body = <Stack gap={4}>{(s.choices || []).map(ch => (

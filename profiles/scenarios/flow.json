@@ -147,7 +147,7 @@
             {
               "id": "document_coordinates",
               "each": "coordinate",
-              "order": "groups",
+              "order": "spec",
               "steps": [
                 {
                   "id": "document_coordinate_way",
@@ -567,6 +567,10 @@
               ]
             },
             {
+              "id": "document_values_check",
+              "box": "check_value"
+            },
+            {
               "id": "document_name",
               "box": "ask",
               "preset": "names",
@@ -615,7 +619,7 @@
         {
           "id": "coordinates",
           "each": "coordinate",
-          "order": "groups",
+          "order": "spec",
           "steps": [
             {
               "id": "coordinate_way",
@@ -1033,6 +1037,10 @@
               ]
             }
           ]
+        },
+        {
+          "id": "values_check",
+          "box": "check_value"
         },
         {
           "id": "name",

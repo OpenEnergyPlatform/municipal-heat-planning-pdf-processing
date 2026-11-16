@@ -11,7 +11,11 @@ import { BlockEditor, PresetSelect } from './blocks';
 export type Edit = (fn: () => void, key?: string) => void;
 
 /* what every input of the settings is given: the data, the edit, the drawing as it stands, and the trying of a block */
-export interface Kit { d: GraphData; edit: Edit; cur?: Cur; tryBlock?: (where: Obj, document: string) => Promise<any> }
+export interface Kit {
+  d: GraphData; edit: Edit; cur?: Cur; tryBlock?: (where: Obj, document: string) => Promise<any>;
+  /* a block as the Python of a block that does the same */
+  pythonOf?: (ref: Obj, kind: string) => Promise<{ python?: string; per?: string; writes?: string }>;
+}
 
 /* the fields of the harvest, grouped by what they are; the code name stands in the details only */
 export function fieldOptions(d: GraphData, extra: string[] = []) {

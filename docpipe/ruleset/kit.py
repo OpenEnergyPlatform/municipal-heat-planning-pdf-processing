@@ -57,8 +57,8 @@ def rule(name, tab, group, kind, help, **more) -> Rule:
 # The kinds of steps (`step_kind`) that send a request to the model.
 ASKING = ("transcribe", "sentences", "order", "docfield", "works", "find",
           "coord", "quantity", "work_coordinate", "phrase", "search",
-          "last_year", "names", "about", "compute", "review", "example",
-          "list")
+          "last_year", "names", "about", "compute", "review", "node_check",
+          "example", "list")
 # Those whose request shows lines of the document.
 SHOWING = ("sentences", "order", "docfield", "works", "find", "coord",
            "quantity", "work_coordinate", "phrase", "search", "last_year",
@@ -68,7 +68,7 @@ SHOWING = ("sentences", "order", "docfield", "works", "find", "coord",
 # answer where it is better, the parameters and the passages read for the
 # first time, the quotes checked again, the second reading.
 PASS_TAKING = ("take_back", "better", "read_parameters", "unread",
-               "recheck", "review")
+               "recheck", "review", "node_check")
 # Those that take an answer and hold it to its quote, and the writing that
 # holds every value to it once more.
 TAKING = ("docfield", "works", "find", "coord", "quantity",

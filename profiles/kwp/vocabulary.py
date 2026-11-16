@@ -189,7 +189,7 @@ def carrier_problems(spec_raw: dict, snapshot: dict,
     terms, sets = snapshot["terms"], snapshot["sets"]
     problems: list = []
     drawn = Drawing(drawing)
-    for parameter in spec_raw.get("parameters", []):
+    for parameter in ontology.as_written(spec_raw).get("parameters", []):
         carrier = (parameter.get("axes") or {}).get("carrier") or {}
         declared = {uri for arrow in drawn.readers(parameter.get("uri"),
                                                    "carrier")

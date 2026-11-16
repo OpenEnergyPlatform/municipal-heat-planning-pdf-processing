@@ -121,7 +121,7 @@ def forget(self, document_id: int) -> None
 #### SurveyedHarvest.sweep
 
 ```python
-def sweep(self, batch, rows, slots, anchor=None) -> None
+def sweep(self, batch, rows, slots) -> None
 ```
 
 What a pass over a stored harvest asks a coordinate again with

@@ -36,8 +36,7 @@ RULES: tuple = (
          "it draws at random from the places after them (rerank_drawn). The "
          "rest follow in the order of the vector search, so a walk down the "
          "list still reaches every passage. A larger number reorders more "
-         "and costs more requests to the reranker. Decided on 2026-11-13: "
-         "the best 15 (first 30, the same evening 15).",
+         "and costs more requests to the reranker.",
          least=1, env="RERANK_POOL", decided="2026-11-13",
          steps=SEARCHING, where="inference/rerank.py (pool_of)"),
     rule("rerank_drawn", "flow", "Search", "whole",
@@ -45,14 +44,12 @@ RULES: tuple = (
          "best ones (rerank_pool), drawn at random from the places after "
          "them up to rerank_drawn_from. The draw is the same for the same "
          "document and search sentences, a new sentence draws anew. Where "
-         "fewer places are left, all of them are given. 0: only the best. "
-         "Decided on 2026-11-13: 10 (first 20, the same evening 10).",
+         "fewer places are left, all of them are given. 0: only the best.",
          least=0, env="RERANK_DRAWN", decided="2026-11-13",
          steps=SEARCHING, where="inference/rerank.py (pool_of)"),
     rule("rerank_drawn_from", "flow", "Search", "whole",
          "The last place of the vector search, within each kind, that the "
-         "passages of rerank_drawn are drawn from. Decided on 2026-11-13: "
-         "100, so of each kind 10 of the places 16 to 100.",
+         "passages of rerank_drawn are drawn from.",
          least=0, env="RERANK_DRAWN_FROM", decided="2026-11-13",
          steps=SEARCHING, where="inference/rerank.py (pool_of)"),
     rule("rerank_pool_by_kind", "flow", "Search", "map",
@@ -113,8 +110,7 @@ RULES: tuple = (
          steps=SEARCHING, where="inference/faiss_store.py (fuse_prepared)"),
     rule("search_kinds", "flow", "Search", "texts",
          "The kinds of passage a search looks at: sections, tables and "
-         "figures. Remove a kind to leave it out of every search. Decided "
-         "on 2026-11-08 (pieces instead of passages).",
+         "figures. Remove a kind to leave it out of every search.",
          choices=("section", "table", "figure"), decided="2026-11-08",
          steps=SEARCHING, where="inference/faiss_store.py (fuse_prepared)"),
     rule("search_with", "flow", "Search", "choice",
@@ -122,7 +118,7 @@ RULES: tuple = (
          "model writes as the plan would print the answer, in a request of "
          "its own, which is the standard. Question: the dimension's own "
          "question, with no request for a sentence. Name: the dimension's "
-         "name, with no request. Decided on 2026-11-08 and 2026-11-09.",
+         "name, with no request.",
          choices=("phrase", "question", "name"),
          decided="2026-11-08, 2026-11-09", steps=("phrase",),
          where="targets.py (search_sentence)"),
@@ -131,22 +127,21 @@ RULES: tuple = (
          "Once: when the search starts, with the search sentence, which is "
          "the standard. Each round: also before every further request, "
          "over the chunks left, with the sentence of that round, which "
-         "costs one request to the reranker for each. Decided on "
-         "2026-11-09.", choices=("once", "each_round"),
+         "costs one request to the reranker for each.", choices=("once", "each_round"),
          decided="2026-11-09", steps=("search",),
          where="engine.py (SearchSupply)"),
     rule("show_twice", "flow", "Search", "switch",
          "Off: no chunk is shown twice to one dimension. On: a chunk shown "
          "before may be shown a second time, where it stands beside the "
          "value, where the model fetches it or where the order reaches it, "
-         "and never a third time. Decided on 2026-11-09.",
+         "and never a third time.",
          decided="2026-11-09", steps=("search", "round", "if"),
          where="engine.py (SearchSupply), targets.py (over_hits)"),
     rule("fetched_count", "flow", "Search", "switch",
          "Off: chunks that the model fetched itself do not count against "
          "the most chunks a search shows, so a search may show more. On: "
          "they count, and the search ends once the fetched and the ordered "
-         "chunks together reach that number. Decided on 2026-11-09.",
+         "chunks together reach that number.",
          decided="2026-11-09", steps=("search",),
          where="engine.py (SearchSupply)"),
     rule("conversation", "flow", "Asking again and giving up", "choice",
@@ -156,8 +151,7 @@ RULES: tuple = (
          "one value go as one conversation, so that each shows the earlier "
          "questions about that value and how they were answered, a "
          "follow-up after the answer it follows, and the room for the "
-         "answer counts all of it. Set it at the frame of the dimensions. "
-         "Decided on 2026-11-08 and 2026-11-09.",
+         "answer counts all of it. Set it at the frame of the dimensions.",
          choices=("none", "per_value"), decided="2026-11-08, 2026-11-09",
          steps=("each coordinate", "coord", "search", "work_coordinate"),
          where="addressed.py (_ask, _follow)"),
@@ -167,8 +161,7 @@ RULES: tuple = (
          "standard. Quote: the words of the line; the code finds the line "
          "among the lines shown, characters counted as the same by "
          "`same_characters` compared as the same, and an answer whose words "
-         "stand in no shown line is refused as not in the source. Decided "
-         "on 2026-11-08 and 2026-11-09.", choices=("address", "quote"),
+         "stand in no shown line is refused as not in the source.", choices=("address", "quote"),
          decided="2026-11-08, 2026-11-09",
          steps=("docfield", "find", "coord", "search", "work_coordinate",
                 "works", "last_year", "quantity", "about"),
@@ -177,15 +170,14 @@ RULES: tuple = (
          "Off: a unit that the value's own place does not settle is not "
          "searched; it is asked at the value's place only, as the spec's "
          "groups say. On: an open unit is searched like an open "
-         "dimension, over the chunks of the document. Decided on "
-         "2026-09-16.", decided="2026-09-16",
+         "dimension, over the chunks of the document.", decided="2026-09-16",
          steps=("each coordinate", "round", "if"),
          where="engine.py (facts, own_only)"),
     # -- flow: calculating ----------------------------------------------------
     rule("code_timeout_s", "flow", "Calculation", "number",
          "The seconds the run waits for one calculation of the sandbox. A "
          "larger number lets longer calculations finish; a smaller number "
-         "gives up on a slow one sooner. Decided on 2026-11-03 (sandbox).",
+         "gives up on a slow one sooner.",
          least=1, env="CODE_EXEC_TIMEOUT", decided="2026-11-03",
          steps=("compute",), where="inference/code_exec.py"),
     rule("code_resend", "flow", "Calculation", "whole",

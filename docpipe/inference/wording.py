@@ -109,8 +109,8 @@ NOTES = {
     "compute_guide": (
         "How a statement about a number the code printed, or one read off a "
         "requested image, is given: told in the message that brings the "
-        "output or the image, not before (owner decision 2026-11-07: each "
-        "request is told what it is to do)."),
+        "output or the image, not before: each request is told what it is "
+        "to do."),
     "citation_quotes": (
         "The citation under the answer, which the model also reads as "
         "`source`."),

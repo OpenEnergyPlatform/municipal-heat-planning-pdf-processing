@@ -30,9 +30,12 @@ Author: Felix Vossel
 from __future__ import annotations
 
 import ast
+import builtins
 import dataclasses
+import inspect
 import logging
 import re
+import textwrap
 from typing import Callable, Optional
 
 from . import conditions
@@ -195,6 +198,164 @@ def compiled(code: str, space: dict) -> Callable:
              "re": re, "log": log, **space}
     exec(compile(code, "<graph block>", "exec"), names)
     return names["run"]
+
+
+# The names a block of Python sees without an import, beside "kg" where the
+# profile has a module of the graph.
+BLOCK_NAMES = ("literal", "in_graph", "is_class", "ttl_string",
+               "NOT_IN_GRAPH", "re", "log", "kg")
+
+
+def _bound(tree: ast.AST) -> set:
+    """The names a piece of code makes itself: arguments, assignments,
+    imports, definitions, loop and handler names."""
+    out: set = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx,
+                                                      (ast.Store, ast.Del)):
+            out.add(node.id)
+        elif isinstance(node, ast.arg):
+            out.add(node.arg)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                               ast.ClassDef)):
+            out.add(node.name)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            out.add(node.name)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                out.add((alias.asname or alias.name).split(".")[0])
+    return out
+
+
+def python_of(brick: Brick, names=BLOCK_NAMES) -> str:
+    """The logic of a brick as the Python of a block: its own function with
+    the def line `def run(call):`, and an import line for every name its body
+    uses that a block does not have (*names*), taken from the brick's own
+    module, so the code runs as it stands. Relative imports in the body are
+    written out in full. The empty text where the source is not to be had."""
+    function = brick.run
+    try:
+        source = textwrap.dedent(inspect.getsource(function))
+    except (OSError, TypeError):
+        return ""
+    func = ast.parse(source).body[0]
+    if not isinstance(func, ast.FunctionDef):
+        return ""
+    module = getattr(function, "__module__", "") or ""
+    lines = source.splitlines()
+    for node in ast.walk(func):
+        if isinstance(node, ast.ImportFrom) and node.level:
+            parent = module.rsplit(".", node.level)[0]
+            full = f"{parent}.{node.module}" if node.module else parent
+            lines[node.lineno - 1] = re.sub(
+                r"from\s+\.+\w*(?:\.\w+)*\s+import", f"from {full} import",
+                lines[node.lineno - 1], count=1)
+    body = "\n".join(lines[func.body[0].lineno - 1:]) + "\n"
+    own = _bound(func)
+    # The body only: the annotations of the def line are not carried over.
+    used = {node.id for statement in func.body for node in ast.walk(statement)
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)}
+    scope = getattr(function, "__globals__", {})
+    imports, taken = [], []
+    for name in sorted(used - own - set(names) - set(dir(builtins))):
+        if name not in scope:
+            continue
+        if inspect.ismodule(scope[name]):
+            real = scope[name].__name__
+            imports.append(f"import {real}" if real == name
+                           else f"import {real} as {name}")
+        elif module:
+            taken.append(name)
+    if taken:
+        imports.append(f"from {module} import {', '.join(taken)}")
+    head = ("\n".join(imports) + "\n\n\n") if imports else ""
+    return head + "def run(call):\n" + body
+
+
+def python_block(ref, kind: str, bricks: dict, space: Optional[dict] = None
+                 ) -> str:
+    """Any block of a drawing as the Python of a block that does the same:
+    a brick as its own logic (`python_of`), a condition as the test and the
+    reason it gives, steps as each step's code in a function of its own and
+    the chain that hands each step what the step before gave, its settings
+    beside it. The code runs as it stands where a block of Python runs.
+    The empty text where a step's source is not to be had; BlockError where
+    *ref* is no block of *kind*."""
+    form = shape(ref)
+    if form == "python":
+        return str(ref["python"])
+    if form == "brick":
+        return python_of(resolve(ref, kind, bricks, space))
+    if form == "if":
+        resolve(ref, kind, bricks, space)
+        why = str(ref.get("reason") or "condition")
+        return (f"import {conditions.__name__} as conditions\n"
+                f"from {__name__} import facts, reason\n\n\n"
+                f"CONDITION = {ref['if']!r}\n\n\n"
+                "def run(call):\n"
+                "    # Nothing where the condition holds, else the reason.\n"
+                "    if conditions.holds(CONDITION, facts(call.doc, "
+                "call.row)):\n"
+                "        return None\n"
+                f"    return reason({why!r}, call.doc, call.row)\n")
+    if form != "steps":
+        raise BlockError(f"no block: {ref!r}")
+    resolve(ref, kind, bricks, space)
+    parts, chain = ["import dataclasses\n"], []
+    for i, step in enumerate(ref["steps"], 1):
+        if shape(step) == "python":
+            code = str(step["python"])
+        else:
+            brick = None
+            for one in (kind,) + tuple(k for k in STEP_KINDS if k != kind):
+                try:
+                    brick = resolve(step, one, bricks, space)
+                    break
+                except BlockError:
+                    continue
+            code = python_of(brick) if brick is not None else ""
+        if not code:
+            return ""
+        settings = step.get("settings") or {} if isinstance(step, dict) \
+            else {}
+        parts.append(f"\ndef _step_{i}():\n"
+                     f"    # Step {i}: its own code, which defines run(call).\n"
+                     + textwrap.indent(code.rstrip() + "\n", "    ")
+                     + "    return run\n\n\n"
+                     f"step_{i} = _step_{i}()\n")
+        chain.append(f"(step_{i}, {settings!r})")
+    last = ("    # The first answer, else the value as it came.\n"
+            "    return items[0][1] if items else call.value\n"
+            if kind == "name" else
+            "    # Every answer that names a term.\n"
+            "    return [item for item in items or () if item[0] is not "
+            "None]\n")
+    parts.append(
+        "\n\nSTEPS = (" + ", ".join(chain) + ("," if len(chain) == 1 else "")
+        + ")\n\n\n"
+        "def _items(result):\n"
+        "    # What a step gave, as [(term, value, ...)].\n"
+        "    if result is None:\n"
+        "        return []\n"
+        "    if isinstance(result, (str, int, float)) and not "
+        "isinstance(result, bool):\n"
+        "        return [(None, result)]\n"
+        "    return list(result)\n\n\n"
+        "def run(call):\n"
+        "    # Each step is called with its settings, from the second on once\n"
+        "    # for each value the step before gave.\n"
+        "    items = None\n"
+        "    for step, settings in STEPS:\n"
+        "        here = dataclasses.replace(call, settings=dict(settings))\n"
+        "        if items is None:\n"
+        "            items = _items(step(here))\n"
+        "            continue\n"
+        "        out = []\n"
+        "        for item in items:\n"
+        "            out += _items(step(dataclasses.replace(here, "
+        "value=item[1])))\n"
+        "        items = out\n" + last)
+    return "".join(parts)
 
 
 # -- every block as a brick ---------------------------------------------------

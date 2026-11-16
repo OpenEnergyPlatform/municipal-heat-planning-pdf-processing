@@ -98,7 +98,9 @@ def test_the_blocks_reach_the_run_as_the_file_writes_them():
     # the kind
     bare = load({"parameter_question": KWP["parameter_question"],
                  "unit_question": KWP["unit_question"],
-                 "groups": KWP["groups"], "parameters": KWP["parameters"]})
+                 "coordinates": KWP["coordinates"],
+                 "shared_axes": KWP["shared_axes"],
+                 "parameters": KWP["parameters"]})
     assert bare.plan_fields == {} and bare.works is None
     assert not runner.names_asked(bare)
 

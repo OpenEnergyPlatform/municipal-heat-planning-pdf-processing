@@ -161,6 +161,24 @@ PRESETS = {preset.name: preset for preset in (
         group="pass", flow="pass", scope="chain", after=("stored",),
         decided="2026-09-13"),
     Preset(
+        "node_check", "Check of a filled node",
+        "Each filled row of the harvest is checked once: the model sees the "
+        "row as JSON and the text around each of its quotes, and says for "
+        "the value and each read dimension whether that text carries it. "
+        "A dimension that does not hold is marked unbacked and asked again "
+        "with the search by the steps after it; a value that does not hold "
+        "is read a second time over its passage and the section above it, "
+        "and falls where that reading does not agree. To change it: the "
+        "rule `node_check_context_chars` sets how much text around a quote "
+        "is shown; the inputs (the node, the text around its quotes) and "
+        "the prompt `node_check` shape the question.",
+        "node_check",
+        (i("node", "row", "node_check_node"),
+         i("quotes", "row", "node_check_quotes")),
+        "node_check", {"to": "node_checked"},
+        group="pass", flow="pass", scope="chain", after=("stored",),
+        decided="2026-11-15"),
+    Preset(
         "example", "Example for a field",
         "This is the request that proposes an example for a field while a "
         "spec is compiled. No run starts it. It stands here so that its "
@@ -255,7 +273,8 @@ PRESETS = {preset.name: preset for preset in (
         VALUE_PLACE + (
             i("field", "field", "field"),
             i("question", "dimension", "question"),
-            i("known", "dimension", "known")),
+            i("known", "dimension", "known"),
+            i("earlier_answer_not_held", "dimension", "not_held")),
         "place", {"to": "dimension", "where": "own"},
         values={"fetch": True, "picture": True},
         settings=(LINES_AROUND,), needs=("coordinate",),
@@ -300,6 +319,7 @@ PRESETS = {preset.name: preset for preset in (
          i("field", "field", "field"),
          i("question", "dimension", "question"),
          i("known", "dimension", "known"),
+         i("earlier_answer_not_held", "dimension", "not_held"),
          i("passages", "hits", "next_chunks")),
         "place", {"to": "dimension", "where": "hits"},
         values={"fetch": True, "picture": True},

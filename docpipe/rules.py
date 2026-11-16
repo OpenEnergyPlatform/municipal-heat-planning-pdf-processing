@@ -95,7 +95,7 @@ RULES = (
        "to the number: the quote \"-1.155\" backs -1155, but \"1.155\" does "
        "not. A dash after a letter, a digit or a separator joins two things, "
        "as in \"2020-2030\", and is no sign. A character you remove is no "
-       "longer read as a minus sign. Decided on 2026-11-01.",
+       "longer read as a minus sign.",
        decided="2026-11-01",
        where="verify.py (numbers_in, canonical_number)"),
     _r("dotted_date_year", "spec", "What a quote must show", "switch",
@@ -176,7 +176,7 @@ RULES = (
        "that dimension gets the entry, marked as derived, with the wording "
        "and quote of the span as its evidence. For example, qualifier -> "
        "out:approximate marks every year of the span as approximate. Empty: "
-       "the rows get no mark. Decided on 2026-11-07.",
+       "the rows get no mark.",
        empty=True, decided="2026-11-07",
        where="runner.py (span rows)"),
     # -- spec: defaults where the spec says nothing ---------------------------

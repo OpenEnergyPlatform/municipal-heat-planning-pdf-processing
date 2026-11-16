@@ -441,7 +441,7 @@ def with_second_pass(most: int) -> list:
     second = {"id": "again_pass", "round": {"most": most}, "steps": [{
         "id": "values_again", "each": "value", "order": "names_first",
         "steps": [{"id": "coordinates_again", "each": "coordinate",
-                   "order": "groups",
+                   "order": "spec",
                    "when": {"all": [row("coordinate", "state", "one_of",
                                         ["open"])]},
                    "steps": [

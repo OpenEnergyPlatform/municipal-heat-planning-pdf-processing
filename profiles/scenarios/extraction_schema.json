@@ -343,7 +343,7 @@
       "additionalProperties": {
        "type": "integer"
       },
-      "description": "The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.",
+      "description": "The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again.",
       "type": "object"
      }
     },
@@ -414,7 +414,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -516,7 +516,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -613,7 +613,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -699,7 +699,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -854,7 +854,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -956,7 +956,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -1053,7 +1053,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -1139,7 +1139,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -1300,7 +1300,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -1402,7 +1402,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -1499,7 +1499,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -1585,7 +1585,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -1741,7 +1741,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -1843,7 +1843,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -1940,7 +1940,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -2026,7 +2026,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2181,7 +2181,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -2283,7 +2283,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2380,7 +2380,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -2466,7 +2466,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2621,7 +2621,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -2723,7 +2723,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -2820,7 +2820,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -2874,7 +2874,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3062,7 +3062,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -3164,7 +3164,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3261,7 +3261,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -3291,7 +3291,7 @@
       "type": "string"
      },
      "value_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3355,7 +3355,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3517,7 +3517,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -3619,7 +3619,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3716,7 +3716,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -3770,7 +3770,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -3894,7 +3894,7 @@
       "type": "array"
      },
      "value_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -4057,7 +4057,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -4159,7 +4159,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -4256,7 +4256,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -4310,7 +4310,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -4434,7 +4434,7 @@
       "type": "array"
      },
      "value_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -4766,7 +4766,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -4868,7 +4868,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -4965,7 +4965,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -5019,7 +5019,7 @@
       "type": "array"
      },
      "scenario_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5177,7 +5177,7 @@
       "type": "array"
      },
      "year_kind_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'year_kind' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'year_kind' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5335,7 +5335,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -5437,7 +5437,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5534,7 +5534,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -5620,7 +5620,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5775,7 +5775,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -5877,7 +5877,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -5974,7 +5974,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -6026,7 +6026,7 @@
       "type": "array"
      },
      "value_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6361,7 +6361,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6517,7 +6517,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -6619,7 +6619,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6716,7 +6716,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -6802,7 +6802,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -6963,7 +6963,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -7065,7 +7065,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7162,7 +7162,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -7248,7 +7248,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7409,7 +7409,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -7511,7 +7511,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7608,7 +7608,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -7694,7 +7694,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -7849,7 +7849,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -7951,7 +7951,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -8048,7 +8048,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -8100,7 +8100,7 @@
       "type": "array"
      },
      "value_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9061,7 +9061,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9217,7 +9217,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -9319,7 +9319,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9416,7 +9416,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -9468,7 +9468,7 @@
       "type": "array"
      },
      "value_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9696,7 +9696,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -9852,7 +9852,7 @@
     "properties": {
      "at": {
       "additionalProperties": false,
-      "description": "Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
+      "description": "Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.",
       "properties": {
        "cell": {
         "minimum": 1,
@@ -9954,7 +9954,7 @@
       "type": "array"
      },
      "parameter_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10051,7 +10051,7 @@
      },
      "read_off": {
       "const": true,
-      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07)."
+      "description": "The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C."
      },
      "reading": {
       "description": "What was read off the figure's image: the element, the number and the unit of its axis. Present only with read_off.",
@@ -10103,7 +10103,7 @@
       "type": "array"
      },
      "value_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'value' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10480,7 +10480,7 @@
       "type": "array"
      },
      "work_means": {
-      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.",
+      "description": "The entries of the document's list of names (its scenarios, its works) 'work' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.",
       "items": {
        "minLength": 1,
        "type": "string"
@@ -10808,8 +10808,7 @@
   },
   "required": [
    "spec",
-   "model",
-   "anchors"
+   "model"
   ],
   "title": "docpipe extraction resume stamp",
   "type": "object"

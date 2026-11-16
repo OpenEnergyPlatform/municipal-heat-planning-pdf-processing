@@ -100,7 +100,7 @@ RULES: tuple = (
          "The tool choice every request sends. none keeps an endpoint that "
          "carries tools of its own from handing a request to them. Empty "
          "or off sends none. A server of your own reads it; a hosted API "
-         "ignores it. Decided on 2026-11-08.",
+         "ignores it.",
          empty=True, env="LLM_TOOL_CHOICE", decided="2026-11-08",
          steps=_ASKS, where="llm_preflight.py (request_extras)"),
     rule("request_options", _FLOW, _MODEL, "text",
@@ -191,16 +191,14 @@ RULES: tuple = (
     rule("refusal_retry_most", _FLOW, _AGAIN, "whole",
          "How many times a request that the server refuses is asked, the "
          "first time included. A request refused to the end leaves its "
-         "document unfinished, and a later run reads it again. Decided on "
-         "2026-11-09.", least=1, decided="2026-11-09", steps=_ASKS,
+         "document unfinished, and a later run reads it again.", least=1, decided="2026-11-09", steps=_ASKS,
          where="runner.py (Failures.failed, persistently)"),
     rule("server_failure_statuses", _FLOW, _AGAIN, "texts",
          "Which answers of the server count as its failure to do the work, "
          "which is asked again after a wait and not given up on: single "
          "statuses such as 429, ranges such as 500-599, and timeout for a "
          "request that got no answer in time. Every other status 400 to "
-         "499 is the server refusing the request itself. Decided on "
-         "2026-11-09.", decided="2026-11-09", steps=_ASKS,
+         "499 is the server refusing the request itself.", decided="2026-11-09", steps=_ASKS,
          where="runner.py (unserved, refused), upstream.py (_asked)"),
     rule("server_retry_most", _FLOW, _AGAIN, "whole",
          "How often a request is asked again after the server's failure "
@@ -208,7 +206,7 @@ RULES: tuple = (
          "without a limit, until the run halts, so that nothing is lost "
          "for a server that comes back. Any other error without a status "
          "is a fault in our own code, asked again as `other_errors_retry` "
-         "says. Decided on 2026-11-09 and 2026-11-12.",
+         "says.",
          least=0, decided="2026-11-09, 2026-11-12", steps=_ASKS,
          where="runner.py (Failures), upstream.py (_asked)"),
     rule("other_errors_retry", _FLOW, _AGAIN, "whole",
@@ -218,13 +216,13 @@ RULES: tuple = (
          "again. A request not asked again leaves its document unfinished, "
          "the run goes on, a later run reads it again, and the log names "
          "the fault and where in the code it arose. This holds for a "
-         "search, an embedding and a reranking too. Decided on 2026-11-12.",
+         "search, an embedding and a reranking too.",
          least=0, decided="2026-11-12", steps=_ASKS,
          where="runner.py (Failures, persistently)"),
     rule("unserved_unstamped", _FLOW, _AGAIN, "switch",
          "On: a document one of whose requests was never answered gets no "
          "stamp, so a later run reads it again. Off: it is stamped as read "
-         "all the same. Decided on 2026-11-09.", decided="2026-11-09",
+         "all the same.", decided="2026-11-09",
          steps=("write",), where="runner.py (not_happened)"),
     rule("search_retry_most", _FLOW, _AGAIN, "whole",
          "How often a search, an embedding or a reranking that the server "
@@ -232,7 +230,7 @@ RULES: tuple = (
          "before its document fails. 0: without a limit, until it answers, "
          "and the plan's own order never stands in for a failed search. A "
          "fault in our own code is asked again as often as "
-         "`other_errors_retry` says. Decided on 2026-11-09 and 2026-11-12.",
+         "`other_errors_retry` says.",
          least=0, decided="2026-11-09, 2026-11-12", steps=_ASKS,
          where="runner.py (persistently)"),
     rule("repair_replies", _FLOW, _AGAIN, "texts",
@@ -245,7 +243,7 @@ RULES: tuple = (
          "that is not exactly the object asked for is asked again with its "
          "fault named. A repaired reply can stand in the harvest saying "
          "read with nothing under it; each one is noted in the request log "
-         "with the repairs it went through. Decided on 2026-09-12.",
+         "with the repairs it went through.",
          choices=("think", "fences", "cut_out", "close"), empty=True,
          decided="2026-09-12", steps=_ASKS, where="runner.py (_loads_object)"),
     rule("cut_off", _FLOW, _AGAIN, "choice",
@@ -255,7 +253,7 @@ RULES: tuple = (
          "list the reply was cut off in are kept, the cut entry and what "
          "followed it are not, and the request is noted as cut off in the "
          "request log. A reply cut off in anything but a list has nothing "
-         "to keep and is a hole. Decided on 2026-09-12.",
+         "to keep and is a hole.",
          choices=("hole", "rescue"), decided="2026-09-12", steps=_ASKS,
          where="runner.py (_ask_in_grammar)"),
     rule("retry_wait_growth", _FLOW, _AGAIN, "choice",
@@ -268,36 +266,33 @@ RULES: tuple = (
          "How much of a broken answer the question asked again shows the "
          "model: the characters before the place where it broke, the "
          "characters after it, and the characters of text outside the "
-         "object. Give all three. Decided on 2026-09-12.", of="whole",
+         "object. Give all three.", of="whole",
          decided="2026-09-12", steps=_ASKS, where="runner.py (_reply_fault)"),
     rule("retry_shows_reply", _FLOW, _AGAIN, "switch",
          "On: a request asked again after an unreadable answer carries that "
          "answer and what was wrong with it. Off: it goes out unchanged, "
-         "except for the temperature that rises with every attempt. "
-         "Decided on 2026-09-12.", decided="2026-09-12", steps=_ASKS,
+         "except for the temperature that rises with every attempt.", decided="2026-09-12", steps=_ASKS,
          where="runner.py (ask_in_grammar)"),
     rule("missing_key_asks_again", _FLOW, _AGAIN, "switch",
          "On: an answer that is valid JSON but lacks a key its schema "
          "requires is asked again, with the key named. Off: it is taken as "
-         "it is, and the missing key reads as nothing found. "
-         "Decided on 2026-09-12.", decided="2026-09-12", steps=_ASKS,
+         "it is, and the missing key reads as nothing found.", decided="2026-09-12", steps=_ASKS,
          where="runner.py (_lacking)"),
     rule("server_probe_timeout_s", _FLOW, _AGAIN, "number",
          "The seconds the health check waits for the model server to "
          "answer. Any answer below status 500 counts as the server being "
-         "there. Decided on 2026-11-09.", least=1, decided="2026-11-09",
+         "there.", least=1, decided="2026-11-09",
          where="runner.py (probe_server)"),
     rule("dead_server_ends_run", _FLOW, _AGAIN, "switch",
          "On: a server that has not answered for `server_dead_after_s` ends "
          "the run at once, and the documents in work stay unstamped. Off: "
-         "the run goes on asking. Decided on 2026-11-09.",
+         "the run goes on asking.",
          decided="2026-11-09", where="runner.py (server_dead)"),
     # -- concurrency ----------------------------------------------------------
     rule("limit_adaptive", _FLOW, _LOAD, "switch",
          "On: the number of requests open at once follows the load of the "
          "server, up where it has room and down where it is overloaded. "
-         "Off: the number of threads alone bounds the requests. Decided "
-         "on 2026-10-22.", env="EXTRACT_LIMIT_ADAPTIVE",
+         "Off: the number of threads alone bounds the requests.", env="EXTRACT_LIMIT_ADAPTIVE",
          env_flag=(False, True), decided="2026-10-22",
          where="runner.py (start_limit)"),
     rule("limit_start", _FLOW, _LOAD, "whole",
@@ -397,19 +392,18 @@ RULES: tuple = (
          where="runner.py (make_computer)"),
     rule("phrase_parallel", _FLOW, _SEARCH, "whole",
          "How many search sentences of one document are written at the "
-         "same time. 0: all of them. Decided on 2026-11-09.", least=0,
+         "same time. 0: all of them.", least=0,
          decided="2026-11-09", steps=("sentences", "order", "phrase"),
          where="runner.py (document_anchor)"),
     rule("documents_in_flight", _FLOW, _LOAD, "whole",
          "The most documents read at the same time, which bounds the "
-         "memory of the run. Decided on 2026-10-22.", least=1,
+         "memory of the run.", least=1,
          env="EXTRACT_BATCH_DOCS", decided="2026-10-22",
          where="runner.py (main)"),
     rule("document_admission", _FLOW, _LOAD, "choice",
          "When a new document is let in. by_server_room: one at a time "
          "whenever fewer requests are open than the limit allows. "
-         "ceiling_only: as many as `documents_in_flight` allows. Decided "
-         "on 2026-10-22.", choices=("by_server_room", "ceiling_only"),
+         "ceiling_only: as many as `documents_in_flight` allows.", choices=("by_server_room", "ceiling_only"),
          decided="2026-10-22", where="runner.py (document_room)"),
     rule("fixed_limit_requests", _FLOW, _LOAD, "whole",
          "How many requests a probe keeps open at once, with a limit that "
@@ -425,13 +419,12 @@ RULES: tuple = (
          env="EXTRACT_CONTENT_CACHE_OWNERS", where="runner.py"),
     rule("code_slots", _FLOW, _CALC, "whole",
          "How many code runs the sandbox takes at once for the whole run. "
-         "A code run waiting for its turn waits on the sandbox otherwise. "
-         "Decided on 2026-11-03.", least=1, env="CODE_EXEC_PARALLEL",
+         "A code run waiting for its turn waits on the sandbox otherwise.", least=1, env="CODE_EXEC_PARALLEL",
          decided="2026-11-03", steps=("compute",),
          where="runner.py (make_computer)"),
     rule("compute_extra_attempts", _FLOW, _CALC, "whole",
          "How many requests a calculation question may use beyond its "
-         "unreadable answers and its code runs. Decided on 2026-11-03.",
+         "unreadable answers and its code runs.",
          least=0, decided="2026-11-03", steps=("compute",),
          where="runner.py (make_computer)"),
     # -- documents and stamps -------------------------------------------------
@@ -441,21 +434,19 @@ RULES: tuple = (
     rule("stamp_without_reply", _FLOW, _DOCS, "switch",
          "On: a document of which not one request was answered is stamped "
          "as read. Off: it gets no stamp, so a later run reads it again, "
-         "which is what a dead server needs. Decided on 2026-11-09.",
+         "which is what a dead server needs.",
          decided="2026-11-09", steps=("write",),
          where="runner.py (not_happened)"),
     rule("coarse_stamp_keys", _FLOW, "Reading a document again", "texts",
          "The stamp keys whose hash is compared where the stamp holds no "
          "finer key. The hash of the whole spec file moves with a comment "
          "or a changed indent and overrules every finer key, so it counts "
-         "only where nothing finer is there. Empty: it is never compared. "
-         "Decided on 2026-09-10.",
+         "only where nothing finer is there. Empty: it is never compared.",
          empty=True, decided="2026-09-10", where="runner.py (stale)"),
     rule("search_to_end", _FLOW, _SEARCH, "switch",
          "On: every search shows every chunk of its document, so a "
          "dimension ends read or unstated and never as exhausted. A run "
-         "that reads the open dimensions to the end switches it on. "
-         "Decided on 2026-11-02.", decided="2026-11-02", steps=("order",),
+         "that reads the open dimensions to the end switches it on.", decided="2026-11-02", steps=("order",),
          where="addressed.py (Reader.budget)"),
     rule("rest_starts_at_open_rows", _FLOW, _SEARCH, "switch",
          "On: the rest of a document is read from the section of the rows "

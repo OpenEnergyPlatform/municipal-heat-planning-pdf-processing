@@ -134,6 +134,14 @@ def review(req, slots: tuple = ()) -> tuple:
     return addressed._format("review_reply", replies.review(slots)), None
 
 
+def node_check(req, names: tuple = ()) -> tuple:
+    """A node check's answer: for the value and each filled dimension,
+    whether the text around its quote carries it (`replies.node_check`)."""
+    from . import replies
+    return addressed._format("node_check_reply",
+                             replies.node_check(names or ("value",))), None
+
+
 def example(req, numeric: bool = False) -> tuple:
     """The values a passage holds of a field, proposed as its example
     (`compile.examples.reply_shape`)."""
@@ -176,6 +184,9 @@ FORMS: dict = {
                 "numbers it came from.", compute),
     "review": ("a second reading", "Each dimension asked, with its words and "
                "its quote.", review),
+    "node_check": ("the check of a node", "For the value and each filled "
+                   "dimension: whether the text around its quote carries "
+                   "it, and why not.", node_check),
     "example": ("a proposed example", "The values the passage holds of the "
                 "field, each with its words and its quote.", example),
 }

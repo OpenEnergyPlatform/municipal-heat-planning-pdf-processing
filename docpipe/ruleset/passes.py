@@ -63,7 +63,7 @@ RULES: tuple = (
          "How many places of the vector search the record keeps for each "
          "kind of passage, each with its similarity, at every search. 0 "
          "keeps every place. A larger number shows further down the order "
-         "and makes the record larger. Decided on 2026-11-14.",
+         "and makes the record larger.",
          decided="2026-11-14", least=0,
          where="runner.py (trace_vector)"),
     rule("trace_requests", "flow", "Trace", "switch",
@@ -71,8 +71,7 @@ RULES: tuple = (
          "it was sent and the answer or error that came back. Off: the "
          "event records only its own counts, and the request cannot be read "
          "back. A step that asks may set this for itself, so that one "
-         "step's requests are recorded and another's are not. Decided on "
-         "2026-11-05.", decided="2026-11-05", steps=ASKING + ("each value",),
+         "step's requests are recorded and another's are not.", decided="2026-11-05", steps=ASKING + ("each value",),
          where="trace.py (exchanged)"),
     rule("show_unparsable", "flow", "Trace", "whole",
          "How many replies that could not be read as the answer asked for "
@@ -92,15 +91,14 @@ RULES: tuple = (
          "On: every run writes its statistics beside the harvest, with the "
          "open coordinates per axis and what each kind of request cost. Off: "
          "no statistics are written. A failure to write them never fails "
-         "the run. Decided on 2026-10-22.", decided="2026-10-22",
+         "the run.", decided="2026-10-22",
          where="stats.py (write)"),
     # -- flow: the archive --
     rule("archive_before_replace", "flow", "Archive", "switch",
          "On: before a run replaces or deletes a file of the harvest, a "
          "harvest, a stamp, a record or a working list, it keeps a copy of "
          "the file as it was, once per run and file, in a folder beside it. "
-         "Off: files are replaced without a copy and cannot be got back. "
-         "Decided on 2026-10-22: nothing is overwritten.",
+         "Off: files are replaced without a copy and cannot be got back.",
          decided="2026-10-22", where="archive.py (keep)"),
     # -- the check before a run --
     rule("shrug_words", "spec", "Check before a run", "texts",
@@ -267,8 +265,7 @@ RULES: tuple = (
          steps=("recheck",)),
     rule("recheck_drop_without_quote", "flow", "Checking the quotes", "switch",
          "On: a coordinate with no stored quote is dropped, because it was "
-         "never checked and is no evidence. Off: it stays as it is. Decided "
-         "on 2026-09-13 with the rule that the answer stands in its quote.",
+         "never checked and is no evidence. Off: it stays as it is.",
          decided="2026-09-13", where="recheck.py (recheck_row)",
          steps=("recheck",)),
     rule("recheck_dropped_state", "flow", "Checking the quotes", "choice",
@@ -279,6 +276,14 @@ RULES: tuple = (
          choices=("unanswered", "unbacked", "exhausted"),
          where="recheck.py (recheck_row)",
          steps=("recheck",)),
+    # -- flow: the check of the filled nodes --
+    rule("node_check_context_chars", "flow", "Check of the nodes", "whole",
+         "How many characters of its passage the check of a filled node "
+         "shows on each side of each quote, the quote among them. The check "
+         "sees the node as JSON and this text, no search and no other "
+         "passage.", least=0,
+         where="runner.py (_node_check_payload)",
+         steps=("node_check",)),
     # -- flow: the second reading --
     rule("review_axis_reasons", "flow", "Second reading", "texts",
          "The reasons in the trust of a row that name a coordinate. The "

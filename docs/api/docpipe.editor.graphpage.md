@@ -104,6 +104,17 @@ reading the drawing names is a field wherever it comes from.
 def bricks_of(profile) -> list
 ```
 
+### python_of_block
+
+```python
+def python_of_block(profile, ref, kind) -> dict
+```
+
+A block of the drawing as the Python of a block that does the same,
+for the page to show when the form "Python" is chosen:
+{"python", "per", "writes"}; {"python": ""} where *ref* is no block of
+*kind* or a step's source is not to be had.
+
 ### presets_of
 
 ```python

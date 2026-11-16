@@ -36,6 +36,25 @@ def review(slots) -> dict
 The fields of one stored value, read again: each under its own name
 with its wording and its quote; the value also with its unit.
 
+### node_check
+
+```python
+def node_check(names) -> dict
+```
+
+The reply of a node check: for the value and each filled coordinate,
+whether the text around its quote carries it, and why not.
+
+### node_check_verdicts
+
+```python
+def node_check_verdicts(answer, names) -> Optional[dict]
+```
+
+{name: (holds, why)} of a node check's reply, or None where the reply
+is not one: no list of checks, a field it was not asked, a field twice,
+a field left out, or a verdict that is not true or false.
+
 ### compute
 
 ```python

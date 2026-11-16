@@ -40,8 +40,7 @@ RULES = (
          "the value's place; a quote that stands nowhere falls all the "
          "same. An address that names no shown line is asked again either "
          "way: the switch is about the quote, not the address. This is the "
-         "first of the two checks every answer passes. What happens when "
-         "it is off was decided on 2026-11-12.",
+         "first of the two checks every answer passes.",
          where="blocks.py (CHECKS), pipeline.py (place_of: merge_field), "
                "reading.py (passage_of), addressed.py (resolve), engine.py",
          steps=tuple(dict.fromkeys(("find", "docfield", "coord", "search")
@@ -63,8 +62,7 @@ RULES = (
          "Which years of the words found for the base or the target year "
          "of a document become that year. All: every year the words name. "
          "First: only the first year the words name, so that words such as "
-         "\"2020 and 2019\" give one year. Decided on 2026-09-22 and "
-         "2026-10-06.", choices=("all", "first"),
+         "\"2020 and 2019\" give one year.", choices=("all", "first"),
          decided="2026-09-22, 2026-10-06", where="engine.py (box_settle)",
          steps=("settle",)),
     # -- spec: spans ----------------------------------------------------------
@@ -73,7 +71,7 @@ RULES = (
          "and the next value read as its upper end are linked, if they "
          "have the same quote and the same answers to every other "
          "dimension, and both carry the two ends. Off: the two values stay "
-         "apart. Decided on 2026-11-06.", decided="2026-11-06",
+         "apart.", decided="2026-11-06",
          where="reading.py (link_ranges)", steps=("each value",)),
     # -- flow: chunks ---------------------------------------------------------
     rule("split_across", "flow", "Chunks", "switch",
@@ -86,7 +84,7 @@ RULES = (
          "On: every chunk of a table starts with the table's title and "
          "head, so a row is always read under its column headings. Off: "
          "only the first chunk of the table has them. A value set at the "
-         "box itself wins over this rule. Decided on 2026-11-02.",
+         "box itself wins over this rule.",
          decided="2026-11-02", where="blocks.py (split), engine.py (cut)",
          steps=("split",)),
     rule("split_caption", "flow", "Chunks", "switch",
@@ -99,8 +97,7 @@ RULES = (
          "On: the caption of a figure is a chunk of its own and its "
          "numbers are chunks of their own, each shown with the caption. "
          "Off: the lines of a figure are cut like any other lines. A value "
-         "set at the box itself wins over this rule. Decided on "
-         "2026-11-09.", decided="2026-11-09",
+         "set at the box itself wins over this rule.", decided="2026-11-09",
          where="blocks.py (split), engine.py (cut)", steps=("split",)),
     # -- flow: documents ------------------------------------------------------
     rule("include_kinds", "flow", "Documents", "texts",
@@ -151,15 +148,14 @@ RULES = (
     rule("search_skips_own_piece", "flow", "Search", "switch",
          "On: the chunk in which the value stands is left out of every "
          "search, because the first request about the dimension has shown "
-         "it already. Off: the search may show that chunk again. Decided "
-         "on 2026-11-09.", decided="2026-11-09",
+         "it already. Off: the search may show that chunk again.", decided="2026-11-09",
          where="engine.py (locate)",
          steps=("order", "beside", "coord", "search", "state")),
     rule("fetch_after_found", "flow", "Search", "switch",
          "On: chunks that an answer asked to see are still fetched when "
          "the same answer already gave a value, or a value not backed by "
          "its quote. Off: such a request lapses as soon as a value is read "
-         "or not backed. Decided on 2026-11-09.", decided="2026-11-09",
+         "or not backed.", decided="2026-11-09",
          where="targets.py (over_hits)", steps=("search",)),
     rule("supply_order", "flow", "Search", "texts",
          "The order in which a search shows the chunks it can show: "
@@ -168,7 +164,7 @@ RULES = (
          "\"ranked\" the best chunks of the search sentence. Chunks of the "
          "kinds before \"ranked\" are shown together first; the ranked "
          "chunks follow only where none of them is left. Chunks of a kind "
-         "that is left out are never shown. Decided on 2026-11-09.",
+         "that is left out are never shown.",
          choices=("fetched", "beside", "ranked"), decided="2026-11-09",
          where="engine.py (SearchSupply)", steps=("search",)),
     rule("round_ends", "flow", "Search", "choice",
@@ -187,16 +183,16 @@ RULES = (
          "no request for it came to a value: a hole names a passage. First "
          "passage: the first passage of the document. Last passage: the "
          "last passage of the document. First asked: the first passage the "
-         "field's first request showed. Decided on 2026-09-12.",
+         "field's first request showed.",
          choices=("first_passage", "last_passage", "first_asked"),
          decided="2026-09-12", where="engine.py (after_items)",
          steps=("each field",)),
     # -- flow: order ----------------------------------------------------------
     rule("coordinate_order", "flow", "Order", "texts",
          "The order in which the dimensions of a value are asked. Empty: "
-         "the order of the spec's groups. Otherwise the dimensions named "
-         "here come first, in this order, and the other dimensions follow "
-         "in the order of the spec's groups.", empty=True,
+         "the order of the questions in the spec (coordinates.order). "
+         "Otherwise the dimensions named here come first, in this order, "
+         "and the other dimensions follow in the spec's order.", empty=True,
          where="engine.py (each_coordinate)", steps=("each coordinate",)),
     rule("names_first", "flow", "Order", "switch",
          "On: the values that name a scenario of the document are asked "
@@ -253,7 +249,7 @@ RULES = (
          "The states of a dimension that count as still open: the "
          "dimension was not read and may still be read. A condition "
          "\"open\" holds for them, and a run that tops up open values "
-         "reads them again. Decided on 2026-11-02.", choices=_STATES,
+         "reads them again.", choices=_STATES,
          decided="2026-11-02",
          where="fields.py (open_states), conditions.py, topup.py, stats.py",
          steps=FRAMES + BOXES + ("open", "summary")),

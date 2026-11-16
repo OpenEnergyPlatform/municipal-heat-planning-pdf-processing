@@ -60,7 +60,7 @@ from .addressed import (Asking, Counts, Found, Plan, Read,
 from .fields import NUMBER, state_for
 from .pipeline import (Batch, Row, Source, WorkItem, mark_unanswered,
                        row_label)
-from .reading import groups_of, in_group_order, link_ranges, slots_of
+from .reading import in_order, link_ranges, slots_of
 from .spec import PLAN_FIELDS, group_taken, plan_field_kind
 
 
@@ -193,7 +193,9 @@ class CoordItem:
     read: Read
     row: Row
     slot: object
-    group: object
+    # How the spec asks a value's coordinates (`spec.Coordinates`): which
+    # are read only at the value's own passage or with the number itself.
+    coordinates: object
     before: list
     clone: Callable
     made: list = field(default_factory=list)
@@ -697,10 +699,10 @@ class Engine:
                         return "number"
                     return "list" if slot.is_closed else "text"
                 if prop == "own_only":
-                    group = coord.group
+                    asked = coord.coordinates
                     own = slot.name in tuple(
-                        getattr(group, "own_passage", ()) or ()) + tuple(
-                        getattr(group, "own_value", ()) or ())
+                        getattr(asked, "own_passage", ()) or ()) + tuple(
+                        getattr(asked, "own_value", ()) or ())
                     # An open unit is searched like an open dimension where
                     # the rule `unit_searched` is on.
                     return own and not (slot.name == fields.UNIT
@@ -710,7 +712,7 @@ class Engine:
                     # read once with the value, never asked again (owner
                     # decision 2026-11-06).
                     return slot.name in tuple(
-                        getattr(coord.group, "own_value", ()) or ())
+                        getattr(coord.coordinates, "own_value", ()) or ())
                 if prop == "unanswered":
                     return coord.unanswered
                 if prop == "required":
@@ -973,7 +975,7 @@ class Engine:
                               if read.unread else {}))
         return doc.reads + doc.find_reads
 
-    def coordinate(self, plan: Plan, read: Read, row: Row, group, slot,
+    def coordinate(self, plan: Plan, read: Read, row: Row, slot,
                    counts: Counts, clone: Callable) -> list:
         """One coordinate of one value asked as the drawing's frame of
         coordinates asks it (a pass over a stored harvest,
@@ -988,11 +990,12 @@ class Engine:
         # The coordinates asked before it, as in the run (owner decision
         # 2026-11-13, point 11): "closed before" holds in a pass as well.
         before = []
-        for _, one in self.slot_sequence(read.batch.parameter):
+        for one in self.slot_sequence(read.batch.parameter):
             if one.name == slot.name:
                 break
             before.append(one)
-        item = CoordItem(read, row, slot, group, before, clone)
+        item = CoordItem(read, row, slot, self.reader.spec.coordinates,
+                         before, clone)
         cscope = vscope.child(True, coord=item)
         if self.holds(self.sweep_frame.get("when"), cscope):
             self.run_steps(self.sweep_frame.get("steps") or [], cscope)
@@ -1437,32 +1440,30 @@ class Engine:
                            parameter=read.batch.parameter)
 
     def slot_sequence(self, parameter) -> list:
-        """[(group, slot)] of a field's coordinates in the order they are
-        asked: the spec's groups, then the rule `coordinate_order`."""
-        slots = slots_of(self.reader.spec, parameter)
-        sequence = [(group, slot)
-                    for group, group_slots in groups_of(self.reader.spec,
-                                                        slots)
-                    for slot in in_group_order(group, group_slots)]
+        """A field's coordinates in the order they are asked: the rule
+        `coordinate_order` first, then the order of the spec."""
+        sequence = in_order(self.reader.spec,
+                            slots_of(self.reader.spec, parameter))
         named = {name: i for i, name in
                  enumerate(rules.get("coordinate_order"))}
         if named:
             sequence = sorted(
-                (one for one in sequence if one[1].name in named),
-                key=lambda one: named[one[1].name]) + [
-                one for one in sequence if one[1].name not in named]
+                (one for one in sequence if one.name in named),
+                key=lambda one: named[one.name]) + [
+                one for one in sequence if one.name not in named]
         return sequence
 
     def each_coordinate(self, node: dict, scope: Scope) -> None:
-        """Each coordinate of the value, in the order of the spec's groups,
-        for the value's row and every row made beside it."""
+        """Each coordinate of the value, in the order of the spec, for the
+        value's row and every row made beside it."""
         value: ValueItem = scope.get("value")
         parameter = value.read.batch.parameter
         before: list = []
         steps = node.get("steps") or []
-        for group, slot in self.slot_sequence(parameter):
+        for slot in self.slot_sequence(parameter):
             for one in list(value.rows):
-                item = CoordItem(value.read, one, slot, group,
+                item = CoordItem(value.read, one, slot,
+                                 self.reader.spec.coordinates,
                                  list(before), value.clone,
                                  seen_of=scope.get("doc").seen_of)
                 child = scope.child(True, coord=item)
@@ -1776,6 +1777,115 @@ class Engine:
         return cached
 
     # -- the boxes of a coordinate --------------------------------------------
+
+    # -- the check of a value once read --------------------------------------
+
+    def box_check_value(self, node: dict, scope: Scope) -> None:
+        """Each row of the value, once its dimensions are decided, held
+        against the text around its quotes (`reader.checking.check`). A
+        dimension that does not hold is asked again at once with the reason,
+        through the steps of the value's coordinate frame, and checked once
+        more; where it does not hold again it is unbacked. A value that does
+        not hold is read a second time over its passage and section, and is
+        refused as unbacked where that reading does not agree. Without a
+        checking the run gave its reader, nothing is asked."""
+        checking = getattr(self.reader, "checking", None)
+        value: ValueItem = scope.get("value")
+        parameter = value.read.batch.parameter
+        if checking is None or parameter is None:
+            return
+        coordinate = self.sibling_frame(node, "coordinate")
+        for row in list(value.rows):
+            if row.claim.get("_why"):
+                continue
+            self.check_row(checking, scope, value, row, parameter,
+                           coordinate)
+
+    def sibling_frame(self, node: dict, each: str) -> Optional[dict]:
+        """The frame of kind *each* beside *node* in the frame it stands in."""
+        for frame, _frames in flow_map.walk(self.tree):
+            for _label, steps in flow_map.children(frame):
+                if any(step is node for step in steps):
+                    return next((step for step in steps
+                                 if isinstance(step, dict)
+                                 and step.get("each") == each), None)
+        return None
+
+    def check_row(self, checking, scope: Scope, value: ValueItem, row: Row,
+                  parameter, coordinate: Optional[dict]) -> None:
+        from . import passboxes
+        from .trust import REVIEW_AGREE
+        claim = row.claim
+        source = value.read.batch.items[row.item_index].source
+        own = (source.owner_kind, source.owner_id)
+
+        def seen() -> dict:
+            # The row as the check and the second reading read a stored one:
+            # its own passage is where the harvest found it.
+            return {**claim, "provenance": {
+                "document_id": value.read.batch.document_id,
+                "owner_kind": own[0], "owner_id": own[1]}}
+
+        def verdicts_of(slots: list) -> Optional[dict]:
+            view = seen()
+            pairs = [own] + [tuple(claim[f"{s.name}_source"]) for s in slots
+                             if isinstance(claim.get(f"{s.name}_source"),
+                                           (list, tuple))]
+            shown = checking.owner_sources(
+                [p for p in dict.fromkeys(pairs) if p != own])
+            shown[own] = source
+            return checking.check(view, parameter, slots, shown)
+
+        def read_slots() -> list:
+            return [slot for slot in fields.asked_slots(parameter)
+                    if claim.get(f"{slot.name}_state") == fields.READ]
+
+        verdicts = verdicts_of(read_slots())
+        if verdicts is None:
+            return
+        failing = [slot for slot in read_slots()
+                   if not verdicts[slot.name][0]]
+        keys = []
+        for slot in failing:
+            key = passboxes.not_held_key(claim, slot.name)
+            passboxes.NOT_HELD[key] = {
+                "answer": claim.get(slot.name),
+                "quote": claim.get(f"{slot.name}_quote"),
+                "why": verdicts[slot.name][1]}
+            keys.append(key)
+            claim[f"{slot.name}_state"] = fields.UNBACKED
+            flags = claim.setdefault("flags", [])
+            if f"node_check:{slot.name}" not in flags:
+                flags.append(f"node_check:{slot.name}")
+        try:
+            if failing and coordinate is not None:
+                names = {slot.name for slot in failing}
+                for slot in self.slot_sequence(parameter):
+                    if slot.name not in names:
+                        continue
+                    item = CoordItem(value.read, row, slot,
+                                     self.reader.spec.coordinates, [],
+                                     value.clone,
+                                     seen_of=scope.get("doc").seen_of)
+                    self.run_steps(coordinate.get("steps") or [],
+                                   scope.child(True, coord=item))
+                    value.rows += item.made
+                again = [slot for slot in failing
+                         if claim.get(f"{slot.name}_state") == fields.READ]
+                second = verdicts_of(again) if again else {}
+                for slot in again:
+                    if second is not None and not second[slot.name][0]:
+                        claim[f"{slot.name}_state"] = fields.UNBACKED
+        finally:
+            for key in keys:
+                passboxes.NOT_HELD.pop(key, None)
+        if verdicts["value"][0]:
+            return
+        view = seen()
+        reread = checking.review_sources(view) or []
+        flag = (checking.review(view, parameter, reread) if reread else "")
+        if flag and flag != REVIEW_AGREE:
+            claim["_why"] = fields.UNBACKED
 
     def box_state(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")

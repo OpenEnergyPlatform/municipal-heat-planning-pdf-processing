@@ -194,7 +194,7 @@ Why values are not an A, counted. A closed list: a reason nobody can enumerate i
 
 ### `unlisted_units`
 
-The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again (owner decision 2026-11-07). Absent in a file written before.
+The units numbers were read with that are no entry of their parameter's list, as the plan prints them, counted: read and not converted, until the list grows and a top-up asks them again.
 
 ## `building_count`
 
@@ -240,7 +240,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -276,7 +276,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -472,7 +472,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -550,7 +550,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -619,7 +619,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -678,7 +678,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -722,7 +722,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -761,7 +761,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -846,7 +846,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -911,7 +911,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -963,7 +963,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -1046,7 +1046,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -1086,7 +1086,7 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (Gebäude), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
@@ -1108,7 +1108,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -1168,7 +1168,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -1224,7 +1224,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -1304,7 +1304,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -1340,7 +1340,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -1536,7 +1536,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -1614,7 +1614,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -1683,7 +1683,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -1757,7 +1757,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -1801,7 +1801,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -1840,7 +1840,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -1925,7 +1925,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -1990,7 +1990,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -2042,7 +2042,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -2125,7 +2125,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -2165,7 +2165,7 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, g CO2-Äq./kWh, g CO2-Äq/kWh, g CO2/MJ, g CO2/kWh, g CO2e/kWh, g CO2eq/kWh, g/kWh, gCO2/kWh, kg, kg CO2, kg CO2-Äq/MWh, kg CO2/GJ, kg CO2/MWh, kg CO2/a, kg CO2/kWh, kg CO2eq, kg CO2eq/MWh, kg CO2eq/a, kg/MWh, kg/a, kg/kWh, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/MWh, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/GWh, t CO2/MWh, t CO2/TJ, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/MWh, t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (Mio. t CO2/a, Mio. t CO2eq, Mio. t CO2eq/a, Mt, Mt/a, Tonnen, Tonnen CO2, Tonnen CO2 im Jahr, Tonnen CO2 jährlich, Tonnen CO2 pro Jahr, Tonnen CO2eq/a, Tonnen CO2äquivalent, Tonnen pro Jahr, Tsd. t, Tsd. t/a, g CO2-Äq./kWh, g CO2-Äq/kWh, g CO2/MJ, g CO2/kWh, g CO2e/kWh, g CO2eq/kWh, g/kWh, gCO2/kWh, kg, kg CO2, kg CO2-Äq/MWh, kg CO2/GJ, kg CO2/MWh, kg CO2/a, kg CO2/kWh, kg CO2eq, kg CO2eq/MWh, kg CO2eq/a, kg/MWh, kg/a, kg/kWh, kt, kt CO2 pro Jahr, kt CO2-Äq./a, kt CO2/a, kt CO2eq, kt CO2eq/a, kt/a, kt/a CO2, t, t CO2, t CO2-eq./a, t CO2-eq/a, t CO2-Äq./a, t CO2-Äq/MWh, t CO2-Äq/a, t CO2-Äquivalent, t CO2-Äquivalente/a, t CO2/GWh, t CO2/MWh, t CO2/TJ, t CO2/a, t CO2e, t CO2e/a, t CO2eq, t CO2eq/a, t CO2äq, t CO2äq., t/MWh, t/a, t/a CO2eq, tCO2, tCO2/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
@@ -2254,7 +2254,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -2314,7 +2314,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -2370,7 +2370,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -2450,7 +2450,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -2486,7 +2486,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -2682,7 +2682,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -2760,7 +2760,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -2829,7 +2829,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -2924,7 +2924,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -2968,7 +2968,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -3007,7 +3007,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -3092,7 +3092,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -3157,7 +3157,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -3209,7 +3209,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -3292,7 +3292,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -3332,7 +3332,7 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (GJ, GJ/a, GWh, GWh/a, MJ, MJ/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, PJ, PJ/a, TJ, TJ/a, TWh, TWh/a, kJ, kJ/a, kWh, kWh/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (GJ, GJ/a, GWh, GWh/a, MJ, MJ/a, MWh, MWh/a, Millionen kWh, Mio. kWh, Mio. kWh/a, Mrd. kWh, PJ, PJ/a, TJ, TJ/a, TWh, TWh/a, kJ, kJ/a, kWh, kWh/a), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
@@ -3375,7 +3375,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -3435,7 +3435,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -3491,7 +3491,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -3571,7 +3571,7 @@ Which source 'aggregation_link_quote' was found in.
 
 ### `aggregation_means`
 
-The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'aggregation' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `aggregation_producer`
 
@@ -3607,7 +3607,7 @@ How the coordinate 'aggregation' ended. Always present: a missing key and a refu
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -3803,7 +3803,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -3881,7 +3881,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -3950,7 +3950,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -4038,7 +4038,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -4082,7 +4082,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -4121,7 +4121,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -4206,7 +4206,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -4271,7 +4271,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -4323,7 +4323,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -4406,7 +4406,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -4446,7 +4446,7 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (GW, MW, MWel, MWp, MWth, kW, kWel, kWp, kWth), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (GW, MW, MWel, MWp, MWth, kW, kWel, kWp, kWth), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
@@ -4476,7 +4476,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -4536,7 +4536,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -4592,7 +4592,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 
@@ -4637,7 +4637,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `catalogue`
 
@@ -4683,7 +4683,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -4729,7 +4729,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -4760,7 +4760,7 @@ Which source 'role_link_quote' was found in.
 
 ### `role_means`
 
-The entries of the document's list of names (its scenarios, its works) 'role' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'role' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `role_producer`
 
@@ -4829,7 +4829,7 @@ The arrows of the drawing that read the row:
 
 ### `at`
 
-Where the value stands (owner decisions 2026-11-08): its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
+Where the value stands: its passage, the number of its line there, the cell of a table row, and the last line of a value over several lines. The quote is that line.
 
 ### `carrier`
 
@@ -5025,7 +5025,7 @@ Which source 'carrier_link_quote' was found in.
 
 ### `carrier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'carrier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `carrier_producer`
 
@@ -5103,7 +5103,7 @@ Which source 'parameter_link_quote' was found in.
 
 ### `parameter_means`
 
-The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'parameter' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `parameter_producer`
 
@@ -5172,7 +5172,7 @@ Which source 'qualifier_link_quote' was found in.
 
 ### `qualifier_means`
 
-The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'qualifier' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `qualifier_producer`
 
@@ -5246,7 +5246,7 @@ Which source 'quantity_link_quote' was found in.
 
 ### `quantity_means`
 
-The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'quantity' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `quantity_producer`
 
@@ -5290,7 +5290,7 @@ Both ends of the range this value is one end of, [lower, upper] as the plan prin
 
 ### `read_off`
 
-The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C (owner decisions 2026-11-05 and 2026-11-07).
+The number stands in no text and was read off the figure's image: the reading is its evidence in place of a quote, and the flag read_off goes with it, a reason of level C.
 
 ### `reading`
 
@@ -5329,7 +5329,7 @@ Which source 'scenario_link_quote' was found in.
 
 ### `scenario_means`
 
-The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'scenario' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `scenario_producer`
 
@@ -5414,7 +5414,7 @@ Which source 'sector_link_quote' was found in.
 
 ### `sector_means`
 
-The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'sector' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `sector_producer`
 
@@ -5479,7 +5479,7 @@ Which source 'spatial_scope_link_quote' was found in.
 
 ### `spatial_scope_means`
 
-The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'spatial_scope' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `spatial_scope_producer`
 
@@ -5531,7 +5531,7 @@ Which source 'subject_link_quote' was found in.
 
 ### `subject_means`
 
-The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'subject' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `subject_producer`
 
@@ -5614,7 +5614,7 @@ Which source 'technology_link_quote' was found in.
 
 ### `technology_means`
 
-The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'technology' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `technology_producer`
 
@@ -5654,7 +5654,7 @@ text_located: the quote sits in the document's own refined text, so it can be ch
 
 ### `unit`
 
-The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target (owner decision 2026-11-07: a unit is never refused). Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
+The unit: one entry of units_accepted (%, Prozent), read as a coordinate with its own passage, or null where the unit the plan prints means none of them: then unit_raw holds it, the flag unmapped:unit:<print> goes with it and the value has no value_target: a unit is never refused. Which entry the document's wording means is the model's reading; the wording itself is never looked up. 
 
 The prompt's own wording:
 
@@ -5677,7 +5677,7 @@ Which source 'unit_link_quote' was found in.
 
 ### `unit_means`
 
-The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'unit' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `unit_producer`
 
@@ -5737,7 +5737,7 @@ Which source 'what_link_quote' was found in.
 
 ### `what_means`
 
-The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'what' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `what_producer`
 
@@ -5789,7 +5789,7 @@ Which source 'whole_link_quote' was found in.
 
 ### `whole_means`
 
-The entries of the document's list of names (its scenarios, its works) 'whole' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'whole' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `whole_producer`
 
@@ -5845,7 +5845,7 @@ Which source 'year_link_quote' was found in.
 
 ### `year_means`
 
-The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing (owner decision 2026-11-09). The graph writes the row to each of them, an empty list to none.
+The entries of the document's list of names (its scenarios, its works) 'year' means: the entry its name is, or the entry of each member where its words name a group; empty where they name a group the field takes no members for, or where the request found they name no such thing. The graph writes the row to each of them, an empty list to none.
 
 ### `year_producer`
 

@@ -169,7 +169,7 @@ QUESTIONS = ("find", "docfield", "coord", "search", "own")
 # run sends.
 REQUESTS = ("find", "docfield", "coord", "search", "phrase", "check",
             "list", "names", "work", "transcribe", "compute", "review",
-            "example", "own")
+            "node_check", "example", "own")
 
 LIBRARY = {box.type: box for box in (
     # -- start ---------------------------------------------------------------
@@ -225,8 +225,7 @@ LIBRARY = {box.type: box for box in (
                           help="On: every chunk of a table starts with the "
                           "table's title and head, so a row is always read "
                           "under its column headings. Off: only the first "
-                          "chunk of the table has them. Decided on "
-                          "2026-11-02.",
+                          "chunk of the table has them.",
                           rule="split_table_head"),
                   Setting("caption", SWITCH, "a figure's caption goes with "
                           "each of its chunks", True,
@@ -240,8 +239,7 @@ LIBRARY = {box.type: box for box in (
                           help="On: the caption of a figure is a chunk of "
                           "its own and its numbers are chunks of their "
                           "own, each shown with the caption. Off: the "
-                          "lines of a figure are cut like any other lines. "
-                          "Decided on 2026-11-09.",
+                          "lines of a figure are cut like any other lines.",
                           rule="split_figure_numbers"),
                   Setting("headings", NUMBER, "headings shown above a line",
                           number="headings")),
@@ -342,6 +340,20 @@ LIBRARY = {box.type: box for box in (
                           "to tell the model what was wrong with its "
                           "answer.")),
         decided="2026-11-10"),
+    Box("check_value", "Check a value once read", "check", "values",
+        "values",
+        "Holds each value, once all its dimensions are decided, against the "
+        "text around its quotes: the value as JSON and 200 characters on "
+        "each side of every quote. A dimension that does not hold is asked "
+        "again at once with the reason, through the steps of the value's "
+        "dimensions, and checked once more; where it does not hold again it "
+        "is unbacked and stays out of the graph. A value that does not hold "
+        "is read a second time over its passage and section and is refused "
+        "as unbacked where that reading does not agree. Example: the carrier "
+        "\"natural gas\" of a value whose line says \"district heating\". "
+        "To change it: switch it off, or set the characters around a quote "
+        "with the rule node_check_context_chars.",
+        "engine.Engine.box_check_value", needs=("value",)),
     # -- remember and state --------------------------------------------------
     Box("settle", "Keep for the whole document", "remember", "answers",
         "document",
@@ -384,7 +396,7 @@ LIBRARY = {box.type: box for box in (
         "the answer is its target: a variable, values of a field of the "
         "Spec, a dimension of a value, a list entry, a search sentence and "
         "more, each checked as the reading checks it. Every question of the "
-        "flow is this step with a preset (owner decision 2026-11-12), which "
+        "flow is this step with a preset, which "
         "fills in its parts; whatever the step sets of its own wins. "
         "Example: \"Which year does the table speak of?\" with the chunk as "
         "numbered lines, answered as {\"year\": 2021}. To change it: the "
@@ -564,6 +576,7 @@ IO = {
     "check": (("answer",), ("answer",)),
     "settle": (("fact", "answer"), ("facts",)),
     "state": (("dimension",), ()),
+    "check_value": (("value",), ()),
     "write": (("values",), ("rows",)),
     # It looks up what the reading's values leave open, before the harvest
     # is written (owner decision 2026-11-13, point 12).
@@ -929,7 +942,19 @@ LIBRARY.update({box.type: box for box in (
           "the reading was not complete, nothing is written and the "
           "document counts as failed (the rule "
           "`parameter_pass_all_or_nothing`).",
-          "passboxes.box_read_parameters", "chain", after=("classify",)),
+          "passboxes.box_read_parameters", "chain",
+          after=("classify", "missing_fields")),
+    _pass("missing_fields", "Fields without a row", "rows", "rows",
+          "The fields a document has no row of are read over the whole "
+          "plan by the next step and appended, where the run left them "
+          "open or never asked them. A field the document was found "
+          "silent on stays empty. The file is read as it lies now, so the "
+          "steps before are kept. To change it: switch the step off, then "
+          "no field without a row is read again; the rule `open_states` "
+          "says which states are open.",
+          "passboxes.missing_fields", "chain", after=("replace",),
+          settings=(Setting("label", TEXT, "name in the log",
+                            help="The name the log gives this step."),)),
     _pass("unread", "Unread passages", "", "rows",
           "The passages that no reading of the harvest answered, and the "
           "passages where a parameter's reading came to nothing, are "
@@ -994,11 +1019,11 @@ WHICH = {"once": "the fields asked once per document",
          "all": "every field"}
 ORDERS = {"piece": ("best_first", "document"),
           "value": ("names_first", "document"),
-          "coordinate": ("groups",),
+          "coordinate": ("spec",),
           "settled": ("spec",), "field": ("spec",)}
 ORDER_WORDS = {"best_first": "best first", "document": "as in the document",
                "names_first": "names first",
-               "groups": "by the spec's groups", "spec": "as in the spec"}
+               "spec": "as in the spec"}
 FRAMES = ("each", "round", "if")
 
 

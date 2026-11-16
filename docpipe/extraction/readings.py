@@ -289,7 +289,7 @@ RULES = (
          "keeps what is still left as numbers marked as contested (see "
          "contested_in_full), or leaves them out. The first decision that "
          "settles the numbers ends the matter. A decision that is removed "
-         "is not made. Decided on 2026-09-23.",
+         "is not made.",
          choices=("wording", "rounding", "trust", "contested"), empty=True,
          decided="2026-09-23",
          where="docpipe/extraction/readings.py (settle)"),
@@ -298,7 +298,7 @@ RULES = (
          "On: a value that two different passages of the document print, "
          "a number or a name, is marked as confirmed. The same passage "
          "read twice counts once, whatever its quotes. Off: no value is "
-         "marked as confirmed. Decided on 2026-11-05.",
+         "marked as confirmed.",
          decided="2026-11-05",
          where="docpipe/extraction/readings.py (settle), graph.py "
                "(_evidence)"),
@@ -308,7 +308,7 @@ FRONT_RULES = (
     rule("front_pages_rule", "graph", GROUP, "choice",
          "Which pages count as the front pages of a publication: its first "
          "page and the page its title was read on, its first page only, or "
-         "its title page only. Decided on 2026-11-05.",
+         "its title page only.",
          choices=("first page and title page", "first page", "title page"),
          decided="2026-11-05",
          where="docpipe/extraction/readings.py (front_pages)"),
@@ -324,8 +324,7 @@ FRONT_RULES = (
          "In which order the readings of a front field count: those read "
          "on a front page (front), those looked up in the catalogue "
          "(catalogue) and any other reading (any). The first of them that "
-         "has a reading decides. Remove one to never take from it. Decided "
-         "on 2026-11-05.",
+         "has a reading decides. Remove one to never take from it.",
          choices=("front", "catalogue", "any"), decided="2026-11-05",
          where="docpipe/extraction/readings.py (in_order)"),
 )

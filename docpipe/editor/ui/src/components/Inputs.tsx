@@ -41,12 +41,18 @@ export function TextBox(p: Common & { list?: string[]; mono?: boolean }) {
 }
 
 /* several lines of text; mono for prompts and code */
-export function AreaBox(p: Common & { minRows?: number; maxRows?: number; mono?: boolean; fontSize?: number }) {
+/* `code`: program text, in a fixed-width font and with its own line breaks only (a long line scrolls instead of wrapping, so a
+   wrapped line never looks like two) */
+export function AreaBox(p: Common & { minRows?: number; maxRows?: number; mono?: boolean; code?: boolean; fontSize?: number }) {
   const t = useTyped(p.value);
+  const mono = p.mono || p.code;
   return <Textarea label={p.label} description={p.description} placeholder={p.placeholder} disabled={p.disabled} error={p.error}
     style={p.style} className={p.className} w={p.w} title={p.title} aria-label={p['aria-label']} spellCheck={false}
-    autosize minRows={p.minRows ?? 3} maxRows={p.maxRows ?? 24} value={t.text} onFocus={t.onFocus}
-    styles={p.mono || p.fontSize ? { input: { fontFamily: p.mono ? 'var(--mantine-font-family-monospace)' : undefined, fontSize: p.fontSize } } : undefined}
+    autosize minRows={p.minRows ?? 3} maxRows={p.maxRows ?? 24} value={t.text} onFocus={t.onFocus} wrap={p.code ? 'off' : undefined}
+    styles={mono || p.fontSize ? { input: {
+      fontFamily: mono ? 'var(--mantine-font-family-monospace)' : undefined, fontSize: p.fontSize,
+      ...(p.code ? { whiteSpace: 'pre', overflowX: 'auto' } : {}),
+    } } : undefined}
     onBlur={() => { t.onBlur(); p.onCommit?.(t.text); }}
     onChange={e => { const v = e.currentTarget.value; t.setText(v); p.onText(v); }} />;
 }

@@ -21,8 +21,7 @@ RULES = (
     rule("catalogue_address", "flow", "Catalogue of publications", "text",
          "The address of the catalogue (OpenAlex) that fills in a "
          "publication's DOI, year and authors when the paper prints none. "
-         "Change it to use another catalogue that answers the same way. "
-         "Decided on 2026-11-04.",
+         "Change it to use another catalogue that answers the same way.",
          decided="2026-11-04",
          steps=("catalogue",),
          where="profiles/scenarios/completion.py"),
@@ -32,7 +31,7 @@ RULES = (
          "with the authors read. A larger number accepts a hit only when "
          "more authors agree and rejects more wrong hits. 1 accepts a hit "
          "with one matching author. Where a paper or a hit names fewer "
-         "authors than this, the next rule decides. Decided on 2026-11-05.",
+         "authors than this, the next rule decides.",
          least=1,
          decided="2026-11-05",
          steps=("catalogue",),
@@ -43,7 +42,7 @@ RULES = (
          "of family names above, all of the authors it does name have to "
          "agree, so a paper with one author is found by that one. Off: the "
          "number is kept as it is, and a paper or a hit with fewer authors "
-         "is never accepted by its title. Decided on 2026-11-05.",
+         "is never accepted by its title.",
          decided="2026-11-05",
          steps=("catalogue",),
          where="profiles/scenarios/completion.py"),
@@ -61,14 +60,14 @@ RULES = (
          "DOI the reading found (doi) and the title (title). The index's DOI "
          "goes first because it belongs to this very file, while a DOI read "
          "off the page can be one the paper cites. Remove a key to never "
-         "ask with it. Decided on 2026-11-04.",
+         "ask with it.",
          choices=("index_doi", "doi", "title"), decided="2026-11-04",
          steps=("catalogue",),
          where="profiles/scenarios/completion.py (complete)"),
     rule("catalogue_fills", "flow", "Catalogue of publications", "texts",
          "The values of a publication the catalogue fills in where its front "
          "pages give none: its DOI, its year and its authors. Remove one to "
-         "never fill it in. Decided on 2026-11-04.", empty=True,
+         "never fill it in.", empty=True,
          choices=("publication_doi", "publication_date",
                   "publication_author"), decided="2026-11-04",
          steps=("catalogue", "write"),
@@ -101,7 +100,7 @@ RULES = (
          "On: a record found by the title is taken only when its authors "
          "agree with the ones read (see the number of family names above); "
          "a record found by its DOI is taken as it is. Off: the first hit of "
-         "the title is taken whoever wrote it. Decided on 2026-11-05.",
+         "the title is taken whoever wrote it.",
          decided="2026-11-05",
          steps=("catalogue",),
          where="profiles/scenarios/completion.py"),
@@ -171,7 +170,7 @@ RULES = (
          "On: a model's own region is offered to a document only when the "
          "paper names that model and the region. Off: it is offered whenever "
          "the paper names the region. Off finds more regions but also "
-         "regions of a model the paper never uses. Decided on 2026-11-07.",
+         "regions of a model the paper never uses.",
          decided="2026-11-07",
          where="profiles/scenarios/extraction.py"),
     rule("alt_label_language", "spec", "Defaults where the spec says nothing",
@@ -213,7 +212,7 @@ GRAPH = (
          "The scenario types, as ontology IDs, that every scenario carries "
          "besides the ones read; for now every IAM scenario gets "
          "OEO_00020517. Add a type to give it to every scenario. Empty: a "
-         "scenario carries only the types read. Decided on 2026-11-04.",
+         "scenario carries only the types read.",
          empty=True, decided="2026-11-04",
          where="profiles/scenarios/kg.py (factsheet)"),
     rule("evidence_as", "graph", "Evidence", "choice",
@@ -229,7 +228,7 @@ GRAPH = (
          "The fields for which a value read on the publication's front pages "
          "wins where the shapes allow only one value. The record of the "
          "catalogue comes next, then any other occurrence. Remove a field to "
-         "treat all its occurrences alike. Decided on 2026-11-05.",
+         "treat all its occurrences alike.",
          decided="2026-11-05",
          where="profiles/scenarios/front.py, profiles/scenarios/kg.py"),
 ) + FRONT_RULES + READINGS

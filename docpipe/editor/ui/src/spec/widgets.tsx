@@ -16,6 +16,7 @@ import { rich, t, tr } from '../lib/i18n';
 import { CondEditor } from '../flow/Conditions';
 import type { Subject } from '../flow/model';
 import { markDirty, S } from './state';
+import { axisOf } from './model';
 import { EntriesTable, type ListRef } from './entries';
 
 export interface FormField { key: string; widget: string; help?: string; choices?: string[]; default?: any; of?: string; year?: boolean }
@@ -112,8 +113,12 @@ export function StringsEditor({ obj, k, keep, list }: { obj: Obj; k: string; kee
   );
 }
 
+/* the field an object of the form belongs to: the field itself, a dimension of its own, or for a shared dimension the
+   first field that asks it */
 function parameterOf(obj: Obj): Obj | undefined {
-  return (S.data.parameters || []).find((p: Obj) => p === obj || (isObj(p.axes) && Object.values(p.axes).includes(obj)));
+  const shared = isObj(S.data.shared_axes) ? Object.entries(S.data.shared_axes).find(([, a]) => a === obj) : undefined;
+  return (S.data.parameters || []).find((p: Obj) => p === obj || (isObj(p.axes)
+    && (Object.values(p.axes).includes(obj) || (!!shared && p.axes[shared[0]] === 'shared'))));
 }
 
 const RECORD_FROM_VALUE: Kind = { k: 'record', fields: [{ key: 'from', kind: { k: 'text' }, help: '' }, { key: 'value', kind: { k: 'text' }, help: '' }] };
@@ -320,7 +325,7 @@ function QuestionsW({ f, obj }: { f: FormField; obj: Obj }) {
 
 function vocabOf(c: string): Obj | null {
   const p = (S.data.parameters || []).find((x: Obj) => isObj(x.axes) && own(x.axes, c));
-  const ax = p && p.axes[c];
+  const ax = p ? axisOf(S.data, p.uri, c) : undefined;
   return isObj(ax) && isObj(ax.vocabulary) ? ax.vocabulary : null;
 }
 const MAP_OF_TEXT: Kind = { k: 'map', value: { k: 'text' } };
