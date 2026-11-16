@@ -9,7 +9,8 @@ import { rich, t, tr } from '../lib/i18n';
 import {
   BrickList, Flag, FieldSelect, FieldsSelect, PairsEditor, bricksOf, type Kit,
 } from './inputs';
-import { BlockEditor, PartsEditor, PresetSelect, TryBlock, formOf } from './blocks';
+import { BlockEditor, PartsEditor, PresetSelect, TryBlock } from './blocks';
+import { formOf } from './forms';
 import {
   COUNT_WORDS, arrowKey, boxTitle, fieldsOfBox, kindOfArrow, localName, rowsOf, subjectOf, takesFields, type Cur, type GraphData, type Obj,
 } from './model';

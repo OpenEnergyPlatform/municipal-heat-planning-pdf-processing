@@ -14,18 +14,8 @@ import { t, tr } from '../lib/i18n';
 import { CondEditor } from '../flow/Conditions';
 import { PythonHelp, type PyExample } from '../components/PythonHelp';
 import { BrickAbout, BrickSelect, FieldSelect, Flag, SettingsEditor, PairsEditor, bricksOf, type Kit } from './inputs';
+import { brickAsPython, brickNamed, formOf, STEP_PYTHON, stepIn, type FormBrick } from './forms';
 import type { BrickInfo, Obj } from './model';
-
-/* which form a block has */
-export const formOf = (ref: unknown): 'brick' | 'if' | 'steps' | 'python' | '' => {
-  if (typeof ref === 'string') return 'brick';
-  if (!ref || typeof ref !== 'object') return '';
-  const r = ref as Obj;
-  if ('if' in r) return 'if';
-  if ('steps' in r) return 'steps';
-  if ('python' in r) return 'python';
-  return 'brick' in r ? 'brick' : '';
-};
 
 const STEP_KINDS = ['object', 'name', 'value'];
 const FORMS_OF: Record<string, string[]> = {
@@ -41,10 +31,16 @@ const PYTHON_START: Record<string, string> = {
 };
 const pythonStart = (kind: string) => PYTHON_START[kind] || 'def run(call):\n    return None\n';
 
+/* what a block keeps in every form: which graph it writes and where it is tried */
+function keepOf(was: unknown): Obj {
+  const keep: Obj = {};
+  if (was && typeof was === 'object') for (const key of ['graph', 'document', 'box']) if (key in was) keep[key] = (was as Obj)[key];
+  return keep;
+}
+
 /* a fresh block of a form, for a place of a kind */
 function fresh(k: Kit, kind: string, form: string, was: Obj): Obj {
-  const keep: Obj = {};
-  for (const key of ['graph', 'document', 'box']) if (key in was) keep[key] = was[key];
+  const keep = keepOf(was);
   if (form === 'if') return { ...keep, if: { all: [{ of: 'reading', is: 'quantity', op: 'listed' }] }, reason: 'condition' };
   if (form === 'steps') {
     const last = bricksOf(k.d, kind)[0];
@@ -55,31 +51,25 @@ function fresh(k: Kit, kind: string, form: string, was: Obj): Obj {
   return { ...keep, brick: first ? first.name : '' };
 }
 
-/* a brick as the server sends it: with its own logic as Python */
-type PyBrick = BrickInfo & { python?: string };
-
-/* what a block would be in another form, to show and not to store: the drawing changes where it is edited. *made* is
-   the block as Python that does the same, as the server writes it for steps and a condition */
+/* what a block would be in another form, to show and not to store: the drawing changes where it is edited (forms.ts).
+   *made* is the block as Python that does the same, as the server writes it for steps and a condition */
 function viewOf(k: Kit, kind: string, form: string, was: Obj, made: { python?: string; per?: string; writes?: string } | null): Obj {
-  const keep: Obj = {};
-  for (const key of ['graph', 'document', 'box']) if (key in was) keep[key] = was[key];
+  const keep = keepOf(was);
   if (form === 'python' && made && made.python) {
     const own: Obj = { ...keep, python: made.python };
     if (kind === 'object' && made.per && made.per !== 'row') own.per = made.per;
     if (kind === 'object' && made.writes) own.writes = made.writes;
     return own;
   }
-  const brick = formOf(was) === 'brick' ? (k.d.bricks as PyBrick[]).find(b => b.name === was.brick) : undefined;
-  const carried: Obj = {};
-  if (was.settings && typeof was.settings === 'object' && Object.keys(was.settings).length) carried.settings = was.settings;
   if (form === 'brick') return { ...keep, brick: '' };
-  if (form === 'steps' && brick) return { ...keep, steps: [{ brick: brick.name, ...carried }] };
-  if (form === 'python' && brick && brick.python) {
-    const own: Obj = { ...keep, python: brick.python, ...carried };
-    if (kind === 'object' && brick.per && brick.per !== 'row') own.per = brick.per;
-    if (kind === 'object' && brick.writes) own.writes = brick.writes;
-    return own;
+  const bricks = k.d.bricks as FormBrick[];
+  const brick = brickNamed(was, bricks);
+  if (form === 'steps' && brick) {
+    const settings = was && typeof was === 'object' ? was.settings : undefined;
+    return { ...keep, steps: [{ brick: brick.name, ...(settings && typeof settings === 'object' && Object.keys(settings).length ? { settings } : {}) }] };
   }
+  const own = form === 'python' ? brickAsPython(was, bricks) : null;
+  if (own) return { ...keep, ...own };
   return fresh(k, kind, form, was);
 }
 
@@ -198,51 +188,30 @@ function StepsPart({ k, kind, refer, onChange }: { k: Kit; kind: string; refer: 
       <Text size="xs" c="dimmed">{kind === 'object'
         ? t('Each step takes the value the one before it gave; the last one writes the object.')
         : t('Each step takes the value the one before it gave; the last one gives the name.')}</Text>
-      {steps.map((step, i) => {
-        const brick = k.d.bricks.find(b => b.name === step.brick);
-        return (
-          <Paper key={i} withBorder p="xs" radius="md">
-            <Group gap="xs" wrap="nowrap" align="flex-start">
-              <Badge variant="light" color="gray">{i + 1}</Badge>
-              <Box style={{ flex: 1, minWidth: 0 }}>
-                {formOf(step) === 'python'
-                  ? (
-                    <Stack gap={4}>
-                      <AreaBox label={t('Python of this step')} minRows={4} code value={step.python || ''}
-                        onText={v => k.edit(() => setSteps(steps.map((x, j) => (j === i ? { ...x, python: v } : x))), 'step-py' + i)} />
-                      <PythonHelp where="step" onPut={ex => k.edit(() => setSteps(steps.map((x, j) => (j === i ? { ...x, python: ex.code } : x))))} />
-                    </Stack>
-                  )
-                  : (
-                    <Stack gap={4}>
-                      <Select size="xs" searchable data={offered.map(b => ({ value: b.name, label: tr(b.does) }))} value={step.brick || null}
-                        comboboxProps={{ width: 460 }} onChange={v => v && k.edit(() => setSteps(steps.map((x, j) => (j === i ? { brick: v } : x))))} />
-                      <BrickAbout brick={brick} />
-                      <SettingsEditor k={k} brick={brick} settings={step.settings || {}} onChange={s => {
-                        const next = { ...step };
-                        if (Object.keys(s).length) next.settings = s; else delete next.settings;
-                        setSteps(steps.map((x, j) => (j === i ? next : x)));
-                      }} />
-                    </Stack>
-                  )}
-              </Box>
-              <Stack gap={2}>
-                <Tooltip label={t('Earlier')}><ActionIcon size="sm" variant="subtle" disabled={i === 0} aria-label={t('Earlier')}
-                  onClick={() => k.edit(() => { const n = steps.slice(); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setSteps(n); })}><IconArrowUp size={14} /></ActionIcon></Tooltip>
-                <Tooltip label={t('Later')}><ActionIcon size="sm" variant="subtle" disabled={i === steps.length - 1} aria-label={t('Later')}
-                  onClick={() => k.edit(() => { const n = steps.slice(); [n[i + 1], n[i]] = [n[i], n[i + 1]]; setSteps(n); })}><IconArrowDown size={14} /></ActionIcon></Tooltip>
-                <Tooltip label={t('Remove the step')}><ActionIcon size="sm" variant="subtle" color="red" disabled={steps.length < 2} aria-label={t('Remove the step')}
-                  onClick={() => k.edit(() => setSteps(steps.filter((_, j) => j !== i)))}><IconMinus size={14} /></ActionIcon></Tooltip>
-              </Stack>
-            </Group>
-          </Paper>
-        );
-      })}
+      {steps.map((step, i) => (
+        <Paper key={i} withBorder p="xs" radius="md">
+          <Group gap="xs" wrap="nowrap" align="flex-start">
+            <Badge variant="light" color="gray">{i + 1}</Badge>
+            <Box style={{ flex: 1, minWidth: 0 }}>
+              <StepPart k={k} kind={kind} step={step} at={i} count={steps.length} offered={offered}
+                onChange={next => setSteps(steps.map((x, j) => (j === i ? next : x)))} />
+            </Box>
+            <Stack gap={2}>
+              <Tooltip label={t('Earlier')}><ActionIcon size="sm" variant="subtle" disabled={i === 0} aria-label={t('Earlier')}
+                onClick={() => k.edit(() => { const n = steps.slice(); [n[i - 1], n[i]] = [n[i], n[i - 1]]; setSteps(n); })}><IconArrowUp size={14} /></ActionIcon></Tooltip>
+              <Tooltip label={t('Later')}><ActionIcon size="sm" variant="subtle" disabled={i === steps.length - 1} aria-label={t('Later')}
+                onClick={() => k.edit(() => { const n = steps.slice(); [n[i + 1], n[i]] = [n[i], n[i + 1]]; setSteps(n); })}><IconArrowDown size={14} /></ActionIcon></Tooltip>
+              <Tooltip label={t('Remove the step')}><ActionIcon size="sm" variant="subtle" color="red" disabled={steps.length < 2} aria-label={t('Remove the step')}
+                onClick={() => k.edit(() => setSteps(steps.filter((_, j) => j !== i)))}><IconMinus size={14} /></ActionIcon></Tooltip>
+            </Stack>
+          </Group>
+        </Paper>
+      ))}
       <Group gap="xs">
         <Button size="compact-xs" variant="light" leftSection={<IconPlus size={12} />}
           onClick={() => k.edit(() => setSteps([...steps, { brick: (offered.find(b => b.kind === 'value') || offered[0] || { name: 'text' }).name }]))}>{t('step')}</Button>
         <Button size="compact-xs" variant="subtle" leftSection={<IconPlus size={12} />}
-          onClick={() => k.edit(() => setSteps([...steps, { python: 'def run(call):\n    return call.value\n' }]))}>{t('Python step')}</Button>
+          onClick={() => k.edit(() => setSteps([...steps, { python: STEP_PYTHON }]))}>{t('Python step')}</Button>
       </Group>
       {kind === 'object' && (
         <TextBox label={t('What it writes, for the check against the ontology')} mono value={refer.writes || ''}
@@ -253,32 +222,74 @@ function StepsPart({ k, kind, refer, onChange }: { k: Kit; kind: string; refer: 
   );
 }
 
-/* Python of the drawing's own: run(call) gives what a block of this kind gives */
-function PythonPart({ k, kind, refer, onChange }: { k: Kit; kind: string; refer: Obj; onChange: (next: Obj) => void }) {
+/* one step: a brick with its settings, or Python of its own. Its switch shows the step in the other form and changes
+   nothing until something is edited there, as the switch of a block does (forms.stepIn) */
+function StepPart({ k, kind, step, at, count, offered, onChange }: {
+  k: Kit; kind: string; step: unknown; at: number; count: number; offered: BrickInfo[]; onChange: (next: Obj) => void;
+}) {
+  const stored = formOf(step) === 'python' ? 'python' : 'brick';
+  const sig = JSON.stringify(step);
+  const [chosen, setChosen] = useState<{ form: 'brick' | 'python'; sig: string } | null>(null);
+  const form = chosen && chosen.sig === sig ? chosen.form : stored;
+  const shown = stepIn(step, form, k.d.bricks as FormBrick[]);
+  const edited = (next: Obj) => { setChosen(null); onChange(next); };
+  const brick = form === 'brick' ? k.d.bricks.find(b => b.name === shown.brick) : undefined;
+  return (
+    <Stack gap={4}>
+      <Box><SegmentedControl size="xs" value={form} data={(['brick', 'python'] as const).map(f => ({ value: f, label: formWord(f) }))}
+        onChange={v => setChosen(v === stored ? null : { form: v as 'brick' | 'python', sig })} /></Box>
+      {form !== stored && <Text size="xs" c="orange">{t('Preview: nothing in the drawing changes until you edit here.')}</Text>}
+      {form === 'python'
+        ? <PythonPart k={k} kind={kind} refer={shown} onChange={edited} step={{ at, first: at === 0, last: at === count - 1 }} />
+        : (
+          <Stack gap={4}>
+            <Select size="xs" searchable placeholder={t('Choose a brick')} data={offered.map(b => ({ value: b.name, label: tr(b.does) }))}
+              value={shown.brick || null} comboboxProps={{ width: 460 }} onChange={v => v && k.edit(() => edited({ brick: v }))} />
+            <BrickAbout brick={brick} />
+            <SettingsEditor k={k} brick={brick} settings={shown.settings || {}} onChange={s => {
+              const next = { ...shown };
+              if (Object.keys(s).length) next.settings = s; else delete next.settings;
+              edited(next);
+            }} />
+          </Stack>
+        )}
+    </Stack>
+  );
+}
+
+/* Python of the drawing's own: run(call) gives what a block of this kind gives. As one step of steps on an arrow, how
+   often it is called counts for the first step and what it writes for the last */
+function PythonPart({ k, kind, refer, onChange, step }: {
+  k: Kit; kind: string; refer: Obj; onChange: (next: Obj) => void; step?: { at: number; first: boolean; last: boolean };
+}) {
+  const tag = step ? '-step' + step.at : '';
+  const called = kind === 'object' && (!step || step.first);
+  const writes = kind === 'object' && (!step || step.last);
   return (
     <Stack gap="xs">
-      <Text size="xs" c="dimmed">{t('The code defines run(call). call has doc, node, row, value, settings, label, source and rows; beside it stand kg (the profile\'s own module of the graph), log, literal, in_graph, is_class and ttl_string. It runs in the run\'s own process.')}</Text>
-      <AreaBox label={t('Python')} minRows={8} code value={refer.python || ''} onText={v => k.edit(() => onChange({ ...refer, python: v }), 'python')} />
-      <PythonHelp where={kind} onPut={(ex: PyExample) => k.edit(() => {
+      {!step && <Text size="xs" c="dimmed">{t('The code defines run(call). call has doc, node, row, value, settings, label, source and rows; beside it stand kg (the profile\'s own module of the graph), log, literal, in_graph, is_class and ttl_string. It runs in the run\'s own process.')}</Text>}
+      <AreaBox label={step ? t('Python of this step') : t('Python')} minRows={step ? 4 : 8} code value={refer.python || ''}
+        onText={v => k.edit(() => onChange({ ...refer, python: v }), 'python' + tag)} />
+      <PythonHelp where={step ? 'step' : kind} onPut={(ex: PyExample) => k.edit(() => {
         const next: Obj = { ...refer, python: ex.code };
-        if (kind === 'object') { if (ex.per) next.per = ex.per; else delete next.per; }
+        if (called) { if (ex.per) next.per = ex.per; else delete next.per; }
         onChange(next);
       })} />
-      {kind === 'object' && (
+      {called && (
         <NativeSelect size="xs" label={t('Called')} value={refer.per || 'row'}
           data={[{ value: 'row', label: t('once per reading') }, { value: 'node', label: t('once per node, with all its readings') }]}
           onChange={e => { const v = e.currentTarget.value; k.edit(() => { const next = { ...refer }; if (v === 'row') delete next.per; else next.per = v; onChange(next); }); }} />
       )}
-      {kind === 'object' && (
+      {writes && (
         <TextBox label={t('What it writes, for the check against the ontology')} mono value={refer.writes || ''}
           description={t('answers, entries, key:<name>, xsd:<type>; empty: nothing known.')}
-          onText={v => k.edit(() => { const next = { ...refer }; if (v) next.writes = v; else delete next.writes; onChange(next); }, 'writes')} />
+          onText={v => k.edit(() => { const next = { ...refer }; if (v) next.writes = v; else delete next.writes; onChange(next); }, 'writes' + tag)} />
       )}
       <Box>
         <Text size="sm" fw={500}>{t('Settings')}</Text>
         <Text size="xs" c="dimmed">{t('What the code reads as call.settings.')}</Text>
         <PairsEditor value={refer.settings && typeof refer.settings === 'object' ? refer.settings : {}}
-          onChange={v => k.edit(() => { const next = { ...refer }; if (Object.keys(v).length) next.settings = v; else delete next.settings; onChange(next); }, 'py-settings')} />
+          onChange={v => k.edit(() => { const next = { ...refer }; if (Object.keys(v).length) next.settings = v; else delete next.settings; onChange(next); }, 'py-settings' + tag)} />
       </Box>
     </Stack>
   );

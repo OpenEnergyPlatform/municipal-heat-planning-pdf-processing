@@ -1127,7 +1127,16 @@ logic as Python: a brick's own function with the imports it needs
 (`graphblocks.python_of`, sent with each brick as `python` by
 `graphpage.bricks_of`), a condition as its test and the reason it gives, steps as
 each step's code chained with its settings (`graphblocks.python_block`,
-`graphpage.python_of_block`, `POST /api/graph/python`). Every place where Python is
+`graphpage.python_of_block`, `POST /api/graph/python`). Each step inside steps
+has its own switch, "A brick" or "Python", that works like the switch of a
+block and only previews: a brick step shown as Python is the brick's own code
+with its settings and, where it has them, how often it is called (`per`) and
+what it writes (`writes`) (`forms.stepIn`, `forms.brickAsPython`), and a Python
+step shown as a brick is a brick not yet chosen, which stores the step as that
+brick once chosen. A Python step shows its settings, what the code reads as
+`call.settings`. On an arrow its first step shows "Called" (once per reading or
+once per node, for the whole chain) and its last step "What it writes", used
+where the steps block has none of its own. Every place where Python is
 written (a block of the Graph tab, a step inside steps, the Python step of the
 Flow tab) has "How to write this, with examples" (`components/PythonHelp.tsx`):
 what the code receives, what it gives back, the names at hand, and examples that
