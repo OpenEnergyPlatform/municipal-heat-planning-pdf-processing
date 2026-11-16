@@ -8,9 +8,15 @@ be. That is most of an extraction spec, written once already by whoever
 maintains the graph. This module reads it and decides nothing: the records
 say what the file says, and `draft.py` turns them into a spec.
 
-What a property shape says in a way this reader does not follow (a path
-that is no single property, a constraint only SPARQL states) is kept as a
-note on the record, so the draft can say what it left out.
+A node shape may also say "one of these properties at least": an sh:or on
+the node whose alternatives each name one property with sh:minCount. That
+is read as a group (`Shape.one_of`), since none of its properties is
+required on its own and one of them is.
+
+What a shape says in a way this reader does not follow (a path that is no
+single property, a constraint only SPARQL states, an sh:and, sh:xone or
+sh:not on the node, an sh:or on the node of another form) is kept as a note
+on the record, so the draft can say what it left out.
 
 rdflib is imported where it is used, as in `docpipe.ontology`.
 
@@ -49,6 +55,9 @@ class Shape:
     name: str
     target_class: Optional[str] = None
     properties: list = field(default_factory=list)
+    # [[property IRI]]: per sh:or on the node, the properties one of which a
+    # node must have at least once
+    one_of: list = field(default_factory=list)
     notes: list = field(default_factory=list)
 
 
@@ -86,8 +95,46 @@ def shapes_of(graph) -> list:
             else:
                 shape.properties.append(read_one)
         shape.properties.sort(key=lambda p: p.path)
+        for alternatives in graph.objects(node, sh["or"]):
+            group = _one_of(graph, alternatives)
+            if isinstance(group, str):
+                shape.notes.append(group)
+            else:
+                shape.one_of.append(group)
+        for word in ("and", "xone", "not"):
+            if graph.value(node, sh[word]) is not None:
+                shape.notes.append(f"an sh:{word} on the node was not read")
         out.append(shape)
     return out
+
+
+# What an alternative of an sh:or on a node may say besides its property and
+# its minimum and still be read as "this property at least once".
+_ALTERNATIVE_SAYS = ("path", "minCount", "name", "description", "message")
+
+
+def _one_of(graph, alternatives):
+    """[property IRI] of an sh:or on a node whose every alternative names one
+    property with sh:minCount 1 or more, sorted; else one line that says why
+    it was not read."""
+    from rdflib import RDF, URIRef
+    sh = _namespace()
+    paths = []
+    for alternative in _members(graph, alternatives):
+        path = graph.value(alternative, sh.path)
+        least = _count(graph.value(alternative, sh.minCount))
+        if not isinstance(path, URIRef) or not least:
+            return ("an sh:or on the node whose alternatives are not each "
+                    "one property with sh:minCount was not read")
+        said = {str(predicate) for predicate in
+                graph.predicates(alternative, None) if predicate != RDF.type}
+        if said - {SH + word for word in _ALTERNATIVE_SAYS}:
+            return ("an sh:or on the node whose alternatives say more than "
+                    "which property they need was not read")
+        paths.append(str(path))
+    if not paths:
+        return "an empty sh:or on the node was not read"
+    return sorted(set(paths))
 
 
 def _namespace():

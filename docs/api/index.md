@@ -84,7 +84,7 @@ is for and what it hands to what; this is the reference.
 - [docpipe.compile](docpipe.compile.md): An extraction spec drafted from the shapes and the ontology of a graph.
 - [docpipe.compile.\_\_main\_\_](docpipe.compile.__main__.md): `python -m docpipe.compile`.
 - [docpipe.compile.cli](docpipe.compile.cli.md): `docpipe compile`, from the shapes of a graph to an extraction spec. (3 functions)
-- [docpipe.compile.draft](docpipe.compile.draft.md): An extraction spec drafted from shapes and an ontology, and what an existing spec says differently. (1 class, 11 functions)
+- [docpipe.compile.draft](docpipe.compile.draft.md): An extraction spec drafted from shapes and an ontology, and what an existing spec says differently. (1 class, 12 functions)
 - [docpipe.compile.examples](docpipe.compile.examples.md): Proposes, from the corpus, the example a parameter still lacks. (10 functions)
 - [docpipe.compile.shapes](docpipe.compile.shapes.md): What SHACL shapes say about a graph, read into plain records. (2 classes, 2 functions)
 - [docpipe.compile.terms](docpipe.compile.terms.md): What an ontology calls a term and says it means. (1 class, 1 function)

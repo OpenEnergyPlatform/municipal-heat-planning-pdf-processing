@@ -44,6 +44,9 @@ from docpipe.profile import load_profile
 REPO = Path(__file__).resolve().parent.parent
 OEO = "https://openenergyplatform.org/ontology/oeo/"
 IAM = "OEO_00020517"
+# A scenario type the shapes list, the spec does not offer and the drawing
+# does not write by itself (it writes the IAM scenario on every factsheet).
+NEW_TYPE = "OEO_00099901"
 SHAPES = f"""@prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix oeo: <{OEO}> .
 @prefix ex: <https://example.org/shapes/> .
@@ -51,7 +54,8 @@ SHAPES = f"""@prefix sh: <http://www.w3.org/ns/shacl#> .
 ex:Factsheet a sh:NodeShape ;
     sh:targetClass oeo:OEO_00000365 ;
     sh:property [ sh:path oeo:OEO_00390073 ;
-                  sh:in ( oeo:OEO_00020309 oeo:{IAM} oeo:OEO_99999999 ) ] .
+                  sh:in ( oeo:OEO_00020309 oeo:{IAM} oeo:{NEW_TYPE}
+                          oeo:OEO_99999999 ) ] .
 """
 
 
@@ -177,33 +181,38 @@ def test_apply_writes_the_lists_and_the_lock_and_never_the_spec(
 def test_a_checked_new_entry_comes_with_the_ontology_s_name(
         tmp_path, profile, cache):
     app = make_app(tmp_path, profile, cache)
-    app._snapshot, app._loaded = pinned(IAM), True
+    app._snapshot, app._loaded = pinned(NEW_TYPE, IAM), True
     status, shown = app.call("GET", "/api/sources", {}, None)
     assert status == 200, shown
     rows = [row for field in shown["differences"]["fields"]
             if field["field"] == "scenario_type" for row in field["rows"]
             if row["kind"] == "list_missing"]
     entries = {one["iri"]: one for row in rows for one in row["entries"]}
-    assert entries[OEO + IAM]["takes"]
+    assert entries[OEO + NEW_TYPE]["takes"]
+    # the drawing writes the IAM scenario on every factsheet itself, so it
+    # is offered and not to be added
+    assert OEO + IAM not in entries
     # the failure by construction: the ontology does not carry the other
     assert not entries[OEO + "OEO_99999999"]["takes"]
     status, taken = app.call("POST", "/api/sources/take", {}, {"chosen": [
-        {"id": entries[OEO + IAM]["id"], "action": "add"},
+        {"id": entries[OEO + NEW_TYPE]["id"], "action": "add"},
         {"id": entries[OEO + "OEO_99999999"]["id"], "action": "add"}]})
     assert status == 200 and len(taken["done"]) == 1
     assert len(taken["refused"]) == 1
     listed = [one for one in taken["data"]["parameters"]
               if one["uri"] == "scenario_type"][0]["vocabulary"]
-    assert listed[OEO + IAM] == {"label": f"name of {IAM}", "spellings": [],
-                                 "definition": f"{IAM} is defined so."}
+    assert listed[OEO + NEW_TYPE] == {
+        "label": f"name of {NEW_TYPE}", "spellings": [],
+        "definition": f"{NEW_TYPE} is defined so."}
     # the Spec tab saves it as it saves any edit
     spec_file = Path(profile.package_dir) / "extraction_spec.json"
     status, told = app.call("POST", "/api/spec/save", {}, {
         "data": taken["data"], "base": server.sha256(spec_file.read_bytes())})
     assert status == 200 and told.get("saved"), told
     saved = json.loads(spec_file.read_text(encoding="utf-8"))
-    assert OEO + IAM in [one for one in saved["parameters"]
-                         if one["uri"] == "scenario_type"][0]["vocabulary"]
+    assert OEO + NEW_TYPE in [one for one in saved["parameters"]
+                              if one["uri"] == "scenario_type"][0][
+        "vocabulary"]
 
 
 def test_kwp_is_held_to_its_shapes_by_what_its_drawing_writes():
@@ -342,10 +351,13 @@ def test_take_hands_back_the_drawing_only_where_a_merge_changed_it(
         tmp_path, profile):
     pytest.importorskip("rdflib")
     shapes = tmp_path / "more.ttl"
+    listed = ("sh:path oeo:OEO_00390073 ;\n                  sh:in ( oeo:"
+              f"OEO_00020309 oeo:{IAM} oeo:{NEW_TYPE}\n"
+              "                          oeo:OEO_99999999 )")
+    assert listed in SHAPES
     shapes.write_text(SHAPES.replace(
-        "sh:path oeo:OEO_00390073 ;\n                  sh:in ( oeo:"
-        f"OEO_00020309 oeo:{IAM} oeo:OEO_99999999 )",
-        "sh:path oeo:OEO_99990001 ; sh:name \"widget\""), encoding="utf-8")
+        listed, "sh:path oeo:OEO_99990001 ; sh:name \"widget\""),
+        encoding="utf-8")
     spec = json.loads((Path(profile.package_dir) / "extraction_spec.json")
                       .read_text(encoding="utf-8"))
     row = "not_asked|factsheet|OEO_99990001"

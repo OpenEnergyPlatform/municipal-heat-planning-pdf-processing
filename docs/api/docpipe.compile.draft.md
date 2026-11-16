@@ -166,6 +166,19 @@ arrow between boxes, and an arrow from a box to itself, is the
 drawing's structure and no field's: it only says the property is
 written.
 
+### written_itself
+
+```python
+def written_itself(drawing: Optional[dict],
+                   rules: Optional[dict] = None) -> dict
+```
+
+{(class, property): {entry}} the drawing writes on every node of a box
+by itself, with the brick `fixed`: the entries a rule of the graph file
+lists (*rules*) or the arrow names, by the local names of each. A box
+that takes its class from a coordinate names no one class and is
+left out.
+
 ### differences
 
 ```python
@@ -173,7 +186,8 @@ def differences(shapes: list, spec_raw: dict,
                 terms: Optional[Terms] = None,
                 unit_properties=UNIT_PROPERTIES,
                 pairs: Optional[list] = None,
-                drawing: Optional[dict] = None) -> list
+                drawing: Optional[dict] = None,
+                rules: Optional[dict] = None) -> list
 ```
 
 What the spec and its drawing (`map` of the graph file) say
@@ -193,8 +207,12 @@ arrow writes is `not_asked`.
 
 An entry of a list that starts with `out:` is the profile's own word for
 "none of these" and no term, so the shapes are not expected to have it.
-The units a shape lists are no property to ask for where the spec asks
-for the shape's number. *pairs*, where given, is filled with (field,
-shape, property) for every property a field was held against.
+An entry of the shapes' list the drawing writes on every node by itself
+(`written_itself`, the rules of the graph file in *rules*) is offered,
+not missing from the spec. The units a shape lists are no property to
+ask for where the spec asks for the shape's number. A property of an
+sh:or on the node is said to be one of the properties the shapes demand
+one of. *pairs*, where given, is filled with (field, shape, property)
+for every property a field was held against.
 
 [Back to the index](../README.md)

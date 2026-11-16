@@ -436,8 +436,9 @@ def differences(profile, spec_raw: Optional[dict], snapshot: Optional[dict],
             from docpipe.compile import shapes
             found, _prefixes = shapes.read(files)
             from docpipe import graphfile
-            rows = draft.differences(found, spec_raw,
-                                     drawing=graphfile.load(profile).map)
+            loaded = graphfile.load(profile)
+            rows = draft.differences(found, spec_raw, drawing=loaded.map,
+                                     rules=loaded.rules)
         except ImportError:
             skipped = RDFLIB_MISSING
     by_field: dict = {}

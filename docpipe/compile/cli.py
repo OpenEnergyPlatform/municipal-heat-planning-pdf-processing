@@ -197,10 +197,14 @@ def _diff(args) -> int:
             raise SystemExit("no spec: give --spec, or a --profile that "
                              "has one")
     # What the spec's fields become is the drawing of the profile's graph
-    # file, so that is what the spec is held to the shapes with.
+    # file, so that is what the spec is held to the shapes with; its rules
+    # say what the drawing writes by itself.
     from .. import graphfile
-    drawing = graphfile.load(profile).map if profile is not None else None
-    rows = drafting.differences(found, _read(path), terms, drawing=drawing)
+    loaded = graphfile.load(profile) if profile is not None else None
+    rows = drafting.differences(
+        found, _read(path), terms,
+        drawing=loaded.map if loaded is not None else None,
+        rules=loaded.rules if loaded is not None else None)
     kinds: dict = {}
     for row in rows:
         kinds.setdefault(row["kind"], []).append(row)

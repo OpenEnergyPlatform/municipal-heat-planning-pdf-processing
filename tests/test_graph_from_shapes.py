@@ -83,9 +83,17 @@ HEAD = """@prefix sh: <http://www.w3.org/ns/shacl#> .
 """
 
 
-def shape(name: str, target: str, *properties: str) -> str:
+def shape(name: str, target: str, *properties: str, node: str = "") -> str:
+    """A node shape of *properties*; *node* is said of the node itself."""
     body = " ;\n".join(f"  sh:property [ {p} ]" for p in properties)
-    return f"ex:{name} a sh:NodeShape ; sh:targetClass {target} ;\n{body} .\n"
+    node = f" ;\n  {node}" if node else ""
+    return (f"ex:{name} a sh:NodeShape ; sh:targetClass {target} ;\n"
+            f"{body}{node} .\n")
+
+
+# A name or an acronym, or both, as the OEKG's shapes ask of a bundle.
+NAME_OR_ACRONYM = ("sh:or ( [ sh:path rdfs:label ; sh:minCount 1 ] "
+                   "[ sh:path dc:acronym ; sh:minCount 1 ] )")
 
 
 VALUE = shape(
@@ -160,10 +168,8 @@ def oekg(report_uuid=True, bundle_uuid=False, region="oeo:OEO_00020220"):
               "sh:path oeo:OEO_00390096 ; sh:datatype xsd:dateTime ; "
               "sh:minCount 1 ; sh:maxCount 1",
               f"sh:path oeo:OEO_00390098 ; {STRING} ; sh:maxCount 1"]
-    bundle = [f"sh:path rdfs:label ; {STRING} ; sh:minCount 1 ; "
-              f"sh:maxCount 1",
-              f"sh:path dc:acronym ; {STRING} ; sh:minCount 1 ; "
-              f"sh:maxCount 1",
+    bundle = [f"sh:path rdfs:label ; {STRING} ; sh:maxCount 1",
+              f"sh:path dc:acronym ; {STRING} ; sh:maxCount 1",
               f"sh:path dc:abstract ; {STRING} ; sh:maxCount 1",
               "sh:path oeo:OEO_00000510 ; sh:class oeo:OEO_00030022",
               "sh:path oeo:OEO_00000509 ; sh:class oeo:OEO_00090001",
@@ -182,7 +188,8 @@ def oekg(report_uuid=True, bundle_uuid=False, region="oeo:OEO_00020220"):
                        + shape("Report", "oeo:OEO_00020012",
                                *(report + [uuid] * report_uuid))
                        + shape("Bundle", "oeo:OEO_00020227",
-                               *(bundle + [uuid] * bundle_uuid))
+                               *(bundle + [uuid] * bundle_uuid),
+                               node=NAME_OR_ACRONYM)
                        + shape("Scenario", "oeo:OEO_00000365", *factsheet))
 
 

@@ -346,8 +346,9 @@ def _answer_of(key: str, value) -> bool:
 
 def required_by_class(profile) -> dict:
     """{class: {property}} the shapes of *profile* demand (min count 1 or
-    more), taken as the Graph tab takes them; {} for a profile without
-    shapes, or without the library that reads them."""
+    more), taken as the Graph tab takes them, and for an sh:or of properties
+    on the node the sorted tuple of them, one of which is demanded; {} for a
+    profile without shapes, or without the library that reads them."""
     from ..editor import sourcespage
     files = sourcespage.shape_files(profile)
     if not files:
@@ -365,7 +366,16 @@ def required_by_class(profile) -> dict:
             if (prop.min_count or 0) >= 1:
                 out.setdefault(_bare(shape.target_class), set()).add(
                     _bare(prop.path))
+        for group in shape.one_of:
+            out.setdefault(_bare(shape.target_class), set()).add(
+                tuple(sorted(_bare(path) for path in group)))
     return out
+
+
+def _need_name(need) -> str:
+    """How the log names what the shapes demand: a property, or the
+    properties of an sh:or one of which is demanded."""
+    return " or ".join(need) if isinstance(need, tuple) else need
 
 
 # -- the writer ---------------------------------------------------------------
@@ -381,7 +391,8 @@ class Writer:
         # profile's own module), and the blocks made of the drawing.
         self.space = space or {}
         self._blocks: dict = {}
-        # {class: {property}} the shapes demand (min count 1 or more),
+        # {class: {property}} the shapes demand (min count 1 or more), or a
+        # tuple of properties one of which they demand (`required_by_class`),
         # names without prefix or namespace; read once, not per document.
         self.required = required or {}
         self.spec = spec
@@ -624,7 +635,9 @@ class Writer:
 
     def lacking(self, doc: Document, entries: dict) -> dict:
         """{box id: [property]} the shapes demand of the class of a node
-        written for the box and some node of it does not say."""
+        written for the box and some node of it does not say; where the
+        shapes demand one of several properties and a node says none, all
+        of them, as "a or b"."""
         out: dict = {}
         for box in self.drawing.boxes:
             if not self.drawing.written(box["id"]):
@@ -638,9 +651,13 @@ class Writer:
                         for one in entries.get(id(node)) or ()}
                 if box.get("uuid"):
                     said.add(_bare(box["uuid"]))
-                for one in sorted(needed - said):
-                    if one not in out.setdefault(box["id"], []):
-                        out[box["id"]].append(one)
+                for need in sorted(needed, key=_need_name):
+                    if (said.intersection(need) if isinstance(need, tuple)
+                            else need in said):
+                        continue
+                    name = _need_name(need)
+                    if name not in out.setdefault(box["id"], []):
+                        out[box["id"]].append(name)
         return out
 
     def by_choice(self, doc: Document) -> Counter:

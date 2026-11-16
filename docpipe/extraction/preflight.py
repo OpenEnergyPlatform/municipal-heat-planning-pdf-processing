@@ -190,10 +190,12 @@ def shape_properties(files, raw: dict, profile=None) -> tuple:
     found, _prefixes = shapes.read(files)
     every = sorted({(shape.name, draft.local(prop.path))
                     for shape in found for prop in shape.properties})
-    drawing = graphfile.load(profile).map if profile is not None else {}
+    loaded = graphfile.load(profile) if profile is not None else None
     unasked = sorted({(row["shape"], row["path"])
-                      for row in draft.differences(found, raw,
-                                                   drawing=drawing)
+                      for row in draft.differences(
+                          found, raw,
+                          drawing=loaded.map if loaded is not None else {},
+                          rules=loaded.rules if loaded is not None else None)
                       if row["kind"] == "not_asked"})
     return unasked, every
 

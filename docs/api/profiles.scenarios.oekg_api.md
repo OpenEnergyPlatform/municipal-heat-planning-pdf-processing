@@ -34,13 +34,19 @@ A body is not the Turtle in another syntax in three places, each on purpose:
                            bundle with several study reports, as they are one
                            node in the Turtle, which mints the bundle from
                            its label. The oldest paper leads.
-  a formed acronym         The platform demands one. A bundle no document
+  a formed acronym         The platform's request schema requires one, as do
+                           the shapes it holds a create against: those of
+                           the commit it pins (`OEKG_SHAPES_PINNED_COMMIT`
+                           in its settings), not the OEKG's newest, which
+                           take a name or an acronym. A bundle no document
                            gives one is named after the first author and the
                            year of its leading paper, `Riahi-2021`. That is
-                           made here, not read, and the run says how often.
+                           made here, not read, the run says how often, and
+                           the Turtle never carries it.
   no IAM annotation        The Turtle types every factsheet an IAM scenario.
-                           The platform's list does not hold that class yet
-                           and refuses a create for it, so a body omits it.
+                           The shapes the platform pins do not list that
+                           class and refuse a create for it, so a body omits
+                           it; the OEKG's newest shapes list it.
 
 Exit 0 is a report, whatever it says. Exit 2 is a run that could not be
 made: no harvest, no database, no API description or no shapes.
@@ -175,7 +181,10 @@ Where a choice list of the spec and the shapes' list for it differ.
 
 The model picks a tag or a scenario type from a list the spec copied
 from the shapes. A class the shapes dropped would be harvested and then
-refused; one they gained could never be chosen.
+refused; one they gained could never be chosen. A class the drawing
+writes on every node by itself (the brick `fixed`, as the IAM scenario
+of the graph rule `scenario_types_always`) is not chosen and not
+missing either.
 
 ### graph
 

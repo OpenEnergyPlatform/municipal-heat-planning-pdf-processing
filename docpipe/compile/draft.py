@@ -639,11 +639,46 @@ def drawn(drawing: Optional[dict], spec_raw: dict) -> tuple:
     return writes, classes, written, from_axis
 
 
+def written_itself(drawing: Optional[dict],
+                   rules: Optional[dict] = None) -> dict:
+    """{(class, property): {entry}} the drawing writes on every node of a box
+    by itself, with the brick `fixed`: the entries a rule of the graph file
+    lists (*rules*) or the arrow names, by the local names of each. A box
+    that takes its class from a coordinate names no one class and is
+    left out."""
+    drawing = drawing or {}
+    rules = rules or {}
+    boxes = {box["id"]: box for box in drawing.get("boxes") or ()
+             if isinstance(box, dict) and box.get("id")}
+    out: dict = {}
+    for arrow in drawing.get("arrows") or ():
+        if not isinstance(arrow, dict):
+            continue
+        ref = arrow.get("brick")
+        name = ref if isinstance(ref, str) else \
+            ref.get("brick") if isinstance(ref, dict) else None
+        if name != "fixed":
+            continue
+        settings = (ref.get("settings") if isinstance(ref, dict) else None) \
+            or arrow.get("settings") or {}
+        rule = settings.get("rule")
+        values = rules.get(rule) if rule else settings.get("values")
+        box = boxes.get(arrow.get("to")) or {}
+        if not isinstance(box.get("class"), str) \
+                or not isinstance(arrow.get("property"), str):
+            continue
+        out.setdefault((local(box["class"].split(":")[-1]),
+                        path_name(arrow["property"])), set()).update(
+            local(str(one).split(":")[-1]) for one in values or ())
+    return out
+
+
 def differences(shapes: list, spec_raw: dict,
                 terms: Optional[Terms] = None,
                 unit_properties=UNIT_PROPERTIES,
                 pairs: Optional[list] = None,
-                drawing: Optional[dict] = None) -> list:
+                drawing: Optional[dict] = None,
+                rules: Optional[dict] = None) -> list:
     """What the spec and its drawing (`map` of the graph file) say
     differently from the shapes, and what one of them does not say at all.
     [{kind, parameter, path, detail}], nothing changed.
@@ -661,9 +696,13 @@ def differences(shapes: list, spec_raw: dict,
 
     An entry of a list that starts with `out:` is the profile's own word for
     "none of these" and no term, so the shapes are not expected to have it.
-    The units a shape lists are no property to ask for where the spec asks
-    for the shape's number. *pairs*, where given, is filled with (field,
-    shape, property) for every property a field was held against.
+    An entry of the shapes' list the drawing writes on every node by itself
+    (`written_itself`, the rules of the graph file in *rules*) is offered,
+    not missing from the spec. The units a shape lists are no property to
+    ask for where the spec asks for the shape's number. A property of an
+    sh:or on the node is said to be one of the properties the shapes demand
+    one of. *pairs*, where given, is filled with (field, shape, property)
+    for every property a field was held against.
     """
     terms = terms or Terms()
     by_path: dict = {}
@@ -671,6 +710,14 @@ def differences(shapes: list, spec_raw: dict,
         for prop in shape.properties:
             by_path.setdefault(local(prop.path), []).append((shape, prop))
     writes, classes_of, written, from_axis = drawn(drawing, spec_raw)
+    itself = written_itself(drawing, rules)
+
+    def one_of(shape, prop) -> Optional[list]:
+        """The local names of the properties of the shape's sh:or that
+        *prop* is one of, or None."""
+        return next((sorted(local(path) for path in group)
+                     for group in getattr(shape, "one_of", ())
+                     if prop.path in group), None)
     out: list = []
     asked: set = set()
 
@@ -735,10 +782,13 @@ def differences(shapes: list, spec_raw: dict,
             asked.add((shape.name, prop.path))
             if pairs is not None:
                 pairs.append((name, shape.name, local(prop.path)))
-            if prop.min_count or prop.max_count is not None:
+            group = one_of(shape, prop)
+            if prop.min_count or prop.max_count is not None or group:
                 note("cardinality", name, local(prop.path),
                      f"the shapes allow min {prop.min_count or 0}, max "
-                     f"{'any' if prop.max_count is None else prop.max_count}")
+                     f"{'any' if prop.max_count is None else prop.max_count}"
+                     + (f", and demand one of {', '.join(group)}"
+                        if group else ""))
             if not prop.choices:
                 continue
             theirs = {local(iri): iri for iri in prop.choices}
@@ -757,7 +807,9 @@ def differences(shapes: list, spec_raw: dict,
                 ours = {local(iri): iri for iri in vocabulary
                         if not str(iri).startswith("out:")
                         and iri not in listed["edgeless"]}
-                missing = sorted(set(theirs) - set(ours))
+                missing = sorted(set(theirs) - set(ours) - itself.get(
+                    (local(shape.target_class or ""), local(prop.path)),
+                    set()))
                 extra = sorted(set(ours) - set(theirs))
                 if missing:
                     note("list_missing", name, local(prop.path),
@@ -814,8 +866,10 @@ def differences(shapes: list, spec_raw: dict,
             if (local(shape.target_class or ""), local(prop.path)) \
                     in written:
                 continue
+            group = one_of(shape, prop)
             needed = " (required: min %d)" % prop.min_count \
-                if prop.min_count else ""
+                if prop.min_count else \
+                f" (required: one of {', '.join(group)})" if group else ""
             note("not_asked", None, local(prop.path),
                  f"{shape.name}: no arrow of the drawing writes this "
                  f"property" + needed, shape=shape.name)

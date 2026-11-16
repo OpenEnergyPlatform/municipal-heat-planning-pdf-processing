@@ -425,7 +425,12 @@ whose work entry stayed open, stays in the harvest and out of the graph), and
 `crawl_crosscheck` logs, never gates, where the chosen title, date or DOI
 differs from the crawl's record of the document (`DocumentMeta`). The report is
 `required`: a document with no `publication_title` is written for nothing; a
-missing date or author is only logged. For the fields the OEKG shapes allow
+missing date or author is only logged. The log line of a document names, per
+box, what the shapes demand of a written node and it does not say
+(`Writer.lacking`); where they demand one of several properties (an `sh:or`
+of properties on the node, `required_by_class`), a node saying none of them
+is named with all of them, "acronym or label" for a scenario bundle, and one
+saying any is not named. For the fields the OEKG shapes allow
 at most once the arrows say `pick: one_reading` (`readings.pick_one`: the reading
 most sources agree on, a tie to the one located on its page, then to the
 longer; a reading contained in another never wins) and the rest are counted

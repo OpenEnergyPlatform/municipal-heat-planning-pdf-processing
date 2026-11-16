@@ -80,7 +80,15 @@ graph file (`graph.json`, `map`), and it reads the links from the same
 drawing: a property an arrow of the drawing writes, or a box link, is not
 asked for, and neither is a unit list a shape holds beside a
 number the spec asks for. It reports a cardinality only where the shapes
-state one and the spec says something else (`differences` in `draft.py`). A
+state one and the spec says something else (`differences` in `draft.py`); a
+property in a group the shapes demand one of (an `sh:or` on the node whose
+alternatives each name one property with `sh:minCount`) gets a `cardinality`
+row ending ", and demand one of acronym, label", and its `not_asked` row says
+"(required: one of acronym, label)". An entry of a shape's `sh:in` list that
+the drawing writes on every node of a box by itself with the brick `fixed`
+(an entry of a graph-file rule such as `scenario_types_always`, or one listed
+in the arrow's `values`) is not reported as `list_missing`
+(`written_itself`; `differences` takes the graph file's `rules`). A
 `not_asked` row (and its `--json` entry) carries the `shape` the property belongs
 to, which `docpipe preflight` keys its record of properties left out on purpose
 by. `examples` embeds its probes with the configured model and says in the log,
@@ -108,5 +116,10 @@ box and property of its shape, one reading where the shapes allow one). It is
 no part of the spec: `finished` leaves it out, and `compile apply --out` writes
 it as a `graph.json` beside the spec where there is none, so
 [the graph writer](graph.md) can serialize a harvest for a project without any
-code of its own. Reading shapes needs `rdflib` (the `kg` extra); the
+code of its own. A node shape's `sh:or` whose alternatives each name one
+property with `sh:minCount` is read as a group (`Shape.one_of`, the sorted
+properties, one of which a node must have). Any other `sh:or` on the node, and
+any `sh:and`, `sh:xone` or `sh:not`, is kept as a note on the shape ("... was
+not read"), as are the property constraints the reader does not follow.
+Reading shapes needs `rdflib` (the `kg` extra); the
 command says so and names the extra where it is not installed.

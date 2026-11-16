@@ -11,9 +11,15 @@ be. That is most of an extraction spec, written once already by whoever
 maintains the graph. This module reads it and decides nothing: the records
 say what the file says, and `draft.py` turns them into a spec.
 
-What a property shape says in a way this reader does not follow (a path
-that is no single property, a constraint only SPARQL states) is kept as a
-note on the record, so the draft can say what it left out.
+A node shape may also say "one of these properties at least": an sh:or on
+the node whose alternatives each name one property with sh:minCount. That
+is read as a group (`Shape.one_of`), since none of its properties is
+required on its own and one of them is.
+
+What a shape says in a way this reader does not follow (a path that is no
+single property, a constraint only SPARQL states, an sh:and, sh:xone or
+sh:not on the node, an sh:or on the node of another form) is kept as a note
+on the record, so the draft can say what it left out.
 
 rdflib is imported where it is used, as in `docpipe.ontology`.
 
@@ -55,6 +61,7 @@ Fields:
 - `name: str`
 - `target_class: Optional[str] = None`
 - `properties: list = field(default_factory=list)`
+- `one_of: list = field(default_factory=list)`: [[property IRI]]: per sh:or on the node, the properties one of which a node must have at least once
 - `notes: list = field(default_factory=list)`
 
 ## Functions

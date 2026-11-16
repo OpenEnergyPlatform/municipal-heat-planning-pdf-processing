@@ -365,7 +365,9 @@ def lacking(self, doc: Document, entries: dict) -> dict
 ```
 
 {box id: [property]} the shapes demand of the class of a node
-written for the box and some node of it does not say.
+written for the box and some node of it does not say; where the
+shapes demand one of several properties and a node says none, all
+of them, as "a or b".
 
 #### Writer.by_choice
 
@@ -470,8 +472,9 @@ def required_by_class(profile) -> dict
 ```
 
 {class: {property}} the shapes of *profile* demand (min count 1 or
-more), taken as the Graph tab takes them; {} for a profile without
-shapes, or without the library that reads them.
+more), taken as the Graph tab takes them, and for an sh:or of properties
+on the node the sorted tuple of them, one of which is demanded; {} for a
+profile without shapes, or without the library that reads them.
 
 ### arrow_block
 

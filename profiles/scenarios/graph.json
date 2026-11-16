@@ -393,7 +393,7 @@
           "rule": "scenario_types_always",
           "prefix": "oeo"
         },
-        "note": "Every factsheet carries the classes the rule scenario_types_always lists (Mirjam: all IAM scenarios get the annotation for now)."
+        "note": "Every factsheet carries the classes the rule scenario_types_always lists (Mirjam: all IAM scenarios get the annotation for now). Held against the shapes, these classes count as written here, not as missing from the list of scenario_type."
       },
       {
         "from": "scenario_abstract",

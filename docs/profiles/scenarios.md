@@ -524,7 +524,11 @@ factsheet's `rdfs:label` is the name the scenario is called by; its
 where there is none (the preset `short_name`). Every factsheet
 also carries a fixed `OEO_00020517` annotation (`graph.json` rule `scenario_types_always`, the brick `fixed`; owner
 decision 2026-11-06: kept) on top of whatever `scenario_type` classes the
-model read off the text.
+model read off the text. The comparisons with the shapes (`compile diff`, the
+dry run's choice lists) count that class as written by the drawing, not as
+missing from the spec. A bundle's `rdfs:label` is written only from a printed
+study name and its `dc:acronym` only from a printed acronym; nothing is made
+up in the Turtle.
 
 A study region the list carries is referenced, never minted. A region the
 model matched against the document's own narrowed OEKG list is written as a
@@ -631,8 +635,12 @@ of ours, and it holds the assembled bundle against the OEKG shapes before
 it writes anything: a create is judged strictly, so one missing value
 refuses the whole bundle, and a key the API does not name is refused as
 well. The shapes demand of a bundle at least one tag of each of the four
-kinds above, each from a fixed list, and exactly one label and one
-acronym; of a scenario at least one scenario type. The acronym is unique
+kinds above, each from a fixed list, and a name or an acronym or both (at
+most one of each); of a scenario at least one scenario type. The platform
+itself holds a create against the shapes of the commit it pins
+(`OEKG_SHAPES_PINNED_COMMIT` in its settings), which demand exactly one label
+and one acronym and do not list the IAM scenario, and its request schema
+`ScenarioBundleCreate` requires an acronym and a label. The acronym is unique
 over there and the only way to find a bundle again.
 
 `profiles/scenarios/oekg_api.py` asks what the API would say to a harvest,
@@ -741,18 +749,21 @@ project's name with another project's acronym often enough, a paper thanks
 two projects, that joining on it would chain unrelated papers into one
 bundle; such a pair stays two bundles and is reported for its acronym.
 
-The second is a formed acronym. The platform demands one, and a bundle no
-document gives one would be refused for that alone. `form_acronyms` names
+The second is a formed acronym. The request schema `ScenarioBundleCreate`
+requires one (and a label), as do the shapes the platform pins
+(`OEKG_SHAPES_PINNED_COMMIT` in oeplatform's settings), not the OEKG's newest,
+which take a name or an acronym; a bundle no document gives one would be
+refused for that alone. `form_acronyms` names
 it after the first author and the year of its leading paper, `Riahi-2021`;
 two that come out the same are told apart by a number, in the order of
 their documents, which keeps a name the same from one run over a harvest
 to the next. That name is made, not read: the entry says so in `formed`,
 the report counts how many, and a paper without an author or a date gets
-none and stays refused.
+none and stays refused. The Turtle never carries a formed acronym.
 
 The third is the missing IAM annotation. The Turtle types every factsheet
-an IAM scenario (`OEO_00020517`, above). The platform's list of scenario
-types does not hold that class yet and refuses a create for it, so the
+an IAM scenario (`OEO_00020517`, above). The shapes the platform pins do
+not list that class (the OEKG's newest do) and refuse a create for it, so the
 body leaves it out (`not_yet_listed` in `oekg_api.py`); so is every type of the graph rule
 `scenario_types_always`, the IAM scenario being the only one today. A
 factsheet with no other type then has none and is refused for that instead.
@@ -780,9 +791,10 @@ A document whose `publication_title` never resolved is refused whole:
 the writer returns nothing and logs at `INFO` level, before a bundle,
 a factsheet or an author node is built (the report box is `required`). Any
 other field the shapes demand on the report or the bundle, a date, an
-author, an acronym or one of the tags, is not refused this way, only
-named in the log as a missing required property; so is the bundle's label where the document prints
-no study name, since nothing stands in for it (owner decision 2026-11-07).
+author or one of the tags, is not refused this way, only
+named in the log as a missing required property; a bundle with neither a
+printed study name nor a printed acronym is named as "acronym or label", since
+nothing stands in for either; it is not valid against the shapes.
 
 A scenario name absent from its own quoted passage is refused as an
 identity for every scenario-scope parameter alike: `scenario_names()`
