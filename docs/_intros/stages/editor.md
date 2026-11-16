@@ -1067,7 +1067,12 @@ On the left are the fields of the harvest as the spec asks them, with a real
 example value each where a harvest is loaded. On the right are the boxes, one
 for each class of the graph, each with the properties the shapes give that class
 and the effect of each constraint; a property the shapes require is red until an
-arrow leads to it. An arrow is drawn by dragging from the dot of a field to a
+arrow leads to it. Where the shapes require one of several properties of a node
+(an sh:or on the node, as the OEKG's shapes do for the name or the acronym of a
+scenario bundle), each of them is marked "1 of n required", all of them are red
+until an arrow, or the box's own number, leads to one of them, and the group
+counts once among the required properties without an arrow
+(`graph/rows.ts`). An arrow is drawn by dragging from the dot of a field to a
 property of a box (the field is written under that property), from a field to a
 box (the field makes the box's nodes), or from a box to a box over a property
 (the nodes are linked). A box says how many nodes it has in a document (one,
@@ -1083,7 +1088,8 @@ it does, what it takes and what it gives. The order of the boxes is the order of
 the nodes in the graph, the order of the arrows the order of the properties. The
 rules of the program (the graph file's `rules`) are in the Rules drawer; the
 effect of a constraint (report, leave out the value, leave out the paper, stop)
-is set in the settings of the box whose properties it holds.
+is set in the settings of the box whose properties it holds, and that of such a
+group there too, under the key the validation reports it with (`Or - <class>`).
 
 A class shows each of its properties once: what several property shapes say of
 one path, in one shape or in several shapes of the class, is one property with the

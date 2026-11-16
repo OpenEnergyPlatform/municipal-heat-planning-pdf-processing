@@ -220,7 +220,7 @@ value first.
 | Key | What it says |
 |---|---|
 | `classes` | per class `{"written": false}` (its nodes and every triple that names them leave the graph) or `{"address": {"folder", "key", "base"}}` (the nodes are named anew: the folder under the base and a UUID over the values of the key properties) |
-| `constraints` | per `"<constraint> <property> <class>"` an effect: `report` (the default), `leave_out_value`, `leave_out_paper` or `stop` |
+| `constraints` | per `"<constraint> <property> <class>"` an effect: `report` (the default), `leave_out_value`, `leave_out_paper` or `stop`; a constraint of the node as a whole has `-` for the property (`Or - OEO_00020227`: none of the properties of an sh:or on the node) |
 | `map` | the drawing (above): prefixes, document, evidence, boxes and arrows; checked by `map_problem` on every load and save |
 | `rules` | writer rules the profile's `rules.py: GRAPH` declares, each read where it is used (`graphfile.get`). Both profiles: `base` (the base IRI), `pick_one_order` (which reading of a field written once wins), `settle_order`, `rounding_tolerance` and `contested_in_full` (how different numbers on one place are settled), `corroborated_by_place` (whether a value that two different passages print, a number or a name, is marked as confirmed). Scenarios also `scenario_types_always`, `evidence_as`, `front_first_fields`, `front_pages_rule`, `front_pages_extra` and `front_order` (front pages and their order) |
 

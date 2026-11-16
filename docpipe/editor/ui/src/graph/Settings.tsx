@@ -1,5 +1,5 @@
 /* The settings that open on the right of the canvas: of a box (how many nodes, of which field, its address, what is
-   admitted, what the shapes require of its properties), of an arrow (the property, the brick with its settings, one
+   admitted, what the shapes require of its properties and of its node as a whole), of an arrow (the property, the brick with its settings, one
    reading, a condition) and of the document. Every control changes the drawing in place. */
 import { Accordion, ActionIcon, Alert, Badge, Box, Button, Divider, Group, NativeSelect, Select, SegmentedControl, Stack, TagsInput, Text, Tooltip } from '@mantine/core';
 import { IconTrash } from '@tabler/icons-react';
@@ -12,7 +12,8 @@ import {
 import { BlockEditor, PartsEditor, PresetSelect, TryBlock } from './blocks';
 import { formOf } from './forms';
 import {
-  COUNT_WORDS, arrowKey, boxTitle, fieldsOfBox, kindOfArrow, localName, rowsOf, subjectOf, takesFields, type Cur, type GraphData, type Obj,
+  COUNT_WORDS, arrowKey, boxTitle, classOf, fieldsOfBox, kindOfArrow, localName, rowsOf, subjectOf, takesFields, type Constraint, type Cur,
+  type GraphData, type Obj,
 } from './model';
 
 export interface Panel {
@@ -25,7 +26,7 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
   const { edit } = kit;
   const map = cur.map;
   const words = COUNT_WORDS();
-  const rows = rowsOf(d, box);
+  const rows = rowsOf(d, map, box);
   const fieldNames = d.fields.map(f => f.name);
   const boxOptions = (map.boxes || []).filter((b: Obj) => b.id !== box.id).map((b: Obj) => ({ value: b.id, label: String(b.id) }));
   const set = (key: string, v: unknown, typing?: string) => edit(() => {
@@ -38,6 +39,14 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
   if (box.class && !classOptions.some(c => c.value === box.class)) classOptions.push({ value: box.class, label: box.class });
   const usedBy = (map.arrows || []).filter((a: Obj) => subjectOf(map, a) === box.id).length;
   const constraintRows = rows.filter(r => r.prop && r.prop.constraints.length);
+  /* what the shapes ask of the node as a whole: one of a group of properties (an sh:or on the node) */
+  const nodeConstraints: Constraint[] = classOf(d, box)?.constraints || [];
+  const labelOf = (name: string) => (rows.find(r => localName(r.curie) === name) || { label: name }).label;
+  const groupsOf = (c: Constraint): string[][] => (Array.isArray(c.says) ? c.says.filter(Array.isArray) as string[][] : []);
+  const effectSelect = (c: Constraint) => (
+    <NativeSelect size="xs" value={cur.constraints[c.key] || 'report'} data={d.effects.map(e => ({ value: e, label: effectWord(e) }))}
+      onChange={e => { const v = e.currentTarget.value; edit(() => { if (v === 'report') delete cur.constraints[c.key]; else cur.constraints[c.key] = v; }); }} />
+  );
 
   return (
     <Stack gap="md" data-settings="box">
@@ -140,19 +149,27 @@ export function BoxSettings({ P, box }: { P: Panel; box: Obj }) {
           </Accordion.Item>
         )}
 
-        {constraintRows.length > 0 && (
+        {(constraintRows.length > 0 || nodeConstraints.length > 0) && (
           <Accordion.Item value="constraints">
             <Accordion.Control>{t('What the shapes ask of its properties')}</Accordion.Control>
             <Accordion.Panel>
               <Stack gap="sm">
+                {nodeConstraints.map(c => (
+                  <Box key={c.key}>
+                    <Text size="sm" fw={600}>{t('At least one of {properties}', { properties: groupsOf(c).map(g => g.map(labelOf).join(', ')).join('; ') })}</Text>
+                    <Group gap="xs" wrap="nowrap" justify="space-between" title={c.key}>
+                      <Text size="sm">{c.component + ' ' + groupsOf(c).map(g => g.join(', ')).join('; ')}</Text>
+                      {effectSelect(c)}
+                    </Group>
+                  </Box>
+                ))}
                 {constraintRows.map(r => (
                   <Box key={r.curie}>
                     <Text size="sm" fw={600}>{r.label}</Text>
                     {r.prop!.constraints.map(c => (
                       <Group key={c.key} gap="xs" wrap="nowrap" justify="space-between" title={c.key}>
                         <Text size="sm">{c.component + ' ' + (Array.isArray(c.says) ? c.says.join(', ') : String(c.says))}</Text>
-                        <NativeSelect size="xs" value={cur.constraints[c.key] || 'report'} data={d.effects.map(e => ({ value: e, label: effectWord(e) }))}
-                          onChange={e => { const v = e.currentTarget.value; edit(() => { if (v === 'report') delete cur.constraints[c.key]; else cur.constraints[c.key] = v; }); }} />
+                        {effectSelect(c)}
                       </Group>
                     ))}
                   </Box>
@@ -232,7 +249,7 @@ export function ArrowSettings({ P, arrow }: { P: Panel; arrow: Obj }) {
   const map = cur.map;
   const kind = kindOfArrow(map, arrow);
   const subject = (map.boxes || []).find((b: Obj) => b.id === subjectOf(map, arrow)) || {};
-  const rows = rowsOf(d, subject);
+  const rows = rowsOf(d, map, subject);
   const number = (map.arrows || []).indexOf(arrow) + 1;
   /* the arrow's block: its brick with the arrow's settings, or a block of its own; a block that is a brick again goes back
      to the brick and settings of the arrow */

@@ -4,18 +4,15 @@
 import { Position, type Edge, type Node } from '@xyflow/react';
 import { t } from '../lib/i18n';
 import type { UInput, UResult } from '../lib/untangle';
+import { boxIds, classOf, demanded, kindOfArrow, missingOf, rowsOf, subjectOf, type ClassInfo, type Obj, type Row } from './rows';
 
-export type Obj = Record<string, any>;
+export { arrowsTo, boxIds, classOf, demanded, isRed, kindOfArrow, localName, missingOf, propOf, rowsOf, subjectOf } from './rows';
+export type { ClassInfo, Constraint, Obj, OneOf, PropInfo, Row } from './rows';
 
 export interface FieldInfo {
   name: string; label: string; kind: 'field' | 'dimension' | 'reading'; help?: string; of?: string[];
   example?: { value: string; document: string } | null;
 }
-export interface Constraint { key: string; component: string; says: unknown; effect: string }
-export interface PropInfo {
-  path: string; iri: string; curie: string; label: string; min: number | null; max: number | null; constraints: Constraint[];
-}
-export interface ClassInfo { id: string; shape: string | null; iri: string | null; curie: string | null; label: string | null; properties: PropInfo[] }
 export interface BrickSetting { key: string; kind: string; help: string; default: unknown }
 export interface BrickInfo {
   name: string; kind: string; does: string; takes: string; gives: string; per: string; writes: string; own: boolean;
@@ -57,49 +54,8 @@ export const COUNT_WORDS = (): Record<string, { label: string; says: string }> =
 export const takesFields = (count: string) => ['per_name', 'per_distinct', 'per_value', 'per_answer'].includes(count);
 
 export const arrowKey = (a: Obj) => `${a.from}>${a.to} ${a.property}`;
-export const boxIds = (map: Obj): Set<string> => new Set((map.boxes || []).map((b: Obj) => b.id));
-export const kindOfArrow = (map: Obj, a: Obj): 'field' | 'link' | 'node' => {
-  const ids = boxIds(map);
-  return ids.has(a.from) ? (a.from === a.to ? 'node' : 'link') : 'field';
-};
-/* the box whose nodes an arrow writes on */
-export const subjectOf = (map: Obj, a: Obj): string => (kindOfArrow(map, a) === 'link' ? a.from : a.to);
 export const fieldsOfBox = (box: Obj): string[] => (typeof box.of === 'string' ? [box.of] : Array.isArray(box.of) && box.of.every((x: unknown) => typeof x === 'string') ? box.of : []);
-export const localName = (name: string) => String(name).split(/[:/#]/).pop() || '';
-
-export function classOf(d: GraphData, box: Obj): ClassInfo | null {
-  if (!box.class) return null;
-  return d.classes.find(c => c.curie === box.class) || d.classes.find(c => c.shape !== null && c.id === localName(box.class)) || null;
-}
-export function propOf(c: ClassInfo | null, curie: string): PropInfo | null {
-  if (!c) return null;
-  return c.properties.find(p => p.curie === curie) || c.properties.find(p => p.path === localName(curie)) || null;
-}
-
-/* the arrows that write a property on a box */
-export const arrowsTo = (map: Obj, boxId: string, curie: string): Obj[] =>
-  (map.arrows || []).filter((a: Obj) => subjectOf(map, a) === boxId && localName(a.property) === localName(curie));
-
-/* the properties of a box: those the shapes give its class, then those an arrow writes that the shapes do not give */
-export interface Row { curie: string; label: string; prop: PropInfo | null; required: boolean; used: Obj[]; outside: boolean; uuid: boolean }
-/* a required property is red while no arrow leads to it; the box's own number (`uuid`) is such a way too */
-export const isRed = (r: Row) => r.required && !r.used.length && !r.uuid;
-export function rowsOf(d: GraphData, box: Obj): Row[] {
-  const c = classOf(d, box);
-  const out: Row[] = [];
-  const seen = new Set<string>();
-  for (const p of c ? c.properties : []) {
-    seen.add(localName(p.curie));
-    const used = arrowsTo(d.map, box.id, p.curie);
-    out.push({ curie: p.curie, label: p.label || localName(p.curie), prop: p, required: (p.min || 0) >= 1, used, outside: false, uuid: !!box.uuid && localName(box.uuid) === localName(p.curie) });
-  }
-  for (const a of d.map.arrows || []) {
-    if (subjectOf(d.map, a) !== box.id || seen.has(localName(a.property))) continue;
-    seen.add(localName(a.property));
-    out.push({ curie: a.property, label: a.label || localName(a.property), prop: null, required: false, used: arrowsTo(d.map, box.id, a.property), outside: !!c, uuid: !!box.uuid && localName(box.uuid) === localName(a.property) });
-  }
-  return out;
-}
+/* which box an arrow writes on, the class of a box, its rows and what the shapes demand of them: graph/rows.ts */
 
 export const humane = (name: string) => { const s = String(name).replace(/_/g, ' ').trim(); return s.charAt(0).toUpperCase() + s.slice(1); };
 /* what a box is called on the page: its class as the ontology labels it, else the words of its name in the drawing */
@@ -224,11 +180,11 @@ export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge
   const boxHeights: Record<string, number> = {};
   const heightOf = new Map<string, { rows: Row[]; shown: Row[]; hidden: number; foldable: boolean; h: number }>();
   for (const b of boxes) {
-    const rows = rowsOf(d, b);
+    const rows = rowsOf(d, map, b);
     const open = decor.expanded.has(b.id);
-    const shown = rows.filter(r => open || r.used.length || r.required || r.uuid);
+    const shown = rows.filter(r => open || r.used.length || demanded(r) || r.uuid);
     const hidden = rows.length - shown.length;
-    const foldable = rows.some(r => !r.used.length && !r.required && !r.uuid);
+    const foldable = rows.some(r => !r.used.length && !demanded(r) && !r.uuid);
     const h = HEAD_H + shown.length * ROW_H + (foldable ? MORE_H : 0) + 8;
     heightOf.set(b.id, { rows, shown, hidden, foldable, h });
   }
@@ -254,10 +210,10 @@ export function layout(d: GraphData, decor: Decor): { nodes: Node[]; edges: Edge
     }
   }
 
-  /* what is red: an arrow or a box the last check names, a required property no arrow leads to */
+  /* what is red: an arrow or a box the last check names, a demand of the shapes no arrow meets */
   for (const b of boxes) {
     const info = heightOf.get(b.id)!;
-    const missing = info.rows.filter(isRed).length;
+    const missing = missingOf(info.rows);
     const mine = arrows.filter(a => subjectOf(map, a) === b.id || a.to === b.id || a.from === b.id).map(arrowKey);
     const pos = positions.get(b.id)!;
     const data: BoxData = {

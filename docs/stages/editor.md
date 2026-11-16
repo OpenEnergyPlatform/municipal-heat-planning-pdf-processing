@@ -1069,7 +1069,12 @@ On the left are the fields of the harvest as the spec asks them, with a real
 example value each where a harvest is loaded. On the right are the boxes, one
 for each class of the graph, each with the properties the shapes give that class
 and the effect of each constraint; a property the shapes require is red until an
-arrow leads to it. An arrow is drawn by dragging from the dot of a field to a
+arrow leads to it. Where the shapes require one of several properties of a node
+(an sh:or on the node, as the OEKG's shapes do for the name or the acronym of a
+scenario bundle), each of them is marked "1 of n required", all of them are red
+until an arrow, or the box's own number, leads to one of them, and the group
+counts once among the required properties without an arrow
+(`graph/rows.ts`). An arrow is drawn by dragging from the dot of a field to a
 property of a box (the field is written under that property), from a field to a
 box (the field makes the box's nodes), or from a box to a box over a property
 (the nodes are linked). A box says how many nodes it has in a document (one,
@@ -1085,7 +1090,8 @@ it does, what it takes and what it gives. The order of the boxes is the order of
 the nodes in the graph, the order of the arrows the order of the properties. The
 rules of the program (the graph file's `rules`) are in the Rules drawer; the
 effect of a constraint (report, leave out the value, leave out the paper, stop)
-is set in the settings of the box whose properties it holds.
+is set in the settings of the box whose properties it holds, and that of such a
+group there too, under the key the validation reports it with (`Or - <class>`).
 
 A class shows each of its properties once: what several property shapes say of
 one path, in one shape or in several shapes of the class, is one property with the
@@ -1473,9 +1479,10 @@ what the page draws and decides what a save writes:
 - `view`: every class of the shapes with its properties, each with the
   fields that write it, its constraints (required, at most so many, a closed
   list, a class, a datatype) and the effect the graph file gives each; per
-  class whether it is written and its address rule; the rules the writer
-  declares, each with its value, what it inherits and the setting that wins
-  over it.
+  class the groups of properties one of which the shapes demand of a node
+  (an sh:or on the node) with that constraint and its effect, whether the
+  class is written and its address rule; the rules the writer declares,
+  each with its value, what it inherits and the setting that wins over it.
 - `judge` and `save`: an edited graph file, read by the run's own parser.
   A profile that extends another writes only what differs from what it
   inherits, and the rules its writer reads.

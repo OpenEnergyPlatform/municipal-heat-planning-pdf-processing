@@ -29,7 +29,7 @@ import { GroupedRules } from '../rules/RuleInputs';
 import { Put } from '../prompts/Reports';
 import type { Edit, Kit } from './inputs';
 import {
-  arrowKey, clone, curOf, freshBoxId, isRed, keptFrom, layout, localName, removeBox, rowsOf, takesFields, untangleInput,
+  arrowKey, clone, curOf, freshBoxId, keptFrom, layout, localName, missingOf, removeBox, rowsOf, takesFields, untangleInput,
   type Cur, type Decor, type GraphData, type Kept, type Obj, type Problem,
 } from './model';
 import { ArrowEdge, BoxNode, Ctx, FieldNode, LabelNode, type GraphCtx } from './nodes';
@@ -322,7 +322,7 @@ function GraphInner() {
   if (!G.data || !G.cur) return <Center h="100%"><Loader /></Center>;
   const d = G.data, cur = G.cur;
   const map = cur.map;
-  const missing = ((map.boxes || []) as Obj[]).reduce((n, b) => n + rowsOf(d, b).filter(isRed).length, 0);
+  const missing = ((map.boxes || []) as Obj[]).reduce((n, b) => n + missingOf(rowsOf(d, map, b)), 0);
   const isDirty = dirty();
 
   const ctx: GraphCtx = {

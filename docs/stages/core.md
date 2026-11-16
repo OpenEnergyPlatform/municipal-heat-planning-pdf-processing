@@ -1070,7 +1070,8 @@ each field becomes, and the rest of the file what the writer is to do:
 A class is named by its identifier (`OEO_00030022`), a property by its
 identifier or `prefix:name`, a constraint by the words the validation
 reports it with (`MinCount OEO_00390079 OEO_00020227`: the constraint, the
-property, the class of the node). The file of the default profile has no
+property, the class of the node; `-` for the property of a constraint of the
+node as a whole, as `Or - OEO_00020227`). The file of the default profile has no
 entry; a profile writes what its writer reads and what it sets otherwise,
 laid over the files it extends entry by entry. A file named by
 `DOCPIPE_GRAPH_FILE` is laid over all of them: what `docpipe edit` writes a

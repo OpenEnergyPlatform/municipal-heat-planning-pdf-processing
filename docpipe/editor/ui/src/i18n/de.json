@@ -3236,5 +3236,9 @@
  "the field {name}": "das Feld {name}",
  "the dimension {name} of {field}": "die Dimension {name} von {field}",
  "the field of the whole document {name}": "das Feld des ganzen Dokuments {name}",
- "the works": "die Werke"
+ "the works": "die Werke",
+ "1 of {n} required": "1 von {n} erforderlich",
+ "Required by the shapes: at least one of {properties}": "Von den Shapes verlangt: mindestens eine von {properties}",
+ "Required by the shapes: at least one of {properties}, and no arrow leads to any of them yet": "Von den Shapes verlangt: mindestens eine von {properties}, und noch führt zu keiner ein Pfeil",
+ "At least one of {properties}": "Mindestens eine von {properties}"
 }

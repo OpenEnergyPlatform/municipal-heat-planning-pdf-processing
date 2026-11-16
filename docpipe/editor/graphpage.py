@@ -11,9 +11,10 @@ what the page draws and decides what a save writes:
 - `view`: every class of the shapes with its properties, each with the
   fields that write it, its constraints (required, at most so many, a closed
   list, a class, a datatype) and the effect the graph file gives each; per
-  class whether it is written and its address rule; the rules the writer
-  declares, each with its value, what it inherits and the setting that wins
-  over it.
+  class the groups of properties one of which the shapes demand of a node
+  (an sh:or on the node) with that constraint and its effect, whether the
+  class is written and its address rule; the rules the writer declares,
+  each with its value, what it inherits and the setting that wins over it.
 - `judge` and `save`: an edited graph file, read by the run's own parser.
   A profile that extends another writes only what differs from what it
   inherits, and the rules its writer reads.
@@ -156,11 +157,25 @@ def _merge_property(known: dict, one: dict) -> None:
             known["constraints"].append(said)
 
 
+def _one_of_constraint(klass: str, groups: list, made) -> dict:
+    """The sh:or on the nodes of *klass*, as the box lists its constraints:
+    named as the validation reports it (no path, `graphfile.violations_of`),
+    so that an effect set here is the effect of that violation."""
+    key = f"Or - {klass}"
+    return {"key": key, "component": "Or",
+            "says": [[graphfile.local(one) for one in group]
+                     for group in groups],
+            "effect": made.effect(key)}
+
+
 def classes(profile, made, spec_raw: Optional[dict], files: list,
             snapshot: Optional[dict],
             prefixes: Optional[dict] = None) -> dict:
     """{"classes": [...], "skipped": why or None}: the shapes' classes with
-    their properties and the constraints."""
+    their properties and the constraints; per class also the groups of
+    properties one of which the shapes demand of a node (an sh:or on the
+    node, `Shape.one_of`), each as the curies of its properties, and that
+    constraint with its effect."""
     if not files:
         return {"classes": [], "skipped": "no shapes file: fetch the "
                                           "sources first (Sources tab)"}
@@ -172,6 +187,8 @@ def classes(profile, made, spec_raw: Optional[dict], files: list,
     terms = (snapshot or {}).get("terms") or {}
     out = []
     seen: dict = {}
+    # {class: [[property IRI]]}: the groups of the sh:or on its nodes
+    groups: dict = {}
     for shape in found:
         if not shape.target_class:
             continue
@@ -184,8 +201,15 @@ def classes(profile, made, spec_raw: Optional[dict], files: list,
                 "label": (terms.get(ontology.identifier(klass) or "") or {})
                 .get("label"),
                 "written": made.written(klass),
-                "address": made.address(klass), "properties": []}
+                "address": made.address(klass), "properties": [],
+                "one_of": [], "constraints": []}
             out.append(seen[klass])
+        # several shapes of one class may say the same sh:or: one group
+        for group in shape.one_of:
+            if list(group) not in groups.setdefault(klass, []):
+                groups[klass].append(list(group))
+                seen[klass]["one_of"].append(
+                    [curie(path, prefixes or {}) for path in group])
         # several shapes may target one class, and one shape may say several
         # things of one path: it is one box with one row per property
         known = {one["path"]: one for one in seen[klass]["properties"]}
@@ -201,12 +225,17 @@ def classes(profile, made, spec_raw: Optional[dict], files: list,
             else:
                 known[one["path"]] = one
                 seen[klass]["properties"].append(one)
+    for klass, said in groups.items():
+        if said:
+            seen[klass]["constraints"].append(
+                _one_of_constraint(klass, said, made))
     for klass, said in made.classes.items():
         if klass not in seen:
             out.append({"id": klass, "shape": None, "label": None,
                         "iri": None, "curie": None,
                         "written": made.written(klass),
-                        "address": made.address(klass), "properties": []})
+                        "address": made.address(klass), "properties": [],
+                        "one_of": [], "constraints": []})
     return {"classes": out, "skipped": None}
 
 

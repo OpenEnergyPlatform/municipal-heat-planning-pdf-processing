@@ -14,9 +14,10 @@ what the page draws and decides what a save writes:
 - `view`: every class of the shapes with its properties, each with the
   fields that write it, its constraints (required, at most so many, a closed
   list, a class, a datatype) and the effect the graph file gives each; per
-  class whether it is written and its address rule; the rules the writer
-  declares, each with its value, what it inherits and the setting that wins
-  over it.
+  class the groups of properties one of which the shapes demand of a node
+  (an sh:or on the node) with that constraint and its effect, whether the
+  class is written and its address rule; the rules the writer declares,
+  each with its value, what it inherits and the setting that wins over it.
 - `judge` and `save`: an edited graph file, read by the run's own parser.
   A profile that extends another writes only what differs from what it
   inherits, and the rules its writer reads.
@@ -75,7 +76,10 @@ def classes(profile, made, spec_raw: Optional[dict], files: list,
 ```
 
 {"classes": [...], "skipped": why or None}: the shapes' classes with
-their properties and the constraints.
+their properties and the constraints; per class also the groups of
+properties one of which the shapes demand of a node (an sh:or on the
+node, `Shape.one_of`), each as the curies of its properties, and that
+constraint with its effect.
 
 ### view
 

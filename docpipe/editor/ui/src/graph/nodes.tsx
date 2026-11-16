@@ -1,6 +1,7 @@
 /* How a field of the harvest, a box and an arrow look on the canvas of the Graph tab. A box shows the properties its
-   class has in the shapes that an arrow writes or that are required; the rest open with "more". A required property no
-   arrow leads to is red. */
+   class has in the shapes that an arrow writes or that the shapes demand, on their own or as one of a group; the rest
+   open with "more". A required property no arrow leads to is red, and so is every property of a group no arrow leads to
+   any of. */
 import { createContext, useContext } from 'react';
 import { BaseEdge, EdgeLabelRenderer, getBezierPath, Handle, Position, type EdgeProps, type NodeProps } from '@xyflow/react';
 import { ActionIcon, Badge, Box, Group, Menu, Text, Tooltip } from '@mantine/core';
@@ -9,6 +10,11 @@ import {
 } from '@tabler/icons-react';
 import { t, tn, tr, useLang } from '../lib/i18n';
 import { boxTitle, isRed, type BoxData, type EdgeData, type FieldData, type GraphData, type Row } from './model';
+
+/* what the shapes demand of a property of a group: one of them, each group named by its properties */
+const oneOfHint = (r: Row) => r.oneOf.map(g => g.met
+  ? t('Required by the shapes: at least one of {properties}', { properties: g.labels.join(', ') })
+  : t('Required by the shapes: at least one of {properties}, and no arrow leads to any of them yet', { properties: g.labels.join(', ') })).join('\n');
 
 export interface GraphCtx {
   selectBox(id: string): void;
@@ -59,6 +65,7 @@ function RowView({ r, box, bad }: { r: Row; box: BoxData['box']; bad: boolean })
       <Group gap={6} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
         <Text size="sm" lineClamp={1} fw={r.used.length ? 600 : 400} c={red ? 'red' : r.used.length ? undefined : 'dimmed'} title={r.curie}>{r.label}</Text>
         {r.required && <Tooltip label={red ? t('Required by the shapes, and no arrow leads to it yet') : t('Required by the shapes')}><Badge size="xs" color={red ? 'red' : 'gray'} variant={red ? 'filled' : 'light'}>{t('required')}</Badge></Tooltip>}
+        {!r.required && r.oneOf.length > 0 && <Tooltip label={oneOfHint(r)} multiline w={280}><Badge size="xs" color={red ? 'red' : 'gray'} variant={red ? 'filled' : 'light'}>{t('1 of {n} required', { n: r.oneOf[0].labels.length })}</Badge></Tooltip>}
         {r.outside && <Tooltip label={t('The shapes do not give this class this property.')}><IconAlertTriangle size={14} color="var(--mantine-color-orange-6)" /></Tooltip>}
         {effects.length > 0 && <Tooltip label={effects.map(k => k.component + ': ' + tr(k.effect)).join('\n')} multiline><Badge size="xs" variant="outline" color="orange">{effects.length}</Badge></Tooltip>}
       </Group>
