@@ -28,7 +28,7 @@ import contextlib
 import contextvars
 import json
 from dataclasses import dataclass
-from typing import Optional
+from typing import Callable, Optional
 
 from . import phrases as phrase_files
 from .profile import ENV_VAR, Profile, active_profile
@@ -65,7 +65,7 @@ class Hole:
 REQUIRED = frozenset({
     "shape_rule", "reasoning_only", "empty", "no_object", "syntax",
     "outside_text", "not_an_object", "key_missing", "key_not_a_list",
-    "key_not_text",
+    "key_not_text", "asked_anew", "syntax_shown", "outside_text_shown",
 })
 
 # What a comment said above a sentence while the sentences were tables in
@@ -120,6 +120,54 @@ def say(phrase: str, /, **values) -> str:
     """One sentence of the ambient profile, with its names filled in."""
     text = phrases()[phrase]
     return text.format(**values) if values else text
+
+
+class Said(str):
+    """A correction that quotes the reply it is about (`read`'s sentence for
+    a reply that broke), and *shown*, the same without the quote, for the
+    request that shows the reply as a turn of its own (`again`). Still the
+    plain sentence for everything that only reads it."""
+    shown: str
+
+    def __new__(cls, text: str, shown: str):
+        made = super().__new__(cls, text)
+        made.shown = shown
+        return made
+
+
+def with_note(messages: list, note: str) -> list:
+    """*messages* with *note* said at their end: in the last message where
+    that is the user's, else as a message of its own."""
+    last = messages[-1] if messages else None
+    if not last or last.get("role") != "user":
+        return [*messages, {"role": "user", "content": note}]
+    content = last.get("content")
+    joined = (f"{content}\n\n{note}" if isinstance(content, str)
+              else [*(content or ()), {"type": "text", "text": note}])
+    return [*messages[:-1], {**last, "content": joined}]
+
+
+def again(base: list, reply, correction: str, cause: str,
+          fits: Optional[Callable[[list], bool]] = None,
+          echo: bool = True) -> list:
+    """The messages of the next attempt after a reply that could not be read
+    (owner decision 2026-11-17: nothing is cut): *base*, the whole reply as
+    the model's turn (*echo*, else none) and what was wrong with it
+    (*correction*; where the reply is shown, a `Said` correction leaves its
+    quote out, so the reply is in the request once), where that fits the
+    window (*fits*; without one it fits). Else *base* asked anew, its cause
+    named in one sentence at its end (`asked_anew`), and neither the reply
+    nor anything quoted from it."""
+    if echo:
+        correction = getattr(correction, "shown", correction)
+        tried = [*base, {"role": "assistant",
+                         "content": reply if isinstance(reply, str) else ""},
+                 {"role": "user", "content": correction}]
+    else:
+        tried = with_note(list(base), correction)
+    if fits is None or fits(tried):
+        return tried
+    return with_note(list(base), say("asked_anew", cause=cause) + _shape())
 
 
 def loads_object(text) -> Optional[dict]:
@@ -204,13 +252,17 @@ def read(choice, key: Optional[str] = None, of: type = list) -> tuple:
         try:
             _obj, end = _DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
-            around = text[max(start, exc.pos - 60):exc.pos + 20]
-            return None, "syntax", say(
-                "syntax", position=exc.pos - start, message=exc.msg,
-                around=around) + _shape()
+            # The whole reply, with the place where it breaks named
+            # (owner decision 2026-11-17: nothing is cut).
+            return None, "syntax", Said(
+                say("syntax", position=exc.pos - start, message=exc.msg,
+                    around=text) + _shape(),
+                say("syntax_shown", position=exc.pos - start,
+                    message=exc.msg) + _shape())
         extra = (text[:start] + text[end:]).strip()
-        return None, "outside_text", say("outside_text",
-                                         extra=extra[:200]) + _shape()
+        return None, "outside_text", Said(
+            say("outside_text", extra=extra) + _shape(),
+            say("outside_text_shown") + _shape())
     # It parsed, and `loads_object` did not take it: not an object.
     return None, "not_an_object", say(
         "not_an_object", kind=type(parsed).__name__) + _shape()

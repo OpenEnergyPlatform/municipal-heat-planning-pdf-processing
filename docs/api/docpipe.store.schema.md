@@ -95,7 +95,9 @@ def migrate(connection: sqlite3.Connection) -> int
 ```
 
 Bring a database of an older format up to this one. Returns the
-format it had. Adds what is missing and touches nothing that is there.
+format it had. Adds what is missing and touches nothing that is there;
+format 2 writes Embeddings anew with every row it held
+(`_pieces_of_embeddings`).
 
 ### note_embedding
 

@@ -20,11 +20,22 @@ is one request over the pool, and a passage's score is the sentences' scores
 put together as the rule `sentence_fusion` says (`fused`, the one place the
 vector search uses too).
 
+The reranker reads pieces, not whole passages (owner decision 2026-11-17,
+"**Nichts** kürzen, einfach ggf. clever aufteilen"): a passage is cut into
+the pieces the harvest reads (`pieces_of`: a section's heading with its
+lines, a table's title, head, lines under it and rows its rows stand under
+with its own rows), each piece is scored with the sentence, and the passage
+counts with its best piece. A piece the harvest hands over (an owner of a
+passage and a place) is read as it is. A pair of sentence and piece that
+does not fit the server's window (`window_for`: its `max_model_len`, the
+frame of a pair as the server counts it, its tokenizer) is split into parts,
+each with the lines its piece carries, and the piece counts with its best
+part. Nothing is cut, by us or by the server: no request asks it to cut.
+
 What a passage is shown as is the caller's: its text, and the picture of a
 figure where the run attaches figures (`image_of`) and the rule
-`rerank_with_images` allows it. The server cuts a pair that outgrows the
-model to the model's length (rule `rerank_truncate_tokens`, -1: the model's
-own), so no length of our own decides what it reads.
+`rerank_with_images` allows it; every piece of a figure goes with its
+picture.
 
 Every value is read when it is used (`docpipe.rules`), so a step of the flow
 may set its own: the model, the pool, the waiting time.
@@ -204,6 +215,109 @@ def traced(document_id, reranker: "Reranker", probes: list, sources: list,
         log.debug("rerank: trace dropped: %s", exc)
 
 
+# -- pieces and the window ------------------------------------------------------
+
+_WINDOWS: dict = {}
+_ASKED: dict = {}
+# One lookup per server and model at a time; a caller that comes while it
+# runs waits for its answer.
+_LOOKUPS: dict = {}
+_WINDOWS_LOCK = threading.Lock()
+
+
+def window_for(base: str, model: str, api_key: str,
+               post: Callable) -> Optional[object]:
+    """What one pair holds on the reranker at *base* (`docpipe.window.
+    Window`): the window the server reports for *model*; the frame of a
+    pair, the tokens the server counted for a pair of one character each;
+    its tokenizer for a text; a picture at most as the model's processor
+    scales one. Kept per server and model once learned whole. A window or
+    frame that could not be learned (no window reported, a failed probe) is
+    not kept: None now, and asked again after the interval the chat window
+    uses (`window.ASK_AGAIN_S`), while pairs go as they are. One
+    caller asks at a time; the others wait for its answer."""
+    from docpipe.window import ASK_AGAIN_S
+    key = (base, model)
+    with _WINDOWS_LOCK:
+        if key in _WINDOWS:
+            return _WINDOWS[key]
+        lookup = _LOOKUPS.setdefault(key, threading.Lock())
+    with lookup:
+        with _WINDOWS_LOCK:
+            if key in _WINDOWS:
+                return _WINDOWS[key]
+            asked = _ASKED.get(key)
+            if asked is not None \
+                    and time.monotonic() - asked < ASK_AGAIN_S:
+                return None
+            _ASKED[key] = time.monotonic()
+        made = _learn_window(base, model, api_key, post)
+        if made is not None:
+            with _WINDOWS_LOCK:
+                _WINDOWS[key] = made
+        return made
+
+
+def _learn_window(base: str, model: str, api_key: str,
+                  post: Callable) -> Optional[object]:
+    """The `window_for` of a server and model as the server says it now;
+    None where it says no window or counts no pair."""
+    from docpipe import window as windows
+    from docpipe.embedding.config import IMAGE_FACTOR, IMAGE_MAX_PIXELS
+    limit = windows.served_limit(base, model, api_key)
+    if not limit:
+        log.warning("rerank: %s reports no window; pairs go as they are "
+                    "until it is asked again", base)
+        return None
+    try:
+        answer = post({"model": model, "query": ".", "documents": ["."]})
+        frame = int((answer.get("usage") or {}).get("prompt_tokens") or 0)
+    except Exception as exc:
+        log.warning("rerank: %s counted no pair (%s); pairs go as they are "
+                    "until it is asked again", base, exc)
+        return None
+    if frame <= 0:
+        log.warning("rerank: %s counted no tokens for a pair; pairs go as "
+                    "they are until it is asked again", base)
+        return None
+    most = IMAGE_MAX_PIXELS // (IMAGE_FACTOR * IMAGE_FACTOR) + 2
+    return windows.Window(
+        limit=int(limit), frame=frame,
+        count=windows.server_counter(base, model, api_key),
+        picture=lambda _image: most)
+
+
+def pieces_of(source) -> list:
+    """[(place, piece)] of a passage as the reranker reads it: the pieces
+    the harvest cuts it into (`docpipe.chunking.pieces.IndexPiece`, the
+    flow's `piece_lines` lines each), a section's with its heading, place
+    the piece's number; a piece the harvest hands over (an owner id that is
+    a passage and a place) is itself, as a `units.Chunk` where it brings
+    one, else its text."""
+    if not isinstance(source.owner_id, (int, str)):
+        chunk = getattr(source, "chunk", None)
+        if chunk is not None:
+            from docpipe.chunking.pieces import IndexPiece
+            return [((), IndexPiece(chunk))]
+        return [((), None)]
+    from docpipe.chunking.pieces import IndexPiece, _with_heading, piece_lines
+    from docpipe.extraction import units
+    from docpipe.extraction.pipeline import Source
+    provenance = dict(getattr(source, "provenance", None) or {})
+    kind = source.owner_kind
+    heading = ((provenance.get("section_title") or "") if kind == "section"
+               else (provenance.get("title") or ""))
+    text = _with_heading(heading, source.text or "")
+    passage = units.passage_of(Source(kind, source.owner_id, text,
+                                      provenance))
+    chunks = units.chunks_of(passage, piece_lines())
+    if not chunks:
+        return [((), None)]
+    return [((chunk.index,), IndexPiece(
+        chunk, "", heading.strip() if kind == "section" else ""))
+        for chunk in chunks]
+
+
 def document_of(source, image: Optional[dict]):
     """A passage as /rerank takes it: its text, the picture before the text
     where it has one (as the embedder lays out an item)."""
@@ -306,7 +420,9 @@ class Reranker:
                  api_key: str = "", post: Optional[Callable] = None,
                  image_of: Optional[Callable] = None,
                  pool_rule: str = "rerank_pool",
-                 store: Optional[Scores] = None):
+                 store: Optional[Scores] = None,
+                 window: Optional[object] = None):
+        self._window = window
         self._base_url = base_url
         self._model = model
         self._pool = pool
@@ -347,17 +463,67 @@ class Reranker:
         response.raise_for_status()
         return response.json()
 
+    def window(self):
+        """What one pair holds on this reranker's server (`window_for`), or
+        the window this reranker was given. A reranker given its own way of
+        sending (*post*) is given its server's window with it, or none: it
+        asks no other server."""
+        if self._window is not None or self._post is not None:
+            return self._window
+        return window_for(self.base_url, self.model, self.api_key, self.post)
+
+    def units_of(self, probe: str, source, image) -> list:
+        """[(place, text)] that *source* is read as for *probe*: each of
+        its pieces (`pieces_of`), whole where the pair fits the window,
+        else in parts, each with the lines its piece carries; place is the
+        piece's number and the part's."""
+        from docpipe.window import TooLong
+        window = self.window()
+        out: list = []
+        for place, piece in pieces_of(source):
+            text = (source.text or "") if piece is None else piece.render()
+            if window is None or _pair_fits(window, probe, text, image):
+                out.append((place + (0,), text))
+                continue
+            if piece is None:
+                out.append((place + (0,), text))
+                log.warning("rerank: a piece of %s %s does not fit the "
+                            "window and has no lines to split by; it goes "
+                            "as it is", source.owner_kind, source.owner_id)
+                continue
+            try:
+                parts = piece.parts(
+                    lambda part: _pair_fits(window, probe, part, image),
+                    f"{source.owner_kind} {source.owner_id}")
+            except TooLong as exc:
+                log.warning("rerank: %s; it goes whole", exc)
+                out.append((place + (0,), text))
+                continue
+            out.extend((place + (at,), part.text)
+                       for at, part in enumerate(parts))
+        return out
+
     def scores(self, document_id, probe: str, sources: list) -> list:
-        """The reranker's score of each of *sources* for *probe*."""
+        """The reranker's score of each of *sources* for *probe*: of its
+        best piece, and of a piece its best part (`units_of`)."""
         if self._document != document_id:
             self.store.enter(self._document, document_id)
             self._document = document_id
         model = self.model
         pictures = bool(rules.get("rerank_with_images"))
-        cut = int(rules.get("rerank_truncate_tokens"))
-        key = lambda s: (model, pictures, cut, probe, s.owner_kind,
-                         s.owner_id)
-        by_key = {key(s): s for s in sources}
+        # Every piece (and part) a pair of its own, scored once for the
+        # document; a passage counts with its best.
+        unit_keys: list = []
+        by_key: dict = {}
+        for source in sources:
+            image = self.image_of(source) if pictures else None
+            keys = []
+            for place, text in self.units_of(probe, source, image):
+                key = (model, pictures, probe, source.owner_kind,
+                       source.owner_id) + tuple(place)
+                keys.append(key)
+                by_key.setdefault(key, (text, image))
+            unit_keys.append(keys)
         first = True
         while True:
             mine, waits = self.store.claim(document_id, list(by_key))
@@ -374,9 +540,8 @@ class Reranker:
                     answer = self.post({
                         "model": model, "query": probe,
                         "documents": [document_of(
-                            s, self.image_of(s) if pictures else None)
-                            for s in missing],
-                        "truncate_prompt_tokens": cut})
+                            _Text(text), image)
+                            for text, image in missing]})
                     tokens = (answer.get("usage") or {}).get(
                         "prompt_tokens")
                     usage.add(model, input_tokens=int(tokens or 0),
@@ -390,9 +555,10 @@ class Reranker:
                     self.store.release(document_id, mine)
             for event in waits:
                 event.wait()
-            scores = [self.store.get(document_id, key(s)) for s in sources]
-            if all(score is not None for score in scores):
-                return scores
+            got = [[self.store.get(document_id, key) for key in keys]
+                   for keys in unit_keys]
+            if all(score is not None for keys in got for score in keys):
+                return [max(keys) for keys in got]
             if mine and not waits:
                 raise ValueError("the reranker left passages without a "
                                  "score")
@@ -424,6 +590,26 @@ class Reranker:
         traced(document_id, self, probes, sources, pool, rest, scored, seed,
                drawn, upto, tally, started)
         return ranked + rest
+
+
+class _Text:
+    """A text as `document_of` reads a passage."""
+
+    def __init__(self, text: str):
+        self.text = text
+
+
+def _pair_fits(window, probe: str, text: str, image) -> bool:
+    """Does a pair of *probe* and *text*, with *image* where it has one,
+    fit *window*: their bytes where those fit, else their counted tokens."""
+    room = window.room((image,) if image is not None else ())
+    if room < 0:
+        return False
+    size = len((probe or "").encode("utf-8")) + len((text or "").encode("utf-8"))
+    if size <= room:
+        return True
+    return window.tokens(probe or "", None) + window.tokens(text or "", None) \
+        <= room
 
 
 def make_reranker(image_of: Optional[Callable] = None,

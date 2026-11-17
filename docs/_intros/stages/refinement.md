@@ -77,11 +77,11 @@ the model): a profile that lacks one of the sentences ends the run there
 with a `LookupError`, not in the middle of the first document.
 
 `max_request_tokens()` is the worst case of one window: the prompt, a full
-window of maximum-size sections and one largest reply
-(`largest_reply_tokens()`). That reply is `REFINE_REPLY_CEILING` tokens (16,384
+window of maximum-size sections, the whole section before it as context and one
+largest reply (`largest_reply_tokens()`). That reply is `REFINE_REPLY_CEILING` tokens (16,384
 by default) in window mode and `LLM_MAX_TOKENS` tokens (8,192 by default) in
 edit mode, whose replies are sized by that setting and not by the window. It
-prints 28,543 tokens with the `kwp` profile and 29,065 with `scenarios`.
+prints the number for the profile in force.
 `assert_serving` checks the served window against it and keeps the window for
 the run (`llm_preflight.served_window`; none where the server reports none, or
 where no preflight ran). What the window holds beyond the budget is what a unit
@@ -106,8 +106,8 @@ Before any window is built, `refine_sections` calls `split_oversized`.
 `content` exactly, the precondition for a safe cut along a segment
 boundary. `_ask_all_cuts` fires every document's split requests at once,
 concurrently, before the refinement windows are dispatched. The model sees only
-the section's title and `outline()`, a compact per-segment listing, and
-answers with cut positions and part titles; `split_section` applies them,
+the section's title and `outline()`, one numbered line per segment with its
+whole text, and answers with cut positions and part titles; `split_section` applies them,
 and `_enforce_max` re-cuts any part still over the limit, subdividing an
 oversized segment with `_subdivide_segments` when there is no boundary to
 cut on. A section whose provenance no longer matches its content is left
@@ -137,9 +137,17 @@ output (see A window the server did not serve).
 `refine_sections` groups the bounded sections into consecutive windows of
 `WINDOW_SIZE` and submits each to `_ask_window`, which calls `_call_llm`, on a `ThreadPoolExecutor`
 sized to `LLM_NUM_PARALLEL`. Every window but the first also receives
-`prev_ctx`, the previous window's last section, passed read-only so the
+`prev_ctx`, the previous window's last section shown whole and read-only, so the
 model can recognise a heading split across the boundary and mark the new
-window's first section `merge_into_previous` instead of a new section.
+window's first section `merge_into_previous` instead of a new section. A window
+that does not fit the served window with its context and its reply is asked in
+halves (`_window_fits`), and a split request whose outline does not fit is
+outlined in two parts at a block boundary, the cuts joined (`_ask_halves`). Both
+checks (`refine._fits_window`, `split._outline_fits`) go through
+`llm_preflight.stage_fits`: the window the server reported at the preflight, the
+frame from the server's own chat template, the texts bounded by their UTF-8
+bytes and counted by the server's `/tokenize` only where the bytes do not fit,
+and the reply room taken off (see [core](core.md)).
 
 ### The LLM call
 
@@ -161,10 +169,12 @@ and a list with no object in it (an empty one too) is a hole named
 A reply that is not that object is asked again, up to `MAX_RETRIES`
 attempts in all, with `_backoff` between them (`min(2 * attempt, 10)`
 seconds). The next request is the original one, then an assistant turn with
-a bounded echo of the bad reply (`_echo`, at most 400 leading and 200
-trailing characters; empty when the reply had no text), then a user turn
-that names the cause in the profile's words (`prompts/reading/phrases.json`) and repeats
-the shape that was asked for. The cause is one of:
+the whole bad reply, then a user turn
+that names the cause in the profile's words (`prompts/reading/phrases.json`; the
+place and the message only, as the reply is in the request once) and repeats
+the shape that was asked for. Where that request does not fit the served window,
+the original request is asked anew with the cause named in one sentence
+(`reading.again`, `_reask`). The cause is one of:
 
 | cause | the reply was |
 |---|---|
@@ -456,7 +466,6 @@ file layout).
 | `SECTION_SPLIT_ENABLE` | constant | `True` | whether oversized sections are split at all | `config.py` |
 | `SECTION_MAX_WORDS` | constant | `1000` | threshold above which a section is split | `config.py` |
 | `SECTION_TARGET_WORDS` | constant | `600` | size a split aims each part at | `config.py` |
-| `SECTION_OUTLINE_WORDS` | constant | `14` | words per segment shown in the split outline | `config.py` |
 | `split_temperature()` | prompt front matter, float | `0.1` (both profiles) | sampling temperature for the section-split LLM call | `split.py` |
 | `split_max_tokens()` | prompt front matter, int | `1024` (both profiles) | reply token ceiling for the section-split LLM call | `split.py` |
 | `TITLE_CLEANUP_ENABLE` | constant | `True` | whether the prefix strip and ALL-CAPS capitalization run | `config.py` |

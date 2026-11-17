@@ -102,23 +102,6 @@ NUMBERS = (
            "head is shown with each of its chunks. A larger number sends "
            "fewer, longer chunks; a smaller number sends more, shorter "
            "chunks and more requests."),
-    Number("title_page_lines", 1,
-           "The number of lines from the document's first page that a "
-           "request shows as its title page. The title page tells the model "
-           "which document it reads. "
-           "A larger number shows more of the first page in every request "
-           "that uses it."),
-    Number("headings", 0,
-           "The number of headings a request shows above the line it asks "
-           "about, the nearest heading last. Headings tell the model which "
-           "section a line belongs to. A larger number shows more of the "
-           "outline above the line; 0 shows no heading."),
-    Number("list_meanings", 0,
-           "The longest list that is shown with what each entry means. A "
-           "longer list shows only the names of its entries. A list whose "
-           "entries belong to groups is then asked in two steps, first the "
-           "group, then the entry. A larger number explains more lists "
-           "entry by entry and makes their requests longer."),
     Number("search_pieces", 1,
            "The number of chunks a search shows when it looks for an open "
            "dimension or for a field asked once per document. A larger "
@@ -185,10 +168,6 @@ SEARCH_NUMBERS = ("search_pieces", "search_tables", "search_figures",
 
 STEPS = {
     "piece_lines": ("split",),
-    "title_page_lines": ("document",),
-    "headings": ("split", "find", "coord", "phrase", "search",
-                 "work_coordinate", "works", "last_year", "about"),
-    "list_meanings": ASKING + ("order", "each field", "each value"),
     "search_pieces": ("order",),
     "search_tables": ("order",),
     "search_figures": ("order",),
@@ -218,9 +197,6 @@ BOX_KEYS = ("id", "box", "preset", "set", "own", "rules", "when", "off",
 class Numbers:
     """The numbers one run reads with, and where each comes from."""
     piece_lines: int
-    title_page_lines: int
-    headings: int
-    list_meanings: int
     search_pieces: int
     search_tables: int
     search_figures: int

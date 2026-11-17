@@ -63,7 +63,8 @@ def max_request_tokens() -> int
 ```
 
 Worst case for one window: prompt + a full window of maximum-size
-sections + the largest reply we would ever ask for, once.
+sections + the whole section before it as context (a section is at most
+SECTION_MAX_WORDS) + the largest reply we would ever ask for, once.
 
 A section that cannot be split any further, whose reply was cut off, is
 asked once more with more room, but the room is bounded by what the served

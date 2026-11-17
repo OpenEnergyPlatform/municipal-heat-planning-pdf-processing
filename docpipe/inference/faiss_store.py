@@ -162,6 +162,9 @@ def prepare_document(conn: sqlite3.Connection, global_index: faiss.Index,
         rows_per_owner[owner] = rows_per_owner.get(owner, 0) + 1
     return {"faiss_ids": faiss_ids, "owner_of": owner_of,
             "rows_per_owner": rows_per_owner,
+            # Which piece each vector is: the entries of the index are
+            # pieces, and a hit says which of its owner's pieces was best.
+            "place_of": db.pieces_of(conn, faiss_ids),
             "index": build_subindex(global_index, id_to_pos, faiss_ids)}
 
 
@@ -181,6 +184,14 @@ def search_prepared(prepared: dict, query_vecs) -> tuple:
     return sub_index.search(queries, sub_index.ntotal)
 
 
+def _walk(scores_row, positions_row, chunk: int = 4096):
+    """(score, position) down one ranking, turned into Python objects a
+    chunk at a time, so a walk that stops early converts only what it read."""
+    for start in range(0, len(scores_row), chunk):
+        yield from zip(scores_row[start:start + chunk].tolist(),
+                       positions_row[start:start + chunk].tolist())
+
+
 def rank_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
                   top_k: int,
                   content_fetcher: Optional[Callable] = None,
@@ -194,23 +205,18 @@ def rank_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
     fetch = content_fetcher or db.fetch_owner_content
     faiss_ids = prepared["faiss_ids"]
     owner_of = prepared["owner_of"]
-    rows_per_owner = prepared["rows_per_owner"]
+    place_of = prepared.get("place_of") or {}
 
     taken: set = set(exclude or ())
-    rows_taken = sum(rows_per_owner.get(o, 0) for o in taken)
-    total = len(faiss_ids)
     out: list[list[dict]] = []
     for i in range(len(scores)):
-        # Only the leading slice is turned into Python objects. At most
-        # rows_taken of those rows are excluded, so top_k + rows_taken of them
-        # always hold top_k that are not — the same rows a pre-filtered search
-        # would have returned.
-        window = min(total, top_k + rows_taken)
-        row_scores = scores[i][:window].tolist()
-        row_positions = positions[i][:window].tolist()
+        # top_k counts owners, not vectors: an owner has one vector per
+        # piece, so the walk goes on until top_k owners that are not taken
+        # are found or the ranking is exhausted. It is turned into Python
+        # objects in chunks, as far as it is walked.
         best: dict[tuple[str, int], float] = {}
-        kept = 0
-        for score, pos in zip(row_scores, row_positions):
+        best_id: dict = {}
+        for score, pos in _walk(scores[i], positions[i]):
             if pos < 0:
                 continue
             owner = owner_of[faiss_ids[pos]]
@@ -218,21 +224,22 @@ def rank_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
                 continue
             # Dedup happens POST-search on the owner: table_text and table_vl
             # point at one Table row, and which scores higher is not known
-            # until the search is done.
+            # until the search is done. An owner counts with its best piece.
+            if owner not in best and len(best) == top_k:
+                break
             if owner not in best or score > best[owner]:
                 best[owner] = float(score)
-            kept += 1
-            if kept == top_k:
-                break
+                best_id[owner] = faiss_ids[pos]
         hits: list[dict] = []
         for (owner_kind, owner_id), score in sorted(
                 best.items(), key=lambda kv: kv[1], reverse=True):
             content = fetch(conn, owner_kind, owner_id)
             if content is None:
                 continue
-            hits.append({"score": score, **content})
+            hits.append(db.with_piece(
+                {"score": score, **content},
+                place_of.get(best_id.get((owner_kind, owner_id)))))
         taken.update(best)
-        rows_taken += sum(rows_per_owner.get(o, 0) for o in best)
         out.append(hits)
     return out
 
@@ -276,6 +283,7 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
     fetch = content_fetcher or db.fetch_owner_content
     faiss_ids = prepared["faiss_ids"]
     owner_of = prepared["owner_of"]
+    place_of = prepared.get("place_of") or {}
     skip = set(exclude or ())
     how = rules.get("sentence_fusion")
     kinds = set(rules.get("search_kinds"))
@@ -291,19 +299,28 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
     # owners have a higher best score. The cap then drops it, and no question
     # ever gets to read what it asked for.
     within: dict = {}
+    # The vector each owner scored best with: which of its pieces.
+    best_id: dict = {}
+    best_score: dict = {}
     for i in range(len(scores)):
-        row = zip(scores[i].tolist(), positions[i].tolist())
-        for taken, (score, pos) in enumerate(row):
-            if cut and taken >= cut:
-                break
+        # The cut counts owners, not vectors: one owner has a vector per
+        # piece, and a long table must not use up the places of the rest.
+        owners_in: set = set()
+        for score, pos in _walk(scores[i], positions[i]):
             if pos < 0:
                 continue
             owner = owner_of[faiss_ids[pos]]
             if owner in skip or owner[0] not in kinds:
                 continue
+            if cut and owner not in owners_in and len(owners_in) == cut:
+                break
+            owners_in.add(owner)
             seen = within.setdefault(owner, {})
             if i not in seen or score > seen[i]:
                 seen[i] = float(score)
+            if owner not in best_score or score > best_score[owner]:
+                best_score[owner] = float(score)
+                best_id[owner] = faiss_ids[pos]
 
     # Mean and sum count what EVERY probe gave an owner, also below the cut.
     counted = within
@@ -331,10 +348,12 @@ def fuse_prepared(conn: sqlite3.Connection, prepared: dict, scores, positions,
         content = fetch(conn, owner_kind, owner_id)
         if content is None:
             continue
-        hits.append({"score": score, "rank": len(hits),
-                     "probe": (probes[probe_index] if probes
-                               and probe_index < len(probes) else probe_index),
-                     **content})
+        hits.append(db.with_piece(
+            {"score": score, "rank": len(hits),
+             "probe": (probes[probe_index] if probes
+                       and probe_index < len(probes) else probe_index),
+             **content},
+            place_of.get(best_id.get((owner_kind, owner_id)))))
     return hits
 
 
@@ -376,23 +395,36 @@ def retrieve(
     id_to_owner: dict[int, tuple[str, int]] = {r[0]: (r[2], r[3]) for r in rows}
 
     sub_index = build_subindex(global_index, id_to_pos, faiss_ids)
-    scores, positions = search_subindex(sub_index, query_vec, top_k)
 
-    # Highest score per (owner_kind, owner_id).
-    best: dict[tuple[str, int], float] = {}
-    for score, pos in zip(scores[0].tolist(), positions[0].tolist()):
-        if pos < 0:
-            continue
-        owner = id_to_owner[faiss_ids[pos]]
-        if owner not in best or score > best[owner]:
-            best[owner] = float(score)
-
-    ranked = sorted(best.items(), key=lambda kv: kv[1], reverse=True)
-
-    hits: list[dict] = []
-    for (owner_kind, owner_id), score in ranked:
-        content = fetch(conn, owner_kind, owner_id)
-        if content is None:
-            continue
-        hits.append({"score": score, **content})
-    return hits
+    # top_k counts owners, not vectors (one vector per piece): the search is
+    # asked for more vectors until top_k owners have a hit or the sub-index
+    # is exhausted, as hybrid.dense_corpus does.
+    asked = max(top_k, 1)
+    while True:
+        scores, positions = search_subindex(sub_index, query_vec, asked)
+        # Highest score per (owner_kind, owner_id): an owner counts with its
+        # best piece, and the hit says which piece that was.
+        best: dict[tuple[str, int], float] = {}
+        best_id: dict = {}
+        for score, pos in zip(scores[0].tolist(), positions[0].tolist()):
+            if pos < 0:
+                continue
+            owner = id_to_owner[faiss_ids[pos]]
+            if owner not in best or score > best[owner]:
+                best[owner] = float(score)
+                best_id[owner] = faiss_ids[pos]
+        ranked = sorted(best.items(), key=lambda kv: kv[1], reverse=True)
+        place_of = db.pieces_of(conn, list(best_id.values()))
+        hits: list[dict] = []
+        for (owner_kind, owner_id), score in ranked:
+            content = fetch(conn, owner_kind, owner_id)
+            if content is None:
+                continue
+            hits.append(db.with_piece(
+                {"score": score, **content},
+                place_of.get(best_id.get((owner_kind, owner_id)))))
+            if len(hits) == top_k:
+                break
+        if len(hits) >= top_k or asked >= sub_index.ntotal:
+            return hits
+        asked = min(sub_index.ntotal, asked * 4)

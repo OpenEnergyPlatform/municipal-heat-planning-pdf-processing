@@ -257,16 +257,15 @@ def _next_chunks(req, value, spec):
 
 def _hit_outline(req, value, spec):
     """The tables and figures of the sections the hits stand in that the
-    request does not show, as many as the rule `hit_outline` says, so that
-    the model can fetch one (owner decision 2026-11-17, from the literature
-    on reading long documents): [{"heading", "items": [{"id", "title"}]}],
-    sections and items in the order of the plan. Only where the answer may
+    request does not show, every one of them, so that the model can fetch
+    one (owner decision 2026-11-17, from the literature on reading long
+    documents; nothing is cut, same day): [{"heading", "items": [{"id",
+    "title"}]}], sections and items in the order of the plan. Only where the answer may
     fetch an item (an outline no answer can use is no help); the outline is
     no place to answer from, an answer is still a shown line."""
     from . import addressed
     plan, chunks = req.plan, req.chunks
-    limit = int(rules.get("hit_outline"))
-    if limit <= 0 or not chunks or plan is None \
+    if not chunks or plan is None \
             or not getattr(req.ask, "fetch", False) \
             or "item" not in addressed.fetches():
         return OMIT
@@ -301,11 +300,9 @@ def _hit_outline(req, value, spec):
     out: list = []
     for section in dict.fromkeys(s.owner_id for s in plan.sources
                                  if s.owner_kind == "section"):
-        if section in items and limit > 0:
-            taken = items[section][:limit]
-            limit -= len(taken)
+        if section in items:
             out.append({"heading": heading.get(section, ""),
-                        "items": taken})
+                        "items": items[section]})
     return out or OMIT
 
 
@@ -737,7 +734,7 @@ SHOWS: dict = {
                     "For each section the hits stand in, its heading and the "
                     "tables and figures of it not shown, each with its "
                     "placeholder and title, where the answer may fetch an "
-                    "item (rule hit_outline).", _hit_outline),
+                    "item.", _hit_outline),
     "headings": ("the headings above it",
                  "The headings above the chunk's first line (rule "
                  "show_headings).", _headings),
@@ -841,10 +838,10 @@ SHOWS: dict = {
                         "The node as JSON: its value and each filled "
                         "coordinate, with wording and quote.",
                         _part_of(_node_check, "node")),
-    "node_check_quotes": ("the text around the quotes of a node",
-                          "Each quote of the node with the characters "
-                          "around it in its passage (rule "
-                          "`node_check_context_chars`).",
+    "node_check_quotes": ("the pieces of the quotes of a node",
+                          "Each quote of the node with the whole piece of "
+                          "its passage that holds it, with the lines the "
+                          "piece carries (title, head, heading).",
                           _part_of(_node_check, "quotes")),
     "draft_field": ("the field as the draft writes it",
                     "A field of a draft spec: its name, what it means, its "

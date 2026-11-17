@@ -631,13 +631,9 @@ def test_a_row_that_names_no_coordinate_is_asked_its_value_or_all_fields():
         assert len(review.review_fields(PARAMETER, ["carrier"])) == 2
 
 
-def test_a_cell_of_the_working_list_holds_as_many_characters_as_the_rule():
-    text = "wort " * 100
-    assert len(review._cell(text)) <= 302
-    with rules.overlaid(review_cell_chars=10):
-        assert review._cell(text) == "wort wort" + " …"
-    with rules.overlaid(review_cell_chars=1000):
-        assert review._cell(text) == text.strip()
+def test_a_cell_of_the_working_list_holds_the_whole_passage():
+    text = "wort " * 1000
+    assert review._cell(text) == text.strip()
 
 
 def test_a_second_number_is_rounded_to_the_places_the_rule_says(monkeypatch):

@@ -87,11 +87,18 @@ examined into one exclude set, stopping at the first non-recheck turn
 `faiss_store.retrieve` rebuilds a small in-memory `IndexFlatIP` from the
 document's own candidate vectors (`build_subindex`,
 `faiss_store.py:60-94`), reconstructed out of the one global FAISS index
-stage 6 wrote; no per-document index exists on disk. A table's two
-embeddings (`table_text`, `table_vl`) can both surface for one row;
-dedup after the search keeps the higher-scoring one per
-`(owner_kind, owner_id)` (`faiss_store.py:308-365`); results are capped
-at `TOP_K`.
+stage 6 wrote; no per-document index exists on disk. The vectors are
+pieces of their owner ([chunking](chunking.md)), so several vectors, a table's
+text and picture vectors among them, can surface for one owner; dedup after the
+search keeps the best-scoring one per `(owner_kind, owner_id)`
+(`faiss_store.py:308-365`), and the owner counts with its best piece. A hit
+carries that piece as `piece` (`piece`, `part`, `page`, `first_line`,
+`last_line`, `embedding_type`; `db.pieces_of`), and a citation names that piece's
+page. `top_k` counts passages (owners), not vectors: `retrieve` asks the
+sub-index for more vectors, four times as many each round, until `top_k` owners
+have a hit or the sub-index is exhausted, and `rank_prepared` and `fuse_prepared`
+count owners against `top_k` and the cut in the same way. Results are capped at
+`TOP_K` passages.
 
 ### Searching by word as well, and over the whole corpus
 
@@ -116,7 +123,7 @@ build says so, removes what it built and leaves the old index as it was.
 Without an index, or for a question that is an image, the result is the search
 by meaning alone. `INFERENCE_LEXICAL=0` turns the word search off.
 
-The words of a question are lowered and not case-folded: the index folds what
+All words of a question are searched, none left out. The words are lowered and not case-folded: the index folds what
 it stores itself and keeps a sharp s, which case-folding would write as "ss".
 The word search asks for more than `top_k` passages (`OVERFETCH` times `top_k`,
 and the passages already examined besides), because what an earlier turn read
@@ -165,11 +172,33 @@ the reranker orders, and the reading still needs a line that holds the value.
 
 The top `MAX_CHUNK_ATTEMPTS` hits are packed by `chunker.pack_chunks`
 into batches under `ANSWER_CONTEXT_TOKENS` tokens each
-(`chunker.py:100-122`), greedily, one oversized hit getting its own chunk
-instead of truncation. Token counts come from the tokenizer
+(`chunker.py:100-122`), greedily, one oversized hit getting its own chunk,
+never cut. Token counts come from the tokenizer
 named by `LLM_TOKENIZER_ID`; a char/4 heuristic serves as an offline
 fallback only, since German prose runs 3.0 to 3.5 characters per token,
 denser than a flat divide by 4 assumes (`answer.py:313-318`).
+
+The conversation of a follow-up is passed with all its turns and whole answers.
+Where it no longer fits the model's window beside the rest, the turn is not asked,
+its fault has the cause `conversation_too_long`, and the page says so (UI word
+`conversation_full`). A reply that could not be read is shown back to the model
+whole with what was wrong; where that does not fit the window, the request starts
+anew with its cause named in one sentence (phrase `asked_anew`). This `again` is
+shared with refinement, visuals and the context sentence (`docpipe/reading.py`).
+Where the failed reply is shown whole as the model's own turn, the correction
+names only the place and the message (phrases `syntax_shown`,
+`outside_text_shown`), so the reply is in the request once. The chat's re-ask
+shows no such turn (`echo=False`), so its correction quotes the reply.
+
+Every fit check of the chat reserves the reply room actually asked for: after a
+reply was cut off the room is doubled, and the request is judged with that room
+(`_window_in_force`). A round of the answer loop whose code-run output does not
+fit the window is not cut: the largest outputs are left out one after the other,
+each replaced by one sentence with its size in characters and lines that asks the
+model to print less (phrase `exec_too_long` in the inference phrases of each
+profile), while the code and the older rounds stay. Where the round does not fit
+even then, though the request without any round would, the turn ends with the
+fault `conversation_too_long` and nothing more is sent.
 
 ### Several requests at once
 
@@ -432,7 +461,7 @@ Every phrase and label the loop wraps around the model comes from the
 active profile through `wording.py`. The sentences are a file of the profile,
 `prompts/inference/phrases.json`, laid over the file of the profile it extends
 (`docpipe/phrases.py`); `phrases()` checks the result against `REQUIRED`, a
-frozenset of 32 keys. `llm_client.py` calls `phrases()` on first use
+frozenset of 33 keys. `llm_client.py` calls `phrases()` on first use
 (`llm_client.py:108-110`), so this package imports with no active profile.
 A lookup with none does not fail: `wording.chat_profile` is the one place
 that falls back, to the built-in `default` profile, for the phrases, the
@@ -459,9 +488,10 @@ none revises an answer. The sentences that tell a model what was wrong with a
 reply that was not the one object are not in `prompts/inference/phrases.json` either. They are
 the profile's `prompts/reading/phrases.json`, the file
 `docpipe/reading.py` reads and that refinement, the visuals stage and page transcription
-use as well. `reading.REQUIRED` names its ten sentences (`shape_rule`,
+use as well. `reading.REQUIRED` names its thirteen sentences (`shape_rule`,
 `reasoning_only`, `empty`, `no_object`, `syntax`, `outside_text`,
-`not_an_object`, `key_missing`, `key_not_a_list`, `key_not_text`), and a profile
+`not_an_object`, `key_missing`, `key_not_a_list`, `key_not_text`, `asked_anew`,
+`syntax_shown`, `outside_text_shown`), and a profile
 lays its file over the one of the profile it extends, entry by entry
 (`reading.phrases`, `phrases.table`). The three stages check the sentences before
 their first request. The chat does not: it reads the sentences when a reply was not
@@ -781,7 +811,7 @@ back to the built-in profile and says so in the log. `llm_client.py` resolves
 its own phrases on first use (`llm_client.py:108-110`), so a profile that lacks a
 phrase surfaces at the first lookup of a turn and not as an import error. The
 profile's `prompts/reading/phrases.json` is looked up only when a reply was not the object
-asked for: a profile that lacks one of its ten sentences raises `LookupError`
+asked for: a profile that lacks one of its thirteen sentences raises `LookupError`
 naming it there (`reading.phrases`).
 
 Answers are deliberately not cached: a follow-up is context-dependent,

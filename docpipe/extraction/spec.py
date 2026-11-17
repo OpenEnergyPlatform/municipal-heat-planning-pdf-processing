@@ -234,8 +234,8 @@ class Axis:
     # several names is (`merged`).
     several: bool = False
     # uri -> the group an entry belongs to ("group" of an entry object, owner
-    # decision 2026-11-08): a list longer than a request shows with what
-    # each entry means is asked group first (`flow.Numbers.list_meanings`).
+    # decision 2026-11-08): a find that names a group has its list request
+    # choose among that group's entries (`addressed.Reader.entry`).
     groups: dict = field(default_factory=dict)
 
     def label_to_uri(self) -> dict:

@@ -8,10 +8,10 @@ The promises, each with a case that breaks it by construction:
 1. The outline names the tables and figures of the sections the hits stand in
    that the request does not show, AND not the shown ones, AND not those of
    other sections, AND each as its placeholder and title line, under the
-   heading of its section, AND as many as the rule `hit_outline` says,
-   headings not counted, AND none at 0.
-2. The payload carries "outline" only where the rule is above 0 AND the
-   answer may fetch an item (rule `fetches` has "item", the step may fetch).
+   heading of its section, AND every one of them (owner decision
+   2026-11-17: nothing is cut, no limit of the former rule `hit_outline`).
+2. The payload carries "outline" only where the answer may fetch an item
+   (rule `fetches` has "item", the step may fetch).
 3. The search preset shows it after the hits, and every prompt of a search
    has a part for it.
 """
@@ -107,11 +107,13 @@ def test_a_hit_in_another_table_leaves_that_table_out():
     assert ids(got) == [["p3_tbl0", "p4_tbl0", "p4_img0"]]
 
 
-def test_the_rule_cuts_the_items_and_zero_gives_none():
-    with rules.overlaid(hit_outline=2):
-        assert ids(outline(plan(), ("table", 3))) == [["p3_tbl1", "p4_tbl0"]]
-    with rules.overlaid(hit_outline=0):
-        assert outline(plan(), ("table", 3)) is shows.OMIT
+def test_every_unshown_item_is_listed_however_many_there_are():
+    many = [table(100 + i, f"p9_t{i}", 2, f"Tabelle {i}: Weitere")
+            for i in range(40)]
+    big = plan_of(SECTION, SHOWN, *many, ELSEWHERE, chunk_units=8)
+    got = outline(big, ("table", 3))
+    # the failure by construction: the former rule gave 8
+    assert ids(got) == [[f"p9_t{i}" for i in range(40)]]
 
 
 def test_an_item_shown_by_another_block_is_not_listed():
@@ -129,7 +131,7 @@ def test_no_outline_where_no_item_may_be_fetched():
         assert outline(plan(), ("table", 3)) is shows.OMIT
 
 
-def test_the_payload_carries_outline_only_above_zero():
+def test_the_payload_carries_outline_where_an_item_may_be_fetched():
     inputs = [spec for spec in presets.PRESETS["search"].inputs
               if spec["key"] == "outline"]
     assert inputs and inputs[0]["show"] == "hit_outline"
@@ -138,9 +140,8 @@ def test_the_payload_carries_outline_only_above_zero():
     p = plan()
     req = request_of(p, ("table", 3))
     assert "outline" in shows.build(req, inputs)
-    with rules.overlaid(hit_outline=0):
-        req = request_of(p, ("table", 3))
-        assert "outline" not in shows.build(req, inputs)
+    req = request_of(p, ("table", 3), fetch=False)
+    assert "outline" not in shows.build(req, inputs)
 
 
 @pytest.mark.parametrize("path", [

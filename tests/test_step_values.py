@@ -95,15 +95,15 @@ def test_numbers_of_the_flow_go_the_same_way():
     search = {"id": "search", "box": "ask", "preset": "search",
               "own": {"per_request": 3}}
     frame = {"id": "coords", "each": "coordinate",
-             "rules": {"search_per_request": 4, "headings": 1}}
+             "rules": {"search_per_request": 4, "follow_ups": 1}}
     run = flow.number(numbers, "search_per_request")
     with step(frame):
         assert flow.number(numbers, "search_per_request") == 4
         with step(search):
             assert flow.number(numbers, "search_per_request") == 3
-            assert flow.number(numbers, "headings") == 1
+            assert flow.number(numbers, "follow_ups") == 1
     assert flow.number(numbers, "search_per_request") == run
-    assert flow.number(numbers, "headings") == numbers.headings
+    assert flow.number(numbers, "follow_ups") == numbers.follow_ups
 
 
 def test_what_is_made_from_the_rules_is_made_per_step():

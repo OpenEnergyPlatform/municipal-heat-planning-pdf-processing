@@ -23,14 +23,20 @@ from transformers.cache_utils import Cache
 from qwen_vl_utils.vision_process import process_vision_info
 
 from docpipe import usage
-from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH
+from docpipe.embedding.config import (EMBEDDING_MAX_TOKEN_LENGTH,
+                                      IMAGE_FACTOR,
+                                      IMAGE_MAX_PIXELS as MAX_PIXELS)
 
 logger = logging.getLogger(__name__)
 
+
+class TooLongInput(ValueError):
+    """An input that holds more tokens than the model's window. Raised, never
+    cut: the index splits its entries to fit (`chunking.fit_inputs`)."""
+
+
 IMAGE_BASE_FACTOR = 16
-IMAGE_FACTOR = IMAGE_BASE_FACTOR * 2
 MIN_PIXELS = 4 * IMAGE_FACTOR * IMAGE_FACTOR
-MAX_PIXELS = 1800 * IMAGE_FACTOR * IMAGE_FACTOR
 FPS = 1
 MAX_FRAMES = 64
 FRAME_MAX_PIXELS = 768 * IMAGE_FACTOR * IMAGE_FACTOR
@@ -218,25 +224,6 @@ class Qwen3VLEmbedder:
             'attention_mask': inputs.get('attention_mask')
         }
 
-    def _truncate_tokens(self, token_ids: List[int], max_length: int) -> List[int]:
-        """Truncate token sequence to specified max length, preserving special tokens."""
-        if len(token_ids) <= max_length:
-            return token_ids
-
-        special_token_ids = set(self.processor.tokenizer.all_special_ids)
-        num_special = sum(1 for token_idx in token_ids if token_idx in special_token_ids)
-        num_non_special_to_keep = max_length - num_special
-
-        final_token_ids = []
-        non_special_kept_count = 0
-        for token_idx in token_ids:
-            if token_idx in special_token_ids:
-                final_token_ids.append(token_idx)
-            elif non_special_kept_count < num_non_special_to_keep:
-                final_token_ids.append(token_idx)
-                non_special_kept_count += 1
-        return final_token_ids
-
     def format_model_input(
         self,
         text: Optional[str] = None,
@@ -334,23 +321,48 @@ class Qwen3VLEmbedder:
         else:
             videos, video_metadata = None, None
 
+        # Never cut (owner decision 2026-11-17, "**Nichts** kürzen"): the
+        # index splits an entry that does not fit (`chunking.fit_inputs`), so
+        # an input over the window here is a split that went wrong, and it is
+        # an error that names it, not a vector of its beginning.
         inputs = self.processor(
             text=text, images=images, videos=videos, video_metadata=video_metadata,
-            truncation=True, max_length=self.max_length, padding=True,
+            truncation=False, padding=True,
             do_resize=False, return_tensors='pt',
             **video_kwargs
         )
 
-        if inputs["input_ids"].shape[1] >= self.max_length:
-            for i in range(inputs["input_ids"].shape[0]):
-                seq_len = int(inputs["attention_mask"][i].sum())
-                if seq_len >= self.max_length:
-                    logger.warning(
-                        "Input %d was truncated: %d tokens >= max_length %d",
-                        i, seq_len, self.max_length,
-                    )
+        if inputs["input_ids"].shape[1] > self.max_length:
+            over = [(i, int(inputs["attention_mask"][i].sum()))
+                    for i in range(inputs["input_ids"].shape[0])]
+            over = [(i, n) for i, n in over if n > self.max_length]
+            if over:
+                raise TooLongInput(
+                    f"{len(over)} input(s) hold more tokens than the window of "
+                    f"{self.max_length}: " + ", ".join(
+                        f"input {i} has {n}" for i, n in over)
+                    + "; nothing is cut, they are not embedded")
 
         return inputs
+
+    def window(self):
+        """What one input holds (`docpipe.window.Window`): the model's
+        length, the frame of an input of no text counted by this processor,
+        its tokenizer for a text, and a picture at most as the processor
+        scales it."""
+        from docpipe.window import Window, picture_tokens
+        # A list of conversations is a batch and gives a list of texts: the
+        # frame is the one text of the one conversation.
+        frame = self.processor.apply_chat_template(
+            [self.format_model_input(text=".")], add_generation_prompt=True,
+            tokenize=False)[0]
+        tokenizer = self.processor.tokenizer
+        frame_tokens = len(tokenizer(frame, add_special_tokens=False)["input_ids"])
+        most = self.max_pixels // (IMAGE_FACTOR * IMAGE_FACTOR) + 2
+        return Window(
+            limit=self.max_length, frame=frame_tokens,
+            count=lambda text: len(tokenizer(text, add_special_tokens=False)["input_ids"]),
+            picture=lambda path: picture_tokens(path, IMAGE_FACTOR, most))
 
     @staticmethod
     def _pooling_last(hidden_state: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
@@ -487,6 +499,11 @@ class MultiGPUEmbedder:
                 )
             )
         self.devices = devices
+
+    def window(self):
+        """What one input holds, as the first replica counts it
+        (`Qwen3VLEmbedder.window`); every replica is the same model."""
+        return self.replicas[0].window()
 
     def process(self, inputs: List[Dict[str, Any]], normalize: bool = True) -> torch.Tensor:
         """Embed ``inputs`` across all replicas, returned on the CPU in order."""

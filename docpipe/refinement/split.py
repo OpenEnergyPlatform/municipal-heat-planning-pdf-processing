@@ -38,13 +38,16 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from docpipe import prompts
+from docpipe.llm_preflight import stage_fits
 from docpipe.profile import profile_value
 from docpipe.reading import Hole
 
 from .config import (
+    LLM_API_KEY,
+    LLM_BASE_URL,
+    LLM_MODEL,
     LLM_NUM_PARALLEL,
     SECTION_MAX_WORDS,
-    SECTION_OUTLINE_WORDS,
     SECTION_SPLIT_ENABLE,
     SECTION_TARGET_WORDS,
 )
@@ -122,26 +125,47 @@ def needs_split(section: dict, max_words: int = SECTION_MAX_WORDS) -> bool:
     return word_count(content) > max_words
 
 
-def outline(section: dict, sample_words: int = SECTION_OUTLINE_WORDS, *,
-            start: int = 0, stop: Optional[int] = None) -> str:
-    """One numbered line per segment: its size and how it starts.
+def outline(section: dict, *, start: int = 0,
+            stop: Optional[int] = None) -> str:
+    """One numbered line per segment: its size and its whole text.
 
     The segments *start* to *stop* (the whole section by default), each with
-    its number in the section: the cuts the model names are those numbers."""
+    its number in the section: the cuts the model names are those numbers.
+    A block is shown whole, its whitespace as one space."""
     lines = []
     segments = section.get("segments") or []
     for i in range(start, len(segments) if stop is None else stop):
         seg = segments[i]
         if seg.get("kind") == "text":
             words = (seg.get("text") or "").split()
-            head = " ".join(words[:sample_words])
-            if len(words) > sample_words:
-                head += " …"
-            lines.append(f"{i:4d} [{len(words)} words] {head}")
+            lines.append(f"{i:4d} [{len(words)} words] {' '.join(words)}")
         else:
             kind = "TABLE" if seg.get("kind") == "table" else "FIGURE"
             lines.append(f"{i:4d} [{kind}] {seg.get('ref') or ''}")
     return "\n".join(lines)
+
+
+def _outline_fits(section: dict, start: int, stop: int) -> bool:
+    """Does the split request of the segments *start* to *stop* with the
+    reply it asks for fit the served window? The request is the one `ask`
+    sends, counted as the server counts it (`llm_preflight.stage_fits`).
+    True where no window is known."""
+    fits = stage_fits("llm", LLM_BASE_URL, LLM_MODEL, LLM_API_KEY)
+    if fits is None:
+        return True
+    return fits(
+        [{"role": "system",
+          "content": prompts.text("refinement/split",
+                                  target=SECTION_TARGET_WORDS)},
+         {"role": "user", "content": split_user(section, start, stop)}],
+        split_max_tokens())
+
+
+def split_user(section: dict, start: int, stop: int) -> str:
+    """The user message of the split request of the segments *start* to
+    *stop*: the title and the outline."""
+    return (f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n"
+            f"{outline(section, start=start, stop=stop)}")
 
 
 def _even_cuts(section: dict, target: int = SECTION_TARGET_WORDS) -> list:
@@ -245,9 +269,13 @@ def _ask_cuts(section: dict, ask: Callable) -> dict | Hole:
 
 def _ask_range(section: dict, ask: Callable, start: int, stop: int,
                again: bool = False) -> dict | Hole:
+    if stop - start > 1 and not _outline_fits(section, start, stop):
+        log.info("Outline of segments %d to %d of %r does not fit the "
+                 "served window: outlined as two parts", start, stop - 1,
+                 section.get("title"))
+        return _ask_halves(section, ask, start, stop)
     got = ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
-              f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n"
-              f"{outline(section, start=start, stop=stop)}", again)
+              split_user(section, start, stop), again)
     if not (isinstance(got, Hole) and got.cause == "cut_off"):
         return got
     if stop - start > 1:
@@ -255,23 +283,33 @@ def _ask_range(section: dict, ask: Callable, start: int, stop: int,
         log.warning("Split reply for %r cut off: asked again for segments "
                     "%d to %d and %d to %d", section.get("title"), start,
                     mid - 1, mid, stop - 1)
-        first = _ask_range(section, ask, start, mid)
-        second = _ask_range(section, ask, mid, stop)
-        for half in (first, second):
-            if isinstance(half, Hole):
-                # A half that is a hole leaves a stretch nobody placed cuts in.
-                return half
-        title = second.get("first_title")
-        return {"first_title": first.get("first_title"),
-                "cuts": [*first["cuts"],
-                         {"at": mid, "title": title if isinstance(title, str)
-                          else None},
-                         *second["cuts"]]}
+        return _ask_halves(section, ask, start, stop)
     if not again:
         log.warning("Split reply for %r cut off, one segment: no halves to "
                     "ask for", section.get("title"))
         return _ask_range(section, ask, start, stop, again=True)
     return got
+
+
+def _ask_halves(section: dict, ask: Callable, start: int,
+                stop: int) -> dict | Hole:
+    """The cuts of the segments *start* to *stop* (more than one) asked as
+    two parts at a block boundary, each outlined and cut on its own with the
+    segment numbers it has in the section; the cuts are joined with the cut
+    between the parts."""
+    mid = start + (stop - start) // 2
+    first = _ask_range(section, ask, start, mid)
+    second = _ask_range(section, ask, mid, stop)
+    for half in (first, second):
+        if isinstance(half, Hole):
+            # A half that is a hole leaves a stretch nobody placed cuts in.
+            return half
+    title = second.get("first_title")
+    return {"first_title": first.get("first_title"),
+            "cuts": [*first["cuts"],
+                     {"at": mid, "title": title if isinstance(title, str)
+                      else None},
+                     *second["cuts"]]}
 
 
 def split_section(section: dict, ask: Optional[Callable] = None,

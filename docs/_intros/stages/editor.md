@@ -878,14 +878,11 @@ shows the number of requests its box asked in the recorded request logs and in
 the last dry run. After Discard the page asks for the measurements again for the
 numbers it puts back.
 
-The flow has twelve numbers, each a whole number, and each says what it counts:
+The flow has nine numbers, each a whole number, and each says what it counts:
 
 | the number | what it counts |
 |---|---|
 | `piece_lines` | lines of a piece a document is read in; a table's head is shown with each of its pieces |
-| `title_page_lines` | lines of the document's first page that a request shows as its title page |
-| `headings` | headings a request shows up to a value's place, its own last |
-| `list_meanings` | entries up to which a list is shown with what each entry means; a longer list shows its names only, and one whose entries name groups is asked group first |
 | `search_pieces` | pieces a search shows for an open coordinate or a field the document has once |
 | `search_tables`, `search_figures`, `search_text` | the share of a search's pieces that are the best pieces of tables, of figures and of text, taken first; the three are scaled to the pieces of the search, and the rest are the best of any kind |
 | `search_per_request` | pieces one request of a search shows |

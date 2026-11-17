@@ -37,6 +37,9 @@ from .merge import merge_batch
 from .database import (
     update_database,
     document_id,
+    drop_wholes,
+    ensure_format,
+    wholes_of_index,
     enrich_bbox,
     enrich_caption,
     enrich_page_source,
@@ -46,11 +49,14 @@ from .database import (
     get_document_faiss_ids,
     next_faiss_id,
 )
-from .chunking import build_embedding_inputs
+from .chunking import build_embedding_inputs, fit_inputs
 from .context import ask_all, load_document
 from .embedding import (
     IncompleteIndex,
     Unembedded,
+    fits_of,
+    window_of,
+    without_pictures,
     load_or_create_index,
     index_ids,
     save_index,
@@ -63,8 +69,11 @@ from .embedding import (
 log = logging.getLogger(__name__)
 
 
-def note_embedding(db_path: Path, embedder) -> None:
-    """Record in the database which model builds its index.
+def note_embedding(db_path: Path, embedder,
+                   window_tokens: Optional[int] = None) -> None:
+    """Record in the database which model builds its index, and the window
+    its inputs were fitted to (*window_tokens*, the configured length where
+    none is given).
 
     Raises `MixedIndex` before any vector is written when the index holds
     vectors of another model, unless that is allowed on purpose
@@ -81,7 +90,7 @@ def note_embedding(db_path: Path, embedder) -> None:
     with sqlite3.connect(str(db_path)) as connection:
         said = store_schema.note_embedding(
             connection, model, backend.EMBEDDING_DIM, index_backend(),
-            backend.EMBEDDING_MAX_TOKEN_LENGTH, __version__,
+            window_tokens or backend.EMBEDDING_MAX_TOKEN_LENGTH, __version__,
             allow_mixed=ALLOW_MIXED_INDEX)
     if said:
         log.warning("%s", said)
@@ -190,8 +199,9 @@ def run(
 
     if step == "reembed":
         # Every item again, into a NEW index file under the ids the database
-        # already gives them; neither the database nor the old file is
-        # written (chunking/reembed.py).
+        # already gives them; the database is brought to format 2 (its
+        # Embeddings table) and otherwise not written, the old file not at
+        # all (chunking/reembed.py).
         from .reembed import run_reembed
         run_reembed(data_dir, db_path, index_path)
         return
@@ -240,6 +250,8 @@ def run(
         log.info("Step 3: Creating embeddings")
         log.info(sep)
 
+        # Format 2: a vector per piece of its owner (store/schema.py).
+        ensure_format(db_path)
         index, next_id = load_or_create_index(index_path)
         # Every id the index holds, read once: it settles both questions below.
         held = index_ids(index)
@@ -254,7 +266,30 @@ def run(
         next_id = max(next_id, next_faiss_id(db_path),
                       (max(held) + 1) if held else 0)
         embedder = load_embedder(EMBEDDING_MODEL)
-        note_embedding(db_path, embedder)
+        # What one input holds: the embedder's window (owner decision
+        # 2026-11-17, "Nichts kürzen"): an entry that does not fit is split
+        # into parts, never cut (`fit_inputs`).
+        window = window_of(embedder)
+        fits = fits_of(window)
+        log.info("Embedding window: %d tokens an input, %d of them the "
+                 "frame; texts over their bytes counted %s",
+                 window.limit, window.frame,
+                 "by the embedder's tokenizer" if window.count else
+                 "by their bytes (no tokenizer)")
+        note_embedding(db_path, embedder, window.limit)
+
+        # The vectors of whole owners, written before the entries of the
+        # index were pieces, go: their owners are embedded again in pieces.
+        wholes = wholes_of_index(db_path)
+        if wholes:
+            removed = remove_ids_from_index(index, wholes)
+            # The index first, the database after, as sync does: a run
+            # killed between them must not leave vectors no row names.
+            save_index(index, index_path)
+            drop_wholes(db_path, wholes)
+            log.info("%d vector(s) of whole entries taken out (%d in this "
+                     "index); their entries are embedded again as pieces",
+                     len(wholes), removed)
 
         candidates = document_dirs(data_dir, DOCUMENT_JSON)
 
@@ -290,13 +325,17 @@ def run(
                 # at them, and the next run does it again. Two such directories
                 # put 1096 dead vectors into the heat-plan index per run.
                 unregistered.append(pdf_name)
-                return []
+                return [], []
             existing = get_existing_embeddings(db_path, pdf_name, doc_id=doc_id)
             merged_data = load_document(pdf_dir)
-            return [
-                inp for inp in build_embedding_inputs(merged_data, pdf_name, pdf_dir)
-                if (inp.embedding_type, inp.section_index, inp.item_id) not in existing
-            ]
+            unfit: list = []
+            fitted = fit_inputs(
+                without_pictures(
+                    build_embedding_inputs(merged_data, pdf_name, pdf_dir),
+                    embedder), fits,
+                lambda inp, reason: unfit.append((inp, reason)))
+            return ([inp for inp in fitted if inp.key not in existing],
+                    unfit)
 
         # Embedded in chunks rather than one pooled call: the pool keeps
         # preparing while the GPUs work on what is ready. A chunk still holds
@@ -315,7 +354,9 @@ def run(
         saved_ntotal = index.ntotal
 
         with ThreadPoolExecutor(max_workers=EMBED_PREPARE_WORKERS) as pool:
-            for inputs in prepared_ahead(pool, candidates, prepare):
+            for inputs, unfit in prepared_ahead(pool, candidates, prepare):
+                for inp, reason in unfit:
+                    missed.add([inp], reason)
                 if not inputs:
                     continue
                 docs_with_inputs += 1
@@ -403,9 +444,10 @@ Examples:
              "in the section text (no model, data_dir is ignored). "
              "'reembed' embeds every item the database maps again, with the "
              "configured embedder, into index_path as a NEW file under the "
-             "ids it already has; the database and the old index are not "
-             "written, and an existing file is continued only when an "
-             "earlier reembed wrote it. "
+             "ids it already has; the database is brought to format 2 (its "
+             "Embeddings table) and otherwise not written, the old index "
+             "is not written, and an existing file is continued only when "
+             "an earlier reembed wrote it. "
              "'sync' merges, then writes each document into the database "
              "under the numbers its sections, tables and figures already "
              "have, and takes every vector whose input changed out of "

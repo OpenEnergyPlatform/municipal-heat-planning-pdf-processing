@@ -5,10 +5,10 @@ exclusions are skipped, a cell needs the whole lineage of its heads).
 
 The promises, each with a case that breaks it by construction:
 
-1. Every chunk of a table and the place of each of its values show the first
-   `table_foot_lines` lines under the table, AND lines beyond that number stay
-   lines of chunks of their own, AND 0 shows a line under a table only in its
-   own chunk.
+1. Every chunk of a table and the place of each of its values show every
+   line under the table (rule `table_foot_lines` on; owner decision
+   2026-11-17: nothing is cut, so no count of them), AND off shows a line
+   under a table only in its own chunk.
 2. A row whose first cell is indented at least two places under a row above
    it is shown with that row and with the rows that row stands under, in each
    of its chunks and at its value's place, AND a row indented one place more
@@ -54,19 +54,19 @@ def place(passage, number):
 
 
 def test_the_notes_under_a_table_go_with_every_chunk_and_value_place():
-    with rules.overlaid(table_foot_lines=2):
+    with rules.overlaid(table_foot_lines=True):
         passage = units.passage_of(NOTES)
     roles = [line.role for line in passage.lines]
     assert roles == ["title", "head", "body", "body", "body", "foot", "foot",
                      "foot"]
-    assert passage.fixed == (1, 2, 6, 7)
-    # The third note is a line of a chunk of its own lines, not carried.
-    assert shown(passage, 2) == [(1, 2, 3, 4, 6, 7), (1, 2, 5, 6, 7, 8)]
-    assert place(passage, 4) == [1, 2, 4, 6, 7]
+    # All three notes, the third ("Quelle: ...") too, go with every chunk.
+    assert passage.fixed == (1, 2, 6, 7, 8)
+    assert shown(passage, 2) == [(1, 2, 3, 4, 6, 7, 8), (1, 2, 5, 6, 7, 8)]
+    assert place(passage, 4) == [1, 2, 4, 6, 7, 8]
 
 
 def test_no_note_is_carried_where_the_rule_says_none():
-    with rules.overlaid(table_foot_lines=0):
+    with rules.overlaid(table_foot_lines=False):
         passage = units.passage_of(NOTES)
     assert passage.fixed == (1, 2)
     assert shown(passage, 2)[0] == (1, 2, 3, 4)
@@ -74,7 +74,7 @@ def test_no_note_is_carried_where_the_rule_says_none():
 
 
 def test_a_title_stays_the_title_where_notes_are_carried():
-    with rules.overlaid(table_foot_lines=3, table_title_lines=False):
+    with rules.overlaid(table_foot_lines=True, table_title_lines=False):
         passage = units.passage_of(NOTES)
     assert passage.title == "| Träger | 2020 | 2030 |"
     assert passage.line(passage.fixed[-1]).role == "foot"

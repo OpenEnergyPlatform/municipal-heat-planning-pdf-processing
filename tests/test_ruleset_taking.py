@@ -403,16 +403,6 @@ def sec(i, text, page=None):
     return Source("section", i, text, {"page": page} if page else {})
 
 
-def test_pattern_hit_chars_say_how_much_stands_around_a_hit():
-    far = "x" * 500 + " needle " + "y" * 500
-    plain = lookup.matching([sec(1, far)], "needle", 10_000).hits[0]["line"]
-    assert len(plain) < 2 * 60 + 20
-    with rules.overlaid(pattern_hit_chars=10):
-        short = lookup.matching([sec(1, far)], "needle",
-                                10_000).hits[0]["line"]
-    assert len(short) < len(plain) and "needle" in short
-
-
 def test_pattern_timeout_s_is_how_long_one_passage_may_be_tried():
     bomb = [sec(1, "a" * 60 + "b")]
     with rules.overlaid(pattern_timeout_s=0.01):
@@ -431,14 +421,6 @@ def test_fetch_next_is_how_many_sections_one_ask_brings():
         assert [s.owner_id for s in lookup.fetch_run(
             docs, ("section", 3), False)] == [2, 1]
         assert lookup.fetch_run(docs, ("section", 5), True) == []
-
-
-def test_compute_fetch_pages_is_how_many_pages_a_fetched_passage_is_cut_to():
-    docs = [sec(1, "x" * 1000, 1), sec(2, "y" * 1000, 2)]
-    assert lookup.two_pages(docs, 2) == 2000
-    with rules.overlaid(compute_fetch_pages=1):
-        assert lookup.two_pages(docs, 2) == 1000
-    assert lookup.two_pages(docs, 2, span=3) == 3000
 
 
 def test_table_continues_pages_is_how_far_back_a_table_looks():

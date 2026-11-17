@@ -16,10 +16,13 @@ Author: Felix Vossel
 ### note_embedding
 
 ```python
-def note_embedding(db_path: Path, embedder) -> None
+def note_embedding(db_path: Path, embedder,
+                   window_tokens: Optional[int] = None) -> None
 ```
 
-Record in the database which model builds its index.
+Record in the database which model builds its index, and the window
+its inputs were fitted to (*window_tokens*, the configured length where
+none is given).
 
 Raises `MixedIndex` before any vector is written when the index holds
 vectors of another model, unless that is allowed on purpose

@@ -64,7 +64,9 @@ def citation_label(hit: dict) -> str:
     """
     w = wording.phrases()
     lq, rq = w["citation_quotes"]
-    page = hit.get("page_number")
+    # The page of the piece the search found best, where the index has
+    # pieces (owner decision 2026-11-17), else the passage's first page.
+    page = (hit.get("piece") or {}).get("page") or hit.get("page_number")
     page_str = (w["citation_page"].format(page=page) if page is not None
                 else w["citation_page_unknown"])
     sec_title = hit.get("section_title")

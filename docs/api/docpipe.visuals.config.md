@@ -17,15 +17,50 @@ def dump_json_atomic(data, path) -> None
 Serialise *data* as UTF-8 JSON to *path* atomically (temp file +
 os.replace). Atomic only within one filesystem.
 
+### shown_bytes
+
+```python
+def shown_bytes(section_content: str = "", head: str = "",
+                between: str = "") -> int
+```
+
+The UTF-8 bytes one request shows beside its prompts.
+
+### longest_shown
+
+```python
+def longest_shown(sections: list) -> int
+```
+
+The most UTF-8 bytes one request of a document with *sections* shows
+beside its prompts: its longest section text, the longest text between
+two of its tables that may continue one another, and, for the head of
+the table before, the longest PDF text of one of its tables (a head is
+part of it).
+
+### longest_in
+
+```python
+def longest_in(root, names: tuple = ()) -> int
+```
+
+`longest_shown` over every document the stage reads under *root*,
+or over *root* itself where it is one document: the first of *names*
+each has (the sections files the stage reads, the refined one first
+where none are given); 0 where there are none or none can be read.
+
 ### max_request_tokens
 
 ```python
-def max_request_tokens() -> int
+def max_request_tokens(shown: int | None = None) -> int
 ```
 
 Worst case for one vision request: the longer of the two requests'
-prompts with the texts they show, cut as they are cut, + one page image
-+ the reply we ask for, once. A table's request counts the part it gets
+prompts with the texts they show, + one page image + the reply we ask
+for, once. *shown* is the UTF-8 bytes the request shows beside its
+prompts (`shown_bytes`; for the stage's preflight `longest_in` of the
+documents the run reads, taken from the active profile's processed
+folder where not given). A table's request counts the part it gets
 where it may continue the table before it. A reply cut off at its limit
 is asked once more with more room, but the room is bounded by what the
 served window leaves beyond this number (vision.call_vision), so no

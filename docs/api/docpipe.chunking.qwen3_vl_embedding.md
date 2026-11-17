@@ -9,6 +9,15 @@ Author: Felix Vossel
 
 ## Classes
 
+### TooLongInput
+
+```python
+class TooLongInput(ValueError)
+```
+
+An input that holds more tokens than the model's window. Raised, never
+cut: the index splits its entries to fit (`chunking.fit_inputs`).
+
 ### Qwen3VLForEmbeddingOutput
 
 ```python
@@ -173,6 +182,17 @@ def format_model_input(
 
 Format a single input (text/image/video) into a chat conversation structure.
 
+#### Qwen3VLEmbedder.window
+
+```python
+def window(self)
+```
+
+What one input holds (`docpipe.window.Window`): the model's
+length, the frame of an input of no text counted by this processor,
+its tokenizer for a text, and a picture at most as the processor
+scales it.
+
 #### Qwen3VLEmbedder.process
 
 ```python
@@ -213,6 +233,15 @@ def __init__(
     **kwargs,
 )
 ```
+
+#### MultiGPUEmbedder.window
+
+```python
+def window(self)
+```
+
+What one input holds, as the first replica counts it
+(`Qwen3VLEmbedder.window`); every replica is the same model.
 
 #### MultiGPUEmbedder.process
 

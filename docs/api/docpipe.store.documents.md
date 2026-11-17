@@ -39,7 +39,8 @@ def content_of(filename: str, connection: sqlite3.Connection)
 ```
 
 (sha256, bytes) a document was registered with; (None, None) when the
-row, or the database, is older than that record.
+row, or the database, is older than that record (told by its columns;
+any other database error raises).
 
 ### set_content
 

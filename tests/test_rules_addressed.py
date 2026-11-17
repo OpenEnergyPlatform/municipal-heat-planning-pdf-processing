@@ -193,23 +193,6 @@ def big_list(groups=("A", "B"), size=30):
                           else groups[1]) for i in range(size)))
 
 
-def test_the_groups_a_two_step_list_takes_are_the_first_or_every_one_named():
-    slot = big_list()
-
-    def asked(**values):
-        model = Model(list=lambda p, n: {"entry": [1, 2]}
-                      if n.get("step") == "group" else {"entry": 25})
-        with at("docfield", values):
-            got = entry_of(model, slot, "Sektor 22")
-        return got, [len(p["list"]) for p, _ in model.of("list")]
-    # the first group named: its twenty entries, and 25 is none of them
-    assert asked() == ("", [2, 20])
-    assert asked(group_picks_taken="first") == ("", [2, 20])
-    # every group named: the entries of both, and what is chosen among them
-    # is an entry of the list, never the name of a group
-    assert asked(group_picks_taken="all") == ("Sektor 24", [2, 30])
-
-
 def test_a_group_without_entries_shows_the_whole_list_or_none():
     slot = big_list(size=6)
 

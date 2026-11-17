@@ -161,11 +161,9 @@ def test_three_shares_of_zero_and_too_many_chunks_are_refused_in_a_drawing():
     assert not [p for p in flow.problems(drawing) if "letters" in p["message"]]
 
 
-def test_the_steps_that_read_the_headings_are_those_the_flow_names():
-    for kind in ("find", "coord", "phrase", "search", "work_coordinate",
-                 "works", "last_year", "about"):
-        assert kind in flow.BY_NAME["headings"].steps
-    assert "work_coordinate" in flow.BY_NAME["list_meanings"].steps
+def test_what_is_shown_whole_is_no_number_of_the_flow():
+    for name in ("headings", "title_page_lines", "list_meanings"):
+        assert name not in flow.BY_NAME
 
 
 # -- resolve ------------------------------------------------------------------

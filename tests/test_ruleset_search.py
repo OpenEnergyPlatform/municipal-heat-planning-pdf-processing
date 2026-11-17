@@ -171,7 +171,7 @@ def test_sentences_are_fused_as_the_rule_says():
         rerank.fused([1], "median")
 
 
-def test_the_model_the_picture_the_length_and_the_waiting_are_the_rules():
+def test_the_model_and_the_picture_are_the_rules_and_nothing_is_cut():
     picture = {"type": "image_url", "image_url": {"url": "data:x"}}
     found = [passage("figure", 1), passage("table", 2)]
     server = Server()
@@ -181,14 +181,14 @@ def test_the_model_the_picture_the_length_and_the_waiting_are_the_rules():
     ranker.order(1, ["q"], found)
     body = server.bodies[0]
     assert body["model"] == rerank.SERVED_MODEL
-    assert body["truncate_prompt_tokens"] == -1
+    # No request asks the server to cut a pair (owner decision 2026-11-17).
+    assert "truncate_prompt_tokens" not in body
     assert isinstance(body["documents"][0], dict)       # figure with picture
-    with at("search", rerank_model="other/model", rerank_with_images=False,
-            rerank_truncate_tokens=512):
+    with at("search", rerank_model="other/model", rerank_with_images=False):
         ranker.order(1, ["q"], found)
     body = server.bodies[1]                 # scored again: another model
     assert body["model"] == "other/model"
-    assert body["truncate_prompt_tokens"] == 512
+    assert "truncate_prompt_tokens" not in body
     assert body["documents"] == ["figure 1", "table 2"]
 
 

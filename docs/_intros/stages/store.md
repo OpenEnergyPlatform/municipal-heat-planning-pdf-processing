@@ -69,7 +69,7 @@ profile's catalog (`_meta_columns` in `docpipe/builtin/default/catalog.py`).
 
 ### Bringing an older database forward
 
-`FORMAT` (`schema.py:35`, currently 1) counts the shape of the core tables
+`FORMAT` (`schema.py:35`, currently 2) counts the shape of the core tables
 and is raised whenever that shape changes. A database carries it as `PRAGMA
 user_version`, and one made before the counter existed reads 0.
 `ADDED_COLUMNS` (`schema.py:37` to `38`) lists every `(table, column, type)`
@@ -79,7 +79,9 @@ database had, runs `ALTER TABLE ... ADD COLUMN` for each listed column that
 `columns()` does not report, sets `user_version` to `FORMAT` if it was
 lower, commits, and returns the version it found. It only ever adds, a
 column or a table: nothing an older reader looks at is renamed or removed,
-so the code that wrote a database and this code can both read it. It never
+so the code that wrote a database and this code can both read it. The one
+exception is format 2: SQLite cannot change a uniqueness in place, so
+`Embeddings` is written anew with every vector it held (`piece` NULL). It never
 lowers a `user_version` that is higher than `FORMAT`.
 
 `apply()` ends with `migrate()`, so a database is brought forward when it is
@@ -102,8 +104,8 @@ declare `created` itself.
 
 A reader brings nothing forward. Opened through `readonly_uri` it cannot
 alter a table, and the code that reads what a later format added is written
-to find it missing: `content_of` returns `(None, None)` when the column or
-the row is not there, `meta` returns an empty dict when there is no `Meta`
+to find it missing: `content_of` returns `(None, None)` when the column (told by
+`PRAGMA table_info`) or the row is not there, `meta` returns an empty dict when there is no `Meta`
 table, `embedding_mismatch` then says nothing, and `note_documents` in
 `docpipe/extraction/runner.py` counts no recorded document when its
 `SELECT` fails.
@@ -272,7 +274,7 @@ package:
 | `Segments` | `id`, `section` (FK), `ordinal`, `page` (FK), `kind`, `ref`, `text`, `bbox` | ordered text/table/figure pieces of a section, page-tagged; `kind` `CHECK`-constrained; `UNIQUE(section, ordinal)` |
 | `Tables` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `markdown`, `bbox`, `caption_source`, `qa`, `context_sentence` | one detected table, crop path, Markdown transcription, and what stage 5 measured of it; `context_sentence` is the sentence of context its vectors were embedded with, NULL for none |
 | `Images` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `description`, `bbox`, `caption_source`, `context_sentence` | one detected figure, crop path, prose description; `context_sentence` as in `Tables` |
-| `Embeddings` | `faiss_id` (PK), `embedding_type`, `owner_kind`, `owner_id` | one FAISS vector; `owner_kind` `CHECK`-constrained; `UNIQUE(owner_kind, owner_id, embedding_type)` |
+| `Embeddings` | `faiss_id` (PK), `embedding_type`, `owner_kind`, `owner_id`, `piece`, `part`, `page`, `first_line`, `last_line` | one FAISS vector, which piece of its owner it is (`piece` counted from 0, NULL for a whole owner written before pieces, a title and a picture alone), which part of the piece (`part`, from 0, where the piece was split to fit the embedder's window), the page of its first own line and its own lines; `owner_kind` `CHECK`-constrained; `UNIQUE(owner_kind, owner_id, embedding_type, piece, part)` |
 
 `bbox` is a JSON array of source-PDF rectangles, `NULL` when unknown,
 display-only, never embedded (`docpipe/store/schema.sql:85` to `89`).
@@ -351,7 +353,7 @@ Reading the tables back out is not this package's job.
 | `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:53`; re-set independently by `docpipe/chunking/database.py:101` |
 | `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:98` to `108` |
 | `CORE_TABLES` | module constant | the 9 core table names, as a tuple | names which tables belong to the core, not a profile | `docpipe/store/schema.py:27` to `28` |
-| `FORMAT` / `PRAGMA user_version` | module constant / pragma | `1` / `0` on a database made before the counter | the shape of the core tables; `migrate` sets the pragma to `FORMAT` when it is lower | `docpipe/store/schema.py:35`, `91` to `102` |
+| `FORMAT` / `PRAGMA user_version` | module constant / pragma | `2` / `0` on a database made before the counter | the shape of the core tables; `migrate` sets the pragma to `FORMAT` when it is lower | `docpipe/store/schema.py:35`, `91` to `102` |
 | `ADDED_COLUMNS` | module constant | `Documents.sha256` (`TEXT`) and `Documents.bytes` (`INTEGER`) | the columns a later format added, which `migrate` adds to a database that lacks them | `docpipe/store/schema.py:37` to `38` |
 
 ## Failure modes
@@ -375,11 +377,15 @@ Reading the tables back out is not this package's job.
   `enrich_bbox`, `enrich_page_source` and `enrich_caption` (`_ensure_table_qa_column`
   in `update_database` alone), so a database
   that none of them has opened is never retrofitted. A missing `bbox` column
-  then raises `sqlite3.OperationalError`, which
-  `docpipe/inference/db.py`'s `section_segments_geo` catches, returning
-  bbox-less segments from the older `section_segments` query and leaving
+  is told by `PRAGMA table_info` (not by catching an error: any other database
+  error raises), and `docpipe/inference/db.py`'s `section_segments_geo` then
+  returns bbox-less segments from the older `section_segments` query and leaves
   the phrase-search fallback to its caller
-  (`_pdf_link_for` in `docpipe/app/app.py`). A missing
+  (`_pdf_link_for` in `docpipe/app/app.py`). The other readers of a column an
+  older database lacks are told the same way: `db.pieces_of` (no `piece` column,
+  format 1, so no vector knows a piece),
+  `hybrid.current_documents` (no `is_current` column, so every document is
+  current) and `documents.content_of` (no `sha256` or `bytes` column). A missing
   `page_text_transcribed` column is asked for, not tried:
   `transcribed_documents` in `docpipe/extraction/trust.py` reads `columns()`
   first and names no document for a database that predates it.

@@ -63,6 +63,31 @@ is asked again from the start.
 def client(self)
 ```
 
+#### ApiEmbedder.embed_each
+
+```python
+def embed_each(self, items: Sequence[dict]) -> list
+```
+
+One vector or the exception of its request for each item, in
+order: in the messages form one item that the server refuses costs
+that item alone, not the others of the call (owner decision
+2026-11-17: a refused input lost the whole batch of 32). The OpenAI
+form sends a batch in one request, so it answers for it as one.
+
+#### ApiEmbedder.window
+
+```python
+def window(self)
+```
+
+What one item holds (`docpipe.window.Window`): the window the
+server reports for the model, else EMBEDDING_MAX_TOKEN_LENGTH; in
+the messages form the frame of an item counted by the server's own
+template, its tokenizer for a text and a picture at most as the
+model's processor scales it; in the OpenAI form texts bounded by
+their bytes.
+
 #### ApiEmbedder.embed
 
 ```python

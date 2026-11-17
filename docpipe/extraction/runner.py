@@ -88,11 +88,12 @@ from . import scheduler
 from . import scratch
 from . import lookup as lookup_map
 from . import trace
+from . import units as units_map
 from .wording import say
 from .pipeline import (YEAR_STATES, DocumentReport, Source,
                        cell_index as pipeline_cell_index, column_head,
                        drop_repeats, fold_batch, fold_claims,
-                       option_named, window_around, write_report)
+                       option_named, write_report)
 from .trust import document_summary, parameter_states
 from .spec import Spec, fingerprints, load as load_spec
 
@@ -1080,21 +1081,10 @@ def make_parents(db_path: Path, content: Optional[Callable] = None) -> Callable:
             if content is None:
                 continue
             parent = _source_of({"score": None, **content}, via="parent")
-            # How much of a parent section rides along with its table (rule
-            # `review_parent_chars`). Kassel's median section is 894
-            # characters and its longest is 6,038, so most fit whole and the
-            # rest are cut around the table's own placeholder rather than
-            # dropped: the sentence that dates a table stands next to its
-            # placeholder and nowhere else.
-            most = rules.get("review_parent_chars")
-            if len(parent.text or "") > most:
-                block = provenance.get("block_id") or ""
-                parent = Source(owner_kind=parent.owner_kind,
-                                owner_id=parent.owner_id,
-                                text=window_around(parent.text, f"[{block}",
-                                             most),
-                                provenance=parent.provenance,
-                                image_path=parent.image_path)
+            # The whole parent section rides along with its table (owner
+            # decision 2026-11-17: nothing is cut): the sentence that dates
+            # a table stands next to its placeholder and may stand anywhere
+            # else in its section as well.
             out.append(parent)
         return out
 
@@ -1156,8 +1146,7 @@ def make_review_sources(db_path: Path,
     independent one.
 
     The parent goes through `make_parents` rather than being fetched from
-    `parent_section` directly, so a section too long for the window arrives
-    cut around this row's own placeholder instead of from its first character.
+    `parent_section` directly, so a parent already shown is not shown twice.
 
     Its own connection per thread, like `make_parents`: read-only, and SQLite
     handles are not shared. The content is, with the parents too: *content*,
@@ -1876,11 +1865,9 @@ def document_anchor(spec: Spec, context: Optional[dict] = None,
                 log.warning("phrase %s attempt %d: %s reply",
                             parameter.uri, attempt, cause)
                 if rules.get("retry_shows_reply"):
-                    conversation.append({
-                        "role": "assistant",
-                        "content": reply.message.content or ""})
-                    conversation.append({"role": "user",
-                                         "content": correction})
+                    conversation[:] = asked_again(
+                        system, conversation, reply.message.content,
+                        correction, cause, wanted, whole=True)
             except Exception as exc:
                 log.warning("phrase %s attempt %d failed: %s",
                             parameter.uri, attempt, exc)
@@ -2363,10 +2350,9 @@ def _ask_in_grammar(client, prompt, conversation: list, shape: dict,
                             kept=len(next(iter(kept.values()))))
                 return kept
             if rules.get("retry_shows_reply"):
-                conversation = conversation + [
-                    {"role": "assistant",
-                     "content": reply.message.content or ""},
-                    {"role": "user", "content": correction}]
+                conversation = asked_again(
+                    text, conversation, reply.message.content, correction,
+                    cause, wanted)
         except Exception as exc:
             log.warning("   %s %s attempt %d failed: %s", where, document_id,
                         attempt, exc)
@@ -2966,15 +2952,25 @@ def _lacking(answer, shape: Optional[dict]) -> Optional[str]:
                  if key not in answer), None)
 
 
-def _excerpt() -> tuple:
-    """(characters before, after, of foreign text) of a broken answer the
-    question asked again shows the model (rule `fault_excerpt_chars`)."""
-    said = rules.get("fault_excerpt_chars")
-    try:
-        return said["before"], said["after"], said["foreign"]
-    except KeyError as exc:
-        raise ValueError(f"fault_excerpt_chars names no {exc}: it gives "
-                         f"before, after and foreign") from None
+def asked_again(system: str, conversation: list, said, correction: str,
+                cause: str, wanted: int, *, whole: bool = False,
+                anew: Optional[list] = None) -> list:
+    """The conversation of the next attempt after a reply that could not be
+    read: *conversation*, the reply as it was (all of it), and what was
+    wrong with it. Where that does not fit the window, the request starts
+    anew (*anew*, else *conversation* as it was) and names the cause in one
+    sentence, so that a long reply is never cut to be shown (owner decision
+    2026-11-17). The sentence is the harvest's own (its phrase
+    `asked_anew`), said where `docpipe.reading.with_note` says a note."""
+    from docpipe import reading as reply_reading
+    longer = [*conversation,
+              {"role": "assistant", "content": said or ""},
+              {"role": "user", "content": correction}]
+    if request_room(system, longer, wanted, whole) is not None:
+        return longer
+    return reply_reading.with_note(
+        list(conversation if anew is None else anew),
+        say("asked_anew", cause=cause))
 
 
 def _reply_fault(reply, limit: int, *, key: str = "",
@@ -3029,14 +3025,14 @@ def _reply_fault(reply, limit: int, *, key: str = "",
         try:
             _obj, end = _DECODER.raw_decode(text, start)
         except json.JSONDecodeError:
-            before, after, _foreign = _excerpt()
-            around = text[max(start, exc.pos - before):exc.pos + after]
+            # The place where it breaks. The reply itself stands whole
+            # right above as the model's own turn (`asked_again`), so the
+            # phrases quote it only where a profile's says so (*around*).
             return "syntax", say(
                 "syntax", position=exc.pos - start, message=exc.msg,
-                around=around) + shape
+                around=text) + shape
         extra = (text[:start] + text[end:]).strip()
-        return "outside_text", say(
-            "outside_text", extra=extra[:_excerpt()[2]]) + shape
+        return "outside_text", say("outside_text", extra=extra) + shape
     if not isinstance(data, dict):
         return "not_an_object", say(
             "not_an_object", kind=type(data).__name__) + shape
@@ -3458,11 +3454,9 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
                 log.warning("   review attempt %d: %s reply%s",
                             attempt, cause, _unparsable(reply))
                 if rules.get("retry_shows_reply"):
-                    conversation.append({
-                        "role": "assistant",
-                        "content": reply.message.content or ""})
-                    conversation.append({"role": "user",
-                                         "content": correction})
+                    conversation = asked_again(
+                        prompt.text, conversation, reply.message.content,
+                        correction, cause, request_wanted("review"))
             except Exception as exc:
                 log.warning("   review attempt %d failed: %s", attempt, exc)
                 if not failures.failed(exc):
@@ -3473,28 +3467,63 @@ def make_review_asker(image_root: Optional[Path] = None) -> Callable:
     return ask
 
 
-def around(text: str, quote: str, chars: int) -> Optional[str]:
-    """*chars* characters of *text* on each side of *quote*, the quote among
-    them, or None where *text* does not hold it. Found as it stands, else
-    with the white space of both folded to single blanks."""
-    if not text or not quote:
+def quote_lines(passage, quote: str) -> list:
+    """The numbers of the lines of *passage* that hold *quote*: the quote
+    found in its lines joined by blanks, white space folded to single
+    blanks on both sides, and each line it touches. [] where the passage
+    does not hold it."""
+    want = " ".join((quote or "").split())
+    if not want:
+        return []
+    spans: list = []
+    folded: list = []
+    at = 0
+    for line in passage.lines:
+        text = " ".join(line.text.split())
+        spans.append((line.number, at, at + len(text)))
+        folded.append(text)
+        at += len(text) + 1
+    found = " ".join(folded).find(want)
+    if found < 0:
+        return []
+    end = found + len(want)
+    return [number for number, start, stop in spans
+            if stop > start and start < end and stop > found]
+
+
+def piece_text(source, quote: str, size: int) -> Optional[str]:
+    """The whole piece of *source* that holds the lines of *quote*, as the
+    request shows a piece: the lines every piece of the passage carries (a
+    table's title and head, a figure's caption), the piece's own lines, and
+    for a section's text its heading. A quote over two pieces gives both.
+    None where the passage does not hold the quote."""
+    passage = units_map.passage_of(source)
+    lines = set(quote_lines(passage, quote))
+    if not lines:
         return None
-    at = text.find(quote)
-    if at < 0:
-        text = " ".join(text.split())
-        quote = " ".join(quote.split())
-        at = text.find(quote)
-        if at < 0:
-            return None
-    return text[max(0, at - chars):at + len(quote) + chars]
+    pieces = units_map.chunks_of(passage, size)
+    held = [piece for piece in pieces
+            if lines & set(piece.numbers)] or pieces[:1]
+    if not held:
+        return None
+    own = sorted({n for piece in held for n in piece.numbers})
+    piece = units_map.Chunk(passage, held[0].index, tuple(own))
+    text = piece.text()
+    provenance = source.provenance or {}
+    heading = (provenance.get("title") or provenance.get("section_title")
+               or "").strip()
+    if (passage.kind not in ("table", "figure") and heading
+            and 1 not in piece.shown and heading not in text):
+        text = f"{heading}\n{text}"
+    return text
 
 
 def _node_check_payload(row: dict, shown: dict, parameter, slots) -> dict:
     """The request body of one node check: the node as JSON (its value and
     each filled coordinate, with wording and quote) and, for each quote, the
-    text around it in the passage it was read in (rule
-    `node_check_context_chars`)."""
-    chars = int(rules.get("node_check_context_chars"))
+    whole piece of the passage it was read in that holds its lines, with the
+    lines that piece carries (owner decision 2026-11-17: nothing is cut)."""
+    size = flow_map.number(numbers(), "piece_lines")
     provenance = row.get("provenance") or {}
     own = (provenance.get("owner_kind"), provenance.get("owner_id"))
     node = {"field": getattr(parameter, "name", None) or row.get("parameter"),
@@ -3511,7 +3540,8 @@ def _node_check_payload(row: dict, shown: dict, parameter, slots) -> dict:
         if isinstance(source_key, (list, tuple)) and len(source_key) == 2:
             pair = (source_key[0], source_key[1])
         source = shown.get(pair) or shown.get(own)
-        text = around(getattr(source, "text", "") or "", quote, chars)             if source is not None else None
+        text = (piece_text(source, quote, size)
+                if source is not None else None)
         entry = {"field": name, "quote": quote}
         if text is not None:
             entry["around"] = text
@@ -3598,11 +3628,9 @@ def make_node_check_asker() -> Callable:
                 log.warning("   node check attempt %d: %s reply%s",
                             attempt, cause, _unparsable(reply))
                 if rules.get("retry_shows_reply"):
-                    conversation.append({
-                        "role": "assistant",
-                        "content": reply.message.content or ""})
-                    conversation.append({"role": "user",
-                                         "content": correction})
+                    conversation = asked_again(
+                        prompt.text, conversation, reply.message.content,
+                        correction, cause, request_wanted("node_check"))
             except Exception as exc:
                 log.warning("   node check attempt %d failed: %s",
                             attempt, exc)
@@ -3669,8 +3697,9 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
     *passages_of(document_id)* is the plan's passages in their order. With it
     a request has the reading's tools (`reading.Gathered`: the next or the
     previous section, a table or figure by its placeholder, a search by
-    pattern or by a sentence), each passage cut to two pages of the plan
-    (*pages_of*, `lookup.two_pages`), and a question that takes a number
+    pattern or by a sentence), each passage whole where the request's window
+    holds it, else in parts that each carry its heading (*pages_of* is no
+    longer read), and a question that takes a number
     (`Question.take`) may take it from whatever the request showed: a
     passage, its title, a hit's line or title (owner decision 2026-11-05).
     *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
@@ -3719,9 +3748,6 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
             cursor={"next": anchor, "previous": anchor},
             rank=(functools.partial(rank, document_id)
                   if rank is not None else None))
-        budget = (lookup_map.two_pages(
-            order, pages_of(document_id) if pages_of else None,
-            rules.get("compute_fetch_pages")) if order else None)
         runs: list = []
         noted = {"taken": 0, "untaken": 0, "misquoted": 0, "rejected": 0,
                  "reason": None}
@@ -3753,7 +3779,8 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
         def ended(outcome: str, claim=None) -> tuple:
             return outcome, claim, runs, {
                 "fetched": len(gathered.sources),
-                "searched": len(gathered.hits), **noted}
+                "searched": len({(h.get("pattern"), h.get("similar"))
+                                 for h in gathered.hits}), **noted}
 
         failures = Failures(document_id)
         # The wait follows the failures, not the rounds: a round of code, of
@@ -3771,7 +3798,8 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 return ended("too_long")
             shape = replies.compute(
                 computing.labels(question),
-                more=reading_map.more_schema() if order else None,
+                more=(reading_map.more_schema(reading_map.PART_GETS)
+                      if order else None),
                 take=question.taking if question.take else None,
                 quote=question.cites)
             started = time.time()
@@ -3819,16 +3847,26 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                                 detail=str(out.get("error"))[:300])
                     return ended("sandbox_failed")
                 runs.append({"code": code,
-                             "stdout": (out.get("stdout") or "")[
-                                 :rules.get("code_output_chars")],
+                             "stdout": out.get("stdout") or "",
                              "ok": bool(out.get("ok")),
                              "error": out.get("error")})
                 trace.event("code", document_id, attempt=attempt, **runs[-1])
                 told(said, _compute_reply(runs[-1], "compute_output"))
                 continue
             answer = _loads_object(said)
+            def fits(texts: list) -> bool:
+                """Do *texts* shown after this answer still fit the
+                window (what a fetched passage is sized against)?"""
+                return request_room(system, [
+                    *conversation,
+                    {"role": "assistant", "content": said or ""},
+                    {"role": "user", "content": "\n".join(texts)}],
+                    request_wanted("compute")) is not None
+            # What it fetches is judged as the follow-up message it is sent
+            # in (`parts.follow_up`), not as its bare texts.
             if isinstance(answer, dict) and order and gathered.fetch(
-                    answer.get("more"), order, passages, budget):
+                    answer.get("more"), order, passages, fits,
+                    parts.follow_up):
                 # What it fetched follows the answer that asked for it, as in
                 # the search: a round that brings something new is no
                 # attempt, and the window bounds how many there are.
@@ -3871,7 +3909,11 @@ def make_computer(profile, passages_of: Optional[Callable] = None,
                 trace.event("error", document_id, where="compute",
                             kind="unreadable", cause=cause, attempt=attempt,
                             finish=getattr(reply, "finish_reason", None))
-                told(said, correction)
+                # The reply as it was and what was wrong with it, else the
+                # question starts anew from its first message.
+                conversation[:] = asked_again(
+                    system, conversation, said, correction, cause,
+                    request_wanted("compute"), anew=conversation[:1])
                 continue
             if answer["value"] is None:
                 return ended("none")
@@ -4868,7 +4910,150 @@ def field_slots(spec) -> list:
     return [slot for slot in out if slot is not None]
 
 
-def context_budget(prompt, spec=None) -> int:
+def _counted_words(text) -> int:
+    """Words of *text* as its lines are shown: each non-empty line with its
+    number."""
+    return sum(len(line.split()) + 1
+               for line in (text or "").split("\n") if line.strip())
+
+
+def shows_tokens(db_path) -> dict:
+    """The tokens the three shows that are unbounded take at most, counted
+    off the database in one pass (owner decision 2026-11-17: nothing is
+    cut): {"headings", "title_page", "outline"}, each the most of any
+    document, in words times the rule `window_words_per_token`.
+
+    - headings: the title of every section, each as the line a request
+      shows (`addressed.Plan.headings`); a section without a title is headed
+      by its first line, as `lookup.title_of` heads it.
+    - title_page: every line of the first page, else of the page the rule
+      `title_page_also` names (`units.title_page_of`); figures only where
+      the rule `title_page_with_figures` says.
+    - outline: every table and figure of the document under the heading of
+      its section, each as the entry the request shows
+      (`shows._hit_outline`), the most a request can list.
+
+    All 0 where there is no database to count."""
+    out = {"headings": 0, "title_page": 0, "outline": 0}
+    if db_path is None or not Path(db_path).is_file():
+        return out
+    letter = units_map.letter_headings()
+    current = ("WHERE d.is_current = 1 "
+               if rules.get("current_versions_only") else "")
+    pages = tuple(dict.fromkeys((rules.get("title_page_first"),
+                                 rules.get("title_page_also"))))
+    marks = ", ".join("?" * len(pages))
+    figures = bool(rules.get("title_page_with_figures"))
+    heads: dict = {}
+    counted: dict = {}
+    front: dict = {}                       # document -> {page: words}
+    items_of: dict = {}                    # section id -> [words per entry]
+    section_head: dict = {}                # section id -> (document, words)
+
+    def first_line(column: str) -> str:
+        return (f"substr({column}, 1, instr({column} || char(10), "
+                f"char(10)) - 1)")
+
+    conn = sqlite3.connect(readonly_uri(db_path), uri=True)
+    try:
+        for document, section, title, page, content in conn.execute(
+                "SELECT s.document, s.id, COALESCE(NULLIF(TRIM(s.title), ''), "
+                + first_line("s.content") + "), s.page_number, "
+                f"CASE WHEN s.page_number IN ({marks}) THEN s.content END "
+                "FROM Sections s JOIN Documents d ON d.id = s.document "
+                + current + "ORDER BY s.document, s.section_number", pages):
+            if (title or "").strip():
+                counted[document] = counted.get(document, 0) + 1
+                line = f"{letter}{counted[document]} {title.strip()}"
+                heads[document] = heads.get(document, 0) + len(line.split())
+            section_head[section] = (document, len((title or "").split()))
+            if content is not None:
+                by_page = front.setdefault(document, {})
+                by_page[page] = by_page.get(page, 0) + _counted_words(content)
+        for table, text, on_page in (("Tables", "markdown", True),
+                                     ("Images", "description", figures)):
+            for document, section, block, page, title, content in \
+                    conn.execute(
+                        "SELECT s.document, o.section, o.block_id, "
+                        "o.page_number, COALESCE(NULLIF(TRIM(o.caption), ''), "
+                        + first_line(f"o.{text}") + "), "
+                        f"CASE WHEN o.page_number IN ({marks}) THEN "
+                        f"o.{text} END FROM {table} o "
+                        "JOIN Sections s ON s.id = o.section "
+                        "JOIN Documents d ON d.id = s.document "
+                        + current, pages):
+                if content is not None and on_page:
+                    by_page = front.setdefault(document, {})
+                    by_page[page] = (by_page.get(page, 0)
+                                     + _counted_words(content))
+                if block:
+                    entry = {"id": block, "title": (title or "").strip()}
+                    items_of.setdefault(section, []).append(
+                        len(json.dumps(entry, ensure_ascii=False).split()))
+    finally:
+        conn.close()
+    listed: dict = {}                      # document -> outline words
+    bare = len(json.dumps({"heading": "", "items": []}).split())
+    for section, items in items_of.items():
+        document, title_words = section_head.get(section, (None, 0))
+        if document is not None:
+            listed[document] = (listed.get(document, 0) + bare
+                                + title_words + sum(items))
+    # The first page that has lines, as `units.title_page_of` takes it.
+    title_page = {document: next((by_page[page] for page in pages
+                                  if by_page.get(page)), 0)
+                  for document, by_page in front.items()}
+    per_token = rules.get("window_words_per_token")
+    for key, words in (("headings", heads), ("title_page", title_page),
+                       ("outline", listed)):
+        out[key] = int(max(words.values(), default=0) * per_token)
+    return out
+
+
+def headings_tokens(db_path) -> int:
+    """Tokens the headings of one request take at most
+    (`shows_tokens`)."""
+    return shows_tokens(db_path)["headings"]
+
+
+def shown_by_flow() -> dict:
+    """Which of the shows `shows_tokens` counts the flow of the run shows:
+    {"title_page", "outline"} as booleans, over the boxes that are on.
+
+    The title page: an asking box with the input that shows it, where the
+    rule `show_title_page` that stands for it (its own, a frame's, the
+    run's) is not "never". The outline: an asking box with the input
+    `hit_outline` that may fetch (setting `fetch`, rule `fetch_rounds` of at
+    least 1) and whose rule `fetches` allows an item (`shows._hit_outline`).
+    """
+    from docpipe.profile import active_profile
+    from .engine import Engine
+    from .general import parts_of
+    shown = {"title_page": False, "outline": False}
+    for node, frames in flow_map.on(flow_map.tree_of(active_profile())):
+        if node.get("box") != "ask":
+            continue
+
+        def own(name):
+            for one in (node, *reversed(frames)):
+                said = Engine.own_values(one).get(name)
+                if said is not None:
+                    return said
+            return rules.get(name)
+
+        shows = {one.get("show") for one in parts_of(node)["inputs"] or ()
+                 if isinstance(one, dict)}
+        if "title_page" in shows and own("show_title_page") != "never":
+            shown["title_page"] = True
+        if "hit_outline" in shows and Engine.setting(node, "fetch", "ask") \
+                and int(own("fetch_rounds")) >= 1 \
+                and "item" in own("fetches"):
+            shown["outline"] = True
+    return shown
+
+
+def context_budget(prompt, spec=None, headings: int = 0,
+                   title_page: int = 0, outline: int = 0) -> int:
     """Tokens one harvest request needs at worst — a floor for the server.
 
     Counted, not guessed: system prompt, parameter payload and JSON envelope,
@@ -4892,10 +5077,15 @@ def context_budget(prompt, spec=None) -> int:
     did not fit the window and was never sent.
 
     A request shows the pieces of a search: as many as the flow says
-    (`search_per_request`), each of its lines (`piece_lines`) and headings
-    (`headings`) at the tokens the longest line takes (`window_line_tokens`);
-    each piece may bring a crop. Each number counts at its largest in the
-    flow, wherever a box sets one for itself.
+    (`search_per_request`), each of its lines (`piece_lines`) at the tokens
+    the longest line takes (`window_line_tokens`); each piece may bring a
+    crop. Each number counts at its largest in the flow, wherever a box sets
+    one for itself. Above them stand the headings up to the place, all of
+    them, once per request: *headings* tokens, which `headings_tokens`
+    counts off the database the run reads. Two more shows are not bounded
+    either: the whole title page and the outline of a hit's sections, which
+    count *title_page* and *outline* tokens (`shows_tokens`) where the flow
+    shows them (`shown_by_flow`), else 0.
     """
     payload = rules.get("window_floor_tokens")
     if spec is not None:
@@ -4917,13 +5107,17 @@ def context_budget(prompt, spec=None) -> int:
                       + rules.get("window_extra_tokens")
                       + (rules.get("dynamic_list_tokens") if dynamic else 0))
     per_request = most_of_number("search_per_request")
-    lines = most_of_number("piece_lines") + most_of_number("headings")
+    lines = most_of_number("piece_lines")
+    shown = shown_by_flow() if (title_page or outline) else {}
     # Of each group of ways the longest: a step may choose any of them.
     words = len(thread_map.widest(prompt.text,
                                   getattr(prompt, "id", "")).split())
     return int(words * rules.get("window_words_per_token")
                + per_request * lines
                * rules.get("window_line_tokens")         # the pieces' text
+               + headings                                   # all headings
+               + (title_page if shown.get("title_page") else 0)
+               + (outline if shown.get("outline") else 0)
                + (rules.get("window_tokens_per_image") * per_request
                   if attach_images() else 0)               # their crops
                + payload                                    # payload + envelope
@@ -4961,16 +5155,20 @@ def answer_tokens_of(prompt) -> int:
     return max(own) if own else int(rules.get(name))
 
 
-def request_budget(spec, profile=None) -> int:
+def request_budget(spec, profile=None, headings: int = 0,
+                   title_page: int = 0, outline: int = 0) -> int:
     """Tokens the largest request this run sends needs, per request.
 
     The window a server is started with has to hold every request kind of the
     run, so it follows the largest of them. Read off the prompts the run
     sends (`survey_prompt_ids`): one per kind of request of the reading
     (`addressed.KINDS`). Never off one that no request carries, and not the
-    review, which has a line of its own in the doctor.
+    review, which has a line of its own in the doctor. *headings*,
+    *title_page*, *outline*: what `shows_tokens` counts off the database the
+    run reads.
     """
-    return max(context_budget(prompts.load(prompt_id, profile), spec)
+    return max(context_budget(prompts.load(prompt_id, profile), spec,
+                              headings, title_page, outline)
                for prompt_id in survey_prompt_ids())
 
 
@@ -5632,7 +5830,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
              "search")
     # The largest request of the run, over the prompts it sends: what the
     # server is started with, what the doctor checks and what it is asked for.
-    required = request_budget(spec)
+    required = request_budget(spec, **shows_tokens(args.db))
     if args.print_context_budget:
         print(required)
         return 0
@@ -5941,7 +6139,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
         _hard_exit(STOPPED_EXIT)
         return STOPPED_EXIT
 
-    log_usage(request_budget(spec))
+    log_usage(required)
     failures += unheld_requests()
     log.info("extraction: done in %.0f s, %d failure(s)",
              time.time() - started, failures)

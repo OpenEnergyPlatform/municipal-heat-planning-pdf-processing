@@ -142,6 +142,42 @@ def get_candidate_faiss_ids(
         for r in conn.execute(sql, params).fetchall()
     ]
 
+def pieces_of(conn: sqlite3.Connection, faiss_ids) -> dict:
+    """{faiss_id: {"piece", "part", "page", "first_line", "last_line",
+    "embedding_type"}} of the vectors *faiss_ids*: which piece of its owner
+    each is, which part of it, the page its first own line stands on and
+    its own lines (owner decision 2026-11-17: a hit leads to its section or
+    table and to the page of its piece). {} for a database whose vectors are
+    of whole owners (format 1), and no entry for a vector of a whole owner."""
+    ids = [int(i) for i in faiss_ids]
+    out: dict = {}
+    # Format 1 is told by its columns; any other database error raises.
+    columns = {row[1] for row in conn.execute(
+        'PRAGMA table_info("Embeddings")').fetchall()}
+    if "piece" not in columns:
+        return {}
+    for start in range(0, len(ids), 500):
+        part = ids[start:start + 500]
+        marks = ",".join("?" * len(part))
+        rows = conn.execute(
+            'SELECT "faiss_id", "piece", "part", "page", "first_line", '
+            '"last_line", "embedding_type" FROM "Embeddings" '
+            f'WHERE "faiss_id" IN ({marks}) AND "piece" IS NOT NULL',
+            part).fetchall()
+        for faiss_id, piece, part_no, page, first, last, etype in rows:
+            out[int(faiss_id)] = {"piece": piece, "part": part_no,
+                                  "page": page, "first_line": first,
+                                  "last_line": last, "embedding_type": etype}
+    return out
+
+
+def with_piece(hit: dict, place: Optional[dict]) -> dict:
+    """*hit* with the piece its best vector is (`pieces_of`), where known."""
+    if place:
+        hit["piece"] = dict(place)
+    return hit
+
+
 _PLACEHOLDER_RE = re.compile(r"\[([a-z0-9_]+)\]")
 
 
@@ -350,19 +386,21 @@ def section_segments_geo(
     origin), or None. See pdf_link.best_segment_rects.
 
     On a pre-bbox database (no `bbox` column) every rects slot is None, so the
-    caller falls back to the `&search=` phrase highlight.
+    caller falls back to the `&search=` phrase highlight. The database is
+    told by its columns; any other database error raises.
     """
-    try:
-        rows = conn.execute(
-            "SELECT p.page_number AS page, s.text AS text, s.bbox AS bbox "
-            "FROM Segments s JOIN Pages p ON s.page = p.id "
-            "WHERE s.section = ? AND s.kind = 'text' "
-            "AND s.text IS NOT NULL AND s.text != '' "
-            "ORDER BY s.ordinal",
-            (section_id,),
-        ).fetchall()
-    except sqlite3.OperationalError:               # no `bbox` column yet
+    columns = {row[1] for row in conn.execute(
+        'PRAGMA table_info("Segments")').fetchall()}
+    if "bbox" not in columns:
         return [(p, t, None) for (p, t) in section_segments(conn, section_id)]
+    rows = conn.execute(
+        "SELECT p.page_number AS page, s.text AS text, s.bbox AS bbox "
+        "FROM Segments s JOIN Pages p ON s.page = p.id "
+        "WHERE s.section = ? AND s.kind = 'text' "
+        "AND s.text IS NOT NULL AND s.text != '' "
+        "ORDER BY s.ordinal",
+        (section_id,),
+    ).fetchall()
 
     out: list[tuple[int, str, Optional[list]]] = []
     for r in rows:

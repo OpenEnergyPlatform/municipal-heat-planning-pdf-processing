@@ -52,22 +52,22 @@ _FIGURE_TYPES = {EMBEDDING_TYPE_FIGURE_TEXT, EMBEDDING_TYPE_FIGURE_VL}
 # 338 ms rather than 1.1 ms per document at corpus scale. Do not "simplify"
 # these back to JOIN; test_database.py asserts the resulting query plans.
 
-# Items of one document that already carry an embedding.
+# Items of one document that already carry an embedding, by piece and part.
 _EXISTING_SECTION_SQL = (
-    "SELECT s.section_number, e.embedding_type "
+    "SELECT s.section_number, e.embedding_type, e.piece, e.part "
     "FROM Sections s CROSS JOIN Embeddings e "
     "  ON e.owner_kind = 'section' AND e.owner_id = s.id "
     "WHERE s.document = ?"
 )
 _EXISTING_TABLE_SQL = (
-    "SELECT s.section_number, t.block_id, e.embedding_type "
+    "SELECT s.section_number, t.block_id, e.embedding_type, e.piece, e.part "
     "FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
     "CROSS JOIN Embeddings e "
     "  ON e.owner_kind = 'table' AND e.owner_id = t.id "
     "WHERE s.document = ?"
 )
 _EXISTING_FIGURE_SQL = (
-    "SELECT s.section_number, i.block_id, e.embedding_type "
+    "SELECT s.section_number, i.block_id, e.embedding_type, e.piece, e.part "
     "FROM Sections s CROSS JOIN Images i ON i.section = s.id "
     "CROSS JOIN Embeddings e "
     "  ON e.owner_kind = 'figure' AND e.owner_id = i.id "
@@ -412,18 +412,21 @@ def section_content(section: dict) -> str:
 
 def table_values(section_id: Optional[int], t: dict) -> tuple:
     """A merged table as its Tables row holds it: (section, block_id, path,
-    page_number, caption, markdown, bbox, qa, context_sentence)."""
+    page_number, caption, markdown, bbox, qa, context_sentence); the
+    sentences of a table asked in parts as one JSON list (`context.stored`)."""
+    from .context import stored
     return (section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
             t.get("caption"), t.get("markdown"), _bbox_json(t), _qa_json(t),
-            t.get("context_sentence"))
+            stored(t.get("context_sentence")))
 
 
 def image_values(section_id: Optional[int], fig: dict) -> tuple:
     """A merged figure as its Images row holds it: (section, block_id, path,
     page_number, caption, description, bbox, context_sentence)."""
+    from .context import stored
     return (section_id, fig.get("id"), fig.get("path", ""), fig.get("page_number"),
             fig.get("caption"), fig.get("description"), _bbox_json(fig),
-            fig.get("context_sentence"))
+            stored(fig.get("context_sentence")))
 
 
 def page_rows(section: dict) -> list:
@@ -693,16 +696,18 @@ def get_existing_embeddings(
     pdf_name: str,
     *,
     doc_id: Optional[int] = None,
-) -> set[tuple[str, int, Optional[str]]]:
+) -> set[tuple]:
     """
     Items of this PDF that already have embeddings, as a set of
-    (embedding_type, section_index, item_id) — item_id is the table/figure
-    block id, None for section-level embeddings. Empty if the doc is unknown.
+    (embedding_type, section_index, item_id, piece, part) — item_id is the
+    table/figure block id, None for section-level embeddings; piece None for
+    a vector of a whole owner written before pieces. Empty if the doc is
+    unknown.
 
     Runs on the calling thread's connection. Pass `doc_id` when the caller has
     already resolved it — the prepare loop asks document_id() first.
     """
-    existing: set[tuple[str, int, Optional[str]]] = set()
+    existing: set[tuple] = set()
 
     conn = _worker_connection(db_path)
     if doc_id is None:
@@ -710,18 +715,19 @@ def get_existing_embeddings(
     if doc_id is None:
         return existing
 
-    for section_number, etype in conn.execute(_EXISTING_SECTION_SQL, (doc_id,)):
-        existing.add((etype, section_number, None))
+    for section_number, etype, piece, part in conn.execute(
+            _EXISTING_SECTION_SQL, (doc_id,)):
+        existing.add((etype, section_number, None, piece, part))
 
-    for section_number, block_id, etype in conn.execute(
+    for section_number, block_id, etype, piece, part in conn.execute(
         _EXISTING_TABLE_SQL, (doc_id,)
     ):
-        existing.add((etype, section_number, block_id))
+        existing.add((etype, section_number, block_id, piece, part))
 
-    for section_number, block_id, etype in conn.execute(
+    for section_number, block_id, etype, piece, part in conn.execute(
         _EXISTING_FIGURE_SQL, (doc_id,)
     ):
-        existing.add((etype, section_number, block_id))
+        existing.add((etype, section_number, block_id, piece, part))
 
     return existing
 
@@ -729,16 +735,19 @@ def get_existing_embeddings(
 # The FAISS id of each embedded item of one document, by the key
 # get_existing_embeddings uses. CROSS JOIN for the same reason as above.
 _EMBEDDING_IDS_SQL = (
-    "SELECT e.embedding_type, s.section_number, NULL, e.faiss_id "
+    "SELECT e.embedding_type, s.section_number, NULL, e.piece, e.part, "
+    "e.faiss_id "
     "FROM Sections s CROSS JOIN Embeddings e "
     "  ON e.owner_kind = 'section' AND e.owner_id = s.id WHERE s.document = ? "
     "UNION ALL "
-    "SELECT e.embedding_type, s.section_number, t.block_id, e.faiss_id "
+    "SELECT e.embedding_type, s.section_number, t.block_id, e.piece, e.part, "
+    "e.faiss_id "
     "FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
     "CROSS JOIN Embeddings e "
     "  ON e.owner_kind = 'table' AND e.owner_id = t.id WHERE s.document = ? "
     "UNION ALL "
-    "SELECT e.embedding_type, s.section_number, i.block_id, e.faiss_id "
+    "SELECT e.embedding_type, s.section_number, i.block_id, e.piece, e.part, "
+    "e.faiss_id "
     "FROM Sections s CROSS JOIN Images i ON i.section = s.id "
     "CROSS JOIN Embeddings e "
     "  ON e.owner_kind = 'figure' AND e.owner_id = i.id WHERE s.document = ?"
@@ -746,12 +755,42 @@ _EMBEDDING_IDS_SQL = (
 
 
 def ids_of_document(connection: sqlite3.Connection, doc_id: int) -> dict:
-    """{(embedding_type, section_index, item_id): faiss_id} of one document,
-    read only: what a new index file has to hold under the same ids
-    (chunking/reembed.py)."""
-    return {(etype, section_number, item_id): int(faiss_id)
-            for etype, section_number, item_id, faiss_id in connection.execute(
-                _EMBEDDING_IDS_SQL, (doc_id, doc_id, doc_id))}
+    """{(embedding_type, section_index, item_id, piece, part): faiss_id} of
+    one document, read only: what a new index file has to hold under the
+    same ids (chunking/reembed.py)."""
+    return {(etype, section_number, item_id, piece, part): int(faiss_id)
+            for etype, section_number, item_id, piece, part, faiss_id
+            in connection.execute(_EMBEDDING_IDS_SQL, (doc_id, doc_id, doc_id))}
+
+
+def ensure_format(db_path: Path) -> int:
+    """Bring the database at *db_path* up to the format of this code
+    (`store.schema.migrate`; format 2 gives Embeddings its pieces). Returns
+    the format it had."""
+    from docpipe.store import schema as store_schema
+    with closing(connect(db_path)) as conn:
+        return store_schema.migrate(conn)
+
+
+def wholes_of_index(db_path: Path) -> list:
+    """The FAISS ids of every vector of a whole owner, written before the
+    entries of the index were pieces (piece NULL): the embed step takes
+    them out of the index and embeds their owners again in pieces."""
+    with closing(connect(db_path)) as conn:
+        return [int(row[0]) for row in conn.execute(
+            "SELECT faiss_id FROM Embeddings WHERE piece IS NULL")]
+
+
+def drop_wholes(db_path: Path, ids) -> int:
+    """Delete the Embeddings rows of *ids*; returns how many went."""
+    ids = [int(i) for i in ids]
+    if not ids:
+        return 0
+    with closing(connect(db_path)) as conn:
+        conn.executemany("DELETE FROM Embeddings WHERE faiss_id = ?",
+                         [(i,) for i in ids])
+        conn.commit()
+    return len(ids)
 
 
 def embedding_ids(db_path: Path, doc_id: int) -> dict:
@@ -857,10 +896,12 @@ def next_faiss_id(db_path: Path) -> int:
 
 
 _EMBEDDING_UPSERT_SQL = (
-    "INSERT INTO Embeddings (faiss_id, embedding_type, owner_kind, owner_id) "
-    "VALUES (?, ?, ?, ?) "
-    "ON CONFLICT(owner_kind, owner_id, embedding_type) "
-    "DO UPDATE SET faiss_id = excluded.faiss_id"
+    "INSERT INTO Embeddings (faiss_id, embedding_type, owner_kind, owner_id, "
+    "piece, part, page, first_line, last_line) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+    "ON CONFLICT(owner_kind, owner_id, embedding_type, piece, part) "
+    "DO UPDATE SET faiss_id = excluded.faiss_id, page = excluded.page, "
+    "first_line = excluded.first_line, last_line = excluded.last_line"
 )
 
 
@@ -926,9 +967,12 @@ class EmbeddingWriter:
     def write(
         self,
         pdf_name: str,
-        records: list[tuple[str, int, Optional[str], int]],
+        records: list[tuple],
     ) -> None:
-        """Write one document's share of a batch; see write_embedding_ids_batch."""
+        """Write one document's share of a batch; see write_embedding_ids_batch.
+        A record is (embedding_type, section_index, item_id, faiss_id) and,
+        after it, (piece, part, page, first_line, last_line); a record of
+        four is piece 0, part 0."""
         if not records:
             return
 
@@ -951,7 +995,11 @@ class EmbeddingWriter:
         rows: list[tuple] = []
         unresolved: list[tuple] = []
 
-        for embedding_type, section_index, item_id, faiss_id in records:
+        for record in records:
+            embedding_type, section_index, item_id, faiss_id = record[:4]
+            rest = tuple(record[4:9])
+            piece, part, page, first_line, last_line = (
+                rest + (0, 0, None, None, None)[len(rest):])
             section_db_id = sections.get(section_index)
             if section_db_id is None:
                 unresolved.append((embedding_type, item_id))
@@ -977,7 +1025,8 @@ class EmbeddingWriter:
                 unresolved.append((embedding_type, item_id))
                 continue
 
-            rows.append((faiss_id, embedding_type, owner_kind, owner_id))
+            rows.append((faiss_id, embedding_type, owner_kind, owner_id,
+                         piece, part, page, first_line, last_line))
 
         self._conn.executemany(_EMBEDDING_UPSERT_SQL, rows)
 
@@ -997,13 +1046,14 @@ class EmbeddingWriter:
 def write_embedding_ids_batch(
     db_path: Path,
     pdf_name: str,
-    records: list[tuple[str, int, Optional[str], int]],
+    records: list[tuple],
 ) -> None:
     """
     Write FAISS embedding ids to the DB in one transaction.
 
-    `records` are (embedding_type, section_index, item_id, faiss_id); item_id is
-    the table/figure block id, None for sections. Records whose owner row
+    `records` are (embedding_type, section_index, item_id, faiss_id, piece,
+    part, page, first_line, last_line); item_id is the table/figure block
+    id, None for sections. Records whose owner row
     cannot be resolved are skipped and counted — the vector is already in the
     FAISS index, so skipping one means index and database have drifted apart,
     which is worth a line in the log rather than silence.

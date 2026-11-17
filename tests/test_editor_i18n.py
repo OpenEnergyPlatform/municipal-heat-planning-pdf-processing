@@ -524,8 +524,7 @@ def measured_texts() -> list:
     from docpipe.editor import measured
 
     numbers = {"search_pieces": 3, "listed_field_factor": 2,
-               "search_per_request": 1, "follow_ups": 1, "replies": 1,
-               "list_meanings": 1}
+               "search_per_request": 1, "follow_ups": 1, "replies": 1}
     out = []
     for n, noted in ((1, True), (2, False), (1_234, True)):
         found = {

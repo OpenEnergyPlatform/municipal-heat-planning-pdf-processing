@@ -40,14 +40,10 @@ from docpipe.extraction.trust import (  # noqa: E402
 COLUMNS = ("document", "level", "reasons", "parameter", "value", "unit",
            "page", "owner", "title", "image", "quote", "coordinates")
 
-# A cell has to fit a spreadsheet and a terminal; the harvest keeps the whole
-# passage and this list is not the archive.
-CELL = 300
-
-
 def _cell(text) -> str:
+    """The whole text on one line; nothing is cut."""
     flat = " ".join(str(text if text is not None else "").split())
-    return flat if len(flat) <= CELL else flat[:CELL].rstrip() + " …"
+    return flat
 
 
 def coordinates(row: dict) -> str:

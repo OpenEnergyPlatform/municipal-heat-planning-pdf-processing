@@ -687,8 +687,7 @@ which is what makes the second reading a check on the first and not an
 independent one.
 
 The parent goes through `make_parents` rather than being fetched from
-`parent_section` directly, so a section too long for the window arrives
-cut around this row's own placeholder instead of from its first character.
+`parent_section` directly, so a parent already shown is not shown twice.
 
 Its own connection per thread, like `make_parents`: read-only, and SQLite
 handles are not shared. The content is, with the parents too: *content*,
@@ -1450,6 +1449,22 @@ that takes about 20 at once refused the rest outright (one probe,
 run may have open at once (*limit*, the run's `LIMIT`), holds no more
 connections than requests in flight. Made once, with the first client.
 
+### asked_again
+
+```python
+def asked_again(system: str, conversation: list, said, correction: str,
+                cause: str, wanted: int, *, whole: bool = False,
+                anew: Optional[list] = None) -> list
+```
+
+The conversation of the next attempt after a reply that could not be
+read: *conversation*, the reply as it was (all of it), and what was
+wrong with it. Where that does not fit the window, the request starts
+anew (*anew*, else *conversation* as it was) and names the cause in one
+sentence, so that a long reply is never cut to be shown (owner decision
+2026-11-17). The sentence is the harvest's own (its phrase
+`asked_anew`), said where `docpipe.reading.with_note` says a note.
+
 ### log_usage
 
 ```python
@@ -1516,15 +1531,28 @@ same model and a narrower window, so what it can find is a reading that
 contradicts itself -- not a reading that is wrong about the picture in the
 same way twice.
 
-### around
+### quote_lines
 
 ```python
-def around(text: str, quote: str, chars: int) -> Optional[str]
+def quote_lines(passage, quote: str) -> list
 ```
 
-*chars* characters of *text* on each side of *quote*, the quote among
-them, or None where *text* does not hold it. Found as it stands, else
-with the white space of both folded to single blanks.
+The numbers of the lines of *passage* that hold *quote*: the quote
+found in its lines joined by blanks, white space folded to single
+blanks on both sides, and each line it touches. [] where the passage
+does not hold it.
+
+### piece_text
+
+```python
+def piece_text(source, quote: str, size: int) -> Optional[str]
+```
+
+The whole piece of *source* that holds the lines of *quote*, as the
+request shows a piece: the lines every piece of the passage carries (a
+table's title and head, a figure's caption), the piece's own lines, and
+for a section's text its heading. A quote over two pieces gives both.
+None where the passage does not hold the quote.
 
 ### make_value_checking
 
@@ -1596,8 +1624,9 @@ Two questions that come to one statement leave one row: the profile's
 *passages_of(document_id)* is the plan's passages in their order. With it
 a request has the reading's tools (`reading.Gathered`: the next or the
 previous section, a table or figure by its placeholder, a search by
-pattern or by a sentence), each passage cut to two pages of the plan
-(*pages_of*, `lookup.two_pages`), and a question that takes a number
+pattern or by a sentence), each passage whole where the request's window
+holds it, else in parts that each carry its heading (*pages_of* is no
+longer read), and a question that takes a number
 (`Question.take`) may take it from whatever the request showed: a
 passage, its title, a hit's line or title (owner decision 2026-11-05).
 *rank(document_id, probes, exclude)* is the plan ranked for a sentence,
@@ -2011,10 +2040,58 @@ Every slot a request can ask, one per request: the parameter, the
 unit, each parameter's coordinates and the value of a category parameter
 asked again.
 
+### shows_tokens
+
+```python
+def shows_tokens(db_path) -> dict
+```
+
+The tokens the three shows that are unbounded take at most, counted
+off the database in one pass (owner decision 2026-11-17: nothing is
+cut): {"headings", "title_page", "outline"}, each the most of any
+document, in words times the rule `window_words_per_token`.
+
+- headings: the title of every section, each as the line a request
+  shows (`addressed.Plan.headings`); a section without a title is headed
+  by its first line, as `lookup.title_of` heads it.
+- title_page: every line of the first page, else of the page the rule
+  `title_page_also` names (`units.title_page_of`); figures only where
+  the rule `title_page_with_figures` says.
+- outline: every table and figure of the document under the heading of
+  its section, each as the entry the request shows
+  (`shows._hit_outline`), the most a request can list.
+
+All 0 where there is no database to count.
+
+### headings_tokens
+
+```python
+def headings_tokens(db_path) -> int
+```
+
+Tokens the headings of one request take at most
+(`shows_tokens`).
+
+### shown_by_flow
+
+```python
+def shown_by_flow() -> dict
+```
+
+Which of the shows `shows_tokens` counts the flow of the run shows:
+{"title_page", "outline"} as booleans, over the boxes that are on.
+
+The title page: an asking box with the input that shows it, where the
+rule `show_title_page` that stands for it (its own, a frame's, the
+run's) is not "never". The outline: an asking box with the input
+`hit_outline` that may fetch (setting `fetch`, rule `fetch_rounds` of at
+least 1) and whose rule `fetches` allows an item (`shows._hit_outline`).
+
 ### context_budget
 
 ```python
-def context_budget(prompt, spec=None) -> int
+def context_budget(prompt, spec=None, headings: int = 0,
+                   title_page: int = 0, outline: int = 0) -> int
 ```
 
 Tokens one harvest request needs at worst — a floor for the server.
@@ -2040,10 +2117,15 @@ sectors whose parameter payload counts 9,627. Unmeasured, that request
 did not fit the window and was never sent.
 
 A request shows the pieces of a search: as many as the flow says
-(`search_per_request`), each of its lines (`piece_lines`) and headings
-(`headings`) at the tokens the longest line takes (`window_line_tokens`);
-each piece may bring a crop. Each number counts at its largest in the
-flow, wherever a box sets one for itself.
+(`search_per_request`), each of its lines (`piece_lines`) at the tokens
+the longest line takes (`window_line_tokens`); each piece may bring a
+crop. Each number counts at its largest in the flow, wherever a box sets
+one for itself. Above them stand the headings up to the place, all of
+them, once per request: *headings* tokens, which `headings_tokens`
+counts off the database the run reads. Two more shows are not bounded
+either: the whole title page and the outline of a hit's sections, which
+count *title_page* and *outline* tokens (`shows_tokens`) where the flow
+shows them (`shown_by_flow`), else 0.
 
 ### most_of_number
 
@@ -2068,7 +2150,8 @@ themselves (rule `max_tokens`), else the run's.
 ### request_budget
 
 ```python
-def request_budget(spec, profile=None) -> int
+def request_budget(spec, profile=None, headings: int = 0,
+                   title_page: int = 0, outline: int = 0) -> int
 ```
 
 Tokens the largest request this run sends needs, per request.
@@ -2077,7 +2160,9 @@ The window a server is started with has to hold every request kind of the
 run, so it follows the largest of them. Read off the prompts the run
 sends (`survey_prompt_ids`): one per kind of request of the reading
 (`addressed.KINDS`). Never off one that no request carries, and not the
-review, which has a line of its own in the doctor.
+review, which has a line of its own in the doctor. *headings*,
+*title_page*, *outline*: what `shows_tokens` counts off the database the
+run reads.
 
 ### select_documents
 

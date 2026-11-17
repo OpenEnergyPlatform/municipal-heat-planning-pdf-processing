@@ -18,10 +18,16 @@ that carry a picture are left out and the index holds the text vectors of a
 corpus. A vLLM server in the messages form (EMBEDDING_API_FORMAT) takes the
 picture too, and then every input is embedded.
 
-A batch the embedder could not serve leaves its inputs without a vector. The
-other batches are finished first; the inputs left over are counted by
-embedding type and by document, and the run ends with them named, not with
-them forgotten.
+A batch the embedder could not serve leaves its inputs without a vector; an
+embedder that answers item by item (`process_each`, the messages form) leaves
+only the item it could not serve. The other batches are finished first; the
+inputs left over are counted by embedding type and by document, and the run
+ends with them named, not with them forgotten.
+
+Nothing is cut (owner decision 2026-11-17): what one input holds is the
+embedder's window (`window_of`), the inputs are split to fit it before they
+are embedded (`chunking.fit_inputs`), and an input that still does not fit is
+an error the run names, never a vector of its beginning.
 
 Author: Felix Vossel
 
@@ -47,6 +53,7 @@ The inputs of a run that came back without a vector.
 Counted by embedding type and by document, so the sentence that ends the
 run says how many inputs of which kind have none. Inputs a text-only
 backend leaves out on purpose are not here: nothing went wrong with them.
+Each one is logged with its reason when it is added.
 
 #### Unembedded.\_\_init\_\_
 
@@ -57,7 +64,7 @@ def __init__(self) -> None
 #### Unembedded.add
 
 ```python
-def add(self, inputs) -> None
+def add(self, inputs, reason: str = "") -> None
 ```
 
 #### Unembedded.sentence
@@ -91,6 +98,25 @@ def __init__(self, embedder=None)
 ```python
 def process(self, items)
 ```
+
+#### ApiIndexEmbedder.process_each
+
+```python
+def process_each(self, items) -> list
+```
+
+A unit vector or the exception of its request for each item: one
+item the server refuses costs that item alone.
+
+#### ApiIndexEmbedder.window
+
+```python
+def window(self)
+```
+
+What one item holds (`docpipe.window.Window`), as the wrapped
+embedder's server says it; texts bounded by their bytes against the
+configured length where it says nothing.
 
 ## Functions
 
@@ -156,6 +182,36 @@ across all visible GPUs in bf16, or on the CPU in fp32 where there is
 none (`qwen3_vl_embedding.dtype_for`): a MultiGPUEmbedder, which exposes
 the same ``process()`` interface as a single Qwen3VLEmbedder.
 
+### window_of
+
+```python
+def window_of(embedder)
+```
+
+What one input of *embedder* holds (`docpipe.window.Window`): its own
+where it says it (the server's window, its tokenizer, the cost of a
+picture), else the configured length with texts bounded by their bytes
+and a picture at most as the model's processor scales it.
+
+### fits_of
+
+```python
+def fits_of(window) -> "Callable"
+```
+
+fits(text, picture): does an input fit *window*.
+
+### without_pictures
+
+```python
+def without_pictures(inputs: list, embedder) -> list
+```
+
+*inputs* without those with a picture when *embedder* takes text only
+(`text_only`: the OpenAI form has no place for one), with a warning for
+the ones left out. A picture is never measured against the window of
+such an embedder, so this comes before `chunking.fit_inputs`.
+
 ### create_embeddings
 
 ```python
@@ -179,12 +235,13 @@ Inputs are split into text-only and VL groups and packed into full
 ``batch_size`` batches across documents; each input's ``pdf_name`` keeps the
 DB writeback grouped per document.
 
-A batch that fails is logged and the others are finished. Its inputs have
-no row, so a rerun finds them again. They are added to `unembedded`, which
-the caller keeps across calls and ends its run on. Without one this call
-raises IncompleteIndex once every batch has been tried, with the vectors
-of the others already in `index` and the database: a failure is never
-only a log line.
+A batch that fails is logged and the others are finished; with an
+embedder that answers item by item (`process_each`) only the items it
+refused fail. Their inputs have no row, so a rerun finds them again. They
+are added to `unembedded`, which the caller keeps across calls and ends
+its run on. Without one this call raises IncompleteIndex once every batch
+has been tried, with the vectors of the others already in `index` and the
+database: a failure is never only a log line.
 
 Persisting the index is the caller's: this is called once per flush chunk,
 and the index is one file rewritten whole.

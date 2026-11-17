@@ -333,9 +333,9 @@ RULES = (
        empty=True, decided="2026-11-08",
        where="units.py"),
     _r("title_page_also", "flow", "Chunks", "whole",
-       "The page whose first lines are the title page when the first page "
-       "has none. The first page is tried first. A document with a cover "
-       "page of no text can name its second page here.",
+       "The page whose lines are the title page, all of them, when the "
+       "first page has none. The first page is tried first. A document "
+       "with a cover page of no text can name its second page here.",
        least=1, decided="2026-11-08", where="units.py"),
     # -- flow: search ---------------------------------------------------------
     _r("rerank", "flow", "Search", "switch",
@@ -512,11 +512,6 @@ RULES = (
        "and costs more requests. A smaller number ends calculations sooner.",
        least=1,
        env="EXTRACT_CODE_ROUNDS", decided="2026-11-03", where="runner.py"),
-    _r("code_output_chars", "flow", "Calculation", "whole",
-       "The most characters of the output of a code run that the model is "
-       "shown. Longer output is cut off. A larger number shows more of a "
-       "long result and makes the next request longer.", least=1,
-       where="runner.py"),
     _r("compute_shown", "flow", "Calculation", "map",
        "How many of the best search hits the search tools of a calculation "
        "show, for each kind: sections, tables and figures. A larger number "
@@ -596,7 +591,6 @@ STEPS = {
     "repeat_timeout_s": ASKING + ("each value",),
     "least_answer_tokens": ASKING + ("each value",),
     "code_rounds": ("compute",),
-    "code_output_chars": ("compute",),
     "compute_shown": ("compute",),
     "same_request_once": ASKING + ("each value",),
 }

@@ -22,7 +22,7 @@ from pathlib import Path
 import openai
 
 from docpipe import providers, reading, usage
-from docpipe.llm_preflight import further_room, request_extras, served_window
+from docpipe.llm_preflight import further_room, request_extras, served_window, stage_fits
 from docpipe.reading import Hole
 
 from .config import (
@@ -34,9 +34,28 @@ from .config import (
     VLM_MAX_TOKENS,
     MAX_RETRIES,
     RETRY_PENALTIES,
+    IMAGE_TOKENS,
 )
 
 log = logging.getLogger(__name__)
+
+
+def _fits_served(room: int):
+    """fits(messages): does a request of *messages*, its picture and a reply
+    of *room* tokens fit the window the vision server reported? Counted as
+    the server counts it (`llm_preflight.stage_fits`: the bytes of the texts
+    first, then its tokenizer). The stage has no picture factor, so a picture
+    costs IMAGE_TOKENS, as the stage's budget counts it
+    (`config.max_request_tokens`). Always where no window is known."""
+    fits = stage_fits("vlm", VLM_BASE_URL, VLM_MODEL, VLM_API_KEY,
+                      picture=_picture_cost)
+    if fits is None:
+        return lambda messages: True
+    return lambda messages: fits(messages, room)
+
+
+def _picture_cost(_part) -> int:
+    return IMAGE_TOKENS
 
 
 def _http_status(exc: Exception) -> int | None:
@@ -293,12 +312,12 @@ def call_vision(
                             room, max_tokens, current_penalty)
                 messages = list(base_messages)
             elif attempt < max_retries:
-                # A reply that is not the object → feed it back, with what was
-                # wrong with it, so the model can correct it.
-                messages = base_messages + [
-                    {"role": "assistant", "content": raw},
-                    {"role": "user", "content": said},
-                ]
+                # A reply that is not the object → feed it back, all of it,
+                # with what was wrong with it, so the model can correct it;
+                # where that does not fit the served window, the request
+                # starts anew with the cause named (`reading.again`).
+                messages = reading.again(base_messages, raw, said, cause,
+                                         fits=_fits_served(room))
 
         if server_needs_time and attempt < max_retries:
             time.sleep(5 * attempt)

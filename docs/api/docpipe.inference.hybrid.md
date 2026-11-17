@@ -46,7 +46,8 @@ def current_documents(conn: sqlite3.Connection) -> Optional[set]
 ```
 
 The ids of the documents that are the current version of their
-work, or None for a database that does not record versions.
+work, or None for a database that does not record versions (told by its
+columns; any other database error raises).
 
 ### dense_corpus
 

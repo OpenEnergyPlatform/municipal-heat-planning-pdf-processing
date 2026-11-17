@@ -27,8 +27,6 @@ from .profile import ENV_VAR, load_profile
 
 # A placeholder as Stage 3 writes it: [p85_tbl0], [p17_img1].
 _ITEM_PLACEHOLDER = re.compile(r"\[p\d+_(?:tbl|img)\d+\]")
-# Past this a "caption" is a paragraph that happens to start with one.
-_CAPTION_LIMIT = 300
 
 # How a caption opens is a fact about the language a corpus is written in,
 # so the core holds no pattern of it. The profile lists them in
@@ -122,4 +120,13 @@ def resolve_title(caption, content, block_id) -> str:
     stored = (caption or "").strip()
     if stored and stored in title:
         title = title[:title.index(stored) + len(stored)]
-    return title[:_CAPTION_LIMIT] if title else caption
+    if not title:
+        return caption
+    # The caption is the whole sentence that names the item, up to its end
+    # (owner decision 2026-11-17): a caption broken over lines is one
+    # sentence, and a text without a sentence end is taken whole. Nothing is
+    # cut by length.
+    from .extraction.units import sentences_of
+    flat = " ".join(title.split())
+    first = sentences_of(flat)
+    return first[0] if first else flat

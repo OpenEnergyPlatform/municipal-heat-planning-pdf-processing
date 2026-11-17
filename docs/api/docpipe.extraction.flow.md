@@ -99,9 +99,6 @@ The numbers one run reads with, and where each comes from.
 Fields:
 
 - `piece_lines: int`
-- `title_page_lines: int`
-- `headings: int`
-- `list_meanings: int`
 - `search_pieces: int`
 - `search_tables: int`
 - `search_figures: int`

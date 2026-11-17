@@ -124,26 +124,28 @@ def title_of(p: Source) -> str
 ### matching
 
 ```python
-def matching(passages: list[Source], pattern: str, room: int) -> Matches
+def matching(passages: list[Source], pattern: str,
+             room: Optional[int] = None) -> Matches
 ```
 
 The passages whose text matches `pattern` (case-insensitive), each as
-{"owner": [kind, id], "title", "line"}, in reading order, as many as fit
-in `room` characters of JSON; `total` counts every matching passage. An
+{"owner": [kind, id], "title", "line"}, in reading order; all of them
+where *room* is None (what the caller shows is its to size, never to
+cut), else as many as fit in `room` characters of JSON; `total` counts
+every matching passage. An
 invalid pattern and a pattern that times out come back as `fault` with
 no hits, never as an exception.
 
-### two_pages
+### hit_line
 
 ```python
-def two_pages(passages: list, pages: Optional[int],
-              span: Optional[float] = None) -> int
+def hit_line(lines, at: str, pattern: Optional[str] = None) -> Optional[int]
 ```
 
-The text of *span* pages of this plan, in characters: *span* times
-its mean; the rule `compute_fetch_pages` pages unless said otherwise.
-What the compute step cuts a passage it fetches to. A figure's
-description is not counted: a figure is never cut, whatever its
-description's length.
+The number of the line of a passage (*lines*, each with `number` and
+`text`) that a hit's line *at* stands for: the line that is it, else
+the lines it is made of (a paragraph the passage numbers by sentence);
+of several, the first the *pattern* matches, else the first. None where
+no line is it.
 
 [Back to the index](../README.md)

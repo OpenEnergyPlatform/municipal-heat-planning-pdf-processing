@@ -93,14 +93,24 @@ def needs_split(section: dict, max_words: int = SECTION_MAX_WORDS) -> bool
 ### outline
 
 ```python
-def outline(section: dict, sample_words: int = SECTION_OUTLINE_WORDS, *,
-            start: int = 0, stop: Optional[int] = None) -> str
+def outline(section: dict, *, start: int = 0,
+            stop: Optional[int] = None) -> str
 ```
 
-One numbered line per segment: its size and how it starts.
+One numbered line per segment: its size and its whole text.
 
 The segments *start* to *stop* (the whole section by default), each with
 its number in the section: the cuts the model names are those numbers.
+A block is shown whole, its whitespace as one space.
+
+### split_user
+
+```python
+def split_user(section: dict, start: int, stop: int) -> str
+```
+
+The user message of the split request of the segments *start* to
+*stop*: the title and the outline.
 
 ### apply_cuts
 

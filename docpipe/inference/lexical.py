@@ -52,8 +52,6 @@ SOURCES = {
                'FROM "Images" i JOIN "Sections" s ON s."id" = i."section"'),
 }
 _WORD = re.compile(r"\w+", re.UNICODE)
-# Words that are in every passage rank nothing and cost a scan each.
-MAX_WORDS = 24
 
 
 def path_for(db_path) -> Path:
@@ -178,7 +176,9 @@ def connect(db_path, index_path: Optional[Path] = None
 
 def words(text: str) -> list:
     """The words of a question as they are looked for: each once, in the
-    order they came, and not more than a question plausibly has."""
+    order they came, every one of them (owner decision 2026-11-17: nothing
+    of a question is cut). A word in every passage ranks nothing and costs
+    no more than a scan, which BM25 weighs by its rarity."""
     seen: list = []
     for word in _WORD.findall(text or ""):
         # Lowered and no more: the index folds what it stores itself and
@@ -186,7 +186,7 @@ def words(text: str) -> list:
         folded = word.lower()
         if len(folded) > 1 and folded not in seen:
             seen.append(folded)
-    return seen[:MAX_WORDS]
+    return seen
 
 
 def search(index: sqlite3.Connection, text: str, *,

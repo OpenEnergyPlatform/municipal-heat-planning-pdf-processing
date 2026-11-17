@@ -254,9 +254,4 @@ RULES = (
          where="fields.py (open_states), conditions.py, topup.py, stats.py",
          steps=FRAMES + BOXES + ("open", "summary")),
     # -- flow: calculation ----------------------------------------------------
-    rule("hit_line_chars", "flow", "Calculation", "whole",
-         "How many characters of the first line of a passage a list of "
-         "hits shows to the calculation's request. A larger number "
-         "shows more of each hit and makes the request longer.", least=1,
-         where="reading.py (first_line)", steps=("compute",)),
 )

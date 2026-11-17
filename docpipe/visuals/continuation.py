@@ -26,10 +26,6 @@ from __future__ import annotations
 
 from typing import Callable, Iterator, Optional
 
-# What stands between two tables is shown up to this many characters, its
-# start and its end, as the section's text beside a table is cut.
-BETWEEN_CHARS = 800
-
 # What a joined part keeps beside its start's rows: where it stood and what
 # the transcription measured of it.
 PART_KEYS = ("id", "page_number", "path", "bbox", "qa")
@@ -104,14 +100,6 @@ def _said(kind: str, item) -> str:
     return f"# {title}" if title else ""
 
 
-def _shortened(text: str, limit: int = BETWEEN_CHARS) -> str:
-    """*text*, its start and its end where it is longer than *limit*."""
-    if len(text) <= limit:
-        return text
-    half = (limit - 5) // 2
-    return text[:half].rstrip() + " ... " + text[-half:].lstrip()
-
-
 def links(sections: list) -> dict:
     """{table id: {"after": the id of the table before it, "between": the
     text between them}} for each table whose page lets it continue the table
@@ -132,7 +120,7 @@ def links(sections: list) -> dict:
             said = [_said(other, one) for other, one in between]
             out[item.get("id")] = {
                 "after": previous[1].get("id"),
-                "between": _shortened("\n".join(s for s in said if s))}
+                "between": "\n".join(s for s in said if s)}
         previous, between = (page, item), []
     return out
 

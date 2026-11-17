@@ -1,9 +1,6 @@
 {
   "numbers": {
     "piece_lines": 8,
-    "title_page_lines": 12,
-    "headings": 10,
-    "list_meanings": 24,
     "search_pieces": 50,
     "search_tables": 20,
     "search_figures": 15,

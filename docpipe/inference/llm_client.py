@@ -178,7 +178,11 @@ def get_client():
 # reader (`reading.HOLE_CAUSES`), or that it was never sent because the
 # provider cannot be asked for the shape in question.
 NOT_ASKED = "not_asked"
-FAULT_CAUSES = reading.HOLE_CAUSES + (NOT_ASKED,)
+# The conversation so far no longer fits the model's window beside the rest
+# of the request. Nothing is dropped from it to make it fit (owner decision
+# 2026-11-17): the turn says so and the person starts a new conversation.
+CONVERSATION_TOO_LONG = "conversation_too_long"
+FAULT_CAUSES = reading.HOLE_CAUSES + (NOT_ASKED, CONVERSATION_TOO_LONG)
 
 
 class ReplyError(RuntimeError):
@@ -447,7 +451,12 @@ def _chat_json(messages: list, temperature: float) -> dict:
                     getattr(choice, "finish_reason", None))
         if cause == "cut_off":
             break
-        convo = _with_correction(base_messages, said)
+        # The correction names the whole reply where the reply broke; where
+        # that does not fit the window the turn is asked anew with its cause
+        # named (`reading.again`), nothing of the reply cut.
+        with reading.speaking(wording.chat_profile()):
+            convo = reading.again(base_messages, None, said, cause,
+                                  fits=_fits_chat, echo=False)
 
     note_fault(request, cause)
     raise ReplyError(cause, request, attempt)
@@ -487,20 +496,108 @@ def grounded_quote(quote, chunk_item: dict) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# The window of the chat model
+# ---------------------------------------------------------------------------
+# What the server says about its window, kept for as long as it says it; a
+# server that did not answer is asked again after `window.ASK_AGAIN_S`, not
+# at every turn.
+_WINDOW_LOCK = threading.Lock()
+_WINDOW: dict = {}
+
+
+def _chat_window():
+    """The `window.Window` of the chat model, its frame the reply it may
+    write (LLM_MAX_TOKENS): the window the run's preflight reported, else
+    the one the server's model card says, counted by the server's own
+    tokenizer where it has one. None where no window is known."""
+    from docpipe import window as windows
+    from docpipe.llm_preflight import served_window
+    if LLM_STUB_MODE:
+        return None
+    with _WINDOW_LOCK:
+        known = _WINDOW.get("window")
+        asked = _WINDOW.get("asked", 0.0)
+        if known is not None \
+                or time.monotonic() - asked < windows.ASK_AGAIN_S:
+            return known
+        _WINDOW["asked"] = time.monotonic()
+    limit = served_window("llm") or windows.served_limit(
+        LLM_BASE_URL, LLM_MODEL, LLM_API_KEY, timeout=5.0)
+    if not limit:
+        return None
+    made = windows.Window(
+        limit, frame=LLM_MAX_TOKENS,
+        count=windows.server_counter(LLM_BASE_URL, LLM_MODEL, LLM_API_KEY))
+    with _WINDOW_LOCK:
+        _WINDOW["window"] = made
+    return made
+
+
+def _window_in_force():
+    """`_chat_window`, its frame the reply room that is actually asked for:
+    a reply that was cut off is asked again with twice the room (`_ask`), and
+    a request is judged with the room it is sent with. None where no window
+    is known."""
+    made = _chat_window()
+    room = _ROOM.get()
+    if made is None or room is None or room == made.frame:
+        return made
+    from docpipe import window as windows
+    return windows.Window(made.limit, frame=room, count=made.count,
+                          picture=made.picture, _counted=made._counted)
+
+
+def _fits_chat(messages: list) -> bool:
+    """Does a request of *messages* fit the chat model's window
+    (`_window_in_force`)? Always where no window is known."""
+    made = _window_in_force()
+    if made is None:
+        return True
+    texts = []
+    for message in messages:
+        content = message.get("content")
+        for part in (content if isinstance(content, list)
+                     else [{"type": "text", "text": content or ""}]):
+            if part.get("type") != "image_url":
+                texts.append(str(part.get("text") or ""))
+    return made.fits("\n".join(texts))
+
+
+def _too_long(request: str, rest: str, history_text: str) -> bool:
+    """Does the conversation (*history_text*) make a request that would fit
+    without it too long for the window? Then the turn is not asked, and its
+    fault list says so (`CONVERSATION_TOO_LONG`); a request that does not
+    fit even without the conversation is not the conversation's fault and
+    goes on as it was. False where the window is not known."""
+    if not history_text:
+        return False
+    made = _window_in_force()
+    if made is None or made.fits(rest + history_text) or not made.fits(rest):
+        return False
+    log.warning("%s: the conversation (%d characters) no longer fits the "
+                "window of %d tokens", request, len(history_text),
+                made.limit)
+    note_fault(request, CONVERSATION_TOO_LONG)
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
-def _history_context(history: Optional[list], limit: int = 5) -> str:
+def _history_context(history: Optional[list]) -> str:
     """
-    A compact block of the last `limit` turns (question, anchor, answer — never
-    the retrieved excerpts) for resolving references in a follow-up. Framed
-    strictly as reference-resolution help, never as a fact source, so grounding
-    stays tied to the current excerpts. Empty string if there is no history.
+    A block of every turn of the conversation (question, anchor, whole answer —
+    never the retrieved excerpts) for resolving references in a follow-up.
+    Framed strictly as reference-resolution help, never as a fact source, so
+    grounding stays tied to the current excerpts. Empty string if there is no
+    history. Nothing is left out to make it shorter: where the conversation no
+    longer fits the window, `_too_long` says so and the turn is not asked.
     """
     if not history:
         return ""
     blocks = []
-    for turn in history[-limit:]:
+    for turn in history:
         task = str(turn.get("task", "")).strip()
         if not task:
             continue
@@ -510,7 +607,7 @@ def _history_context(history: Optional[list], limit: int = 5) -> str:
             lines.append(f"  {_w()['history_phrase']}: {anchor}")
         answer = str(turn.get("answer", "")).strip()
         if answer:
-            lines.append(f"  {_w()['history_answer']}: {answer[:800]}")
+            lines.append(f"  {_w()['history_answer']}: {answer}")
         blocks.append("\n".join(lines))
     if not blocks:
         return ""
@@ -541,7 +638,11 @@ def make_search_phrase(task: str, visual: bool = False,
     # rejects a second one ("System message must be at the beginning"). Fold our
     # instructions into the user turn instead.
     prompt = _prompt("inference/image_phrase") if visual else _prompt("inference/phrase")
-    base = f"{prompt}{_history_context(history)}\n\n{_w()['task_heading']}:\n{task}"
+    kept = _history_context(history)
+    rest = f"{prompt}\n\n{_w()['task_heading']}:\n{task}"
+    if _too_long(replies.PHRASE[0], rest, kept):
+        return task.strip(), False
+    base = f"{prompt}{kept}\n\n{_w()['task_heading']}:\n{task}"
     messages = [{"role": "user", "content": base}]
     try:
         parsed = _ask(replies.PHRASE, messages, temperature=LLM_TEMPERATURE)
@@ -606,21 +707,37 @@ def ask_chunk(task: str, chunk_items: list[dict]) -> dict:
     return {"found": True, "answer": answer, "quote": quote}
 
 
-def _format_exec_result(out: dict) -> str:
-    """The user-turn text fed back to the model after a sandbox run."""
+def _exec_parts(out: dict) -> tuple:
+    """(heading, output) of a sandbox run as the model is shown it: its
+    stdout, or the error it ended with."""
     if out.get("ok"):
         s = (out.get("stdout") or "").strip()
-        return f"{_w()['exec_stdout']}:\n" + (s if s else _w()["exec_empty"])
-    err = (out.get("error") or (out.get("stderr") or "")).strip() or _w()["exec_unknown"]
-    return f"{_w()['exec_failed']}:\n" + err[:1500] + "\n" + _w()["exec_recover"]
+        return _w()["exec_stdout"], (s if s else _w()["exec_empty"])
+    err = (out.get("error") or (out.get("stderr") or "")).strip() \
+        or _w()["exec_unknown"]
+    return _w()["exec_failed"], err
 
 
-def _compute_tail(compute: list, force: bool) -> str:
+def _format_exec_result(out: dict, shown: bool = True) -> str:
+    """The user-turn text fed back to the model after a sandbox run. An
+    output that is not *shown* (it does not fit the window, `_answer_text`)
+    stands as one sentence with its size (`exec_too_long`); nothing of it is
+    cut."""
+    heading, said = _exec_parts(out)
+    if not shown:
+        said = _w()["exec_too_long"].format(
+            characters=len(said), lines=len(said.splitlines()) or 1)
+    recover = "" if out.get("ok") else "\n" + _w()["exec_recover"]
+    return f"{heading}:\n" + said + recover
+
+
+def _compute_tail(compute: list, force: bool, hidden=frozenset()) -> str:
     """
     User-message suffix carrying prior code runs. The ReAct loop must stay
     SINGLE-TURN (no assistant echo of the action JSON) because some gateway
     agents reject a JSON-string assistant turn — so each round re-sends the
-    accumulated results inside the user message.
+    accumulated results inside the user message. The output of the runs
+    numbered in *hidden* (from 0) is not shown (`_format_exec_result`).
     """
     if not compute:
         return ""
@@ -628,10 +745,48 @@ def _compute_tail(compute: list, force: bool) -> str:
     # that printed it. The numbers restart with every call.
     done = "\n\n".join(
         f"{_w()['code_heading']} {n}:\n{c['code']}\n"
-        f"{_format_exec_result(c['output'])}"
+        f"{_format_exec_result(c['output'], n - 1 not in hidden)}"
         for n, c in enumerate(compute, start=1))
     guide = _w()["compute_guide_final"] if force else _w()["compute_guide"]
     return f"\n\n{_w()['compute_heading']}:\n" + done + "\n\n" + guide
+
+
+class _RoundsTooLong(Exception):
+    """The request no longer fits the window even with the output of every
+    code run left out: the conversation is full (`CONVERSATION_TOO_LONG`)."""
+
+
+def _answer_text(base: str, compute: list, requested: list, force: bool,
+                 image_parts: list) -> str:
+    """The text of one round of the answer loop: *base* and the tails of the
+    runs and the requested crops. Where it does not fit the window
+    (`_fits_chat`), the output of the largest runs is left out, one after the
+    other until it fits, and said so in its place; older rounds stay and
+    nothing of an output is cut. `_RoundsTooLong` where it still does not fit
+    though the request without any round does."""
+    requests = _requested_tail(requested, force)
+    hidden: set = set()
+
+    def text() -> str:
+        return base + _compute_tail(compute, force, hidden) + requests
+
+    def fits(body: str) -> bool:
+        return _fits_chat(_answer_messages(body, image_parts))
+
+    if not compute or fits(text()):
+        return text()
+    sizes = [len(_exec_parts(c["output"])[1]) for c in compute]
+    for n in sorted(range(len(compute)), key=lambda i: -sizes[i]):
+        hidden.add(n)
+        log.warning("answer_from_sources: the output of code run %d (%d "
+                    "characters) does not fit the window: not shown", n + 1,
+                    sizes[n])
+        if fits(text()):
+            return text()
+    if not fits(base + requests):
+        return text()                       # not the rounds' fault: as it was
+    note_fault(replies.ANSWER, CONVERSATION_TOO_LONG)
+    raise _RoundsTooLong()
 
 
 def _requested_tail(requested: list, force: bool) -> str:
@@ -843,7 +998,12 @@ def answer_from_sources(task: str, chunk_items: list[dict],
         prompt = prompt + _prompt("inference/image_hint")
     payload = json.dumps({"task": task, "prior": prior or None,
                           "excerpt": chunk_items}, ensure_ascii=False)
-    base = f"{prompt}{_history_context(history)}\n\n{payload}"
+    kept = _history_context(history)
+    if _too_long(replies.ANSWER, f"{prompt}\n\n{payload}", kept):
+        return {"statements": [], "complete": False, "compute": [],
+                "attached_images": [], "requested": [],
+                "fault": CONVERSATION_TOO_LONG}
+    base = f"{prompt}{kept}\n\n{payload}"
 
     image_parts, attached = [], []
     for idx in sorted(images or {}):
@@ -860,9 +1020,9 @@ def answer_from_sources(task: str, chunk_items: list[dict],
     splittable = len(chunk_items) > 1 and _depth < SPLIT_DEPTH
 
     def call(force: bool) -> dict:
-        tail = _compute_tail(compute, force) + _requested_tail(requested, force)
+        body = _answer_text(base, compute, requested, force, image_parts)
         return _ask(replies.answer(actions=not force),
-                    _answer_messages(base + tail, image_parts),
+                    _answer_messages(body, image_parts),
                     temperature=LLM_TEMPERATURE, splittable=splittable)
 
     try:
@@ -912,6 +1072,10 @@ def answer_from_sources(task: str, chunk_items: list[dict],
             # got here without the reader is no answer, and says so.
             note_fault(replies.ANSWER, "missing_key")
             raise ReplyError("missing_key", replies.ANSWER)
+    except _RoundsTooLong:
+        return {"statements": [], "complete": False, "compute": compute,
+                "attached_images": attached, "requested": requested,
+                "fault": CONVERSATION_TOO_LONG}
     except ReplyError as unread:
         if unread.cause == "cut_off" and splittable:
             cut = len(chunk_items) // 2
@@ -1059,9 +1223,13 @@ def pick_values(task: str, entries: list,
     shape = replies.picked(ids)
     payload = json.dumps({"task": task, "entries": entries},
                          ensure_ascii=False)
+    kept = _history_context(history)
+    if _too_long(shape[0], f"{_prompt('inference/pick_values')}\n\n{payload}",
+                 kept):
+        return []
     base = [{"role": "user",
              "content": f"{_prompt('inference/pick_values')}"
-                        f"{_history_context(history)}\n\n{payload}"}]
+                        f"{kept}\n\n{payload}"}]
     messages = base
     for _attempt in range(LLM_MAX_RETRIES):
         try:

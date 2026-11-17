@@ -28,8 +28,8 @@ RULES: tuple = (
        where="addressed.py (title_page_shown)"),
     _r("show_headings", "flow", SHOWN, "switch",
        "Whether a request shows the headings above the place it asks about, "
-       "as many as the number of headings says. Headings tell the model "
-       "which section a line belongs to. Off: no heading is shown.",
+       "all of them in reading order, the nearest last. Headings tell the "
+       "model which section a line belongs to. Off: no heading is shown.",
        steps=("works", "find", "coord", "work_coordinate", "search",
               "last_year", "phrase", "about"),
        where="shows.py (_headings, _value_headings), "
@@ -159,24 +159,28 @@ RULES: tuple = (
        "its own. Off: it does not, so the first row under the head is the "
        "line after the last head line.", steps=("split",),
        where="units.py (table_lines)"),
-    _r("table_foot_lines", "flow", "Chunks", "whole",
-       "How many lines under a table, its notes such as \"* ohne "
-       "Industrie\" or \"Angaben in MWh/a\", every chunk of the table "
-       "shows as it shows the title and the head, and so every request "
-       "about one of its values: what such a line says holds for each "
-       "number of the table. Further lines under it are lines of chunks of "
-       "their own. 0: a line under a table is shown only in its own chunk.",
-       least=0, decided="2026-11-17", steps=("split",),
+    _r("table_foot_lines", "flow", "Chunks", "switch",
+       "Whether the lines under a table, its notes such as \"* ohne "
+       "Industrie\" or \"Angaben in MWh/a\", go with every chunk of the "
+       "table, all of them, as the title and the head do, and so with "
+       "every request about one of its values and with every entry of the "
+       "table in the index: what such a line says holds for each number of "
+       "the table. Off: a line under a table is shown in its own chunk "
+       "only.", decided="2026-11-17", steps=("split",),
        where="units.py (table_lines)"),
     _r("table_parent_rows", "flow", "Chunks", "switch",
-       "Whether a row of a table whose first cell is indented under a row "
-       "above it, by spaces or a mark such as \"└\", is shown with the rows "
-       "it stands under wherever it is shown: in each of its chunks and in "
-       "every request about one of its values, so that \"└ Erdgas\" says "
-       "under \"Wohngebäude\" whose gas it is. Off: a row is shown alone, "
-       "and the row above it only where it stands in the same chunk.",
+       "Whether a row of a table is shown with the rows it stands under "
+       "wherever it is shown: in each of its chunks, in every request "
+       "about one of its values and in every entry of the table in the "
+       "index. A row stands under the row above it whose first cell it is "
+       "indented under, by spaces or a mark such as \"└\", so that \"└ "
+       "Erdgas\" says under \"Wohngebäude\" whose gas it is; and under the "
+       "group row above it, a row that fills its first cell only (\"AT\", "
+       "\"2030\"), up to the next group row. Off: a row is shown alone, and "
+       "the rows above it only where they stand in the same chunk.",
        decided="2026-11-17", steps=("split",),
-       where="units.py (row_parents, Chunk.shown, passage_lines)"),
+       where="units.py (group_row, row_parents, Chunk.shown, "
+             "passage_lines)"),
     _r("figure_part", "flow", "Chunks", "choice",
        "Which chunks of a figure a field reads. By the kind of field: a "
        "field of numbers reads the chunks of its numbers and any other field "
@@ -190,9 +194,10 @@ RULES: tuple = (
            "each field", "each piece"),
        where="addressed.py (Plan.part)"),
     _r("title_page_first", "flow", "Chunks", "whole",
-       "The page whose first lines are tried first as the title page. The "
-       "page of the rule \"the page whose first lines are the title page "
-       "when the first page has none\" is tried after it.", least=1, decided="2026-11-08", steps=("document",),
+       "The page whose lines are tried first as the title page, all of "
+       "them. The page of the rule \"the page whose lines are the title "
+       "page when the first page has none\" is tried after it.", least=1,
+       decided="2026-11-08", steps=("document",),
        where="units.py (title_page_of)"),
     _r("title_page_with_figures", "flow", "Chunks", "switch",
        "Whether the lines of a figure may be lines of the title page. Off: "
@@ -249,17 +254,6 @@ RULES: tuple = (
        "has one value only. First: the first find. All: every find, so that "
        "a search can make several rows.", choices=("first", "all"),
        steps=("search",), where="targets.py (over_hits)"),
-    _r("hit_outline", "flow", "Search", "whole",
-       "How many tables and figures a search request lists in an outline "
-       "beside the hits. For each section a hit stands in, its "
-       "heading and under it the tables and figures of that section the "
-       "request does not show, each as its placeholder and title line, so "
-       "that the model can fetch one with `item`. Standard 8; headings do "
-       "not count. The outline is no place to answer from: an answer is "
-       "still a shown line. Shown only where the answer may fetch an `item` "
-       "(rules `fetches`, `fetch_rounds`). 0: no outline.",
-       least=0, decided="2026-11-17", steps=("search",),
-       where="shows.py (_hit_outline)"),
     _r("about_other", "flow", "Search", "choice",
        "Which finds of a search are checked as finds from another place. "
        "Passage: a find in a passage other than the value's own. Any: every "
@@ -372,23 +366,11 @@ RULES: tuple = (
               "last_year", "work_coordinate"),
        where="units.py (Shown.evidence)"),
     # -- flow: lists ---------------------------------------------------------
-    _r("two_step_list", "flow", "Lists", "switch",
-       "Whether a list longer than the number of entries shown with their "
-       "meaning, whose entries belong to groups, is asked in two steps: the "
-       "group first, then the entry. Off: such a list is shown by the names "
-       "of its entries in one step.",
-       decided="2026-11-08", steps=LISTED + ("each field", "each value"),
-       where="addressed.py (listing)"),
     _r("group_without_entries", "flow", "Lists", "choice",
        "What happens where the group a find names has no entry in the "
-       "list. All entries: the whole list is shown. None: no entry is "
-       "chosen.", choices=("all_entries", "none"),
-       decided="2026-11-08", steps=LISTED,
-       where="addressed.py (Reader._entry)"),
-    _r("group_picks_taken", "flow", "Lists", "choice",
-       "Which groups of a list asked in two steps count where the answer "
-       "names several. First: the first group named. All: every group "
-       "named, and the entry is chosen among the entries of all of them.", choices=("first", "all"),
+       "list. All entries: the whole list is shown, every entry with what "
+       "it means. None: no entry is chosen.",
+       choices=("all_entries", "none"),
        decided="2026-11-08", steps=LISTED,
        where="addressed.py (Reader._entry)"),
     _r("same_name_two_entries", "spec", "Lists and wording", "switch",

@@ -887,13 +887,12 @@ class Engine:
             table_head=bool(self.setting(node, "table_head", "split")),
             caption=bool(self.setting(node, "caption", "split")),
             figure_numbers=bool(self.setting(node, "figure_numbers",
-                                             "split")),
-            headings=self.number_of_split("headings"))
+                                             "split")))
 
     def number_of_split(self, key: str) -> int:
         node = self.split_node
         own = (node or {}).get("own") or {}
-        name = {"lines": "piece_lines", "headings": "headings"}[key]
+        name = {"lines": "piece_lines"}[key]
         if key in own:
             rules.noted(name)
             return int(own[key])

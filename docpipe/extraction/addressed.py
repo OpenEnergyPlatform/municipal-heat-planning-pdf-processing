@@ -83,8 +83,8 @@ from . import flow as flow_map
 from .fields import (EXHAUSTED, NUMBER, OUT_OF_SLICE, READ, SAID_UNSTATED,
                      UNBACKED)
 from .pipeline import Row, Source, merge_field, row_label
-from .reading import (CUT, GETS, NO_ANSWER, Read, link_ranges, slots_of,
-                      span_rows)
+from .reading import (CUT, GETS, NO_ANSWER, TOO_LONG, Read, link_ranges,
+                      slots_of, span_rows)
 from .units import (Chunk, Cut, Line, cut_pieces, letter_headings,
                     letter_settings, letter_title_page,
                     Passage, Shown, address_of, chunks_of, own_lines,
@@ -119,9 +119,9 @@ WORDS_NOT_IN_LINE = "words_not_in_line"
 # file (`runner.take_flow`) and a reading made without one takes from the
 # default profile's (`flow.default`): the pieces a search shows, first the
 # best of each kind up to its share, then the best of the rest, and how many
-# a request shows; the entries up to which a list is shown with what each
-# means; the headings shown up to a value's place; the lines of a piece and
-# of the title page; how often an answer that did not hold is asked again.
+# a request shows; the lines of a piece; how often an answer that did not hold is asked
+# again. The title page, the headings up to a place and the entries of a list
+# are shown whole.
 
 # A name not on the document's list yet.
 NEW = "new"
@@ -757,34 +757,27 @@ def said_none(reply) -> bool:
                for pick in (given if isinstance(given, list) else [given]))
 
 
+# Where a sentence of a list entry's meaning ends, for splitting one that
+# does not fit a request.
+SENTENCE_END = regex.compile(r"(?<=[.!?])\s+")
+
 # A find's entry that is no number of its request's list (`not_an_option`,
 # owner decision 2026-09-11).
 NOT_AN_OPTION = "not_an_option"
 
 
-def listing(options, meanings: int, two_step: bool = True) -> tuple:
+def listing(options, two_step: bool = True) -> tuple:
     """(lines, choices, grouped) of a list as a request shows it (owner
-    decisions 2026-11-08): a list longer than *meanings* entries
-    (`flow.Numbers.list_meanings`) whose entries name groups is shown by
-    its groups, each a choice; a shorter one with what each entry means, a
-    longer one by its names. *choices* are what a number picks, labels or
-    group names. The rule `two_step_list` says whether a long list of groups
-    is asked in two steps, *two_step* that this list is the first of them:
-    the entries of the groups chosen are never shown as groups."""
-    options = list(options)
-    groups: list = []
-    for option in options:
-        group = getattr(option, "group", "") or ""
-        if group and group not in groups:
-            groups.append(group)
-    if len(options) > meanings and len(groups) > 1 \
-            and two_step and rules.get("two_step_list"):
-        return ([f"{i} {group}" for i, group in enumerate(groups, start=1)],
-                groups, True)
+    decision 2026-11-17: nothing is cut): every entry with its number in
+    the list and what it means, never only its name. *choices* are what a
+    number picks, the entries' labels. *grouped* is always False: a list is
+    no longer asked group first, a list that does not fit a request is asked
+    in parts (`Reader.entry_picks`); the flag and *two_step* stay for the
+    callers that unpack them."""
     lines = []
     for i, option in enumerate(options, start=1):
         text = f"{i} {option.label}"
-        if option.definition and len(options) <= meanings:
+        if option.definition:
             text += f" (means: {option.definition})"
         lines.append(text)
     return lines, [option.label for option in options], False
@@ -1380,17 +1373,16 @@ class Plan:
                  chunk_units: Optional[int] = None, *, numbers=None,
                  cut: Optional[Cut] = None,
                  cutting: Optional[Callable] = None):
-        # How many lines a piece and the title page hold and how many
-        # headings are shown up to a place are the flow's (`flow.Numbers`);
-        # *chunk_units* says another size of the pieces, *cut* how the
+        # How many lines a piece holds is the flow's (`flow.Numbers`); the
+        # title page and the headings are shown whole (owner decision
+        # 2026-11-17). *chunk_units* says another size of the pieces, *cut* how the
         # flow's split box cuts them (`units.Cut`); *cutting()* is the
         # context the pieces are cut in (the split box's own values,
         # `engine.Engine.step`).
         self.numbers = numbers or flow_map.default()
         if cut is None:
             cut = Cut(lines=flow_map.number(self.numbers, "piece_lines")
-                      if chunk_units is None else chunk_units,
-                      headings=flow_map.number(self.numbers, "headings"))
+                      if chunk_units is None else chunk_units)
         elif chunk_units is not None:
             cut = dataclasses.replace(cut, lines=chunk_units)
         self.cut = cut
@@ -1426,9 +1418,7 @@ class Plan:
         self.places = {numbers: {chunk.key: i for i, chunk in
                                  enumerate(view)}
                        for numbers, view in self.views.items()}
-        self.title_page = title_page_of(
-            list(self.passages.values()),
-            flow_map.number(self.numbers, "title_page_lines"))
+        self.title_page = title_page_of(list(self.passages.values()))
         self.settings: list = []          # [(Line, Source)]
         self.bases: list = []             # `pipeline.named_years` entries
         self.lists: dict = {}
@@ -1441,6 +1431,8 @@ class Plan:
         self._locks: dict = {}
         self._headings: dict = {}
         self._first: set = set()
+        # Set while this context builds a request only to measure it.
+        self._measure = contextvars.ContextVar("measuring", default=False)
         # Where each dimension was read for the values of a passage (owner
         # decision 2026-11-17): {(dimension, value's passage): {piece key:
         # how many values read it there}}, for the search of the same
@@ -1481,6 +1473,10 @@ class Plan:
         document? Told once per step (rule `show_title_page`, "first")."""
         step = rules.STEP.get()
         key = step.ident if step is not None else ""
+        if self._measure.get():
+            # A request built to measure records nothing.
+            with self.lock:
+                return key not in self._first
         with self.lock:
             if key in self._first:
                 return False
@@ -1491,26 +1487,33 @@ class Plan:
         with self.lock:
             return self._locks.setdefault(key, threading.Lock())
 
+    @contextlib.contextmanager
+    def measuring(self):
+        """A request built only to measure it: it does not count as the
+        first request of its step (`first_request`)."""
+        token = self._measure.set(True)
+        try:
+            yield
+        finally:
+            self._measure.reset(token)
+
     def headings(self, owner: tuple) -> list:
-        """[(Line, Source)] of the titles of the sections up to a passage,
-        its own last (`lookup.sections_up_to`)."""
-        # As many as the step that runs says (`headings`), else as the
-        # split box cut the document with.
-        own, value = rules.stepped_value("headings")
-        count = int(value) if own else self.cut.headings
+        """[(Line, Source)] of the titles of every section up to a passage
+        in reading order, its own last (`lookup.sections_up_to`); none is
+        left out (owner decision 2026-11-17)."""
         with self.lock:
-            if (owner, count) in self._headings:
-                return self._headings[(owner, count)]
+            if owner in self._headings:
+                return self._headings[owner]
         got: list = []
         for section in lookup.sections_up_to(self.sources, tuple(owner),
-                                             count):
+                                             len(self.sources)):
             title = lookup.title_of(section)
             if title:
                 got.append((Line(len(got) + 1, title, (), "heading"),
                             Source(section.owner_kind, section.owner_id,
                                    title, section.provenance)))
         with self.lock:
-            self._headings[(owner, count)] = got
+            self._headings[owner] = got
         return got
 
     def chunk_of(self, owner: tuple, number: int,
@@ -1733,19 +1736,16 @@ class Untaken:
 def untaken_items(plan: Plan, claims: list) -> list:
     """The numbers of the plan's tables and figures no value of *claims*
     took, in the plan's order, each as an `Untaken` (owner decision
-    2026-11-17): a cell of a table's row that prints a number other than a
-    year, its words the number the cell prints (the first where it prints
-    several), and for a figure's line of numbers each number of the line
-    other than a year, one item each. Taken as `numbers_untaken` counts."""
+    2026-11-17): every number other than a year a cell of a table's row
+    prints, one item each ("12 / 15" gives two items of one cell address),
+    and for a figure's line of numbers each number of the line other than a
+    year, one item each. Taken as `numbers_untaken` counts."""
     out = []
     for owner, _passage, units in _number_units(plan, claims):
         for line, cell, text, taken in units:
             if taken:
                 continue
-            tokens = number_tokens(text)
-            if cell is not None:
-                tokens = tokens[:1]
-            for token in tokens:
+            for token in number_tokens(text):
                 out.append(Untaken(owner, line.number, cell, token,
                                    line.text))
     return out
@@ -1895,9 +1895,8 @@ class Reader:
     are the numbers of the flow the reading is bounded by (`flow.Numbers`,
     the default profile's where none are given): they say *budget*, *shares*
     and *per_request* where those are not given, how many times the budget
-    a field with a list reads, up to how many entries a list is shown with
-    what each means and how often an answer that did not hold is asked
-    again. *image_of(source)* is the picture of a figure a coordinate
+    a field with a list reads and how often an answer that did not hold is
+    asked again. *image_of(source)* is the picture of a figure a coordinate
     request may ask for (`IMAGE`), None where the run attaches none.
     """
 
@@ -2168,13 +2167,10 @@ class Reader:
 
     def list_of(self, options, two_step: bool = True) -> tuple:
         """A list as every request of this reading shows it (`listing`):
-        with what each entry means up to the flow's number of entries
-        (`flow.Numbers.list_meanings`). Every place that shows a list or
+        every entry with what it means. Every place that shows a list or
         reads a number of one goes through here, so that a number is read
         against the list it was given for."""
-        return listing(options,
-                       flow_map.number(self.numbers, "list_meanings"),
-                       two_step)
+        return listing(options, two_step)
 
     def listed(self, parameter) -> Optional[tuple]:
         """The list a field's finds name their entry in (`list_of`), None
@@ -2261,12 +2257,8 @@ class Reader:
             slot = fields.value_choice(parameter)
             entry = ""
             if slot.options and got.entry is not None:
-                _lines, choices, grouped = self.list_of(slot.options)
-                if got.entry and grouped:
-                    entry = self.entry(plan, parameter.uri, "value", slot,
-                                       got.words, got, counts,
-                                       group=choices[got.entry - 1])
-                elif got.entry:
+                _lines, choices, _grouped = self.list_of(slot.options)
+                if got.entry:
                     entry = choices[got.entry - 1]
             elif slot.options:
                 entry = self.entry(plan, parameter.uri, "value", slot,
@@ -2388,8 +2380,6 @@ class Reader:
         2026-11-09: what an earlier answer wrote beside an entry steered
         every later one)."""
         from types import SimpleNamespace
-        from . import forms
-        from .general import nested
         options = list(slot.options)
         if not options:
             return [words] if several else words
@@ -2406,25 +2396,6 @@ class Reader:
                 if rules.get("group_without_entries") == "none":
                     return [] if several else ""
                 chosen = options
-        else:
-            lines, choices, grouped = self.list_of(options)
-            if grouped:
-                # A long list in two steps: its groups, then the entries of
-                # the group chosen (the first group named, or every one the
-                # rule `group_picks_taken` says), with what each means.
-                every = rules.get("group_picks_taken") == "all"
-                ask = nested(self, "entry", plan,
-                             {**values, "options": lines}, node)
-                req = ask.request()
-                shape, example = forms.of(ask.reply, req, several=every)
-                reply = ask.ask(req, shape, example, counts, **noted,
-                                step="group")
-                picks = self._picks(reply, len(choices), every) or []
-                if picks:
-                    named = {choices[i - 1] for i in
-                             (picks if every else picks[:1])}
-                    chosen = [o for o in options
-                              if (getattr(o, "group", "") or "") in named]
         # What is chosen among now are entries, never the groups again.
         listed, labels, _grouped = self.list_of(chosen, two_step=False)
         ways = [] if rules.get("entry_once_per_wording") \
@@ -2435,13 +2406,94 @@ class Reader:
             if earlier:
                 ways.append("list_shows_earlier")
         noted = {**noted, **second_ways(ways)}
+        picks = self.entry_picks(plan, values, listed, len(labels), several,
+                                 counts, noted, node, earlier)
+        picked = [labels[i - 1] for i in picks or []]
+        if several:
+            return picked
+        return picked[0] if picked else ""
+
+    def entry_picks(self, plan: Plan, values: dict, listed: list,
+                    size: int, several: bool, counts: Counts, noted: dict,
+                    node: Optional[dict], earlier: list,
+                    numbers: Optional[list] = None) -> list:
+        """The numbers of the entries a list request names (owner decision
+        2026-11-17: nothing is cut, a list is split instead). *listed* are
+        the lines of the list, each with its number and what it means,
+        *numbers* the entries asked about (all where None). A list whose
+        request fits the window of the model is one request. One that does
+        not is asked in parts, each part a request with a share of the
+        entries and what they mean, each under its number in the whole list;
+        no part names an entry: none; one names one: that one; several name
+        some: one more request over the entries named, with what they
+        mean."""
+        from .. import window as windowing
+        numbers = list(range(1, len(listed) + 1)) if numbers is None \
+            else list(numbers)
+        room = self.list_window(plan, values, node, earlier)
+
+        def text(number: int, replaced: dict) -> str:
+            whole = listed[number - 1]
+            said = replaced.get(number, whole)
+            if number in replaced:
+                # A fragment of a split line that does not begin with the
+                # entry's name (every one after the first) says whose it is.
+                label = whole.removeprefix(f"{number} ").split(
+                    " (means:", 1)[0]
+                if not said.removeprefix(f"{number} ").startswith(label):
+                    return f"{number} {label} (continued): {said}"
+            return said if said.startswith(f"{number} ") \
+                else f"{number} {said}"
+
+        def render(shown: list, replaced: dict) -> str:
+            return json.dumps([text(n, replaced) for n in shown],
+                              ensure_ascii=False, indent=1)
+
+        try:
+            parts = windowing.split(
+                numbers, render, lambda n: listed[n - 1], room.fits,
+                lambda line: [one for one in SENTENCE_END.split(line)
+                              if one.strip()], name="a list")
+        except windowing.TooLong as exc:
+            # Never cut: the question of this wording ends as a request
+            # that does not fit ends, and the run goes on.
+            log.warning("list of %s entries (parameter %s, coordinate %s) "
+                        "for the words %r: %s", len(listed),
+                        noted.get("parameter"), noted.get("coordinate"),
+                        values.get("words"), exc)
+            counts.fail(TOO_LONG)
+            return []
+        named: list = []
+        for part in parts:
+            shown = [text(n, part.replaced) for n in part.numbers]
+            for number in self._list_round(plan, values, shown, size,
+                                           several, counts, noted, node,
+                                           earlier):
+                if number not in named:
+                    named.append(number)
+        if len(parts) == 1:
+            return named
+        named.sort()
+        if len(named) < 2 or len(named) >= len(numbers):
+            return named
+        return self.entry_picks(plan, values, listed, size, several, counts,
+                                noted, node, earlier, named)
+
+    def _list_round(self, plan: Plan, values: dict, shown: list, size: int,
+                    several: bool, counts: Counts, noted: dict,
+                    node: Optional[dict], earlier: list) -> list:
+        """The numbers one request over the lines *shown* of a list of
+        *size* entries names, asked again where an answer names no number of
+        the list."""
+        from . import forms
+        from .general import nested
         ask = nested(self, "entry", plan,
-                     {**values, "options": listed,
+                     {**values, "options": shown,
                       "earlier": earlier or None}, node)
         req = ask.request()
         shape, example = forms.of(ask.reply, req, several=several)
         reply = ask.ask(req, shape, example, counts, **noted)
-        picks = self._picks(reply, len(labels), several)
+        picks = self._picks(reply, size, several)
         if picks is None:
             counts.fail(NOT_AN_OPTION)
         for _ in range(self.follow_ups()):
@@ -2451,11 +2503,44 @@ class Reader:
             reply = ask.follow(req, shape, example, reply,
                                [say(NOT_AN_OPTION, given=given)],
                                counts, **noted)
-            picks = self._picks(reply, len(labels), several)
-        picked = [labels[i - 1] for i in picks or []]
-        if several:
-            return picked
-        return picked[0] if picked else ""
+            picks = self._picks(reply, size, several)
+        return picks or []
+
+    def list_window(self, plan: Plan, values: dict, node: Optional[dict],
+                    earlier: list):
+        """The room a list request leaves for the lines of its list
+        (`window.Window`): the window the server reported
+        (`runner.model_window`) less the instruction of the request, what
+        else it shows besides the list, the room for its answer and the
+        margin; texts are counted as the run counts every request
+        (`runner.prompt_tokens`)."""
+        from .. import prompts
+        from .. import window as windowing
+        from . import runner
+        from . import thread as thread_map
+        from .general import nested
+        ask = nested(self, "entry", plan, {**values, "options": [],
+                                           "earlier": earlier or None}, node)
+        with plan.measuring():
+            payload = ask.request().payload
+        shown = {key: value for key, value in payload.items()
+                 if key not in ("conversation", PICTURE)}
+        system = ""
+        try:
+            prompt = prompts.load(ask.prompt if isinstance(ask.prompt, str)
+                                  else PROMPT_IDS["list"])
+            system = thread_map.widest(prompt.text, prompt.id)
+        except (FileNotFoundError, LookupError):
+            pass
+        frame = runner.prompt_tokens(system, [
+            {"role": "user", "content": json.dumps(
+                shown, ensure_ascii=False, indent=1, default=str)}]) \
+            + runner.request_wanted(ask.kind) \
+            + rules.get("answer_margin_tokens")
+        return windowing.Window(
+            runner.model_window(), frame,
+            lambda text: runner.prompt_tokens(
+                "", [{"role": "user", "content": text}]))
 
     @staticmethod
     def _picks(reply, size: int, several: bool) -> Optional[list]:
@@ -3413,11 +3498,14 @@ def field_shown_of(field_: dict) -> dict:
 
 @dataclass
 class ChunkDoc:
-    """A piece as the reranker reads it."""
+    """A piece as the reranker reads it; *chunk* the piece itself, so that
+    one over the reranker's window is split into parts that each carry its
+    title, head and heading (`rerank.pieces_of`), nothing cut."""
     owner_kind: str
     owner_id: tuple
     text: str
     image_path: Optional[str] = None
+    chunk: Optional[Chunk] = None
 
 
 def make_order(reranker: Optional[Callable], rank: Optional[Callable]
@@ -3453,7 +3541,8 @@ def make_order(reranker: Optional[Callable], rank: Optional[Callable]
             local.reranker = reranker()
         if local.reranker is None:
             return list(chunks)
-        docs = [ChunkDoc(c.passage.kind, c.key, c.text()) for c in chunks]
+        docs = [ChunkDoc(c.passage.kind, c.key, c.text(), chunk=c)
+                for c in chunks]
         by = {doc.owner_id: c for doc, c in zip(docs, chunks)}
         return [by[doc.owner_id] for doc in local.reranker.order(
             document_id, sentences, docs)]

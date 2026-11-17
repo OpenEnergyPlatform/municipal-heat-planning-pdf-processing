@@ -136,12 +136,25 @@ CREATE TABLE IF NOT EXISTS "Images" (
 );
 
 -- One row per embedded vector. `faiss_id` is the id in the FAISS IDMap index.
+-- The entries of the index are the pieces the harvest reads (owner decision
+-- 2026-11-17): `piece` is which piece of its owner a vector is, counted from 0
+-- as the harvest counts them (0 for a section's title), NULL for a vector of a
+-- whole owner written before pieces; `part` which part of the piece, from 0,
+-- where the piece did not fit the embedder's window and was split, each part
+-- with the lines its piece carries; `page` the page its first own line stands
+-- on; `first_line` and `last_line` its own lines as the harvest numbers its
+-- passage (NULL for a title and for a piece of carried lines only).
 CREATE TABLE IF NOT EXISTS "Embeddings" (
     "faiss_id"       INTEGER PRIMARY KEY,
     "embedding_type" TEXT NOT NULL,   -- section_text|section_title|table_text|table_vl|figure_text|figure_vl
     "owner_kind"     TEXT NOT NULL CHECK ("owner_kind" IN ('section', 'table', 'figure')),
     "owner_id"       INTEGER NOT NULL,
-    UNIQUE("owner_kind", "owner_id", "embedding_type")
+    "piece"          INTEGER,
+    "part"           INTEGER NOT NULL DEFAULT 0,
+    "page"           INTEGER,
+    "first_line"     INTEGER,
+    "last_line"      INTEGER,
+    UNIQUE("owner_kind", "owner_id", "embedding_type", "piece", "part")
 );
 
 CREATE INDEX IF NOT EXISTS "idx_documents_group"   ON "Documents"("group_key");

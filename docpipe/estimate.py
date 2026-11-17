@@ -377,7 +377,7 @@ def visuals(where: Where) -> Estimate:
                      if f.get("description")}
         before = sum(pending.values())
         for section in data.get("sections", []):
-            context = _words(str(section.get("content", ""))[:800])
+            context = _words(str(section.get("content", "")))
             for kind, key in (("table", "tables"), ("figure", "figures")):
                 for item in section.get(key, []):
                     if item.get("id") in done:
@@ -420,8 +420,8 @@ def visuals(where: Where) -> Estimate:
             (pending[kind] * (prompts[kind] * per + config.IMAGE_TOKENS)
              + section_words[kind] * per) for kind in pending))
         est.basis += (f"; both prompts, {config.IMAGE_TOKENS:,} tokens for "
-                      f"the image and the first 800 characters of the "
-                      f"section, at {per:g} tokens per word")
+                      f"the image and the whole text of the section, at "
+                      f"{per:g} tokens per word")
         est.notes.append("the length of a transcription or a description is "
                          "in no prompt: output tokens are not counted")
     return est
@@ -433,20 +433,26 @@ def visuals(where: Where) -> Estimate:
 
 def _embedded(conn: sqlite3.Connection, name: str) -> set:
     """What `database.get_existing_embeddings` says of a document, over a
-    connection that cannot write: (embedding type, section, item) of every
-    input that has its vector."""
+    connection that cannot write: the key (`EmbeddingInput.key`: embedding
+    type, section, item, piece, part) of every input that has its vector.
+    Empty for a database whose vectors are of whole owners, not of pieces:
+    the embed step drops those first and embeds every piece anew."""
     from docpipe.chunking import database
 
-    doc_id = database._resolve_document_id(name, conn)
+    columns = {row[1] for row in conn.execute(
+        'PRAGMA table_info("Embeddings")')}
     existing: set = set()
+    if "piece" not in columns:
+        return existing
+    doc_id = database._resolve_document_id(name, conn)
     if doc_id is None:
         return existing
-    for number, etype in conn.execute(database._EXISTING_SECTION_SQL,
-                                      (doc_id,)):
-        existing.add((etype, number, None))
+    for number, etype, piece, part in conn.execute(
+            database._EXISTING_SECTION_SQL, (doc_id,)):
+        existing.add((etype, number, None, piece, part))
     for sql in (database._EXISTING_TABLE_SQL, database._EXISTING_FIGURE_SQL):
-        for number, block, etype in conn.execute(sql, (doc_id,)):
-            existing.add((etype, number, block))
+        for number, block, etype, piece, part in conn.execute(sql, (doc_id,)):
+            existing.add((etype, number, block, piece, part))
     return existing
 
 
@@ -474,14 +480,13 @@ def chunk(where: Where) -> Estimate:
                 existing = _embedded(conn, doc.name) if conn is not None \
                     else set()
                 todo = [item for item in chunking.build_embedding_inputs(
-                    merged, doc.name, doc)
-                    if (item.embedding_type, item.section_index,
-                        item.item_id) not in existing]
+                    merged, doc.name, doc, log_counts=False)
+                    if item.key not in existing]
                 if todo:
                     documents += 1
                 inputs += len(todo)
-                tokens += sum(min(int(_words(item.text) * TOKENS_PER_WORD),
-                                  config.MAX_TOKEN_LENGTH) for item in todo)
+                tokens += sum(int(_words(item.text) * TOKENS_PER_WORD)
+                              for item in todo)
         finally:
             if conn is not None:
                 conn.close()
@@ -500,11 +505,13 @@ def chunk(where: Where) -> Estimate:
                          "database step registers the documents first")
     if not _measured(est, where, "chunking", embedding=True):
         est.tokens_embedded = tokens
-        est.basis += (f"; the text of each input at {TOKENS_PER_WORD:g} tokens "
-                      f"per word, at most {config.MAX_TOKEN_LENGTH:,} per "
-                      f"input")
+        est.basis += (f"; the text of each piece at {TOKENS_PER_WORD:g} "
+                      f"tokens per word, all of it")
         est.notes.append("a picture's tokens are not counted, only the text "
                          "that goes with it")
+        est.notes.append("a piece over the embedder's window is split into "
+                         "parts that each carry its title and head again: "
+                         "those repeats are not counted")
     return est
 
 

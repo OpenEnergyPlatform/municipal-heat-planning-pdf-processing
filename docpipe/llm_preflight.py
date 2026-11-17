@@ -38,9 +38,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+import threading
+import time
+from typing import Callable, Optional, Sequence
 
 from docpipe import providers, rules
+from docpipe import window as windows
 from docpipe.providers.governor import status_of
 
 log = logging.getLogger(__name__)
@@ -94,6 +97,96 @@ def further_room(asked: int, *, reply: int, budget: Optional[int],
         return 2 * asked
     more = min(2 * asked, reply + window - budget)
     return more if more > asked else None
+
+
+# The windows built for the stages that ask a server for a chat, one per
+# server and served window, kept for the run: building one asks the server
+# (its tokenizer), and the same server is asked by many threads.
+_STAGE_WINDOWS: dict = {}
+_STAGE_LOCK = threading.Lock()
+
+
+def _chat_parts(messages: Sequence) -> tuple:
+    """(texts, pictures, skeleton) of chat *messages*: every text they show,
+    every picture part, and the same messages with their texts emptied and
+    their pictures left out, which is what the server's template makes the
+    frame of."""
+    texts: list = []
+    pictures: list = []
+    skeleton: list = []
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            empty: object = []
+            for part in content:
+                if part.get("type") == "image_url":
+                    pictures.append(part)
+                else:
+                    texts.append(str(part.get("text") or ""))
+                    empty.append({"type": "text", "text": ""})
+        else:
+            texts.append(str(content or ""))
+            empty = ""
+        skeleton.append({"role": message.get("role"), "content": empty})
+    return texts, pictures, skeleton
+
+
+def stage_fits(role: str, base_url: str, model: str, api_key: str = "", *,
+               picture: Optional[Callable] = None
+               ) -> Optional[Callable[[Sequence, int], bool]]:
+    """fits(messages, reply): does a chat request of *messages* with room for
+    a reply of *reply* tokens fit the window the server of *role* reported at
+    this run's preflight (`served_window`)? None where it reported none: a
+    check that is true then is the caller's to make.
+
+    The size judged is the size sent: the frame is what the server's own
+    template makes of the same messages with their texts emptied
+    (`windows.server_frame`), each picture costs what *picture* says (called
+    with the picture's part; a request with pictures needs it), and the reply
+    room is taken off the window. The texts are bounded by their UTF-8 bytes
+    first, as a token holds at least one byte, and only texts whose bytes do
+    not fit are counted exactly, by the server's tokenizer. Where the server
+    counts nothing, bytes decide: a text that would have fitted may be
+    split, never cut. The window is built once per server."""
+    limit = served_window(role)
+    if limit is None:
+        return None
+    key = (role, base_url, model, limit, picture)
+    with _STAGE_LOCK:
+        entry = _STAGE_WINDOWS.get(key)
+        if entry is None:
+            entry = (windows.Window(
+                limit, count=windows.server_counter(base_url, model, api_key),
+                picture=picture), {})
+            _STAGE_WINDOWS[key] = entry
+    served, frames = entry
+
+    def frame_of(skeleton: list) -> int:
+        # A frame the server counted is kept; one it did not count is 0 (the
+        # texts' bytes bound the request, as `context.window_fits` does) and
+        # asked again after `windows.ASK_AGAIN_S`.
+        shape = json.dumps(skeleton, sort_keys=True)
+        with _STAGE_LOCK:
+            known = frames.get(shape)
+        if known is not None and (known[0] is not None or
+                                  time.monotonic() - known[1]
+                                  < windows.ASK_AGAIN_S):
+            return known[0] or 0
+        made = windows.server_frame(base_url, model, skeleton, api_key,
+                                   add_generation_prompt=True)
+        with _STAGE_LOCK:
+            frames[shape] = (made, time.monotonic())
+        return made or 0
+
+    def fits(messages: Sequence, reply: int) -> bool:
+        texts, pictures, skeleton = _chat_parts(messages)
+        room = served.room(pictures) - frame_of(skeleton) - int(reply)
+        if room < 0:
+            return False
+        if sum(len(t.encode("utf-8")) for t in texts) <= room:
+            return True
+        return sum(served.tokens(t) for t in texts) <= room
+    return fits
 
 
 # What every chat request of this pipeline carries. Thinking off, and where

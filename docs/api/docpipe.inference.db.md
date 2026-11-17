@@ -82,6 +82,27 @@ owner kinds (section / table / figure). Empty list if no type matches.
 sqlite3 cannot bind a list into `IN (...)`, so the placeholder lists are
 built per branch and the parameters flattened.
 
+### pieces_of
+
+```python
+def pieces_of(conn: sqlite3.Connection, faiss_ids) -> dict
+```
+
+{faiss_id: {"piece", "part", "page", "first_line", "last_line",
+"embedding_type"}} of the vectors *faiss_ids*: which piece of its owner
+each is, which part of it, the page its first own line stands on and
+its own lines (owner decision 2026-11-17: a hit leads to its section or
+table and to the page of its piece). {} for a database whose vectors are
+of whole owners (format 1), and no entry for a vector of a whole owner.
+
+### with_piece
+
+```python
+def with_piece(hit: dict, place: Optional[dict]) -> dict
+```
+
+*hit* with the piece its best vector is (`pieces_of`), where known.
+
 ### section_item_captions
 
 ```python
@@ -178,6 +199,7 @@ Like `section_segments`, but each triple also carries the segment's stored
 origin), or None. See pdf_link.best_segment_rects.
 
 On a pre-bbox database (no `bbox` column) every rects slot is None, so the
-caller falls back to the `&search=` phrase highlight.
+caller falls back to the `&search=` phrase highlight. The database is
+told by its columns; any other database error raises.
 
 [Back to the index](../README.md)

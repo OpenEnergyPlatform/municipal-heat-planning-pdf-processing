@@ -12,6 +12,7 @@
   "exec_failed": "Ausführung fehlgeschlagen",
   "exec_unknown": "unbekannter Fehler",
   "exec_recover": "Korrigiere den Code ODER antworte ohne Berechnung.",
+  "exec_too_long": "Die Ausgabe dieses Laufs ist für diese Anfrage zu lang ({characters} Zeichen, {lines} Zeilen) und wird nicht gezeigt. Ändere deinen Code so, dass er weniger ausgibt.",
   "compute_heading": "Bereits ausgeführt",
   "compute_guide": "Gib die finale Antwort im vorgegebenen JSON-Format — oder, nur falls unbedingt nötig, eine weitere {\"action\":\"python\",\"code\":...}. Eine Aussage über eine berechnete Zahl lautet {\"statement\": \"...\", \"basis\": \"computed\", \"index\": <int des Auszugs, der die Eingangswerte enthält>, \"quote\": \"<wörtlicher Satz oder wörtliche Tabellenzeile aus diesem Auszug mit den Eingangswerten>\", \"run\": <Nummer des Laufs unter \"Bereits ausgeführt\", dessen Ausgabe die Zahl gedruckt hat>}. Gib eine berechnete Zahl nie mit basis \"text\" an.",
   "compute_guide_final": "Gib JETZT die finale Antwort im vorgegebenen JSON-Format (KEIN action-Objekt mehr). Eine Aussage über eine berechnete Zahl lautet {\"statement\": \"...\", \"basis\": \"computed\", \"index\": <int des Auszugs, der die Eingangswerte enthält>, \"quote\": \"<wörtlicher Satz oder wörtliche Tabellenzeile aus diesem Auszug mit den Eingangswerten>\", \"run\": <Nummer des Laufs unter \"Bereits ausgeführt\", dessen Ausgabe die Zahl gedruckt hat>}. Gib eine berechnete Zahl nie mit basis \"text\" an.",

@@ -8,7 +8,7 @@ for the run and sees the code do the other thing, AND the standard does what
 it did.
 
 1. Every rule of this part stands in the default file with its standard,
-   AND a number the steps take (`replies`, `follow_ups`, `list_meanings`) is
+   AND a number the steps take (`replies`, `follow_ups`) is
    a value of its own at each of the fourteen steps that ask the model, AND
    a box that asks nothing takes none.
 2. The kinds of chunks a search shows come in the order of `supply_order`
@@ -25,16 +25,15 @@ it did.
    values in `names_first`; a frame side by side asks in one pool by
    `together_pooled`.
 5. The document step reads the passages `include_kinds` and the pages
-   `pages` name AND its own `title_page_lines` decides the title page (it
-   did not, 10.4.2); the transcribe box can be off or asked only for the
-   figures its condition holds for.
+   `pages` name AND the title page is the whole first page (10.4.2); the
+   transcribe box can be off or asked only for the figures its condition
+   holds for.
 6. Every new property of a condition is true at one case and false at
    another; "open" is the states of `open_states`.
 7. The rules that stood as settings of a box (`split_across`, ...) give the
    box its value where it has none of its own, AND a value set at the box
    wins.
-8. `link_range_ends`, `hit_line_chars`, `plans_kept` are read where they
-   are used.
+8. `link_range_ends` and `plans_kept` are read where they are used.
 """
 import copy
 import time
@@ -88,7 +87,7 @@ STANDARD = {
     "settled_fields": ["settings", "base_year", "target_year"],
     "state_mode": "by_supply",
     "open_states": ["exhausted", "unanswered", "unbacked"],
-    "hit_line_chars": 200, "this_publication_first": True,
+    "this_publication_first": True,
     "publication_description": "with_title"}
 
 ASKING = ("figures", "sentences", "works", "document_fields", "finds",
@@ -171,15 +170,14 @@ def test_each_step_that_asks_takes_its_own_replies_follow_ups_meanings(
     def default():
         return copy.deepcopy(flow.load(profile).tree)
     drawing = default()
-    node(drawing, ident)["rules"] = {"follow_ups": 3, "replies": 5,
-                                     "list_meanings": 7}
+    node(drawing, ident)["rules"] = {"follow_ups": 3, "replies": 5}
     assert flow.problems(drawing, profile=profile) == []
     drawing = default()
     box = node(drawing, ident)
     own = {setting.key: 2 for setting in
            flow.blocks.LIBRARY[box["box"]].settings
-           if setting.key in ("follow_ups", "replies", "list_meanings")}
-    assert set(own) == {"follow_ups", "replies", "list_meanings"}
+           if setting.key in ("follow_ups", "replies")}
+    assert set(own) == {"follow_ups", "replies"}
     box["own"] = own
     assert flow.problems(drawing, profile=profile) == []
     engine = Engine(Reading(), drawing)
@@ -584,15 +582,9 @@ def test_a_figure_left_out_is_not_transcribed():
     assert asked == [[5]]
 
 
-def test_the_title_page_lines_of_the_document_box_decide_the_title_page():
+def test_the_title_page_is_the_whole_first_page_the_document_box_names():
     standard = planned(sources=[TITLE, TEXT, TABLE])
     assert len(standard.title_page) == 2
-    for how in ("own", "rules"):
-        drawing = default()
-        node(drawing, "document")[how] = {"title_page_lines": 1}
-        assert flow.problems(drawing) == []
-        assert len(planned(drawing, [TITLE, TEXT, TABLE]).title_page) == 1, \
-            how
     # a frame's value reaches the box in it as well
     drawing = default()
     node(drawing, "document")["rules"] = {"title_page_also": 3}
@@ -845,13 +837,6 @@ def test_the_two_ends_of_a_range_are_linked_unless_the_rule_is_off():
         assert reading.link_ranges(rows, slots) == 0
 
 
-def test_a_hit_list_shows_the_first_line_up_to_the_rule():
-    long = Source("section", 9, "Titel\n" + "x" * 500, {"page": 1})
-    assert len(reading.first_line(long)) == 200
-    with at_step("compute", hit_line_chars=10):
-        assert len(reading.first_line(long)) == 10
-
-
 def test_a_pass_keeps_as_many_plans_as_the_rule_says():
     from docpipe.extraction.surveyed import SurveyedHarvest
     model = Model()
@@ -869,7 +854,7 @@ def test_a_pass_keeps_as_many_plans_as_the_rule_says():
 
 def test_the_value_of_a_rule_is_checked_against_its_bounds():
     for name, bad in (("plans_kept", 0), ("phrase_new_from_round", 0),
-                      ("hit_line_chars", 0), ("round_ends", "never"),
+                      ("round_ends", "never"),
                       ("hole_passage", "any"), ("supply_order", ["x"]),
                       ("pages", [3, 2]), ("open_states", ["lost"])):
         assert rules.problem(name, bad) is not None, name

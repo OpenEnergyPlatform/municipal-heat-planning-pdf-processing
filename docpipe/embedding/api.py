@@ -181,6 +181,59 @@ class ApiEmbedder:
             usage.add(self.model, embedding_tokens=tokens, requests=1)
         return answer["data"][0]["embedding"]
 
+    def embed_each(self, items: Sequence[dict]) -> list:
+        """One vector or the exception of its request for each item, in
+        order: in the messages form one item that the server refuses costs
+        that item alone, not the others of the call (owner decision
+        2026-11-17: a refused input lost the whole batch of 32). The OpenAI
+        form sends a batch in one request, so it answers for it as one."""
+        if not items:
+            return []
+        if self.form != "messages":
+            try:
+                return list(self.embed(items))
+            except Exception as exc:
+                return [exc] * len(items)
+
+        def one(item: dict):
+            try:
+                return unit_rows([self._embed_message(item)])[0]
+            except Exception as exc:
+                return exc
+        with ThreadPoolExecutor(max_workers=len(items)) as pool:
+            return list(pool.map(one, items))
+
+    def window(self):
+        """What one item holds (`docpipe.window.Window`): the window the
+        server reports for the model, else EMBEDDING_MAX_TOKEN_LENGTH; in
+        the messages form the frame of an item counted by the server's own
+        template, its tokenizer for a text and a picture at most as the
+        model's processor scales it; in the OpenAI form texts bounded by
+        their bytes."""
+        from docpipe import window
+        limit = (window.served_limit(self.base_url, self.model, self.api_key)
+                 if self.base_url else None) or config.EMBEDDING_MAX_TOKEN_LENGTH
+        if self.form != "messages":
+            return window.Window(limit=limit)
+        frame = window.server_frame(
+            self.base_url, self.model, conversation({"text": "."}),
+            self.api_key, continue_final_message=True,
+            add_generation_prompt=False, add_special_tokens=True)
+        if frame is None:
+            # A server that counts no chat: the bytes of the turns written
+            # out hold more than their tokens.
+            import json
+            frame = len(json.dumps(conversation({"text": "."}),
+                                   ensure_ascii=False).encode("utf-8"))
+        most = (config.IMAGE_MAX_PIXELS
+                // (config.IMAGE_FACTOR * config.IMAGE_FACTOR) + 2)
+        return window.Window(
+            limit=limit, frame=frame,
+            count=window.server_counter(self.base_url, self.model,
+                                        self.api_key),
+            picture=lambda path: window.picture_tokens(
+                path, config.IMAGE_FACTOR, most))
+
     def embed(self, items: Sequence[dict]) -> list:
         if self.form == "messages":
             # One chat per request, all of a call in flight at once: the

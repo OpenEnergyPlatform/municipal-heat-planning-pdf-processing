@@ -332,13 +332,6 @@ SAID = {
     "lost": (
         "{n} reply could not be read, by cause: {listed}.",
         "{n} replies could not be read, by cause: {listed}."),
-    "lists": (
-        "{n} request asked for the entry of a list; {late} of the lists "
-        "shown had more than {meanings} entries, so their entries are shown "
-        "by their names only.",
-        "{n} requests asked for the entry of a list; {late} of the lists "
-        "shown had more than {meanings} entries, so their entries are shown "
-        "by their names only."),
 }
 # What `notes` says of traces written before a search noted its budget.
 NOT_NOTED = (
@@ -426,12 +419,6 @@ def says(found: dict, numbers: dict) -> dict:
         if lost:
             out["replies"].append(_say(
                 "lost", lost, listed=_listed(found["unreadable"])))
-    meanings = whole("list_meanings")
-    if meanings is not None and found["lists"]:
-        lists = found["lists"]
-        out["list_meanings"].append(_say(
-            "lists", len(lists), late=after(lists, meanings),
-            meanings=meanings))
     return dict(out)
 
 

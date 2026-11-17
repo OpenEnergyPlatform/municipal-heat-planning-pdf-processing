@@ -148,8 +148,6 @@
  "{n} replies were read, {late} of them only after more than {replies} attempts. Attempt → replies read: {by_attempt}.",
  "{n} reply could not be read, by cause: {listed}.",
  "{n} reply was read, {late} of them only after more than {replies} attempts. Attempt → replies read: {by_attempt}.",
- "{n} request asked for the entry of a list; {late} of the lists shown had more than {meanings} entries, so their entries are shown by their names only.",
- "{n} requests asked for the entry of a list; {late} of the lists shown had more than {meanings} entries, so their entries are shown by their names only.",
  "{n} shapes carry this path and the block does not say which node is meant",
  "{of} is nothing a condition can be about",
  "{path} is empty: no value",

@@ -397,12 +397,14 @@ role and content dicts. An assistant entry carries what the turn produced:
 `citations`, `phrase`, `values`, `compute`, the counts (`made`, `dropped`) and
 the faults the caption and the warning under the answer are drawn from, or
 `rows` for a comparison. `turns_by_doc` maps a document id (the whole corpus
-under `None`) to its last five turns, kept apart per document so that a "check
+under `None`) to all its turns, kept apart per document so that a "check
 again" in one plan never excludes another's sources, and a failed turn is kept
 because that follow-up is asked precisely after one. What a turn keeps for a
 follow-up is its question, its anchor, the sources it examined and its answer as
 `answer_text`, the statements that stood without list marks and numbers, so a
 statement that was removed is in no later request.
+Turns are never dropped: where the conversation no longer fits the model's
+window, the turn is not asked and the page says so (UI word `conversation_full`).
 
 `QUERY_CACHE_PATH` holds one table, `query_cache` (a key, the vector as a
 float32 blob, a timestamp). The key is over the embedding model and the

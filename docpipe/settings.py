@@ -361,10 +361,6 @@ SETTINGS = (
       "left unanswered; a server's failure is asked again until the run "
       "halts. Unset: the profile's flow file says it (replies).",
       stages=("extract",), flow=("replies",)),
-    S("EXTRACT_PARENT_CHARS", "extract.parent_chars", "int", None,
-      "Characters of a table's parent section sent along with the table.",
-      stages=("extract",),
-      rule="review_parent_chars"),
     S("EXTRACT_PROVENANCE", "extract.provenance", "flag", "1",
       "Write the provenance of every value beside the graph "
       "(<graph>.prov.ttl); 0 writes the graph only.",

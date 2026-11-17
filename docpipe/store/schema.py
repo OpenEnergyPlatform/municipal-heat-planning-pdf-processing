@@ -32,10 +32,19 @@ CORE_TABLES = ("Documents", "Pages", "Sections", "SectionPages", "Segments",
 # reads 0 and is brought up by `migrate`, which only ever adds: a column, a
 # table. Nothing an older reader looks at is renamed or removed, so a
 # database can be read by the code that wrote it and by this one.
-FORMAT = 1
+# Format 2 (owner decision 2026-11-17, the index of pieces): Embeddings holds
+# a vector per piece and part of its owner. Its columns are added and its
+# uniqueness is per owner, type, piece and part, which SQLite can only change
+# by writing the table anew (`_pieces_of_embeddings`); every row keeps its
+# values, a vector written before reads piece NULL. A reader of format 1 still
+# reads it; its writer, whose upsert names the old uniqueness, cannot write
+# into it.
+FORMAT = 2
 # (table, column, type) of every column a later format added.
 ADDED_COLUMNS = (("Documents", "sha256", "TEXT"),
                  ("Documents", "bytes", "INTEGER"))
+# The columns format 2 gave Embeddings, as schema.sql writes them.
+EMBEDDING_PIECE_COLUMNS = ("piece", "part", "page", "first_line", "last_line")
 
 
 def core_sql() -> str:
@@ -88,14 +97,63 @@ def add_missing_column(connection: sqlite3.Connection, table: str,
     return True
 
 
+def _pieces_of_embeddings(connection: sqlite3.Connection) -> bool:
+    """Write Embeddings anew with the columns and the uniqueness of format
+    2, its rows as they were (piece NULL). False where it has them already
+    or is not there."""
+    held = columns(connection, "Embeddings")
+    if not held or set(EMBEDDING_PIECE_COLUMNS) <= held:
+        return False
+    connection.commit()
+    connection.execute("PRAGMA foreign_keys = OFF")
+    try:
+        connection.execute("BEGIN")
+        connection.execute(
+            'ALTER TABLE "Embeddings" RENAME TO "Embeddings_before_pieces"')
+        connection.execute(
+            'DROP INDEX IF EXISTS "idx_embeddings_owner"')
+        connection.execute(
+            'CREATE TABLE "Embeddings" ('
+            '"faiss_id" INTEGER PRIMARY KEY, '
+            '"embedding_type" TEXT NOT NULL, '
+            '"owner_kind" TEXT NOT NULL CHECK ("owner_kind" IN '
+            "('section', 'table', 'figure')), "
+            '"owner_id" INTEGER NOT NULL, '
+            '"piece" INTEGER, '
+            '"part" INTEGER NOT NULL DEFAULT 0, '
+            '"page" INTEGER, '
+            '"first_line" INTEGER, '
+            '"last_line" INTEGER, '
+            'UNIQUE("owner_kind", "owner_id", "embedding_type", "piece", '
+            '"part"))')
+        connection.execute(
+            'INSERT INTO "Embeddings" ("faiss_id", "embedding_type", '
+            '"owner_kind", "owner_id") SELECT "faiss_id", "embedding_type", '
+            '"owner_kind", "owner_id" FROM "Embeddings_before_pieces"')
+        connection.execute('DROP TABLE "Embeddings_before_pieces"')
+        connection.execute(
+            'CREATE INDEX IF NOT EXISTS "idx_embeddings_owner" ON '
+            '"Embeddings"("owner_kind", "owner_id")')
+        connection.execute("COMMIT")
+    except BaseException:
+        connection.execute("ROLLBACK")
+        raise
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON")
+    return True
+
+
 def migrate(connection: sqlite3.Connection) -> int:
     """Bring a database of an older format up to this one. Returns the
-    format it had. Adds what is missing and touches nothing that is there."""
+    format it had. Adds what is missing and touches nothing that is there;
+    format 2 writes Embeddings anew with every row it held
+    (`_pieces_of_embeddings`)."""
     had = connection.execute("PRAGMA user_version").fetchone()[0]
     for table, column, kind in ADDED_COLUMNS:
         if column not in columns(connection, table):
             connection.execute(
                 f'ALTER TABLE "{table}" ADD COLUMN "{column}" {kind}')
+    _pieces_of_embeddings(connection)
     if had < FORMAT:
         connection.execute(f"PRAGMA user_version = {FORMAT}")
     connection.commit()

@@ -11,8 +11,8 @@ This module merges the refined section text from
 [refinement](refinement.md) (Stage 4) with the enriched table and figure data
 from [visuals](visuals.md) (Stage 5) into one `document.json` per document,
 loads it into the shared SQLite corpus database as `Sections`, `Pages`,
-`SectionPages`, `Segments`, `Tables` and `Images` rows, and embeds each
-section, table and figure as up to six typed vectors into one FAISS index. It
+`SectionPages`, `Segments`, `Tables` and `Images` rows, and embeds the
+pieces of each section, table and figure as typed vectors into one FAISS index. It
 runs as `python -m docpipe.chunking` (`docpipe/chunking/__main__.py`).
 
 It runs as three steps, merge, then db, then embed, run in sequence but
@@ -21,8 +21,8 @@ standalone, additive maintenance steps, `enrich-bbox`, `enrich-page-source` and
 `enrich-caption`, that backfill one column family on an already built corpus
 without touching sections, embeddings or the index (`pipeline.py:163`), and a
 fourth standalone step, `reembed`, that embeds the whole corpus again into a new
-index file and writes neither the database nor the old index
-(`pipeline.py:186`), and a fifth, `sync`, that writes a plan processed again
+index file and writes the old index not at all and the database only to bring
+it to format 2 (`pipeline.py:186`), and a fifth, `sync`, that writes a plan processed again
 into the database under the numbers its entries already have and takes the
 vectors whose input changed out of the indexes (`pipeline.py:155`).
 Skipping this stage leaves a plan processed but absent from the database and
@@ -41,7 +41,7 @@ index are read at query time instead, by [extraction](extraction.md) and the
 |---|---|
 | **In** | `sections_refined.json` + `visuals.json` (merge); `document.json` (db, embed); `sections.json` (standalone `enrich-bbox`); `page_transcription_report.json` (standalone `enrich-page-source`); an existing FAISS index file, if present (embed); the index file and every `--also` file, which must exist (sync). |
 | **Out** | `document.json` per PDF; `Sections`, `Pages`, `SectionPages`, `Segments`, `Tables`, `Images` rows in the database; `Embeddings` rows and their vectors in the FAISS index file; under sync, rows kept, updated, inserted or deleted under their old numbers, and vectors taken out of the index files (a reembed's record beside a file is marked `complete: false`). |
-| **Resumes on** | Merge: `document.json` newer than both its inputs. Db: a document already has `Sections` rows. Embed: an `(embedding_type, section_index, item_id)` triple already in `Embeddings`; an input whose batch failed has none, so a document with missing vectors is not done. Sync has no resume state: a rerun plans again on the rows as they stand and writes what is still to be written. `--force` clears exactly the step it is passed for. |
+| **Resumes on** | Merge: `document.json` newer than both its inputs. Db: a document already has `Sections` rows. Embed: an `(embedding_type, section_index, item_id, piece, part)` key already in `Embeddings`; an input whose batch failed has none, so a document with missing vectors is not done. Sync has no resume state: a rerun plans again on the rows as they stand and writes what is still to be written. `--force` clears exactly the step it is passed for. |
 | **Needs** | A `Documents` row already written by fileprocessing, to resolve a processed directory (db, embed). One GPU replica per visible device (embed), one replica on the CPU in fp32 where there is none, or with `EMBEDDING_INDEX_BACKEND=api` an embeddings endpoint and no GPU. No other network call. |
 
 ## Method
@@ -95,18 +95,21 @@ steady gain on number questions) the chat model is asked once for each table and
 figure, after the merge, for one sentence that says what it is about, in which
 unit, for which area, scenario and years, as far as its caption, its head and
 the heading of its section say it (`docpipe/chunking/context.py`, prompt
-`visuals/context_sentence`). The head the request shows is the first
-`context_head_chars` characters (1500) of the table's markdown or the figure's
-description. The embedding inputs of the table or figure, both the text vector and
-the text that goes with the picture, begin with that sentence on a line of its own
-(`chunking.build_embedding_inputs`); a stage that embeds without the rule on reads
-none.
+`visuals/context_sentence`). The request shows the kind, the section heading, the
+caption and the whole text, the table's markdown or the figure's description. A
+request over the window of the chat model is asked in parts, each with the caption,
+the heading and the table's head, every row in exactly one part. The embedding
+inputs of the table or figure, both the text vector and the text that goes with the
+picture, begin with that sentence on a line of its own
+(`chunking.build_embedding_inputs`); where a table was asked in parts, a piece
+begins with the sentence of the part that holds its rows. A stage that embeds
+without the rule on reads none.
 
 The sentences are kept beside the document's results in
 `results/context_sentences.json`, each under a hash of exactly what the request
-showed and of the prompt, so one is asked again only when the caption, the head,
-the heading or the prompt changed, and a change of `context_head_chars` asks every
-sentence again. The database holds the sentence a table's or figure's vectors were
+showed and of the prompt, so one is asked again only when the caption, the text,
+the heading or the prompt changed. The file holds `{"sentences": {key: sentence},
+"parts": {key of the whole: [[first line, last line, key of the part], ...]}}`. The database holds the sentence a table's or figure's vectors were
 embedded with in the column `context_sentence` of `Tables` and `Images` (NULL for
 none; `_ensure_context_sentence_column` adds it to a database that predates it).
 `--step sync` compares that column with the sentence kept, so a changed sentence
@@ -115,7 +118,44 @@ rule on is thus a request for each table and figure and a new embedding of all o
 their vectors. An answer that is not one JSON object with the key `sentence` is
 asked again with its cause named, is never embedded, and leaves the table or
 figure with its text as it was, to be asked again by the next run; nothing is
-repaired.
+repaired. A table or figure whose carried lines (title, head, foot
+lines) leave no room beside one row, or that has only carried lines and they do not
+fit, is named in the log at error level, left without a sentence and counted as
+`too_long`; the run goes on. The run counts requests (asked, answered, dropped)
+and tables and figures (kept, too long).
+
+### The entries of the index: pieces
+
+An entry of the index is a piece the harvest reads, not a whole section, table or
+figure (`docpipe/chunking/pieces.py`; owner decision 2026-11-17: nothing is cut,
+what does not fit is split and keeps its assignment). The text is cut into numbered
+lines as the harvest cuts it, and a piece holds up to `piece_lines` of them (a
+number of the flow, 8):
+
+- a section's piece is its heading and up to `piece_lines` sentences;
+- a table's piece is its title, its head, all its foot lines, the parent rows of
+  its rows (indented rows and group rows) and up to `piece_lines` own rows;
+- a figure's piece is its caption and up to `piece_lines` sentences of its
+  description.
+
+The context sentence stands before a table or figure piece. A piece over the
+embedder's window is split into parts (`docpipe/window.py`: at lines, then
+sentences, then words), each part carrying the piece's title, head or heading, so
+every word stands in exactly one part. A piece whose carried lines leave no room
+for one word of its own, or that has no own lines and carried lines that do not
+fit, is named (`TooLong`) and not embedded, never cut. An embedder that takes text
+only never gets a piece with a picture: those inputs are dropped with a warning
+before the window fit, in `prepare` and in `create_embeddings`
+(`embedding.without_pictures`). The window comes from the
+embedder's server (`max_model_len` of `/v1/models`), or for the local model from
+`max_length`. The local model counts the frame (the tokens of an input with no
+text) from the chat template of one conversation. A text counts as fitting when
+its UTF-8 bytes fit, and only a text whose bytes do not fit is counted by
+`/tokenize`; a text the server could not count (logged) is bounded by its
+bytes. A window or tokenizer the server did not give is not kept as unknown:
+it is asked again after `window.ASK_AGAIN_S` (60 s). The rule `table_foot_lines`
+(a switch) makes every piece of a table carry every foot line. Each vector knows its piece, part, page and first and last
+line (the table `Embeddings`, below).
 
 ### Database insertion
 
@@ -156,11 +196,20 @@ rules:
   more than once, and moves with it to the section it now stands in (`pair`). A
   table part the merge joined to its start has no entry any more and its row is
   gone.
-- A vector stays only where its input is unchanged: the text and picture that
-  `build_embedding_inputs` makes of the entry, from the database before and from
-  the document now, each with the caption the database holds
-  (`captions.resolve_title`). Every other `Embeddings` row is deleted and its id
-  taken out of the index and of every `--also` file.
+- A vector stays only where its input is unchanged, piece by piece: the text
+  and picture that `build_embedding_inputs` makes of each piece of the entry,
+  from the database before and from the document now, each with the caption
+  the database holds, resolved once (`captions.resolve_title`, or the resolver
+  the sync is given). Every other `Embeddings` row is deleted and its id taken
+  out of the index and of every `--also` file.
+- A kept vector takes the assignment of its piece now. Its piece kept its text
+  and picture, but may stand elsewhere: each part's own lines move as the
+  piece's first line moved, and its page is the page of its first line now
+  (`Plan.moved`, written as an `UPDATE` of page, first line and last line).
+  Nothing is embedded again for a move.
+
+Before it plans, a sync brings the database to format 2 (`ensure_format`),
+except in a dry run, which writes nothing.
 
 The indexes are written first, atomically through a `.part` file, and the
 database after, document by document, one commit each. A run that dies between
@@ -170,7 +219,9 @@ again; a second run finds the changes still to be written and writes them.
 same, changed, new and gone sections, tables and figures, vectors kept, and
 vectors to embed again or gone.
 
-A sync only takes vectors out. The order after it is sync, then the embed step,
+A sync only takes vectors out. The vectors of whole owners (`piece` NULL, from
+before pieces) go out of the database and the index too, and the embed step
+embeds the pieces anew. The order after it is sync, then the embed step,
 which embeds each input that has no `Embeddings` row into `index_path`, then
 `--step reembed` on each `--also` file, which fills the ids that file lacks (a
 record marked `complete: false` is continued). Every unchanged entry keeps its
@@ -193,9 +244,14 @@ section content and block id, recording the outcome in `caption_source`
 holds (`embedding.py:99`); `drop_embeddings_missing_from_index` deletes any
 `Embeddings` row whose `faiss_id` is absent from that set; `next_id` becomes
 the maximum of the index's count, the database's high-water mark, and one past
-the largest held id (`pipeline.py:245`; `database.py:796`). `load_embedder`
+the largest held id (`pipeline.py:245`; `database.py:796`). The step then takes
+the vectors of whole owners (`piece` NULL) out of the index, saves the index file,
+and only then deletes their `Embeddings` rows: the index first and the database
+after, as sync does, so a run killed between the two leaves no vector without a
+row to name it. The step also brings a database of format 1 to format 2
+(`ensure_format`) before it reads it. `load_embedder`
 then builds the embedder, and `note_embedding` in `pipeline.py` records its
-model, dimension, backend and token limit in the database's `Meta` table (see
+model, dimension, backend and window in the database's `Meta` table (see
 [store](store.md)). An index that already holds vectors of another model is not
 continued with this one: vectors of two models do not compare. The run stops
 before it writes a vector, ends 1 with one error line naming both models and no
@@ -231,8 +287,8 @@ depth. `prepared_ahead` streams
 them through `prepare()` in a `ThreadPoolExecutor` bounded to
 `EMBED_PREPARE_WORKERS` threads, keeping at most `EMBED_PREPARE_AHEAD`
 documents' work in flight (`pipeline.py:105`). `prepare()` resolves the document
-id and filters `build_embedding_inputs`' output against
-`get_existing_embeddings`; an unresolved document contributes nothing and is
+id and fits `build_embedding_inputs`' output to the embedder's window (`fit_inputs`) and
+filters it against `get_existing_embeddings`; an unresolved document contributes nothing and is
 named in one warning at the run's end (`pipeline.py:273`, `321`). At
 `EMBED_FLUSH_ITEMS` pending items, `create_embeddings` runs and the index saves
 past `EMBED_SAVE_VECTORS` growth; a final flush and save close the run
@@ -255,9 +311,10 @@ group, sorts each by text length so a batch pads to its own spread, batches at
 `EMBEDDING_BATCH_SIZE`, calls the embedder's `process()`, adds vectors to the
 index under newly allocated contiguous ids, and writes the matching
 `Embeddings` rows, grouped per document, through one shared `EmbeddingWriter`
-(`embedding.py:198`). An embedder that sets `text_only` never sees the
+(`embedding.py:198`). An item the embedder refuses costs only itself: it goes to the missed list below. An embedder that sets `text_only` never sees the
 image-bearing group: those inputs are dropped with one warning that counts them
-and get no `Embeddings` row. `ApiIndexEmbedder` takes `text_only` from the
+and get no `Embeddings` row (`without_pictures`, also run in `prepare` before the
+window fit, so no picture is measured against such an embedder's window). `ApiIndexEmbedder` takes `text_only` from the
 `ApiEmbedder` it wraps (`embedding.py:155`), and that is true only in the
 OpenAI form of `EMBEDDING_API_FORMAT`, which has no place for a picture; an
 index built through it holds the text vectors of a corpus only. In the
@@ -276,8 +333,10 @@ the merge, db and embed steps are considered (`pipeline.py:186`;
 `run_reembed` in `docpipe/chunking/reembed.py`). `index_path` names a NEW file.
 Each item's vector goes into it under the FAISS id the database already gives
 that item, read per document by `embedding_ids` (`database.py:734` to `716`),
-so the `Embeddings` rows stay as they are. Neither the database nor the old
-index file is written, and a run moves to the new file by its path.
+so the `Embeddings` rows stay as they are. The old index file is not written.
+The database is written only to bring a database of format 1 to format 2 (its
+`Embeddings` table, `ensure_format`); nothing else in it changes. A run moves to
+the new file by its path.
 
 Beside the new file a record `<index>.json` says what made it: model, backend,
 form, dimension, vectors, whether it is complete, and the counts. An existing
@@ -312,8 +371,9 @@ counterpart wherever one carries enriched content (`merge.py:5`).
 
 `EmbeddingInput` (`chunking.py:38`) is one vector's input: `embedding_type`,
 `pdf_name`, `section_index`, `item_id` (a table or figure block id, or `None`
-for a section-level input), `text`, and `image` (set only for a VL input whose
-crop exists on disk).
+for a section-level input), `text`, `image` (set only for a VL input whose
+crop exists on disk), and its place: `piece`, `part`, `page`, `first_line`,
+`last_line`.
 
 The six tables below live in the shared core schema (see [store](store.md)):
 
@@ -324,7 +384,7 @@ The six tables below live in the shared core schema (see [store](store.md)):
 | `SectionPages` | The distinct pages a section spans. | One `executemany` per section. | `PRIMARY KEY(section, page)` |
 | `Segments` | Ordered, page-tagged text/table/figure pieces of a section. | One `executemany` per section. | `UNIQUE(section, ordinal)` |
 | `Tables` / `Images` | One row per table or figure: caption, markdown or description, bbox, the sentence of context its vectors were embedded with (`context_sentence`, NULL for none); for a table also the result of stage 5's check of its transcription (`qa`). | One `executemany` per section. | none beyond the primary key |
-| `Embeddings` | One row per stored vector: `faiss_id`, `embedding_type`, `owner_kind`, `owner_id`. | `EmbeddingWriter.write`, per flush. | `UNIQUE(owner_kind, owner_id, embedding_type)` |
+| `Embeddings` | One row per stored vector (format 2): `faiss_id`, `embedding_type`, `owner_kind`, `owner_id`, and its place, `piece`, `part`, `page`, `first_line`, `last_line`. A format-1 database is migrated with every vector it held (`piece` NULL). | `EmbeddingWriter.write`, per flush. | `UNIQUE(owner_kind, owner_id, embedding_type, piece, part)` |
 
 `Segments`, `Tables` and `Images` each carry `bbox`: a JSON array of one or
 more `[x0, y0, x1, y1]` rectangles in PDF points, top-left origin, `NULL` when
@@ -361,11 +421,10 @@ faiss_id)` tuples per document (`database.py:912`).
 |---|---|---|---|---|
 | `EMBEDDING_MODEL` | env var | `Qwen/Qwen3-VL-Embedding-8B` | model `load_embedder` loads, or the endpoint is asked for under `EMBEDDING_INDEX_BACKEND=api`, for every vector this run produces | `docpipe/embedding/config.py:21`, re-exported at `chunking/config.py:17` |
 | `EMBEDDING_DIM` | env var | `4096` | vector dimension of a new FAISS index | `embedding/config.py:22`; `chunking/config.py:17` |
-| `EMBEDDING_MAX_TOKEN_LENGTH` (as `MAX_TOKEN_LENGTH`) | env var | `16384` | `max_length` passed to the embedder; longer inputs truncate | `embedding/config.py:23`; `chunking/config.py:19` |
+| `EMBEDDING_MAX_TOKEN_LENGTH` (as `MAX_TOKEN_LENGTH`) | env var | `16384` | the window of the local embedder where no server reports one; the local embedder runs with truncation off and raises `TooLongInput` | `embedding/config.py:23`; `chunking/config.py:19` |
 | `EMBEDDING_ALLOW_MIXED_INDEX` | env var / `embedding.allow_mixed_index` | `0` | `0` stops an append to an index of another embedding model before any vector is written (exit 1, one error line); a value other than `0` allows the mixture and records both models | `docpipe/chunking/config.py`, declared in `docpipe/settings.py` (stage `chunk`) |
 | `EMBEDDING_INDEX_BACKEND` | env var | `local` | what builds the index: `local` makes `load_embedder` return a `MultiGPUEmbedder` on the visible GPUs; `api` makes it return an `ApiIndexEmbedder` over `docpipe.embedding.api.ApiEmbedder`, which needs an `EMBEDDING_BASE_URL` (or a hosted `EMBEDDING_PROVIDER`) and no GPU, and in the default OpenAI form of `EMBEDDING_API_FORMAT` takes text only and so leaves inputs that carry a picture out (the messages form embeds them); recorded in `Meta` as `embedding/backend` | `index_backend()` in `chunking/embedding.py`; declared in `docpipe/settings.py` |
 | `EMBEDDING_BACKEND` | env var | `local` | picks the query-time embedder in `docpipe.embedding`; `load_embedder` here does not read it, `EMBEDDING_INDEX_BACKEND` decides what builds the index | `embedding/config.py:19` |
-| `SECTION_EMBED_MAX_WORDS` | code constant | `1800` | last-resort word cap on a section's embedding text, logged when it fires | `chunking/config.py:30`; `chunking.py:64` |
 | `EMBEDDING_BATCH_SIZE` | code constant | `32` | items per model batch in `create_embeddings`; a same-named, env-driven constant in `embedding/config.py` (default `8`) is not read here, except by `ApiEmbedder` under the api backend, which splits each batch into requests of that size | `chunking/config.py:32` |
 | `EMBED_PREPARE_WORKERS` | code constant | `8` | threads reading merged JSON and querying the DB while the GPUs work | `chunking/config.py:38`; `pipeline.py:309` |
 | `EMBED_PREPARE_AHEAD` | code constant | `32` | documents' prepared input allowed to sit unconsumed | `chunking/config.py:45`; `pipeline.py:105` |
@@ -421,10 +480,8 @@ Listing a crop directory raises for anything but a missing directory: only
 permission error surfaces instead of silently dropping every VL input
 (`chunking.py:49`). A table or figure with no (or empty) `path` is skipped with
 a warning naming its id, rather than resolving to the containing directory
-itself and embedding that (`chunking.py:179`, `209`). A section past
-`SECTION_EMBED_MAX_WORDS` is truncated and the cut logged, since refinement
-should already have split it, both before and after the model rewrote it
-(`chunking.py:64`).
+itself and embedding that (`chunking.py:179`, `209`). A piece that does not fit the window even in parts (`TooLong`) is named and
+left out, never cut.
 
 A model batch that raises inside `create_embeddings` is logged with its item
 range, and its inputs are collected in an `Unembedded` tally by embedding type
@@ -519,7 +576,7 @@ enabling `python -m docpipe.chunking`.
 
 `config.py` holds the module's constants: `EMBEDDING_MODEL`, `EMBEDDING_DIM`
 and `MAX_TOKEN_LENGTH` re-exported from `docpipe/embedding/config.py`, plus
-`SECTION_EMBED_MAX_WORDS`, `EMBEDDING_BATCH_SIZE`, the `EMBED_*` tuning
+`EMBEDDING_BATCH_SIZE`, the `EMBED_*` tuning
 constants, `FAISS_INDEX_FILE`, and the six embedding-type strings, imported by
 every other module here; the embedding-model wrappers declare their own
 constants instead.
@@ -531,8 +588,8 @@ combining Stage 4 and Stage 5 output into `document.json` with an mtime cache.
 Called by `pipeline.run()`.
 
 `sync.py` implements `--step sync`: `align` and `pair` match sections and
-entries to old rows, `plan_document` plans one document and `apply_plan` writes
-it, `drop_from_index` takes ids out of an index file, and `run_sync` runs them
+entries to old rows, `plan_document` plans one document (what to drop, and what
+moved) and `apply_plan` writes it, `drop_from_index` takes ids out of an index file, and `run_sync` runs them
 over every document. It reuses the per-section insert helpers of `database.py`
 (`section_content`, `table_values`, `image_values`, `page_rows`, `segment_rows`,
 `insert_provenance`), which the db step uses too, and `build_embedding_inputs`
@@ -548,7 +605,9 @@ schema declaring `bbox`, `page_text_transcribed` and `caption_source`.
 
 `chunking.py` builds one document's `EmbeddingInput` records: section, title,
 table and figure inputs in text and VL form, replacing placeholders with
-captions and capping oversized section text. Called by `pipeline.py`'s
+captions and fitting each to the embedder's window (`fit_inputs`). `pieces.py`
+cuts a section, table or figure into the harvest's pieces and splits one that does
+not fit into parts; `docpipe/window.py` holds the window and the split. Called by `pipeline.py`'s
 `prepare()`.
 
 `embedding.py` is the embed step: FAISS lifecycle (`load_or_create_index`,

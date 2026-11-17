@@ -65,28 +65,88 @@ TOKENS_PER_WORD = 3.0
 # exact count depends on the model's patch grid, and getting it wrong upwards
 # only costs KV cache, downwards costs the run.
 IMAGE_TOKENS = 4096
-# Each text a request shows beside its prompts is cut to this many characters
-# (process._truncate): the section's text, and for a table that may continue
-# the table before it, that table's head and what stands between the two
-# (continuation.BETWEEN_CHARS). Counted at two characters a token.
-SHOWN_CHARS = 800
+# What a request shows beside its prompts is shown whole (owner decision
+# 2026-11-17): the section's text and, for a table that may continue the
+# table before it, that table's head and what stands between the two. Its
+# size counts in UTF-8 bytes, which bound its tokens from above (the
+# tokenizers are byte-level: a token holds at least one byte).
 
 
-def max_request_tokens() -> int:
+def shown_bytes(section_content: str = "", head: str = "",
+                between: str = "") -> int:
+    """The UTF-8 bytes one request shows beside its prompts."""
+    return sum(len((text or "").encode("utf-8"))
+               for text in (section_content, head, between))
+
+
+def longest_shown(sections: list) -> int:
+    """The most UTF-8 bytes one request of a document with *sections* shows
+    beside its prompts: its longest section text, the longest text between
+    two of its tables that may continue one another, and, for the head of
+    the table before, the longest PDF text of one of its tables (a head is
+    part of it)."""
+    from . import continuation
+    content = max((shown_bytes(str(s.get("content") or ""))
+                   for s in sections), default=0)
+    between = max((shown_bytes(v.get("between") or "")
+                   for v in continuation.links(sections).values()), default=0)
+    head = max((shown_bytes(str(t.get("source_text") or ""))
+                for s in sections for t in s.get("tables") or ()), default=0)
+    return content + between + head
+
+
+def longest_in(root, names: tuple = ()) -> int:
+    """`longest_shown` over every document the stage reads under *root*,
+    or over *root* itself where it is one document: the first of *names*
+    each has (the sections files the stage reads, the refined one first
+    where none are given); 0 where there are none or none can be read."""
+    from docpipe.artifacts import document_dirs
+    names = tuple(names) or (SECTIONS_REFINED_JSON, SECTIONS_JSON)
+    most = 0
+    if root is None or not Path(root).is_dir():
+        return 0
+    own = any((Path(root) / name).exists() for name in names)
+    for doc in ([Path(root)] if own else
+                document_dirs(root, *names, distinct=False)):
+        for name in names:
+            path = Path(doc) / name
+            if not path.exists():
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                break
+            sections = data.get("sections") if isinstance(data, dict) else None
+            if isinstance(sections, list):
+                most = max(most, longest_shown(
+                    [s for s in sections if isinstance(s, dict)]))
+            break
+    return most
+
+
+def max_request_tokens(shown: int | None = None) -> int:
     """Worst case for one vision request: the longer of the two requests'
-    prompts with the texts they show, cut as they are cut, + one page image
-    + the reply we ask for, once. A table's request counts the part it gets
+    prompts with the texts they show, + one page image + the reply we ask
+    for, once. *shown* is the UTF-8 bytes the request shows beside its
+    prompts (`shown_bytes`; for the stage's preflight `longest_in` of the
+    documents the run reads, taken from the active profile's processed
+    folder where not given). A table's request counts the part it gets
     where it may continue the table before it. A reply cut off at its limit
     is asked once more with more room, but the room is bounded by what the
     served window leaves beyond this number (vision.call_vision), so no
     second reply is counted."""
+    if shown is None:
+        from docpipe.profile import active_profile
+        profile = active_profile()
+        shown = longest_in(getattr(profile, "processed_dir", None))
+    text = shown
     table = ((len(table_system_prompt().split())
               + len(table_user_prompt().split())
               + len(table_continued_prompt().split())) * TOKENS_PER_WORD
-             + 3 * SHOWN_CHARS / 2)
+             + text)
     figure = ((len(figure_system_prompt().split())
                + len(figure_user_prompt().split())) * TOKENS_PER_WORD
-              + SHOWN_CHARS / 2)
+              + text)
     return int(max(table, figure) + IMAGE_TOKENS + VLM_MAX_TOKENS)
 
 # ---------------------------------------------------------------------------

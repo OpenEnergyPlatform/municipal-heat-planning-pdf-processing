@@ -38,9 +38,6 @@ log = logging.getLogger(__name__)
 
 EXAMPLE_PROMPT_ID = "extraction/example"
 REVIEW_FILE = "examples.review.json"
-# Characters of the passage kept around the quotes of a proposal.
-SNIPPET_MARGIN = 240
-SNIPPET_MAX = 1800
 NOT_IN_PASSAGE = "quote_not_in_passage"
 TOO_SHORT = "quote_too_short"
 NOT_IN_QUOTE = "value_not_in_quote"
@@ -100,7 +97,10 @@ def checked(drafted, passage: str, parameter: dict) -> tuple:
     else its wording as the document writes it (`value_raw`, else `value`).
     """
     numeric = parameter.get("value_type") in spec_module.NUMERIC_TYPES
-    stand_in = SimpleNamespace(is_numeric=numeric)
+    # What `verify.value_in_quote` reads of a parameter: a number is held
+    # to its digits, anything else to its wording.
+    stand_in = SimpleNamespace(is_numeric=numeric, is_entry=False,
+                               number_in_quote=numeric)
     kept, dropped = [], []
     for raw in drafted if isinstance(drafted, list) else ():
         if not isinstance(raw, dict):
@@ -119,30 +119,47 @@ def checked(drafted, passage: str, parameter: dict) -> tuple:
     return kept, dropped
 
 
-def snippet(passage: str, quotes: list) -> str:
-    """The part of the passage an example shows: the quotes with what
-    stands around them, never more than `SNIPPET_MAX` characters. A quote
-    that cannot be placed letter for letter (it stands in the passage with
-    other spacing) is placed by nobody here: the start of the passage is
-    shown. Whether a quote is in what is shown is the caller's to check."""
-    spans = []
+def piece_lines_of(profile=None) -> int:
+    """How many lines a piece of the harvest holds: the number `piece_lines`
+    of the flow of *profile*, else of the profile in force."""
+    from ..extraction import flow as flow_map
+    if profile is None:
+        from ..profile import active_profile
+        profile = active_profile()
+    return int(flow_map.load(profile).numbers["piece_lines"])
+
+
+def snippet(passage: str, quotes: list, piece_lines: Optional[int] = None,
+            item=None) -> str:
+    """The part of the passage an example shows: the piece of the harvest
+    that holds a quote, whole (owner decision 2026-11-17: nothing is cut).
+    The passage is cut into its pieces as the harvest cuts it
+    (`units.chunks_of`, *piece_lines* lines each; *item* is the source of
+    the passage, a section where not given), and each piece is shown with the
+    lines it carries (a table's title and head, the rows its rows stand
+    under); where the quotes stand in several pieces, those pieces are shown
+    in their order. A quote that no one piece holds (it crosses a piece, or
+    stands in the passage with other spacing) is placed by nobody here: the
+    whole passage is shown, never a part of it. Whether a quote is in what
+    is shown is the caller's to check."""
+    from ..extraction import units
+    from ..extraction.pipeline import Source
+    if not quotes:
+        return passage
+    if piece_lines is None:
+        piece_lines = piece_lines_of()
+    source = item if item is not None else Source("section", 0, passage)
+    made = units.passage_of(source)
+    chunks = units.chunks_of(made, piece_lines)
+    shown: set = set()
     for quote in quotes:
-        at = passage.find(quote)
-        if at < 0:
-            return passage[:SNIPPET_MAX]
-        spans.append((at, at + len(quote)))
-    if not spans:
-        return passage[:SNIPPET_MAX]
-    low = max(0, min(start for start, _ in spans) - SNIPPET_MARGIN)
-    high = min(len(passage), max(end for _, end in spans) + SNIPPET_MARGIN)
-    if high - low > SNIPPET_MAX:
-        return passage[:SNIPPET_MAX] if high <= SNIPPET_MAX else \
-            passage[low:low + SNIPPET_MAX]
-    # whole lines: a table row cut in half reads as another row
-    low = passage.rfind("\n", 0, low) + 1
-    newline = passage.find("\n", high)
-    high = len(passage) if newline < 0 else newline
-    return passage[low:high].strip()
+        holder = next((chunk for chunk in chunks
+                       if quote_in(chunk.text(), quote)), None)
+        if holder is None:
+            return passage
+        shown.update(holder.shown)
+    return "\n".join(made.line(number).text
+                     for number in sorted(shown)).strip()
 
 
 def by_rank(ranked: list) -> list:
@@ -162,9 +179,12 @@ def lacking(raw_spec: dict, only: Optional[list] = None) -> list:
 
 def propose(raw_spec: dict, find: Callable, ask: Callable, *,
             only: Optional[list] = None, per_parameter: int = 2,
-            passages: int = 6) -> dict:
+            passages: int = 6, piece_lines: Optional[int] = None) -> dict:
     """The review file's content: per parameter, the proposals that carry
-    their evidence, and a count of what was read and dropped."""
+    their evidence, and a count of what was read and dropped. An example
+    shows the piece of the harvest that holds its quote (`snippet`, pieces of
+    *piece_lines* lines); a found passage may carry its source under
+    "item"."""
     out: dict = {}
     for parameter in lacking(raw_spec, only):
         name = parameter["uri"]
@@ -188,10 +208,11 @@ def propose(raw_spec: dict, find: Callable, ask: Callable, *,
                 continue
             entry["passages_read"] += 1
             kept, dropped = checked(reply["tuples"], text, parameter)
-            # An example shows a part of its passage. A tuple whose quote
-            # is not in that part would be refused when it is applied, so
+            # An example shows a piece of its passage. A tuple whose quote
+            # is not in that piece would be refused when it is applied, so
             # it is not proposed.
-            source = snippet(text, [t["quote"] for t in kept])
+            source = snippet(text, [t["quote"] for t in kept], piece_lines,
+                             found.get("item"))
             shown = [t for t in kept if quote_in(source, t["quote"])]
             dropped += [(t, NOT_SHOWN) for t in kept if t not in shown]
             for _raw, why in dropped:

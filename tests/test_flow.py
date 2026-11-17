@@ -409,15 +409,18 @@ def test_the_numbers_cut_the_plan():
     def plan(**numbers):
         return addressed.Plan(7, sources, {}, numbers=dataclasses.replace(
             flow.default(), **numbers))
-    mine = plan(piece_lines=3, title_page_lines=4, headings=2)
+    mine = plan(piece_lines=3)
     assert max(len(chunk.numbers) for chunk in mine.chunks) == 3
-    assert len(mine.title_page) == 4
-    assert len(mine.headings(("section", 24))) == 2
+    # the title page is the whole first page and the headings are every
+    # one up to the place, whatever the pieces are: the fifteen titles and
+    # the first section's, which has none and is headed by its first line
+    assert len(mine.title_page) == 30
+    assert len(mine.headings(("section", 24))) == 16
     # the failure by construction: other numbers cut it otherwise
-    other = plan(piece_lines=5, title_page_lines=6, headings=3)
+    other = plan(piece_lines=5)
     assert max(len(chunk.numbers) for chunk in other.chunks) == 5
-    assert len(other.title_page) == 6
-    assert len(other.headings(("section", 24))) == 3
+    assert len(other.title_page) == 30
+    assert len(other.headings(("section", 24))) == 16
 
 
 # -- the stamp names the flow of each pass and compares nothing of it -----------

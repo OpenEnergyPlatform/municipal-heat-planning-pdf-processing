@@ -14,7 +14,9 @@ Promises:
   fails alone is missed;
 - a file that exists without a record is refused, and so is an embedder that
   leaves pictures out, before anything is written;
-- the database gives each key of one document its id, and none of another.
+- the database gives each key of one document its id, and none of another;
+  a key names the piece and the part of its owner (format 2), so two pieces
+  of one owner are two keys.
 """
 import sqlite3
 
@@ -32,9 +34,9 @@ from docpipe.embedding.api import DEFAULT_INSTRUCTION, ApiEmbedder, conversation
 DIM = 4
 
 
-def item(etype, section, item_id=None, text="t", image=None):
+def item(etype, section, item_id=None, text="t", image=None, piece=0):
     return EmbeddingInput(embedding_type=etype, pdf_name="plan", section_index=section,
-                          item_id=item_id, text=text, image=image)
+                          item_id=item_id, text=text, image=image, piece=piece)
 
 
 class Fake:
@@ -102,8 +104,9 @@ def test_the_input_form_still_refuses_a_picture():
 def test_every_mapped_input_goes_in_under_its_own_id():
     inputs = [item("section_text", 0), item("table_vl", 1, "p2_tbl0", "Tabelle", "img.png"),
               item("figure_text", 2, "p3_fig1", "Abbildung")]
-    ids = {("section_text", 0, None): 17, ("table_vl", 1, "p2_tbl0"): 4,
-           ("figure_text", 2, "p3_fig1"): 230}
+    ids = {("section_text", 0, None, 0, 0): 17,
+           ("table_vl", 1, "p2_tbl0", 0, 0): 4,
+           ("figure_text", 2, "p3_fig1", 0, 0): 230}
     pending, no_id, no_input = plan(inputs, ids, done=set())
     index, missed = new_index(), Unembedded()
     assert embed_into(index, pending, Fake(), missed) == 3
@@ -113,7 +116,8 @@ def test_every_mapped_input_goes_in_under_its_own_id():
 
 def test_ids_without_an_input_and_inputs_without_an_id_are_counted_not_filled():
     inputs = [item("section_text", 0), item("figure_vl", 5, "p9_fig0", "Bild", "f.png")]
-    ids = {("section_text", 0, None): 1, ("table_text", 3, "p4_tbl2"): 2}
+    ids = {("section_text", 0, None, 0, 0): 1,
+           ("table_text", 3, "p4_tbl2", 0, 0): 2}
     pending, no_id, no_input = plan(inputs, ids, done=set())
     assert [faiss_id for faiss_id, _ in pending] == [1]
     assert no_id == {"figure_vl": 1}
@@ -123,14 +127,24 @@ def test_ids_without_an_input_and_inputs_without_an_id_are_counted_not_filled():
 def test_an_id_is_taken_once_and_ids_the_file_holds_are_skipped():
     twice = [item("section_text", 0, text="a"), item("section_text", 0, text="b"),
              item("section_title", 0, text="c")]
-    ids = {("section_text", 0, None): 8, ("section_title", 0, None): 9}
+    ids = {("section_text", 0, None, 0, 0): 8,
+           ("section_title", 0, None, 0, 0): 9}
     pending, _, _ = plan(twice, ids, done={9})
     assert [(faiss_id, inp.text) for faiss_id, inp in pending] == [(8, "a")]
+    # The break by construction: the second piece of the owner is a key of
+    # its own and takes the id the database gives that piece.
+    pieces = [item("section_text", 0, text="a"),
+              item("section_text", 0, text="b", piece=1)]
+    pending, _, _ = plan(pieces, {("section_text", 0, None, 0, 0): 8,
+                                  ("section_text", 0, None, 1, 0): 10},
+                         done=set())
+    assert [(faiss_id, inp.text) for faiss_id, inp in pending] == [
+        (8, "a"), (10, "b")]
 
 
 def test_a_failed_batch_is_tried_input_by_input():
     inputs = [item("section_text", s, text=text) for s, text in enumerate("abcd")]
-    ids = {("section_text", s, None): 100 + s for s in range(4)}
+    ids = {("section_text", s, None, 0, 0): 100 + s for s in range(4)}
     pending, _, _ = plan(inputs, ids, done=set())
     index, missed, fake = new_index(), Unembedded(), Fake(fail_on="c")
     assert embed_into(index, pending, fake, missed, batch_size=4) == 3
@@ -164,15 +178,18 @@ def test_the_database_gives_each_key_of_one_document_its_id():
         CREATE TABLE Sections (id INTEGER PRIMARY KEY, document INTEGER, section_number INTEGER);
         CREATE TABLE Tables (id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT);
         CREATE TABLE Images (id INTEGER PRIMARY KEY, section INTEGER, block_id TEXT);
-        CREATE TABLE Embeddings (owner_kind TEXT, owner_id INTEGER, embedding_type TEXT, faiss_id INTEGER);
+        CREATE TABLE Embeddings (owner_kind TEXT, owner_id INTEGER, embedding_type TEXT,
+                                 faiss_id INTEGER, piece INTEGER, part INTEGER);
         INSERT INTO Sections VALUES (1, 7, 0), (2, 7, 1), (3, 8, 0);
         INSERT INTO Tables VALUES (10, 2, 'p2_tbl0');
         INSERT INTO Images VALUES (20, 2, 'p2_fig1');
         INSERT INTO Embeddings VALUES
-            ('section', 1, 'section_text', 11), ('section', 1, 'section_title', 12),
-            ('table', 10, 'table_vl', 13), ('figure', 20, 'figure_text', 14),
-            ('section', 3, 'section_text', 99);
+            ('section', 1, 'section_text', 11, 0, 0), ('section', 1, 'section_title', 12, 0, 0),
+            ('section', 1, 'section_text', 15, 1, 0),
+            ('table', 10, 'table_vl', 13, 0, 1), ('figure', 20, 'figure_text', 14, 0, 0),
+            ('section', 3, 'section_text', 99, 0, 0);
     """)
     assert ids_of_document(db, 7) == {
-        ("section_text", 0, None): 11, ("section_title", 0, None): 12,
-        ("table_vl", 1, "p2_tbl0"): 13, ("figure_text", 1, "p2_fig1"): 14}
+        ("section_text", 0, None, 0, 0): 11, ("section_title", 0, None, 0, 0): 12,
+        ("section_text", 0, None, 1, 0): 15,
+        ("table_vl", 1, "p2_tbl0", 0, 1): 13, ("figure_text", 1, "p2_fig1", 0, 0): 14}

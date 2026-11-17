@@ -19,11 +19,12 @@ the database's ids then no longer fit it. Here (owner decision 2026-11-07,
 - a table part the merge joined to the table it continues is gone.
 
 A vector stays where its input is unchanged: the text, and the picture, that
-`chunking.build_embedding_inputs` makes of the entry, from the database
-before and from the document now, each with the caption the database holds
-(`captions.resolve_title`, which `enrich_caption` applies). Every other
-vector goes: its Embeddings row is deleted and its id taken out of every
-index named. The embed step then embeds each input that has no row, and a
+`chunking.build_embedding_inputs` makes of each piece of the entry, from the
+database before and from the document now, each with the caption the
+database holds (`captions.resolve_title`, which `enrich_caption` applies).
+Every other vector goes, every part of a piece that changed and every
+vector of a whole entry written before the entries of the index were pieces:
+its Embeddings row is deleted and its id taken out of every index named. The embed step then embeds each input that has no row, and a
 re-embedding (chunking/reembed.py) fills each further index, built under the
 same ids, with the ids it lacks.
 
@@ -54,6 +55,7 @@ from docpipe.artifacts import document_dirs
 from docpipe.captions import resolve_title
 
 from .chunking import build_embedding_inputs
+from .pieces import as_held
 from .config import DOCUMENT_JSON
 from .context import load_document
 from .database import (_FIGURE_TYPES, _SECTION_TYPES, _TABLE_TYPES,
@@ -71,23 +73,34 @@ TABLE_FIELDS = ("id", "section", "block_id", "path", "page_number", "caption",
 IMAGE_FIELDS = ("id", "section", "block_id", "path", "page_number", "caption",
                 "description", "bbox", "context_sentence", "caption_source")
 
-# The vectors of one document, by owner. CROSS JOIN drives from Sections,
-# as in database.py.
-_EMBEDDINGS_SQL = (
-    "SELECT 'section', s.id, e.embedding_type, e.faiss_id "
-    "FROM Sections s CROSS JOIN Embeddings e "
-    "  ON e.owner_kind = 'section' AND e.owner_id = s.id WHERE s.document = ? "
-    "UNION ALL "
-    "SELECT 'table', t.id, e.embedding_type, e.faiss_id "
-    "FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
-    "CROSS JOIN Embeddings e "
-    "  ON e.owner_kind = 'table' AND e.owner_id = t.id WHERE s.document = ? "
-    "UNION ALL "
-    "SELECT 'figure', i.id, e.embedding_type, e.faiss_id "
-    "FROM Sections s CROSS JOIN Images i ON i.section = s.id "
-    "CROSS JOIN Embeddings e "
-    "  ON e.owner_kind = 'figure' AND e.owner_id = i.id WHERE s.document = ?"
-)
+# The vectors of one document, by owner and piece (NULL: a vector of a whole
+# owner, or a database of format 1 that has no pieces), with the part, page
+# and own lines each is stored with. CROSS JOIN drives
+# from Sections, as in database.py.
+def _embeddings_sql(conn) -> str:
+    have = {row[1] for row in conn.execute('PRAGMA table_info("Embeddings")')}
+    piece = "e.piece" if "piece" in have else "NULL"
+    # The part and the assignment of each vector, as stored.
+    piece += ", " + ", ".join(f"e.{c}" if c in have else "NULL"
+                              for c in ("part", "page", "first_line",
+                                        "last_line"))
+    return (
+        f"SELECT 'section', s.id, e.embedding_type, {piece}, e.faiss_id "
+        "FROM Sections s CROSS JOIN Embeddings e "
+        "  ON e.owner_kind = 'section' AND e.owner_id = s.id "
+        "WHERE s.document = ? "
+        "UNION ALL "
+        f"SELECT 'table', t.id, e.embedding_type, {piece}, e.faiss_id "
+        "FROM Sections s CROSS JOIN Tables t ON t.section = s.id "
+        "CROSS JOIN Embeddings e "
+        "  ON e.owner_kind = 'table' AND e.owner_id = t.id "
+        "WHERE s.document = ? "
+        "UNION ALL "
+        f"SELECT 'figure', i.id, e.embedding_type, {piece}, e.faiss_id "
+        "FROM Sections s CROSS JOIN Images i ON i.section = s.id "
+        "CROSS JOIN Embeddings e "
+        "  ON e.owner_kind = 'figure' AND e.owner_id = i.id "
+        "WHERE s.document = ?")
 
 Resolve = Callable[[Optional[str], str, Optional[str]], Optional[str]]
 
@@ -165,22 +178,33 @@ class Plan:
     drop: dict                     # faiss id -> embedding type, of every vector that goes
     kept: int
     counts: dict
+    # faiss id -> (page, first_line, last_line) of a kept vector whose piece,
+    # or whose part of it, now stands elsewhere: its text and picture are
+    # the same, so it stays and only its assignment is written.
+    moved: dict = field(default_factory=dict)
 
     @property
     def writes(self) -> bool:
-        return bool(self.drop or self.gone_sections or self.gone_tables
+        return bool(self.drop or self.moved or self.gone_sections or self.gone_tables
                     or self.gone_figures or self.provenance or self.renumbered
                     or any(c["changed"] or c["new"] for c in self.counts.values()))
 
 
 def _owner_inputs(document: dict, name: str, pdf_dir: Path, sections: list,
-                  tables: dict, figures: dict) -> dict:
-    """{(owner kind, row id, embedding type): (text, picture)} of a document's
-    embedding inputs, for the entries that have a row: *sections* gives the
-    row of each section index, *tables* and *figures* the row of each
-    (section index, block id)."""
+                  tables: dict, figures: dict,
+                  assigned: Optional[dict] = None) -> dict:
+    """{(owner kind, row id, embedding type, piece): (text, picture)} of a
+    document's embedding inputs, each piece whole, for the entries that have
+    a row: *sections* gives the row of each section index, *tables* and
+    *figures* the row of each (section index, block id). *assigned*, when
+    given, is filled with {the same key: (page, first_line, last_line,
+    piece)} of the piece whole, *piece* the `pieces.IndexPiece` it is made
+    of (the page of each of its lines)."""
     out: dict = {}
-    for inp in build_embedding_inputs(document, name, pdf_dir, log_counts=False):
+    # The captions are those the database holds or will hold, resolved
+    # once already (`_with_captions`).
+    for inp in build_embedding_inputs(document, name, pdf_dir,
+                                      log_counts=False, resolve=as_held):
         if inp.embedding_type in _SECTION_TYPES:
             kind, row = "section", sections[inp.section_index]
         elif inp.embedding_type in _TABLE_TYPES:
@@ -190,7 +214,11 @@ def _owner_inputs(document: dict, name: str, pdf_dir: Path, sections: list,
         else:
             continue
         if row is not None:
-            out.setdefault((kind, row, inp.embedding_type), (inp.text, inp.image))
+            key = (kind, row, inp.embedding_type, inp.piece)
+            out.setdefault(key, (inp.text, inp.image))
+            if assigned is not None:
+                assigned.setdefault(
+                    key, (inp.page, inp.first_line, inp.last_line, inp.unit))
     return out
 
 
@@ -283,25 +311,52 @@ def plan_document(conn, doc_id: int, name: str, merged: dict, pdf_dir: Path,
         old_doc, name, pdf_dir, old_ids,
         {(position[t["section"]], t["block_id"]): t["id"] for t in reversed(old_tables)},
         {(position[f["section"]], f["block_id"]): f["id"] for f in reversed(old_figures)})
+    assigned: dict = {}
     now = _owner_inputs(
         new, name, pdf_dir, rows,
         {(at, item.get("id")): row["id"] for at, item, row in reversed(tables) if row},
-        {(at, item.get("id")): row["id"] for at, item, row in reversed(figures) if row})
+        {(at, item.get("id")): row["id"] for at, item, row in reversed(figures) if row},
+        assigned)
     drop: dict = {}
+    moved: dict = {}
     kept = 0
-    for kind, owner, etype, faiss_id in conn.execute(
-            _EMBEDDINGS_SQL, (doc_id, doc_id, doc_id)):
-        key = (kind, owner, etype)
-        if key in before and before[key] == now.get(key):
-            kept += 1
-        else:
-            drop[int(faiss_id)] = etype
+    stored = list(conn.execute(_embeddings_sql(conn), (doc_id, doc_id, doc_id)))
+    # The vectors of one piece, each row (kind, owner, type, piece, part,
+    # page, first_line, last_line, faiss id).
+    held: dict = defaultdict(list)
+    for r in stored:
+        held[(r[0], r[1], r[2], r[3])].append(r)
+    for key, rows_of in held.items():
+        if not (key in before and before[key] == now.get(key)):
+            drop.update({int(r[8]): key[2] for r in rows_of})
+            continue
+        # The piece kept its text and picture, so each of its vectors is
+        # right; each part takes the assignment of the piece now: its own
+        # lines moved as the piece's first line moved, the page of its
+        # first line now (the piece's page where it holds no own line).
+        kept += len(rows_of)
+        want = assigned.get(key)
+        if want is None:
+            continue
+        page, first, _last, piece = want
+        firsts = [r[6] for r in rows_of if r[6] is not None]
+        shift = (first - min(firsts)) if first is not None and firsts else 0
+        for r in rows_of:
+            if r[6] is None or r[7] is None:
+                now_at = (page, r[6], r[7])
+            else:
+                lines = (r[6] + shift, r[7] + shift)
+                at = (piece.page_of((lines[0],))
+                      if hasattr(piece, "page_of") else page)
+                now_at = (at, *lines)
+            if now_at != (r[5], r[6], r[7]):
+                moved[int(r[8])] = now_at
     return Plan(name=name, doc_id=doc_id, new=new, rows=rows,
                 gone_sections=gone_sections, tables=tables,
                 gone_tables=[row["id"] for row in gone_tables], figures=figures,
                 gone_figures=[row["id"] for row in gone_figures],
                 provenance=provenance, renumbered=renumbered, drop=drop,
-                kept=kept, counts=counts)
+                kept=kept, counts=counts, moved=moved)
 
 
 def apply_plan(conn, plan: Plan) -> None:
@@ -352,6 +407,10 @@ def apply_plan(conn, plan: Plan) -> None:
         insert_provenance(doc_id, ids[at], sections[at], conn, page_cache)
     conn.executemany("DELETE FROM Embeddings WHERE faiss_id = ?",
                      [(faiss_id,) for faiss_id in plan.drop])
+    conn.executemany(
+        "UPDATE Embeddings SET page = ?, first_line = ?, last_line = ? "
+        "WHERE faiss_id = ?",
+        [(*want, faiss_id) for faiss_id, want in plan.moved.items()])
 
 
 def drop_from_index(path: Path, ids) -> int:
@@ -430,6 +489,10 @@ def run_sync(data_dir: Path, db_path: Path, index_paths, *,
     missing = [str(p) for p in paths if not p.exists()]
     if missing:
         raise FileNotFoundError(f"no index file: {', '.join(missing)}")
+    if not dry_run:
+        # Format 2: a vector per piece of its owner (store/schema.py).
+        from .database import ensure_format
+        ensure_format(db_path)
     report = SyncReport()
     drop: set = set()
     to_write: list = []

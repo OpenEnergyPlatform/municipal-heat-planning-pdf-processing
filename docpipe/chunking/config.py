@@ -24,11 +24,6 @@ from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH as MAX_TOKEN_LEN
 # purpose; the database then records both models.
 ALLOW_MIXED_INDEX = os.environ.get("EMBEDDING_ALLOW_MIXED_INDEX", "0") != "0"
 
-# Hard ceiling for one section's embedding text. Refinement splits sections
-# above SECTION_MAX_WORDS, so this only catches what slipped through; it sits
-# clear of MAX_TOKEN_LENGTH so a capped section is never silently truncated by
-# the tokenizer instead.
-SECTION_EMBED_MAX_WORDS = 1800
 # Aggregate batch: MultiGPUEmbedder splits it round-robin across the replicas.
 EMBEDDING_BATCH_SIZE = 32
 

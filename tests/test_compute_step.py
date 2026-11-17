@@ -425,8 +425,8 @@ def computing(monkeypatch, *said, ran=None, plan=None, rank=None):
     monkeypatch.setattr(code_exec, "run_code", run_code)
     monkeypatch.setattr(runner.trace, "event", lambda kind, doc=None, /, **f:
                         events.append({"t": kind, "doc": doc, **f}))
-    # A plan of one page: what a search lists and a fetch shows is cut to
-    # two pages of it.
+    # A plan of one page (what a fetch shows is whole or in parts that fit
+    # the window, never cut).
     step = (runner.make_computer(PROFILE, lambda document_id: plan,
                                  lambda document_id: 1, rank)
             if plan is not None else runner.make_computer(PROFILE))

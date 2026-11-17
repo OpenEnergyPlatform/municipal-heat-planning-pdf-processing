@@ -127,12 +127,10 @@ def test_matching_is_case_insensitive_and_titles_items_by_their_title():
     assert r.hits[0]["title"] == "F20"
 
 
-def test_matching_trims_the_line_to_the_neighbourhood():
+def test_matching_gives_the_whole_line_of_the_hit():
     far = "x" * 500 + " needle " + "y" * 500
     r = matching([sec(1, "H\n" + far)], "needle", 10_000)
-    line = r.hits[0]["line"]
-    assert "needle" in line
-    assert len(line) < 2 * rules.get("pattern_hit_chars") + 20
+    assert r.hits[0]["line"] == far.strip()
 
 
 def test_matching_line_is_one_line_of_the_passage():

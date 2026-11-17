@@ -37,6 +37,7 @@ from .config import (
     SECTIONS_JSON,
     VISUALS_JSON,
     dump_json_atomic,
+    longest_in,
     max_request_tokens,
 )
 from . import continuation, qa, replies
@@ -599,10 +600,17 @@ def main() -> None:
     profile = require_profile(args)
     usage.begin("visuals")
 
+    if args.input is None:
+        args.input = str(profile.processed_dir)
+    # The texts the run shows, measured where it reads them: the documents
+    # under --input, in the file --input-json names where it names one.
+    budget = max_request_tokens(longest_in(
+        args.input, (args.input_json,) if args.input_json else ()))
+
     # Lets the job script derive --max-model-len from the code instead of
     # restating it in a comment that nothing checks.
     if args.print_context_budget:
-        print(max_request_tokens())
+        print(budget)
         sys.exit(0)
 
     # The sentences a retry says are the profile's, and a profile that lacks
@@ -610,9 +618,6 @@ def main() -> None:
     # that asks nothing of the model (the budget above, a dry run) needs none.
     if not args.dry_run:
         reading.phrases()
-
-    if args.input is None:
-        args.input = str(profile.processed_dir)
 
     holes: list = []
     common = dict(
@@ -632,7 +637,7 @@ def main() -> None:
         # check has to use what run_* will actually talk to.
         if not args.dry_run:
             assert_serving(args.base_url or VLM_BASE_URL, VLM_API_KEY,
-                           args.model or VLM_MODEL, max_request_tokens(),
+                           args.model or VLM_MODEL, budget,
                            what="image enrichment", role="vlm",
                            shapes=dict((replies.TABLE,
                                         replies.TABLE_CONTINUED,

@@ -47,7 +47,6 @@ WINDOW_SIZE = int(os.environ.get(
 SECTION_SPLIT_ENABLE  = True
 SECTION_MAX_WORDS     = 1000
 SECTION_TARGET_WORDS  = 600
-SECTION_OUTLINE_WORDS = 14   # words per block shown to the model in the outline
 
 # Numbering-prefix strip + ALL-CAPS de-shout applied on top of the LLM's pass.
 TITLE_CLEANUP_ENABLE = True
@@ -138,7 +137,8 @@ def largest_reply_tokens() -> int:
 
 def max_request_tokens() -> int:
     """Worst case for one window: prompt + a full window of maximum-size
-    sections + the largest reply we would ever ask for, once.
+    sections + the whole section before it as context (a section is at most
+    SECTION_MAX_WORDS) + the largest reply we would ever ask for, once.
 
     A section that cannot be split any further, whose reply was cut off, is
     asked once more with more room, but the room is bounded by what the served
@@ -148,7 +148,7 @@ def max_request_tokens() -> int:
     limit, is logged there.
     """
     system = len(system_prompt().split()) * TOKENS_PER_WORD
-    window = WINDOW_SIZE * SECTION_MAX_WORDS * TOKENS_PER_WORD
+    window = (WINDOW_SIZE + 1) * SECTION_MAX_WORDS * TOKENS_PER_WORD
     return int(system + window + largest_reply_tokens())
 
 

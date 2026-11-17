@@ -5,9 +5,10 @@ under the ids it already has.
 A vector is comparable only with vectors embedded the same way: the same
 model, and the same implementation of it. Moving the embedder to a vLLM
 server (the messages form, docpipe/embedding/api.py) changes every vector,
-so the corpus is embedded again as a whole. The database keeps its ids and
-is not written: each item's vector goes into the new file under the id the
-database already gives it. The old file stays as it is, and a run moves to
+so the corpus is embedded again as a whole. The database keeps its ids and is
+otherwise not written: a database of format 1 is first brought to format 2
+(its Embeddings table, `ensure_format`), and each item's vector then goes into
+the new file under the id the database already gives it. The old file stays as it is, and a run moves to
 the new one by its path.
 
 A record beside the new file (`<index>.json`) says what made it and how far
@@ -95,7 +96,7 @@ def plan(inputs: list, ids: dict, done: set) -> tuple:
     keys = set()
     taken = set()
     for inp in inputs:
-        key = (inp.embedding_type, inp.section_index, inp.item_id)
+        key = inp.key
         keys.add(key)
         faiss_id = ids.get(key)
         if faiss_id is None:
@@ -186,9 +187,10 @@ def run_reembed(data_dir: Path, db_path: Path, index_path: Path, *,
     from docpipe.artifacts import document_dirs
     from concurrent.futures import ThreadPoolExecutor
 
-    from .chunking import build_embedding_inputs
+    from .chunking import build_embedding_inputs, fit_inputs
     from .context import load_document
-    from .database import document_id, embedding_ids
+    from .database import document_id, embedding_ids, ensure_format
+    from .embedding import fits_of, window_of
     from .pipeline import prepared_ahead
 
     data_dir, db_path, index_path = Path(data_dir), Path(db_path), Path(index_path)
@@ -202,20 +204,26 @@ def run_reembed(data_dir: Path, db_path: Path, index_path: Path, *,
             "EMBEDDING_API_FORMAT=messages with a vLLM server, or the local "
             "backend")
 
+    ensure_format(db_path)
     index, _ = load_or_create_index(index_path)
     done = set(index_ids(index))
     report = Report(resumed=len(done))
     record = record_path(index_path)
     write_record(record, embedder, index, report, complete=False)
+    # The parts of a piece are the ones this embedder's window makes; where
+    # they are the parts the database names, they go under its ids.
+    fits = fits_of(window_of(embedder))
+    unfit: list = []
 
     def prepare(pdf_dir):
         doc = document_id(db_path, pdf_dir.name)
         if doc is None:
             return pdf_dir.name, None, {}
         merged = load_document(pdf_dir)
-        return (pdf_dir.name,
-                build_embedding_inputs(merged, pdf_dir.name, pdf_dir),
-                embedding_ids(db_path, doc))
+        inputs = fit_inputs(
+            build_embedding_inputs(merged, pdf_dir.name, pdf_dir), fits,
+            lambda inp, reason: unfit.append((inp, reason)))
+        return (pdf_dir.name, inputs, embedding_ids(db_path, doc))
 
     candidates = document_dirs(data_dir, DOCUMENT_JSON)
     log.info("Re-embedding %d document(s) into %s (%d vector(s) already "
@@ -249,6 +257,8 @@ def run_reembed(data_dir: Path, db_path: Path, index_path: Path, *,
                 flush()
     if pending:
         flush()
+    for inp, reason in unfit:
+        report.missed.add([inp], reason)
 
     save_index(index, index_path)
     write_record(record, embedder, index, report,

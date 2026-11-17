@@ -232,6 +232,20 @@ budget, the room is twice *asked*. Each stage's budget is one largest reply
 (`refinement.config.max_request_tokens`, `visuals.config.max_request_tokens`,
 `page_text_without_layer.page_request_tokens`).
 
+The same window decides whether a request fits, for refinement's windows and split
+outlines and the vision requests of the visuals stage (`llm_preflight.stage_fits`,
+used by `refine._fits_window`, `split._outline_fits` and `vision._fits_served`).
+`fits(messages, reply)` judges the request as it is sent: the window the server
+reported at the preflight, the frame from the server's own chat template of the
+same messages with their texts emptied (a frame the server did not count is not
+kept, and is asked again after `window.ASK_AGAIN_S`, 60 s), the texts bounded by
+their UTF-8 bytes first and counted by the server's `/tokenize` only where the
+bytes do not fit, and the reply room asked for taken off. Each picture costs what
+the stage says (`IMAGE_TOKENS` in the visuals stage). A text the server did not
+count is bounded by its bytes, so a text that would have fitted may be split and
+nothing is cut. It is None where the server reported no window, and the check
+is then the caller's.
+
 ### Reading a model's reply as one JSON object
 
 Refinement, the visuals stage, page transcription and the chat ask a model for
@@ -273,14 +287,22 @@ The sentences the model hears are the profile's. `profiles/<name>/prompts/readin
 carries them, in the language of the profile's prompts for these
 stages; `reading.phrases()` takes the table `phrases.table` makes of it, laid over the
 files of the profiles it extends entry by entry, and checks the result against
-`reading.REQUIRED`, ten names: `shape_rule` (what is said back whatever went
+`reading.REQUIRED`, thirteen names: `shape_rule` (what is said back whatever went
 wrong: the shape that was asked for, appended to every cause), `reasoning_only`,
-`empty`, `no_object`, `syntax`, `outside_text`, `not_an_object`, and
-`key_missing`, `key_not_a_list`, `key_not_text`, the three the key check says.
+`empty`, `no_object`, `syntax`, `outside_text`, `not_an_object`,
+`key_missing`, `key_not_a_list`, `key_not_text` (the three the key check says),
+`asked_anew`, and `syntax_shown` and `outside_text_shown`. A correction after a
+reply that could not be read (`reading.again`) puts the whole reply into the
+request once. Where the reply is shown as the model's own turn, the correction
+names only the place and the message (`syntax_shown`, `outside_text_shown`), so
+the reply is not there twice; where it is not shown as a turn (the chat's re-ask,
+`echo=False`), the correction quotes it (`syntax`, `outside_text`). Where the
+request with the whole reply does not fit the window, the original request is
+asked anew with the cause named in one sentence (`asked_anew`).
 A profile that lacks one raises `LookupError` naming it and the file, and the three stages
 call `reading.phrases()` in their `main` before the first request, so the gap is
 found there and not in the middle of the first document. The built-in
-`default`, `kwp` and `scenarios` profiles each provide all ten, in English,
+`default`, `kwp` and `scenarios` profiles each provide all thirteen, in English,
 because the prompts of these stages are English in all three (the scenarios
 profile's extraction prompts are German, and `prompts/extraction/phrases.json` is a
 different file: the harvest's own). `reading.say(name, **values)` fills in a
@@ -445,7 +467,8 @@ placeholder's id without the brackets. It never raises: `caption`
 already looking like one, a missing `content` or `block_id`, a
 `block_id` absent from `content`, or no caption-like sentence before the
 placeholder, all come back as `caption`, unchanged
-(`docpipe/captions.py:99-111`). The list of patterns it reads is checked on
+(`docpipe/captions.py:99-111`). A title found is the
+caption's first whole sentence, with no cap on its length. The list of patterns it reads is checked on
 first use: a list that is empty, a bare string, a pattern that does not
 compile or one that matches the empty text (which would make every text a
 caption) is a `ValueError` naming the profile, and a standalone profile with
@@ -465,9 +488,8 @@ no `CAPTION_START` at all is a `LookupError`.
 | `max_retries` (OpenAI client) | hardcoded constant | 1 | preflight retried once before a connection failure is reported | `docpipe/llm_preflight.py:141` |
 | `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `CONTEXT_FLAG` (`"--max-model-len"`) | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:305-306`, `:47-48` |
 | `shapes` (`assert_serving`) | function parameter | none | `{name: schema}`, the reply schemas a stage sends as the grammar of every request; each is put to the server once before the first document | `docpipe/llm_preflight.py:308` |
-| the sentences of `reading` | profile file (`prompts/reading/phrases.json`) | none; required, ten names (`reading.REQUIRED`) | the sentences a stage says to the model when its reply was not the one JSON object; checked before the first request | `reading.phrases`, `phrases.table` |
+| the sentences of `reading` | profile file (`prompts/reading/phrases.json`) | none; required, thirteen names (`reading.REQUIRED`) | the sentences a stage says to the model when its reply was not the one JSON object; checked before the first request | `reading.phrases`, `phrases.table` |
 | `preprocessing.CAPTION_START` | profile component | none; each profile lists its own | the non-empty list of regular expressions, each carrying its own anchor, that open a caption | `docpipe/captions.py:40-71` |
-| `_CAPTION_LIMIT` | module constant | 300 characters | caps the length of a title `resolve_title()` returns | `docpipe/captions.py:31` |
 | `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:91-92` |
 | `cached` price | key of a `[prices]` entry in the project file | the model's `input` price | per million tokens, what an input token costs that the provider served from its cache | `docpipe/settings.py` (`PRICED`), `docpipe/usage.py` (`cost`) |
 
@@ -597,7 +619,8 @@ model that cannot answer inside a reply schema is refused there too (see
 stage sends as its grammar is refused there too (`assert_reply_schemas`). It keeps
 the window the server reported (`served_window`) and gives the room of the one
 further attempt at a unit whose reply was cut off and that cannot be split
-(`further_room`). Called once per run from refinement, extraction (review and harvest),
+(`further_room`); `stage_fits(role, ...)` says whether a request fits that window
+(see below). Called once per run from refinement, extraction (review and harvest),
 visuals (skipped under `--dry-run`) and page transcription, which asks before
 the first page that lacks its text; the doctor sends its request-field
 probe on its own.

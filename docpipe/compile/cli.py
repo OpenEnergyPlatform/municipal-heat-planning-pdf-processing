@@ -258,7 +258,7 @@ def _corpus(args, profile):
         a proposal."""
         probe = f"{parameter.get('label')}. {parameter.get('description')}"
         return proposing.by_rank(
-            [[{"document": name, "text": source.text,
+            [[{"document": name, "text": source.text, "item": source,
                "where": [source.owner_kind, source.owner_id]}
               for source in retrieve([probe], document, set())]
              for document, name in documents])
@@ -349,7 +349,8 @@ def _examples(args) -> int:
     review = proposing.propose(
         raw, find, ask, only=[parameter["uri"] for parameter in wanted],
         per_parameter=args.per_parameter,
-        passages=max(6, 2 * args.documents))
+        passages=max(6, 2 * args.documents),
+        piece_lines=proposing.piece_lines_of(profile))
     got = sum(1 for entry in review["parameters"].values()
               if entry["proposals"])
     review["parameters"] = {**before, **review["parameters"]}

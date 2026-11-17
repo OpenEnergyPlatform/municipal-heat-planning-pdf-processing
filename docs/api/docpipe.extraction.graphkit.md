@@ -58,7 +58,13 @@ every organisation of one of them, so there is no default.
 def ttl_comment(text, indent: str = "") -> str
 ```
 
-One Turtle comment line, flattened so a quote cannot break the file.
+A Turtle comment of the whole *text*, as many lines as it needs.
+
+The text is flattened so a quote cannot break the file and wrapped at word
+boundaries, each line starting with "#" (a comment ends at its line end,
+so every line has to carry its own). No character of the text is dropped
+(owner decision 2026-11-17); a word longer than the width stands whole on
+its own line.
 
 ### ttl_escape
 

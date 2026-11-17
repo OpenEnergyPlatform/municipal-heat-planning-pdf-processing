@@ -53,13 +53,10 @@ ORG_COLUMNS = ("name_as_written", "iri_key", "names_sharing_key",
 # organisation).
 ORGANISATION_CLASS = "OEO_00030022"
 
-# A cell has to fit a spreadsheet; the harvest keeps the whole quote.
-CELL = 300
-
-
 def _cell(text) -> str:
+    """The whole text on one line; nothing is cut."""
     flat = " ".join(str(text if text is not None else "").split())
-    return flat if len(flat) <= CELL else flat[:CELL].rstrip() + " …"
+    return flat
 
 
 def default_spec_path() -> Path:

@@ -9,14 +9,20 @@ Promises, each with a case that breaks it by construction:
    carries no sentence is embedded as before; a sentence of an item with no
    text is not embedded alone.)
 2. The model is asked once for each table and figure, and a second build with
-   the same caption, head and heading asks nothing: the sentence is kept. (A
-   changed caption, head or heading asks again, and only for that item.)
+   the same caption, text and heading asks nothing: the sentence is kept. (A
+   changed caption, text or heading asks again, and only for that item.)
 3. Off, nothing is asked, nothing is read from what is kept, and the inputs are
    byte for byte what they were.
 4. An answer out of form is asked again, as often as the other stages ask, and
    is never embedded.
 5. `--step sync` takes a changed sentence for a changed entry (its vectors go)
    and an unchanged one for an unchanged entry (its vectors stay).
+6. Nothing is cut (owner decision 2026-11-17): the request shows the whole
+   text of a table or figure; one over the window is asked in parts, each
+   with its caption, heading and head and every row in exactly one part, and
+   a head that alone does not fit is named, never cut. Each part has its
+   sentence, which the index puts before the rows of that part. A reply whose
+   echo does not fit is asked anew with its cause, nothing of it shown.
 """
 from __future__ import annotations
 
@@ -75,6 +81,15 @@ class Asker:
         return f"Satz zu {request['kind']} {request['caption']}"
 
 
+def table_text(*rows):
+    """A table's text as the index shows it (`chunking.pieces`): its title,
+    its head and its rows, the rule under the head only where the rule
+    `table_rule_line` shows it."""
+    head = HEAD.splitlines()
+    shown = [head[0]] + ([head[1]] if rules.get("table_rule_line") else [])
+    return "\n".join(["Tabelle 1: Bedarf", *shown, *rows])
+
+
 def inputs_of(merged, pdf_dir):
     return {(i.embedding_type, i.item_id): i for i in
             build_embedding_inputs(merged, "plan", pdf_dir, log_counts=False)}
@@ -105,7 +120,7 @@ def test_the_text_and_the_picture_text_of_a_table_and_a_figure_start_with_the_se
 
 def test_a_document_without_a_sentence_is_embedded_as_before(folder):
     got = inputs_of(doc(), folder)
-    assert got[("table_text", "p1_tbl0")].text == "Tabelle 1: Bedarf\n" + HEAD + "\n| 2025 | 10 |"
+    assert got[("table_text", "p1_tbl0")].text == table_text("| 2025 | 10 |")
     assert got[("figure_vl", "p1_fig0")].text == "Abbildung 1: Verlauf\nLinie von 10 auf 8 GWh"
 
 
@@ -123,22 +138,24 @@ def test_a_sentence_of_an_item_with_no_text_is_not_embedded_alone(folder):
 def test_the_model_is_asked_once_for_each_table_and_figure_and_then_nothing(folder):
     asker = Asker()
     first = context.ask_document(doc(), folder, asker, salt="s")
-    assert first == {"asked": 2, "answered": 2, "kept": 0, "dropped": 0}
+    assert first == {"asked": 2, "answered": 2, "kept": 0, "dropped": 0,
+                     "too_long": 0}
     assert sorted(r["kind"] for r in asker.requests) == ["figure", "table"]
     assert (folder / CONTEXT_SENTENCES_JSON).is_file()
 
     again = context.ask_document(doc(), folder, asker, salt="s")
-    assert again == {"asked": 0, "answered": 0, "kept": 2, "dropped": 0}
+    assert again == {"asked": 0, "answered": 0, "kept": 2, "dropped": 0,
+                     "too_long": 0}
     assert len(asker.requests) == 2
 
 
-def test_the_request_shows_caption_head_and_heading_of_the_section(folder):
+def test_the_request_shows_caption_whole_text_and_heading_of_the_section(folder):
     asker = Asker()
     context.ask_document(doc(), folder, asker, salt="s")
     request = next(r for r in asker.requests if r["kind"] == "table")
     assert request == {"kind": "table", "section_heading": "Endenergiebedarf",
                        "caption": "Tabelle 1: Bedarf",
-                       "head": HEAD + "\n| 2025 | 10 |"}
+                       "text": HEAD + "\n| 2025 | 10 |"}
 
 
 @pytest.mark.parametrize("change", ["caption", "head", "heading"])
@@ -202,7 +219,7 @@ def test_off_what_is_kept_is_not_read_and_the_inputs_are_as_before(folder):
         merged = context.load_document(folder)
     assert merged == doc()
     got = inputs_of(merged, folder)
-    assert got[("table_vl", "p1_tbl0")].text == "Tabelle 1: Bedarf\n" + HEAD + "\n| 2025 | 10 |"
+    assert got[("table_vl", "p1_tbl0")].text == table_text("| 2025 | 10 |")
     with rules.overlaid(context_sentence=True):
         on = inputs_of(context.load_document(folder), folder)
     assert on[("table_vl", "p1_tbl0")].text.startswith("Satz zu table")
@@ -213,7 +230,8 @@ def test_on_ask_all_asks_each_document(tmp_path, folder):
     asker = Asker()
     with rules.overlaid(context_sentence=True):
         total = context.ask_all(tmp_path, asker)
-    assert total == {"asked": 2, "answered": 2, "kept": 0, "dropped": 0}
+    assert total == {"asked": 2, "answered": 2, "kept": 0, "dropped": 0,
+                     "too_long": 0}
 
 
 # -- 4. an answer out of form ------------------------------------------------
@@ -259,10 +277,11 @@ def test_an_answer_out_of_form_is_never_embedded_and_is_asked_again_next_time(fo
     asker = Asker(reply=None)
     asker.reply = ""          # the model gave nothing usable
     counts = context.ask_document(doc(), folder, asker, salt="s")
-    assert counts == {"asked": 2, "answered": 0, "kept": 0, "dropped": 2}
+    assert counts == {"asked": 2, "answered": 0, "kept": 0, "dropped": 2,
+                      "too_long": 0}
     merged = context.attach(doc(), folder, salt="s")
     got = inputs_of(merged, folder)
-    assert got[("table_text", "p1_tbl0")].text == "Tabelle 1: Bedarf\n" + HEAD + "\n| 2025 | 10 |"
+    assert got[("table_text", "p1_tbl0")].text == table_text("| 2025 | 10 |")
     again = Asker()
     assert context.ask_document(doc(), folder, again, salt="s")["asked"] == 2
 
@@ -294,7 +313,7 @@ def test_sync_takes_a_new_sentence_for_a_changed_entry_and_an_unchanged_one_for_
         first = corpus.sync()
     # Only the table's text vector changed; the section's and the title's stay.
     assert dict(first.dropped) == {"table_text": 1}
-    assert corpus.held() == set(ids.values()) - {ids[("table_text", 0, "p1_tbl0")]}
+    assert corpus.held() == set(ids.values()) - {ids[("table_text", 0, "p1_tbl0", 0, 0)]}
     with sqlite3.connect(corpus.db) as conn:
         assert conn.execute("SELECT context_sentence FROM Tables").fetchone() == (
             "Bedarf in MWh fuer 2025.",)
@@ -328,25 +347,174 @@ def test_sync_with_the_rule_off_takes_a_kept_sentence_for_nothing(tmp_path):
     assert report.changed == [] and not report.dropped
 
 
-# -- the head length is a rule ------------------------------------------------
+# -- 6. nothing is cut: the whole text, or parts that each carry its lines --
 
-def test_a_head_longer_than_the_rule_is_cut_at_the_rules_length():
+ROWS = [f"| {2000 + n} | {n} |" for n in range(40)]
+
+
+def long_table():
     merged = doc()
     sec = merged["sections"][0]
-    sec["tables"][0]["markdown"] = "x" * 50
-    with rules.overlaid(context_head_chars=10):
-        assert context.shown("table", sec, sec["tables"][0])["head"] == "x" * 10
-    with rules.overlaid(context_head_chars=50):
-        assert context.shown("table", sec, sec["tables"][0])["head"] == "x" * 50
+    sec["tables"][0]["markdown"] = HEAD + "\n" + "\n".join(ROWS)
+    return merged, sec, sec["tables"][0]
 
 
-def test_a_different_head_length_asks_again_and_the_same_one_does_not(folder):
-    merged = doc()
-    merged["sections"][0]["tables"][0]["markdown"] = "x" * 50
+def small_window(request):
+    """A window that holds the head and a few rows of the long table."""
+    return len(request["text"].encode("utf-8")) <= 160
+
+
+def test_the_request_shows_the_whole_text_of_a_table_however_long():
+    _merged, sec, item = long_table()
+    many = "\n".join(f"| {n} | {n} |" for n in range(2000))
+    item["markdown"] = HEAD + "\n" + many
+    got = context.shown("table", sec, item)
+    assert got["text"] == HEAD + "\n" + many
+    assert context.requests_of("table", sec, item) == [(got, None, None)]
+
+
+def test_a_table_over_the_window_is_asked_in_parts_each_with_its_caption_heading_and_head():
+    _merged, sec, item = long_table()
+    asked = context.requests_of("table", sec, item, small_window)
+    assert len(asked) > 1
+    seen = []
+    for request, first, last in asked:
+        assert small_window(request)
+        assert request["caption"] == "Tabelle 1: Bedarf"
+        assert request["section_heading"] == "Endenergiebedarf"
+        assert "| Jahr | MWh |" in request["text"]          # the head, carried
+        assert first is not None and last is not None and first <= last
+        seen += [row for row in ROWS if row in request["text"]]
+    assert seen == ROWS                                     # every row once
+
+
+def test_a_table_whose_head_alone_does_not_fit_is_named_never_cut():
+    from docpipe.window import TooLong
+    _merged, sec, item = long_table()
+    with pytest.raises(TooLong):
+        context.requests_of("table", sec, item,
+                            lambda request: len(request["text"]) <= 10)
+
+
+def test_each_part_has_its_sentence_and_the_index_puts_it_before_its_rows(folder):
+    merged, _sec, _item = long_table()
+
+    def ask(request):
+        first = next((row for row in ROWS if row in request["text"]),
+                     request["caption"])
+        return f"Satz ab {first}"
+
+    asked = context.requests_of("table", merged["sections"][0],
+                                merged["sections"][0]["tables"][0],
+                                small_window)
+    counts = context.ask_document(merged, folder, ask, salt="s",
+                                  fits=small_window)
+    assert counts["asked"] == len(asked) + 1             # the parts, the figure
+    item = context.attach(copy.deepcopy(merged), folder,
+                          salt="s")["sections"][0]["tables"][0]
+    said = context.sentences_of(item["context_sentence"])
+    assert len(said) == len(asked)
+    for (request, first, last), (s_first, s_last, sentence) in zip(asked, said):
+        assert (s_first, s_last) == (first, last)
+        assert sentence == ask(request)
+        assert context.lead_of(item, first, last) == sentence + "\n"
+    # The same parts again: nothing is asked.
+    again = context.ask_document(merged, folder, ask, salt="s",
+                                 fits=small_window)
+    assert again["asked"] == 0 and again["kept"] == 2
+
+
+def test_a_reply_whose_echo_does_not_fit_asks_anew_with_its_cause_only():
+    broken = '{"sentence": "' + "x " * 500
+    client = Client([broken, '{"sentence": "Ein Satz."}'])
+    # The reply alone is over 1,000 characters: its echo does not fit,
+    # the request anew with one sentence does.
+    narrow = lambda request: (not isinstance(request, list)
+                              or len(json.dumps(request)) <= 1000)
+    got = context.ask_model(client, {"kind": "table"}, system="s", model="m",
+                            temperature=0.1, max_tokens=400,
+                            max_retries=MAX_RETRIES, wait=lambda s: None,
+                            fits=narrow)
+    assert got == "Ein Satz."
+    second = client.messages[1]
+    assert [m["role"] for m in second] == ["system", "user"]
+    assert "x x x" not in json.dumps(second)
+    assert "(syntax)" in second[-1]["content"]
+    # The same reply with room: it goes back whole, as the model's turn.
+    client = Client([broken, '{"sentence": "Ein Satz."}'])
+    assert ask_with(client) == "Ein Satz."
+    assert client.messages[1][-2] == {"role": "assistant", "content": broken}
+
+
+# -- 7. an item that cannot be shown whole is named, the run goes on --------
+
+def no_table_fits(request):
+    """A window in which no table text fits, but a figure does."""
+    return request["kind"] == "figure" or len(request["text"]) <= 10
+
+
+def rows_doc():
+    return long_table()[0]
+
+
+def test_an_item_that_cannot_be_shown_is_named_left_out_and_the_run_goes_on(
+        tmp_path, caplog):
+    make = rows_doc
+    for name in ("plan", "plan2"):
+        pdf_dir = tmp_path / name
+        (pdf_dir / "images").mkdir(parents=True)
+        (pdf_dir / DOCUMENT_JSON).parent.mkdir(parents=True, exist_ok=True)
+        (pdf_dir / DOCUMENT_JSON).write_text(json.dumps(make()),
+                                             encoding="utf-8")
     asker = Asker()
-    with rules.overlaid(context_head_chars=25):
-        context.ask_document(merged, folder, asker, salt="s")
-        assert context.ask_document(merged, folder, asker, salt="s")["asked"] == 0
-    with rules.overlaid(context_head_chars=40):
-        # Only the table's head changes with the length; the figure's is short.
-        assert context.ask_document(merged, folder, asker, salt="s")["asked"] == 1
+    with rules.overlaid(context_sentence=True), \
+            caplog.at_level("ERROR", logger=context.log.name):
+        total = context.ask_all(tmp_path, asker, no_table_fits)
+    # Both documents were done: the figure of each was asked, the table of
+    # each was named in the log, counted as too long (a table, not a
+    # request), and nothing was sent.
+    assert [r["kind"] for r in asker.requests] == ["figure", "figure"]
+    assert total == {"asked": 2, "answered": 2, "kept": 0, "dropped": 0,
+                     "too_long": 2}
+    named = [r.getMessage() for r in caplog.records]
+    assert len(named) == 2 and all("p1_tbl0" in m and "plan" in m
+                                   for m in named)
+    for name in ("plan", "plan2"):
+        merged = context.attach(make(), tmp_path / name,
+                                salt=context.prompt_salt())
+        sec = merged["sections"][0]
+        assert "context_sentence" not in sec["tables"][0]
+        assert "context_sentence" in sec["figures"][0]
+
+
+def test_a_piece_of_carried_lines_only_that_do_not_fit_is_not_an_empty_list():
+    # A piece with no own line whose carried lines (a title, a head) do not
+    # fit: never an empty list, which asked nothing and said nothing.
+    from docpipe.window import TooLong, split
+    with pytest.raises(TooLong):
+        split([], lambda numbers, replaced: "Tabelle 1\n| Jahr | MWh |",
+              lambda n: "", lambda text: False, lambda line: [line],
+              "table p1_tbl0")
+
+
+def test_every_row_of_a_table_in_parts_gets_the_sentence_of_the_part_that_holds_it(folder):
+    merged, sec, item = long_table()
+    asked = context.requests_of("table", sec, item, small_window)
+    context.ask_document(merged, folder,
+                         lambda r: "Satz ab " + next(
+                             (row for row in ROWS if row in r["text"]), "?"),
+                         salt="s", fits=small_window)
+    got = context.attach(copy.deepcopy(merged), folder,
+                         salt="s")["sections"][0]["tables"][0]
+    for request, first, last in asked:
+        for n in range(first, last + 1):
+            assert context.lead_of(got, n, n) == \
+                context.lead_of(got, first, last)
+            assert context.lead_of(got, n, n) != ""
+    # An entry of carried lines only takes the first part's sentence.
+    assert context.lead_of(got, None, None) == \
+        context.lead_of(got, asked[0][1], asked[0][2])
+    # A row no kept part holds (its part was not answered) has no sentence,
+    # never another part's.
+    dropped = {**got, "context_sentence": got["context_sentence"][1:]}
+    assert context.lead_of(dropped, asked[0][1], asked[0][1]) == ""

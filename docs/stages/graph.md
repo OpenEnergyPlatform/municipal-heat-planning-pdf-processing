@@ -755,7 +755,7 @@ writer and the provenance file share: the UUIDv5 an IRI is minted from
 (`normalise`, to which each writer passes its own list of legal forms, since a
 shared list would mint every organisation of one corpus anew), the Turtle
 helpers (`ttl_string`, `ttl_escape`, `ttl_literal`, `ttl_comment`, a comment
-cut at 400 characters) and `NOT_IN_GRAPH`, the `out:` prefix of the choice
+wrapped onto several lines, never cut) and `NOT_IN_GRAPH`, the `out:` prefix of the choice
 list entries that are answers and not things of the graph. Every IRI and every
 byte of Turtle is what it was before the move, which two golden Turtle files
 per profile hold. Its `validate` holds a written

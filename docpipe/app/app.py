@@ -609,6 +609,9 @@ def chat_page() -> None:
     history.append(message)
     for document_id, result in reply["remember"]:
         _remember(by_doc, document_id, task, result)
+    if any(fault.get("cause") == llm_client.CONVERSATION_TOO_LONG
+           for fault in message.get("faults") or ()):
+        st.warning(T["conversation_full"])
 
 
 def _say(msg: dict) -> None:
@@ -678,7 +681,10 @@ def _remember(by_doc: dict, document_id, task: str, result: dict) -> None:
     Failed turns too: "schau noch einmal nach" is asked precisely AFTER a
     failure, and without the failed question in context the anchor is built
     from the literal follow-up words with no referent at all. The whole
-    corpus is one conversation of its own, under the key None.
+    corpus is one conversation of its own, under the key None. Every turn
+    stays (owner decision 2026-11-17: nothing is cut); when the conversation
+    no longer fits the model's window, the turn says so
+    (`llm_client.CONVERSATION_TOO_LONG`) instead of dropping turns.
     """
     turns = by_doc.setdefault(document_id, [])
     turns.append({
@@ -691,7 +697,6 @@ def _remember(by_doc: dict, document_id, task: str, result: dict) -> None:
         "examined": result.get("examined", []),
         "recheck": result.get("recheck", False),
     })
-    by_doc[document_id] = turns[-5:]
 
 
 def _kept(harvest: dict) -> dict:

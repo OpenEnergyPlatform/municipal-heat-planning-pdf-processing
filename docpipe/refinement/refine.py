@@ -53,7 +53,7 @@ from typing import Callable, Collection, Optional
 
 from docpipe import prompts, providers, reading, usage
 from docpipe.profile import profile_value
-from docpipe.llm_preflight import request_extras, served_window
+from docpipe.llm_preflight import request_extras, served_window, stage_fits
 from docpipe.reading import Hole
 
 from . import replies
@@ -170,30 +170,90 @@ def _strip_table_source_text(sections: list) -> None:
                     t.pop("source_text", None)
 
 
-def _tail_text(content, n: int) -> str:
-    """Returns the last *n* characters of a section's content (str or list)."""
+def _whole_text(content) -> str:
+    """A section's content (str or list) as one text, whole."""
     if isinstance(content, list):
         content = " ".join(str(x) for x in content)
-    content = str(content)
-    return content[-n:] if len(content) > n else content
+    return str(content)
 
 
-# A re-ask has to tell the model that its answer was unusable, it does not
-# have to hand the whole answer back. Echoing it verbatim adds up to
-# llm_max_tokens() on top of a window that is already ~18k tokens, which is how a
-# retry, not the original request, ran into the 32k context limit.
-_ECHO_HEAD = 400
-_ECHO_TAIL = 200
+def _fits_window(messages: list, max_tokens: int) -> bool:
+    """Does a request of *messages* with a reply of *max_tokens* fit the
+    window the server reported? Counted as the server counts it (the bytes
+    of the texts first, then its tokenizer; `llm_preflight.stage_fits`).
+    True where no window is known."""
+    fits = stage_fits("llm", LLM_BASE_URL, LLM_MODEL, LLM_API_KEY)
+    return True if fits is None else fits(messages, max_tokens)
 
 
-def _echo(raw_text: str) -> str:
-    """The failed answer, bounded: enough to point at the fault, not a resend."""
-    if len(raw_text) <= _ECHO_HEAD + _ECHO_TAIL:
-        return raw_text
-    dropped = len(raw_text) - _ECHO_HEAD - _ECHO_TAIL
-    return (raw_text[:_ECHO_HEAD]
-            + "\n...[%d characters omitted]...\n" % dropped
-            + raw_text[-_ECHO_TAIL:])
+def _reask(base_messages: list, content, said: str, cause: str,
+           max_tokens: int) -> list:
+    """The messages of the re-ask of a request whose answer was unusable
+    (`reading.again`): the original request, the whole failed answer and
+    what was wrong with it (*said*); where that does not fit the served
+    window, the original request anew with its *cause* named in one
+    sentence. Nothing of the answer is cut."""
+    messages = reading.again(base_messages, content, said, cause,
+                             fits=lambda tried: _fits_window(tried,
+                                                             max_tokens))
+    if len(messages) == len(base_messages):
+        log.warning("   The re-ask with the whole failed answer does not fit "
+                    "the served window of %s tokens: the request starts anew "
+                    "with the cause named", served_window("llm"))
+    return messages
+
+
+def _stripped(sections_window: list) -> list:
+    """The sections of a window as the model gets them: segments and pages
+    are stripped (the model must not see or rewrite them; they are
+    reattached afterwards, see _thread_provenance)."""
+    stripped = [
+        {k: v for k, v in s.items() if k not in ("segments", "pages")}
+        for s in sections_window
+    ]
+    if REFINE_RETURN_CORRECTIONS:
+        # The reply carries no text, so it needs a handle back to its section.
+        # Media keeps only id and caption: the model must not restate a path or
+        # a page number it is forbidden to change (and used to drop).
+        for i, sec in enumerate(stripped):
+            sec["index"] = i
+            for key in ("tables", "figures"):
+                sec[key] = [{"id": m.get("id"), "caption": m.get("caption")}
+                            for m in (sec.get(key) or [])]
+    return stripped
+
+
+def _user_content(stripped: list, prev_context: Optional[dict]) -> str:
+    """The user message of a window: its sections as JSON and, where there is
+    one, the whole section before them as read-only context."""
+    user_payload = json.dumps({"sections": stripped}, ensure_ascii=False,
+                              indent=2)
+    if not prev_context:
+        return user_payload
+    ctx = {
+        "title": prev_context.get("title", ""),
+        "content": _whole_text(prev_context.get("content", "")),
+    }
+    return (
+        "CONTEXT (read-only — do NOT include this in your output): the "
+        "section immediately before the first section below, whole. "
+        "Use it ONLY to decide whether the first section is a "
+        "broken continuation of it (then set that first section's "
+        '_action to "merge_into_previous").\n'
+        + json.dumps(ctx, ensure_ascii=False, indent=2)
+        + "\n\nSECTIONS TO PROCESS:\n"
+        + user_payload
+    )
+
+
+def _window_fits(window: list, prev_context: Optional[dict]) -> bool:
+    """Does the request of *window* with its context, and the reply it asks
+    for, fit the served window?"""
+    content = _user_content(_stripped(window), prev_context)
+    return _fits_window(
+        [{"role": "system", "content": system_prompt()},
+         {"role": "user", "content": content}],
+        reply_tokens(len(content.split())))
 
 
 def _materialise_corrections(reply: list, window: list) -> list:
@@ -319,44 +379,8 @@ def _call_llm(
         NOT_SERVED when the last attempt never got an answer: no connection,
         a timeout, a 429 or a 5xx.
     """
-    # segments/pages are stripped from the payload: the model must not see or
-    # rewrite them. They are reattached afterwards (see _thread_provenance).
-    stripped = [
-        {k: v for k, v in s.items() if k not in ("segments", "pages")}
-        for s in sections_window
-    ]
-    if REFINE_RETURN_CORRECTIONS:
-        # The reply carries no text, so it needs a handle back to its section.
-        # Media keeps only id and caption: the model must not restate a path or
-        # a page number it is forbidden to change (and used to drop).
-        for i, sec in enumerate(stripped):
-            sec["index"] = i
-            for key in ("tables", "figures"):
-                sec[key] = [{"id": m.get("id"), "caption": m.get("caption")}
-                            for m in (sec.get(key) or [])]
-    user_payload = json.dumps(
-        {"sections": stripped},
-        ensure_ascii=False,
-        indent=2,
-    )
-
-    if prev_context:
-        ctx = {
-            "title": prev_context.get("title", ""),
-            "content_tail": _tail_text(prev_context.get("content", ""), 600),
-        }
-        user_content = (
-            "CONTEXT (read-only — do NOT include this in your output): the "
-            "section immediately before the first section below ended as "
-            "shown. Use it ONLY to decide whether the first section is a "
-            "broken continuation of it (then set that first section's "
-            '_action to "merge_into_previous").\n'
-            + json.dumps(ctx, ensure_ascii=False, indent=2)
-            + "\n\nSECTIONS TO PROCESS:\n"
-            + user_payload
-        )
-    else:
-        user_content = user_payload
+    stripped = _stripped(sections_window)
+    user_content = _user_content(stripped, prev_context)
 
     base_messages = [
         {"role": "system", "content": system_prompt()},
@@ -454,11 +478,7 @@ def _call_llm(
         )
         outcome = Hole(cause)
         content = getattr(getattr(choice, "message", None), "content", None)
-        messages = base_messages + [
-            {"role": "assistant",
-             "content": _echo(content) if isinstance(content, str) else ""},
-            {"role": "user", "content": said},
-        ]
+        messages = _reask(base_messages, content, said, cause, max_tokens)
         _backoff(attempt)
 
     return outcome
@@ -468,21 +488,34 @@ def _ask_window(window: list[dict], client, prev_context: Optional[dict]):
     """The reply to one window: a list of sections, a Hole, NOT_SERVED, or
     Halved when only some parts of the window were read.
 
-    A reply that was cut off is never asked again as it stands. The window is
-    asked as its first half and its second half, by sections; the second half
-    sees the last section of the first as its context, exactly what the next
-    window would see. A lone section has no halves and gets more room, once
-    (`_further_tokens` says how much), or is a hole at once where the served
-    window leaves it none. The reply that was cut off is not used.
+    A window whose request (its sections, the whole section before it as
+    context and the reply it asks for) does not fit the served window takes
+    fewer sections: it is asked as halves at once. A reply that was cut off
+    is never asked again as it stands: the window is asked as its first half
+    and its second half, by sections; the second half sees the last section
+    of the first as its context, exactly what the next window would see. A
+    lone section has no halves and gets more room, once (`_further_tokens`
+    says how much), or is a hole at once where the served window leaves it
+    none. The reply that was cut off is not used.
     """
+    if len(window) > 1 and not _window_fits(window, prev_context):
+        log.warning("   Window of %d section(s) with its context does not "
+                    "fit the served window: asked as halves", len(window))
+        return _ask_halves(window, client, prev_context)
     got = _call_llm(window, client, prev_context)
     if not (isinstance(got, Hole) and got.cause == "cut_off"):
         return got
     if len(window) == 1:
         return _call_llm(window, client, prev_context, again=True)
-    mid = len(window) // 2
     log.warning("   Window of %d section(s) cut off: asked again as %d and %d",
-                len(window), mid, len(window) - mid)
+                len(window), len(window) // 2, len(window) - len(window) // 2)
+    return _ask_halves(window, client, prev_context)
+
+
+def _ask_halves(window: list[dict], client, prev_context: Optional[dict]):
+    """A window of more than one section asked as its first and its second
+    half (see `_ask_window`)."""
+    mid = len(window) // 2
     parts = []
     for offset, part, context in ((0, window[:mid], prev_context),
                                   (mid, window[mid:], window[mid - 1])):
@@ -1121,11 +1154,8 @@ def _make_splitter(client) -> Callable[..., dict | Hole]:
                         f"reply")
             outcome = Hole(cause)
             content = getattr(getattr(choice, "message", None), "content", None)
-            messages = base_messages + [
-                {"role": "assistant",
-                 "content": _echo(content) if isinstance(content, str) else ""},
-                {"role": "user", "content": said},
-            ]
+            messages = _reask(base_messages, content, said, cause,
+                              max_tokens)
             _backoff(attempt)
         return outcome
     return ask

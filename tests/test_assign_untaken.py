@@ -84,11 +84,12 @@ def cells_of(claims):
 def test_a_cell_no_value_took_is_asked_once_and_becomes_a_value_of_the_field():
     model = AssignModel()
     claims = read(model, TABLE, TEXT)
-    # The table's four numbers: 1.200, 27, "800 / 750" (its first) and 12;
-    # the text has none counted.
+    # The table's five numbers: 1.200, 27, both of "800 / 750" (one item
+    # each, owner decision 2026-11-17: nothing is cut) and 12; the text has
+    # none counted.
     assert [n["value"] for _, n in model.of("assign")] == [
-        "1.200", "27", "800", "12"]
-    assert cells_of(claims) == [(3, 2), (3, 3), (4, 2), (4, 3)]
+        "1.200", "27", "800", "750", "12"]
+    assert cells_of(claims) == [(3, 2), (3, 3), (4, 2), (4, 2), (4, 3)]
     first = next(c for c in claims if c["at"]["line"] == 3
                  and c["at"]["cell"] == 2)
     assert first["value"] == 1200 and first["value_raw"] == "1.200"
@@ -101,7 +102,7 @@ def test_a_cell_no_value_took_is_asked_once_and_becomes_a_value_of_the_field():
 
 def test_none_makes_no_value_and_the_rule_off_asks_nothing():
     model = AssignModel(assign=lambda p, n: NONE)
-    assert not read(model, TABLE) and len(model.of("assign")) == 4
+    assert not read(model, TABLE) and len(model.of("assign")) == 5
     off = AssignModel()
     assert not read(off, TABLE, ask_untaken=False) and not off.of("assign")
     # The break by construction: with the rule on the same model asks and
@@ -117,8 +118,9 @@ def test_a_cell_a_value_took_is_not_asked():
         return {"found": [{"at": "3.2", "words": "1.200"}]}
     model = AssignModel(find=find)
     claims = read(model, TABLE)
-    assert [n["value"] for _, n in model.of("assign")] == ["27", "800", "12"]
-    assert cells_of(claims) == [(3, 2), (3, 3), (4, 2), (4, 3)]
+    assert [n["value"] for _, n in model.of("assign")] == [
+        "27", "800", "750", "12"]
+    assert cells_of(claims) == [(3, 2), (3, 3), (4, 2), (4, 2), (4, 3)]
     # The break by construction: a find at another cell leaves the cell
     # asked.
     other = AssignModel(find=lambda p, n: {"found": [
@@ -136,7 +138,7 @@ def test_an_answer_outside_the_list_is_asked_again_and_never_a_value():
     assert not claims
     follows = [(p, n) for p, n in model.of("follow")
                if n["asked"] == "assign"]
-    assert len(follows) == 4
+    assert len(follows) == 5
     said = json.dumps(follows[0][0]["what"], ensure_ascii=False)
     assert "7" in said
     # The reason is the one a list request gives, no new one.
@@ -174,11 +176,11 @@ def test_a_figure_line_is_asked_for_each_number_other_than_a_year():
 
 
 def test_the_numbers_asked_named_and_none_are_counted_and_added():
-    answers = iter([ONE, NONE, ONE, NONE])
+    answers = iter([ONE, NONE, ONE, NONE, NONE])
     model = AssignModel(assign=lambda p, n: next(answers))
     counts = Counts()
     read(model, TABLE, counts=counts)
-    assert dict(counts.assigned) == {"asked": 4, "named": 2, "none": 2}
+    assert dict(counts.assigned) == {"asked": 5, "named": 2, "none": 3}
     # The break by construction: with the rule off nothing is counted.
     off = Counts()
     read(AssignModel(), TABLE, counts=off, ask_untaken=False)

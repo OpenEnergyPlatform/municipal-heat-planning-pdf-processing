@@ -138,6 +138,9 @@ UI = {
     "page_failed_draw": ("Seite {page} konnte nicht gezeigt werden: sie ließ "
                          "sich nicht darstellen."),
     "download_pdf": "PDF herunterladen",
+    "conversation_full": ("Dieses Gespräch passt nicht mehr in das Fenster "
+                          "des Modells. Bitte beginnen Sie ein neues "
+                          "Gespräch."),
     "no_profile": ("Es ist kein Profil benannt, deshalb läuft der Chat mit "
                    "dem eingebauten Profil `default`: englische Prompts und "
                    "Texte, die für jeden Ordner passen. Für ein anderes "

@@ -130,26 +130,6 @@ def test_compute_extra_attempts_are_the_requests_beyond_the_code_and_replies(
     assert asked_when(compute_extra_attempts=4) == tries + 4
 
 
-def test_code_output_chars_are_what_the_model_is_shown_of_the_output(
-        monkeypatch):
-    assert DEFAULT["code_output_chars"] == 2000
-    # The output prints the answer first, so the answer is taken whatever
-    # is cut from the rest.
-    output = "38892.0\n" + "x" * 5000
-
-    def shown(**values):
-        out = {"ok": True, "stdout": output, "error": None}
-        step, asked, _runs, _events = computing(monkeypatch, CODE, ANSWER,
-                                                ran=out)
-        with rules.overlaid(**values):
-            run_step(step, share(21), amount(185200))
-        return asked[1]["messages"][-1]["content"]
-    assert output[:2000] in shown() and output[:2001] not in shown()
-    assert output[:10] in shown(code_output_chars=10)
-    assert output[:11] not in shown(code_output_chars=10)
-    assert output[:4000] in shown(code_output_chars=4000)
-
-
 # -- a passage and what the request is sized by -------------------------------
 
 def test_heading_in_front_chars_say_how_early_a_heading_may_stand():
@@ -330,24 +310,6 @@ def parents_of(tmp_path):
                                "document_id": 1, "title": "", "text": "| 1 |",
                                "section_id": 5, "block_id": "T1"}}
     return path, lambda _conn, kind, owner: sections.get((kind, owner))
-
-
-def test_review_parent_chars_are_how_much_of_the_section_above_is_shown(
-        tmp_path):
-    path, fetch = parents_of(tmp_path)
-    own = runner.Source("table", 9, "| 1 |",
-                        {"parent_section": 5, "block_id": "T1"})
-    parents = runner.make_parents(path, content=fetch)
-    assert DEFAULT["review_parent_chars"] == 4000
-    standard = parents([own])[0].text               # 6,006 characters long
-    assert len(standard) <= 4000 and "[T1]" in standard
-    with rules.overlaid(review_parent_chars=500):
-        cut = parents([own])[0].text
-        assert len(cut) <= 500 and "[T1]" in cut        # cut around the table
-    with rules.overlaid(review_parent_chars=9000):
-        assert len(parents([own])[0].text) > 6000
-    with at_step("review", review_parent_chars=300):
-        assert len(parents([own])[0].text) <= 300
 
 
 def test_review_shown_passages_say_whether_the_section_is_shown_with_the_row(

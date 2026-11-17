@@ -24,8 +24,9 @@ import uuid
 # classes, so no IRI, type or link is ever made from one.
 NOT_IN_GRAPH = "out:"
 
-# A Turtle comment line is cut here, so one long quote cannot swallow a file.
-COMMENT_LIMIT = 400
+# Where a Turtle comment line is wrapped (a display width, never a limit of
+# what a comment says: nothing of the text is dropped).
+COMMENT_WIDTH = 100
 
 
 def base_namespace(base: str) -> uuid.UUID:
@@ -61,9 +62,25 @@ def normalise(label: str, legal: str = "") -> str:
 
 
 def ttl_comment(text, indent: str = "") -> str:
-    """One Turtle comment line, flattened so a quote cannot break the file."""
-    flat = re.sub(r"\s+", " ", str(text or "")).strip()
-    return f"{indent}# " + flat[:COMMENT_LIMIT]
+    """A Turtle comment of the whole *text*, as many lines as it needs.
+
+    The text is flattened so a quote cannot break the file and wrapped at word
+    boundaries, each line starting with "#" (a comment ends at its line end,
+    so every line has to carry its own). No character of the text is dropped
+    (owner decision 2026-11-17); a word longer than the width stands whole on
+    its own line."""
+    words = re.sub(r"\s+", " ", str(text or "")).strip().split(" ")
+    prefix = f"{indent}# "
+    lines: list = []
+    current = ""
+    for word in words:
+        if current and len(prefix) + len(current) + 1 + len(word) > COMMENT_WIDTH:
+            lines.append(prefix + current)
+            current = word
+        else:
+            current = f"{current} {word}" if current else word
+    lines.append(prefix + current)
+    return "\n".join(lines)
 
 
 def ttl_escape(text) -> str:

@@ -58,12 +58,14 @@ def kinds_of(embedding_types) -> list:
 
 def current_documents(conn: sqlite3.Connection) -> Optional[set]:
     """The ids of the documents that are the current version of their
-    work, or None for a database that does not record versions."""
-    try:
-        return {row[0] for row in conn.execute(
-            'SELECT "id" FROM "Documents" WHERE "is_current" = 1')}
-    except sqlite3.OperationalError:
+    work, or None for a database that does not record versions (told by its
+    columns; any other database error raises)."""
+    columns = {row[1] for row in conn.execute(
+        'PRAGMA table_info("Documents")').fetchall()}
+    if "is_current" not in columns:
         return None
+    return {row[0] for row in conn.execute(
+        'SELECT "id" FROM "Documents" WHERE "is_current" = 1')}
 
 
 def dense_corpus(conn: sqlite3.Connection, global_index, embedding_types,
@@ -96,12 +98,15 @@ def dense_corpus(conn: sqlite3.Connection, global_index, embedding_types,
                 if kind_name in wanted:
                     owners[int(faiss_id)] = (str(owner_kind), int(owner_id))
         best: dict = {}
+        best_id: dict = {}
         for score, faiss_id in pairs:
             owner = owners.get(faiss_id)
             if owner is None or (exclude and owner in exclude):
                 continue
             if owner not in best or score > best[owner]:
                 best[owner] = score
+                best_id[owner] = faiss_id
+        place_of = db.pieces_of(conn, list(best_id.values()))
         hits = []
         for owner, score in sorted(best.items(), key=lambda item: -item[1]):
             content = fetch(conn, *owner)
@@ -110,7 +115,8 @@ def dense_corpus(conn: sqlite3.Connection, global_index, embedding_types,
             if current is not None \
                     and content.get("document_id") not in current:
                 continue
-            hits.append({"score": score, **content})
+            hits.append(db.with_piece({"score": score, **content},
+                                      place_of.get(best_id.get(owner))))
             if len(hits) == top_k:
                 break
         if len(hits) >= top_k or asked >= min(total, MAX_FETCH):

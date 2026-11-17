@@ -277,13 +277,6 @@ RULES: tuple = (
          where="recheck.py (recheck_row)",
          steps=("recheck",)),
     # -- flow: the check of the filled nodes --
-    rule("node_check_context_chars", "flow", "Check of the nodes", "whole",
-         "How many characters of its passage the check of a filled node "
-         "shows on each side of each quote, the quote among them. The check "
-         "sees the node as JSON and this text, no search and no other "
-         "passage.", least=0,
-         where="runner.py (_node_check_payload)",
-         steps=("node_check",)),
     rule("value_bounds", "flow", "Check of the nodes", "table",
          "The most a value of a field may be in the field's own unit, as the "
          "ontology defines the field, such as a share, which is a part of a "
@@ -310,11 +303,6 @@ RULES: tuple = (
          "second reading asks the value of a row and, besides it, each "
          "coordinate that one of these reasons names.", empty=True,
          where="review.py (disputed)",
-         steps=("review",)),
-    rule("review_cell_chars", "flow", "Second reading", "whole",
-         "How many characters of a passage each cell of the working list "
-         "of the second reading holds. A longer passage is cut with a "
-         "mark.", least=1, where="review.py (_cell)",
          steps=("review",)),
     rule("review_compare_places", "flow", "Second reading", "whole",
          "To how many decimal places a second number is rounded, after it "

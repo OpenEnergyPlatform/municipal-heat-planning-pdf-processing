@@ -56,11 +56,9 @@ COLUMNS = ("document", "parameter", "value", "unit", "page", "owner",
            "quote", "field", "first", "second", "second_quote", "verdict")
 
 def _cell(text) -> str:
-    """A passage as the working list carries it: at most
-    `review_cell_chars` characters."""
-    flat = " ".join(str(text if text is not None else "").split())
-    cell = rules.get("review_cell_chars")
-    return flat if len(flat) <= cell else flat[:cell].rstrip() + " …"
+    """A passage as the working list carries it: whole, its runs of
+    whitespace collapsed; nothing is cut."""
+    return " ".join(str(text if text is not None else "").split())
 
 
 def rows_to_review(tuples: list, *, force: bool = False) -> list:

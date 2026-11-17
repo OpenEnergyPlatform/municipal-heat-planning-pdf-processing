@@ -10,7 +10,8 @@ every answer an address (addressed.py, owner decisions 2026-11-08 and
    `head` the head of its column. A field with a list is asked with it, AND
    its find names the number of its entry, AND a number off the list is
    `not_an_option` and asked again, AND no list request follows a find with
-   its number, AND the find of a group asks its member.
+   its number, AND the find of a group member names its entry in the whole
+   list.
 5. A coordinate's request is its instruction and exactly one message, AND
    it shows of the plan only the value's line with its table's title and
    head, or the sentences beside it, the headings, the title page, the
@@ -24,9 +25,8 @@ every answer an address (addressed.py, owner decisions 2026-11-08 and
    search goes with the field's.
 7. A number off the list is `not_an_option` and asked once more, AND 0 is no
    entry, AND one wording of one field is asked once per document, AND a
-   list longer than a request shows with meanings shows names only, AND one
-   whose entries name groups is asked group first, AND the list is shown as
-   it is, never with an earlier wording.
+   long list shows every meaning in one request, whatever its groups, AND
+   the list is shown as it is, never with an earlier wording.
 8. A field a document has once is never asked per piece, AND is asked over
    at most the run's budget of pieces, five a request, a field with a list
    over twice that.
@@ -524,48 +524,26 @@ def test_one_wording_of_one_field_is_asked_once_per_document():
     assert len(model.of("list")) == 2
 
 
-def test_a_long_list_shows_names_and_one_with_groups_is_asked_group_first():
+def test_a_long_list_shows_every_meaning_in_one_request_whatever_its_groups():
     options = tuple(fields.Option(label=f"Sektor {i}", uri=f"S{i}",
                                   definition=f"Der Sektor {i}.",
                                   group="A" if i < 20 else "B")
                     for i in range(30))
     slot = SimpleNamespace(name="sector", question="Welcher Sektor?",
                            options=options)
-    model = Model(list=lambda p, n: {"entry": 2} if n.get("step") == "group"
-                  else {"entry": 3})
+    model = Model(list=lambda p, n: {"entry": 23})
     assert entry_of(model, slot, "Sektor 22") == "Sektor 22"
-    (group, ask) = [payload for payload, _ in model.of("list")]
-    assert group["list"] == ["1 A", "2 B"]
-    # The entries of the group chosen, ten, with what each means.
-    assert len(ask["list"]) == 10 and "(means: " in ask["list"][0]
-    # the failure by construction: without groups the thirty show names only
-    plain = SimpleNamespace(name="sector", question="Welcher Sektor?",
-                            options=tuple(fields.Option(
-                                label=o.label, uri=o.uri,
-                                definition=o.definition) for o in options))
-    model = Model(list=lambda p, n: {"entry": 1})
-    entry_of(model, plain, "Sektor 0")
     ((ask, _noted),) = model.of("list")
-    assert len(ask["list"]) == 30 and "(means: " not in ask["list"][0]
-    # How long a list may be to show what its entries mean is the flow's
-    # number: a reading told thirty shows it for these thirty, in one step.
-    def told(meanings):
-        return dataclasses.replace(flow.default(), list_meanings=meanings)
-    model = Model(list=lambda p, n: {"entry": 1})
-    reader_of(model, numbers=told(30)).entry(
-        plan_of(TEXT), ENERGY.uri, slot.name, slot, "Sektor 0", None,
-        addressed.Counts())
-    ((ask, _noted),) = model.of("list")
-    assert len(ask["list"]) == 30 and "(means: " in ask["list"][0]
-    # And the list a field's finds name their entry in is shown by it too.
+    # All thirty entries, each with what it means, no group step first.
+    assert len(ask["list"]) == 30
+    assert all("(means: " in line for line in ask["list"])
+    # And the list a field's finds name their entry in shows them all too.
     kind = SCENARIOS.by_uri["scenario_type"]
-    entries = len(fields.value_choice(kind).options)
-
-    def lines(meanings):
-        return reader_of(Model(), spec=SCENARIOS,
-                         numbers=told(meanings)).listed(kind)[0]
-    assert "(means: " in lines(entries)[0]
-    assert "(means: " not in lines(entries - 1)[0]
+    lines = reader_of(Model(), spec=SCENARIOS).listed(kind)[0]
+    assert len(lines) == len(fields.value_choice(kind).options)
+    assert all("(means: " in line for line in lines
+               if fields.value_choice(kind).options[
+                   int(line.split(" ", 1)[0]) - 1].definition)
 
 
 # -- 8. a field asked once, the end of a search ---------------------------------
@@ -1319,34 +1297,32 @@ def test_a_closed_field_s_find_names_its_entry_of_the_list_it_is_shown():
     assert claim["value"] == "reference scenario"
 
 
-def test_the_find_of_a_group_asks_its_member_among_the_group_s_entries():
+def test_the_find_of_a_group_member_names_the_entry_in_the_whole_list():
     sector = SCENARIOS.by_uri["study_sector"]
     text = Source("section", 4, "The study covers the energy industries.",
                   {"document_id": 7, "page": 2})
-    _lines, groups, grouped = Reader(SCENARIOS, Model().asks(),
-                                     in_order).listed(sector)
-    crf = next(i for i, g in enumerate(groups, start=1)
-               if g.startswith("CRF"))
-    members = [o.label for o in fields.value_choice(sector).options
-               if o.group == groups[crf - 1]]
+    options = fields.value_choice(sector).options
+    _lines, choices, grouped = Reader(SCENARIOS, Model().asks(),
+                                      in_order).listed(sector)
+    member = next(i for i, o in enumerate(options, start=1) if o.group)
 
     def docfield(payload, noted):
         for block in (payload.get("passages") or {}).values():
             for line in block["lines"]:
                 if "energy industries" in line:
-                    return {"found": [{"entry": crf,
+                    return {"found": [{"entry": member,
                                        "at": line.split(" ", 1)[0],
                                        "words": "energy industries"}]}
         return {"found": []}
-    model = Model(docfield=docfield, list=lambda p, n: {"entry": 2})
+    model = Model(docfield=docfield)
     reads = reader_of(model, spec=SCENARIOS)(plan_of(TITLE, text), [sector])
     (claim,) = [c for r in reads for c in r.claims]
-    (asked,) = [p for p, n in model.of("list")
+    # The list is the whole list, never its groups: the find names an entry
+    # and no list request follows for it.
+    assert not grouped and len(choices) == len(options)
+    assert claim["value"] == options[member - 1].label
+    assert not [n for _, n in model.of("list")
                 if n.get("parameter") == sector.uri]
-    # The find names the group, the list request shows its members only.
-    assert grouped and len(members) > 1
-    assert len(asked["list"]) == len(members)
-    assert claim["value"] == members[1]
 
 
 # -- 5. two replies shown -------------------------------------------------------------

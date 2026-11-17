@@ -826,7 +826,8 @@ TARGETS: dict = {target.name: target for target in (
            gives=("find",), forms=("yes_no",)),
     Target("entry", "the entry of a list",
            "The entry of a list the words of an answer mean, once per "
-           "wording; a long list with groups in two steps.", nested=True,
+           "wording; a list too long for one request in parts.",
+           nested=True,
            gives=("words", "find", "options", "earlier", "dimension"),
            forms=("entry",)),
     Target("plan_year", "the plan's year of a wording",

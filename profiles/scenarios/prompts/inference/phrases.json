@@ -12,6 +12,7 @@
   "exec_failed": "Execution failed",
   "exec_unknown": "unknown error",
   "exec_recover": "Fix the code OR answer without computing.",
+  "exec_too_long": "The output of this run is too long for this request ({characters} characters, {lines} lines) and is not shown. Change your code to print less.",
   "compute_heading": "Already executed",
   "compute_guide": "Give the final answer in the prescribed JSON format — or, only if truly necessary, another {\"action\":\"python\",\"code\":...}. A statement about a calculated number is {\"statement\": \"...\", \"basis\": \"computed\", \"index\": <int of the excerpt that holds the input values>, \"quote\": \"<verbatim sentence or table row from that excerpt with the input values>\", \"run\": <number of the run under \"Already executed\" whose output printed the number>}. Never give a calculated number with basis \"text\".",
   "compute_guide_final": "Give the final answer NOW, in the prescribed JSON format (NO more action objects). A statement about a calculated number is {\"statement\": \"...\", \"basis\": \"computed\", \"index\": <int of the excerpt that holds the input values>, \"quote\": \"<verbatim sentence or table row from that excerpt with the input values>\", \"run\": <number of the run under \"Already executed\" whose output printed the number>}. Never give a calculated number with basis \"text\".",

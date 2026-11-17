@@ -163,15 +163,16 @@ PRESETS = {preset.name: preset for preset in (
     Preset(
         "node_check", "Check of a filled node",
         "Each filled row of the harvest is checked once: the model sees the "
-        "row as JSON and the text around each of its quotes, and says for "
-        "the value and each read dimension whether that text carries it. "
+        "row as JSON and the whole piece each of its quotes stands in, and "
+        "says for the value and each read dimension whether that text "
+        "carries it. "
         "A dimension that does not hold is marked unbacked and asked again "
         "with the search by the steps after it; a value that does not hold "
         "is read a second time over its passage and the section above it, "
         "and falls where that reading does not agree. To change it: the "
-        "rule `node_check_context_chars` sets how much text around a quote "
-        "is shown; the inputs (the node, the text around its quotes) and "
-        "the prompt `node_check` shape the question.",
+        "flow's number `piece_lines` sets how many lines a piece has; the "
+        "inputs (the node, the pieces its quotes stand in) and the prompt "
+        "`node_check` shape the question.",
         "node_check",
         (i("node", "row", "node_check_node"),
          i("quotes", "row", "node_check_quotes")),
@@ -243,10 +244,9 @@ PRESETS = {preset.name: preset for preset in (
         "again for each half of the chunk. Example: in a table of the heat "
         "demand by energy carrier, the numbers of its five rows. Unlike \"Ask "
         "a field once for the whole document\", this step goes through every "
-        "chunk. To change it: the inputs, the follow-up questions, the "
-        "answers in the wrong form and up to how many entries a list shows "
-        "what they mean; the prompt `find` and the keys of the field in the "
-        "Spec tab shape the question.",
+        "chunk. To change it: the inputs, the follow-up questions and the "
+        "answers in the wrong form; the prompt `find` and the keys of the "
+        "field in the Spec tab shape the question.",
         "find",
         (i("field", "field", "field"),
          i("list", "field", "list"),
@@ -347,7 +347,7 @@ PRESETS = {preset.name: preset for preset in (
          i("earlier_answer_not_held", "dimension", "not_held"),
          i("passages", "hits", "next_chunks"),
          # Owner decision 2026-11-17: the unshown tables and figures of the
-         # hits' sections (rule `hit_outline`).
+         # hits' sections, all of them (the input `hit_outline`).
          i("outline", "hits", "hit_outline")),
         "place", {"to": "dimension", "where": "hits"},
         values={"fetch": True, "picture": True},
@@ -375,15 +375,15 @@ PRESETS = {preset.name: preset for preset in (
         "list", "Choose the list entry",
         "Where the words of an answer have to be an entry of a list, such "
         "as an energy carrier or a sector, the model chooses the entry the "
-        "words mean, once for each wording; a long list with groups is asked "
-        "in two steps, first the group, then the entry. This step stands "
-        "after the question whose list entries it chooses and says how that "
-        "is asked; one asked where no such step stands is asked as the first "
-        "of them in the flow says. Example: the words \"heat from the grid\" "
+        "words mean, once for each wording, with every entry and what it "
+        "means; a list too long for one request is asked in parts, each "
+        "entry under its number in the whole list. This step stands after "
+        "the question whose list entries it chooses and says how that is "
+        "asked; one asked where no such step stands is asked as the first of "
+        "them in the flow says. Example: the words \"heat from the grid\" "
         "become the entry district heating. To change it: the inputs, the "
         "answer room and the temperature of the request, the follow-up "
-        "questions, up to how many entries the list shows what they mean, "
-        "and the prompt `list`.",
+        "questions and the prompt `list`.",
         "list",
         (i("words", "words", "always"),
          i("question", "dimension", "question"),

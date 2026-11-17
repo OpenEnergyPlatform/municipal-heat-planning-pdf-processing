@@ -131,14 +131,8 @@ REPLIES = Setting("replies", NUMBER, "answers in the wrong form, at most",
                   "the run.")
 PER_REQUEST = Setting("per_request", NUMBER, "chunks per request",
                       number="search_per_request")
-MEANINGS = Setting("list_meanings", NUMBER, "show what each list entry "
-                   "means, up to", number="list_meanings",
-                   help="A list with at most this many entries is shown "
-                   "with what each entry means. A longer list shows only "
-                   "the names of its entries, and a list with groups is "
-                   "asked in two steps, first the group, then the entry.")
 # What every step that asks the model takes (plan 2026-11-11, 5.2).
-NUMBERS = (FOLLOW, REPLIES, MEANINGS)
+NUMBERS = (FOLLOW, REPLIES)
 # What a question may ask to see besides what it shows (owner decision
 # 2026-11-12: where the document says a missing detail at another place or
 # points to it, the model may fetch that place itself), each step its own.
@@ -182,21 +176,19 @@ LIBRARY = {box.type: box for box in (
     # -- start ---------------------------------------------------------------
     Box("document", "Load the document", "start", "", "document",
         "Loads one PDF as the preprocessing left it: its pages with their "
-        "lines of text, its tables and its figures. The first lines of its "
-        "first page are its title page, which later questions can show. Every "
+        "lines of text, its tables and its figures. The whole of its "
+        "first page is its title page, which later questions can show. Every "
         "other step works on what this step loads. Example: a heat plan of 80 "
-        "pages with 30 tables. To change it: set how many lines the title "
-        "page has, and which page counts as the title page where the first "
-        "page has none (rule `title_page_also`).",
+        "pages with 30 tables. To change it: set which page counts as the "
+        "title page where the first page has none (rule "
+        "`title_page_also`).",
         "surveyed.SurveyedHarvest.plan_of",
-        settings=(Setting("title_page_lines", NUMBER, "lines of the title "
-                          "page", number="title_page_lines"),
-                  Setting("title_page_also", RULE, "the page used as title "
+        settings=(Setting("title_page_also", RULE, "the page used as title "
                           "page where the first page has none",
                           help="Where the first page has no text, for "
                           "example because it is a cover picture, the "
-                          "first lines of this page are the title page. "
-                          "A larger number takes a later page.")),
+                          "whole of this page is the title page. "
+                          "A larger number takes a later page."),),
         prepares=True, top=True),
     # -- prepare -------------------------------------------------------------
     Box("split", "Split the document into chunks", "prepare",
@@ -247,9 +239,7 @@ LIBRARY = {box.type: box for box in (
                           "its own and its numbers are chunks of their "
                           "own, each shown with the caption. Off: the "
                           "lines of a figure are cut like any other lines.",
-                          rule="split_figure_numbers"),
-                  Setting("headings", NUMBER, "headings shown above a line",
-                          number="headings")),
+                          rule="split_figure_numbers")),
         decided="2026-11-08", prepares=True, top=True),
     Box("lists", "Start the lists of names", "prepare", "pieces", "pieces",
         "Starts, for each document, the lists of names that are read across "
@@ -350,16 +340,17 @@ LIBRARY = {box.type: box for box in (
     Box("check_value", "Check a value once read", "check", "values",
         "values",
         "Holds each value, once all its dimensions are decided, against the "
-        "text around its quotes: the value as JSON and 200 characters on "
-        "each side of every quote. A dimension that does not hold is asked "
+        "pieces its quotes stand in: the value as JSON and, for every quote, "
+        "the whole piece that holds it, with its table's title and head or "
+        "its section's heading. A dimension that does not hold is asked "
         "again at once with the reason, through the steps of the value's "
         "dimensions, and checked once more; where it does not hold again it "
         "is unbacked and stays out of the graph. A value that does not hold "
         "is read a second time over its passage and section and is refused "
         "as unbacked where that reading does not agree. Example: the carrier "
         "\"natural gas\" of a value whose line says \"district heating\". "
-        "To change it: switch it off, or set the characters around a quote "
-        "with the rule node_check_context_chars.",
+        "To change it: switch it off; how many lines a piece has is the "
+        "flow's number piece_lines.",
         "engine.Engine.box_check_value", needs=("value",)),
     # -- remember and state --------------------------------------------------
     Box("settle", "Keep for the whole document", "remember", "answers",
@@ -462,8 +453,7 @@ LIBRARY = {box.type: box for box in (
                                  "the title page where it is shown"),
                           help="Which lines the example of a request that "
                           "finds values points to."),
-                  FETCHES, FETCH_ROUNDS, FETCH_ROUNDS_KEEP, FOLLOW, REPLIES,
-                  MEANINGS),
+                  FETCHES, FETCH_ROUNDS, FETCH_ROUNDS_KEEP, FOLLOW, REPLIES),
         decided="2026-11-12", marks=CHECKS),
     Box("retrieve", "Search the document with a text", "order",
         "answers", "supply",
@@ -919,9 +909,8 @@ LIBRARY.update({box.type: box for box in (
     _pass("worklist", "Working list", "rows", "rows",
           "What the second reading said, one line for each field it "
           "asked, is written into the working list `review.csv` beside "
-          "the harvest, after a copy of the old one is kept. To change "
-          "it: the rule `review_cell_chars` sets how much of a passage "
-          "a cell holds.",
+          "the harvest, after a copy of the old one is kept. A cell "
+          "holds its passage whole. To change it: switch it off.",
           "review.run", "run", after=("review",)),
     _pass("clear_stamps", "Clear the stamps", "rows", "rows",
           "A harvest that a rule it never saw has rewritten is not the "

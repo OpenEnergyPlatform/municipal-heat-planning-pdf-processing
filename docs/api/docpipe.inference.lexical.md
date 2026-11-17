@@ -69,7 +69,9 @@ def words(text: str) -> list
 ```
 
 The words of a question as they are looked for: each once, in the
-order they came, and not more than a question plausibly has.
+order they came, every one of them (owner decision 2026-11-17: nothing
+of a question is cut). A word in every passage ranks nothing and costs
+no more than a scan, which BM25 weighs by its rarity.
 
 ### search
 

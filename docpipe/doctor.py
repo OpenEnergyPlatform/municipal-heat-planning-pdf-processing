@@ -342,7 +342,8 @@ def _extract_budget(profile) -> int:
         raise LookupError("the spec names no groups: a spec needs groups, "
                           "since every run reads each plan passage by "
                           "passage")
-    return runner.request_budget(spec, profile)
+    return runner.request_budget(
+        spec, profile, **runner.shows_tokens(profile.db_path))
 
 
 def _review_budget(profile) -> int:

@@ -101,6 +101,8 @@ UI = {
                           "page."),
     "page_failed_draw": "Page {page} could not be shown: it did not render.",
     "download_pdf": "Download the PDF",
+    "conversation_full": ("This conversation no longer fits the model's "
+                          "window. Please start a new conversation."),
     "no_profile": ("No profile is named, so the chat runs on the built-in "
                    "profile `default`: English prompts and wording that fit "
                    "any folder. To use another, start the chat with "

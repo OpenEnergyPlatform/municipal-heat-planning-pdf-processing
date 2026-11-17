@@ -181,13 +181,12 @@ sentence, and a number such as "1.155 MWh" never breaks, since a sentence ends
 only where a mark is followed by a space. A table is its title lines, its head
 lines and its body rows, numbered in that order from 1 (the rule under the
 head counts not), each body row one line whose cells are numbered from 1; the
-lines under a table are lines as well (`units.table_lines`). The first
-`table_foot_lines` of them (the notes of a table, such as "* ohne Industrie" or
-"Angaben in MWh/a", five in the shipped flows, owner decision 2026-11-17) are
-fixed lines like the title and the head: every piece of the table shows them,
-and so does every request about one of its values, because what such a note
-says holds for each number of the table. With the rule at 0 a line under a table
-is shown only in its own piece. Every line that
+lines under a table are lines as well (`units.table_lines`). With the rule
+`table_foot_lines` on (a switch, owner decision 2026-11-17) every foot line of a
+table (the notes, such as "* ohne Industrie" or "Angaben in MWh/a") is a fixed line
+like the title and the head: every piece of the table shows them, and so does every
+request about one of its values, because what such a note says holds for each number
+of the table. With the rule off a line under a table is shown only in its own piece. Every line that
 "|" divides has cells, wherever it stands and not only a table row
 (`units.line_cells`): "26 2019 | Erdgas | 11" is addressed 26.1 to 26.3. A row whose
 first cell is indented under a row above it, by spaces or by a mark such as
@@ -209,17 +208,20 @@ a stretch of lines, `12-14` (`units.address_of`). A request shows its own
 passage under its own numbers and every other block of lines under a letter of
 its own, so that no two lines of a request share an address: the title page
 `T`, the headings up to the value's place `H`, the plan's settings `F`, and
-any other passage `A`, `B`, ... (`units.Shown`). The title page is the first
-`title_page_lines` lines of the plan's first page, else of its second, and `H`
-holds the last `headings` headings up to the place, its own last (numbers of the
-flow, see The flow file).
+any other passage `A`, `B`, ... (`units.Shown`). The title page is every line of
+the plan's first page, else of its second, and `H` holds every heading up to the
+place, the nearest last. Nothing of either is cut. The rule `show_title_page` set to
+`first` shows the title page with the first request a step makes in a document; a
+request built only to measure one (`Plan.measuring`, a flag of the calling context
+alone) records nothing as that first request, so marks other threads set stay.
 `H`, `T` and `F` are numbered from 1 in the block; every line of a passage keeps
 one number in every request that shows it.
 
 A piece (`units.Chunk`) is at most `piece_lines` lines of its passage, a number
 of the flow (a profile that wants another number writes it into its own
 `flow.json`; owner decision 2026-11-08: eight lines, and twelve only where a
-probe loses values against the runs before). A table's title and head lines are shown with every piece of it under
+probe loses values against the runs before). The vector index holds the same
+pieces ([chunking](chunking.md)). A table's title and head lines are shown with every piece of it under
 the same numbers, the caption lines of a figure with numbers likewise, and a passage
 that holds fixed lines only is one piece. A figure with numbers is first the
 piece of its caption, then the pieces of its numbers, each shown with the caption
@@ -418,10 +420,15 @@ A field with a list (value type `category`: a scenario's type, a study's
 descriptor, sector division, sector, technology) is asked with its list in the find
 and the docfield request, and the reply names the entry's number beside the
 address and the words: `{"found": [{"entry": n, "at": ..., "words": ...}]}`
-(`addressed.listing`, `Reader.listed`; owner decision 2026-11-09). A list of more
-than `list_meanings` entries (a number of the flow, shown by `Reader.list_of`; 24 in the default profile, 32 in the scenarios profile's `flow.json`, so the 32-entry list of a study's topic keywords is shown with its meanings, owner decision 2026-11-14)
-whose entries name more than one group is shown by its groups, a list of up to
-that many entries with what each means ("(means: ...)"). A number that is no
+(`addressed.listing`, `Reader.listed`; owner decision 2026-11-09). A list is shown with every entry and what each means ("(means: ...)",
+`Reader.list_of`). A list request that does not fit the window is asked in parts,
+each entry under its number in the whole list: no part names an entry, the answer
+is none; one names one, that one is the answer; several name entries, one more
+request is asked over those entries. A list line split at its sentences shows, in
+every fragment that does not begin with the entry's name, `<number> <name>
+(continued): <fragment>`, and the words count in the room (`addressed.entry_picks`).
+A list that cannot be split to fit ends that entry question as `too_long`, counted
+and logged with the parameter, the coordinate and the wording; the run goes on. A number that is no
 number of the list is `not_an_option` and is asked again in the follow-up. A find with its number needs no list request; a
 find that names a group asks the member in a list request that shows only that
 group's entries (see Entries of a list). No code reads a number by its place, and a table is read
@@ -586,7 +593,7 @@ under a condition takes the value's own quote and no wording.
 **What the request shows** (`addressed.show_value`): the value, its words and its
 address; its own place, which in a table is its row with the table's title and
 head and in a section the sentences before and after its line; the headings up to
-it (`H`, the 10 last, its own last: `lookup.sections_up_to`; the work
+it (`H`, every heading up to it, its own last: `lookup.sections_up_to`; the work
 coordinate is shown none); the title page (`T`); the plan's settings (`F`); the
 field with what it means; the question of the coordinate (the spec's one
 sentence); and `known`, what the value has read so far in the plan's words
@@ -720,13 +727,11 @@ beside a year, a number, a unit, a source note and a whole sentence, and the doc
 prompt says an entry is chosen by its meaning, also where the words differ from its name.
 A value of a field with a list does not come to this request where its find named
 the entry (see Finding a field's values in a piece). The reply is `{"entry": n}`, the number of the entry, 0 for
-none, or a list of numbers where several may be meant (`several`). A list of more
-than `list_meanings` entries (a number of the flow) shows its names only, and one whose
-entries carry a `group` in the spec (an entry object may say `"group"`;
-`fields.Option.group`) and name more than one group is asked group first
-(`addressed.listing`): a first request chooses among the groups, a second among
-the entries of the group chosen, with what each means (the step `group`); a find
-that names a group asks the second only. A number that is no number of the list is asked again with the
+none, or a list of numbers where several may be meant (`several`). A list is shown with every entry and what it means, and a list that does not fit
+the window is asked in parts as under Finding a field's values in a piece. Entries
+may carry a `group` in the spec (an entry object may say `"group"`;
+`fields.Option.group`); a find that names a group asks its list among that
+group's entries only. A number that is no number of the list is asked again with the
 reason `not_an_option` and then leaves the coordinate without an entry, which the
 check ends as it ends any answer off its list. The unit is such a list, so is the
 value of a category parameter and the quantity; so is the choice among the plan's
@@ -829,14 +834,13 @@ holds (`read`), when an answer does not hold after its follow-ups (`unbacked`), 
 `--top-up-open` sets the budget to every piece (`runner.read_to_end`), so a
 coordinate ends `read` or `unstated` there.
 
-Beside the hits a search request lists an outline (rule `hit_outline`, 8 in the
-shipped flows, owner decision 2026-11-17; `shows._hit_outline`, the input
-`outline` of the step): for each section a hit stands in, its heading and under
-it the tables and figures of that section the request does not show, each as its
-placeholder and title line, so that the model can fetch one with `item`. The
+Beside the hits a search request lists an outline (the input `hit_outline` of the
+step, `shows._hit_outline`): for each section a hit stands in, its heading and
+under it every table and figure of that section the request does not show, each as
+its placeholder and title line, so that the model can fetch one with `item`. The
 outline is no place to answer from, since an answer is still a shown line, and
 it is shown only where the answer may fetch an `item` (rules `fetches` and
-`fetch_rounds`); headings do not count against its number and 0 leaves it out.
+`fetch_rounds`). Hit lines and pattern hits are whole lines.
 
 Two kinds of piece come after the neighbours in that first request (owner
 decision 2026-11-17, both counted in the trace as ways of the request). Sibling
@@ -1313,7 +1317,15 @@ pieces of `search_pieces`, of which `search_tables`, `search_figures` and
 numbers of the flow; `runner.search_budget`), and has the reranker order them once with the search
 sentence (owner decisions 2026-11-08 and 2026-11-09: pieces are ordered by the
 reranker with the same sentence; `Reader.shown_order`). A piece goes as its text, a
-figure's as its transcribed lines. A failed reranker request is asked again
+figure's as its transcribed lines. The reranker scores the pieces of the harvest
+(`rerank.pieces_of`: with heading, title and head), a passage counts with its best
+piece, and a pair over the reranker's window (from the server's `max_model_len`) is
+split into parts, each with the lines its piece carries, and counts with its best
+part. The window and the frame of a pair are learned once per server and model
+(`rerank.window_for`) and kept only when learned whole: a window or frame that
+could not be learned is not kept, pairs go as they are, and the server is asked
+again after `window.ASK_AGAIN_S` (60 s); one lookup runs per server and model at
+a time and other callers wait for its answer. Nothing is sent with `truncate_prompt_tokens`. A failed reranker request is asked again
 (`runner.Persistent`), and the pieces never stay in another order for it. A request
 to the reranker has no time limit (owner decision 2026-11-13): one given up was
 scored by the server all the same and, asked again, queued once more behind the ones
@@ -1711,11 +1723,26 @@ model asks for the next or the previous section, a table or figure by its
 placeholder, a list of the passages matching a pattern, a list of those nearest
 a sentence it writes as the plan would print it (`similar`, ranked as the
 search ranks the plan; the list shows its passages, not the sentence), or a
-passage of such a list, each cut to two pages of
-the plan, and what came of it follows the answer that asked for it as a
+passage of such a list, whole where it fits the window and else in parts, and
+what came of it follows the answer that asked for it as a
 message of the same conversation (`more`, `hits`, `not_found`, owner decisions
-2026-11-07). A round that fetched something new is no attempt; the window
-bounds how many there are. For a share the model may take its whole from a
+2026-11-07). A passage that does not fit the room is shown in parts, the first now
+and the others when the model asks for them with `{"get": "part", "id": ..., "part":
+n}`; each part carries its heading and its entry says "n of m". A part shows the
+fixed lines (title, head, foot lines) and the rows its rows stand under (group rows
+and indented parent rows), as the pieces of the index do, and keeps its own line
+numbers. A part the model asks for that no longer fits the room left now is split
+anew together with the parts not shown yet, at that room: the parts shown keep their
+numbers and the count grows; a part that the new split left empty is answered as
+`unknown`. A hit starts at the part that holds its line, found by its line number
+(`lookup.hit_line`). A hit list (a pattern or `similar` list) that does not fit is
+shown in parts too, each list under its own id (`L1`, `L2`, ...) with `part` ("n of
+m") and `total`, the next part fetched with the same ask, `{"get": "part", "id":
+"L1", "part": n}`; a hit that does not fit alone is missed as `too_long`, never cut.
+The fit check of a fetch judges the follow-up message as it is sent
+(`Gathered.fetch(..., render=parts.follow_up)`). A round that fetched something
+new is no attempt; the window bounds how many there are. The trace field `searched` counts searches, not the parts
+of their lists. For a share the model may take its whole from a
 passage it was shown, `{"take": {...}}` with the parameter, the number, one of
 its units, a quantity from its list with the plan's word for it, and a quote.
 It names no passage: the number is read from the passage its quote stands in, of
@@ -1731,7 +1758,7 @@ one the parameter accepts), its quantity like any coordinate
 stands in `numbers`; one not taken is told why. It is an input of the computed
 row and no row of its own. The model answers with `{"action": "python", "code":
 ...}`, the sandbox runs the code with `numbers`, `sources` (the passages shown
-and fetched) and `tables` as in the chat, and its output follows the answer
+and fetched) and `tables` as in the chat, and its output, whole, follows the answer
 that ran it, in the words of the `compute_output` phrase, which say what the
 result looks like. Then the model answers `{"value": ..., "used": [...]}`, or
 `{"value": null}` where there is nothing to compute. For a share the answer also quotes, from the passage of
@@ -2277,8 +2304,8 @@ Every filled row of a stored harvest is checked once,
 with a small context first. The step "Check of a filled node" (preset
 `node_check`, target `node_checked`, `passboxes.box_node_check`) shows the
 model the row as JSON (its value and each read dimension, with wording and
-quote) and, for each quote, the text around it in its passage, as many
-characters on each side as the rule `node_check_context_chars` says (200);
+quote) and, for each quote, its whole piece with the title, head or heading
+(`piece_lines` lines), not a stretch of characters around it;
 no search and no other passage (`runner.make_node_check_asker`,
 `runner._node_check_payload`). The model says for the value and for each
 dimension whether that text carries it, and why not.
@@ -2717,7 +2744,7 @@ stay in the schema for traces of before 2026-11-08. An event that reports a mode
 request (every `<stage>_ask`, and an `error` of kind `exception`) carries the
 request as sent (`input`) and what came back (`output`).
 `review.csv` carries one line per
-field a review asked about, named by `review.COLUMNS`.
+field a review asked about, named by `review.COLUMNS`; it holds passages whole.
 
 A harvest directory (`out`) holds, per document,
 `<name>.jsonl`, `<name>.stamp.json`, `trace/<name>.trace.jsonl.gz` and
@@ -2846,10 +2873,8 @@ once at the end) are refused by name, each at its box. A box that is on and asks
 whose prompt the profile does not write is refused as well
 (`flow.prompt_problems`).
 
-There are twelve numbers, all whole numbers, each counting something: lines of a
-piece (`piece_lines`), lines of the title page (`title_page_lines`), headings
-shown up to a value's place (`headings`), entries of a list up to which it is
-shown with their meanings (`list_meanings`), pieces of a search (`search_pieces`),
+There are nine numbers, all whole numbers, each counting something: lines of a
+piece (`piece_lines`), pieces of a search (`search_pieces`),
 the shares of a search's pieces that come first from tables, figures and text
 (`search_tables`, `search_figures`, `search_text`), pieces one request of a search
 shows (`search_per_request`), the times a field the document has once reads the
@@ -2891,7 +2916,7 @@ harvest read with.
 | `EXTRACT_SEARCH_PIECES` / `EXTRACT_SEARCH_SHARES` / `EXTRACT_SEARCH_CHUNKS` | env var | none (the flow's `search_pieces`) / none (its `search_tables`, `search_figures`, `search_text`) / none (its `search_per_request`) | The budget of every search, read by `runner.search_budget`: how many pieces a search for an open coordinate or a field a document has once shows (a field with a list reads `listed_field_factor` times as many); how many of them come first from tables, figures and text, scaled to the budget (the setting lists three whole numbers in that order, such as `20,15,15`), the rest being the best of any kind; and how many pieces a request shows. A setting that is set wins over the flow file (see The flow file). A coordinate whose budget ends with pieces unshown is `exhausted`; `runner.read_to_end` sets the budget to every piece for `--top-up-open` | `runner.make_reader`, `engine.Engine.box_order`, `addressed.Reader.shown_order` |
 | `EXTRACT_BATCH_SOURCES` / `EXTRACT_BATCH_CHARS` | env var | `6` / `14000` | Passages and characters of passage text a value request was sized for; they only enter the context budget (`runner.context_budget`) | `runner.py` |
 | `EXTRACT_PRIOR_MAX` | env var | `24` | Earlier values a request was told it has; it only enters the context budget (`runner.context_budget`) now | `runner.py` |
-| `EXTRACT_MAX_SOURCE_CHARS` / `EXTRACT_PARENT_CHARS` | env var | `16000` / `4000` | `MAX_SOURCE_CHARS`: the longest stretch of passage text a request was sized for; it only enters the context budget now. `PARENT_CHARS`: how much of a table's parent section rides along with it; a longer one is cut around the table's placeholder | `runner.context_budget`, `runner.make_parents` |
+| `EXTRACT_MAX_SOURCE_CHARS` | env var | `16000` | The longest stretch of passage text a request was sized for; it only enters the context budget now. A table's parent section is shown whole | `runner.context_budget` |
 | `EXTRACT_CODE_ROUNDS` | env var | `2` | Sandbox rounds a compute question may spend on a self-checked value | `runner.make_computer` |
 | `RERANK_BASE_URL` / `RERANK_MODEL` / `RERANK_POOL` / `RERANK_DRAWN` / `RERANK_DRAWN_FROM` / `RERANK_API_KEY` | env var | empty / `Qwen/Qwen3-VL-Reranker-8B` / `30` / `20` / `100` / `EMPTY` | The vLLM server whose `/rerank` orders the pieces of a plan for each field and every passage search (empty: the vector search's order, the plan's order without the search), the model it serves, how many of the best passages of each kind a passage search hands it, how many more of each kind it draws at random and up to which place it draws them (the order of the pieces scores every piece and draws none) | `rerank.py`, `runner.make_more_sources`, `runner.make_chunk_reranker` |
 | `LLM_TOOL_CHOICE` | env var | `none` | The `tool_choice` every request of the pipeline sends; `none` keeps an agent endpoint from calling a tool of its own, empty or `off` sends none | `llm_preflight.request_extras` |
@@ -2944,7 +2969,16 @@ all parameters' class lists together, which a request planned for no
 parameter carries at once, and the widest slot a request offers, its
 options with their definitions as the model reads them (`runner.field_slots`).
 For scenarios that slot is the value of `study_sector` asked again, 154
-entries in 63,230 characters. A run needs the largest of these budgets over
+entries in 63,230 characters. The budget adds three shows that nothing bounds,
+each the largest of any current document, counted off the database in one pass
+(`runner.shows_tokens`), in words times `window_words_per_token`: the headings
+(every section title, as the line a request shows it), the whole title page (every
+line of page 1, or of the page `title_page_also` names) and the hit outline (every
+table and figure of a section, as `shows._hit_outline` lists them). The title page
+and the outline are added only where the flow shows them (`shown_by_flow`:
+`context_budget` and `request_budget` take them as `title_page` and `outline`), and
+the doctor's extract line (`doctor._extract_budget`) passes the same numbers
+(`runner.headings_tokens`; `extract --print-context-budget`). A run needs the largest of these budgets over
 the prompts it sends (`runner.request_budget`, `runner.survey_prompt_ids`): one
 for each kind of request of the harvest (`addressed.KINDS`), the check and the
 names where the profile writes them. The review
@@ -2986,8 +3020,13 @@ dimension printed only at its line (`own_only`) ends `unstated` where it is prin
 with the number itself (`own_value`) and its line does not give it; any other is
 shown its own chunk whole, without neighbours, in a round of its own first. The
 box beside shows the value's own chunk whole between its neighbours. A reply that
-does not parse, is empty, or arrives as a non-dict is asked again with the cause
-named (`_reply_fault`), and no JSON is repaired.
+does not parse, is empty, or arrives as a non-dict is shown back to the model
+whole with what was wrong (`runner.asked_again`), as the model's own turn above
+the correction: the harvest's corrections (the phrases `syntax` and `outside_text`
+of the extraction phrases) name only the place and the message and no longer quote
+the reply, so it stands in the request once. Where that does not fit the window,
+the request starts anew with its cause named in one sentence (phrase
+`asked_anew`). No JSON is repaired.
 
 At the document level, `finish_document` writes the JSONL file every time
 and withholds the stamp entirely, forcing a full redo on the next run, in

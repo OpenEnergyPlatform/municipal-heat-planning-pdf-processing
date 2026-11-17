@@ -171,23 +171,22 @@ def title_of(p: Source) -> str:
 
 
 def _neighbourhood(text: str, found) -> str:
-    """The hit's line with the characters of the rule `pattern_hit_chars` on
-    each side of the match."""
-    around = rules.get("pattern_hit_chars")
+    """The hit's whole line: every line the match touches, from its first
+    character to its last (owner decision 2026-11-17: nothing is cut)."""
     start, end = found.span()
-    end = min(end, start + 2 * around)
     line_start = text.rfind("\n", 0, start) + 1
     line_end = text.find("\n", end)
     line_end = len(text) if line_end < 0 else line_end
-    lo = max(line_start, start - around)
-    hi = min(line_end, end + around)
-    return text[lo:hi].strip()
+    return text[line_start:line_end].strip()
 
 
-def matching(passages: list[Source], pattern: str, room: int) -> Matches:
+def matching(passages: list[Source], pattern: str,
+             room: Optional[int] = None) -> Matches:
     """The passages whose text matches `pattern` (case-insensitive), each as
-    {"owner": [kind, id], "title", "line"}, in reading order, as many as fit
-    in `room` characters of JSON; `total` counts every matching passage. An
+    {"owner": [kind, id], "title", "line"}, in reading order; all of them
+    where *room* is None (what the caller shows is its to size, never to
+    cut), else as many as fit in `room` characters of JSON; `total` counts
+    every matching passage. An
     invalid pattern and a pattern that times out come back as `fault` with
     no hits, never as an exception."""
     try:
@@ -215,7 +214,7 @@ def matching(passages: list[Source], pattern: str, room: int) -> Matches:
         hit = {"owner": [p.owner_kind, p.owner_id], "title": title_of(p),
                "line": _neighbourhood(p.text, found)}
         cost = len(json.dumps(hit, ensure_ascii=False))
-        if used + cost > room:
+        if room is not None and used + cost > room:
             full = True
             continue
         used += cost
@@ -223,18 +222,33 @@ def matching(passages: list[Source], pattern: str, room: int) -> Matches:
     return Matches(hits, total)
 
 
-def two_pages(passages: list, pages: Optional[int],
-              span: Optional[float] = None) -> int:
-    """The text of *span* pages of this plan, in characters: *span* times
-    its mean; the rule `compute_fetch_pages` pages unless said otherwise.
-    What the compute step cuts a passage it fetches to. A figure's
-    description is not counted: a figure is never cut, whatever its
-    description's length."""
-    if span is None:
-        span = rules.get("compute_fetch_pages")
-    chars = sum(len(p.text or "") for p in passages
-                if p.owner_kind != "figure")
-    if not pages:
-        pages = max([(p.provenance or {}).get("page") or 0
-                     for p in passages] or [0])
-    return max(1, round(span * chars / max(pages or 1, 1)))
+def hit_line(lines, at: str, pattern: Optional[str] = None) -> Optional[int]:
+    """The number of the line of a passage (*lines*, each with `number` and
+    `text`) that a hit's line *at* stands for: the line that is it, else
+    the lines it is made of (a paragraph the passage numbers by sentence);
+    of several, the first the *pattern* matches, else the first. None where
+    no line is it."""
+    at = (at or "").strip()
+    if not at:
+        return None
+    held = [line for line in lines if (line.text or "").strip() == at]
+    if not held:
+        held = [line for line in lines
+                if (line.text or "").strip()
+                and line.text.strip() in at]
+    if not held:
+        return None
+    if pattern and len(held) > 1:
+        try:
+            compiled = regex.compile(pattern,
+                                     regex.IGNORECASE | regex.MULTILINE)
+        except (regex.error, TypeError, ValueError):
+            return held[0].number
+        limit = rules.get("pattern_timeout_s")
+        for line in held:
+            try:
+                if compiled.search(line.text, timeout=limit):
+                    return line.number
+            except TimeoutError:
+                break
+    return held[0].number

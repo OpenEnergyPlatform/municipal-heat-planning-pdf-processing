@@ -24,8 +24,8 @@ from docpipe.reading import Hole
 
 from . import qa, replies
 from .config import (
-    SHOWN_CHARS,
     max_request_tokens,
+    shown_bytes,
     table_continued_prompt,
     table_system_prompt,
     table_user_prompt,
@@ -76,13 +76,6 @@ def _assess_table(markdown: str, source_text: str,
 def _table_text(reply: dict) -> str:
     """The Markdown of a table reply, whose `rows` are its lines in order."""
     return "\n".join(str(row) for row in reply["rows"])
-
-
-def _truncate(text: str, max_len: int = SHOWN_CHARS) -> str:
-    """Truncates text with an ellipsis if it exceeds max_len."""
-    if len(text) <= max_len:
-        return text
-    return text[: max_len - 3] + "..."
 
 
 def _caption_instruction(existing: str, kind: str) -> str:
@@ -153,23 +146,28 @@ def process_table(
         section_title=section.get("title", "Unknown"),
         page_number=table.get("page_number", section.get("page_number", "?")),
         existing_caption=existing_caption or "(none)",
-        section_content=_truncate(section.get("content", "")),
+        section_content=section.get("content", ""),
         caption_instruction=_caption_instruction(existing_caption, "table"),
     )
     reply = replies.TABLE
     if before is not None:
         user_prompt += table_continued_prompt().format(
             previous_caption=before.get("caption") or "(none)",
-            previous_head=_truncate(before.get("head") or "") or "(no head)",
+            previous_head=before.get("head") or "(no head)",
             between=before.get("between") or "(nothing)",
         )
         reply = replies.TABLE_CONTINUED
 
     kwargs = {"model": model} if model else {}
+    # What this request holds, not the worst of the run: the room a cut-off
+    # reply may be given follows from the text it really shows.
+    budget = max_request_tokens(shown_bytes(
+        section.get("content", ""),
+        (before or {}).get("head") or "", (before or {}).get("between") or ""))
     response = call_vision(
         client, table_system_prompt(), user_prompt, image_path,
         temperature=TABLE_VLM_TEMPERATURE, reply=reply,
-        budget=max_request_tokens(), **kwargs
+        budget=budget, **kwargs
     )
 
     if isinstance(response, Hole):
@@ -188,7 +186,7 @@ def process_table(
             client, table_system_prompt(), user_prompt + _QA_RETRY_HINT, image_path,
             temperature=TABLE_QA_RETRY_TEMPERATURE,
             repetition_penalty=TABLE_QA_RETRY_PENALTY,
-            reply=reply, budget=max_request_tokens(), **kwargs,
+            reply=reply, budget=budget, **kwargs,
         )
         # A retry that is a hole keeps the first attempt, which was read.
         if not isinstance(retry, Hole):
@@ -285,14 +283,16 @@ def process_figure(
         section_title=section.get("title", "Unknown"),
         page_number=figure.get("page_number", section.get("page_number", "?")),
         existing_caption=existing_caption or "(none)",
-        section_content=_truncate(section.get("content", "")),
+        section_content=section.get("content", ""),
         caption_instruction=_caption_instruction(existing_caption, "figure"),
     )
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
         client, figure_system_prompt(), user_prompt, image_path,
-        reply=replies.FIGURE, budget=max_request_tokens(), **kwargs
+        reply=replies.FIGURE,
+        budget=max_request_tokens(shown_bytes(section.get("content", ""))),
+        **kwargs
     )
 
     if isinstance(response, Hole):

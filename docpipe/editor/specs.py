@@ -958,18 +958,15 @@ HELP = {
         "label is known."),
     ("entry", "definition"): (
         "What the ontology says that the entry means, in one sentence. "
-        "A request shows it with the list as long as the list is not "
-        "longer than the number `list_meanings` of the flow. Empty: the "
-        "entry is shown by its name."),
+        "A request shows it with the list, whole. Empty: the entry is "
+        "shown by its name."),
     ("entry", "gloss"): (
         "One line in the language of the profile that says what the entry "
         "means. It is shown instead of the definition and written once by "
         "the model from the definition. Empty: the definition is shown."),
     ("entry", "group"): (
-        "The group the entry belongs to. A list longer than the number "
-        "`list_meanings` of the flow is asked in two steps, first the "
-        "group, then the entry. Empty: the entry is in no group, and its "
-        "list is asked in one step."),
+        "The group the entry belongs to. Empty: the entry is in no "
+        "group."),
     ("unit", "factor"): (
         "The factor by which a number in this unit is multiplied to give "
         "the field's target unit, so 1 means that the unit is the target "

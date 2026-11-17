@@ -23,6 +23,14 @@ EMBEDDING_DIM = int(os.environ.get("EMBEDDING_DIM", "4096"))
 EMBEDDING_MAX_TOKEN_LENGTH = int(os.environ.get("EMBEDDING_MAX_TOKEN_LENGTH", "16384"))
 EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "8"))
 
+# What a picture costs the embedder's vision processor, as the model's own
+# code sets it (Qwen3-VL, chunking/qwen3_vl_embedding.py): a square of
+# IMAGE_FACTOR pixels a side is one token, and a picture is scaled down to
+# IMAGE_MAX_PIXELS pixels at most. The window of an input counts a picture by
+# them (`docpipe.window.picture_tokens`).
+IMAGE_FACTOR = 16 * 2
+IMAGE_MAX_PIXELS = 1800 * IMAGE_FACTOR * IMAGE_FACTOR
+
 # api: any OpenAI-compatible embeddings endpoint.
 EMBEDDING_BASE_URL = os.environ.get("EMBEDDING_BASE_URL", "")
 EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY", "EMPTY")

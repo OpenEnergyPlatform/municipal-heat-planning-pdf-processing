@@ -236,8 +236,7 @@ condition *new_piece* holds for the next line (`conditions`, the line's
 properties of `line_facts`). A table's title and head go with each of
 its pieces (*table_head*), a figure's caption with each of its pieces
 (*caption*); a figure's numbers are pieces of their own, its caption
-one (*figure_numbers*). *headings* is how many headings a request shows
-up to a place.
+one (*figure_numbers*).
 
 Fields:
 
@@ -247,7 +246,6 @@ Fields:
 - `table_head: bool = True`
 - `caption: bool = True`
 - `figure_numbers: bool = True`
-- `headings: int = 10`
 
 #### Cut.plain
 
@@ -475,6 +473,16 @@ def table_lines(text: str) -> Optional[tuple]
 ([Line], fixed) of a table's text, None where it holds no Markdown
 table with a rule under its head.
 
+### group_row
+
+```python
+def group_row(line: Line) -> bool
+```
+
+Is *line* a row that names a group of the rows under it ("AT",
+"2030"): a body row of several cells that fills its first cell only
+(owner decision 2026-11-17)?
+
 ### row_parents
 
 ```python
@@ -482,12 +490,15 @@ def row_parents(lines) -> dict
 ```
 
 {line number: (rows above it that it stands under, top first)} of a
-table's body rows (owner decision 2026-11-17). A row stands under the
-nearest row above whose first cell is indented at least two places less
-("└ Erdgas" under "Wohngebäude"), and under the rows that row stands
-under; a row with an empty first cell stands under none and keeps the
-rows above it as they are. One place more or less is the spacing of a
-transcription, not an indent.
+table's body rows (owner decisions 2026-11-17). A row stands under the
+group row above it (`group_row`), up to the next group row, and under
+the nearest row above whose first cell is indented at least two places
+less ("└ Erdgas" under "Wohngebäude"), and under the rows that row
+stands under; a group row begins its rows afresh, so a row is not
+indented under a row of the group before. A row with an empty first
+cell stands under its group alone and keeps the rows above it as they
+are. One place more or less is the spacing of a transcription, not an
+indent.
 
 ### figure_lines
 
@@ -613,13 +624,13 @@ a row with the rows it stands under.
 ### title_page_of
 
 ```python
-def title_page_of(passages: list, count: int) -> list
+def title_page_of(passages: list) -> list
 ```
 
-[(Line, Source)] of the plan's title page: the first *count* lines
-of its first page, else of the page the rule `title_page_also` names,
-each the line of its passage (`Passage`), in the plan's order; [] for a
-plan with no page.
+[(Line, Source)] of the plan's title page: every line of its first
+page, else of the page the rule `title_page_also` names, each the line
+of its passage (`Passage`), in the plan's order; [] for a plan with no
+page. Nothing of the page is cut (owner decision 2026-11-17).
 
 ### short_quote
 

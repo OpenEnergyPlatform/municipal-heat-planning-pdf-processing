@@ -42,6 +42,21 @@ Fields:
 - `cause: str`
 - `detail: str = ""`
 
+### Said
+
+```python
+class Said(str)
+```
+
+A correction that quotes the reply it is about (`read`'s sentence for
+a reply that broke), and *shown*, the same without the quote, for the
+request that shows the reply as a turn of its own (`again`). Still the
+plain sentence for everything that only reads it.
+
+Fields:
+
+- `shown: str`
+
 ## Functions
 
 ### speaking
@@ -70,6 +85,32 @@ def say(phrase: str, /, **values) -> str
 ```
 
 One sentence of the ambient profile, with its names filled in.
+
+### with_note
+
+```python
+def with_note(messages: list, note: str) -> list
+```
+
+*messages* with *note* said at their end: in the last message where
+that is the user's, else as a message of its own.
+
+### again
+
+```python
+def again(base: list, reply, correction: str, cause: str,
+          fits: Optional[Callable[[list], bool]] = None,
+          echo: bool = True) -> list
+```
+
+The messages of the next attempt after a reply that could not be read
+(owner decision 2026-11-17: nothing is cut): *base*, the whole reply as
+the model's turn (*echo*, else none) and what was wrong with it
+(*correction*; where the reply is shown, a `Said` correction leaves its
+quote out, so the reply is in the request once), where that fits the
+window (*fits*; without one it fits). Else *base* asked anew, its cause
+named in one sentence at its end (`asked_anew`), and neither the reply
+nor anything quoted from it.
 
 ### loads_object
 

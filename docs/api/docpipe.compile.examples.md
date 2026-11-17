@@ -65,17 +65,33 @@ The quote stands in the passage, it is long enough to name a place, and
 the value stands in the quote: for a number its digits, for anything
 else its wording as the document writes it (`value_raw`, else `value`).
 
+### piece_lines_of
+
+```python
+def piece_lines_of(profile=None) -> int
+```
+
+How many lines a piece of the harvest holds: the number `piece_lines`
+of the flow of *profile*, else of the profile in force.
+
 ### snippet
 
 ```python
-def snippet(passage: str, quotes: list) -> str
+def snippet(passage: str, quotes: list, piece_lines: Optional[int] = None,
+            item=None) -> str
 ```
 
-The part of the passage an example shows: the quotes with what
-stands around them, never more than `SNIPPET_MAX` characters. A quote
-that cannot be placed letter for letter (it stands in the passage with
-other spacing) is placed by nobody here: the start of the passage is
-shown. Whether a quote is in what is shown is the caller's to check.
+The part of the passage an example shows: the piece of the harvest
+that holds a quote, whole (owner decision 2026-11-17: nothing is cut).
+The passage is cut into its pieces as the harvest cuts it
+(`units.chunks_of`, *piece_lines* lines each; *item* is the source of
+the passage, a section where not given), and each piece is shown with the
+lines it carries (a table's title and head, the rows its rows stand
+under); where the quotes stand in several pieces, those pieces are shown
+in their order. A quote that no one piece holds (it crosses a piece, or
+stands in the passage with other spacing) is placed by nobody here: the
+whole passage is shown, never a part of it. Whether a quote is in what
+is shown is the caller's to check.
 
 ### by_rank
 
@@ -100,11 +116,14 @@ The parameters a proposal is wanted for.
 ```python
 def propose(raw_spec: dict, find: Callable, ask: Callable, *,
             only: Optional[list] = None, per_parameter: int = 2,
-            passages: int = 6) -> dict
+            passages: int = 6, piece_lines: Optional[int] = None) -> dict
 ```
 
 The review file's content: per parameter, the proposals that carry
-their evidence, and a count of what was read and dropped.
+their evidence, and a count of what was read and dropped. An example
+shows the piece of the harvest that holds its quote (`snippet`, pieces of
+*piece_lines* lines); a found passage may carry its source under
+"item".
 
 ### apply
 

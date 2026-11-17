@@ -8,9 +8,10 @@ under the ids it already has.
 A vector is comparable only with vectors embedded the same way: the same
 model, and the same implementation of it. Moving the embedder to a vLLM
 server (the messages form, docpipe/embedding/api.py) changes every vector,
-so the corpus is embedded again as a whole. The database keeps its ids and
-is not written: each item's vector goes into the new file under the id the
-database already gives it. The old file stays as it is, and a run moves to
+so the corpus is embedded again as a whole. The database keeps its ids and is
+otherwise not written: a database of format 1 is first brought to format 2
+(its Embeddings table, `ensure_format`), and each item's vector then goes into
+the new file under the id the database already gives it. The old file stays as it is, and a run moves to
 the new one by its path.
 
 A record beside the new file (`<index>.json`) says what made it and how far

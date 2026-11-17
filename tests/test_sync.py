@@ -63,7 +63,9 @@ class Corpus:
         conn.close()
         inputs = build_embedding_inputs(doc, "plan", self.dir)
         with EmbeddingWriter(self.db) as writer:
-            writer.write("plan", [(i.embedding_type, i.section_index, i.item_id, n)
+            writer.write("plan", [(i.embedding_type, i.section_index, i.item_id, n,
+                                   i.piece, i.part, i.page, i.first_line,
+                                   i.last_line)
                                   for n, i in enumerate(inputs)])
         self.index = tmp_path / "faiss.index"
         self.save(self.index, len(inputs))
@@ -137,8 +139,8 @@ def test_a_joined_part_goes_with_its_vectors_and_its_start_is_embedded_again(tmp
 
     # The part's own vector, its start's (new rows), and the section whose
     # placeholder no longer names a table go; the rest stays.
-    gone = {ids[("table_text", 1, "p2_tbl0")], ids[("table_text", 0, "p1_tbl0")],
-            ids[("section_text", 1, None)]}
+    gone = {ids[("table_text", 1, "p2_tbl0", 0, 0)], ids[("table_text", 0, "p1_tbl0", 0, 0)],
+            ids[("section_text", 1, None, 0, 0)]}
     assert set(ids.values()) - set(corpus.ids().values()) == gone
     assert corpus.held() == set(ids.values()) - gone
     assert corpus.tables()["p1_tbl0"][0] == tables["p1_tbl0"][0]
@@ -174,8 +176,8 @@ def test_a_changed_section_keeps_its_row_and_loses_only_its_changed_vector(tmp_p
     corpus.sync()
 
     assert corpus.sections() == rows
-    assert set(ids.values()) - set(corpus.ids().values()) == {ids[("section_text", 1, None)]}
-    assert ids[("section_title", 1, None)] in corpus.held()
+    assert set(ids.values()) - set(corpus.ids().values()) == {ids[("section_text", 1, None, 0, 0)]}
+    assert ids[("section_title", 1, None, 0, 0)] in corpus.held()
 
 
 def test_a_gone_section_takes_its_vectors_and_the_next_keeps_row_and_vectors(tmp_path):
@@ -189,7 +191,7 @@ def test_a_gone_section_takes_its_vectors_and_the_next_keeps_row_and_vectors(tmp
     now = corpus.sections()
     assert "B" not in now and now["C"] == (rows["C"][0], 1)
     assert set(ids.values()) - corpus.held() == {
-        ids[("section_text", 1, None)], ids[("section_title", 1, None)]}
+        ids[("section_text", 1, None, 0, 0)], ids[("section_title", 1, None, 0, 0)]}
 
 
 def test_a_table_moving_to_another_section_keeps_its_row_and_its_vector(tmp_path):
@@ -205,9 +207,9 @@ def test_a_table_moving_to_another_section_keeps_its_row_and_its_vector(tmp_path
 
     row, sec, _caption, _source = corpus.tables()["p1_tbl0"]
     assert row == tables["p1_tbl0"][0] and sec == rows["Zwei"][0]
-    assert ids[("table_text", 0, "p1_tbl0")] in corpus.held()
+    assert ids[("table_text", 0, "p1_tbl0", 0, 0)] in corpus.held()
     assert set(ids.values()) - corpus.held() == {
-        ids[("section_text", 0, None)], ids[("section_text", 1, None)]}
+        ids[("section_text", 0, None, 0, 0)], ids[("section_text", 1, None, 0, 0)]}
 
 
 def test_a_dry_run_counts_and_writes_nothing(tmp_path):
@@ -236,7 +238,7 @@ def test_a_further_index_loses_the_same_vectors_and_its_record_says_incomplete(t
 
     corpus.sync(further)
 
-    gone = {ids[("section_text", 0, None)]}
+    gone = {ids[("section_text", 0, None, 0, 0)]}
     assert corpus.held() == corpus.held(further) == set(ids.values()) - gone
     record = json.loads(record_path(further).read_text(encoding="utf-8"))
     assert record["complete"] is False and record["vectors"] == len(ids) - 1
@@ -256,7 +258,7 @@ def test_the_indexes_lose_the_vectors_before_the_database_is_written(tmp_path, m
     monkeypatch.setattr(sync_module, "apply_plan", dies)
     with pytest.raises(RuntimeError):
         corpus.sync()
-    gone = ids[("section_text", 1, None)]
+    gone = ids[("section_text", 1, None, 0, 0)]
     assert gone not in corpus.held() and corpus.ids() == ids
     monkeypatch.undo()
 
@@ -285,7 +287,98 @@ def test_a_caption_is_compared_and_written_as_the_database_holds_it(tmp_path):
     corpus.sync(resolve=same)
 
     assert corpus.tables()["p1_tbl0"][2:] == ("Hinweis: Wegen der Rundung", "stage")
-    assert ids[("table_text", 0, "p1_tbl0")] not in corpus.held()
+    assert ids[("table_text", 0, "p1_tbl0", 0, 0)] not in corpus.held()
+
+
+def test_a_section_that_grows_keeps_the_vector_of_its_unchanged_piece(tmp_path):
+    # Eight lines fill a piece (the flow's piece_lines): the heading and
+    # seven sentences. The new text adds three sentences, a second piece.
+    seven = " ".join(f"Satz {n} sagt etwas." for n in range(1, 8))
+    old = {"sections": [section("A", seven)]}
+    corpus = Corpus(tmp_path, old)
+    ids = corpus.ids()
+    first = ids[("section_text", 0, None, 0, 0)]
+    corpus.write({"sections": [section(
+        "A", seven + " Satz 8 kommt. Satz 9 kommt. Satz 10 kommt.")]})
+
+    report = corpus.sync()
+
+    assert not report.dropped
+    assert first in corpus.held() and corpus.ids() == ids
+    # The break by construction: a changed first sentence changes the
+    # first piece, and its vector goes.
+    corpus.write({"sections": [section("A", "Neu. " + seven)]})
+    assert dict(corpus.sync().dropped) == {"section_text": 1}
+    assert first not in corpus.held()
+
+
+def test_a_kept_vector_takes_the_page_of_its_piece_now_and_keeps_its_id(tmp_path):
+    seven = " ".join(f"Satz {n} sagt etwas." for n in range(1, 8))
+    corpus = Corpus(tmp_path, {"sections": [section("A", seven, page=1)]})
+    ids = corpus.ids()
+    first = ids[("section_text", 0, None, 0, 0)]
+
+    def stored():
+        with sqlite3.connect(corpus.db) as conn:
+            return conn.execute(
+                "SELECT page, first_line, last_line FROM Embeddings "
+                "WHERE faiss_id = ?", (first,)).fetchone()
+
+    before = stored()
+    assert before[0] == 1
+    # The text stays, the PDF page of the section moves.
+    corpus.write({"sections": [section("A", seven, page=2)]})
+
+    report = corpus.sync()
+
+    assert not report.dropped and report.kept == len(ids)
+    assert corpus.ids() == ids and first in corpus.held()
+    assert stored() == (2, before[1], before[2])
+
+
+def test_each_part_of_a_kept_piece_takes_the_page_of_its_first_line_now(tmp_path):
+    seven = " ".join(f"Satz {n} sagt etwas." for n in range(1, 8))
+    corpus = Corpus(tmp_path, {"sections": [section("A", seven, page=1)]})
+    first = corpus.ids()[("section_text", 0, None, 0, 0)]
+    with sqlite3.connect(corpus.db) as conn:     # as a window split it in two
+        conn.execute(
+            "INSERT INTO Embeddings (faiss_id, embedding_type, owner_kind, "
+            "owner_id, piece, part, page, first_line, last_line) "
+            "SELECT 99, embedding_type, owner_kind, owner_id, piece, 1, page, "
+            "first_line + 1, last_line FROM Embeddings WHERE faiss_id = ?",
+            (first,))
+        conn.execute("UPDATE Embeddings SET last_line = first_line "
+                     "WHERE faiss_id = ?", (first,))
+    ids = corpus.ids()
+    # The text stays. Its heading (line 1) stays on the section's page 1,
+    # its sentences (lines 2 to 8) now stand on page 2: the piece's own
+    # page, its first line's, does not move, the second part's does.
+    moved = section("A", seven, page=1)
+    moved["pages"] = [1, 2]
+    moved["segments"] = [{"kind": "text", "page": 2, "text": seven}]
+    corpus.write({"sections": [moved]})
+
+    report = corpus.sync()
+
+    assert not report.dropped and corpus.ids() == ids
+    with sqlite3.connect(corpus.db) as conn:
+        stored = {row[0]: row[1:] for row in conn.execute(
+            "SELECT faiss_id, page, first_line, last_line FROM Embeddings "
+            "WHERE faiss_id IN (?, 99)", (first,))}
+    assert stored == {first: (1, 1, 1), 99: (2, 2, 8)}
+
+
+def test_a_vector_of_a_whole_owner_goes_so_that_its_pieces_are_embedded(tmp_path):
+    old = {"sections": [section("A", "eins"), section("B", "zwei")]}
+    corpus = Corpus(tmp_path, old)
+    ids = corpus.ids()
+    with sqlite3.connect(corpus.db) as conn:       # written before pieces
+        conn.execute("UPDATE Embeddings SET piece = NULL")
+
+    report = corpus.sync()
+
+    assert sum(report.dropped.values()) == len(ids)
+    assert corpus.held() == set() and corpus.ids() == {}
 
 
 @pytest.mark.parametrize("old, new, rows", [

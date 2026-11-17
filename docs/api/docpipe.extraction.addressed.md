@@ -318,14 +318,25 @@ document? Told once per step (rule `show_title_page`, "first").
 def key_lock(self, key) -> threading.Lock
 ```
 
+#### Plan.measuring
+
+```python
+@contextlib.contextmanager
+def measuring(self)
+```
+
+A request built only to measure it: it does not count as the
+first request of its step (`first_request`).
+
 #### Plan.headings
 
 ```python
 def headings(self, owner: tuple) -> list
 ```
 
-[(Line, Source)] of the titles of the sections up to a passage,
-its own last (`lookup.sections_up_to`).
+[(Line, Source)] of the titles of every section up to a passage
+in reading order, its own last (`lookup.sections_up_to`); none is
+left out (owner decision 2026-11-17).
 
 #### Plan.chunk_of
 
@@ -530,9 +541,8 @@ its municipality), which a search sentence is written with. *numbers*
 are the numbers of the flow the reading is bounded by (`flow.Numbers`,
 the default profile's where none are given): they say *budget*, *shares*
 and *per_request* where those are not given, how many times the budget
-a field with a list reads, up to how many entries a list is shown with
-what each means and how often an answer that did not hold is asked
-again. *image_of(source)* is the picture of a figure a coordinate
+a field with a list reads and how often an answer that did not hold is
+asked again. *image_of(source)* is the picture of a figure a coordinate
 request may ask for (`IMAGE`), None where the run attaches none.
 
 #### Reader.\_\_init\_\_
@@ -646,8 +656,7 @@ def list_of(self, options, two_step: bool = True) -> tuple
 ```
 
 A list as every request of this reading shows it (`listing`):
-with what each entry means up to the flow's number of entries
-(`flow.Numbers.list_meanings`). Every place that shows a list or
+every entry with what it means. Every place that shows a list or
 reads a number of one goes through here, so that a number is read
 against the list it was given for.
 
@@ -736,6 +745,40 @@ def earlier_entries(plan: Plan, uri: str, name: str,
 [{"words", "entry"}] the document's list of this coordinate has
 already settled for other wordings, for the rule
 `list_shows_earlier`.
+
+#### Reader.entry_picks
+
+```python
+def entry_picks(self, plan: Plan, values: dict, listed: list,
+                size: int, several: bool, counts: Counts, noted: dict,
+                node: Optional[dict], earlier: list,
+                numbers: Optional[list] = None) -> list
+```
+
+The numbers of the entries a list request names (owner decision
+2026-11-17: nothing is cut, a list is split instead). *listed* are
+the lines of the list, each with its number and what it means,
+*numbers* the entries asked about (all where None). A list whose
+request fits the window of the model is one request. One that does
+not is asked in parts, each part a request with a share of the
+entries and what they mean, each under its number in the whole list;
+no part names an entry: none; one names one: that one; several name
+some: one more request over the entries named, with what they
+mean.
+
+#### Reader.list_window
+
+```python
+def list_window(self, plan: Plan, values: dict, node: Optional[dict],
+                earlier: list)
+```
+
+The room a list request leaves for the lines of its list
+(`window.Window`): the window the server reported
+(`runner.model_window`) less the instruction of the request, what
+else it shows besides the list, the room for its answer and the
+margin; texts are counted as the run counts every request
+(`runner.prompt_tokens`).
 
 #### Reader.list_holds
 
@@ -1113,7 +1156,9 @@ none or two.
 class ChunkDoc
 ```
 
-A piece as the reranker reads it.
+A piece as the reranker reads it; *chunk* the piece itself, so that
+one over the reranker's window is split into parts that each carry its
+title, head and heading (`rerank.pieces_of`), nothing cut.
 
 Fields:
 
@@ -1121,6 +1166,7 @@ Fields:
 - `owner_id: tuple`
 - `text: str`
 - `image_path: Optional[str] = None`
+- `chunk: Optional[Chunk] = None`
 
 ### Orders
 
@@ -1515,17 +1561,16 @@ Does the answer of a names request name 0, none of its list?
 ### listing
 
 ```python
-def listing(options, meanings: int, two_step: bool = True) -> tuple
+def listing(options, two_step: bool = True) -> tuple
 ```
 
 (lines, choices, grouped) of a list as a request shows it (owner
-decisions 2026-11-08): a list longer than *meanings* entries
-(`flow.Numbers.list_meanings`) whose entries name groups is shown by
-its groups, each a choice; a shorter one with what each entry means, a
-longer one by its names. *choices* are what a number picks, labels or
-group names. The rule `two_step_list` says whether a long list of groups
-is asked in two steps, *two_step* that this list is the first of them:
-the entries of the groups chosen are never shown as groups.
+decision 2026-11-17: nothing is cut): every entry with its number in
+the list and what it means, never only its name. *choices* are what a
+number picks, the entries' labels. *grouped* is always False: a list is
+no longer asked group first, a list that does not fit a request is asked
+in parts (`Reader.entry_picks`); the flag and *two_step* stay for the
+callers that unpack them.
 
 ### picked_entry
 
@@ -1753,10 +1798,10 @@ def untaken_items(plan: Plan, claims: list) -> list
 
 The numbers of the plan's tables and figures no value of *claims*
 took, in the plan's order, each as an `Untaken` (owner decision
-2026-11-17): a cell of a table's row that prints a number other than a
-year, its words the number the cell prints (the first where it prints
-several), and for a figure's line of numbers each number of the line
-other than a year, one item each. Taken as `numbers_untaken` counts.
+2026-11-17): every number other than a year a cell of a table's row
+prints, one item each ("12 / 15" gives two items of one cell address),
+and for a figure's line of numbers each number of the line other than a
+year, one item each. Taken as `numbers_untaken` counts.
 
 ### title_page_shown
 

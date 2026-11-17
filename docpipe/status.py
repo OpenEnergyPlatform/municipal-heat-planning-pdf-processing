@@ -160,6 +160,11 @@ def collect(profile) -> Report:
         # documents and no more, and that is ingest's output.
         registered = connection is not None and "Documents" in tables
         built = connection is not None and CORE_TABLES <= tables
+        # A database of format 1 (no piece column in Embeddings) holds
+        # nothing embedded in the format of this code: all of it is still to
+        # embed, and the queries that select e.piece would fail on it.
+        pieced = built and "piece" in {row[1] for row in connection.execute(
+            'PRAGMA table_info("Embeddings")')}
         named = _documents(profile, connection, tables)
         report.documents = sorted(named)
         report.word_index, indexed = _indexed_documents(report.database)
@@ -179,7 +184,7 @@ def collect(profile) -> Report:
                            and refine._read_partial(
                                folder / REFINEMENT_PARTIAL_JSON) is None),
                 "visuals": _visuals_there(folder, visuals),
-                "chunk": (built and row is not None
+                "chunk": (pieced and row is not None
                           and merge._is_cached(folder)
                           and any(connection.execute(sql, (row,)).fetchone()
                                   for sql in (database._EXISTING_SECTION_SQL,

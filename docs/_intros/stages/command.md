@@ -123,7 +123,7 @@ for it:
 | preprocess | `pages.json` and `sections.json` exist |
 | refine | `sections_refined.json` exists and no partial file (`sections_refined.partial.json`) sits beside it: one stays beside a finished output too, while a window ended as a hole |
 | visuals | `visuals.json` exists and every table and figure of its input has the markdown or description the stage looks for |
-| chunk | `document.json` is not older than its inputs and an embedding is recorded for a section, table or figure of the document |
+| chunk | `document.json` is not older than its inputs and an embedding is recorded for a section, table or figure of the document; a database of format 1 (`Embeddings` without a `piece` column) reports it as not done, since its vectors are embedded anew |
 | lexical | the word index is current and holds a passage of the document |
 
 It changes nothing: the database and the word index are opened for reading, no

@@ -71,12 +71,6 @@ RULES: tuple = (
          "index. A larger number waits longer for a busy server before the "
          "request fails and is asked again.",
          least=1, steps=SEARCHING, where="embedding/api.py (ApiEmbedder)"),
-    rule("rerank_truncate_tokens", "flow", "Search", "whole",
-         "How many tokens of a passage and its sentence the reranker reads. "
-         "-1: the model's own length, which the server cuts the pair to; "
-         "no length of ours decides what it reads. A smaller number cuts "
-         "long passages sooner.",
-         least=-1, steps=SEARCHING, where="inference/rerank.py (scores)"),
     rule("rerank_with_images", "flow", "Search", "switch",
          "On: the reranker is given the picture of a figure together with its "
          "text, where the run attaches figures at all. Off: it reads only "

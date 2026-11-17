@@ -225,14 +225,6 @@ RULES: tuple = (
          decided="2026-11-17",
          where="chunking/context.py (ask_all, attach), "
                "chunking/chunking.py (build_embedding_inputs)"),
-    rule("context_head_chars", _FLOW, "Index", "whole",
-         "How many characters of the table's markdown or of the figure's "
-         "description the request for a context sentence shows as the "
-         "head of the table or figure. A larger number shows more of the "
-         "table or figure and makes the request longer. A change asks every "
-         "sentence again, since it is part of what the request shows. Only "
-         "read where the rule `context_sentence` is on.", least=1,
-         decided="2026-11-17", where="chunking/context.py (shown)"),
     # -- waiting and asking again ---------------------------------------------
     rule("llm_timeout_s", _FLOW, _AGAIN, "number",
          "The seconds the first attempt of a request waits for its answer. "
@@ -314,12 +306,6 @@ RULES: tuple = (
          "server's failure. linear: linearly after both. doubling: "
          "doubling after both.", choices=("by_cause", "linear", "doubling"),
          steps=_ASKS, where="runner.py (retry_wait)"),
-    rule("fault_excerpt_chars", "prompts", "Questions asked again", "map",
-         "How much of a broken answer the question asked again shows the "
-         "model: the characters before the place where it broke, the "
-         "characters after it, and the characters of text outside the "
-         "object. Give all three.", of="whole",
-         decided="2026-09-12", steps=_ASKS, where="runner.py (_reply_fault)"),
     rule("retry_shows_reply", _FLOW, _AGAIN, "switch",
          "On: a request asked again after an unreadable answer carries that "
          "answer and what was wrong with it. Off: it goes out unchanged, "
@@ -545,11 +531,6 @@ RULES: tuple = (
          env="EXTRACT_BATCH_CHARS", steps=("take_back",),
          where="runner.py, pipeline.py"),
     # -- second reading and the quote in the PDF ------------------------------
-    rule("review_parent_chars", _FLOW, _REVIEW, "whole",
-         "How many characters of the section above a table go into the "
-         "second reading of a value from that table.", least=0,
-         env="EXTRACT_PARENT_CHARS", steps=("review",),
-         where="runner.py (make_parents)"),
     rule("locate_quotes", _FLOW, _PDF, "switch",
          "On: the place of each quote in the PDF is found and written as "
          "rectangles, for highlighting. Off: no place is looked for, and "

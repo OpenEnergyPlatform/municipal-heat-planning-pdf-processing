@@ -45,6 +45,11 @@ Fields:
 - `by_hit: dict = field(default_factory=dict)`
 - `rank: Optional[Callable] = None`
 - `unfit: bool = False`
+- `parts: dict = field(default_factory=dict)`: The parts of each passage that came in parts, in order, by owner (a `window.Part` each, a number's slot), the owner of each shown entry by its id, and the parts shown (`fetch`).
+- `entries: dict = field(default_factory=dict)`
+- `part_shown: dict = field(default_factory=dict)`
+- `hit_pattern: dict = field(default_factory=dict)`: The pattern each hit was found by, by its id (`lookup.hit_line`), and the hit lists that came in parts, by their id (`_hit_list`).
+- `hit_lists: dict = field(default_factory=dict)`
 
 #### Gathered.context
 
@@ -110,13 +115,21 @@ with the id a later ask names it by. Returns how many.
 
 ```python
 def fetch(self, asks, order: list, passages: dict,
-          budget: Optional[int]) -> bool
+          fits: Optional[Callable] = None,
+          render: Optional[Callable] = None) -> bool
 ```
 
-The asks of one reply resolved (`lookup`), each passage cut to
-*budget*, two pages of the plan. True when a passage or a hit list
-came of them the request has not shown yet: an ask for something
-shown already, or for nothing, ends the gathering.
+The asks of one reply resolved (`lookup`). Each passage comes
+whole where it fits the request's window, else in parts, each with
+its heading, the answer saying which part of how many it is; so
+does a hit list. *fits*(texts) says whether texts together still
+fit the window, None where nothing bounds them. *render*(follow)
+is the message that tells the model what this fetch brought: where
+it is given, *fits* judges that message, the entries brought so far
+and the one tried, exactly as it will be sent (the size judged is
+the size sent); else it judges the texts alone. True when a passage
+or a hit list came of them the request has not shown yet: an ask
+for something shown already, or for nothing, ends the gathering.
 
 ### Read
 
@@ -207,14 +220,33 @@ def more_schema(gets: tuple = GETS) -> dict
 The asks a reply may carry under "more": any of *gets*, by default
 every one.
 
+### shown_list
+
+```python
+def shown_list(listed: dict) -> dict
+```
+
+A hit list as a message shows it: without what it was searched with
+(`SEARCHED_WITH`).
+
+### largest_prefix
+
+```python
+def largest_prefix(items: list, fits: Callable) -> int
+```
+
+How many of *items*, from the first, still fit (`fits(prefix)`, which
+holds for fewer where it holds for more): found by doubling, then by
+halving, so that few and never much more than the room is judged.
+
 ### first_line
 
 ```python
 def first_line(source: Source) -> str
 ```
 
-The first line of a passage under its title: what a hit list shows
-of it.
+The first line of a passage under its title, whole: what a hit list
+shows of it (owner decision 2026-11-17: nothing is cut).
 
 ### passage_of
 

@@ -1,13 +1,13 @@
 """
 test_node_check.py: what the check of the filled nodes promises (owner
-decision 2026-11-15, `passboxes.box_node_check`, `runner.around`,
+decision 2026-11-15, `passboxes.box_node_check`, `runner.piece_text`,
 `runner._node_check_payload`, `replies.node_check_verdicts`).
 
 The promises, each with a case that breaks it by construction:
 
-1. The check sees the text around each quote, as many characters on each
-   side as the rule says, AND nothing where the passage does not hold the
-   quote.
+1. The check sees the whole piece of the passage around each quote (owner
+   decision 2026-11-17: not 200 characters), AND nothing where the passage
+   does not hold the quote.
 2. A reply is read only where it says true or false for the value and for
    every dimension asked, AND a field left out, a field asked of nobody or a
    verdict that is no boolean is no reply.
@@ -28,6 +28,7 @@ from types import SimpleNamespace
 
 from docpipe import rules
 from docpipe.extraction import fields, passboxes, passflow, replies, runner
+from docpipe.extraction.pipeline import Source
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.trust import REVIEW_AGREE, REVIEW_DISAGREE
 
@@ -74,16 +75,14 @@ def verdicts(failing=()) -> callable:
 
 # 1 -----------------------------------------------------------------------
 
-def test_the_check_sees_the_text_around_each_quote():
-    with rules.overlaid(node_check_context_chars=10):
-        got = runner.around(TEXT, "| Erdgas | 241 |", 10)
-    at = TEXT.find("| Erdgas | 241 |")
-    assert got == TEXT[at - 10:at + len("| Erdgas | 241 |") + 10]
-    assert runner.around(TEXT, "| Heizöl | 99 |", 10) is None
-    with rules.overlaid(node_check_context_chars=10):
-        body = runner._node_check_payload(
-            row_of(), {("table", 1): SimpleNamespace(text=TEXT)},
-            PARAMETER, SLOTS)
+def test_the_check_sees_the_whole_piece_around_each_quote():
+    source = Source("table", 1, TEXT, {})
+    got = runner.piece_text(source, "| Erdgas | 241 |", 8)
+    assert got is not None and "| Erdgas | 241 |" in got
+    assert got.endswith("Fernwärme.") and got.startswith("Die Tabelle")
+    assert runner.piece_text(source, "| Heizöl | 99 |", 8) is None
+    body = runner._node_check_payload(
+        row_of(), {("table", 1): source}, PARAMETER, SLOTS)
     assert body["quotes"][0]["around"] == got
     assert body["node"]["value"] == 241
 

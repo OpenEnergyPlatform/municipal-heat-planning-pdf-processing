@@ -218,24 +218,12 @@ RULES = (
          "order. It is added to the rounding of the printed places.",
          least=0, decided="2026-11-03", steps=CHECKED,
          where="verify.py (computed_from_inputs)"),
-    rule("compute_fetch_pages", "flow", "Calculation", "number",
-         "How many pages of text a calculation shows of a passage it asked "
-         "to see. A longer passage is cut to this many pages, measured by "
-         "the plan's mean page. A figure's description is never cut.",
-         least=0.1, steps=("compute",),
-         where="lookup.py (two_pages), runner.py (make_computer)"),
     rule("compute_used_if_none", "flow", "Calculation", "choice",
          "Which numbers a calculated row names as its inputs when the "
          "model names none. All: every number the question showed. None: "
          "no number, and the row has no inputs to stand on.", choices=("all", "none"), decided="2026-11-03",
          steps=("compute",), where="compute.py (used_numbers)"),
     # -- flow: search ---------------------------------------------------------
-    rule("pattern_hit_chars", "flow", "Search", "whole",
-         "How many characters of text stand on each side of the hit of a "
-         "pattern search in the answer the model gets back. A larger "
-         "number shows more around each hit and fits fewer hits in the "
-         "answer.", least=0, steps=("search", "compute"),
-         where="lookup.py (matching)"),
     rule("fetch_next", "flow", "Search", "whole",
          "How many sections an ask for the next or the previous section "
          "brings in one go. A larger number shows more text of the plan "

@@ -62,10 +62,12 @@ it.
 input path is given, and, on `--print-context-budget`, prints
 `max_request_tokens()` and exits early: the longer, by word count, of the
 two requests' prompts, system and user (the table's with the continuation
-prompt), times `TOKENS_PER_WORD`, plus the texts they show at `SHOWN_CHARS`,
-plus `IMAGE_TOKENS` for a full-page crop, plus `VLM_MAX_TOKENS` for the one reply, all over-estimated:
-15,144 tokens with the `kwp` profile and 15,300 with `scenarios`. No second
-reply is counted. `assert_serving` keeps the window the server reported
+prompt), times `TOKENS_PER_WORD`, plus the texts they show, whole, counted in UTF-8
+bytes (`config.shown_bytes`; the longest section text, between-text and table head of the
+documents the run reads, `config.longest_shown` and `config.longest_in`; a byte
+bounds a token from above),
+plus `IMAGE_TOKENS` for a full-page crop, plus `VLM_MAX_TOKENS` for the one reply, all over-estimated.
+No second reply is counted. The job scripts derive `--max-model-len` from it. `assert_serving` keeps the window the server reported
 (`llm_preflight.served_window`, role `vlm`), and what it holds beyond this
 budget is what a reply that was cut off is asked once more with (see The vision
 call, its retries and a hole).
@@ -186,7 +188,7 @@ included, is shown and the model decides (owner decision 2026-11-07). The
 reading takes the same tables by the same rule (see
 [extraction](extraction.md)). Such a table is asked after the table before
 it with prompt `visuals/table_continued`: that table's caption and head and
-the text between the two (`BETWEEN_CHARS`), and the reply says whether it
+the text between the two, whole, and the reply says whether it
 `continues` it; where it does, its rows are written under that head and it
 gets no caption (`table_continued_reply`). Its reply is `{rows, caption,
 continues}` (`replies.TABLE_CONTINUED`), and the prompt tells the model that the
@@ -246,8 +248,12 @@ closed or salvaged, and no second request without a schema fills in for a
 reply that could not be read.
 
 A reply that is not that object is asked again, up to `MAX_RETRIES` attempts
-in all: the failed answer is echoed back with the cause named in the profile's
-words (`prompts/reading/phrases.json`) and the shape that was asked for. A reply that
+in all: the failed answer is echoed back whole as the model's own turn, with the
+cause named in the profile's words (`prompts/reading/phrases.json`; the place and
+the message only, as the reply is in the request once) and the shape that was
+asked for. Whether that request fits is judged by `llm_preflight.stage_fits`
+(`vision._fits_served`: a picture costs `IMAGE_TOKENS`); where it does not fit
+the served window, the original request is asked anew with the cause named. A reply that
 cannot be read comes back within the second, so this retry does not wait. A
 timeout, a 429, a 5xx or any other exception waits `5 * attempt` seconds
 (not after the last attempt) and, for a timeout, also escalates the
@@ -364,7 +370,6 @@ partial, tested shape rather than objects the code builds.
 | `TABLE_QA_MAX_SHARED_UNREADABLE`/`MIN_KNOWN_WORDS` | constant | `0.25`/`0.5` | a coverage below the minimum is not assessed where both hold: under the first share of the transcription's salient tokens stand in the PDF text, and under the second share of its words occur in the document's text | `config.py`, `qa.py` |
 | `TABLE_QA_RETRY_TEMPERATURE`/`RETRY_PENALTY` | constant | `0.4`/`1.3` | sampling for the QA-failure retry | `config.py` |
 | `TOKENS_PER_WORD` | constant | `3.0` | word-to-token factor in the context budget estimate | `config.py` |
-| `SHOWN_CHARS` | constant | `800` | characters of each text a request shows beside its prompts, counted at two a token in the context budget | `config.py` |
 | `IMAGE_TOKENS` | constant | `4096` | tokens charged per image crop in the context budget estimate | `config.py` |
 | `--batch` | CLI flag | off | input path is a root of output directories | `pipeline.py` |
 | `--dry-run` | CLI flag | off | report counts only, no server call | `pipeline.py` |

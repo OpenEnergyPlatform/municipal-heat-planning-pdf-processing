@@ -1779,9 +1779,17 @@ def _rerank(node, turn):
         if ranker is None:
             llm_client.note_fault("rerank", "not_served")
         return
+    # The reranker reads each hit in the pieces the harvest reads, a
+    # section's with its heading, a table's with its title (`rerank.
+    # pieces_of`).
     views = [SimpleNamespace(text=one.get("text") or "",
                              owner_kind=one.get("owner_kind"),
-                             owner_id=one.get("owner_id")) for one in head]
+                             owner_id=one.get("owner_id"),
+                             provenance={
+                                 "section_title": one.get("section_title"),
+                                 "title": one.get("title"),
+                                 "page": one.get("page_number")})
+             for one in head]
     scores = ranker.scores(turn.document_id, probe, views)
     order = sorted(range(len(head)), key=lambda at: -scores[at])
     turn.put("hits", [head[at] for at in order] + tail)

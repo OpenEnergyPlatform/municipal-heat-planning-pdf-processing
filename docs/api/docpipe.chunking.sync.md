@@ -22,11 +22,12 @@ the database's ids then no longer fit it. Here (owner decision 2026-11-07,
 - a table part the merge joined to the table it continues is gone.
 
 A vector stays where its input is unchanged: the text, and the picture, that
-`chunking.build_embedding_inputs` makes of the entry, from the database
-before and from the document now, each with the caption the database holds
-(`captions.resolve_title`, which `enrich_caption` applies). Every other
-vector goes: its Embeddings row is deleted and its id taken out of every
-index named. The embed step then embeds each input that has no row, and a
+`chunking.build_embedding_inputs` makes of each piece of the entry, from the
+database before and from the document now, each with the caption the
+database holds (`captions.resolve_title`, which `enrich_caption` applies).
+Every other vector goes, every part of a piece that changed and every
+vector of a whole entry written before the entries of the index were pieces:
+its Embeddings row is deleted and its id taken out of every index named. The embed step then embeds each input that has no row, and a
 re-embedding (chunking/reembed.py) fills each further index, built under the
 same ids, with the ids it lacks.
 
@@ -64,6 +65,7 @@ Fields:
 - `drop: dict`: faiss id -> embedding type, of every vector that goes
 - `kept: int`
 - `counts: dict`
+- `moved: dict = field(default_factory=dict)`: faiss id -> (page, first_line, last_line) of a kept vector whose piece, or whose part of it, now stands elsewhere: its text and picture are the same, so it stays and only its assignment is written.
 
 #### Plan.writes
 

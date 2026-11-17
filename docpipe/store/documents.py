@@ -39,13 +39,15 @@ def file_sha256(path) -> tuple:
 
 def content_of(filename: str, connection: sqlite3.Connection):
     """(sha256, bytes) a document was registered with; (None, None) when the
-    row, or the database, is older than that record."""
-    try:
-        row = connection.execute(
-            "SELECT sha256, bytes FROM Documents WHERE filename = ?",
-            (filename,)).fetchone()
-    except sqlite3.OperationalError:            # no such column
+    row, or the database, is older than that record (told by its columns;
+    any other database error raises)."""
+    columns = {row[1] for row in connection.execute(
+        'PRAGMA table_info("Documents")').fetchall()}
+    if not {"sha256", "bytes"} <= columns:
         return None, None
+    row = connection.execute(
+        "SELECT sha256, bytes FROM Documents WHERE filename = ?",
+        (filename,)).fetchone()
     return (row[0], row[1]) if row else (None, None)
 
 

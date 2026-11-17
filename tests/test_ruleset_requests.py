@@ -240,21 +240,6 @@ def reply_of(text, finish="stop"):
         content=text, reasoning_content=None))
 
 
-def test_what_a_retry_shows_of_the_broken_answer_is_the_rule():
-    text = '{"a": 1, "b": ' + "x" * 300
-    _cause, said = runner._reply_fault(reply_of(text), 100)
-    with at("find", fault_excerpt_chars={"before": 3, "after": 3,
-                                          "foreign": 5}):
-        _cause, less = runner._reply_fault(reply_of(text), 100)
-    assert len(less) < len(said)
-    foreign = 'x {"a": 1} ' + "y" * 400
-    _cause, long = runner._reply_fault(reply_of(foreign), 100)
-    with at("find", fault_excerpt_chars={"before": 60, "after": 20,
-                                          "foreign": 10}):
-        _cause, short = runner._reply_fault(reply_of(foreign), 100)
-    assert len(short) < len(long)
-
-
 SHAPE = {"type": "json_schema", "json_schema": {
     "name": "x", "schema": {"type": "object", "required": ["found"],
                             "properties": {"found": {"type": "array"}}}}}

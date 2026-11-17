@@ -87,6 +87,9 @@ and the request form against `config.*`, raising `ValueError` at once if
 form is neither `input` nor `messages`, or if the form is `messages` and
 `base_url` is empty. `text_only` is true in the `input` form and false in the
 `messages` form (`docpipe/embedding/api.py:103` to `125`).
+The index build never gives a text-only embedder an input with a picture: it
+drops those inputs with a warning before it fits the window
+(`chunking.embedding.without_pictures`), see [chunking](chunking.md).
 
 The `input` form, the default, is the OpenAI `/v1/embeddings` request.
 `embed()` scans items for an `image` key and refuses the whole call if any
@@ -173,7 +176,7 @@ package; storing a returned vector is the caller's job.
 | `EMBEDDING_BACKEND` | environment variable | `"local"` | Selects `local`, `api`, or an import-path spec; a `backend` argument to `get_embedder()` overrides it per call | `docpipe/embedding/config.py:19` |
 | `EMBEDDING_MODEL` | environment variable | `"Qwen/Qwen3-VL-Embedding-8B"` | HF model id, or served model name for `api` | `docpipe/embedding/config.py:21` |
 | `EMBEDDING_DIM` | environment variable | `4096` | Vector width the rest of the pipeline sizes its FAISS index to; not checked here | `docpipe/embedding/config.py:22` |
-| `EMBEDDING_MAX_TOKEN_LENGTH` | environment variable | `16384` | Token ceiling passed as `max_length`, overriding `qwen3_vl_embedding.py`'s own default of `8192` | `docpipe/embedding/config.py:23` |
+| `EMBEDDING_MAX_TOKEN_LENGTH` | environment variable | `16384` | Window of the local model in tokens, passed as `max_length`, overriding `qwen3_vl_embedding.py`'s own default of `8192`; longer inputs are an error, never truncated | `docpipe/embedding/config.py:23` |
 | `EMBEDDING_BATCH_SIZE` | environment variable | `8` | Texts per `/v1/embeddings` request; read by `ApiEmbedder`, and by `docpipe values-index` for the lines it embeds per call | `docpipe/embedding/config.py:24` |
 | `EMBEDDING_BASE_URL` | environment variable | `""` | Endpoint for `api`; empty raises `ValueError` at construction | `docpipe/embedding/config.py:27` |
 | `EMBEDDING_API_KEY` | environment variable | `"EMPTY"` | API key for `api`; the placeholder works against endpoints that do not check it | `docpipe/embedding/config.py:28` |
@@ -235,9 +238,15 @@ error raised anywhere (`docpipe/chunking/config.py:13` to `16`).
   is captured per thread; once every thread joins, the first captured
   exception is re-raised on the main thread and the whole call fails
   (`docpipe/chunking/qwen3_vl_embedding.py:470` to `484`).
-- A sequence truncated to `max_length` is still embedded, not refused, but
-  logged with its index and real token count
-  (`docpipe/chunking/qwen3_vl_embedding.py:344` to `351`).
+- An input over the window is never cut: the local model runs with
+  truncation off and raises `TooLongInput` naming the input and its token count.
+  The index splits its entries to fit before it asks
+  ([chunking](chunking.md), `docpipe/window.py`). The window comes from the
+  server (`max_model_len` of `/v1/models`) or, for the local model, from
+  `max_length`.
+- In the messages form an item the server refuses costs only itself
+  (`ApiEmbedder.embed_each`): it goes to the chunking stage's missed list, and
+  the others of the batch keep their vectors.
 
 ## Measured behaviour
 

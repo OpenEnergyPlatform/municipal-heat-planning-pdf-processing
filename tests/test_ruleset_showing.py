@@ -271,11 +271,11 @@ def test_the_title_page_is_the_page_and_the_figures_the_rules_say():
     figure = Source("figure", 3, "Abbildung eins.", {"page": 1})
     passages = [units.passage_of(s) for s in (figure, one, two)]
     texts = lambda lines: [line.text for line, _ in lines]  # noqa: E731
-    assert texts(units.title_page_of(passages, 5)) == ["Eins.", "Zwei."]
+    assert texts(units.title_page_of(passages)) == ["Eins.", "Zwei."]
     with rules.overlaid(title_page_with_figures=True):
-        assert texts(units.title_page_of(passages, 5))[0] == "Abbildung eins."
+        assert texts(units.title_page_of(passages))[0] == "Abbildung eins."
     with rules.overlaid(title_page_first=2):
-        assert texts(units.title_page_of(passages, 5)) == ["Zwei hier."]
+        assert texts(units.title_page_of(passages)) == ["Zwei hier."]
 
 
 def test_a_figure_is_read_in_the_pieces_the_rule_says():
@@ -561,19 +561,6 @@ def test_a_year_list_shows_its_quotes_as_the_rule_says():
     assert addressed.years_listed(listed) == ["1 2021 (base: Basisjahr 2021)"]
     with rules.overlaid(year_list_quote=False):
         assert addressed.years_listed(listed) == ["1 2021 (base)"]
-
-
-def test_a_long_list_with_groups_is_asked_in_two_steps_where_the_rule_says():
-    class Option:
-        definition = ""
-
-        def __init__(self, i, group):
-            self.label, self.group = f"o{i}", group
-    options = [Option(i, "a" if i < 3 else "b") for i in range(6)]
-    _lines, _choices, grouped = addressed.listing(options, 2)
-    assert grouped
-    with rules.overlaid(two_step_list=False):
-        assert not addressed.listing(options, 2)[2]
 
 
 def test_a_document_name_is_taken_from_the_title_page_as_the_rule_says():

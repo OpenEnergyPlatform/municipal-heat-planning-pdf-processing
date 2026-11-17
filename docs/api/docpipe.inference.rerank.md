@@ -23,11 +23,22 @@ is one request over the pool, and a passage's score is the sentences' scores
 put together as the rule `sentence_fusion` says (`fused`, the one place the
 vector search uses too).
 
+The reranker reads pieces, not whole passages (owner decision 2026-11-17,
+"**Nichts** kürzen, einfach ggf. clever aufteilen"): a passage is cut into
+the pieces the harvest reads (`pieces_of`: a section's heading with its
+lines, a table's title, head, lines under it and rows its rows stand under
+with its own rows), each piece is scored with the sentence, and the passage
+counts with its best piece. A piece the harvest hands over (an owner of a
+passage and a place) is read as it is. A pair of sentence and piece that
+does not fit the server's window (`window_for`: its `max_model_len`, the
+frame of a pair as the server counts it, its tokenizer) is split into parts,
+each with the lines its piece carries, and the piece counts with its best
+part. Nothing is cut, by us or by the server: no request asks it to cut.
+
 What a passage is shown as is the caller's: its text, and the picture of a
 figure where the run attaches figures (`image_of`) and the rule
-`rerank_with_images` allows it. The server cuts a pair that outgrows the
-model to the model's length (rule `rerank_truncate_tokens`, -1: the model's
-own), so no length of our own decides what it reads.
+`rerank_with_images` allows it; every piece of a figure goes with its
+picture.
 
 Every value is read when it is used (`docpipe.rules`), so a step of the flow
 may set its own: the model, the pool, the waiting time.
@@ -132,7 +143,8 @@ def __init__(self, base_url: str = "", model: str = "", pool: int = 0,
              api_key: str = "", post: Optional[Callable] = None,
              image_of: Optional[Callable] = None,
              pool_rule: str = "rerank_pool",
-             store: Optional[Scores] = None)
+             store: Optional[Scores] = None,
+             window: Optional[object] = None)
 ```
 
 #### Reranker.base_url
@@ -162,13 +174,36 @@ def api_key(self) -> str
 def post(self, body: dict) -> dict
 ```
 
+#### Reranker.window
+
+```python
+def window(self)
+```
+
+What one pair holds on this reranker's server (`window_for`), or
+the window this reranker was given. A reranker given its own way of
+sending (*post*) is given its server's window with it, or none: it
+asks no other server.
+
+#### Reranker.units_of
+
+```python
+def units_of(self, probe: str, source, image) -> list
+```
+
+[(place, text)] that *source* is read as for *probe*: each of
+its pieces (`pieces_of`), whole where the pair fits the window,
+else in parts, each with the lines its piece carries; place is the
+piece's number and the part's.
+
 #### Reranker.scores
 
 ```python
 def scores(self, document_id, probe: str, sources: list) -> list
 ```
 
-The reranker's score of each of *sources* for *probe*.
+The reranker's score of each of *sources* for *probe*: of its
+best piece, and of a piece its best part (`units_of`).
 
 #### Reranker.order
 
@@ -279,6 +314,36 @@ many sentences, the pool's best of each kind and those drawn up to
 place *upto*, each one's score in the order they came to, the passages
 left after the pool, the pairs scored now, kept from before or waited
 for, and the time it took. Never raises.
+
+### window_for
+
+```python
+def window_for(base: str, model: str, api_key: str,
+               post: Callable) -> Optional[object]
+```
+
+What one pair holds on the reranker at *base* (`docpipe.window.
+Window`): the window the server reports for *model*; the frame of a
+pair, the tokens the server counted for a pair of one character each;
+its tokenizer for a text; a picture at most as the model's processor
+scales one. Kept per server and model once learned whole. A window or
+frame that could not be learned (no window reported, a failed probe) is
+not kept: None now, and asked again after the interval the chat window
+uses (`window.ASK_AGAIN_S`), while pairs go as they are. One
+caller asks at a time; the others wait for its answer.
+
+### pieces_of
+
+```python
+def pieces_of(source) -> list
+```
+
+[(place, piece)] of a passage as the reranker reads it: the pieces
+the harvest cuts it into (`docpipe.chunking.pieces.IndexPiece`, the
+flow's `piece_lines` lines each), a section's with its heading, place
+the piece's number; a piece the harvest hands over (an owner id that is
+a passage and a place) is itself, as a `units.Chunk` where it brings
+one, else its text.
 
 ### document_of
 

@@ -180,8 +180,9 @@ class Option:
     # What the term means, as the request shows it: the spec's gloss where it
     # has one, else the definition (owner decision 2026-11-05, ticket 26).
     definition: str = ""
-    # The group the entry belongs to, by which a long list is asked first
-    # (`flow.Numbers.list_meanings`, owner decision 2026-11-08).
+    # The group the entry belongs to (owner decision 2026-11-08): a find
+    # that names a group has its list request choose among that group's
+    # entries (`addressed.Reader.entry`).
     group: str = ""
 
 

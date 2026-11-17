@@ -82,6 +82,29 @@ min(2 * asked, reply + window - budget). A request that asked for less than
 Where the window is not known, or the caller has no budget, the room is
 twice.
 
+### stage_fits
+
+```python
+def stage_fits(role: str, base_url: str, model: str, api_key: str = "", *,
+               picture: Optional[Callable] = None
+               ) -> Optional[Callable[[Sequence, int], bool]]
+```
+
+fits(messages, reply): does a chat request of *messages* with room for
+a reply of *reply* tokens fit the window the server of *role* reported at
+this run's preflight (`served_window`)? None where it reported none: a
+check that is true then is the caller's to make.
+
+The size judged is the size sent: the frame is what the server's own
+template makes of the same messages with their texts emptied
+(`windows.server_frame`), each picture costs what *picture* says (called
+with the picture's part; a request with pictures needs it), and the reply
+room is taken off the window. The texts are bounded by their UTF-8 bytes
+first, as a token holds at least one byte, and only texts whose bytes do
+not fit are counted exactly, by the server's tokenizer. Where the server
+counts nothing, bytes decide: a text that would have fitted may be
+split, never cut. The window is built once per server.
+
 ### thinking_enabled
 
 ```python

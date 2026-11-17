@@ -48,11 +48,14 @@ def close(self) -> None
 def write(
     self,
     pdf_name: str,
-    records: list[tuple[str, int, Optional[str], int]],
+    records: list[tuple],
 ) -> None
 ```
 
 Write one document's share of a batch; see write_embedding_ids_batch.
+A record is (embedding_type, section_index, item_id, faiss_id) and,
+after it, (piece, part, page, first_line, last_line); a record of
+four is piece 0, part 0.
 
 ## Functions
 
@@ -133,7 +136,8 @@ def table_values(section_id: Optional[int], t: dict) -> tuple
 ```
 
 A merged table as its Tables row holds it: (section, block_id, path,
-page_number, caption, markdown, bbox, qa, context_sentence).
+page_number, caption, markdown, bbox, qa, context_sentence); the
+sentences of a table asked in parts as one JSON list (`context.stored`).
 
 ### image_values
 
@@ -213,12 +217,14 @@ def get_existing_embeddings(
     pdf_name: str,
     *,
     doc_id: Optional[int] = None,
-) -> set[tuple[str, int, Optional[str]]]
+) -> set[tuple]
 ```
 
 Items of this PDF that already have embeddings, as a set of
-(embedding_type, section_index, item_id) — item_id is the table/figure
-block id, None for section-level embeddings. Empty if the doc is unknown.
+(embedding_type, section_index, item_id, piece, part) — item_id is the
+table/figure block id, None for section-level embeddings; piece None for
+a vector of a whole owner written before pieces. Empty if the doc is
+unknown.
 
 Runs on the calling thread's connection. Pass `doc_id` when the caller has
 already resolved it — the prepare loop asks document_id() first.
@@ -229,9 +235,37 @@ already resolved it — the prepare loop asks document_id() first.
 def ids_of_document(connection: sqlite3.Connection, doc_id: int) -> dict
 ```
 
-{(embedding_type, section_index, item_id): faiss_id} of one document,
-read only: what a new index file has to hold under the same ids
-(chunking/reembed.py).
+{(embedding_type, section_index, item_id, piece, part): faiss_id} of
+one document, read only: what a new index file has to hold under the
+same ids (chunking/reembed.py).
+
+### ensure_format
+
+```python
+def ensure_format(db_path: Path) -> int
+```
+
+Bring the database at *db_path* up to the format of this code
+(`store.schema.migrate`; format 2 gives Embeddings its pieces). Returns
+the format it had.
+
+### wholes_of_index
+
+```python
+def wholes_of_index(db_path: Path) -> list
+```
+
+The FAISS ids of every vector of a whole owner, written before the
+entries of the index were pieces (piece NULL): the embed step takes
+them out of the index and embeds their owners again in pieces.
+
+### drop_wholes
+
+```python
+def drop_wholes(db_path: Path, ids) -> int
+```
+
+Delete the Embeddings rows of *ids*; returns how many went.
 
 ### embedding_ids
 
@@ -314,14 +348,15 @@ id another row still holds and the faiss_id PK rejects the insert.
 def write_embedding_ids_batch(
     db_path: Path,
     pdf_name: str,
-    records: list[tuple[str, int, Optional[str], int]],
+    records: list[tuple],
 ) -> None
 ```
 
 Write FAISS embedding ids to the DB in one transaction.
 
-`records` are (embedding_type, section_index, item_id, faiss_id); item_id is
-the table/figure block id, None for sections. Records whose owner row
+`records` are (embedding_type, section_index, item_id, faiss_id, piece,
+part, page, first_line, last_line); item_id is the table/figure block
+id, None for sections. Records whose owner row
 cannot be resolved are skipped and counted — the vector is already in the
 FAISS index, so skipping one means index and database have drifted apart,
 which is worth a line in the log rather than silence.

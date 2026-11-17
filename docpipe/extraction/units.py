@@ -48,10 +48,11 @@ from .. import rules
 from .pipeline import Source
 from .verify import flat
 
-# How many lines a piece holds and how many lines of the plan's first page
-# are its title page are numbers of the flow (`flow.Numbers.piece_lines`,
-# `title_page_lines`; owner decision 2026-11-08, f: 8 lines, and 12 measured
-# only where a probe loses values against the runs before).
+# How many lines a piece holds is a number of the flow
+# (`flow.Numbers.piece_lines`; owner decision 2026-11-08, f: 8 lines, and 12
+# measured only where a probe loses values against the runs before). The title
+# page is the whole first page and the headings are every heading up to a
+# place: nothing is cut (owner decision 2026-11-17).
 
 # The letters of the blocks a request shows beside its own passage, and the
 # letters of other passages, in order (rules `letter_title_page`,
@@ -324,12 +325,12 @@ def table_lines(text: str) -> Optional[tuple]:
     if not any(line.role == "body" for line in lines):
         return None
     # The lines under a table, its notes ("* ohne Industrie", "Angaben in
-    # MWh/a"), go with every piece of it as its title and head do (owner
-    # decision 2026-11-17): what they say holds for each of its numbers.
-    carried = rules.get("table_foot_lines")
-    if carried:
-        fixed += [line.number for line in lines
-                  if line.role == "foot"][:carried]
+    # MWh/a"), go with every piece of it as its title and head do, all of
+    # them (owner decisions 2026-11-17: "Alle Zeilen unter einer Tabelle
+    # gehen mit jedem Stück mit"): what they say holds for each of its
+    # numbers.
+    if rules.get("table_foot_lines"):
+        fixed += [line.number for line in lines if line.role == "foot"]
     return lines, tuple(fixed)
 
 
@@ -346,27 +347,45 @@ def _row_indent(text: str) -> Optional[int]:
     return len(first) - len(word)
 
 
+def group_row(line: Line) -> bool:
+    """Is *line* a row that names a group of the rows under it ("AT",
+    "2030"): a body row of several cells that fills its first cell only
+    (owner decision 2026-11-17)?"""
+    cells = line.cells
+    return (line.role == "body" and len(cells) > 1 and bool(cells[0])
+            and not any(cell for cell in cells[1:]))
+
+
 def row_parents(lines) -> dict:
     """{line number: (rows above it that it stands under, top first)} of a
-    table's body rows (owner decision 2026-11-17). A row stands under the
-    nearest row above whose first cell is indented at least two places less
-    ("└ Erdgas" under "Wohngebäude"), and under the rows that row stands
-    under; a row with an empty first cell stands under none and keeps the
-    rows above it as they are. One place more or less is the spacing of a
-    transcription, not an indent."""
+    table's body rows (owner decisions 2026-11-17). A row stands under the
+    group row above it (`group_row`), up to the next group row, and under
+    the nearest row above whose first cell is indented at least two places
+    less ("└ Erdgas" under "Wohngebäude"), and under the rows that row
+    stands under; a group row begins its rows afresh, so a row is not
+    indented under a row of the group before. A row with an empty first
+    cell stands under its group alone and keeps the rows above it as they
+    are. One place more or less is the spacing of a transcription, not an
+    indent."""
     parents: dict = {}
     stack: list = []
+    group: Optional[int] = None
     for line in lines:
         if line.role != "body":
             continue
-        indent = _row_indent(line.text)
-        if indent is None:
+        if group_row(line):
+            group = line.number
+            stack = []
             continue
-        while stack and stack[-1][0] > indent - 2:
-            stack.pop()
-        if stack:
-            parents[line.number] = tuple(number for _, number in stack)
-        stack.append((indent, line.number))
+        above: list = [] if group is None else [group]
+        indent = _row_indent(line.text)
+        if indent is not None:
+            while stack and stack[-1][0] > indent - 2:
+                stack.pop()
+            above += [number for _, number in stack]
+            stack.append((indent, line.number))
+        if above:
+            parents[line.number] = tuple(above)
     return parents
 
 
@@ -506,15 +525,13 @@ class Cut:
     properties of `line_facts`). A table's title and head go with each of
     its pieces (*table_head*), a figure's caption with each of its pieces
     (*caption*); a figure's numbers are pieces of their own, its caption
-    one (*figure_numbers*). *headings* is how many headings a request shows
-    up to a place."""
+    one (*figure_numbers*)."""
     lines: int = 8
     new_piece: Optional[dict] = None
     across: bool = False
     table_head: bool = True
     caption: bool = True
     figure_numbers: bool = True
-    headings: int = 10
 
     def plain(self) -> bool:
         """Is this the cut of every flow before 2026-11-11: pieces of at
@@ -911,11 +928,11 @@ def passage_lines(passage: Passage, numbers) -> list:
         passage, [passage.line(n) for n in wanted])]
 
 
-def title_page_of(passages: list, count: int) -> list:
-    """[(Line, Source)] of the plan's title page: the first *count* lines
-    of its first page, else of the page the rule `title_page_also` names,
-    each the line of its passage (`Passage`), in the plan's order; [] for a
-    plan with no page."""
+def title_page_of(passages: list) -> list:
+    """[(Line, Source)] of the plan's title page: every line of its first
+    page, else of the page the rule `title_page_also` names, each the line
+    of its passage (`Passage`), in the plan's order; [] for a plan with no
+    page. Nothing of the page is cut (owner decision 2026-11-17)."""
     figures = rules.get("title_page_with_figures")
     for page in dict.fromkeys((rules.get("title_page_first"),
                                rules.get("title_page_also"))):
@@ -926,8 +943,6 @@ def title_page_of(passages: list, count: int) -> list:
                 continue
             for line in passage.lines:
                 lines.append((line, passage.source))
-                if len(lines) >= count:
-                    return lines
         if lines:
             return lines
     return []
