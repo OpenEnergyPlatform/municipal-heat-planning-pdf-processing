@@ -15,6 +15,17 @@
       "spatial_scope": "municipality"
     },
     "computed_same_once": "on",
+    "value_bounds": [
+      {
+        "parameter": "share",
+        "at_most": "100"
+      }
+    ],
+    "part_of_whole": {
+      "carrier": "out:total",
+      "sector": "out:total",
+      "technology": "out:total"
+    },
     "compute_least_parts": 2,
     "sum_printed_least_numbers": 3,
     "shown_number_places": 6,
@@ -29,6 +40,7 @@
     ],
     "alt_label_language": "de",
     "contract_language": "de",
-    "prompt_checks": []
+    "prompt_checks": [],
+    "context_sentence": true
   }
 }

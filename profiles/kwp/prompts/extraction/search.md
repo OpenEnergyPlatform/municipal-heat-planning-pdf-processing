@@ -28,8 +28,21 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 <!-- with: settings -->
 "settings" sind Festlegungen, die der Plan für alle seine Werte trifft, unter dem Buchstaben F. Sie gelten auch für diesen Wert, wo sie über ihn sprechen.
 
+<!-- with: outline -->
+"outline" nennt zu jedem Abschnitt, in dem die Treffer stehen, seine Überschrift und die Tabellen und Abbildungen darin, die nicht gezeigt sind, je mit Kennung und Titel: {"get":"item","id":"…"} unter "more" holt eine. Die Gliederung sagt nichts über diesen Wert; die Antwort bleibt eine gezeigte Zeile.
+
 <!-- with: get_image -->
 {"get":"image"} unter "more" fordert das Bild der Abbildung an, in der der Wert steht, {"get":"image","id":"B"} das Bild der Abbildung unter Buchstabe B: wenn die Zeilen der Abbildung die Antwort nicht sagen, ihr Bild sie aber zeigt, etwa die Farbe eines Legendeneintrags oder das Stück eines Balkens. Die Frage kommt dann mit dem Bild noch einmal; die Antwort bleibt eine gezeigte Zeile, etwa die Legendenzeile dieser Farbe.
 
+<!-- with: get_region -->
+Mit "region":[links,oben,rechts,unten], jede Zahl von 0 bis 1000 der Breite und Höhe des Bildes, kommt nur dieser Ausschnitt, vergrößert und schärfer, etwa {"get":"image","region":[0,700,1000,1000]} für eine Legende im unteren Drittel.
+
+<!-- with: get_section -->
+{"get":"section"} unter "more" holt den Abschnitt, in dem der Wert steht, von seinem Anfang an, {"get":"section","id":"B"} den Abschnitt des Stücks unter Buchstabe B, {"get":"section","id":"p17_img1"} den Abschnitt, in dem diese Tabelle oder Abbildung steht: wenn eine Festlegung wie „alle Angaben in MWh/a“ oder „im Zielszenario“ am Anfang des Abschnitts stehen kann.
+
 <!-- with: image -->
 Das Bild der Abbildung unter "image" ("passage": die Abbildung, in der der Wert steht) hängt an. Lies darin, was ihre Zeilen nicht sagen, und antworte mit der gezeigten Zeile, die es nennt, etwa der Legendenzeile der Farbe.
+
+<!-- with: image_region -->
+Das Bild zeigt nur den Ausschnitt unter "image_region" (links, oben, rechts, unten, von 0 bis 1000 der Breite und Höhe der Abbildung), vergrößert.
+

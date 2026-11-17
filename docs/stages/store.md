@@ -272,8 +272,8 @@ package:
 | `Sections` | `id`, `document` (FK), `section_number`, `title`, `content`, `page_number` | one retrieval chunk; `UNIQUE(document, section_number)` |
 | `SectionPages` | `section` (FK), `page` (FK) | pages a chunk spans, many to many |
 | `Segments` | `id`, `section` (FK), `ordinal`, `page` (FK), `kind`, `ref`, `text`, `bbox` | ordered text/table/figure pieces of a section, page-tagged; `kind` `CHECK`-constrained; `UNIQUE(section, ordinal)` |
-| `Tables` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `markdown`, `bbox`, `caption_source`, `qa` | one detected table, crop path, Markdown transcription, and what stage 5 measured of it |
-| `Images` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `description`, `bbox`, `caption_source` | one detected figure, crop path, prose description |
+| `Tables` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `markdown`, `bbox`, `caption_source`, `qa`, `context_sentence` | one detected table, crop path, Markdown transcription, and what stage 5 measured of it; `context_sentence` is the sentence of context its vectors were embedded with, NULL for none |
+| `Images` | `id`, `section` (FK), `block_id`, `path`, `page_number`, `caption`, `description`, `bbox`, `caption_source`, `context_sentence` | one detected figure, crop path, prose description; `context_sentence` as in `Tables` |
 | `Embeddings` | `faiss_id` (PK), `embedding_type`, `owner_kind`, `owner_id` | one FAISS vector; `owner_kind` `CHECK`-constrained; `UNIQUE(owner_kind, owner_id, embedding_type)` |
 
 `bbox` is a JSON array of source-PDF rectangles, `NULL` when unknown,

@@ -47,6 +47,7 @@ from .database import (
     next_faiss_id,
 )
 from .chunking import build_embedding_inputs
+from .context import ask_all, load_document
 from .embedding import (
     IncompleteIndex,
     Unembedded,
@@ -156,6 +157,10 @@ def run(
         from .sync import run_sync
         if not dry_run:
             merge_batch(data_dir, force=force)
+            # Rule `context_sentence` on: each table and figure asked once for
+            # its sentence (nothing when it is off); run_sync then finds the
+            # entries whose sentence changed.
+            ask_all(data_dir)
         run_sync(data_dir, db_path, [index_path, *[Path(p) for p in also]],
                  dry_run=dry_run)
         return
@@ -199,6 +204,10 @@ def run(
         log.info("Step 1: Merging preprocessing + imageprocessing outputs")
         log.info(sep)
         merge_batch(data_dir, force=force)
+
+    if "merge" in steps:
+        # Rule `context_sentence` (off: nothing is asked).
+        ask_all(data_dir)
 
     # Must run BEFORE the db step's forced delete removes the Embeddings rows,
     # or the embed step can no longer evict the stale vectors from the index.
@@ -283,8 +292,7 @@ def run(
                 unregistered.append(pdf_name)
                 return []
             existing = get_existing_embeddings(db_path, pdf_name, doc_id=doc_id)
-            with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
-                merged_data = json.load(f)
+            merged_data = load_document(pdf_dir)
             return [
                 inp for inp in build_embedding_inputs(merged_data, pdf_name, pdf_dir)
                 if (inp.embedding_type, inp.section_index, inp.item_id) not in existing

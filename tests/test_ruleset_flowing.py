@@ -322,7 +322,8 @@ def stubbed_search():
     reader = reader_of(Model(search=lambda p, n: {"at": "1",
                                                   "words": "2021"}))
     reader.take = lambda *a: ([], [object()], [{"get": "next"}])
-    reader.fetch = lambda plan, more, batch, seen, numbers: ["asked"]
+    reader.fetch = lambda plan, more, batch, seen, numbers, shown=None: \
+        ["asked"]
     plan = plan_of(TEXT, TABLE)
     coord = coord_of(plan)
     doc = Doc(plan, Counts(), [ENERGY])

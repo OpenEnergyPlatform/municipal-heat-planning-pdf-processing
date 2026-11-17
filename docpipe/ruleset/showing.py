@@ -159,6 +159,24 @@ RULES: tuple = (
        "its own. Off: it does not, so the first row under the head is the "
        "line after the last head line.", steps=("split",),
        where="units.py (table_lines)"),
+    _r("table_foot_lines", "flow", "Chunks", "whole",
+       "How many lines under a table, its notes such as \"* ohne "
+       "Industrie\" or \"Angaben in MWh/a\", every chunk of the table "
+       "shows as it shows the title and the head, and so every request "
+       "about one of its values: what such a line says holds for each "
+       "number of the table. Further lines under it are lines of chunks of "
+       "their own. 0: a line under a table is shown only in its own chunk.",
+       least=0, decided="2026-11-17", steps=("split",),
+       where="units.py (table_lines)"),
+    _r("table_parent_rows", "flow", "Chunks", "switch",
+       "Whether a row of a table whose first cell is indented under a row "
+       "above it, by spaces or a mark such as \"└\", is shown with the rows "
+       "it stands under wherever it is shown: in each of its chunks and in "
+       "every request about one of its values, so that \"└ Erdgas\" says "
+       "under \"Wohngebäude\" whose gas it is. Off: a row is shown alone, "
+       "and the row above it only where it stands in the same chunk.",
+       decided="2026-11-17", steps=("split",),
+       where="units.py (row_parents, Chunk.shown, passage_lines)"),
     _r("figure_part", "flow", "Chunks", "choice",
        "Which chunks of a figure a field reads. By the kind of field: a "
        "field of numbers reads the chunks of its numbers and any other field "
@@ -231,6 +249,17 @@ RULES: tuple = (
        "has one value only. First: the first find. All: every find, so that "
        "a search can make several rows.", choices=("first", "all"),
        steps=("search",), where="targets.py (over_hits)"),
+    _r("hit_outline", "flow", "Search", "whole",
+       "How many tables and figures a search request lists in an outline "
+       "beside the hits. For each section a hit stands in, its "
+       "heading and under it the tables and figures of that section the "
+       "request does not show, each as its placeholder and title line, so "
+       "that the model can fetch one with `item`. Standard 8; headings do "
+       "not count. The outline is no place to answer from: an answer is "
+       "still a shown line. Shown only where the answer may fetch an `item` "
+       "(rules `fetches`, `fetch_rounds`). 0: no outline.",
+       least=0, decided="2026-11-17", steps=("search",),
+       where="shows.py (_hit_outline)"),
     _r("about_other", "flow", "Search", "choice",
        "Which finds of a search are checked as finds from another place. "
        "Passage: a find in a passage other than the value's own. Any: every "
@@ -249,6 +278,37 @@ RULES: tuple = (
        "chunk after.", least=0,
        decided="2026-11-09", steps=("beside",),
        where="addressed.py (Plan.beside)"),
+    _r("sibling_places", "flow", "Search", "whole",
+       "How many chunks the step that shows the neighbours adds where the "
+       "same dimension was already read for another value of the same "
+       "table or section, such as the paragraph before a table that names "
+       "the scenario of its numbers. The chunk most of these values read it "
+       "in comes first. Each value is still asked for itself and answers "
+       "with an address of its own; nothing is taken over. 0: the "
+       "neighbours alone.", least=0,
+       decided="2026-11-17", steps=("beside",),
+       where="engine.py (Engine.read_near), addressed.py (Plan.read_near)"),
+    _r("item_labels", "flow", "Search", "texts",
+       "The words that label a table or a figure in its title line and in "
+       "the text, such as \"Tabelle 7\" or \"Abb. 3\". The label and the "
+       "number of a title line are found with them. A text names the item "
+       "where it prints the same number as a word (\"Tabelle 4\" is not "
+       "\"Tabelle 41\") after the title's label or an abbreviation of it "
+       "or the label the title abbreviates (one label without its final "
+       "period is the beginning of the other: Tab., Tab and Tabelle name "
+       "each other). Tables and figures are numbered each by themselves, "
+       "so \"Abbildung 4\" does not name \"Tabelle 4\".",
+       decided="2026-11-17", steps=("beside",),
+       where="addressed.py (Plan.mentioning)"),
+    _r("mentioning_pieces", "flow", "Search", "whole",
+       "How many text pieces that name the table or figure of the value by "
+       "its label and number (\"Tabelle 7 zeigt das Szenario ...\") the "
+       "step that shows the neighbours adds after the pieces where the "
+       "same dimension was read for the table's other values. Standard 2. "
+       "0: none.", least=0,
+       decided="2026-11-17", steps=("beside",),
+       where="engine.py (Engine.mention_pieces), addressed.py "
+             "(Plan.mentioning)"),
     _r("reuse_stored_order", "flow", "Search", "switch",
        "Whether the order of the chunks that an earlier run stored is "
        "used again where the fields and the chunks are the same. Off: the "

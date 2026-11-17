@@ -154,10 +154,23 @@ def wording_key(row: dict, fields: tuple) -> str:
                       for key in fields).strip(" /")
 
 
+def rounds_together(low: float, high: float, *, tolerance: float,
+                    drawn_tolerance: Optional[float] = None,
+                    drawn: bool = False) -> bool:
+    """Do two numbers differ by rounding only: within *tolerance*, or within
+    *drawn_tolerance* where one of them was read off a picture. The one
+    comparison `settle` and the comparison across runs
+    (`acrossruns.compare`) share."""
+    limit = drawn_tolerance if drawn_tolerance is not None and drawn \
+        else tolerance
+    return bool(high) and (high - low) / abs(high) <= limit
+
+
 def settle(iri: str, rows: list, address: Callable, *, fold: Callable,
            wording: tuple, tolerance: float, order: list,
            corroborate: bool, transcribed: bool = False,
-           keep_open: bool = False) -> tuple:
+           keep_open: bool = False,
+           drawn_tolerance: Optional[float] = None) -> tuple:
     """({iri: row} kept, Counter skipped, {iri: marks}) for one address.
 
     *address(row, label)* names a node split off by its wording or kept as
@@ -169,7 +182,10 @@ def settle(iri: str, rows: list, address: Callable, *, fold: Callable,
     `settle_order`, standard from owner decision 2026-09-23): "wording", the
     document's different wording splits them into a node each, named by that
     wording; "rounding", a rounded statement of the other loses to the more
-    precise one; "trust", a lower trust grade loses to the higher; and
+    precise one, within *tolerance*, or within *drawn_tolerance* where one
+    of the numbers was read off a picture (`drawn`, rule `drawn_tolerance`,
+    owner decision 2026-11-17: a number a figure only draws is an estimate);
+    "trust", a lower trust grade loses to the higher; and
     "contested", what is left is a question for a human. With *keep_open*
     each of those stays as a node of its own, marked as contested (owner
     decision 2026-11-02); without it, as for the strict graph, nothing
@@ -206,7 +222,8 @@ def settle(iri: str, rows: list, address: Callable, *, fold: Callable,
             got, lost, named = settle(
                 sub_iri, group, address, fold=fold, wording=wording,
                 tolerance=tolerance, order=order, corroborate=corroborate,
-                transcribed=transcribed, keep_open=keep_open)
+                transcribed=transcribed, keep_open=keep_open,
+                drawn_tolerance=drawn_tolerance)
             kept.update(got)
             skipped.update(lost)
             for node in got:
@@ -223,8 +240,10 @@ def settle(iri: str, rows: list, address: Callable, *, fold: Callable,
         if decision == "wording" and split():
             return kept, skipped, marks
         if decision == "rounding":
-            low, high = min(claims), max(claims)
-            if high and (high - low) / abs(high) <= tolerance:
+            if rounds_together(min(claims), max(claims),
+                               tolerance=tolerance,
+                               drawn_tolerance=drawn_tolerance,
+                               drawn=any(r.get("drawn") for r in distinct)):
                 best = max(precision(r) for r in distinct)
                 top = [r for r in distinct if precision(r) == best]
                 if len(top) == 1:

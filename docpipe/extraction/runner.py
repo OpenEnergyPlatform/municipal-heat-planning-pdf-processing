@@ -58,7 +58,7 @@ from contextlib import ExitStack, contextmanager, nullcontext
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Callable, Optional
+from typing import Callable, Optional, Sequence
 
 from docpipe import prompts
 from docpipe import providers
@@ -958,6 +958,9 @@ def make_retrieve(conn: sqlite3.Connection, index, id_to_pos: dict,
         trace_vector(document_id, probes, exclude, hits, vectors, started)
         return [_source_of(hit) for hit in hits]
 
+    # The vectors of sentences, from the query cache the search above filled:
+    # the page search asks them without embedding a sentence twice.
+    retrieve.vectors = embed_many
     return retrieve
 
 
@@ -1328,11 +1331,101 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
     *reranker()* makes one thread's reranker (`rerank.Reranker`), which puts
     the best passages of each kind in its own order before they are handed
     back; None leaves the vector search's order.
+
+    The word index of the corpus (`lexical.py`) is asked with the same
+    sentences, as many passages as the rule `search_words` says (owner
+    decision 2026-11-17: the vector search is weakest where a sentence is
+    most exact, at names, abbreviations and numbers). Its hits join the
+    passages the reranker orders, beside the best of the vector search and
+    those it draws (`rerank.pool_of`); without a reranker the two rankings
+    are merged by reciprocal rank (`hybrid.fuse`). The word decides nothing
+    about what a passage means: it only puts the passage before the
+    reranker. A corpus without a current word index is searched by its
+    vectors alone, which the log says once.
+
+    The page index of the corpus (`pages.py`) is asked with the vectors of
+    the same sentences, as many pages of the document as the rule
+    `search_pages` says (owner decision 2026-11-17, from the literature on
+    searching the page image: ColPali 2024, Nemotron ColEmbed V2 2026): the
+    passages that stand on the best pages join the reranker's candidates
+    beside the word hits. A page backs no value; the passage still has to
+    carry a line. A corpus without a current page index is searched
+    without it, which the log says once.
     """
     from docpipe.inference import query_cache
 
     local = threading.local()
     shared = content or make_shared_content()
+    # The word index, opened at the first search that asks it: [index or
+    # None] once opened.
+    word_index: list = []
+    word_lock = threading.Lock()
+    # The page index likewise: [index or None] once opened.
+    page_index: list = []
+
+    def pages_of() -> Optional[object]:
+        with word_lock:
+            if not page_index:
+                from docpipe.inference import pages
+                page_index.append(pages.connect(db_path))
+            return page_index[0]
+
+    def words_of() -> Optional[object]:
+        with word_lock:
+            if not word_index:
+                from docpipe.inference import lexical
+                word_index.append(lexical.connect(db_path))
+            return word_index[0]
+
+    def worded(document_id: int, queries: list, exclude: set) -> list:
+        """[(kind, id)] of the passages of *document_id* the word index
+        finds best for *queries*, each sentence searched on its own and
+        the lists merged by reciprocal rank, those of *exclude* left out,
+        as many as the rule `search_words` says."""
+        most = int(rules.get("search_words"))
+        if most <= 0 or not queries:
+            return []
+        index = words_of()
+        if index is None:
+            return []
+        from docpipe.inference import hybrid, lexical
+        started = time.time()
+        rankings = [[(kind, owner) for kind, owner, _document in
+                     lexical.search(index, query, document=document_id,
+                                    limit=most + len(exclude))]
+                    for query in queries]
+        hits = [key for key, _score in hybrid.fuse(rankings)
+                if key not in exclude][:most]
+        if trace.enabled():
+            trace.in_search("words", document_id,
+                            places=[list(key) for key in hits],
+                            ms=trace.ms_since(started))
+        return hits
+
+    def paged(document_id: int, queries: list, exclude: set,
+              retrieve) -> list:
+        """[(kind, id)] of the passages of *document_id* that stand on the
+        pages the page index finds closest to *queries* (their vectors are
+        the vector search's), those of *exclude* left out, as many pages as
+        the rule `search_pages` says."""
+        most = int(rules.get("search_pages"))
+        if most <= 0 or not queries:
+            return []
+        index = pages_of()
+        vectors_of = getattr(retrieve, "vectors", None)
+        if index is None or vectors_of is None:
+            return []
+        from docpipe.inference import pages
+        started = time.time()
+        found = index.search(vectors_of(list(queries)), document_id, most)
+        places = [key for key in pages.passages_on(local.conn, document_id,
+                                                   found)
+                  if key not in exclude]
+        if trace.enabled():
+            trace.in_search("pages", document_id, pages=list(found),
+                            added=[list(key) for key in places],
+                            ms=trace.ms_since(started))
+        return places
 
     def connections():
         if getattr(local, "conn", None) is None:
@@ -1371,8 +1464,38 @@ def make_more_sources(db_path: Path, index, id_to_pos: dict,
                     continue
                 taken.add(key)
                 found.append(source)
+            words = worded(document_id, list(queries), set(exclude))
+            for key in words:
+                # A hit the vector search did not hand back (its *limit*)
+                # joins with the content of its passage.
+                if key in taken:
+                    continue
+                passage = shared(local.conn, *key)
+                if passage is not None:
+                    taken.add(key)
+                    found.append(_source_of({"score": None, **passage},
+                                            via="words"))
+            leaves = paged(document_id, list(queries), set(exclude),
+                           retrieve)
+            for key in leaves:
+                if key in taken:
+                    continue
+                passage = shared(local.conn, *key)
+                if passage is not None:
+                    taken.add(key)
+                    found.append(_source_of({"score": None, **passage},
+                                            via="pages"))
             if local.rerank is not None:
-                found = local.rerank.order(document_id, list(queries), found)
+                found = local.rerank.order(document_id, list(queries), found,
+                                           also=words + leaves)
+            elif words or leaves:
+                from docpipe.inference import hybrid
+                by_key = {(s.owner_kind, s.owner_id): s for s in found}
+                found = [by_key[key] for key, _score in hybrid.fuse(
+                    [list(by_key)] + [r for r in (words, leaves) if r])
+                    if key in by_key]
+            if limit:
+                found = found[:limit]
         except Exception as exc:
             # Raised, never an empty list: a search that could not run is
             # no finding about the plan (owner decision 2026-11-09), and
@@ -2087,14 +2210,70 @@ def system_text(prompt, example) -> str:
     if len(pair) > 1 and NOTHING_PLACE not in places:
         raise KeyError(f"{prompt.id}: the request shows two replies and the "
                        f"prompt has a place for one")
-    values = {name: json.dumps(one, ensure_ascii=False,
-                               separators=(",", ":"))
+    # The example in the order of the keys of the reply form (rule
+    # `reply_order`). Where the rule `example_place` says "message" the
+    # system prompt names the payload key that holds it instead, so that it
+    # is the same for every request of a kind (`example_keys`).
+    in_message = rules.get("example_place") == "message"
+    values = {name: (json.dumps(name) if in_message else
+                     json.dumps(addressed_map.in_reply_order(one),
+                                ensure_ascii=False, separators=(",", ":")))
               for name, one in zip((EXAMPLE_PLACE, NOTHING_PLACE), pair)}
     # A place the request shows no reply for (the flow's switch for the
     # empty example is off, or the request has no example) is empty text.
     return prompt.render(**{name: values.get(name, "")
                             for name in (EXAMPLE_PLACE, NOTHING_PLACE)
                             if name in places})
+
+
+def example_keys(prompt, example) -> dict:
+    """The keys a request's payload gets where the rule `example_place` says
+    "message" (owner decision 2026-11-17, from the literature on requests
+    that share their beginning: BatchLLM, SGLang): "example" and "nothing"
+    hold the example replies, in the order of the rule `reply_order`, for the
+    places the prompt has; the system prompt names them (`system_text`).
+    Empty under "prompt", or for a prompt without such a place."""
+    places = getattr(prompt, "placeholders", ())
+    if example is None or rules.get("example_place") != "message":
+        return {}
+    pair = tuple(example) if isinstance(example, (tuple, list)) \
+        else (example,)
+    return {name: addressed_map.in_reply_order(one)
+            for name, one in zip((EXAMPLE_PLACE, NOTHING_PLACE), pair)
+            if name in places}
+
+
+def with_example_keys(conversation: list, keys: dict) -> list:
+    """*conversation* with *keys* as the last keys of the payload in its
+    last message (the JSON the message starts with; its words after the
+    JSON stay after it)."""
+    if not keys or not conversation:
+        return conversation
+    last = dict(conversation[-1])
+    content = last.get("content")
+    texts = [part for part in content if part.get("type") == "text"] \
+        if isinstance(content, list) else []
+    text = content if isinstance(content, str) else \
+        (texts[0].get("text", "") if texts else None)
+    if text is None:
+        return conversation
+
+    def put(old: str) -> str:
+        try:
+            data, end = json.JSONDecoder().raw_decode(old)
+        except ValueError:
+            data, end = None, 0
+        if not isinstance(data, dict):
+            return (old + "\n\n" if old else "") + json.dumps(
+                keys, ensure_ascii=False, indent=1)
+        return json.dumps({**data, **keys}, ensure_ascii=False,
+                          indent=1) + old[end:]
+    if isinstance(content, str):
+        last["content"] = put(content)
+    else:
+        last["content"] = [{**part, "text": put(part["text"])}
+                           if part is texts[0] else part for part in content]
+    return [*conversation[:-1], last]
 
 
 def ask_in_grammar(client, prompt, conversation: list, shape: dict,
@@ -2136,6 +2315,8 @@ def _ask_in_grammar(client, prompt, conversation: list, shape: dict,
     client = _repeating(client)
     wanted = request_wanted(where)
     text = system_text(prompt, example)
+    conversation = with_example_keys(conversation,
+                                     example_keys(prompt, example))
     failures = Failures(document_id, where=where)
     for attempt in failures.attempts():
         limit = request_room(text, conversation, wanted)
@@ -2154,6 +2335,7 @@ def _ask_in_grammar(client, prompt, conversation: list, shape: dict,
             trace.event(f"{where}_ask", document_id, attempt=attempt,
                         ms=int((time.time() - started) * 1000),
                         prompt_tokens=getattr(usage, "prompt_tokens", None),
+                        cached_tokens=token_usage.cached_of(usage),
                         completion_tokens=getattr(usage, "completion_tokens",
                                                   None),
                         **({"box": box} if box else {}), **noted)
@@ -2227,7 +2409,7 @@ def run_each(jobs: list, run: Callable) -> list:
 ASK_KEYS = {"transcribe": "caption", "find": "found", "docfield": "found",
             "coord": "at", "search": "at", "list": "entry",
             "names": "entry", "check": "about", "work": "found",
-            "phrase": "phrase"}
+            "phrase": "phrase", "assign": "entry"}
 
 
 def request_prompt(parts, payload: dict, shape: Optional[dict] = None):
@@ -2241,16 +2423,17 @@ def request_prompt(parts, payload: dict, shape: Optional[dict] = None):
 
 
 def reply_offers(shape: Optional[dict]) -> set:
-    """{"more", "get_image"} as far as the reply form *shape* offers them:
-    what a request's prompt tells about besides its payload."""
+    """{"more", "get_image", "get_region", "get_section"} as far as the
+    reply form *shape* offers them: what a request's prompt tells about
+    besides its payload."""
     schema = ((shape or {}).get("json_schema") or {}).get("schema") or {}
     more = (schema.get("properties") or {}).get("more")
     if not isinstance(more, dict):
         return set()
     gets = (((more.get("items") or {}).get("properties") or {})
             .get("get") or {}).get("enum") or ()
-    return {"more"} | ({"get_image"} if addressed_map.IMAGE in gets
-                       else set())
+    items = ((more.get("items") or {}).get("properties") or {})
+    return {"more"}         | ({"get_image"} if addressed_map.IMAGE in gets else set())         | ({"get_region"} if "region" in items else set())         | ({"get_section"} if addressed_map.SECTION in gets else set())
 
 
 def make_asks(profile=None) -> Optional[addressed_map.Asks]:
@@ -2304,7 +2487,8 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
                     {"role": "assistant", "content": json.dumps(
                         one["answer"], ensure_ascii=False)}]
         picture = payload.get(addressed_map.PICTURE)
-        part = _image_part(picture) if picture else None
+        part = (_image_part(picture, payload.get(addressed_map.REGION))
+                if picture else None)
         if part is not None:
             return out + [{"role": "user", "content": [
                 {"type": "text", "text": content}, part]}]
@@ -2366,6 +2550,7 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
         list=asker("list"), names=optional("names"),
         search=asker("search"), follow=follow, check=optional("check"),
         work=optional("work"), phrase=optional("phrase"),
+        assign=optional("assign"),
         own=general_ask, transcribe=optional("transcribe"))
 
 
@@ -2513,7 +2698,8 @@ def make_harvest(spec: Spec, *, db_path: Optional[Path], out: Path,
     transcripts = addressed_map.Transcripts(
         None, Path(out) / "transcripts", transcript_fingerprint(profile),
         lambda source: addressed_map.image_key(image_path_of(source,
-                                                             image_root)))
+                                                             image_root)),
+        trace=trace.event)
     numbers = take_flow(profile)
     orders = addressed_map.Orders(order, seek, Path(out) / "survey",
                                   trace=trace.event,
@@ -2918,9 +3104,10 @@ _IMAGES: dict = {}
 _IMAGES_LOCK = threading.Lock()
 
 
-def _image_data_url(path: str) -> Optional[str]:
-    """The crop, read, downscaled and base64'd — once per file, size and
-    format per run.
+def _image_data_url(path: str,
+                    region: Optional[Sequence] = None) -> Optional[str]:
+    """The crop, read, downscaled and base64'd — once per file, size, format
+    and region per run.
 
     Every parameter asks the same table again, so the same PNG used to be
     reopened, resampled and re-encoded once per parameter. Bounded
@@ -2935,17 +3122,36 @@ def _image_data_url(path: str) -> Optional[str]:
     artefacts blur first — and a blurred digit is the failure this whole
     stage exists to avoid. Deliberately not imported from llm_client, which
     binds the QA prompts at import time.
+
+    A *region* ([left, top, right, bottom], 0 to 1000 of the picture's width
+    and height, `addressed.region_of`) is cut out of the crop as it is
+    stored and sent at the size of a whole picture: a smaller part is
+    enlarged to `image_max_side`, so that what was too small to read in the
+    whole picture comes sharper (owner decision 2026-11-17).
     """
     import base64
     import io
     side, kind = image_max_side(), rules.get("image_format")
-    key = (path, side, kind)
+    region = tuple(region) if region else None
+    key = (path, side, kind, region)
     with _IMAGES_LOCK:
         if key in _IMAGES:
             return _IMAGES[key]
     try:
         from PIL import Image
         img = Image.open(path)
+        if region:
+            width, height = img.size
+            left, top, right, bottom = region
+            box = (width * left // 1000, height * top // 1000,
+                   max(width * right // 1000, width * left // 1000 + 1),
+                   max(height * bottom // 1000, height * top // 1000 + 1))
+            img = img.crop(box)
+            if max(img.size) < side:
+                scale = side / max(img.size)
+                img = img.resize((max(1, round(img.size[0] * scale)),
+                                  max(1, round(img.size[1] * scale))),
+                                 Image.LANCZOS)
         if max(img.size) > side:
             img.thumbnail((side, side))
         if kind == "jpeg" and img.mode not in ("RGB", "L"):
@@ -2966,9 +3172,11 @@ def _image_data_url(path: str) -> Optional[str]:
     return url
 
 
-def _image_part(path: str) -> Optional[dict]:
-    """A table or figure crop as a chat message part, or None if unreadable."""
-    url = _image_data_url(str(path))
+def _image_part(path: str,
+                region: Optional[Sequence] = None) -> Optional[dict]:
+    """A table or figure crop as a chat message part, or None if unreadable;
+    with *region* only that part of it (`_image_data_url`)."""
+    url = _image_data_url(str(path), region)
     return None if url is None else {"type": "image_url", "image_url": {"url": url}}
 
 
@@ -3035,6 +3243,7 @@ def _asked(stage: str, document_id, response, *, attempt: int,
     trace.event(f"{stage}_ask", document_id, attempt=attempt,
                 ms=int((time.time() - started) * 1000),
                 prompt_tokens=getattr(usage, "prompt_tokens", None),
+                cached_tokens=token_usage.cached_of(usage),
                 completion_tokens=getattr(usage, "completion_tokens", None),
                 **({"box": box} if box else {}), **noted)
 
@@ -5027,6 +5236,17 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
                         help="No harvest: write the JSONL in OUT as the "
                              "drawing of the profile's graph file says, as "
                              "TTL")
+    parser.add_argument("--also-harvest", type=Path, action="append",
+                        default=None, metavar="DIR",
+                        help="With --serialize: a further harvest directory "
+                             "of the same plans (repeatable). Its rows are "
+                             "compared with this run's numbers and never "
+                             "written: a node another run disagrees with "
+                             "(another number at the node, or the same "
+                             "number at the same place under another node) "
+                             "is marked as contested in the full graph and "
+                             "left out of the strict graph. No model is "
+                             "asked")
     parser.add_argument("--no-provenance", dest="provenance",
                         action="store_false",
                         help="With --serialize: do not write the "
@@ -5236,8 +5456,11 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
         from . import graph, provenance
         # The drawing of the profile's graph file says what an answer
         # becomes; the program writes it (`graph.py`).
+        from . import acrossruns
+        other_runs = acrossruns.read_runs(args.also_harvest)
         try:
-            serializer = graph.make_serializer(profile, args.db)
+            serializer = graph.make_serializer(profile, args.db,
+                                               other_runs=other_runs)
         except graph.GraphError as exc:
             parser.error(str(exc))
         described = profile.component("kg", "PROVENANCE") or {}
@@ -5262,6 +5485,7 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
             return 1
         log.info("serialize: %d tuple(s) from %d document(s) -> %s",
                  sum(counts.values()), len(counts), args.serialize)
+        serializer.writer.log_across_runs()
         written = [Path(args.serialize)]
         # A profile whose data schema closes its lists more tightly than the
         # graph does writes the graph a second time as that schema takes it,
@@ -5270,10 +5494,11 @@ def _main(argv: Optional[list], stack: ExitStack) -> int:
             beside = Path(args.serialize).with_suffix(".strict.ttl")
             try:
                 indexes.append({})
-                taken = serialize_run(args.out, beside,
-                                      graph.make_serializer(
-                                          profile, args.db, strict=True),
+                strict_serializer = graph.make_serializer(
+                    profile, args.db, strict=True, other_runs=other_runs)
+                taken = serialize_run(args.out, beside, strict_serializer,
                                       index=indexes[-1])
+                strict_serializer.writer.log_across_runs()
                 log.info("serialize: %d document(s) as the data schema takes "
                          "them -> %s", len(taken), beside)
                 written.append(beside)

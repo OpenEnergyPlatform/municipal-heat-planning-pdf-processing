@@ -717,7 +717,8 @@ the box "Ask the model" with a preset (`{"box": "ask", "preset": NAME}`;
 the presets beside the other kinds: write out the figures, order the chunks for
 each field, ask a field once for the whole document, ask for the values in a
 chunk, ask a dimension at the value's line or over the search hits, write a
-search sentence, check that a find is about the value, choose a list entry and
+search sentence, check that a find is about the value, ask which field a number no
+question took is, choose a list entry and
 compute shares and sums; the second reading and the example of a field are
 presets of the library of the passes. A step has five parts, each shown as a
 setting that "as its preset" takes back to the preset's: the request (the kind

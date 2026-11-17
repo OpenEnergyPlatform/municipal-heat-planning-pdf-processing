@@ -27,7 +27,7 @@ import json
 from typing import Callable, Optional
 
 from .. import rules
-from . import trace
+from . import lookup, trace
 from .units import (Chunk, Shown, letter_headings, letter_settings,
                     letter_title_page, own_lines, passage_lines)
 
@@ -253,6 +253,60 @@ def _next_chunks(req, value, spec):
     if not req.batch:
         return OMIT
     return req.letter_blocks(req.batch)
+
+
+def _hit_outline(req, value, spec):
+    """The tables and figures of the sections the hits stand in that the
+    request does not show, as many as the rule `hit_outline` says, so that
+    the model can fetch one (owner decision 2026-11-17, from the literature
+    on reading long documents): [{"heading", "items": [{"id", "title"}]}],
+    sections and items in the order of the plan. Only where the answer may
+    fetch an item (an outline no answer can use is no help); the outline is
+    no place to answer from, an answer is still a shown line."""
+    from . import addressed
+    plan, chunks = req.plan, req.chunks
+    limit = int(rules.get("hit_outline"))
+    if limit <= 0 or not chunks or plan is None \
+            or not getattr(req.ask, "fetch", False) \
+            or "item" not in addressed.fetches():
+        return OMIT
+    shown = {(source.owner_kind, source.owner_id)
+             for block in req.shown.blocks.values()
+             for _, _, source in block.entries}
+    shown |= {chunk.owner for chunk in chunks}
+    sections: set = set()
+    for chunk in chunks:
+        source = chunk.passage.source
+        if source.owner_kind == "section":
+            sections.add(source.owner_id)
+        elif (source.provenance or {}).get("parent_section") is not None:
+            sections.add(source.provenance["parent_section"])
+    heading: dict = {}
+    items: dict = {}
+    for source in plan.sources:
+        prov = source.provenance or {}
+        if source.owner_kind == "section" and source.owner_id in sections:
+            heading[source.owner_id] = lookup.title_of(source)
+        elif source.owner_kind in ("table", "figure") \
+                and prov.get("parent_section") in sections \
+                and prov.get("block_id") \
+                and (source.owner_kind, source.owner_id) not in shown:
+            passage = plan.passages.get((source.owner_kind, source.owner_id))
+            lines = [line.text for line in passage.lines] \
+                if passage is not None else \
+                (source.text or "").split("\n")
+            title = next((text.strip() for text in lines if text.strip()), "")
+            items.setdefault(prov["parent_section"], []).append(
+                {"id": prov["block_id"], "title": title})
+    out: list = []
+    for section in dict.fromkeys(s.owner_id for s in plan.sources
+                                 if s.owner_kind == "section"):
+        if section in items and limit > 0:
+            taken = items[section][:limit]
+            limit -= len(taken)
+            out.append({"heading": heading.get(section, ""),
+                        "items": taken})
+    return out or OMIT
 
 
 def take(req: Request, supply, size: int):
@@ -679,6 +733,11 @@ SHOWS: dict = {
                     "(chunks per request): those a reply asked to see "
                     "first, none shown before, each under a letter. Where "
                     "none is left, the request is not made.", _next_chunks),
+    "hit_outline": ("the tables and figures around the hits",
+                    "For each section the hits stand in, its heading and the "
+                    "tables and figures of it not shown, each with its "
+                    "placeholder and title, where the answer may fetch an "
+                    "item (rule hit_outline).", _hit_outline),
     "headings": ("the headings above it",
                  "The headings above the chunk's first line (rule "
                  "show_headings).", _headings),

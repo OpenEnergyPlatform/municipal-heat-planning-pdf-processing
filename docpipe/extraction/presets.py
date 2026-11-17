@@ -257,6 +257,31 @@ PRESETS = {preset.name: preset for preset in (
         "finds", {"to": "values", "keep": "now"},
         needs=("piece",), decided="2026-11-08"),
     Preset(
+        "assign", "Ask which field a number is",
+        "Asks, for each number of a table or figure that no field's question "
+        "took, which field of the Spec that reads numbers it is, or none: "
+        "the request shows the number's line with the head of its table, the "
+        "headings above it and the numbered list of the fields, and the "
+        "answer is the number of the field, 0 for none. Where a field is "
+        "named, the number becomes a value of it at that address and goes "
+        "through the same coordinates and checks as every value. It costs "
+        "one request for each such number, and a plan with many cost or "
+        "area tables has many. The rule `ask_untaken` switches it off; "
+        "where the profile writes no prompt `assign`, nothing is asked. "
+        "Example: the cell \"1.200\" of a table of the buildings by "
+        "construction year is the field \"number of buildings\". Unlike "
+        "\"Ask for the values in a chunk\", which asks a field for its "
+        "values, this step asks a number for its field. To change it: the "
+        "inputs, the follow-up questions and the answers in the wrong form; "
+        "the prompt `assign` shapes the question.",
+        "assign",
+        (i("value", "number", "value"),
+         i("passage", "number", "value_lines"),
+         i("headings", "number", "value_headings"),
+         i("list", "options", "always")),
+        "entry", {"to": "assign"},
+        settings=(LINES_AROUND,), needs=("list",), decided="2026-11-17"),
+    Preset(
         "coord", "Ask a dimension at the value's line",
         "Asks one dimension of a value, such as its year or its energy "
         "carrier, where the value stands: the request shows its line with the "
@@ -320,7 +345,10 @@ PRESETS = {preset.name: preset for preset in (
          i("question", "dimension", "question"),
          i("known", "dimension", "known"),
          i("earlier_answer_not_held", "dimension", "not_held"),
-         i("passages", "hits", "next_chunks")),
+         i("passages", "hits", "next_chunks"),
+         # Owner decision 2026-11-17: the unshown tables and figures of the
+         # hits' sections (rule `hit_outline`).
+         i("outline", "hits", "hit_outline")),
         "place", {"to": "dimension", "where": "hits"},
         values={"fetch": True, "picture": True},
         settings=(PER_REQUEST,), needs=("round", "coordinate"),

@@ -42,6 +42,10 @@ Every attribute below is one seam `docpipe/` or a script asks a profile
 for by name, described in general on [profiles](../profiles.md); this
 table gives this profile's own answer.
 
+Among the rules of its own `rules.json`, the profile switches on `context_sentence`
+(the sentence of context before each table and figure in the index, see
+[chunking](../stages/chunking.md)); the core's default is off.
+
 | Stage | Module | Attribute | Contributes |
 |---|---|---|---|
 | File processing | `source.py`, `schema.sql`, `store.py` | `SOURCE`, `DocumentMeta` | the crawl as a `Source`, and the profile's table and upsert helper |

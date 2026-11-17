@@ -55,9 +55,11 @@ from docpipe.captions import resolve_title
 
 from .chunking import build_embedding_inputs
 from .config import DOCUMENT_JSON
+from .context import load_document
 from .database import (_FIGURE_TYPES, _SECTION_TYPES, _TABLE_TYPES,
                        _ensure_bbox_columns, _ensure_caption_source_column,
-                       _ensure_table_qa_column, _resolve_document_id, connect,
+                       _ensure_context_sentence_column, _ensure_table_qa_column,
+                       _resolve_document_id, connect,
                        enrich_page_source, image_values, insert_provenance,
                        page_rows, section_content, segment_rows, table_values)
 from .reembed import record_path
@@ -65,9 +67,9 @@ from .reembed import record_path
 log = logging.getLogger(__name__)
 
 TABLE_FIELDS = ("id", "section", "block_id", "path", "page_number", "caption",
-                "markdown", "bbox", "qa", "caption_source")
+                "markdown", "bbox", "qa", "context_sentence", "caption_source")
 IMAGE_FIELDS = ("id", "section", "block_id", "path", "page_number", "caption",
-                "description", "bbox", "caption_source")
+                "description", "bbox", "context_sentence", "caption_source")
 
 # The vectors of one document, by owner. CROSS JOIN drives from Sections,
 # as in database.py.
@@ -266,11 +268,13 @@ def plan_document(conn, doc_id: int, name: str, merged: dict, pdf_dir: Path,
     for t in old_tables:
         held[t["section"]]["tables"].append(
             {"id": t["block_id"], "caption": t["caption"],
-             "markdown": t["markdown"], "path": t["path"]})
+             "markdown": t["markdown"], "path": t["path"],
+             "context_sentence": t["context_sentence"]})
     for f in old_figures:
         held[f["section"]]["figures"].append(
             {"id": f["block_id"], "caption": f["caption"],
-             "description": f["description"], "path": f["path"]})
+             "description": f["description"], "path": f["path"],
+             "context_sentence": f["context_sentence"]})
     old_doc = {"sections": [
         {"title": title, "content": content or "", **held[row_id]}
         for row_id, title, content, _page in old]}
@@ -411,8 +415,9 @@ class SyncReport:
 
 
 def _read(pdf_dir: Path) -> dict:
-    with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as fh:
-        return json.load(fh)
+    # With the rule `context_sentence` on, the sentences kept for the document
+    # are on its tables and figures: a changed sentence is a changed input.
+    return load_document(pdf_dir)
 
 
 def run_sync(data_dir: Path, db_path: Path, index_paths, *,
@@ -455,6 +460,7 @@ def run_sync(data_dir: Path, db_path: Path, index_paths, *,
         _ensure_bbox_columns(conn)
         _ensure_table_qa_column(conn)
         _ensure_caption_source_column(conn)
+        _ensure_context_sentence_column(conn)
         for pdf_dir, doc_id in to_write:
             # Planned again on the rows as they stand now.
             plan = plan_document(conn, doc_id, pdf_dir.name, _read(pdf_dir),

@@ -64,6 +64,7 @@ import contextlib
 import contextvars
 import copy
 import dataclasses
+import decimal
 import hashlib
 import json
 import logging
@@ -97,13 +98,15 @@ log = logging.getLogger(__name__)
 
 # The requests and their prompts, one task each.
 KINDS = ("transcribe", "find", "docfield", "coord", "list", "names",
-         "search", "check", "follow", "work", "phrase")
+         "search", "check", "follow", "work", "phrase", "assign")
 PROMPT_IDS = {kind: f"extraction/{kind}" for kind in KINDS}
 # Requests a profile may leave unwritten: the check of a find from another
 # passage, the names request and the work request of a run that builds no
-# list of names or works (`runner.names_asked`), and the sentence a search
-# goes with, without which it goes with the field's.
-OPTIONAL = ("check", "names", "work", "phrase")
+# list of names or works (`runner.names_asked`), the sentence a search
+# goes with, without which it goes with the field's, and the question of
+# which field a number no question took belongs to, without which none is
+# asked (`assign`, owner decision 2026-11-17).
+OPTIONAL = ("check", "names", "work", "phrase", "assign")
 
 # Why a find or a coordinate's answer does not hold beyond the two checks of
 # the harvest: its address names no line the request showed, or its words
@@ -356,7 +359,39 @@ def is_question(sentence: str) -> bool:
 
 def _format(name: str, schema: dict) -> dict:
     return {"type": "json_schema",
-            "json_schema": {"name": name, "schema": schema}}
+            "json_schema": {"name": name, "schema": in_reply_order(schema)}}
+
+
+def in_reply_order(node):
+    """A reply form, or an example of a reply, with its keys in the order
+    the rule `reply_order` says (owner decision 2026-11-17, from the
+    literature on forced formats: the order of an answer's keys can change
+    what the model writes, so it is a setting that can be measured).
+    "address_first" keeps every form as it is written, the line before its
+    words; "words_first" puts "words" first in every object that has it,
+    so the model writes the words of the value before it names their
+    line. Nothing else changes: the same keys, the same checks."""
+    if rules.get("reply_order") != "words_first":
+        return node
+    return _words_first(node)
+
+
+def _words_first(node):
+    if isinstance(node, list):
+        return [_words_first(one) for one in node]
+    if not isinstance(node, dict):
+        return node
+    out = {key: _words_first(value) for key, value in node.items()}
+    properties = out.get("properties")
+    if isinstance(properties, dict) and "words" in properties:
+        out["properties"] = {"words": properties["words"],
+                             **{key: value for key, value
+                                in properties.items() if key != "words"}}
+    elif "words" in out and "properties" not in out:
+        out = {"words": out["words"],
+               **{key: value for key, value in out.items()
+                  if key != "words"}}
+    return out
 
 
 def reply_format(schema: dict) -> dict:
@@ -393,26 +428,59 @@ IMAGE = "image"
 # The key of a request's payload that carries the picture's file to the
 # runner, which sends it beside the message and not in it (`runner.own`).
 PICTURE = "_picture"
+# The part of a picture a request asked for (owner decision 2026-11-17, from
+# the literature on reading figures: the model names a region and gets it
+# cut out of the stored crop at the size of a whole picture, sharper): four
+# numbers from 0 to 1000, left, top, right and bottom. The payload shows it
+# under this key, and the runner cuts the picture by it.
+REGION = "image_region"
+# The section a line stands in, from its start in the order of the plan
+# (owner decision 2026-11-17, from the literature on reading long
+# documents: after a hit the model reads its whole section), as many
+# pieces as the rule `fetch_section_pieces` says.
+SECTION = "section"
 
 
 def fetches(image: bool = False) -> list:
     """What a reply may fetch itself (rule `fetches` of the step that
-    asks), in the order of `GETS`; with *image* the picture of a shown
-    figure too, where the rule allows it."""
+    asks), in the order of `GETS` and then the section of a line; with
+    *image* the picture of a shown figure too, where the rule allows it."""
     allowed = rules.get("fetches")
-    return [get for get in GETS if get in allowed] \
+    return [get for get in GETS + (SECTION,) if get in allowed] \
         + ([IMAGE] if image and IMAGE in allowed else [])
 
 
 def more_schema(image: bool = False) -> dict:
+    properties = {"get": {"enum": fetches(image)},
+                  "at": {"type": "string"},
+                  "id": {"type": "string"},
+                  "pattern": {"type": "string"},
+                  "text": {"type": "string"}}
+    if IMAGE in properties["get"]["enum"] and rules.get("image_regions"):
+        properties["region"] = {"type": "array", "minItems": 4,
+                                "maxItems": 4,
+                                "items": {"type": "integer", "minimum": 0,
+                                          "maximum": 1000}}
     return {"type": "array", "items": {
-        "type": "object",
-        "properties": {"get": {"enum": fetches(image)},
-                       "at": {"type": "string"},
-                       "id": {"type": "string"},
-                       "pattern": {"type": "string"},
-                       "text": {"type": "string"}},
+        "type": "object", "properties": properties,
         "required": ["get"], "additionalProperties": False}}
+
+
+def region_of(ask) -> Optional[list]:
+    """The region of a picture an ask names ([left, top, right, bottom] from
+    0 to 1000), None where it names none or one that is no part of the
+    picture: four numbers, each from 0 to 1000, the right one past the left
+    one and the bottom one past the top one."""
+    raw = ask.get("region") if isinstance(ask, dict) else None
+    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+        return None
+    try:
+        left, top, right, bottom = (int(x) for x in raw)
+    except (TypeError, ValueError):
+        return None
+    if not (0 <= left < right <= 1000 and 0 <= top < bottom <= 1000):
+        return None
+    return [left, top, right, bottom]
 
 
 def with_more(properties: dict, more: bool, image: bool = False) -> dict:
@@ -960,11 +1028,13 @@ class Transcripts:
     nothing is asked and its description stands for it)."""
 
     def __init__(self, ask: Optional[Callable], store: Optional[Path],
-                 fingerprint, image_key: Callable):
+                 fingerprint, image_key: Callable,
+                 trace: Optional[Callable] = None):
         self.ask = ask
         self.store = Path(store) if store else None
         self._fingerprint = fingerprint
         self.image_key = image_key
+        self.trace = trace
         self._lock = threading.Lock()
 
     @property
@@ -1010,8 +1080,20 @@ class Transcripts:
         where None), *told* what names its prompt, inputs and answer form
         (`fingerprint_of`)."""
         asking = ask if ask is not None else self.ask
+        # (owner decision 2026-11-17, from the literature on transcribing a
+        # chart several times, Self-Ensembling 2026): a figure is written
+        # out `transcribe_times` times and each number is the median of the
+        # transcriptions; the kept transcript is named by the times and the
+        # temperature, and with 1 by what it always was named by.
+        times = max(1, int(rules.get("transcribe_times")))
+        temperature = float(rules.get("transcribe_temperature"))
         mark = self.fingerprint_of(told)
+        if times > 1 and mark:
+            mark = hashlib.sha256(
+                f"{mark}|times={times}|temperature={temperature}".encode(
+                    "utf-8")).hexdigest()[:16]
         kept = self._load(document_id)
+        merged: list = []
         out: dict = {}
         wanted = []
         for source in figures:
@@ -1034,14 +1116,36 @@ class Transcripts:
                 return None
             return [str(line).strip() for line in lines if str(line).strip()]
 
-        def one(job):
-            source, key = job
-            reply = asking(source, document_id)
+        def read(reply) -> Optional[dict]:
             caption, numbers = lines_of(reply, "caption"), \
                 lines_of(reply, "numbers")
             if caption is None or numbers is None:
-                return source, key, None
-            return source, key, {"caption": caption, "numbers": numbers}
+                return None
+            return {"caption": caption, "numbers": numbers}
+
+        def one(job):
+            source, key = job
+            first = read(asking(source, document_id))
+            if first is None or times == 1:
+                return source, key, first
+            # The repeats are requests of their own, at their own
+            # temperature and never answered from the run's cache.
+            step = rules.STEP.get()
+            node = {"id": step.ident if step is not None else "",
+                    "box": step.kind if step is not None else "transcribe"}
+            again = []
+            for n in range(2, times + 1):
+                with rules.in_step(rules.stepped(node, {
+                        "temperature": temperature,
+                        "same_request_once": False})), repeating(n):
+                    got = read(asking(source, document_id))
+                if got is not None:
+                    again.append(got)
+            if not again:
+                return source, key, first
+            lines, tally = merge_transcripts([first, *again])
+            merged.append({"repeats": len(again), **tally})
+            return source, key, lines
         done = (each(wanted, one) if each is not None
                 else [one(job) for job in wanted])
         changed = False
@@ -1059,7 +1163,92 @@ class Transcripts:
                 archive.keep(path)
                 path.write_text(json.dumps(kept, ensure_ascii=False,
                                            indent=1), encoding="utf-8")
+        if merged and self.trace is not None:
+            self.trace("transcribed_again", document_id, times=times,
+                       figures=len(merged),
+                       requests=sum(m["repeats"] for m in merged),
+                       lines=sum(m["lines"] for m in merged),
+                       numbers_changed=sum(m["changed"] for m in merged))
         return out, len(wanted)
+
+
+# The request number of a transcription after the first, which the request
+# notes (`repeat`).
+REPEAT: contextvars.ContextVar = contextvars.ContextVar("repeat", default=0)
+
+
+@contextlib.contextmanager
+def repeating(n: int):
+    """The requests asked while the block runs are the *n*-th transcription
+    of a figure (`Transcripts`)."""
+    token = REPEAT.set(n)
+    try:
+        yield
+    finally:
+        REPEAT.reset(token)
+
+
+def merge_transcripts(transcripts: list) -> tuple:
+    """(the kept transcript, {"lines": matched lines, "changed": numbers
+    that differ from the first's}) of several transcriptions of one figure
+    (owner decision 2026-11-17, from the literature on transcribing a chart
+    several times, Self-Ensembling 2026). A number is read as the harvest reads
+    a printed one: with its sign in front (rule `sign_belongs`), grouped by
+    spaces (rule `thousands_spaces`) or plain. The caption is the first's. A line
+    of numbers whose words without the numbers are the same in every
+    transcription, once in each and with as many numbers, takes number by
+    number the median of the values the transcriptions print, the lower
+    middle one for an even count, written as the transcription it comes
+    from printed it; any other line stays as the first has it, and a line
+    only a later transcription has is not added. A number that cannot be
+    read keeps the first's text."""
+    from .verify import _NUMBER, _signed, _space_grouped
+
+    def split(line: str) -> tuple:
+        # A number as the harvest reads a printed one: with its sign where
+        # the rule `sign_belongs` is on, grouped by spaces, or plain.
+        parts = ([_signed().pattern] if rules.get("sign_belongs") == "on"
+                 else []) + [_space_grouped().pattern, _NUMBER.pattern]
+        number = re.compile("|".join(parts))
+        found = list(number.finditer(line))
+        words = " ".join(number.sub("#", line).casefold().split())
+        return words, [m.group(0) for m in found], found
+
+    first = transcripts[0]
+    others = [{} for _ in transcripts[1:]]
+    for table, one in zip(others, transcripts[1:]):
+        seen: dict = {}
+        for line in one["numbers"]:
+            words, tokens, _ = split(line)
+            seen.setdefault(words, []).append(tokens)
+        table.update(seen)
+    out, matched, changed = [], 0, 0
+    own = collections.Counter(split(line)[0] for line in first["numbers"])
+    for line in first["numbers"]:
+        words, tokens, found = split(line)
+        held = [table.get(words) for table in others]
+        if not tokens or own[words] != 1 \
+                or any(h is None or len(h) != 1 or len(h[0]) != len(tokens)
+                       for h in held):
+            out.append(line)
+            continue
+        matched += 1
+        pieces, last = [], 0
+        for i, token in enumerate(tokens):
+            texts = [token] + [h[0][i] for h in held]
+            values = [canonical_number(t) for t in texts]
+            chosen = token
+            if all(v is not None for v in values):
+                ranked = sorted(range(len(texts)),
+                                key=lambda j: decimal.Decimal(values[j]))
+                chosen = texts[ranked[(len(texts) - 1) // 2]]
+            if values[0] != canonical_number(chosen):
+                changed += 1
+            pieces.append(line[last:found[i].start()] + chosen)
+            last = found[i].end()
+        out.append("".join(pieces) + line[last:])
+    return ({"caption": list(first["caption"]), "numbers": out},
+            {"lines": matched, "changed": changed})
 
 
 def image_key(path: Optional[str]) -> Optional[str]:
@@ -1147,6 +1336,41 @@ class Names:
         return out
 
 
+def label_regex(labels: tuple) -> str:
+    """A pattern for any of *labels*, the longest first, "Abb." also as
+    "Abb", then the number as printed: "7", "7.2", "4-1", "A.3"."""
+    words = sorted({re.escape(x.strip().rstrip(".")) for x in labels
+                    if x.strip().rstrip(".")}, key=lambda x: -len(x))
+    return (r"(?<!\w)(" + "|".join(words) + r")\.?[  ]*"
+            r"((?:[A-Za-z]\.)?\d+(?:[.\-]\d+)*)(?![\w])")
+
+
+def labels_and_numbers(text: str, labels: tuple) -> list:
+    """[(label without its period, case-folded; number)] printed in *text*.
+    A number is taken whole, so that "4" is not found in "41" or "4.1"."""
+    if not text or not labels:
+        return []
+    return [(m.group(1).casefold(), m.group(2).casefold())
+            for m in re.finditer(label_regex(labels), text, re.IGNORECASE)]
+
+
+def label_and_number(text: str, labels: tuple, start: bool = False):
+    """The first label and number of *text* (at its start where *start*)."""
+    if not text or not labels:
+        return None
+    m = re.compile(label_regex(labels), re.IGNORECASE).search(text.lstrip())
+    if m is None or (start and m.start() != 0):
+        return None
+    return m.group(1).casefold(), m.group(2).casefold()
+
+
+def label_names(title_label: str, said: str) -> bool:
+    """Does the label *said* in a text name an item whose title has
+    *title_label*? One is the other or its abbreviation (a prefix)."""
+    a, b = title_label.casefold().rstrip("."), said.casefold().rstrip(".")
+    return a.startswith(b) or b.startswith(a)
+
+
 class Plan:
     """One document as numbered lines and pieces, and what its requests
     share while it is read: its title page, its settings, its years, the
@@ -1217,6 +1441,18 @@ class Plan:
         self._locks: dict = {}
         self._headings: dict = {}
         self._first: set = set()
+        # Where each dimension was read for the values of a passage (owner
+        # decision 2026-11-17): {(dimension, value's passage): {piece key:
+        # how many values read it there}}, for the search of the same
+        # dimension of the other values of that table or section.
+        self.read_at: dict = {}
+        # {labels: {number: [(label, piece key)]}} of the text pieces that
+        # print a label and number (`mentioning`), built on first use.
+        self._mentions: dict = {}
+        # The values of each field read and checked so far, as (their
+        # entries, their number in the field's unit), for the conditions a
+        # value is checked against (`engine.Engine.conditions`).
+        self.values_read: dict = {}
 
     def document(self) -> list:
         """What a quote may stand in anywhere in the document, in its order
@@ -1287,6 +1523,85 @@ class Plan:
         return next((c for c in pieces if number in c.numbers),
                     pieces[0] if pieces else None)
 
+    def note_read(self, name: str, owner: tuple, key: tuple) -> None:
+        """Dimension *name* was read in piece *key* for a value of passage
+        *owner*."""
+        with self.lock:
+            places = self.read_at.setdefault((name, tuple(owner)), {})
+            places[tuple(key)] = places.get(tuple(key), 0) + 1
+
+    def read_near(self, name: str, owner: tuple) -> list:
+        """[piece key] where dimension *name* was read for the values of
+        passage *owner*, the piece most values read it in first, in the
+        order they were read where two are as often."""
+        with self.lock:
+            places = list((self.read_at.get((name, tuple(owner))) or {})
+                          .items())
+        return [key for key, _count in sorted(places,
+                                              key=lambda kv: -kv[1])]
+
+    def mentioning(self, owner: tuple) -> list:
+        """[piece key] of the text pieces that name the table or figure
+        *owner* by the label and number of its title line, in the document's
+        order (owner decision 2026-11-17, from the literature on DocFS: the
+        scenario or year of a table often stands in the paragraph that
+        discusses it).
+
+        The labels are the rule `item_labels`. A text names the item where
+        a label and the same number stand in it as a word ("Tabelle 4" is
+        not "Tabelle 41" or "Tabelle 4.1"), and the label is the title
+        line's label or an abbreviation of it or the other way round: one
+        label without its final period is a prefix of the other ("Tab.",
+        "Tab" and "Tabelle" name each other, "Abb." and "Abbildung", "Fig."
+        and "Figure"). Plans number tables and figures each by themselves,
+        so "Abbildung 4" does not name "Tabelle 4"."""
+        passage = self.passages.get(tuple(owner or ()))
+        if passage is None or passage.kind not in ("table", "figure"):
+            return []
+        labels = tuple(str(x) for x in rules.get("item_labels") or ()
+                       if str(x).strip())
+        if not labels:
+            return []
+        title = next((line.text for line in passage.lines if line.text), "")
+        own = label_and_number(title, labels, start=True)
+        if own is None:
+            return []
+        with self.lock:
+            index = self._mentions.get(labels)
+        if index is None:
+            index = {}
+            for chunk in self.chunks:
+                if chunk.owner[0] != "section":
+                    continue
+                text = " ".join(chunk.passage.line(n).text
+                                for n in chunk.numbers)
+                for label, number in labels_and_numbers(text, labels):
+                    index.setdefault(number, []).append((label, chunk.key))
+            with self.lock:
+                self._mentions[labels] = index
+        label, number = own
+        keys: list = []
+        for said, key in index.get(number, ()):
+            if label_names(label, said) and key not in keys:
+                keys.append(key)
+        return keys
+
+    def piece_of_quote(self, owner, quote, numbers: bool) -> Optional[Chunk]:
+        """The piece of passage *owner* whose line a quote is, of the pieces
+        a field of numbers or another field reads; None where no line of
+        the passage is the quote or holds it."""
+        passage = self.passages.get(tuple(owner or ()))
+        wanted = flat(quote or "").casefold()
+        if passage is None or not wanted:
+            return None
+        number = next((line.number for line in passage.lines
+                       if line.text and (
+                           flat(line.text).casefold() in wanted
+                           or wanted in flat(line.text).casefold())), None)
+        if number is None:
+            return None
+        return self.chunk_of(passage.owner, number, numbers)
+
     def beside(self, chunk: Chunk, numbers: bool = False,
                own: bool = False) -> list:
         """The pieces right before and after *chunk* among those a field of
@@ -1302,6 +1617,138 @@ class Plan:
             + ([at] if own else []) \
             + [at + d for d in range(1, near + 1)]
         return [view[i] for i in around if 0 <= i < len(view)]
+
+
+def printed_numbers(line: Line) -> list:
+    """[(cell or None, text)] of the numbers a line of a table or figure
+    prints, counted for `numbers_untaken`: each cell of a table's row that
+    prints a number other than a year, numbered from 1 as an address names
+    it, or a line of a figure's numbers whole; [] for any other line."""
+    def counts(text: str) -> bool:
+        years = {canonical_number(year) for year in years_in(text)}
+        return bool(numbers_in(text) - years)
+    if line.role == "body" and line.cells:
+        return [(at, cell) for at, cell in enumerate(line.cells, 1)
+                if counts(cell)]
+    if line.role == "number" and counts(line.text):
+        return [(None, line.text)]
+    return []
+
+
+def numbers_untaken(plan: Plan, claims: list) -> dict:
+    """The numbers of the plan's tables and figures no value took (owner
+    decision 2026-11-17, from the literature on reading numbers: find every
+    number, then see which no question took): per kind the passages, their
+    numbers and those no value's address names, and per passage with any
+    untaken [kind, id, untaken, numbers], most first. A number is a cell of
+    a table's row or a line of a figure's numbers that prints a number
+    other than a year (`printed_numbers`); a value takes the cell its
+    address names, else the numbers of its line that print its words.
+    Counted only: nothing is asked or left out for it."""
+    kinds: dict = {}
+    passages: list = []
+    for owner, passage, units in _number_units(plan, claims):
+        numbers = len(units)
+        untaken = sum(1 for _line, _cell, _text, taken in units
+                      if not taken)
+        if not numbers:
+            continue
+        tally = kinds.setdefault(passage.kind, {"passages": 0, "numbers": 0,
+                                                "untaken": 0})
+        tally["passages"] += 1
+        tally["numbers"] += numbers
+        tally["untaken"] += untaken
+        if untaken:
+            passages.append([owner[0], owner[1], untaken, numbers])
+    passages.sort(key=lambda p: (-p[2], -p[3]))
+    return {"kinds": kinds, "passages": passages}
+
+
+def _number_units(plan: Plan, claims: list):
+    """(owner, passage, [(line, cell, text, taken)]) of each table and
+    figure of *plan*, the units `printed_numbers` counts in its lines and
+    whether a value of *claims* took each: the one way `numbers_untaken` and
+    `untaken_items` decide it. A value takes the cell its address names,
+    else the numbers of its line that print its words, and a figure's line
+    it stands at."""
+    cells: dict = collections.defaultdict(set)
+    words: dict = collections.defaultdict(list)
+    for claim in claims:
+        at = claim.get("at") or {}
+        owner = tuple(at.get("owner") or ())
+        if len(owner) != 2 or at.get("line") is None:
+            continue
+        key = (owner, int(at["line"]))
+        if at.get("cell"):
+            cells[key].add(int(at["cell"]))
+        else:
+            words[key].append(flat(str(claim.get("value_raw") or "")))
+    for owner, passage in plan.passages.items():
+        if passage.kind not in ("table", "figure"):
+            continue
+        units = []
+        for line in passage.lines:
+            key = (owner, line.number)
+            for cell, text in printed_numbers(line):
+                said = [w for w in words.get(key, ()) if w]
+                taken = (cell is not None and cell in cells.get(key, ())) \
+                    or (cell is None and key in words) \
+                    or any(w in flat(text) for w in said)
+                units.append((line, cell, text, bool(taken)))
+        yield owner, passage, units
+
+
+def number_tokens(text: str) -> list:
+    """The numbers *text* prints other than years, each as printed, in
+    order."""
+    from .verify import _NUMBER
+    years = {canonical_number(year) for year in years_in(text)}
+    return [m.group(0) for m in _NUMBER.finditer(text or "")
+            if canonical_number(m.group(0)) not in years]
+
+
+@dataclass
+class Untaken:
+    """A number of a table or figure that no value took (owner decision
+    2026-11-17, from the literature on reading numbers: every number no
+    question took is asked which field it is): its passage, its line, its
+    cell (None in a figure's line of numbers), the number as the line
+    prints it and the line's text. `row` makes it a place a request shows
+    as the place of a value (`shows`)."""
+    owner: tuple
+    line: int
+    cell: Optional[int]
+    words: str
+    text: str = ""
+
+    @property
+    def row(self):
+        from types import SimpleNamespace
+        return SimpleNamespace(claim={
+            "at": {"owner": list(self.owner), "line": self.line,
+                   **({"cell": self.cell} if self.cell else {})},
+            "value_raw": self.words})
+
+
+def untaken_items(plan: Plan, claims: list) -> list:
+    """The numbers of the plan's tables and figures no value of *claims*
+    took, in the plan's order, each as an `Untaken` (owner decision
+    2026-11-17): a cell of a table's row that prints a number other than a
+    year, its words the number the cell prints (the first where it prints
+    several), and for a figure's line of numbers each number of the line
+    other than a year, one item each. Taken as `numbers_untaken` counts."""
+    out = []
+    for owner, _passage, units in _number_units(plan, claims):
+        for line, cell, text, taken in units:
+            if taken:
+                continue
+            tokens = number_tokens(text)
+            if cell is not None:
+                tokens = tokens[:1]
+            for token in tokens:
+                out.append(Untaken(owner, line.number, cell, token,
+                                   line.text))
+    return out
 
 
 def title_page_shown(plan: Plan) -> bool:
@@ -1383,6 +1830,7 @@ class Asks:
     check: Optional[Callable] = None
     work: Optional[Callable] = None
     phrase: Optional[Callable] = None
+    assign: Optional[Callable] = None
     # A request of a general step (`general`, owner decision 2026-11-12):
     # (prompt, payload, document_id, *, shape, example, follow, **noted),
     # the prompt the id of a prompt file or {"text": its own}.
@@ -1401,6 +1849,9 @@ class Counts:
     asked: collections.Counter = field(default_factory=collections.Counter)
     failed: collections.Counter = field(default_factory=collections.Counter)
     questions: int = 0
+    # The numbers no question took that were asked which field they belong
+    # to, and what it came to: "asked", "named" (a field) and "none".
+    assigned: collections.Counter = field(default_factory=collections.Counter)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def ask(self, kind: str, n: int = 1) -> None:
@@ -1595,6 +2046,8 @@ class Reader:
         counts.ask(kind)
         talk = self._talk(kind, noted, document_id)
         noted = self._ways(kind, noted, talk)
+        if kind == "transcribe" and REPEAT.get():
+            noted = {**noted, "repeat": REPEAT.get()}
         sent = payload
         if talk:
             # The questions about the value so far and what they were
@@ -2149,17 +2602,26 @@ class Reader:
         nothing that could be fetched."""
         shown = Shown(dict(shown.blocks)) if shown is not None else Shown()
         seen = {chunk.key for chunk in anchor}
+        # Rule `fetch_rounds_keep` "last": each round shows the request's
+        # own pieces and those of the round before only (owner decision
+        # 2026-11-17, from the literature on VISOR).
+        last = rules.get("fetch_rounds_keep") == "last"
+        base_blocks = dict(shown.blocks)
+        base_passages = dict(payload.get("passages") or {})
         for _ in range(int(rules.get("fetch_rounds"))):
             more = asked_more(reply)
             if not more or not anchor:
                 break
-            pieces = self.fetch(plan, more, anchor, seen, False)
+            pieces = self.fetch(plan, more, anchor, seen, False, shown)
             if not pieces:
                 break
             seen.update(chunk.key for chunk in pieces)
+            if last:
+                shown.blocks = dict(base_blocks)
             blocks = self.show_fetched(plan, shown, pieces)
             payload = {**payload, "passages": {
-                **(payload.get("passages") or {}), **blocks}}
+                **(base_passages if last
+                   else (payload.get("passages") or {})), **blocks}}
             from .shows import blocks_of
             again = self._ask(kind, payload, plan.document_id, shape,
                               example, counts, **{
@@ -2274,8 +2736,12 @@ class Reader:
             if picture is None:
                 continue
             seen.add(picture)
+            # A region the ask names comes cut out of the picture (rule
+            # `image_regions`, owner decision 2026-11-17).
+            region = region_of(ask) if rules.get("image_regions") else None
             again = self._ask(kind, {**payload,
                                      "image": letter or "passage",
+                                     **({REGION: region} if region else {}),
                                      PICTURE: picture},
                               document_id, coord_format(several, more=True),
                               example, counts, **noted, picture=letter
@@ -2403,6 +2869,7 @@ class Reader:
                 held = True
                 if means is not None:
                     one.claim[f"{slot.name}_means"] = list(means)
+                self.note_read(plan, read, one, slot)
                 made += span_rows(one, slot, answer.get("until"),
                                   self.span_marks, clone)
             for failure in got["failed"]:
@@ -2579,11 +3046,13 @@ class Reader:
                     "") or slot.question or slot.name
 
     def fetch(self, plan: Plan, more, batch: list, seen: set,
-              numbers: bool = False) -> list:
+              numbers: bool = False, shown: Optional[Shown] = None) -> list:
         """The pieces a reply asks for itself (`more`), those not shown
         yet, of the pieces its field reads: the piece before or after a
         shown one, a table or figure by its placeholder, the pieces a
-        pattern stands in, the pieces best for a sentence of its own."""
+        pattern stands in, the pieces best for a sentence of its own, the
+        section a line stands in (*shown*: what the request showed, by
+        which a letter names its piece)."""
         pieces = plan.pieces(numbers)
         places = plan.places_of(numbers)
         out: list = []
@@ -2630,6 +3099,9 @@ class Reader:
                             plan.document_id, [text], pieces)
                             if c.key not in seen][:self.per_request]
                     ask = {**ask, "sid": sid}
+            elif get == SECTION:
+                out += self.section_pieces(plan, ask, batch, pieces, seen,
+                                           shown)
             noted.append({**ask, "pieces": [
                 list(c.key) for c in out[before:] if c.key not in seen]})
         given = [c for c in dict.fromkeys(out) if c.key not in seen]
@@ -2637,6 +3109,52 @@ class Reader:
             trace.event("fetch", plan.document_id, of=asked_in,
                         asks=noted, pieces=[list(c.key) for c in given])
         return given
+
+    @staticmethod
+    def note_read(plan: Plan, read: Read, row: Row, slot) -> None:
+        """Where a dimension was read for a value (its source and quote),
+        for the search of the same dimension of the other values of the
+        value's table or section (`Plan.read_near`, rule
+        `sibling_places`)."""
+        owner = (row.claim.get("at") or {}).get("owner")
+        source = row.claim.get(f"{slot.name}_source")
+        if not owner or not source:
+            return
+        piece = plan.piece_of_quote(source, row.claim.get(f"{slot.name}_quote"),
+                                    read.batch.parameter.is_numeric)
+        if piece is not None:
+            plan.note_read(slot.name, tuple(owner), piece.key)
+
+    @staticmethod
+    def section_pieces(plan: Plan, ask: dict, batch: list, pieces: list,
+                       seen: set, shown: Optional[Shown] = None) -> list:
+        """The pieces of the section a line stands in, from the section's
+        start in the order of the plan, those not shown yet, as many as the
+        rule `fetch_section_pieces` says: of the piece under the letter the
+        ask's "id" names, else of the table or figure it names by its
+        placeholder, else of the value's own place or the first piece
+        shown. A table or a figure stands in the section its placeholder
+        stands in."""
+        name = str(ask.get("id") or "").strip()
+        letter = "" if name.casefold() == "passage" else name
+        source = None
+        block = shown.blocks.get(letter) if shown is not None else None
+        if block is not None and block.entries:
+            source = block.entries[0][2]
+        elif name:
+            source = lookup.item(plan.sources, name)
+        elif batch:
+            source = batch[0].passage.source
+        if source is None:
+            return []
+        owner = (source.owner_kind, source.owner_id)
+        if source.owner_kind != "section":
+            parent = (source.provenance or {}).get("parent_section")
+            if parent is None:
+                return []
+            owner = ("section", parent)
+        return [c for c in pieces if c.owner == owner
+                and c.key not in seen][:int(rules.get("fetch_section_pieces"))]
 
     def matching(self, wanted, pieces: list, seen: set) -> list:
         """The pieces a pattern the model wrote stands in, not shown yet,

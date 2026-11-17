@@ -99,6 +99,12 @@ def raw(scope, name: str):
     if name == "values":
         return [claim for read in (doc.field_reads + doc.find_reads)
                 for claim in read.claims] if doc is not None else []
+    if name == "untaken":
+        # The numbers of tables and figures no value took, asked which field
+        # they are (`addressed.untaken_items`, owner decision 2026-11-17).
+        return addressed.untaken_items(
+            plan, [claim for read in (doc.field_reads + doc.find_reads)
+                   for claim in read.claims]) if doc is not None else []
     if name == "value":
         return value
     if name == "dimension":

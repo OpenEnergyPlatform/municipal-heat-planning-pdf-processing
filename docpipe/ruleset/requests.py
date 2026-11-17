@@ -181,6 +181,58 @@ RULES: tuple = (
          env="EXTRACT_ATTACH_IMAGES", env_flag=(False, True),
          steps=("transcribe", "order", "search", "review", "each value"),
          where="runner.py (image_path_of)"),
+    # (owner decision 2026-11-17, from the literature on transcribing a
+    # chart several times, Self-Ensembling 2026)
+    rule("transcribe_times", "prompts", _IMAGES, "whole",
+         "How many times a figure is transcribed. The caption is the first "
+         "transcription's; each number of a line of numbers that all "
+         "transcriptions print in the same words is the median of the "
+         "values they give, written as the transcription it comes from "
+         "wrote it, and any other line stays as the first transcription has "
+         "it. Every repeat is one more request for each figure, and most "
+         "values of a harvest come from figures, so a larger number costs "
+         "more requests and reads their numbers more reliably. 1 asks once, "
+         "and the transcription stands as it is.", least=1,
+         decided="2026-11-17", steps=("transcribe",),
+         where="addressed.py (Transcripts, merge_transcripts)"),
+    rule("transcribe_temperature", "prompts", _IMAGES, "number",
+         "The temperature of the repeats of a figure's transcription, which "
+         "are never answered from the cache of requests; the first "
+         "transcription keeps the temperature of its prompt or step. At 0 "
+         "the repeats come back the same as the first. A higher number "
+         "makes the transcriptions differ, so that the median of each "
+         "number can correct a misread one, and a very high one adds "
+         "errors of its own.", least=0, most=2,
+         decided="2026-11-17", steps=("transcribe",),
+         where="addressed.py (Transcripts)"),
+    # A sentence of context before each table and figure of the index
+    # (owner decision 2026-11-17, from the literature on contextual retrieval:
+    # a 2026 BM25 study finds a context sentence per piece the one extension
+    # with a steady gain on number questions)
+    rule("context_sentence", _FLOW, "Index", "switch",
+         "On: the chunk stage asks the chat model once for each table and "
+         "figure for one sentence that says what it is about, in which "
+         "unit, for which area, scenario and years, as far as its caption, "
+         "its head and the heading of its section say it, and the index "
+         "embeds that sentence before the text of the table or figure, "
+         "both for the text vector and for the text that goes with the "
+         "picture. The sentence is kept with the document and asked again "
+         "only when the caption, the head or the heading changed. It costs "
+         "one request for each table and figure, and then a new index: "
+         "the vectors of every table and figure change, which `--step "
+         "sync` finds and embeds again. Off, the standard: nothing is "
+         "asked and the text of a table or figure is as it always was.",
+         decided="2026-11-17",
+         where="chunking/context.py (ask_all, attach), "
+               "chunking/chunking.py (build_embedding_inputs)"),
+    rule("context_head_chars", _FLOW, "Index", "whole",
+         "How many characters of the table's markdown or of the figure's "
+         "description the request for a context sentence shows as the "
+         "head of the table or figure. A larger number shows more of the "
+         "table or figure and makes the request longer. A change asks every "
+         "sentence again, since it is part of what the request shows. Only "
+         "read where the rule `context_sentence` is on.", least=1,
+         decided="2026-11-17", where="chunking/context.py (shown)"),
     # -- waiting and asking again ---------------------------------------------
     rule("llm_timeout_s", _FLOW, _AGAIN, "number",
          "The seconds the first attempt of a request waits for its answer. "

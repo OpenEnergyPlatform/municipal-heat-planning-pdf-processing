@@ -4,6 +4,7 @@
   "rules": {
     "base": "https://openenergyplatform.org/id/mhpkg/",
     "rounding_tolerance": 0.02,
+    "drawn_tolerance": 0.1,
     "contested_in_full": true,
     "pick_one_order": [
       "not_contained",

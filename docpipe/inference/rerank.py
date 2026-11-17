@@ -44,7 +44,7 @@ import logging
 import random
 import threading
 import time
-from typing import Callable, Optional, Sequence
+from typing import Callable, Iterable, Optional, Sequence
 
 from docpipe import rules, usage
 
@@ -118,13 +118,15 @@ def drawing(seed: str, kind: str) -> random.Random:
 
 def pool_of(sources: Sequence, size: Optional[int] = None,
             rule: str = "rerank_pool", drawn: int = 0, upto: int = 0,
-            seed: str = "") -> tuple:
+            seed: str = "", also: Iterable = ()) -> tuple:
     """(pool, rest): of each kind its first *size* passages and *drawn* of
     those at its places after them up to place *upto*, drawn at random as
-    *seed* says, the pool in the order of *sources* and the others after it
-    in theirs. Without *size* each kind has the number the rules give it
-    (`pool_size`); a kind whose number is 0 draws none either, and where
-    fewer places are left than *drawn*, all of them are taken."""
+    *seed* says, and the passages *also* names ((kind, id), the word
+    index's hits of the search, owner decision 2026-11-17), the pool in the
+    order of *sources* and the others after it in theirs. Without *size*
+    each kind has the number the rules give it (`pool_size`); a kind whose
+    number is 0 draws none either, and where fewer places are left than
+    *drawn*, all of them are taken."""
     places: dict = {}
     for at, source in enumerate(sources):
         places.setdefault(source.owner_kind, []).append(at)
@@ -137,6 +139,10 @@ def pool_of(sources: Sequence, size: Optional[int] = None,
         after = at[wanted:max(upto, wanted)]
         chosen.update(after if len(after) <= drawn
                       else drawing(seed, kind).sample(after, drawn))
+    named = {(kind, owner) for kind, owner in also}
+    if named:
+        chosen.update(at for at, source in enumerate(sources)
+                      if (source.owner_kind, source.owner_id) in named)
     pool = [s for at, s in enumerate(sources) if at in chosen]
     rest = [s for at, s in enumerate(sources) if at not in chosen]
     return pool, rest
@@ -392,7 +398,10 @@ class Reranker:
                                  "score")
 
     def order(self, document_id, probes: Sequence[str],
-              sources: Sequence) -> list:
+              sources: Sequence, also: Iterable = ()) -> list:
+        """*sources* best first for *probes*: the pool (`pool_of`, with
+        the passages *also* names) in the reranker's order, the rest after
+        it in theirs."""
         sources = list(sources)
         probes = [p for p in probes if p and p.strip()]
         if not probes or not sources:
@@ -401,7 +410,7 @@ class Reranker:
         drawn, upto = drawn_of(self.pool_rule)
         seed = "\x00".join([str(document_id)] + sorted(set(probes)))
         pool, rest = pool_of(sources, self._pool or None, self.pool_rule,
-                             drawn, upto, seed)
+                             drawn, upto, seed, also)
         self._tally = {"scored": 0, "kept": 0, "waited": 0}
         try:
             best = [fused(column) for column in zip(

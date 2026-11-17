@@ -30,5 +30,15 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 <!-- with: get_image -->
 {"get":"image"} under "more" asks for the picture of the figure shown, {"get":"image","id":"B"} for the picture of the figure under letter B. The request is then asked again with the picture.
 
+<!-- with: get_region -->
+With "region":[left,top,right,bottom], each from 0 to 1000 of the picture's width and height, only that part comes, enlarged and sharper, such as {"get":"image","region":[0,700,1000,1000]} for a legend in its lower third.
+
+<!-- with: get_section -->
+{"get":"section"} under "more" fetches the section of the first piece shown, from its start, {"get":"section","id":"B"} the section of the piece under letter B, {"get":"section","id":"p17_img1"} the section that table or figure stands in: where a setting such as the unit of all its numbers may stand at the start of the section.
+
 <!-- with: image -->
 The picture of the figure under "image" is attached. Read in it what its lines do not say.
+
+<!-- with: image_region -->
+The picture shows only the part under "image_region" (left, top, right, bottom, from 0 to 1000 of the figure's width and height), enlarged.
+

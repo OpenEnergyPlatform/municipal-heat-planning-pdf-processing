@@ -61,6 +61,15 @@ def _dir_names(path: Path, cache: dict[Path, set[str]]) -> set[str]:
     return names
 
 
+def _lead(item: dict, text: str) -> str:
+    """The sentence of context that goes before the text of a table or figure,
+    with its line break; "" for one that has none, or whose text is empty
+    (owner decision 2026-11-17, rule `context_sentence`: chunking/context.py
+    sets `context_sentence` on the items it has a sentence for)."""
+    sentence = (item.get("context_sentence") or "").strip()
+    return sentence + "\n" if sentence and text else ""
+
+
 def _capped(text: str, pdf_name: str, sec_idx: int) -> str:
     """
     Last line of defence against a section that is too long to embed.
@@ -166,6 +175,7 @@ def build_embedding_inputs(
             caption = t.get("caption", "") or ""
             markdown = t.get("markdown", "") or ""
             table_text = (caption + "\n" + markdown).strip()
+            lead = _lead(t, table_text)
 
             if table_text:
                 inputs.append(EmbeddingInput(
@@ -173,7 +183,7 @@ def build_embedding_inputs(
                     pdf_name=pdf_name,
                     section_index=sec_idx,
                     item_id=t["id"],
-                    text=table_text,
+                    text=lead + table_text,
                 ))
 
             # An item without a path would make output_dir / "" == output_dir,
@@ -192,7 +202,7 @@ def build_embedding_inputs(
                     pdf_name=pdf_name,
                     section_index=sec_idx,
                     item_id=t["id"],
-                    text=table_text or caption,
+                    text=lead + (table_text or caption),
                     image=str(image_path),
                 ))
 
@@ -200,6 +210,7 @@ def build_embedding_inputs(
             caption = fig.get("caption", "") or ""
             description = fig.get("description", "") or ""
             figure_text = (caption + "\n" + description).strip()
+            lead = _lead(fig, figure_text)
 
             if figure_text:
                 inputs.append(EmbeddingInput(
@@ -207,7 +218,7 @@ def build_embedding_inputs(
                     pdf_name=pdf_name,
                     section_index=sec_idx,
                     item_id=fig["id"],
-                    text=figure_text,
+                    text=lead + figure_text,
                 ))
 
             rel_path = fig.get("path") or ""      # same trap as tables above
@@ -222,7 +233,7 @@ def build_embedding_inputs(
                     pdf_name=pdf_name,
                     section_index=sec_idx,
                     item_id=fig["id"],
-                    text=figure_text or caption,
+                    text=lead + (figure_text or caption),
                     image=str(image_path),
                 ))
 

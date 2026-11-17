@@ -4,9 +4,13 @@ Nenne jeden Wert des Felds unter "field", der in den Zeilen unter "passage" steh
 Nenne jeden Wert des Felds unter "field", der in den Zeilen unter "passage" steht, je Wert mit seiner Zeile, Zeichen für Zeichen, und seinen Worten.
 <!-- /way -->
 
-* Vor jeder Zeile steht ihre Adresse. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: in „19 | Rathaus | 1912 | 750.940 |“ ist 19.3 die Zelle „750.940“. Titel und Kopf einer Tabelle stehen in jedem ihrer Stücke unter denselben Adressen, ebenso Titel, Achsen und Legende einer Abbildung.
+* Vor jeder Zeile steht ihre Adresse. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: in „19 | Rathaus | 1912 | 750.940 |“ ist 19.3 die Zelle „750.940“. Titel, Kopf und Anmerkungen unter einer Tabelle stehen in jedem ihrer Stücke unter denselben Adressen, eine eingerückte Zeile mit den Zeilen, unter denen sie steht, ebenso Titel, Achsen und Legende einer Abbildung.
 * Ein Wert ist, was das Feld nach seiner Bedeutung ("means") ist, und eine Angabe des Plans über seine Gemeinde oder etwas darin. Ein Beispiel aus einem anderen Ort und eine Vorgabe aus Gesetz, Förderrichtlinie oder Leitfaden zählen nicht, außer der Plan macht sie zu seiner eigenen.
 * Worte, die nur benennen, worum es im Feld geht, etwa ein Titel oder eine Überschrift, die das Thema der Zeilen darunter nennt, sind kein Wert.
+<!-- way: find_again_way=same -->
+<!-- way: find_again_way=generous -->
+* Das ist ein zweites Lesen dieser Zeilen. Nenne jeden Wert des Felds, den die Zeilen drucken, auch wo du unsicher bist, ob er zum Feld gehört; was keine Zeile druckt, bleibt kein Wert.
+<!-- /way -->
 <!-- way: answer_with=address -->
 * "at" ist die Zelle des Werts, wo er in einer Zeile mit Zellen steht, sonst seine Zeile. "words" ist die Zahl, wie die Zeile sie druckt, Zeichen für Zeichen, mit ihrem Vorzeichen und ohne Einheit.
 <!-- way: answer_with=quote -->

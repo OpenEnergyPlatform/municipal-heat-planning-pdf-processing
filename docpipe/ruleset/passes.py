@@ -284,6 +284,26 @@ RULES: tuple = (
          "passage.", least=0,
          where="runner.py (_node_check_payload)",
          steps=("node_check",)),
+    rule("value_bounds", "flow", "Check of the nodes", "table",
+         "The most a value of a field may be in the field's own unit, as the "
+         "ontology defines the field, such as a share, which is a part of a "
+         "whole and so at most 100 %. A value above it is read a second "
+         "time and marked (condition:over_bound); nothing is taken away for "
+         "it. Each row names a field by its address in the spec and the "
+         "most. Empty: no bound is checked.",
+         columns=("parameter", "at_most"), empty=True, decided="2026-11-17",
+         steps=("check_value",),
+         where="engine.py (Engine.conditions, check_row)"),
+    rule("part_of_whole", "flow", "Check of the nodes", "map",
+         "The entry of a dimension that names the whole its other entries "
+         "are parts of, such as the total over all energy carriers. A part "
+         "greater than its whole among the values of the document read so "
+         "far, all other entries of the field the same, is read a second "
+         "time and marked (condition:part_over_whole); nothing is taken away "
+         "for it. Compared in the field's own unit. Empty: no part is "
+         "compared with its whole.",
+         empty=True, decided="2026-11-17", steps=("check_value",),
+         where="engine.py (Engine.conditions, check_row)"),
     # -- flow: the second reading --
     rule("review_axis_reasons", "flow", "Second reading", "texts",
          "The reasons in the trust of a row that name a coordinate. The "

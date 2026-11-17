@@ -335,7 +335,8 @@ def evidence_comment(row: dict, document: str, prose: dict, join: str, *,
                      transcribed: bool = False, conflict: bool = False,
                      corroborated: bool = False,
                      resolved: Optional[str] = None,
-                     named: Optional[str] = None) -> list:
+                     named: Optional[str] = None,
+                     across_runs: Optional[list] = None) -> list:
     """Where this value was read, as comment lines above its node: the
     coordinates in English, the passage, the page, how it was aggregated,
     what was computed, and how far the run stands behind it."""
@@ -388,6 +389,10 @@ def evidence_comment(row: dict, document: str, prose: dict, join: str, *,
             {"rounding": "Kept over a rounded reading of the same number",
              "trust": "Kept over a reading of the same coordinates with a "
                       "lower trust level"}[resolved]))
+    if across_runs:
+        # the other harvests disagree (owner decision 2026-11-17)
+        lines.append(ttl_comment("Contested across runs: "
+                                 + "; ".join(across_runs)))
     lines.append(ttl_comment(render(verdict, prose, join=join, row=row)))
     return lines
 

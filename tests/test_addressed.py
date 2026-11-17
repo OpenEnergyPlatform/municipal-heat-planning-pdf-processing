@@ -74,6 +74,9 @@ from docpipe.profile import load_profile
 from docpipe.extraction.spec import load as load_spec
 from docpipe.extraction.wording import say
 from profiles.scenarios import kg
+import pytest
+
+from docpipe import rules
 
 ROOT = Path(__file__).resolve().parent.parent
 SCENARIOS = load_spec(json.loads((ROOT / "profiles" / "scenarios"
@@ -173,6 +176,15 @@ class Model:
     def of(self, kind: str) -> list:
         return [(payload, noted) for k, payload, noted in self.calls
                 if k == kind]
+
+
+@pytest.fixture(autouse=True)
+def no_second_pass():
+    """The tests of this file count the requests of one pass over a field's
+    pieces; the second pass (rule `find_again_below`) has its own tests in
+    test_find_again.py."""
+    with rules.overlaid(find_again_below=0):
+        yield
 
 
 def plan_of(*sources, chunk_units=8) -> Plan:
@@ -1192,8 +1204,16 @@ def transcripts(store, asked: list, prompt="p1", image="img1"):
     return addressed.Transcripts(ask, store, prompt, lambda source: image)
 
 
+@pytest.fixture
+def one_transcription():
+    # These two promises are about the transcription itself; the repeats
+    # of rule `transcribe_times` are those of tests/test_transcribe_times.py.
+    with rules.overlaid(transcribe_times=1):
+        yield
+
+
 def test_a_figure_is_transcribed_once_in_two_lists_and_its_value_is_drawn(
-        tmp_path):
+        tmp_path, one_transcription):
     asked: list = []
     lines = {"caption": CAPTION, "numbers": NUMBERS}
     got, n = transcripts(tmp_path, asked)(7, [FIGURE])
@@ -1226,7 +1246,7 @@ def test_a_figure_is_transcribed_once_in_two_lists_and_its_value_is_drawn(
 
 
 def test_a_figure_written_out_with_a_step_s_own_parts_is_kept_apart(
-        tmp_path):
+        tmp_path, one_transcription):
     # A step that writes out the figures with a prompt, inputs or answer
     # form of its own asks with its own request AND keeps what it wrote
     # under its own mark, so that neither step takes the other's

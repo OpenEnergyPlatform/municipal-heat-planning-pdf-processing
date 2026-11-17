@@ -4,9 +4,9 @@ Beantworte die Frage unter "question" für den Wert unter "value" mit der Adress
 Beantworte die Frage unter "question" für den Wert unter "value" mit der gezeigten Zeile, die die Antwort für diesen Wert sagt, unter "quote" Zeichen für Zeichen, und ihren Worten; sagt keine gezeigte Zeile sie, ist "quote" 0.
 <!-- /way -->
 
-* "value" nennt die Worte des Werts und seine Adresse unter "passage". "passage" zeigt seine Zeile, bei einer Tabelle mit ihrem Titel und Kopf, sonst mit dem Satz davor und danach.
+* "value" nennt die Worte des Werts und seine Adresse unter "passage". "passage" zeigt seine Zeile, bei einer Tabelle mit ihrem Titel, ihrem Kopf, den Anmerkungen darunter und den Zeilen, unter denen seine Zeile eingerückt steht, sonst mit dem Satz davor und danach.
 * Vor jeder Zeile steht ihre Adresse, bei einem anderen Block mit seinem Buchstaben davor. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: 19.2 ist die zweite Zelle der Zeile 19.
-* Die Zeile muss über DIESEN Wert sprechen: seine eigene Zeile, der Kopf seiner Spalte, der Titel seiner Tabelle, sein Satz und die Sätze daneben, die Überschrift seines Abschnitts.
+* Die Zeile muss über DIESEN Wert sprechen: seine eigene Zeile, der Kopf seiner Spalte, der Titel seiner Tabelle, eine Anmerkung unter ihr, die Zeile, unter der seine Zeile eingerückt steht, sein Satz und die Sätze daneben, die Überschrift seines Abschnitts.
 * "words" sind die Worte dieser Zeile, die die Antwort sagen, Zeichen für Zeichen, etwa „2019 bis 2021“ für einen Zeitraum.
 * Zeigt die Form unten eine Liste "found", nenne darin jede Antwort einzeln, etwa zwei Energieträger einer Zahl; sagt keine Zeile eine, bleibt sie leer.
 
@@ -34,8 +34,17 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 <!-- with: get_image -->
 {"get":"image"} unter "more" fordert das Bild der Abbildung an, in der der Wert steht, {"get":"image","id":"B"} das Bild der Abbildung unter Buchstabe B: wenn die Zeilen der Abbildung die Antwort nicht sagen, ihr Bild sie aber zeigt, etwa die Farbe eines Legendeneintrags oder das Stück eines Balkens. Die Frage kommt dann mit dem Bild noch einmal; die Antwort bleibt eine gezeigte Zeile, etwa die Legendenzeile dieser Farbe.
 
+<!-- with: get_region -->
+Mit "region":[links,oben,rechts,unten], jede Zahl von 0 bis 1000 der Breite und Höhe des Bildes, kommt nur dieser Ausschnitt, vergrößert und schärfer, etwa {"get":"image","region":[0,700,1000,1000]} für eine Legende im unteren Drittel.
+
+<!-- with: get_section -->
+{"get":"section"} unter "more" holt den Abschnitt, in dem der Wert steht, von seinem Anfang an, {"get":"section","id":"B"} den Abschnitt des Stücks unter Buchstabe B, {"get":"section","id":"p17_img1"} den Abschnitt, in dem diese Tabelle oder Abbildung steht: wenn eine Festlegung wie „alle Angaben in MWh/a“ oder „im Zielszenario“ am Anfang des Abschnitts stehen kann.
+
 <!-- with: image -->
 Das Bild der Abbildung unter "image" ("passage": die Abbildung, in der der Wert steht) hängt an. Lies darin, was ihre Zeilen nicht sagen, und antworte mit der gezeigten Zeile, die es nennt, etwa der Legendenzeile der Farbe.
+
+<!-- with: image_region -->
+Das Bild zeigt nur den Ausschnitt unter "image_region" (links, oben, rechts, unten, von 0 bis 1000 der Breite und Höhe der Abbildung), vergrößert.
 
 <!-- with: passages -->
 "passages" sind weitere Stücke des Plans, die du sehen wolltest, jedes unter seinem Buchstaben, mit Art, Seite und Titel.

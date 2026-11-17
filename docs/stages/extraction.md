@@ -181,9 +181,24 @@ sentence, and a number such as "1.155 MWh" never breaks, since a sentence ends
 only where a mark is followed by a space. A table is its title lines, its head
 lines and its body rows, numbered in that order from 1 (the rule under the
 head counts not), each body row one line whose cells are numbered from 1; the
-lines under a table are lines as well (`units.table_lines`). Every line that
+lines under a table are lines as well (`units.table_lines`). The first
+`table_foot_lines` of them (the notes of a table, such as "* ohne Industrie" or
+"Angaben in MWh/a", five in the shipped flows, owner decision 2026-11-17) are
+fixed lines like the title and the head: every piece of the table shows them,
+and so does every request about one of its values, because what such a note
+says holds for each number of the table. With the rule at 0 a line under a table
+is shown only in its own piece. Every line that
 "|" divides has cells, wherever it stands and not only a table row
-(`units.line_cells`): "26 2019 | Erdgas | 11" is addressed 26.1 to 26.3. A figure
+(`units.line_cells`): "26 2019 | Erdgas | 11" is addressed 26.1 to 26.3. A row whose
+first cell is indented under a row above it, by spaces or by a mark such as
+"└", is shown with the rows it stands under wherever it is shown (rule
+`table_parent_rows`, on in the shipped flows, owner decision 2026-11-17;
+`units.row_parents`): in each piece that holds it and in every request about
+one of its values, so that "└ Erdgas" says under "Wohngebäude" whose gas it is.
+A row stands under the nearest row above whose first cell is indented at least
+two places less, and under the rows that row stands under; one place more or
+less is the spacing of a transcription and no indent, and a row with an empty
+first cell stands under none. A figure
 is the lines a model wrote it into once, its caption first and then its
 numbers (see Transcribing the figures), else the sentences of its description. A table the layout cut at a
 page break is cut alone: `lookup.continued` still marks the table it may
@@ -245,6 +260,29 @@ sets the flag `read_off` (`verify.verify_tuple`) and makes the value a level C
 (see Trust levels). A transcription that came to nothing, or a reply that did
 not parse, is kept nowhere and leaves the description in its place. The
 requests are counted as `transcribe` (`transcribe_ask`).
+
+A figure can be transcribed more than once (rule `transcribe_times`, 3 in the
+shipped flows, owner decision 2026-11-17, from the literature on transcribing a
+chart several times). The first transcription is asked as above and its caption
+stands. Each repeat is a request of its own, at the temperature
+`transcribe_temperature` (0.7), never answered from the run's cache of requests
+and noted in the trace as `repeat`. `addressed.merge_transcripts` then
+compares the transcriptions line by line: a line of numbers whose words without
+the numbers are the same in every transcription, once in each and with as many
+numbers, takes number by number the median of the values the transcriptions
+print (the lower middle one for an even count), written as the transcription it
+comes from wrote it. A number is read as the harvest reads a printed one, with
+its sign in front (rule `sign_belongs`) or grouped by spaces
+(`thousands_spaces`). Any other line stays as the first transcription has it,
+a line only a later transcription has is not added, and a number that cannot
+be read keeps the first one's text. Most values of a harvest come from figures,
+so a misread digit that one transcription makes and the others do not is
+corrected, at the price of the extra requests; a very high temperature adds
+errors of its own. The kept transcription is named by the times and the
+temperature as well as by the prompt and the model, so a change of either
+transcribes again, and with `transcribe_times` at 1 everything is as it was.
+The trace holds one `transcribed_again` event per document (figures, requests,
+matched lines, numbers that differ from the first transcription's).
 
 ### The order of a whole plan
 
@@ -437,11 +475,64 @@ otherwise, and the other pieces are read (`reading.Read.lost`,
 in a passage and a piece of it that came to no reply is `unread` there, with the
 first reason, and is not a plan that seems silent (`trust.parameter_states`).
 
+A field a document gave few values for is read a second time (rule
+`find_again_below`, 3 in the shipped flows, owner decision 2026-11-17;
+`engine.Engine.find_again`). Where the first pass over a field's pieces found at
+least one value and fewer than that many, the same requests are asked again over
+the same pieces, and what the second pass finds joins the first pass's finds: each
+find keeps its own quote, and a find at the same place (passage, line, cell and
+words) in both passes is one value. A field that found nothing is not asked
+again, since the document most likely does not carry it, and 0 asks no second
+pass. The rule `find_again_way` says how the second pass asks: `generous` (the
+standard) with the second wording of the find prompt, which asks for every value
+the shown lines print, also where the model is unsure, each value it names being
+checked like any other; `same` with the words of the first pass, which at a
+temperature of 0 mostly answers the same. The first pass always asks in the
+standard way, and the second pass is never answered from the run's cache of
+requests. The trace notes it as a `second_way` event per field (finds of the
+first pass, finds added, requests) and marks each request of it.
+
 A parameter with the axis `qualifier` in kwp (approximate, at most, at least,
 range low or high) reads it with the value (owner decision 2026-11-06). The two
 ends of a range are linked by code, not by the model (`reading.link_ranges`,
 tuple key `range`), and the compute step gives a number it works out the qualifier
 of the rows it used (`profiles/kwp/compute.qualified`).
+
+### The numbers no field took
+
+Every number of a table or figure that no field's question took is counted, and
+then asked which field it is (owner decision 2026-11-17, from the literature on
+reading numbers: find every number, then see which no question took).
+`addressed.numbers_untaken` goes over the plan's tables and figures after the
+find steps. A number is a cell of a table row, or a line of a figure's numbers,
+that prints a number other than a year (`addressed.printed_numbers`); a value
+takes the cell its address names, or else the numbers of its line that print its
+words, and a figure's line it stands at. Per kind (tables, figures) the passages
+with numbers, their numbers and those no value took are written as the trace
+event `untaken` per document, with the passages that have any, most first, and
+`stats.py` sums them as `numbers_untaken`: it says where values may be missing
+without a gold list.
+
+The step `assign` (preset `assign`, target `assigned`, prompt
+`extraction/assign`, rule `ask_untaken`, on in the shipped flows) asks for each
+such number which field it is. The flow draws it as the frame `untaken_numbers`
+between the find frame and the values frame: a loop over the variable `untaken`
+(`addressed.untaken_items`, one item for each cell of a table row, one for each
+number of a figure's line), side by side. The request shows the number's line
+under the head of its table, the headings above it and the numbered list of the
+spec's fields that read numbers; the reply is `{"entry": n}`, the number of the
+field or 0 for none. An answer outside the list is `not_an_option` and is asked
+again with its reason. Where a field is named, the number becomes a find of that
+field at that address (its line and cell, the number as printed, its line as the
+quote), is checked as every find is, and joins that field's finds of its
+passage, so the values frame reads its coordinates and applies its checks like
+those of any other value. The step costs one request for each such number, and a
+plan with many cost or area tables has many; a profile without the prompt
+`assign` asks nothing (`addressed.OPTIONAL`), and `ask_untaken` off leaves the
+numbers unread. The trace event is `assigned` per document, summed by `stats.py`
+as `numbers_assigned` (numbers asked, those that named a field, those that named
+none). The step asks a number for its field, where the find step asks a field for
+its numbers.
 
 ### A field a document has once
 
@@ -713,7 +804,9 @@ number, see The flow file), each request showing the value and its own place (as
 pieces under a letter of their own, with their kind, page and title:
 
 1. the pieces right before and after the value's piece, one request (window
-   `near`; `Plan.beside`);
+   `near`; `Plan.beside`), and after them the places the same dimension was
+   read at for the table's or section's other values and the text pieces that
+   name the table or figure (below);
 2. the run's budget of pieces (`search_pieces`): the pieces of
    the passages the vector search finds best for the sentence, the best of each
    kind first up to its share (`search_tables`, `search_figures` and `search_text`:
@@ -735,6 +828,36 @@ holds (`read`), when an answer does not hold after its follow-ups (`unbacked`), 
 `unstated` where every piece was shown (the finding is about the plan).
 `--top-up-open` sets the budget to every piece (`runner.read_to_end`), so a
 coordinate ends `read` or `unstated` there.
+
+Beside the hits a search request lists an outline (rule `hit_outline`, 8 in the
+shipped flows, owner decision 2026-11-17; `shows._hit_outline`, the input
+`outline` of the step): for each section a hit stands in, its heading and under
+it the tables and figures of that section the request does not show, each as its
+placeholder and title line, so that the model can fetch one with `item`. The
+outline is no place to answer from, since an answer is still a shown line, and
+it is shown only where the answer may fetch an `item` (rules `fetches` and
+`fetch_rounds`); headings do not count against its number and 0 leaves it out.
+
+Two kinds of piece come after the neighbours in that first request (owner
+decision 2026-11-17, both counted in the trace as ways of the request). Sibling
+places (rule `sibling_places`, 3 in the shipped flows): where the same
+dimension was already read for another value of the same table or section, the
+pieces it was read in come next, the one most values read it in first
+(`Plan.note_read`, `Plan.read_near`, `engine.Engine.read_near`), since the
+paragraph that names the scenario of one number of a table is the best first
+guess for the others. Each value is still asked for itself and answers with an
+address of its own; nothing is taken over from the sibling's answer. Text
+pieces that name the table or figure (rules `item_labels` and
+`mentioning_pieces`, 2 in the shipped flows; `Plan.mentioning`,
+`engine.Engine.mention_pieces`): a text names the item where it prints the label
+and the number of the item's title line as a word, "Tabelle 7" or "Abb. 3",
+with a number taken whole ("Tabelle 4" is not "Tabelle 41" or "Tabelle 4.1").
+The labels come in families by prefix: the label of the title or an abbreviation
+of it, or the label the title abbreviates, so that Tab., Tab and Tabelle name
+each other and Abb. and Abbildung do. Tables and figures are numbered each by
+themselves, so "Abbildung 4" does not name "Tabelle 4". The pieces beside the
+value, the sibling places and those already seen are left out, and both kinds
+are counted against nothing: the budget below is the run's.
 
 The box beside (`beside`) takes as many pieces on each side of the value's as the
 rule `beside_pieces` says, 0 for none; switched to `own_piece`, it takes the
@@ -770,6 +893,23 @@ offer `more` with the same ways of fetching, each by its own value of the rule
 Where the rule `fetch_rounds` is 0, none of these requests may ask to see more
 (`general.Ask.fetch`, owner decision 2026-11-13).
 
+A reply may also ask for the section a line stands in, `{"get": "section"}` with
+`id` the letter of a shown piece, the placeholder of a table or figure, or
+neither for the value's own place (owner decision 2026-11-17, a way of the rule
+`fetches`; `Reader.section_pieces`). It gets the pieces of that section from its
+start, in the order of the plan, those not shown yet, as many as the rule
+`fetch_section_pieces` says (5); a table or figure stands in the section of its
+placeholder. A larger number shows more of a long section at once and makes that
+request larger.
+
+The rule `fetch_rounds_keep` says what a further round of fetching shows of what
+was fetched. `all` (the standard) adds every round's pieces to the request, which
+grows with each round. `last` shows the request's own pieces and those fetched
+in the round just before, none of earlier rounds, and nothing is fetched twice;
+an answer can only name a line shown in its own request, so a line of a dropped
+piece cannot be cited. With one round, or none, both give the same request
+(`Reader.asked_with_fetched`, `targets.fetched_again`).
+
 A question about a dimension (`coord` at the value's own place, `search`) that shows
 a figure whose picture the run attaches (`attach_images`) may also ask for that
 picture, `{"get": "image"}` for the figure the value stands in, `{"get": "image",
@@ -781,9 +921,16 @@ no picture: one picture a request, each picture once a coordinate
 (`CoordItem.pictures`). The answer is still a shown line of the figure's
 transcription, such as the legend line of a colour, and both checks apply as
 always; the picture only helps to read what the transcription does not say. A
+request may name a region of the picture too (rule `image_regions`, on in the
+shipped flows, owner decision 2026-11-17): `"region"`, four whole numbers from 0
+to 1000 for the left, top, right and bottom of the part it wants, the right one
+past the left and the bottom past the top (`addressed.region_of`; any other
+region is none). The region is cut out of the stored crop and sent at the size of
+a whole picture (`runner._image_data_url`), so small writing such as a legend
+comes sharper; off, the picture always comes whole. A
 prompt tells a request about fetching only where its reply may fetch: the parts
-`<!-- with: more -->` and `<!-- with: get_image -->` follow the reply's form, not
-its payload (`runner.reply_offers`), and `<!-- with: image -->` the request that
+`<!-- with: more -->`, `<!-- with: get_image -->`, `<!-- with: get_region -->` and
+`<!-- with: get_section -->` follow the reply's form, not its payload (`runner.reply_offers`), and `<!-- with: image -->` the request that
 carries a picture.
 
 A find from another passage than the value's own is asked whether that place speaks
@@ -904,7 +1051,8 @@ place, is an error before anything is sent.
 The prompts are one for each kind of request, `extraction/<kind>`: `transcribe`,
 `find`, `docfield`, `coord`, `list`, `search`, `follow` and, where a profile
 writes them, `check`, `phrase` (the sentence a search goes with; without it the
-search goes with the field's sentence), and `names` and `work` for a run that builds
+search goes with the field's sentence), `assign` (which field a number no
+question took is; without it none is asked), and `names` and `work` for a run that builds
 lists of names and works (`addressed.KINDS`, `addressed.OPTIONAL`). A profile whose spec names coordinates and
 lacks one of the required ones is broken, and the run stops at the start and names
 the prompt, as `spec.load` stops at a broken spec (owner decision 2026-11-04;
@@ -1019,7 +1167,13 @@ with its `why`) and `asked` (once per reading: `requests` per kind, `refused` pe
 reason, `question_queries`, `chunks`, `scope`). The requests for a search sentence
 (`phrase_ask`, with the parameter and the coordinate it is written for), the review
 and the compute step write `phrase_ask`, `review_ask` and `compute_ask`
-(`runner._asked`, one per reply, with its tokens). The events of the
+(`runner._asked`, one per reply, with its tokens, the tokens the server's
+prefix cache served among them as `cached_tokens`). Since 2026-11-17 a document
+also writes `untaken` and `assigned` (the numbers no field took, and which of
+them the step `assign` named a field for), `second_way` (per field read a second
+time, `find_again_below`: finds of the first pass, finds added, requests) and
+`transcribed_again` (the figures transcribed more than once); a request of a
+repeated transcription carries `repeat`, its number. The events of the
 field-by-field flow, `plan`, `anchor`, `frame`, `rows`, `field`, `sweep`, `drop`
 and `places`, are written no more and stay in the schema for older traces, as do
 the `comb`, `years`, `settings`, `naming` events and their requests of the flow
@@ -1075,6 +1229,43 @@ vLLM server (`EMBEDDING_BACKEND=api`, `EMBEDDING_API_FORMAT=messages`) gives
 different vectors, so a query embedded one way is never compared with an index
 embedded the other. The index a run searches is the one it is handed; the
 vLLM-embedded indexes are searched with queries embedded through vLLM.
+
+### The word index and the page index beside the vectors
+
+Besides the vector search a search of the harvest asks two further routes, both
+of which only put passages before the reranker and neither decides anything about
+what a passage means (owner decision 2026-11-17; `runner.make_more_sources`).
+
+The word index (rule `search_words`, 30 in the shipped flows) is the corpus's
+FTS5 file built by `docpipe lexical`. Each sentence of the search is asked of it
+for the document in hand, the lists are merged by reciprocal rank, and the first
+`search_words` passages not already shown or excluded join the candidates, with
+their content if the vector search did not hand them back. A vector search is
+weakest where a sentence is most exact, at names, abbreviations and numbers, and
+a word index is not. A corpus without a current word index is searched by its
+vectors alone, which the log says once. The trace event is `words` (the passages,
+best first).
+
+The page index (rule `search_pages`, 5 in the shipped flows;
+`docpipe/inference/pages.py`) holds one vector for each page of each document,
+made from the page's image by the corpus's multimodal embedder, so that a search
+sentence embedded as the harvest embeds it can be compared with a page. The
+vectors of the sentences are the vector search's own, taken from its query cache,
+so no sentence is embedded twice. The `search_pages` pages closest to the
+sentences are found for the document, and the sections, tables and figures that
+stand on them (`pages.passages_on`) join the candidates, so that a map or a chart
+whose transcription lacks the detail is scored too. A page backs no value: the
+reading still needs a line of a shown passage that holds it, and both checks stay.
+A corpus without a current page index is searched without it, which the log says
+once. The trace event is `pages` (the pages found and the passages added). The
+index is built by `docpipe pages` (see [inference](inference.md)); 0 for either
+rule leaves that route unasked.
+
+The candidates of the vector, word and page routes go to the reranker together:
+`rerank.pool_of` takes besides the best of each kind and those drawn the
+passages named in its argument `also`, which is what the word and page routes
+found. Without a reranker the lists are merged by reciprocal rank
+(`hybrid.fuse`).
 
 ### Reranking a search
 
@@ -1152,6 +1343,24 @@ a check: every key stays as optional as the prompt leaves it, and what the reply
 says is still verified by `merge_field` exactly as before. Which entry a number
 names, or whether an address names a shown line, is not in the grammar either: code
 looks it up (`addressed.resolve`, `Reader._picks`).
+
+Two rules set the form of the reply without changing what is checked (owner
+decision 2026-11-17, measured as settings). `reply_order` says in which order a
+reply writes its keys, which the grammar enforces: `address_first` (the
+standard) writes the line before its words, `words_first` writes the words of
+the value first and then the line that prints them, and the example the prompt
+shows follows the same order (`addressed.in_reply_order`). `example_place` says
+where a request shows the example of its reply: `prompt` (the standard) in the
+system prompt, where the example carries the request's own address, so two
+requests of a kind differ from that point on and the server's prefix cache
+serves only the part before it; `message` keeps the system prompt's words and
+names the keys `example` and `nothing` instead, and the example stands under
+those keys at the end of the message, so the whole system prompt is the same
+for every request of a kind and step and the server's prefix cache serves all
+of it (`runner.system_text`, `example_keys`). Each `<stage>_ask` event of the
+trace carries `cached_tokens` next to `prompt_tokens`, what the server served
+from its prefix cache, and `scripts/prefix_share.py` totals the share per
+request kind and step from a run's traces.
 
 A reply that parses but lacks a key its schema requires at the top is not the
 object that was asked for, and is asked again as `missing_key`, the retry
@@ -1733,6 +1942,9 @@ a long value is a `piece`.
   level (passages or pieces), the model, the pool rule, the drawn passages, the
   draws, `upto`, the hash of the seed, the pool in its new order with its
   scores, the count of the rest, the pairs scored, kept and waited for, and the
+  milliseconds. `words` and `pages` hold what the word index and the page
+  index added to the search (rules `search_words`, `search_pages`): the
+  passages, or the pages and the passages standing on them, and the
   milliseconds. `pick` holds the pieces taken, each with its place in the
   search order and the vector place of its passage.
 - **Finds.** `finds` says what became of each find of an answer: its address
@@ -2040,7 +2252,21 @@ frame, the request showing `earlier_answer_not_held`, and checked once more;
 where it does not hold again it is `unbacked`. A value that does not hold is
 read a second time over its passage and section (`review.review_row`) and
 refused for `unbacked` where that reading does not agree. A check with no
-reply leaves the row as it is. A field the document has no row of is not
+reply leaves the row as it is. A value is also held to the conditions of the
+ontology (owner decision 2026-11-17, `engine.Engine.conditions`, called in
+`check_row`). The rule `value_bounds` gives a field the most its value may be in
+the field's own unit, such as a share, which is a part of a whole and so at most
+100 %; a value above it breaks `over_bound`. The rule `part_of_whole` names, per
+axis, the entry of a dimension that is the whole its other entries are parts of,
+such as the total over all energy carriers: a part greater than its whole among
+the values of the document read so far, every other entry of the field the same,
+breaks `part_over_whole`. Compared in the field's own unit and on the closed lists
+and numbers of the field alone, not on its free words; each value is noted for
+the values read after it. A value that breaks a condition is read a second time
+through the same review request and flagged `condition:<name>`, and nothing is
+removed for it. Both rules are empty in the default profile and filled in kwp
+(a share at most 100, the total of carriers, sectors and technologies as the
+wholes). A field the document has no row of is not
 read again here; the next run asks it. The run gives its reader what the
 check asks with (`runner.make_value_checking`); the pass below stays for
 harvests written before the step.
@@ -2198,6 +2424,9 @@ and never fails the run. Each count says what it counts:
 | `pieces` | `documents` read piece by piece, the `chunks` (pieces) they were cut into and `question_queries`, the searches made with a question for want of a sentence in the form of the plan (searches) |
 | `asked_once` | the fields a document has once: `fields` asked (fields x documents), `values` read (values) and `unread`, fields a request came to nothing for (fields) |
 | `works` | `documents` with works, `works` (entries of the lists, each document's own publication included) and `asked_their_details`, new works asked for their title, organisation, year and short name (works) |
+| `numbers_untaken` | per kind (table, figure) the `passages` with numbers, their `numbers` (cells and figure lines that print a number other than a year) and the `untaken` ones no value's address names; `by_document` the same per document with its passages `[kind, id, untaken, numbers]`, most untaken first |
+| `numbers_assigned` | `documents` where the step `assign` asked, the numbers `asked`, those that `named` a field and those that named `none` (numbers) |
+| `figures_transcribed_again` | `documents` with figures transcribed more than once, the `figures`, the `requests` beyond each first transcription, the `lines` of numbers matched across the transcriptions and the `numbers_changed` that differ from the first transcription's |
 
 The same file can be made for any harvest by hand with `python -m
 docpipe.extraction.stats HARVEST_DIR [--trace DIR ...]`, trace directories
@@ -2481,7 +2710,8 @@ self-check described under Method, `error`, one `<stage>_ask` per answered
 request of each stage (`ASK_STAGES`), and `piece`, a text the requests of the
 document repeat; since 2026-11-14 also `run`, `search`, `vector`, `rerank`, `pick`,
 `finds`, `step`, `outcome`, `retry` and `fetch` (see The harvest file, the stamp
-and the trace). The events of the field-by-field flow, `plan`, `anchor`,
+and the trace), and since 2026-11-17 `untaken`, `assigned`, `second_way`,
+`transcribed_again`, `words` and `pages` (see the sections of their steps). The events of the field-by-field flow, `plan`, `anchor`,
 `frame`, `rows`, `field`, `sweep`, `drop` and `places`, are written no more and
 stay in the schema for traces of before 2026-11-08. An event that reports a model
 request (every `<stage>_ask`, and an `error` of kind `exception`) carries the
@@ -2546,8 +2776,8 @@ numbers the step reads: `Preset.kind`, `rules.step_kind`), the prompt, the input
 answer, `forms`) and `into` (what becomes of the answer, the target, `targets`).
 The presets (`presets.PRESETS`, `Preset`) fill the five parts for the questions
 of the two use cases: `transcribe`, `sentences`, `docfield`, `find`, `coord`,
-`phrase`, `search`, `about`, `list`, `plan_year_words`, `name`, `compute`,
-`review` and `example`; what a step sets of its own wins over its preset.
+`phrase`, `search`, `about`, `assign`, `list`, `plan_year_words`, `name`,
+`compute`, `review` and `example`; what a step sets of its own wins over its preset.
 `general.Ask` and `general.ask_step` send the request. Beside them the library
 has general steps (`extraction.general`): ask the model with a prompt of the profile or a text of
 the step's own (`ask` without a preset; an input named as `{{key}}` or `{{key.field}}` is
@@ -2561,7 +2791,10 @@ returning a dict, run in the run's own process) and a loop over any list
 (`"each": "list"` with `list` and `as`). A condition row may be about any
 variable (`"of": "var"`, its path as `is`). The default profile has a general
 prompt for each kind of question (`prompts/extraction/`), which a profile
-replaces with its own. A rule a question step reads is read at `ask` as well,
+replaces with its own. The shipped flows draw the step `assign` in a frame of its own, `untaken_numbers`
+(`"each": "list"` over the variable `untaken`, `"together": true`), between the
+find frame and the values frame, so that a number it names a field for is a find
+of that field before the values are read on (see The numbers no field took). A rule a question step reads is read at `ask` as well,
 a rule of the search at `retrieve` and `rerank` (`ruleset/kit.py`,
 `with_general`).
 
@@ -2688,6 +2921,7 @@ harvest read with.
 | `--review` / `--review-limit N` | CLI flag | off / `0` | Runs `review.run`, one request per value of level C or D, up to N total | `review.run` |
 | `--profile NAME` | CLI flag | `$DOCPIPE_PROFILE` | names the profile whose spec, prompts and hooks the run reads; the stage refuses to run without one, in a line naming the available profiles, and `__main__.py` binds the flag before `runner` is imported | `runner.main`, `docpipe/profile.py` |
 | `--serialize TTL` / `--print-context-budget` | CLI flag | none / off | `--serialize`: no harvest, hands `--out` to `serialize.run`, which calls the writer of the drawing of the profile's graph file. `--print-context-budget`: prints the tokens, per request, that the largest request of a harvest needs, then exits | `serialize.run`, `runner.main` |
+| `--also-harvest DIR` | CLI flag, repeatable | none | With `--serialize`: a further harvest directory of the same plans, whose rows are compared with this run's numbers and never written; a node another run disagrees with is marked contested in the full graph and left out of the strict one, and the graph log counts it (see [the knowledge graph](graph.md)) | `runner.main`, `acrossruns.read_runs`, `graph.Writer._across_runs` |
 | `--no-provenance` | CLI flag | off (the file is written) | With `--serialize`: no provenance file beside the graph, as `EXTRACT_PROVENANCE=0` | `runner.main`, `provenance.enabled` |
 | `FRAME` | profile hook | none | The frame coordinates (kwp: scenario and year): the plan's years date them, and `--top-up` blocks a changed key that names one (`runner.main`, `topup.actionable`). No coordinate of a plan closes a row: `SLICE`, `READ_IN_FULL` and `kept_quantities()` were deleted on 2026-11-10, and what closes a row now is a coordinate with an entry a value must have, the spec's `keep` at a coordinate (`fields.kept`, `fields.closed`; the scenarios spec uses it for `work`), which gives the state `out_of_slice` | `runner.main`, `topup.actionable` |
 | `PROMPT_CHECKS` | profile hook | the extended profile's, else none | Entries `(what is checked, prompt id, passage, has to be there)`: passages the profile's prompts have to hold or must not. Read by `docpipe preflight` and by nothing in a run | `preflight.audit`, `preflight.prompt_checks` |

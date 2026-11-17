@@ -4,9 +4,13 @@ Name every value of the field under "field" that the lines under "passage" print
 Name every value of the field under "field" that the lines under "passage" print, each with its line, character for character, and its words.
 <!-- /way -->
 
-* Each line starts with its address. A line that "|" divides has cells, counted from 1, wherever it stands: in "12 | Oslo | 2030 | 4.2 |" the cell 12.4 is "4.2". A table's title and head stand in every piece of it under the same addresses, and so does a figure's caption.
+* Each line starts with its address. A line that "|" divides has cells, counted from 1, wherever it stands: in "12 | Oslo | 2030 | 4.2 |" the cell 12.4 is "4.2". A table's title, head and the notes under it stand in every piece of it under the same addresses, an indented row with the rows it stands under, and so does a figure's caption.
 * A value is what the field means ("means"), as this document states it for itself.
 * Words that only name what the field is about, such as a heading that names the topic of the lines below it, are no value of it.
+<!-- way: find_again_way=same -->
+<!-- way: find_again_way=generous -->
+* This is a second reading of these lines. Name every value of the field the lines print, also where you are unsure it belongs to the field; what no line prints stays no value.
+<!-- /way -->
 <!-- way: answer_with=address -->
 * "at" is the value's cell where it stands in a line with cells, else its line; where a value runs over several lines, from the first to the last, such as 4-6. "words" are the value as the line prints it, character for character.
 <!-- way: answer_with=quote -->
@@ -37,5 +41,15 @@ Where no line prints one, in this form:
 <!-- with: get_image -->
 {"get":"image"} under "more" asks for the picture of the figure shown, {"get":"image","id":"B"} for the picture of the figure under letter B, where its lines do not say what you need and its picture shows it. The request is then asked again with the picture; the answer is still a shown line.
 
+<!-- with: get_region -->
+With "region":[left,top,right,bottom], each from 0 to 1000 of the picture's width and height, only that part comes, enlarged and sharper, such as {"get":"image","region":[0,700,1000,1000]} for a legend in its lower third.
+
+<!-- with: get_section -->
+{"get":"section"} under "more" fetches the section of the first piece shown, from its start, {"get":"section","id":"B"} the section of the piece under letter B, {"get":"section","id":"p17_img1"} the section that table or figure stands in: where a setting such as the unit of all its numbers may stand at the start of the section.
+
 <!-- with: image -->
 The picture of the figure under "image" is attached. Read in it what its lines do not say, and answer with the shown line that names it, such as the legend line of a colour.
+
+<!-- with: image_region -->
+The picture shows only the part under "image_region" (left, top, right, bottom, from 0 to 1000 of the figure's width and height), enlarged.
+

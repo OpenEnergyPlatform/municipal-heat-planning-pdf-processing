@@ -88,6 +88,37 @@ reaches stages 4 to 6, but extraction and the chat still look for its crops at
 `<processed root>/<document name>/images/`, so such a document shows and
 attaches no crops there.
 
+### A sentence of context before each table and figure
+
+With the rule `context_sentence` on (off in the core's defaults, on in the kwp and
+scenarios profiles; owner decision 2026-11-17, from the literature on contextual
+retrieval: a sentence of context for each piece was the one extension with a
+steady gain on number questions) the chat model is asked once for each table and
+figure, after the merge, for one sentence that says what it is about, in which
+unit, for which area, scenario and years, as far as its caption, its head and
+the heading of its section say it (`docpipe/chunking/context.py`, prompt
+`visuals/context_sentence`). The head the request shows is the first
+`context_head_chars` characters (1500) of the table's markdown or the figure's
+description. The embedding inputs of the table or figure, both the text vector and
+the text that goes with the picture, begin with that sentence on a line of its own
+(`chunking.build_embedding_inputs`); a stage that embeds without the rule on reads
+none.
+
+The sentences are kept beside the document's results in
+`results/context_sentences.json`, each under a hash of exactly what the request
+showed and of the prompt, so one is asked again only when the caption, the head,
+the heading or the prompt changed, and a change of `context_head_chars` asks every
+sentence again. The database holds the sentence a table's or figure's vectors were
+embedded with in the column `context_sentence` of `Tables` and `Images` (NULL for
+none; `_ensure_context_sentence_column` adds it to a database that predates it).
+`--step sync` compares that column with the sentence kept, so a changed sentence
+is a changed entry and only its vectors are embedded again; the first run with the
+rule on is thus a request for each table and figure and a new embedding of all of
+their vectors. An answer that is not one JSON object with the key `sentence` is
+asked again with its cause named, is never embedded, and leaves the table or
+figure with its text as it was, to be asked again by the next run; nothing is
+repaired.
+
 ### Database insertion
 
 When `--force` covers both the db and embed steps, `run()` first snapshots
@@ -294,7 +325,7 @@ The six tables below live in the shared core schema (see [store](store.md)):
 | `Sections` | One retrieval chunk: title, content, primary page number. | One `INSERT` per section, in list order. | `UNIQUE(document, section_number)` |
 | `SectionPages` | The distinct pages a section spans. | One `executemany` per section. | `PRIMARY KEY(section, page)` |
 | `Segments` | Ordered, page-tagged text/table/figure pieces of a section. | One `executemany` per section. | `UNIQUE(section, ordinal)` |
-| `Tables` / `Images` | One row per table or figure: caption, markdown or description, bbox; for a table also the result of stage 5's check of its transcription (`qa`). | One `executemany` per section. | none beyond the primary key |
+| `Tables` / `Images` | One row per table or figure: caption, markdown or description, bbox, the sentence of context its vectors were embedded with (`context_sentence`, NULL for none); for a table also the result of stage 5's check of its transcription (`qa`). | One `executemany` per section. | none beyond the primary key |
 | `Embeddings` | One row per stored vector: `faiss_id`, `embedding_type`, `owner_kind`, `owner_id`. | `EmbeddingWriter.write`, per flush. | `UNIQUE(owner_kind, owner_id, embedding_type)` |
 
 `Segments`, `Tables` and `Images` each carry `bbox`: a JSON array of one or

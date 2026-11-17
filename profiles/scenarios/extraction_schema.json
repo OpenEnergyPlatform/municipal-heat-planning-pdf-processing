@@ -10662,8 +10662,8 @@
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
-   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match|settings|seek|transcribe|find|docfield|coord|list|names|search|check|follow|work)$": {
-    "description": "sha256 of the prompt file; `transcribe`, `find`, `docfield`, `coord`, `list`, `names`, `search`, `check`, `follow`, `work` and `phrase` are the prompts of a harvest piece by piece; the others are in stamps of older releases",
+   "^extraction/(harvest|queries|anchors|rows|field|phrase|frame|survey|read_values|read_text|comb|match|settings|seek|transcribe|find|docfield|coord|list|names|search|check|follow|work|assign)$": {
+    "description": "sha256 of the prompt file; `transcribe`, `find`, `docfield`, `coord`, `list`, `names`, `search`, `check`, `follow`, `work`, `assign` and `phrase` are the prompts of a harvest piece by piece; the others are in stamps of older releases",
     "pattern": "^[0-9a-f]{64}$",
     "type": "string"
    },
@@ -10915,6 +10915,12 @@
       },
       "type": "object"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -11052,6 +11058,12 @@
        "type": "array"
       },
       "type": "object"
+     },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
      },
      "completion_tokens": {
       "type": [
@@ -11293,6 +11305,12 @@
        "type": "array"
       },
       "type": "object"
+     },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
      },
      "completion_tokens": {
       "type": [
@@ -11628,6 +11646,12 @@
        "type": "array"
       },
       "type": "object"
+     },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
      },
      "cause": {
       "enum": [
@@ -12047,6 +12071,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12108,6 +12138,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -12172,6 +12205,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12233,6 +12272,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -12297,6 +12339,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12358,6 +12406,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -12422,6 +12473,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12483,6 +12540,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -12547,6 +12607,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12608,6 +12674,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -12672,6 +12741,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12733,6 +12808,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -12797,6 +12875,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12858,6 +12942,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -12922,6 +13009,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -12983,6 +13076,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -13047,6 +13143,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -13108,6 +13210,9 @@
        "integer",
        "null"
       ]
+     },
+     "repeat": {
+      "type": "integer"
      },
      "rid": {
       "type": "integer"
@@ -13172,6 +13277,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "chunk": {
       "type": "integer"
      },
@@ -13234,6 +13345,9 @@
        "null"
       ]
      },
+     "repeat": {
+      "type": "integer"
+     },
      "rid": {
       "type": "integer"
      },
@@ -13276,6 +13390,9 @@
      "answered_at": {
       "type": "number"
      },
+     "asked": {
+      "type": "string"
+     },
      "asked_at": {
       "type": "number"
      },
@@ -13293,6 +13410,143 @@
      },
      "box": {
       "type": "string"
+     },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "chunk": {
+      "type": "integer"
+     },
+     "chunks": {
+      "type": "integer"
+     },
+     "completion_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "coordinate": {
+      "type": "string"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "fetched": {
+      "type": "integer"
+     },
+     "input": {
+      "type": "object"
+     },
+     "kind": {},
+     "ms": {
+      "type": "integer"
+     },
+     "names": {
+      "type": "integer"
+     },
+     "of": {
+      "type": "integer"
+     },
+     "once": {
+      "type": "boolean"
+     },
+     "output": {
+      "type": "object"
+     },
+     "owner": {},
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "picture": {
+      "type": "string"
+     },
+     "pieces": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "prompt_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
+     "repeat": {
+      "type": "integer"
+     },
+     "rid": {
+      "type": "integer"
+     },
+     "sent_at": {
+      "type": "number"
+     },
+     "shows": {
+      "enum": [
+       "near",
+       "found",
+       "fetched"
+      ]
+     },
+     "sid": {
+      "type": "integer"
+     },
+     "step": {
+      "enum": [
+       "group",
+       "plan_years"
+      ]
+     },
+     "t": {
+      "const": "assign_ask"
+     },
+     "value": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "attempt"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "answered_at": {
+      "type": "number"
+     },
+     "asked_at": {
+      "type": "number"
+     },
+     "attempt": {
+      "type": "integer"
+     },
+     "blocks": {
+      "additionalProperties": {
+       "items": {
+        "type": "array"
+       },
+       "type": "array"
+      },
+      "type": "object"
+     },
+     "box": {
+      "type": "string"
+     },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
      },
      "completion_tokens": {
       "type": [
@@ -13394,6 +13648,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -13491,6 +13751,12 @@
      "box": {
       "type": "string"
      },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
+     },
      "completion_tokens": {
       "type": [
        "integer",
@@ -13587,6 +13853,12 @@
      },
      "box": {
       "type": "string"
+     },
+     "cached_tokens": {
+      "type": [
+       "integer",
+       "null"
+      ]
      },
      "completion_tokens": {
       "type": [
@@ -13847,6 +14119,156 @@
      "refused",
      "question_queries",
      "chunks"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "kinds": {
+      "additionalProperties": {
+       "additionalProperties": {
+        "type": "integer"
+       },
+       "type": "object"
+      },
+      "type": "object"
+     },
+     "passages": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "scope": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "untaken"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "kinds",
+     "passages"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "asked": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "named": {
+      "type": "integer"
+     },
+     "none": {
+      "type": "integer"
+     },
+     "scope": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "t": {
+      "const": "assigned"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "asked",
+     "named",
+     "none"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "added": {
+      "type": "integer"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "finds": {
+      "type": "integer"
+     },
+     "parameter": {
+      "type": [
+       "string",
+       "null"
+      ]
+     },
+     "requests": {
+      "type": "integer"
+     },
+     "rule": {
+      "type": "string"
+     },
+     "t": {
+      "const": "second_way"
+     },
+     "way": {
+      "type": "string"
+     },
+     "work": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "rule"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "figures": {
+      "type": "integer"
+     },
+     "lines": {
+      "type": "integer"
+     },
+     "numbers_changed": {
+      "type": "integer"
+     },
+     "requests": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "transcribed_again"
+     },
+     "times": {
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "times",
+     "figures",
+     "requests",
+     "lines",
+     "numbers_changed"
     ],
     "type": "object"
    },
@@ -14201,6 +14623,71 @@
      "probes",
      "places",
      "of_kind"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "doc": {
+      "type": "integer"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "places": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "sid": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "words"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "places"
+    ],
+    "type": "object"
+   },
+   {
+    "additionalProperties": false,
+    "properties": {
+     "added": {
+      "items": {
+       "type": "array"
+      },
+      "type": "array"
+     },
+     "doc": {
+      "type": "integer"
+     },
+     "ms": {
+      "type": "integer"
+     },
+     "pages": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array"
+     },
+     "sid": {
+      "type": "integer"
+     },
+     "t": {
+      "const": "pages"
+     }
+    },
+    "required": [
+     "t",
+     "doc",
+     "pages",
+     "added"
     ],
     "type": "object"
    },

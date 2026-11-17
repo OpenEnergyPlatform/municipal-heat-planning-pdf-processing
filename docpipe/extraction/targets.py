@@ -133,17 +133,26 @@ def fetched_again(ask, req, shape: dict, example, reply, counts):
     reader, plan = ask.reader, ask.plan
     anchor = list(req.chunks)
     seen = {chunk.key for chunk in req.chunks}
+    # Rule `fetch_rounds_keep` "last": each round shows the request's own
+    # pieces and those of the round before only (owner decision 2026-11-17,
+    # from the literature on VISOR).
+    last = rules.get("fetch_rounds_keep") == "last"
+    base_blocks = dict(req.shown.blocks)
+    base_passages = dict(req.payload.get("passages") or {})
     for _ in range(int(rules.get("fetch_rounds"))):
         more = asked_more(reply)
         if not more or not anchor:
             break
-        pieces = reader.fetch(plan, more, anchor, seen, False)
+        pieces = reader.fetch(plan, more, anchor, seen, False, req.shown)
         if not pieces:
             break
         seen.update(chunk.key for chunk in pieces)
+        if last:
+            req.shown.blocks = dict(base_blocks)
         blocks = reader.show_fetched(plan, req.shown, pieces)
         req.payload = {**req.payload, "passages": {
-            **(req.payload.get("passages") or {}), **blocks}}
+            **(base_passages if last
+               else (req.payload.get("passages") or {})), **blocks}}
         again = ask.ask(req, shape, example, counts, fetched=len(pieces))
         if not isinstance(again, dict):
             break
@@ -228,7 +237,11 @@ def _values_once(ask, parameter, name: str, chunk, counts) -> dict:
     shape, example = forms.of(ask.reply, req, closed=listed is not None,
                               more=ask.fetch,
                               at=ask.setting("example_at"))
-    noted = {"parameter": parameter.uri, **chunk_notes(chunk)}
+    # A request of the second pass over a field's pieces says so
+    # (`engine.Engine.find_again`).
+    noted = {"parameter": parameter.uri, **chunk_notes(chunk),
+             **second_ways(["find_again_below"]
+                           if ask.scope.get("find_pass") == 2 else [])}
     out = {"claims": [], "asked": 1, "failed": collections.Counter(),
            "lost": None, "elsewhere": []}
     reply = ask.ask(req, shape, example, counts, **noted)
@@ -343,6 +356,98 @@ def _gathered_once(ask, item, req, counts) -> tuple:
     return held, None, wanted
 
 
+# -- a number no question took ------------------------------------------------------
+
+def assigned(ask, counts):
+    """The field a number no question took belongs to (`assign`, owner
+    decision 2026-11-17, from the literature on reading numbers: every
+    number no question took is asked which field of the list it is, or
+    none): the request shows the number's line with the head of its table
+    as a value's own place is shown, the headings above it and the spec's
+    fields that read numbers, numbered; the answer is the number of the
+    field, 0 for none. An answer outside the list is asked again with its
+    reason (`not_an_option`). Where a field is named the number becomes a
+    find of that field at that address, as a find of the find step would be
+    (its line and cell, the number as printed, its line as the quote),
+    checked as every find is and kept with that field's finds of its
+    passage, so that the values and their coordinates go through it as
+    through any value. Nothing is asked where the rule `ask_untaken` is off
+    or the profile writes no prompt for the request."""
+    from types import SimpleNamespace
+    from .general import raw
+    from .wording import say
+    reader, plan, engine = ask.reader, ask.plan, ask.engine
+    item = raw(ask.scope, "number")
+    if item is None or not rules.get("ask_untaken") or not ask.asks():
+        return None
+    choices = [p for p in ask.doc.parameters if p.is_numeric]
+    if not choices:
+        return None
+    options = [SimpleNamespace(label=p.label, definition=p.description,
+                               group="") for p in choices]
+    lines, labels, _grouped = reader.list_of(options, two_step=False)
+    req = ask.request({"options": lines})
+    shape, example = forms.of(ask.reply, req)
+    passage = plan.passages.get(tuple(item.owner))
+    noted = {"kind": passage.kind if passage is not None else None,
+             "owner": item.owner[1], "value": item.words}
+    counts.assigned["asked"] += 1
+    reply = ask.ask(req, shape, example, counts, **noted)
+    picks = reader._picks(reply, len(labels), False)
+    if picks is None:
+        counts.fail(addressed.NOT_AN_OPTION)
+    for _ in range(reader.follow_ups()):
+        if picks is not None:
+            break
+        given = reply.get("entry") if isinstance(reply, dict) else None
+        reply = ask.follow(req, shape, example, reply,
+                           [say(addressed.NOT_AN_OPTION, given=given)],
+                           counts, **noted)
+        picks = reader._picks(reply, len(labels), False)
+    pick = picks[0] if picks else 0
+    counts.assigned["named" if pick else "none"] += 1
+    claims: list = []
+    if pick:
+        parameter = choices[pick - 1]
+        at = f"{item.line}.{item.cell}" if item.cell else f"{item.line}"
+        entry = {**addressed.point(req.shown, True, at=at),
+                 "words": item.words}
+        outer = addressed.ASKING.get()
+
+        def refused(got):
+            first = outer.refused(got) if outer is not None \
+                and outer.refused is not None else None
+            if first is not None:
+                return first
+            for check in getattr(parameter, "checks", ()):
+                if conditions.holds(check["refuse"],
+                                    engine.facts(ask.scope, got)):
+                    return f"check:{check['name']}", check["sentence"]
+            return None
+        with addressed.asking(Asking(
+                ask.node.get("id"), refused,
+                outer.follow_ups if outer is not None else None,
+                scope=ask.scope,
+                nested=outer.nested if outer is not None else None)):
+            held, refusedl = reader._finds(
+                plan, req.shown, {"found": [entry]},
+                reader.listed(parameter), parameter.is_numeric)
+        for _, why in refusedl:
+            counts.fail(why)
+        for got in held:
+            claim = reader.claim(plan, parameter, got, counts)
+            if claim is not None:
+                claims.append(claim)
+        if claims:
+            engine.keep_finds(ask.scope, parameter, {
+                "claims": claims, "asked": 0,
+                "failed": collections.Counter(), "lost": [],
+                "elsewhere": [], "members": []})
+    return _answer(True, len(claims), not claims, False,
+                   item.words, claims[0].get("quote", "") if claims else "",
+                   **came_to(ask, counts))
+
+
 # -- a dimension of a value -------------------------------------------------------
 
 def coord_notes(coord) -> dict:
@@ -379,8 +484,10 @@ def at_own_place(ask, counts):
     read, row, slot = coord.read, coord.row, coord.slot
     noted = coord_notes(coord)
     answered, made, more = False, [], []
+    shown = None
     if shows.has_place(plan, row.claim):
         req = ask.request()
+        shown = req.shown
         several = reader.several(slot)
         seen = coord.pictures
         pictures = reader.pictures(req.shown, seen) if ask.picture else {}
@@ -408,7 +515,8 @@ def at_own_place(ask, counts):
         if coord.chunk is not None:
             coord.fetched = reader.fetch(plan, more, [coord.chunk],
                                          coord.seen,
-                                         read.batch.parameter.is_numeric)
+                                         read.batch.parameter.is_numeric,
+                                         shown)
     return _answer(answered, 1 if state == READ else 0, state != READ,
                    False, **came_to(ask, counts))
 
@@ -502,7 +610,7 @@ def over_hits(ask, counts):
         supply.fetched = reader.fetch(
             plan, more, batch,
             {c.key for c in batch} if rules.get("show_twice")
-            else coord.seen, numbers)
+            else coord.seen, numbers, req.shown)
     return _answer(True, 1 if held else 0, not held, False,
                    **came_to(ask, counts))
 
@@ -693,7 +801,16 @@ TARGETS: dict = {target.name: target for target in (
            "Values of a field of the Spec, each with the line it stands in, "
            "checked as every value is; kept at once, or gathered over the "
            "rounds of a field of the whole document.", values,
-           forms=("finds",), outputs=("answer", "values")),
+           forms=("finds",), outputs=("answer", "values", "untaken")),
+    Target("assign", "the field of a number no question took",
+           "The field of the Spec that reads numbers a number of a table or "
+           "figure belongs to, or none, chosen from the list of such fields "
+           "by the line of the number, its table's head and the headings "
+           "above it; asked once for each number no value took. Where a "
+           "field is named the number becomes a value of it at that "
+           "address, with the coordinates and checks of every value.",
+           assigned, gives=("options",), forms=("entry",),
+           outputs=("answer",)),
     Target("dimension", "a dimension of the value",
            "The dimension of the value the answer's line says, at the "
            "value's own place or over the search hits; checked as every "

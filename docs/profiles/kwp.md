@@ -63,6 +63,14 @@ Every attribute below is one seam `docpipe/` or a script asks a profile
 for by name, described in general on [profiles](../profiles.md); this
 table gives kwp's own answer.
 
+Among the rules of its own `rules.json`, the profile switches on `context_sentence`
+(the sentence of context before each table and figure in the index, see
+[chunking](../stages/chunking.md)), and fills `value_bounds` (a share is at most
+100) and `part_of_whole` (the total over carriers, sectors and technologies is the
+whole its parts are compared with) for the conditions of the ontology a value is
+checked against (see [the extraction stage](../stages/extraction.md)); its graph
+rule `drawn_tolerance` is described on [the knowledge graph](../stages/graph.md).
+
 | Stage | Module | Attribute | Contributes |
 |---|---|---|---|
 | File processing | `source.py` | `SOURCE`, `backfill_meta` | the KWW register as a `Source`: filtering, convoy grouping, overrides |

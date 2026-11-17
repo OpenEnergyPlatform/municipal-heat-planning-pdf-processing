@@ -25,6 +25,8 @@ numbers a report and the ontology side can act on:
   document has once and the values read of them, the works a document
   presents beside itself, and the search sentences that were questions
   (owner decisions 2026-11-08);
+- the numbers of the tables and figures no value took, per kind and per
+  document (owner decision 2026-11-17): where values may be missing;
 - how many requests were with the server at once, on average and at most,
   and the seconds they spent with it and waiting for a place, all and per
   stage; and per stage the requests answered with the answer of the same
@@ -213,6 +215,10 @@ def from_traces(trace_dirs: Iterable[Path],
     pieces: Counter = Counter()
     once: Counter = Counter()
     works: Counter = Counter()
+    untaken: dict = defaultdict(Counter)
+    assigned: Counter = Counter()
+    again: Counter = Counter()
+    untaken_by_document: list = []
     timed: list = []
     for directory in trace_dirs:
         for path in trace.files(directory):
@@ -295,6 +301,27 @@ def from_traces(trace_dirs: Iterable[Path],
                     works["documents"] += 1
                     works["works"] += _int(event, "works")
                     works["new"] += _int(event, "new")
+                elif kind == "assigned":
+                    assigned["documents"] += 1
+                    for key in ("asked", "named", "none"):
+                        assigned[key] += _int(event, key)
+                elif kind == "transcribed_again":
+                    again["documents"] += 1
+                    for key in ("figures", "requests", "lines",
+                                "numbers_changed"):
+                        again[key] += _int(event, key)
+                elif kind == "untaken":
+                    held = {}
+                    for of, tally in (event.get("kinds") or {}).items():
+                        for key in ("passages", "numbers", "untaken"):
+                            untaken[of][key] += _int(tally, key)
+                        held[of] = [_int(tally, "untaken"),
+                                    _int(tally, "numbers")]
+                    untaken_by_document.append({
+                        "document": trace.name_of(path),
+                        **{f"{of}_untaken": n for of, (n, _) in held.items()},
+                        **{f"{of}_numbers": m for of, (_, m) in held.items()},
+                        "passages": event.get("passages") or []})
     return {
         # The maps of places: documents mapped and how many completely,
         # passages, requests, places taken and not, requests unread, and
@@ -372,6 +399,30 @@ def from_traces(trace_dirs: Iterable[Path],
             "documents": works["documents"],
             "works": works["works"],
             "asked_their_details": works["new"]},
+        # The numbers of the tables and figures no value took (owner
+        # decision 2026-11-17): per kind the passages with numbers, their
+        # numbers (cells or figure lines that print a number other than a
+        # year) and those no value's address names; per document the same
+        # and its passages [kind, id, untaken, numbers], most untaken
+        # first. Where values may be missing, without a gold list.
+        # Of those, the numbers asked which field they are (owner decision
+        # 2026-11-17): documents with the question, the numbers asked, those
+        # that named a field of the Spec and those that named none.
+        # The figures transcribed more than once (rule `transcribe_times`,
+        # owner decision 2026-11-17): documents with such figures, the
+        # figures, the requests beyond each first transcription, the lines
+        # of numbers matched across the transcriptions and the numbers that
+        # differ from the first transcription's.
+        "figures_transcribed_again": {key: again[key] for key in (
+            "documents", "figures", "requests", "lines", "numbers_changed")},
+        "numbers_assigned": {key: assigned[key] for key in (
+            "documents", "asked", "named", "none")},
+        "numbers_untaken": {
+            "by_kind": {of: dict(c) for of, c in untaken.items()},
+            "by_document": sorted(
+                untaken_by_document,
+                key=lambda d: -sum(v for k, v in d.items()
+                                   if k.endswith("_untaken")))},
     }
 
 

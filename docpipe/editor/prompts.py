@@ -45,7 +45,7 @@ NO_STALE = ("A changed prompt leaves the harvests that are already written "
 # The requests whose instruction is the part of the prompt their message
 # carries (`runner.request_prompt`), and those sent the prompt whole.
 CUT = ("find", "docfield", "coord", "list", "names", "search", "check",
-       "work", "phrase")
+       "work", "phrase", "assign")
 WHOLE = ("transcribe",)
 # The request asked again goes under the prompt of the one it follows;
 # the words after its payload are those of this prompt.

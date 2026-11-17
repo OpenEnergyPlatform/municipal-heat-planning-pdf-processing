@@ -30,3 +30,7 @@ Wo keine Zeile einen druckt, in dieser Form:
 
 <!-- with: more -->
 "more" holt Stücke, auf die eine gezeigte Zeile verweist oder die du noch brauchst, etwa „siehe Abbildung 12“: {"get":"next"} das Stück nach dem gezeigten, {"get":"previous"} das davor, {"get":"item","id":"p17_img1"} die Tabelle oder Abbildung, die eine Zeile mit „[p17_img1 …]“ nennt, {"get":"search","pattern":"Bilanzjahr"} die Stücke, in denen ein Muster steht, {"get":"similar","text":"…"} die Stücke, die einem Satz am nächsten sind; der Satz steht so da, wie der Plan ihn drucken würde, nie als Frage. Was du holst, siehst du in der nächsten Anfrage.
+
+<!-- with: get_section -->
+{"get":"section"} unter "more" holt den Abschnitt des ersten gezeigten Stücks, von seinem Anfang an, {"get":"section","id":"B"} den Abschnitt des Stücks unter Buchstabe B, {"get":"section","id":"p17_img1"} den Abschnitt, in dem diese Tabelle oder Abbildung steht: wenn eine Festlegung wie „alle Angaben in MWh/a“ am Anfang des Abschnitts stehen kann.
+

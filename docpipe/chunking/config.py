@@ -6,7 +6,8 @@ Author: Felix Vossel
 
 import os
 
-from docpipe.artifacts import (DOCUMENT_JSON,            # noqa: F401  (re-exported)
+from docpipe.artifacts import (CONTEXT_SENTENCES_JSON,  # noqa: F401  (re-exported)
+                               DOCUMENT_JSON,            # noqa: F401  (re-exported)
                                PAGE_TRANSCRIPTION_REPORT_JSON,
                                SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON)
 

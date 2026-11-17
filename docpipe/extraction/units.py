@@ -125,6 +125,9 @@ def _ordinal():
 # A line of a Markdown table and the rule under its head.
 _ROW = re.compile(r"^\s*\|.*\|\s*$")
 _RULE = re.compile(r"^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$")
+# What indents the first cell of a table row as the table prompt asks for an
+# indented sub-row (rule 4: "leading whitespace or a prefix such as '└'").
+_INDENT = "  \t└├│┗┣↳"
 # An address as a model writes it: an optional block letter, a line, an
 # optional cell, an optional last line of a stretch.
 _ADDRESS = re.compile(r"^\s*([A-Z])?\s*(\d+)(?:\.(\d+))?"
@@ -211,12 +214,24 @@ class Line:
 class Passage:
     """A passage as numbered lines. *source* is what a value read from it
     is checked against: the passage itself, a figure as its transcription.
-    *fixed* are the lines every piece of it shows (a table's title and
-    head, a figure's title)."""
+    *fixed* are the lines every piece of it shows (a table's title, head
+    and the lines under it the rule `table_foot_lines` carries, a figure's
+    title). *parents* are, for a row of a table indented under rows above
+    it, those rows, top first (`row_parents`): every piece and every place
+    that shows the row shows them with it."""
     source: Source
     lines: list
     fixed: tuple = ()
     drawn: bool = False
+    parents: dict = field(default_factory=dict)
+
+    def parents_of(self, numbers) -> set:
+        """The rows the rows *numbers* stand under, where they are
+        indented under rows above them (owner decision 2026-11-17)."""
+        if not self.parents:
+            return set()
+        return {up for number in numbers
+                for up in self.parents.get(number, ())}
 
     @property
     def owner(self) -> tuple:
@@ -239,8 +254,9 @@ class Passage:
     @property
     def title(self) -> str:
         """The table's or figure's title line, the section's heading."""
-        if self.fixed:
-            return self.line(self.fixed[0]).text
+        heads = [n for n in self.fixed if self.line(n).role != "foot"]
+        if heads:
+            return self.line(heads[0]).text
         return (self.source.provenance or {}).get("section_title") or ""
 
     def line(self, number: int) -> Optional[Line]:
@@ -307,7 +323,51 @@ def table_lines(text: str) -> Optional[tuple]:
                               "foot"))
     if not any(line.role == "body" for line in lines):
         return None
+    # The lines under a table, its notes ("* ohne Industrie", "Angaben in
+    # MWh/a"), go with every piece of it as its title and head do (owner
+    # decision 2026-11-17): what they say holds for each of its numbers.
+    carried = rules.get("table_foot_lines")
+    if carried:
+        fixed += [line.number for line in lines
+                  if line.role == "foot"][:carried]
     return lines, tuple(fixed)
+
+
+def _row_indent(text: str) -> Optional[int]:
+    """How far the first cell of a table row is indented: the spaces and
+    tree marks before its first word, None where the cell is empty."""
+    body = (text or "").strip()
+    if body.startswith("|"):
+        body = body[1:]
+    first = body.split("|", 1)[0]
+    word = first.lstrip(_INDENT)
+    if not word.strip():
+        return None
+    return len(first) - len(word)
+
+
+def row_parents(lines) -> dict:
+    """{line number: (rows above it that it stands under, top first)} of a
+    table's body rows (owner decision 2026-11-17). A row stands under the
+    nearest row above whose first cell is indented at least two places less
+    ("└ Erdgas" under "Wohngebäude"), and under the rows that row stands
+    under; a row with an empty first cell stands under none and keeps the
+    rows above it as they are. One place more or less is the spacing of a
+    transcription, not an indent."""
+    parents: dict = {}
+    stack: list = []
+    for line in lines:
+        if line.role != "body":
+            continue
+        indent = _row_indent(line.text)
+        if indent is None:
+            continue
+        while stack and stack[-1][0] > indent - 2:
+            stack.pop()
+        if stack:
+            parents[line.number] = tuple(number for _, number in stack)
+        stack.append((indent, line.number))
+    return parents
 
 
 def figure_lines(transcript) -> tuple:
@@ -336,7 +396,9 @@ def passage_of(source: Source, transcript=None) -> Passage:
     if source.owner_kind == "table":
         got = table_lines(source.text)
         if got is not None:
-            return Passage(source, got[0], got[1])
+            parents = row_parents(got[0]) \
+                if rules.get("table_parent_rows") else {}
+            return Passage(source, got[0], got[1], parents=parents)
     if source.owner_kind == "figure":
         caption, numbers = figure_lines(transcript)
         if caption or numbers:
@@ -397,7 +459,8 @@ class Chunk:
         """Every line number the piece shows, in order."""
         carried = self.passage.fixed if self.carried is None \
             else self.carried
-        return tuple(sorted(set(carried) | set(self.numbers)))
+        return tuple(sorted(set(carried) | set(self.numbers)
+                            | self.passage.parents_of(self.numbers)))
 
     def lines(self) -> list:
         return [self.passage.line(n) for n in self.shown]
@@ -839,9 +902,11 @@ def own_lines(chunk: Chunk) -> list:
 
 
 def passage_lines(passage: Passage, numbers) -> list:
-    """[(Line, Source)] of *numbers* of a passage, its fixed lines first."""
-    wanted = sorted(set(passage.fixed) | {n for n in numbers
-                                         if passage.line(n) is not None})
+    """[(Line, Source)] of *numbers* of a passage, its fixed lines first,
+    a row with the rows it stands under."""
+    numbers = {n for n in numbers if passage.line(n) is not None}
+    wanted = sorted(set(passage.fixed) | numbers
+                    | passage.parents_of(numbers))
     return [(line, passage.source) for line in _requested(
         passage, [passage.line(n) for n in wanted])]
 

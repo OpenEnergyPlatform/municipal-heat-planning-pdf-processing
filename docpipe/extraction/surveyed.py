@@ -47,7 +47,7 @@ from .. import rules
 from .lookup import continued
 from . import fields
 from . import flow as flow_map
-from .addressed import Plan
+from .addressed import Plan, numbers_untaken
 from .pipeline import Batch, Row, WorkItem, row_label
 from .reading import NO_ANSWER, Read
 from .survey import Answer, Found
@@ -307,6 +307,18 @@ class SurveyedHarvest:
                        refused=dict(counts.failed),
                        question_queries=counts.questions,
                        chunks=len(plan.chunks), scope=scope or None)
+            # The numbers of its tables and figures no value took (owner
+            # decision 2026-11-17), for the run's statistic.
+            self.trace("untaken", document_id, scope=scope or None,
+                       **numbers_untaken(
+                           plan, [claim for read in reads
+                                  for claim in read.claims]))
+            # Of those numbers the ones asked which field they are (owner
+            # decision 2026-11-17): asked, named a field, named none.
+            self.trace("assigned", document_id, scope=scope or None,
+                       asked=counts.assigned["asked"],
+                       named=counts.assigned["named"],
+                       none=counts.assigned["none"])
         return taken_of(document_id, spec, reads)
 
     def sweep(self, batch, rows, slots) -> None:

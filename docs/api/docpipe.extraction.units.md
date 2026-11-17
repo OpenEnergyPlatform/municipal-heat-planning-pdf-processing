@@ -69,8 +69,11 @@ class Passage
 
 A passage as numbered lines. *source* is what a value read from it
 is checked against: the passage itself, a figure as its transcription.
-*fixed* are the lines every piece of it shows (a table's title and
-head, a figure's title).
+*fixed* are the lines every piece of it shows (a table's title, head
+and the lines under it the rule `table_foot_lines` carries, a figure's
+title). *parents* are, for a row of a table indented under rows above
+it, those rows, top first (`row_parents`): every piece and every place
+that shows the row shows them with it.
 
 Fields:
 
@@ -78,6 +81,16 @@ Fields:
 - `lines: list`
 - `fixed: tuple = ()`
 - `drawn: bool = False`
+- `parents: dict = field(default_factory=dict)`
+
+#### Passage.parents_of
+
+```python
+def parents_of(self, numbers) -> set
+```
+
+The rows the rows *numbers* stand under, where they are
+indented under rows above them (owner decision 2026-11-17).
 
 #### Passage.owner
 
@@ -462,6 +475,20 @@ def table_lines(text: str) -> Optional[tuple]
 ([Line], fixed) of a table's text, None where it holds no Markdown
 table with a rule under its head.
 
+### row_parents
+
+```python
+def row_parents(lines) -> dict
+```
+
+{line number: (rows above it that it stands under, top first)} of a
+table's body rows (owner decision 2026-11-17). A row stands under the
+nearest row above whose first cell is indented at least two places less
+("└ Erdgas" under "Wohngebäude"), and under the rows that row stands
+under; a row with an empty first cell stands under none and keeps the
+rows above it as they are. One place more or less is the spacing of a
+transcription, not an indent.
+
 ### figure_lines
 
 ```python
@@ -580,7 +607,8 @@ def own_lines(chunk: Chunk) -> list
 def passage_lines(passage: Passage, numbers) -> list
 ```
 
-[(Line, Source)] of *numbers* of a passage, its fixed lines first.
+[(Line, Source)] of *numbers* of a passage, its fixed lines first,
+a row with the rows it stands under.
 
 ### title_page_of
 

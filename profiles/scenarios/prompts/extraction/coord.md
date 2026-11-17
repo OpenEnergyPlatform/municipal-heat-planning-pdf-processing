@@ -12,8 +12,8 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 {{example}}
 
 <!-- with: value -->
-The question is about the value under "value": its words and its address. "passage" shows the value's line, in a table with the table's title and head, in text with the sentences before and after it.
-* The answer stands in a line about THIS value: its own line, the head of its column, the title of its table, the sentences around it or the heading of its section.
+The question is about the value under "value": its words and its address. "passage" shows the value's line, in a table with the table's title, head, the notes under it and the rows its row is indented under, in text with the sentences before and after it.
+* The answer stands in a line about THIS value: its own line, the head of its column, the title of its table, a note under it, the row its row is indented under, the sentences around it or the heading of its section.
 * Words that only repeat the value are no answer: asked for the scenario of the region "Asia", "Asia" is the value, not its scenario.
 
 <!-- with: list -->
@@ -47,8 +47,17 @@ The question asks one detail of the work under "work", a work this publication p
 <!-- with: get_image -->
 {"get":"image"} under "more" asks for the picture of the figure the value stands in, {"get":"image","id":"B"} for the picture of the figure under letter B: where the figure's lines do not say the answer but its picture shows it, such as the colour of a legend entry or the part of a bar. The question is then asked again with the picture; the answer is still a shown line, such as the legend line of that colour.
 
+<!-- with: get_region -->
+With "region":[left,top,right,bottom], each from 0 to 1000 of the picture's width and height, only that part comes, enlarged and sharper, such as {"get":"image","region":[0,700,1000,1000]} for a legend in its lower third.
+
+<!-- with: get_section -->
+{"get":"section"} under "more" fetches the section the value stands in, from its start, {"get":"section","id":"B"} the section of the piece under letter B, {"get":"section","id":"p17_img1"} the section that table or figure stands in: where a setting such as the unit or the scenario of all its numbers may stand at the start of the section.
+
 <!-- with: image -->
 The picture of the figure under "image" ("passage": the figure the value stands in) is attached. Read in it what its lines do not say, and answer with the shown line that names it, such as the legend line of the colour.
+
+<!-- with: image_region -->
+The picture shows only the part under "image_region" (left, top, right, bottom, from 0 to 1000 of the figure's width and height), enlarged.
 
 <!-- with: passages -->
 "passages" are further pieces of the publication you asked to see, each under its letter, with its kind, page and title.

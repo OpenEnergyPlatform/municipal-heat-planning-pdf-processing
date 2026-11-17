@@ -174,8 +174,12 @@ The reranker's score of each of *sources* for *probe*.
 
 ```python
 def order(self, document_id, probes: Sequence[str],
-          sources: Sequence) -> list
+          sources: Sequence, also: Iterable = ()) -> list
 ```
+
+*sources* best first for *probes*: the pool (`pool_of`, with
+the passages *also* names) in the reranker's order, the rest after
+it in theirs.
 
 ## Functions
 
@@ -239,15 +243,17 @@ in every process (Python's own hash is not).
 ```python
 def pool_of(sources: Sequence, size: Optional[int] = None,
             rule: str = "rerank_pool", drawn: int = 0, upto: int = 0,
-            seed: str = "") -> tuple
+            seed: str = "", also: Iterable = ()) -> tuple
 ```
 
 (pool, rest): of each kind its first *size* passages and *drawn* of
 those at its places after them up to place *upto*, drawn at random as
-*seed* says, the pool in the order of *sources* and the others after it
-in theirs. Without *size* each kind has the number the rules give it
-(`pool_size`); a kind whose number is 0 draws none either, and where
-fewer places are left than *drawn*, all of them are taken.
+*seed* says, and the passages *also* names ((kind, id), the word
+index's hits of the search, owner decision 2026-11-17), the pool in the
+order of *sources* and the others after it in theirs. Without *size*
+each kind has the number the rules give it (`pool_size`); a kind whose
+number is 0 draws none either, and where fewer places are left than
+*drawn*, all of them are taken.
 
 ### drawn_in
 

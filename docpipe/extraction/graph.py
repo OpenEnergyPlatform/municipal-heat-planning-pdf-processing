@@ -40,7 +40,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from . import graphblocks, graphkit
+from . import acrossruns, graphblocks, graphkit
 from .bricks import Call, literal, registry
 from .fields import COORDINATE_KEYS
 from .graphkit import NOT_IN_GRAPH, ttl_comment, ttl_literal
@@ -248,6 +248,8 @@ class Document:
         self.admitted: dict = {}
         self.contested: dict = {}
         self.counts: Counter = Counter()
+        # what the comparison with other runs found (`acrossruns`)
+        self.across: Counter = Counter()
         self.held: Counter = Counter()
         self.held_rows: set = set()
         self.asked: dict = {}
@@ -385,8 +387,13 @@ class Writer:
                  db_path=None, strict: bool = False,
                  extra: Optional[dict] = None,
                  required: Optional[dict] = None,
-                 space: Optional[dict] = None):
+                 space: Optional[dict] = None,
+                 other_runs: Optional[dict] = None):
         self.drawing = drawing
+        # {run: {document: rows}} of further harvests, compared with the
+        # numbers and never written (`acrossruns`); none: today's graph.
+        self.other_runs = other_runs or {}
+        self.across_total: Counter = Counter()
         # What the Python of the drawing sees beside its call (the
         # profile's own module), and the blocks made of the drawing.
         self.space = space or {}
@@ -709,6 +716,7 @@ class Writer:
                  and self.drawing.written(box["id"])}
         parts = [f"wrote {wrote}"]
         for label, found in (
+                ("across runs", dict(doc.across)),
                 ("contested", {key: len(one) if isinstance(one, list)
                                else one
                                for key, one in doc.contested.items()}),
@@ -745,6 +753,9 @@ class Writer:
                 iri, group, address, fold=doc.fold,
                 wording=tuple(settings.get("wording") or ()),
                 tolerance=float(self.rules.get("rounding_tolerance") or 0),
+                drawn_tolerance=None
+                if self.rules.get("drawn_tolerance") is None
+                else float(self.rules.get("drawn_tolerance")),
                 order=self.rules.get("settle_order"),
                 corroborate=bool(self.rules.get("corroborated_by_place")),
                 transcribed=doc.transcribed,
@@ -754,9 +765,69 @@ class Writer:
             marks.update(named)
             for reason, n in lost.items():
                 doc.held[reason] += n
+        if self.other_runs:
+            values = self._across_runs(doc, box, values, marks, address,
+                                       settings)
         return [Node(box["id"], iri, key=iri, rows=[row],
                      data={"marks": marks.get(iri, {})})
                 for iri, row in values.items()]
+
+    def _across_runs(self, doc: Document, box: dict, values: dict,
+                     marks: dict, address: Callable, settings: dict) -> dict:
+        """*values* without the nodes the other runs contest where this
+        graph leaves contested nodes out (`contested_in_full`, the strict
+        graph); else with each such node marked as contested and told which
+        run reads what (owner decision 2026-11-17, `acrossruns`)."""
+        fields_ = self.drawing.fields_of(box)
+        others = []
+        for run, by_doc in self.other_runs.items():
+            taken = []
+            for row in by_doc.get(doc.name) or ():
+                if row.get("parameter") in fields_ and self.condition(
+                        self.drawing.document.get("admit"), doc, row) is None \
+                        and self.condition(box.get("admit"), doc,
+                                           row) is None:
+                    taken.append(row)
+            others.append((run, taken))
+        wording = tuple(settings.get("wording") or ())
+        contested, seen, counts = acrossruns.compare(
+            rows=doc.admitted.get(box["id"]) or [], kept=values,
+            others=others, address=address, fold=doc.fold, wording=wording,
+            tolerance=float(self.rules.get("rounding_tolerance") or 0),
+            drawn_tolerance=None if self.rules.get("drawn_tolerance") is None
+            else float(self.rules.get("drawn_tolerance")))
+        keep_open = not self.strict and bool(self.rules.get(
+            "contested_in_full"))
+        across: Counter = Counter()
+        across["nodes compared"] += len(seen)
+        across["nodes without counterpart"] += len(values) - len(seen)
+        across["rows without counterpart"] += counts["rows without counterpart"]
+        for iri, found in contested.items():
+            if found.get("number"):
+                across["contested by number"] += 1
+            if found.get("coordinates"):
+                across["contested by coordinates"] += 1
+                for _run, keys, _number in found["coordinates"]:
+                    for key in keys:
+                        across[f"contested by coordinates: {key}"] += 1
+        across["nodes agreeing"] += len(seen - set(contested))
+        across = +across                      # no zero counts in the log
+        doc.across.update(across)
+        self.across_total.update(across)
+        if not keep_open:
+            return {iri: row for iri, row in values.items()
+                    if iri not in contested}
+        for iri, found in contested.items():
+            marks[iri] = dict(marks.get(iri, {}), conflict=True,
+                              across_runs=acrossruns.mark_lines(found))
+        return values
+
+    def log_across_runs(self) -> None:
+        """The total of the comparison with other runs, one log line; none
+        without other runs."""
+        if self.other_runs:
+            log.info("graph: across %d other run(s): %s", len(self.other_runs),
+                     dict(self.across_total))
 
     def _answers(self, doc: Document, box: dict) -> list:
         among = doc.nodes.get(box.get("among")) or []
@@ -1407,7 +1478,7 @@ def load_drawing(profile, environ=None) -> Drawing:
 def make_writer(profile, db_path=None, *, strict: bool = False,
                 extra: Optional[dict] = None,
                 drawing: Optional[Drawing] = None,
-                environ=None) -> Writer:
+                environ=None, other_runs: Optional[dict] = None) -> Writer:
     from .. import graphfile
     from .spec import load as load_spec
     made = graphfile.load(profile, environ)
@@ -1425,7 +1496,7 @@ def make_writer(profile, db_path=None, *, strict: bool = False,
     return Writer(drawing, spec=spec, rules=dict(made.rules), bricks=bricks,
                   db_path=db_path, strict=strict, extra=extra,
                   required=required_by_class(profile),
-                  space=python_space(profile))
+                  space=python_space(profile), other_runs=other_runs)
 
 
 def python_space(profile) -> dict:
@@ -1442,12 +1513,14 @@ def python_space(profile) -> dict:
 
 def make_serializer(profile, db_path=None, *, strict: bool = False,
                     extra: Optional[dict] = None,
-                    drawing: Optional[Drawing] = None) -> Callable:
+                    drawing: Optional[Drawing] = None,
+                    other_runs: Optional[dict] = None) -> Callable:
     """(document name, accepted rows) -> Turtle or None, written from the
     drawing of *profile*. `claims` holds per document what the provenance
-    file records."""
+    file records. *other_runs* ({run: {document: rows}},
+    `acrossruns.read_runs`) are compared with the numbers, never written."""
     writer = make_writer(profile, db_path, strict=strict, extra=extra,
-                         drawing=drawing)
+                         drawing=drawing, other_runs=other_runs)
 
     def serializer(name: str, rows: list):
         written = writer.write(name, rows, (serializer.decisions or {}).get(

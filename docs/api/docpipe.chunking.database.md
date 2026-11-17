@@ -133,7 +133,7 @@ def table_values(section_id: Optional[int], t: dict) -> tuple
 ```
 
 A merged table as its Tables row holds it: (section, block_id, path,
-page_number, caption, markdown, bbox, qa).
+page_number, caption, markdown, bbox, qa, context_sentence).
 
 ### image_values
 
@@ -142,7 +142,7 @@ def image_values(section_id: Optional[int], fig: dict) -> tuple
 ```
 
 A merged figure as its Images row holds it: (section, block_id, path,
-page_number, caption, description, bbox).
+page_number, caption, description, bbox, context_sentence).
 
 ### page_rows
 

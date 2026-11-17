@@ -19,7 +19,7 @@ FRAMES = ("each settled", "each field", "each piece", "each value",
 BOXES = ("document", "transcribe", "split", "lists", "sentences", "order",
          "beside", "docfield", "works", "find", "coord", "quantity",
          "work_coordinate", "phrase", "search", "last_year", "names",
-         "about", "check", "settle", "state", "write", "compute",
+         "about", "check", "assign", "settle", "state", "write", "compute",
          "catalogue", "ask", "retrieve", "rerank", "set", "filter", "merge",
          "python")
 EACH = tuple(kind for kind in FRAMES if kind.startswith("each"))

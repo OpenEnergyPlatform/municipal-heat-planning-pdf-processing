@@ -173,6 +173,7 @@
     "model_region_needs_model": true,
     "alt_label_language": "en",
     "contract_language": "en",
-    "prompt_checks": []
+    "prompt_checks": [],
+    "context_sentence": true
   }
 }

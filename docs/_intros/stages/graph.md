@@ -222,7 +222,7 @@ value first.
 | `classes` | per class `{"written": false}` (its nodes and every triple that names them leave the graph) or `{"address": {"folder", "key", "base"}}` (the nodes are named anew: the folder under the base and a UUID over the values of the key properties) |
 | `constraints` | per `"<constraint> <property> <class>"` an effect: `report` (the default), `leave_out_value`, `leave_out_paper` or `stop`; a constraint of the node as a whole has `-` for the property (`Or - OEO_00020227`: none of the properties of an sh:or on the node) |
 | `map` | the drawing (above): prefixes, document, evidence, boxes and arrows; checked by `map_problem` on every load and save |
-| `rules` | writer rules the profile's `rules.py: GRAPH` declares, each read where it is used (`graphfile.get`). Both profiles: `base` (the base IRI), `pick_one_order` (which reading of a field written once wins), `settle_order`, `rounding_tolerance` and `contested_in_full` (how different numbers on one place are settled), `corroborated_by_place` (whether a value that two different passages print, a number or a name, is marked as confirmed). Scenarios also `scenario_types_always`, `evidence_as`, `front_first_fields`, `front_pages_rule`, `front_pages_extra` and `front_order` (front pages and their order) |
+| `rules` | writer rules the profile's `rules.py: GRAPH` declares, each read where it is used (`graphfile.get`). Both profiles: `base` (the base IRI), `pick_one_order` (which reading of a field written once wins), `settle_order`, `rounding_tolerance` and `contested_in_full` (how different numbers on one place are settled), kwp also `drawn_tolerance` (how far apart a number read off a picture may lie from another and still be the same statement), `corroborated_by_place` (whether a value that two different passages print, a number or a name, is marked as confirmed). Scenarios also `scenario_types_always`, `evidence_as`, `front_first_fields`, `front_pages_rule`, `front_pages_extra` and `front_order` (front pages and their order) |
 
 `serialize.apply_graph_file` runs after the graph is written, by `--serialize`
 and by the gate. The gate shuts for a constraint whose effect is `stop`. With
@@ -365,6 +365,32 @@ level (`A` best, `D` worst) loses to the higher, `conflict:trust`; what none of
 those settles stays in the full graph as a node per number, marked contested and
 counted `conflict:open`, and stays out of the strict graph, counted
 `conflict`. Each winner's comment states what it won over.
+
+A number that a figure only draws (the height of a bar, read off a picture and
+carrying `drawn`) is an estimate, so the kwp graph rule `drawn_tolerance` (0.1)
+widens the rounding test for it: two occurrences count as one statement when they
+lie within that share of the larger number and one of them was drawn, not
+within `rounding_tolerance` alone (`readings.rounds_together`, `readings.settle`).
+The more precise one wins, else the one with the better trust level; 0 merges only
+equal numbers. Owner decision 2026-11-17.
+
+Disagreement across runs. `--also-harvest DIR` (repeatable, with `--serialize`)
+hands the serializer the harvest directories of further runs over the same plans
+(`acrossruns.read_runs`; a run is named after its directory). Their rows are read
+and admitted like this run's and then only compared, in `acrossruns.compare` called
+by `Writer._across_runs`: no row of another run becomes a node or a row of a node,
+and no model is asked. A node is contested across runs where a row of another run
+sits at it with a number beyond the rounding rule, or where a row of another run at
+the place of one of this run's rows (the same passage and line and cell, else the
+same passage and quote) gives the same number at another node, its coordinates
+differing. In the full graph such a node stays and is marked as contested, with a
+comment line telling which run reads what (`across_runs`); in the strict graph
+(and wherever `contested_in_full` is off) it is left out. The graph stays this
+run's. The graph log counts, per document and in total, the nodes compared, those
+agreeing, those with no counterpart in another run, and the nodes contested by
+number or by coordinates, per coordinate. The comparison is a measure of the
+run-to-run noise of a reading and a place to look, not a decision about which run
+is right. Owner decision 2026-11-17.
 
 `value_class` (a preset) writes a number as its quantity's OEO class, in the strict graph
 also as the schema's class above it. The arrows write the number as `xsd:float`,

@@ -58,11 +58,11 @@ def rule(name, tab, group, kind, help, **more) -> Rule:
 ASKING = ("transcribe", "sentences", "order", "docfield", "works", "find",
           "coord", "quantity", "work_coordinate", "phrase", "search",
           "last_year", "names", "about", "compute", "review", "node_check",
-          "example", "list")
+          "example", "list", "assign")
 # Those whose request shows lines of the document.
 SHOWING = ("sentences", "order", "docfield", "works", "find", "coord",
            "quantity", "work_coordinate", "phrase", "search", "last_year",
-           "names", "about", "list")
+           "names", "about", "list", "assign")
 # The steps of a pass over a stored harvest that take an answer, or hold a
 # stored one, to its quote: a dimension taken back and read again, the new
 # answer where it is better, the parameters and the passages read for the
@@ -73,7 +73,7 @@ PASS_TAKING = ("take_back", "better", "read_parameters", "unread",
 # holds every value to it once more.
 TAKING = ("docfield", "works", "find", "coord", "quantity",
           "work_coordinate", "search", "last_year", "names", "about",
-          "settle", "write", "list") + PASS_TAKING
+          "settle", "write", "list", "assign") + PASS_TAKING
 # The general steps of a flow (owner decision 2026-11-12) and the steps
 # whose work each does: it reads the rules they read for that work, so a
 # value set at one of them can be set at the general step too. A question

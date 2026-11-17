@@ -121,18 +121,27 @@ nearest caption to each table or image
 (`docpipe/preprocessing/layout.py:279-281`).
 
 A text block of the PDF's text layer that lies 90 percent or more inside a box
-of a suppressed class (header, footer, page number, footnote and their image
-forms) is taken off the page, as before. Of those, the footnote class is
-counted: once per document, after the refusal check, stage 2 logs `Stage 2: the
-footnote class removed N text block(s) with M character(s)`, zero included, so
-that "none found" is told from "not counted". `_lies_in` is the one test both
-the removal and the count ask, so the count cannot drift from what is removed.
-The line is logged only for a document stage 2 ran on: none for one loaded
-from `pages.json`, one with no pages, or one the stage refuses. A table's own
-note, class `vision_footnote`, is a caption class and not part of it. Footnote
-text therefore stays out of `pages.json`, `sections.json`, the database, the
-vectors and every harvest passage, as it did, and the count is the only new
-thing.
+of a suppressed class (header, footer, page number and their image forms) is
+taken off the page. The footnote class is not one of them: its text blocks stay
+on the page, labelled `footnote`, and stage 3 sets each on a line of its own
+after the text of its page (see Stage 3 below). Footnotes were removed and only
+counted until the owner's decision of 2026-11-17: a footnote names what a
+number of its page means ("¹ witterungsbereinigt", "* ohne Industrie"), and a
+request of the harvest could read it nowhere once it was gone. The footnote
+blocks are still counted: once per document, after the refusal check, stage 2
+logs `Stage 2: the footnote class kept N text block(s) with M character(s)`,
+zero included, so that "none found" is told from "not counted". `_lies_in` is
+the one test both the labelling and the removal of the other classes ask, and a
+block that also lies in a suppressed box is removed, not kept. The line is
+logged only for a document stage 2 ran on: none for one loaded from
+`pages.json`, one with no pages, or one the stage refuses. A table's own note,
+class `vision_footnote`, is a caption class and not part of it.
+
+The pages cache was written without the footnote text, so a corpus processed
+before this change gets the footnotes only when stages 1 and 2 run again
+(`--force-reextract`); `--rebuild-stage3` alone reads the old `pages.json` and
+finds none.
+
 ### Caching Stage 1+2
 
 If no page failed, `_save_pages_cache()` writes the cleaned `PageData` list
@@ -235,8 +244,14 @@ then walks every block: a
 `SECTION_TITLE_CLASSES` block opens a new `Section`, a table or image
 block becomes a `TableRef` or `FigureRef` plus a `[block_id]` placeholder
 whose caption is settled by `docpipe.captions.resolve_title()`, and text
-accumulates into `Section.content` and `Section.segments`.
-`drop_directory_sections()` removes table-of-contents-like sections
+accumulates into `Section.content` and `Section.segments`. A footnote block
+(label `footnote`) is held until the text of its page is set and then stands on
+a line of its own after it, as a text segment marked `"footnote": true`, so that
+a request of the harvest can read and quote it like any line. Where the page's
+text breaks off in a sentence that runs on to the next page, the footnote waits
+for the end of that sentence, and a table or figure placeholder, a new heading
+or the end of the document also sets down the footnotes held, so no sentence is
+cut by one. `drop_directory_sections()` removes table-of-contents-like sections
 (`docpipe/preprocessing/sections.py:311-507`).
 
 ### Folder-mode iteration

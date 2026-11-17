@@ -179,9 +179,10 @@ def test_a_prompt_cut_for_editing_is_put_back_character_for_character():
     # where it writes one (the second reading's)
     cut = prompts.segments(FRONT + prompts.on_disk(KWP, "extraction/coord",
                                                    read)["raw"])
-    # five parts of what a request carries, four of what it may fetch
-    # (owner decision 2026-11-12: more, get_image, image, passages)
-    assert cut["front"].startswith("---\n") and len(cut["parts"]) == 9
+    # five parts of what a request carries, seven of what it may fetch
+    # (owner decision 2026-11-12: more, get_image, image, passages; owner
+    # decision 2026-11-17: get_region, get_section, image_region)
+    assert cut["front"].startswith("---\n") and len(cut["parts"]) == 12
     assert all(part["mark"].startswith("<!-- with: ")
                and part["mark"].endswith("-->\n") for part in cut["parts"])
 

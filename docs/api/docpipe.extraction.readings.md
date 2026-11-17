@@ -123,13 +123,27 @@ The document's words for what tells two numbers on one address
 apart, the *fields* of the row joined: "Wirtschaftlich genutzte
 Gebäude" and "Öffentliche Gebäude" are one class and not one number.
 
+### rounds_together
+
+```python
+def rounds_together(low: float, high: float, *, tolerance: float,
+                    drawn_tolerance: Optional[float] = None,
+                    drawn: bool = False) -> bool
+```
+
+Do two numbers differ by rounding only: within *tolerance*, or within
+*drawn_tolerance* where one of them was read off a picture. The one
+comparison `settle` and the comparison across runs
+(`acrossruns.compare`) share.
+
 ### settle
 
 ```python
 def settle(iri: str, rows: list, address: Callable, *, fold: Callable,
            wording: tuple, tolerance: float, order: list,
            corroborate: bool, transcribed: bool = False,
-           keep_open: bool = False) -> tuple
+           keep_open: bool = False,
+           drawn_tolerance: Optional[float] = None) -> tuple
 ```
 
 ({iri: row} kept, Counter skipped, {iri: marks}) for one address.
@@ -143,7 +157,10 @@ read twice is one statement, whatever its quotes (owner decision
 `settle_order`, standard from owner decision 2026-09-23): "wording", the
 document's different wording splits them into a node each, named by that
 wording; "rounding", a rounded statement of the other loses to the more
-precise one; "trust", a lower trust grade loses to the higher; and
+precise one, within *tolerance*, or within *drawn_tolerance* where one
+of the numbers was read off a picture (`drawn`, rule `drawn_tolerance`,
+owner decision 2026-11-17: a number a figure only draws is an estimate);
+"trust", a lower trust grade loses to the higher; and
 "contested", what is left is a question for a human. With *keep_open*
 each of those stays as a node of its own, marked as contested (owner
 decision 2026-11-02); without it, as for the strict graph, nothing

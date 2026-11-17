@@ -216,5 +216,6 @@ Author: Felix Vossel
 | `REFINEMENT_PARTIAL_JSON` | `results/sections_refined.partial.json` | refinement (unfinished) |
 | `VISUALS_JSON` | `results/visuals.json` | visuals |
 | `DOCUMENT_JSON` | `results/document.json` | chunking (merge) → database |
+| `CONTEXT_SENTENCES_JSON` | `results/context_sentences.json` | chunking (rule context_sentence) |
 
 [Back to the index](README.md)

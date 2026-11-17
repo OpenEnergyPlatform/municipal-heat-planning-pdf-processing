@@ -516,15 +516,17 @@ class Engine:
                     values[setting.number] = value
         return values
 
-    def step(self, node: Optional[dict]):
+    def step(self, node: Optional[dict], **extra):
         """Read with *node*'s own values laid over those of the frames it
         stands in, while it runs (`rules.STEP`); work it hands to other
         threads takes them along (`runner.run_each` copies the context).
-        No node (a step of the preparation that is not drawn): the run's
-        values."""
+        *extra* are values of the run's rules laid over them, as the pass of
+        a field's find step sets them (`find_again`). No node (a step of the
+        preparation that is not drawn): the run's values."""
         if node is None:
             return contextlib.nullcontext()
-        return rules.in_step(rules.stepped(node, self.own_values(node)))
+        return rules.in_step(rules.stepped(
+            node, {**self.own_values(node), **extra}))
 
     # -- numbers and settings of a box ----------------------------------------
 
@@ -585,6 +587,7 @@ class Engine:
                 doc.counts.asked.update(part.asked)
                 doc.counts.failed.update(part.failed)
                 doc.counts.questions += part.questions
+                doc.counts.assigned.update(part.assigned)
 
     @staticmethod
     def came_to(part: Counts) -> dict:
@@ -1267,25 +1270,112 @@ class Engine:
                     by_child.append(own)
                     pooled += own
 
-            def run_inner(grand) -> None:
-                with self.step(inner):
+            piece_frame = inner["each"] == "piece"
+
+            def run_inner(grand, **extra) -> None:
+                with self.step(inner, **extra):
                     self.run_steps(inner.get("steps") or [], grand)
+            # The first pass of a field's pieces reads the find prompt in
+            # its standard way, whatever way a second pass asks in.
+            first = {"find_again_way": "same"} if piece_frame else {}
             if rules.get("together_pooled"):
-                self.reader.each(pooled, run_inner)
+                self.reader.each(pooled, lambda g: run_inner(g, **first))
             else:
                 self.reader.each(
-                    by_child, lambda own: [run_inner(g) for g in own])
+                    by_child,
+                    lambda own: [run_inner(g, **first) for g in own])
+            if piece_frame:
+                for (_node, child), own in zip(jobs, by_child):
+                    pooled += self.find_again(inner, child, own, run_inner)
             self.after_items(inner, pooled, scope)
             self.after_items(node, [child for _n, child in jobs], scope)
             return len(jobs)
+        piece_frame = what == "piece"
+        first = {"find_again_way": "same"} if piece_frame else {}
+
+        def run_one(child, **extra) -> None:
+            with (self.step(node, **first, **extra) if piece_frame
+                  else contextlib.nullcontext()):
+                self.run_steps(steps, child)
         if node.get("together"):
-            self.reader.each([child for _n, child in jobs],
-                             lambda child: self.run_steps(steps, child))
+            self.reader.each([child for _n, child in jobs], run_one)
         else:
             for _node, child in jobs:
-                self.run_steps(steps, child)
-        self.after_items(node, [child for _n, child in jobs], scope)
+                run_one(child)
+        done = [child for _n, child in jobs]
+        if piece_frame:
+            # The pieces of one field: a second pass over them where they
+            # found little.
+            done += self.find_again(
+                node, scope, done,
+                lambda grand, **extra: run_one(grand, **extra))
+        self.after_items(node, done, scope)
         return len(jobs)
+
+    @staticmethod
+    def find_key(claim: dict) -> tuple:
+        """Where and what a find is: its passage, line and cell, and its
+        words. A value found twice at one place has one key."""
+        at = claim.get("at") or {}
+        return (tuple(at.get("owner") or ()), at.get("line"), at.get("cell"),
+                at.get("last"), str(claim.get("value_raw")
+                                    or claim.get("value") or ""))
+
+    def find_again(self, node: dict, scope: Scope, done: list,
+                   run: Callable) -> list:
+        """A second pass of a field's find step over the same pieces where
+        the first found at least one value and fewer than the rule
+        `find_again_below` says (owner decision 2026-11-17, from the
+        literature on reading a place several times, LangExtract 2025): the
+        same requests are asked again, each find holds its own quote, and
+        what the second pass finds joins the first's; a value found at the
+        same place in both passes is one value. A field that found nothing
+        is not asked again, and 0 for the rule asks no second pass.
+        *done* are the scopes of the pieces' first pass, *scope* the field's;
+        what comes back are the scopes of the second pass, whose finds
+        `after_items` keeps with those of the first."""
+        with self.step(node):
+            below = int(rules.get("find_again_below"))
+            way = rules.get("find_again_way")
+        found = {self.find_key(claim)
+                 for grand in done
+                 for got in grand.values.get("finds") or ()
+                 for claim in got["claims"]}
+        if below <= 0 or not found or len(found) >= below or not done:
+            return []
+        again = []
+        for values in self.items(node, scope):
+            grand = scope.child(True, find_pass=2, **values)
+            if self.holds(node.get("when"), grand):
+                again.append(grand)
+        extra = {"find_again_way": way, "same_request_once": False}
+        if node.get("together"):
+            self.reader.each(again, lambda grand: run(grand, **extra))
+        else:
+            for grand in again:
+                run(grand, **extra)
+        added = 0
+        for grand in again:
+            for got in grand.values.get("finds") or ():
+                kept = []
+                for claim in got["claims"]:
+                    key = self.find_key(claim)
+                    if key not in found:
+                        found.add(key)
+                        kept.append(claim)
+                dropped = ({id(c) for c in got["claims"]}
+                           - {id(c) for c in kept})
+                got["claims"] = kept
+                got["elsewhere"] = [c for c in got.get("elsewhere") or ()
+                                    if id(c) not in dropped]
+                added += len(kept)
+        parameter = scope.get("parameter")
+        self.reader._traced("second_way", scope.get("doc").plan.document_id,
+                            rule="find_again_below",
+                            parameter=getattr(parameter, "uri", None),
+                            finds=len(found) - added, added=added,
+                            requests=len(again), way=way)
+        return again
 
     def after_items(self, node: dict, done: list, scope: Scope) -> None:
         """What a frame does once its items are through: the finds of each
@@ -1576,11 +1666,64 @@ class Engine:
             if coord.chunk is not None else []
         if own:
             coord.seen.discard(coord.chunk.key)
-        supply = SearchSupply(first, None, "near")
+        siblings = self.read_near(coord, plan, first)
+        mentioning = self.mention_pieces(coord, plan, first + siblings)
+        supply = SearchSupply(first + siblings + mentioning, None, "near")
+        if siblings:
+            supply.ways.add("sibling_places")
+        if mentioning:
+            supply.ways.add("mentioning_pieces")
         # What the answer at the value's own place asked to see comes first,
         # before the pieces beside it (owner decision 2026-11-12).
         supply.fetched, coord.fetched = coord.fetched, []
         scope.put("supply", supply)
+
+    @staticmethod
+    def read_near(coord: CoordItem, plan: Plan, first: list) -> list:
+        """The pieces where the same dimension was read for another value
+        of the value's table or section (`Plan.read_near`, owner decision
+        2026-11-17: the place that holds the scenario or the year of one
+        value of a table is the best first guess for the others), the one
+        most of them read it in first, as many as the rule
+        `sibling_places` says, those beside it and those shown left out.
+        Each value is still asked for itself, with an address of its own."""
+        most = int(rules.get("sibling_places"))
+        owner = (coord.row.claim.get("at") or {}).get("owner")
+        if most <= 0 or not owner:
+            return []
+        have = {chunk.key for chunk in first} | set(coord.seen or ())
+        out: list = []
+        for key in plan.read_near(coord.slot.name, tuple(owner)):
+            piece = plan.by_key.get(key)
+            if piece is None or key in have:
+                continue
+            have.add(key)
+            out.append(piece)
+            if len(out) >= most:
+                break
+        return out
+
+    @staticmethod
+    def mention_pieces(coord: CoordItem, plan: Plan, shown: list) -> list:
+        """The text pieces that name the value's table or figure by its
+        label and number (`Plan.mentioning`, owner decision 2026-11-17, from
+        the literature on DocFS), as many as the rule `mentioning_pieces`
+        says, those beside the value, among its siblings or seen left out."""
+        most = int(rules.get("mentioning_pieces"))
+        owner = (coord.row.claim.get("at") or {}).get("owner")
+        if most <= 0 or not owner:
+            return []
+        have = {chunk.key for chunk in shown} | set(coord.seen or ())
+        out: list = []
+        for key in plan.mentioning(tuple(owner)):
+            piece = plan.by_key.get(key)
+            if piece is None or key in have:
+                continue
+            have.add(key)
+            out.append(piece)
+            if len(out) >= most:
+                break
+        return out
 
     @staticmethod
     def locate(coord: CoordItem, plan: Plan) -> None:
@@ -1840,6 +1983,24 @@ class Engine:
             return [slot for slot in fields.asked_slots(parameter)
                     if claim.get(f"{slot.name}_state") == fields.READ]
 
+        # The conditions of the ontology the value breaks among the values
+        # read so far (owner decision 2026-11-17): it is read a second time
+        # and marked, and nothing is taken away for it.
+        plan = getattr(scope.get("doc"), "plan", None)
+        broken = Engine.conditions(plan, parameter, claim) \
+            if plan is not None else []
+        if broken:
+            flags = claim.setdefault("flags", [])
+            for name in broken:
+                if f"condition:{name}" not in flags:
+                    flags.append(f"condition:{name}")
+            view = seen()
+            reread = checking.review_sources(view) or []
+            if reread:
+                checking.review(view, parameter, reread)
+                for flag in view.get("flags") or ():
+                    if flag not in flags:
+                        flags.append(flag)
         verdicts = verdicts_of(read_slots())
         if verdicts is None:
             return
@@ -1886,6 +2047,58 @@ class Engine:
         flag = (checking.review(view, parameter, reread) if reread else "")
         if flag and flag != REVIEW_AGREE:
             claim["_why"] = fields.UNBACKED
+
+    @staticmethod
+    def conditions(plan: Plan, parameter, claim: dict) -> list:
+        """The conditions of the ontology a value read breaks (owner
+        decision 2026-11-17, from the literature on correcting extracted
+        facts: what breaks a condition of the ontology is read again):
+        "over_bound", above the most the rule `value_bounds` gives its
+        field, such as a share above 100 %; "part_over_whole", a part
+        greater than its whole among the values of the document read so
+        far, the whole being the value with the same entries but the one
+        the rule `part_of_whole` names on one axis, such as a carrier's
+        number above the total of all carriers. Compared in the field's own
+        unit (`value_target`) and on the closed lists and numbers of the
+        field alone, not on its free words. The value is noted for the
+        values read after it."""
+        target = claim.get("value_target")
+        broken: list = []
+        if not isinstance(target, (int, float)) or isinstance(target, bool):
+            return broken
+        uri = getattr(parameter, "uri", None)
+        for bound in rules.get("value_bounds") or ():
+            if bound.get("parameter") == uri \
+                    and target > float(bound.get("at_most")):
+                broken.append("over_bound")
+                break
+        wholes = rules.get("part_of_whole") or {}
+        slots = [slot for slot in fields.axis_slots(parameter)
+                 if slot.kind != fields.TEXT]
+        mine = {slot.name: claim.get(slot.name) for slot in slots}
+        with plan.lock:
+            earlier = list(plan.values_read.get(uri, ()))
+            plan.values_read.setdefault(uri, []).append(
+                (mine, float(target)))
+        for axis, whole in wholes.items():
+            if axis not in mine or mine[axis] is None:
+                continue
+            rest = {name: value for name, value in mine.items()
+                    if name != axis}
+            for other, other_target in earlier:
+                if other.get(axis) is None or other.get(axis) == mine[axis] \
+                        or {name: value for name, value in other.items()
+                            if name != axis} != rest:
+                    continue
+                if (mine[axis] != whole and other[axis] == whole
+                        and target > other_target) \
+                        or (mine[axis] == whole and other[axis] != whole
+                            and other_target > target):
+                    broken.append("part_over_whole")
+                    break
+            if "part_over_whole" in broken:
+                break
+        return broken
 
     def box_state(self, node: dict, scope: Scope) -> None:
         coord: CoordItem = scope.get("coord")

@@ -49,7 +49,11 @@ from conftest import step_node
 @pytest.fixture(autouse=True)
 def fresh():
     rules.reset()
-    yield
+    # The tests of this file count the requests of one pass over a field's
+    # pieces; the second pass (rule `find_again_below`) has its own tests in
+    # test_find_again.py.
+    with rules.overlaid(find_again_below=0):
+        yield
     rules.reset()
 
 

@@ -31,6 +31,7 @@ REFINEMENT_PARTIAL_JSON = (
     f"{DIR_RESULTS}/sections_refined.partial.json")             # refinement (unfinished)
 VISUALS_JSON          = f"{DIR_RESULTS}/visuals.json"           # visuals
 DOCUMENT_JSON         = f"{DIR_RESULTS}/document.json"          # chunking (merge) → database
+CONTEXT_SENTENCES_JSON = f"{DIR_RESULTS}/context_sentences.json"  # chunking (rule context_sentence)
 
 # What the stages after stage 3 and stage 5 read of these two files is written
 # down in docpipe/schemas/<name>.schema.json. Each file carries the version of

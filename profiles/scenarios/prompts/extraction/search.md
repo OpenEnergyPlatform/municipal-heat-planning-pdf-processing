@@ -28,8 +28,21 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 <!-- with: settings -->
 "settings" are what this publication settles for all its values, under the letter F. They hold for this value too where they speak about it.
 
+<!-- with: outline -->
+"outline" lists, for each section the hits stand in, its heading and the tables and figures of it that are not shown, each as its id and title: {"get":"item","id":"..."} under "more" fetches one. The outline says nothing about this value; the answer is still a shown line.
+
 <!-- with: get_image -->
 {"get":"image"} under "more" asks for the picture of the figure the value stands in, {"get":"image","id":"B"} for the picture of the figure under letter B: where the figure's lines do not say the answer but its picture shows it, such as the colour of a legend entry or the part of a bar. The question is then asked again with the picture; the answer is still a shown line, such as the legend line of that colour.
 
+<!-- with: get_region -->
+With "region":[left,top,right,bottom], each from 0 to 1000 of the picture's width and height, only that part comes, enlarged and sharper, such as {"get":"image","region":[0,700,1000,1000]} for a legend in its lower third.
+
+<!-- with: get_section -->
+{"get":"section"} under "more" fetches the section the value stands in, from its start, {"get":"section","id":"B"} the section of the piece under letter B, {"get":"section","id":"p17_img1"} the section that table or figure stands in: where a setting such as the unit or the scenario of all its numbers may stand at the start of the section.
+
 <!-- with: image -->
 The picture of the figure under "image" ("passage": the figure the value stands in) is attached. Read in it what its lines do not say, and answer with the shown line that names it, such as the legend line of the colour.
+
+<!-- with: image_region -->
+The picture shows only the part under "image_region" (left, top, right, bottom, from 0 to 1000 of the figure's width and height), enlarged.
+

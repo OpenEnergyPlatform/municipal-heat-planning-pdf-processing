@@ -344,13 +344,41 @@ RULES = (
        "order of the embedding search. Only a search with at least two "
        "chunks is ordered.",
        decided="2026-11-06, 2026-11-08", where="addressed.py"),
+    _r("search_words", "flow", "Search", "whole",
+       "How many passages the word index of the corpus adds at most to the "
+       "candidates of a search: the passages of the document that carry the "
+       "most words of the search sentence, the rare ones counting most. They "
+       "join the passages the reranker orders, beside the best of the "
+       "vector search and those it draws, so that a table that prints the "
+       "exact words of a sentence is scored even where its vector is not "
+       "near. Without a reranker the two lists are merged by their places. "
+       "The words decide nothing about what a passage means. A corpus "
+       "without a current word index is searched by its vectors alone. 0: "
+       "the vector search alone.",
+       least=0, decided="2026-11-17",
+       where="runner.py (make_more_sources), rerank.py (pool_of)"),
+    _r("search_pages", "flow", "Search", "whole",
+       "How many pages of the document the page index adds at most to the "
+       "candidates of a search: the pages whose image lies closest to the "
+       "search sentences, embedded as the passages are. The passages "
+       "(sections, tables and figures) that stand on these pages join the "
+       "passages the reranker orders, so that a map or a chart whose "
+       "transcription lacks the detail is scored too. A page backs no "
+       "value: the reading still needs a line that holds it. It needs the "
+       "page index that `docpipe pages` builds; a corpus without a current "
+       "one is searched without it, and nothing changes. 0: the page index "
+       "is not asked.",
+       least=0, decided="2026-11-17",
+       where="runner.py (make_more_sources), pages.py"),
     _r("fetches", "flow", "Search", "texts",
        "What an answer may ask to see besides the chunks shown. `next` and "
        "`previous` are the chunk after the last and before the first one "
        "shown, `item` is a table or figure it names, `search` is the chunks "
        "that match a pattern, and `similar` is the chunks closest to a text "
-       "it writes. Chunks asked for this way come first in the next request, "
-       "and no chunk is shown twice. `image` lets a question about a "
+       "it writes, and `section` is the section a line stands in, from its "
+       "start (`fetch_section_pieces`). Chunks asked for this way come first "
+       "in the next request, and no chunk is shown twice. `image` lets a "
+       "question about a "
        "dimension ask once for the picture of a figure it shows: the same "
        "question is then asked again with the picture, and its answer is "
        "still a shown line. Besides the search, the question at the value's "
@@ -359,8 +387,9 @@ RULES = (
        "is then asked again with what it asked for. Each of these steps has "
        "a value of its own. Remove an entry to forbid it. Empty: the model "
        "sees only what the step shows.",
-       choices=("next", "previous", "item", "search", "similar", "image"),
-       empty=True, decided="2026-11-07, 2026-11-09, 2026-11-12",
+       choices=("next", "previous", "item", "search", "similar", "section",
+                "image"),
+       empty=True, decided="2026-11-07, 2026-11-09, 2026-11-12, 2026-11-17",
        where="addressed.py"),
     _r("fetch_rounds", "flow", "Search", "whole",
        "How often the list entry of a name or a detail of a cited work is "
@@ -372,6 +401,34 @@ RULES = (
        "0: no answer may ask to see more, and nothing is fetched.",
        least=0, decided="2026-11-12, 2026-11-13",
        where="addressed.py, targets.py, general.py (Ask.fetch)"),
+    _r("fetch_rounds_keep", "flow", "Search", "choice",
+       "Which fetched chunks a further round of fetching shows (rule "
+       "`fetch_rounds`). All: every round adds its chunks to the request, "
+       "which grows with each round. Last: a further round shows the "
+       "request's own chunks and only those fetched in the round just "
+       "before, not those of earlier rounds; nothing is fetched twice. An "
+       "answer can only name a line shown in its own request, so a line of "
+       "a dropped chunk cannot be cited. With one round, or 0, both give "
+       "the same request.",
+       choices=("all", "last"), decided="2026-11-17",
+       where="addressed.py (Reader.asked_with_fetched), targets.py "
+             "(fetched_again)"),
+    _r("fetch_section_pieces", "flow", "Search", "whole",
+       "How many chunks an answer gets that asks for the section a line "
+       "stands in (`section` of `fetches`): the chunks of that section from "
+       "its start, in the order of the document, those not shown yet. A "
+       "table or figure stands in the section of its placeholder. A larger "
+       "number shows more of a long section at once and makes that request "
+       "larger.",
+       least=1, decided="2026-11-17", where="addressed.py (section_pieces)"),
+    _r("image_regions", "flow", "Search", "switch",
+       "On: an answer that asks for the picture of a figure may name a "
+       "region of it, four numbers from 0 to 1000 from the left and from "
+       "the top. That region is cut out of the stored crop and sent at the "
+       "size of a whole picture, so small writing such as a legend comes "
+       "sharper. Off: the picture always comes whole.",
+       decided="2026-11-17",
+       where="addressed.py (region_of), runner.py (_image_data_url)"),
     _r("question_as_sentence", "flow", "Search", "switch",
        "On: a search sentence that is a question is used, and the run counts "
        "it. Off: such a sentence is replaced by the field's own search "
@@ -522,9 +579,15 @@ STEPS = {
     "abbreviations": ("split",),
     "title_page_also": ("document",),
     "rerank": ("order", "search"),
+    "search_words": ("order", "search"),
+    "search_pages": ("order", "search"),
     "fetches": ("search", "coord", "docfield", "names", "works"),
     # A name is asked where its value or coordinate is read, too.
     "fetch_rounds": ("names", "works", "coord", "search"),
+    "fetch_rounds_keep": ("names", "works", "coord", "search"),
+    "fetch_section_pieces": ("search", "coord", "docfield", "names",
+                             "works"),
+    "image_regions": ("coord", "search"),
     "question_as_sentence": ("sentences", "order", "phrase"),
     "retry_wait_s": ASKING + ("each value",),
     "retry_wait_most_s": ASKING + ("each value",),

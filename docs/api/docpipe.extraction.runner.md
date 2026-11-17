@@ -775,6 +775,26 @@ of its own, and not from a store per thread.
 the best passages of each kind in its own order before they are handed
 back; None leaves the vector search's order.
 
+The word index of the corpus (`lexical.py`) is asked with the same
+sentences, as many passages as the rule `search_words` says (owner
+decision 2026-11-17: the vector search is weakest where a sentence is
+most exact, at names, abbreviations and numbers). Its hits join the
+passages the reranker orders, beside the best of the vector search and
+those it draws (`rerank.pool_of`); without a reranker the two rankings
+are merged by reciprocal rank (`hybrid.fuse`). The word decides nothing
+about what a passage means: it only puts the passage before the
+reranker. A corpus without a current word index is searched by its
+vectors alone, which the log says once.
+
+The page index of the corpus (`pages.py`) is asked with the vectors of
+the same sentences, as many pages of the document as the rule
+`search_pages` says (owner decision 2026-11-17, from the literature on
+searching the page image: ColPali 2024, Nemotron ColEmbed V2 2026): the
+passages that stand on the best pages join the reranker's candidates
+beside the word hits. A page backs no value; the passage still has to
+carry a line. A corpus without a current page index is searched
+without it, which the log says once.
+
 ### fill_dynamic_axes
 
 ```python
@@ -1178,6 +1198,29 @@ place is sent as it is written; one with it and no example for it is an
 error before anything is sent, as every open placeholder is
 (`prompts.Prompt.render`).
 
+### example_keys
+
+```python
+def example_keys(prompt, example) -> dict
+```
+
+The keys a request's payload gets where the rule `example_place` says
+"message" (owner decision 2026-11-17, from the literature on requests
+that share their beginning: BatchLLM, SGLang): "example" and "nothing"
+hold the example replies, in the order of the rule `reply_order`, for the
+places the prompt has; the system prompt names them (`system_text`).
+Empty under "prompt", or for a prompt without such a place.
+
+### with_example_keys
+
+```python
+def with_example_keys(conversation: list, keys: dict) -> list
+```
+
+*conversation* with *keys* as the last keys of the payload in its
+last message (the JSON the message starts with; its words after the
+JSON stay after it).
+
 ### ask_in_grammar
 
 ```python
@@ -1227,8 +1270,9 @@ decision 2026-11-12).
 def reply_offers(shape: Optional[dict]) -> set
 ```
 
-{"more", "get_image"} as far as the reply form *shape* offers them:
-what a request's prompt tells about besides its payload.
+{"more", "get_image", "get_region", "get_section"} as far as the
+reply form *shape* offers them: what a request's prompt tells about
+besides its payload.
 
 ### make_asks
 

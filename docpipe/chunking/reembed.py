@@ -187,6 +187,7 @@ def run_reembed(data_dir: Path, db_path: Path, index_path: Path, *,
     from concurrent.futures import ThreadPoolExecutor
 
     from .chunking import build_embedding_inputs
+    from .context import load_document
     from .database import document_id, embedding_ids
     from .pipeline import prepared_ahead
 
@@ -211,8 +212,7 @@ def run_reembed(data_dir: Path, db_path: Path, index_path: Path, *,
         doc = document_id(db_path, pdf_dir.name)
         if doc is None:
             return pdf_dir.name, None, {}
-        with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as fh:
-            merged = json.load(fh)
+        merged = load_document(pdf_dir)
         return (pdf_dir.name,
                 build_embedding_inputs(merged, pdf_dir.name, pdf_dir),
                 embedding_ids(db_path, doc))

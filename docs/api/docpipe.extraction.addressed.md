@@ -146,7 +146,8 @@ nothing is asked and its description stands for it).
 
 ```python
 def __init__(self, ask: Optional[Callable], store: Optional[Path],
-             fingerprint, image_key: Callable)
+             fingerprint, image_key: Callable,
+             trace: Optional[Callable] = None)
 ```
 
 #### Transcripts.fingerprint
@@ -337,6 +338,56 @@ The piece of a passage that holds its line *number*, of those a
 field of numbers or another field reads where *numbers* says which;
 a line every piece shows is the first piece's.
 
+#### Plan.note_read
+
+```python
+def note_read(self, name: str, owner: tuple, key: tuple) -> None
+```
+
+Dimension *name* was read in piece *key* for a value of passage
+*owner*.
+
+#### Plan.read_near
+
+```python
+def read_near(self, name: str, owner: tuple) -> list
+```
+
+[piece key] where dimension *name* was read for the values of
+passage *owner*, the piece most values read it in first, in the
+order they were read where two are as often.
+
+#### Plan.mentioning
+
+```python
+def mentioning(self, owner: tuple) -> list
+```
+
+[piece key] of the text pieces that name the table or figure
+*owner* by the label and number of its title line, in the document's
+order (owner decision 2026-11-17, from the literature on DocFS: the
+scenario or year of a table often stands in the paragraph that
+discusses it).
+
+The labels are the rule `item_labels`. A text names the item where
+a label and the same number stand in it as a word ("Tabelle 4" is
+not "Tabelle 41" or "Tabelle 4.1"), and the label is the title
+line's label or an abbreviation of it or the other way round: one
+label without its final period is a prefix of the other ("Tab.",
+"Tab" and "Tabelle" name each other, "Abb." and "Abbildung", "Fig."
+and "Figure"). Plans number tables and figures each by themselves,
+so "Abbildung 4" does not name "Tabelle 4".
+
+#### Plan.piece_of_quote
+
+```python
+def piece_of_quote(self, owner, quote, numbers: bool) -> Optional[Chunk]
+```
+
+The piece of passage *owner* whose line a quote is, of the pieces
+a field of numbers or another field reads; None where no line of
+the passage is the quote or holds it.
+
 #### Plan.beside
 
 ```python
@@ -348,6 +399,35 @@ The pieces right before and after *chunk* among those a field of
 numbers or another field reads, as many on each side as the rule
 `beside_pieces` says, and with *own* the piece itself between
 them.
+
+### Untaken
+
+```python
+@dataclass
+class Untaken
+```
+
+A number of a table or figure that no value took (owner decision
+2026-11-17, from the literature on reading numbers: every number no
+question took is asked which field it is): its passage, its line, its
+cell (None in a figure's line of numbers), the number as the line
+prints it and the line's text. `row` makes it a place a request shows
+as the place of a value (`shows`).
+
+Fields:
+
+- `owner: tuple`
+- `line: int`
+- `cell: Optional[int]`
+- `words: str`
+- `text: str = ""`
+
+#### Untaken.row
+
+```python
+@property
+def row(self)
+```
 
 ### Asks
 
@@ -376,6 +456,7 @@ Fields:
 - `check: Optional[Callable] = None`
 - `work: Optional[Callable] = None`
 - `phrase: Optional[Callable] = None`
+- `assign: Optional[Callable] = None`
 - `own: Optional[Callable] = None`: A request of a general step (`general`, owner decision 2026-11-12): (prompt, payload, document_id, *, shape, example, follow, **noted), the prompt the id of a prompt file or {"text": its own}.
 - `transcribe: Optional[Callable] = None`: The lines of a figure (`Transcripts`), None where the profile writes no prompt for them: the flow says so where its step is on (`flow.prompt_problems`).
 
@@ -395,6 +476,7 @@ Fields:
 - `asked: collections.Counter = field(default_factory=collections.Counter)`
 - `failed: collections.Counter = field(default_factory=collections.Counter)`
 - `questions: int = 0`
+- `assigned: collections.Counter = field(default_factory=collections.Counter)`: The numbers no question took that were asked which field they belong to, and what it came to: "asked", "named" (a field) and "none".
 - `lock: threading.Lock = field(default_factory=threading.Lock)`
 
 #### Counts.ask
@@ -880,13 +962,43 @@ def fallback(self, plan: Plan, parameter, slot) -> str
 
 ```python
 def fetch(self, plan: Plan, more, batch: list, seen: set,
-          numbers: bool = False) -> list
+          numbers: bool = False, shown: Optional[Shown] = None) -> list
 ```
 
 The pieces a reply asks for itself (`more`), those not shown
 yet, of the pieces its field reads: the piece before or after a
 shown one, a table or figure by its placeholder, the pieces a
-pattern stands in, the pieces best for a sentence of its own.
+pattern stands in, the pieces best for a sentence of its own, the
+section a line stands in (*shown*: what the request showed, by
+which a letter names its piece).
+
+#### Reader.note_read
+
+```python
+@staticmethod
+def note_read(plan: Plan, read: Read, row: Row, slot) -> None
+```
+
+Where a dimension was read for a value (its source and quote),
+for the search of the same dimension of the other values of the
+value's table or section (`Plan.read_near`, rule
+`sibling_places`).
+
+#### Reader.section_pieces
+
+```python
+@staticmethod
+def section_pieces(plan: Plan, ask: dict, batch: list, pieces: list,
+                   seen: set, shown: Optional[Shown] = None) -> list
+```
+
+The pieces of the section a line stands in, from the section's
+start in the order of the plan, those not shown yet, as many as the
+rule `fetch_section_pieces` says: of the piece under the letter the
+ask's "id" names, else of the table or figure it names by its
+placeholder, else of the value's own place or the first piece
+shown. A table or a figure stands in the section its placeholder
+stands in.
 
 #### Reader.matching
 
@@ -1155,6 +1267,21 @@ def is_question(sentence: str) -> bool
 Is a search sentence a question rather than a sentence of the
 plan?
 
+### in_reply_order
+
+```python
+def in_reply_order(node)
+```
+
+A reply form, or an example of a reply, with its keys in the order
+the rule `reply_order` says (owner decision 2026-11-17, from the
+literature on forced formats: the order of an answer's keys can change
+what the model writes, so it is a setting that can be measured).
+"address_first" keeps every form as it is written, the line before its
+words; "words_first" puts "words" first in every object that has it,
+so the model writes the words of the value before it names their
+line. Nothing else changes: the same keys, the same checks.
+
 ### reply_format
 
 ```python
@@ -1180,14 +1307,25 @@ def fetches(image: bool = False) -> list
 ```
 
 What a reply may fetch itself (rule `fetches` of the step that
-asks), in the order of `GETS`; with *image* the picture of a shown
-figure too, where the rule allows it.
+asks), in the order of `GETS` and then the section of a line; with
+*image* the picture of a shown figure too, where the rule allows it.
 
 ### more_schema
 
 ```python
 def more_schema(image: bool = False) -> dict
 ```
+
+### region_of
+
+```python
+def region_of(ask) -> Optional[list]
+```
+
+The region of a picture an ask names ([left, top, right, bottom] from
+0 to 1000), None where it names none or one that is no part of the
+picture: four numbers, each from 0 to 1000, the right one past the left
+one and the bottom one past the top one.
 
 ### with_more
 
@@ -1498,6 +1636,36 @@ looked for in every passage of *passages*, the document's, where the
 rule `check_quote_shown` is off (owner decision 2026-11-12); an address
 is never: the rule is about the quote.
 
+### repeating
+
+```python
+@contextlib.contextmanager
+def repeating(n: int)
+```
+
+The requests asked while the block runs are the *n*-th transcription
+of a figure (`Transcripts`).
+
+### merge_transcripts
+
+```python
+def merge_transcripts(transcripts: list) -> tuple
+```
+
+(the kept transcript, {"lines": matched lines, "changed": numbers
+that differ from the first's}) of several transcriptions of one figure
+(owner decision 2026-11-17, from the literature on transcribing a chart
+several times, Self-Ensembling 2026). A number is read as the harvest reads
+a printed one: with its sign in front (rule `sign_belongs`), grouped by
+spaces (rule `thousands_spaces`) or plain. The caption is the first's. A line
+of numbers whose words without the numbers are the same in every
+transcription, once in each and with as many numbers, takes number by
+number the median of the values the transcriptions print, the lower
+middle one for an even count, written as the transcription it comes
+from printed it; any other line stays as the first has it, and a line
+only a later transcription has is not added. A number that cannot be
+read keeps the first's text.
+
 ### image_key
 
 ```python
@@ -1505,6 +1673,90 @@ def image_key(path: Optional[str]) -> Optional[str]
 ```
 
 What names an image for its kept transcription: its bytes' hash.
+
+### label_regex
+
+```python
+def label_regex(labels: tuple) -> str
+```
+
+A pattern for any of *labels*, the longest first, "Abb." also as
+"Abb", then the number as printed: "7", "7.2", "4-1", "A.3".
+
+### labels_and_numbers
+
+```python
+def labels_and_numbers(text: str, labels: tuple) -> list
+```
+
+[(label without its period, case-folded; number)] printed in *text*.
+A number is taken whole, so that "4" is not found in "41" or "4.1".
+
+### label_and_number
+
+```python
+def label_and_number(text: str, labels: tuple, start: bool = False)
+```
+
+The first label and number of *text* (at its start where *start*).
+
+### label_names
+
+```python
+def label_names(title_label: str, said: str) -> bool
+```
+
+Does the label *said* in a text name an item whose title has
+*title_label*? One is the other or its abbreviation (a prefix).
+
+### printed_numbers
+
+```python
+def printed_numbers(line: Line) -> list
+```
+
+[(cell or None, text)] of the numbers a line of a table or figure
+prints, counted for `numbers_untaken`: each cell of a table's row that
+prints a number other than a year, numbered from 1 as an address names
+it, or a line of a figure's numbers whole; [] for any other line.
+
+### numbers_untaken
+
+```python
+def numbers_untaken(plan: Plan, claims: list) -> dict
+```
+
+The numbers of the plan's tables and figures no value took (owner
+decision 2026-11-17, from the literature on reading numbers: find every
+number, then see which no question took): per kind the passages, their
+numbers and those no value's address names, and per passage with any
+untaken [kind, id, untaken, numbers], most first. A number is a cell of
+a table's row or a line of a figure's numbers that prints a number
+other than a year (`printed_numbers`); a value takes the cell its
+address names, else the numbers of its line that print its words.
+Counted only: nothing is asked or left out for it.
+
+### number_tokens
+
+```python
+def number_tokens(text: str) -> list
+```
+
+The numbers *text* prints other than years, each as printed, in
+order.
+
+### untaken_items
+
+```python
+def untaken_items(plan: Plan, claims: list) -> list
+```
+
+The numbers of the plan's tables and figures no value of *claims*
+took, in the plan's order, each as an `Untaken` (owner decision
+2026-11-17): a cell of a table's row that prints a number other than a
+year, its words the number the cell prints (the first where it prints
+several), and for a figure's line of numbers each number of the line
+other than a year, one item each. Taken as `numbers_untaken` counts.
 
 ### title_page_shown
 

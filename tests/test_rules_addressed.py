@@ -82,7 +82,7 @@ def test_the_dashes_that_make_a_span_of_years_are_the_rule_s():
 # -- what a reply may fetch ---------------------------------------------------
 
 def test_a_reply_may_fetch_what_the_rule_allows_and_the_schema_says_so():
-    every = ["next", "previous", "item", "search", "similar"]
+    every = ["next", "previous", "item", "search", "similar", "section"]
     assert addressed.fetches() == every
     assert addressed.more_schema()["items"]["properties"]["get"][
         "enum"] == every

@@ -118,7 +118,8 @@ CREATE TABLE IF NOT EXISTS "Tables" (
     "markdown"       TEXT,
     "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
     "caption_source" TEXT,  -- stage | section_text
-    "qa"             TEXT   -- JSON, see above
+    "qa"             TEXT,  -- JSON, see above
+    "context_sentence" TEXT -- the sentence of context embedded before the table's text; NULL = none
 );
 
 CREATE TABLE IF NOT EXISTS "Images" (
@@ -130,7 +131,8 @@ CREATE TABLE IF NOT EXISTS "Images" (
     "caption"        TEXT,
     "description"    TEXT,
     "bbox"           TEXT,  -- JSON [[x0,y0,x1,y1]] region in PDF points
-    "caption_source" TEXT   -- see Tables.caption_source
+    "caption_source" TEXT,  -- see Tables.caption_source
+    "context_sentence" TEXT -- see Tables.context_sentence
 );
 
 -- One row per embedded vector. `faiss_id` is the id in the FAISS IDMap index.

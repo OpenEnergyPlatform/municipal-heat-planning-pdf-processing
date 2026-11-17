@@ -21,6 +21,13 @@ a section that still references a real table or figure and routing a
 bibliography title to the Stage 4 literature path instead of
 dropping it.
 
+A footnote at the foot of a page (a text block Stage 2 labelled
+`footnote`) stands on a line of its own after the text of its page, a
+text segment marked `"footnote": true`. Where the page's text breaks off
+in a sentence that runs on to the next page, the footnote waits for the
+end of that sentence, so no sentence is cut by it (owner decision
+2026-11-17: "wir sollten die Fußnoten behalten").
+
 A table's or figure's caption is settled during assembly, where the
 section text and its placeholder are both available: resolve_title
 (docpipe.captions) chooses between the caption block Stage 2 attached

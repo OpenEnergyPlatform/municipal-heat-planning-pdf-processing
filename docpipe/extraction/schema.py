@@ -900,12 +900,12 @@ def stamp_schema() -> dict:
             "^extraction/(harvest|queries|anchors|rows|field|phrase|frame"
             "|survey|read_values|read_text|comb|match|settings|seek"
             "|transcribe|find|docfield|coord|list|names|search|check"
-            "|follow|work)$":
+            "|follow|work|assign)$":
                 {**sha, "description": "sha256 of the prompt file; "
                                        "`transcribe`, `find`, `docfield`, "
                                        "`coord`, `list`, `names`, `search`, "
-                                       "`check`, `follow`, `work` and "
-                                       "`phrase` are the prompts of a "
+                                       "`check`, `follow`, `work`, `assign` "
+                                       "and `phrase` are the prompts of a "
                                        "harvest piece by piece; the others "
                                        "are in stamps of older releases"},
             "^question_text/[^/]+$": {
@@ -971,7 +971,7 @@ def stamp_schema() -> dict:
 # coordinate's search, the frame, the review and the compute step
 # (`runner._asked`, `phrase`).
 PIECE_ASKS = ("transcribe", "find", "docfield", "coord", "list", "names",
-              "search", "check", "follow", "work")
+              "search", "check", "follow", "work", "assign")
 ASK_STAGES = PIECE_ASKS + ("phrase", "frame", "review", "compute")
 
 
@@ -1183,7 +1183,8 @@ def trace_schema() -> dict:
                                 "names": {"type": "integer"},
                                 "asked": {"type": "string"},
                                 "shows": {"enum": ["near", "found",
-                                                   "fetched"]}}
+                                                   "fetched"]},
+                                "repeat": {"type": "integer"}}
                                if stage in PIECE_ASKS
                                else {"coordinate": {"type": "string"}}
                                if stage == "phrase" else {}),
@@ -1222,6 +1223,38 @@ def trace_schema() -> dict:
                   "question_queries": {"type": "integer"},
                   "chunks": {"type": "integer"},
                   "scope": {"type": ["string", "null"]}},
+        # The numbers of a document's tables and figures no value took
+        # (`addressed.numbers_untaken`): per kind its passages, numbers and
+        # untaken ones, and per passage with any [kind, id, untaken, numbers].
+        "untaken": {"kinds": {"type": "object", "additionalProperties": {
+                        "type": "object", "additionalProperties": {
+                            "type": "integer"}}},
+                    "passages": {"type": "array", "items": {"type": "array"}},
+                    "scope": {"type": ["string", "null"]}},
+        # Of those numbers the ones the step `assign` asked which field they
+        # are: asked, named a field, named none.
+        "assigned": {"asked": {"type": "integer"},
+                     "named": {"type": "integer"},
+                     "none": {"type": "integer"},
+                     "scope": {"type": ["string", "null"]}},
+        # A request that went through the second way of a rule (`rule`): the
+        # field and what that way came to where the rule says it.
+        "second_way": {"rule": {"type": "string"},
+                       "parameter": {"type": ["string", "null"]},
+                       "work": {"type": "integer"},
+                       "finds": {"type": "integer"},
+                       "added": {"type": "integer"},
+                       "requests": {"type": "integer"},
+                       "way": {"type": "string"}},
+        # The figures of a document transcribed more than once (rule
+        # `transcribe_times`): the times, the figures, the requests beyond
+        # the first transcription, the lines of numbers matched across the
+        # transcriptions and the numbers that differ from the first's.
+        "transcribed_again": {"times": {"type": "integer"},
+                              "figures": {"type": "integer"},
+                              "requests": {"type": "integer"},
+                              "lines": {"type": "integer"},
+                              "numbers_changed": {"type": "integer"}},
         # A sentence the passages are ranked with for a parameter, written
         # for the document or once per run (`per`).
         "seek_probe": {"parameter": {"type": "string"},
@@ -1290,6 +1323,18 @@ def trace_schema() -> dict:
                    "of_kind": by_field,
                    "excluded": {"type": "array", "items": {"type": "array"}},
                    "vectors": {"type": "object"}, "ms": {"type": "integer"}},
+        # Its word search (rule `search_words`): the passages the word index
+        # found for its sentences, best first, before the reranker.
+        "words": {"sid": {"type": "integer"},
+                  "places": {"type": "array", "items": {"type": "array"}},
+                  "ms": {"type": "integer"}},
+        # Its page search (rule `search_pages`): the pages of the page index
+        # closest to its sentences, best first, and the passages standing
+        # on them that joined the candidates.
+        "pages": {"sid": {"type": "integer"},
+                  "pages": {"type": "array", "items": {"type": "integer"}},
+                  "added": {"type": "array", "items": {"type": "array"}},
+                  "ms": {"type": "integer"}},
         # Its reranker, of passages or of pieces: the model, the rule of the
         # pool, the passages drawn (the rest of the pool is the best of its
         # kind), how many it draws and up to which place, the draw's seed,
@@ -1349,6 +1394,7 @@ def trace_schema() -> dict:
     # answer is that of the same request sent before in the document and
     # nothing was sent (`scheduler.Once`, owner decision 2026-11-07).
     exchange = {"input": {"type": "object"}, "output": {"type": "object"},
+                "cached_tokens": {"type": ["integer", "null"]},
                 "asked_at": {"type": "number"}, "sent_at": {"type": "number"},
                 "answered_at": {"type": "number"},
                 "once": {"type": "boolean"},
@@ -1372,7 +1418,7 @@ def trace_schema() -> dict:
         # The requests piece by piece carry what their kind names.
         **{f"{stage}_ask": {"parameter", "owner", "kind", "value", "chunk",
                             "chunks", "coordinate", "step", "names",
-                            "asked"}
+                            "asked", "repeat"}
            for stage in PIECE_ASKS},
         # A search sentence, the frame, the review and the compute step say
         # their attempt and what it cost; a parameter where they have one,
@@ -1382,6 +1428,8 @@ def trace_schema() -> dict:
         "phrase_ask": {"parameter", "owner", "kind", "value", "coordinate"},
         "docfield": {"why"},
         "asked": {"scope"},
+        "second_way": {"parameter", "work", "finds", "added", "requests",
+                       "way"},
         "read": {"failed", "unanswered", "unread", "why"},
         "completion": {"filled", "id", "key", "matched"},
         # Of the events that make a run readable back, only what names them
@@ -1407,7 +1455,8 @@ def trace_schema() -> dict:
     # them would refuse a legitimate record from a request that never reached
     # the server.
     loose = {"detail", "status", "finish", "why", "sources", "ms", "slot",
-             "prompt_tokens", "completion_tokens", "filled_by", "unbacked_by",
+             "prompt_tokens", "cached_tokens", "completion_tokens", "filled_by",
+             "unbacked_by",
              "field", "raw_missing", "raw_foreign", "cause", "owner",
              "rejected", "given", "raw", "quote", "via_base", "via_target",
              "via_table", "scope", "withdrawn",

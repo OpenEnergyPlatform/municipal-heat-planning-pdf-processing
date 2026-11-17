@@ -157,6 +157,13 @@ FETCH_ROUNDS = Setting("fetch_rounds", RULE, "asked again with what was "
                        help="How often this question is asked again with "
                        "the chunks its answer asked to see. 0: the answer "
                        "is taken as it is.")
+FETCH_ROUNDS_KEEP = Setting("fetch_rounds_keep", RULE, "what a further round "
+                            "shows of what was fetched",
+                            help="All: every round adds its chunks to the "
+                            "request. Last: a further round shows the "
+                            "request's own chunks and those fetched in the "
+                            "round before only; a line of a dropped chunk "
+                            "cannot be cited.")
 CHECKS = ("the quote is a line the request showed",
           "the answer is in its quote",
           "a quote is long enough to point to one place (quote_min_chars)",
@@ -168,8 +175,8 @@ QUESTIONS = ("find", "docfield", "coord", "search", "own")
 # the general step's own "own"), and the prompts of the other requests a
 # run sends.
 REQUESTS = ("find", "docfield", "coord", "search", "phrase", "check",
-            "list", "names", "work", "transcribe", "compute", "review",
-            "node_check", "example", "own")
+            "list", "names", "work", "assign", "transcribe", "compute",
+            "review", "node_check", "example", "own")
 
 LIBRARY = {box.type: box for box in (
     # -- start ---------------------------------------------------------------
@@ -455,7 +462,8 @@ LIBRARY = {box.type: box for box in (
                                  "the title page where it is shown"),
                           help="Which lines the example of a request that "
                           "finds values points to."),
-                  FETCHES, FETCH_ROUNDS, FOLLOW, REPLIES, MEANINGS),
+                  FETCHES, FETCH_ROUNDS, FETCH_ROUNDS_KEEP, FOLLOW, REPLIES,
+                  MEANINGS),
         decided="2026-11-12", marks=CHECKS),
     Box("retrieve", "Search the document with a text", "order",
         "answers", "supply",

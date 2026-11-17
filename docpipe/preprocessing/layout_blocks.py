@@ -4,8 +4,9 @@ layout_blocks.py: Turns the detections of one page into blocks.
 Each surviving box becomes a text suppression, a saved table or image crop,
 or a title or caption Block; classes outside those sets are ignored, since
 the Stage 1 PyMuPDF text blocks already cover that content. The text in a
-footnote box leaves the page like a page number does, and the document's log
-says how many text blocks and characters that was.
+footnote box stays on the page, labelled `footnote` (owner decision
+2026-11-17), and the document's log says how many text blocks and characters
+that was.
 
 Author: Felix Vossel
 """
@@ -43,16 +44,16 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class FootnoteTally:
-    """What the footnote class took off the pages of one document."""
+    """What the footnote class found on the pages of one document."""
     blocks: int = 0
     chars: int = 0
 
-    def add(self, removed: list[Block]) -> None:
-        self.blocks += len(removed)
-        self.chars += sum(len(b.content or "") for b in removed)
+    def add(self, found: list[Block]) -> None:
+        self.blocks += len(found)
+        self.chars += sum(len(b.content or "") for b in found)
 
     def line(self) -> str:
-        return (f"Stage 2: the footnote class removed {self.blocks} text "
+        return (f"Stage 2: the footnote class kept {self.blocks} text "
                 f"block(s) with {self.chars} character(s)")
 
 
@@ -188,8 +189,8 @@ def process_page(
 
     *detections* are in detection-image pixel space (det_w x det_h), while
     crops come from *crop_image*, which may be rendered at a different DPI.
-    *footnotes*, when given, is told which text blocks the footnote class took
-    off this page.
+    *footnotes*, when given, is told which text blocks the footnote class
+    found on this page; they stay on it, labelled `footnote`.
     """
     prefix = f"p{pg.page_number - 1}"
 
@@ -219,10 +220,12 @@ def process_page(
             pg.width_pt, pg.height_pt,
         )
 
+        if label in FOOTNOTE_CLASSES:
+            footnote_bboxes.append(bbox_pt)
+            continue
+
         if label in SUPPRESS_CLASSES:
             suppress_bboxes.append(bbox_pt)
-            if label in FOOTNOTE_CLASSES:
-                footnote_bboxes.append(bbox_pt)
             continue
 
         if label in SECTION_TITLE_CLASSES:
@@ -366,10 +369,19 @@ def process_page(
             suppress_bboxes.append(bbox_pt_expanded)
             continue
 
+    if footnote_bboxes:
+        # A footnote stays a text block of its page, labelled so that
+        # Stage 3 can set it on a line of its own after the page's text.
+        kept = [b for b in pg.blocks
+                if b.type == "text" and _lies_in(b, footnote_bboxes)
+                and not _lies_in(b, suppress_bboxes)]
+        for block in kept:
+            block.layout_label = "footnote"
+        if footnotes is not None:
+            footnotes.add(kept)
+
     if suppress_bboxes:
         before = len(pg.blocks)
-        if footnotes is not None:
-            footnotes.add([b for b in pg.blocks if _lies_in(b, footnote_bboxes)])
         pg.blocks = [b for b in pg.blocks if not _lies_in(b, suppress_bboxes)]
         suppressed = before - len(pg.blocks)
         if suppressed:

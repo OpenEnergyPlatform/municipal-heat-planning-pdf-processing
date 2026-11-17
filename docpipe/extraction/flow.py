@@ -172,7 +172,7 @@ NUMBERS = (
 # the numbers that bound how it is asked again (plan 2026-11-11, 5.2).
 ASKING = ("transcribe", "sentences", "docfield", "works", "find", "coord",
           "quantity", "work_coordinate", "phrase", "search", "last_year",
-          "names", "about", "compute", "list")
+          "names", "about", "compute", "list", "assign")
 def _with_general(steps: tuple, searching: bool) -> tuple:
     from ..ruleset.kit import with_general
     return with_general(steps, searching)
@@ -519,7 +519,7 @@ def lasting_of(node: dict, name: str) -> bool:
     kind = blocks.LIBRARY.get(node.get("box"))
     if kind is None or kind.type not in GENERAL:
         return variables.lasting(name)
-    if name == "values":
+    if name in ("values", "untaken"):
         return True
     if name == "answer":
         return False

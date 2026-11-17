@@ -611,6 +611,25 @@
       ]
     },
     {
+      "id": "untaken_numbers",
+      "each": "list",
+      "list": "untaken",
+      "as": "number",
+      "together": true,
+      "note": "Each number of a table or figure that no field's question took is asked which field of the list it is, or none; where a field is named, the number becomes a find of that field before the values are read on.",
+      "steps": [
+        {
+          "id": "assign",
+          "box": "ask",
+          "preset": "assign",
+          "rules": {
+            "temperature": 0,
+            "max_tokens": 256
+          }
+        }
+      ]
+    },
+    {
       "id": "values",
       "each": "value",
       "order": "names_first",

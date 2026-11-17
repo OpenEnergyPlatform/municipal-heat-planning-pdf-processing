@@ -18,6 +18,13 @@ a section that still references a real table or figure and routing a
 bibliography title to the Stage 4 literature path instead of
 dropping it.
 
+A footnote at the foot of a page (a text block Stage 2 labelled
+`footnote`) stands on a line of its own after the text of its page, a
+text segment marked `"footnote": true`. Where the page's text breaks off
+in a sentence that runs on to the next page, the footnote waits for the
+end of that sentence, so no sentence is cut by it (owner decision
+2026-11-17: "wir sollten die Fußnoten behalten").
+
 A table's or figure's caption is settled during assembly, where the
 section text and its placeholder are both available: resolve_title
 (docpipe.captions) chooses between the caption block Stage 2 attached
@@ -38,6 +45,7 @@ from typing import Optional
 from .config import (
     SECTIONS_JSON,
     SECTION_TITLE_CLASSES,
+    FOOTNOTE_CLASSES,
     HEADER_FOOTER_STRIP_ENABLE,
     HEADER_FOOTER_ZONE_FRAC,
     HEADER_FOOTER_MAX_LEN,
@@ -71,6 +79,21 @@ log = logging.getLogger(__name__)
 def _block_is_title(block: Block) -> bool:
     """True when the block represents a section-title heading."""
     return block.layout_label in SECTION_TITLE_CLASSES
+
+
+def _block_is_footnote(block: Block) -> bool:
+    """True when the block is the text of a footnote at the foot of a page
+    (Stage 2 keeps it, labelled, owner decision 2026-11-17)."""
+    return block.layout_label in FOOTNOTE_CLASSES
+
+
+# The end of a sentence: a mark, then only what closes it.
+_SENTENCE_END = re.compile(r"[.!?][\"'”“»)\]]*$")
+
+
+def _ends_sentence(text: str) -> bool:
+    """Does *text* end a sentence, so that a footnote may follow it?"""
+    return bool(_SENTENCE_END.search((text or "").rstrip()))
 
 
 def _rect(bbox) -> Optional[list[float]]:
@@ -345,6 +368,22 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
     # (text, page, rect) fragments accumulated for the current section before
     # flushing; rect is the block's [x0,y0,x1,y1] in PDF points (or None).
     pending: list[tuple[str, int, Optional[list[float]]]] = []
+    # The footnotes of a page, held until the sentence they interrupt ends
+    # (a paragraph that runs on to the next page), then each set on a line
+    # of its own; *new_line* says that what follows them begins a line.
+    held: list[tuple[str, int, Optional[list[float]]]] = []
+    new_line = False
+
+    def _sep() -> str:
+        """What joins the next text or placeholder to the section's content:
+        a line break after a footnote, else a space."""
+        nonlocal new_line
+        if not current_section.content:
+            new_line = False
+            return ""
+        sep = "\n" if new_line else " "
+        new_line = False
+        return sep
 
     def _emit_text_segment(page, parts: list[str], rects: list[list[float]]) -> None:
         """Append one page-tagged text segment. Rects stay per-block rather
@@ -353,6 +392,28 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
         if rects:
             seg["bbox"] = rects
         current_section.segments.append(seg)
+
+    def _emit_footnotes() -> None:
+        """Set the footnotes held on lines of their own, each a text segment
+        marked as a footnote, so that a request of the harvest can read and
+        quote it like any line (owner decision 2026-11-17)."""
+        nonlocal held, new_line
+        if current_section is None or not held:
+            held = []
+            return
+        for text, page, rect in held:
+            ts = text.strip()
+            if not ts:
+                continue
+            current_section.content += \
+                ("\n" if current_section.content else "") + ts
+            seg: dict = {"page": page, "kind": "text", "text": ts,
+                         "footnote": True}
+            if rect is not None:
+                seg["bbox"] = [rect]
+            current_section.segments.append(seg)
+            new_line = True
+        held = []
 
     def _flush_text() -> None:
         """Flush pending fragments into the current section's content and
@@ -363,8 +424,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
             return
         joined = " ".join(t.strip() for (t, _p, _b) in pending if t.strip())
         if joined:
-            sep = " " if current_section.content else ""
-            current_section.content += sep + joined
+            current_section.content += _sep() + joined
         group_page: Optional[int] = None
         group_parts: list[str] = []
         group_rects: list[list[float]] = []
@@ -385,8 +445,10 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
         pending = []
 
     def _open_section(title: str, page_number: Optional[int] = None) -> None:
-        nonlocal current_section
+        nonlocal current_section, new_line
         _flush_text()
+        _emit_footnotes()
+        new_line = False
         if current_section is not None:
             current_section.content = current_section.content.strip()
         new_section = Section(title=title, page_number=page_number)
@@ -422,6 +484,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
 
             if block.type == "table":
                 _flush_text()
+                _emit_footnotes()
                 if current_section is not None:
                     rect = _rect(block.bbox)
                     ref = TableRef(
@@ -433,8 +496,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
                         bbox=[rect] if rect is not None else None,
                     )
                     current_section.tables.append(ref)
-                    sep = " " if current_section.content else ""
-                    current_section.content += sep + f"[{block.id}]"
+                    current_section.content += _sep() + f"[{block.id}]"
                     ref.caption = resolve_title(ref.caption,
                                                 current_section.content,
                                                 block.id)
@@ -446,6 +508,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
 
             if block.type == "image":
                 _flush_text()
+                _emit_footnotes()
                 if current_section is not None:
                     rect = _rect(block.bbox)
                     ref = FigureRef(
@@ -456,8 +519,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
                         bbox=[rect] if rect is not None else None,
                     )
                     current_section.figures.append(ref)
-                    sep = " " if current_section.content else ""
-                    current_section.content += sep + f"[{block.id}]"
+                    current_section.content += _sep() + f"[{block.id}]"
                     ref.caption = resolve_title(ref.caption,
                                                 current_section.content,
                                                 block.id)
@@ -467,10 +529,24 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
                     current_section.segments.append(seg)
                 continue
 
+            if block.type == "text" and block.content and _block_is_footnote(block):
+                # A footnote waits for the end of the sentence it stands
+                # in, which a paragraph running on to the next page ends
+                # there; at the end of a sentence it follows at once.
+                held.append((block.content, pg.page_number, _rect(block.bbox)))
+                if not pending or _ends_sentence(pending[-1][0]):
+                    _flush_text()
+                    _emit_footnotes()
+                continue
+
             if block.type == "text" and block.content:
                 pending.append((block.content, pg.page_number, _rect(block.bbox)))
+                if held and _ends_sentence(block.content):
+                    _flush_text()
+                    _emit_footnotes()
 
     _flush_text()
+    _emit_footnotes()
     if current_section is not None:
         current_section.content = current_section.content.strip()
 

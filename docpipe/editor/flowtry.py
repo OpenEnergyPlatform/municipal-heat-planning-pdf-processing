@@ -283,6 +283,10 @@ class Recorder:
             # out as its prompt is written (`runner.document_anchor`).
             system = built.text if example is None \
                 else runner.system_text(built, example)
+        if parts is not None:
+            # Where the rule `example_place` says "message" the example
+            # stands in the message, as the run sends it.
+            sent = {**sent, **runner.example_keys(built, example)}
         entry["first"] = {
             "kind": kind if not follows else f"follow of {follows}",
             "system": system,

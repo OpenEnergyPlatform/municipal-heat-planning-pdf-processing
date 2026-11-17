@@ -135,6 +135,27 @@ request whose answer did not fit its room is asked in halves, and what
 an answer asks to see comes first in the field's next request (owner
 decision 2026-11-12).
 
+### assigned
+
+```python
+def assigned(ask, counts)
+```
+
+The field a number no question took belongs to (`assign`, owner
+decision 2026-11-17, from the literature on reading numbers: every
+number no question took is asked which field of the list it is, or
+none): the request shows the number's line with the head of its table
+as a value's own place is shown, the headings above it and the spec's
+fields that read numbers, numbered; the answer is the number of the
+field, 0 for none. An answer outside the list is asked again with its
+reason (`not_an_option`). Where a field is named the number becomes a
+find of that field at that address, as a find of the find step would be
+(its line and cell, the number as printed, its line as the quote),
+checked as every find is and kept with that field's finds of its
+passage, so that the values and their coordinates go through it as
+through any value. Nothing is asked where the rule `ask_untaken` is off
+or the profile writes no prompt for the request.
+
 ### coord_notes
 
 ```python

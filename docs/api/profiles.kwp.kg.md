@@ -167,7 +167,8 @@ def evidence_comment(row: dict, document: str, prose: dict, join: str, *,
                      transcribed: bool = False, conflict: bool = False,
                      corroborated: bool = False,
                      resolved: Optional[str] = None,
-                     named: Optional[str] = None) -> list
+                     named: Optional[str] = None,
+                     across_runs: Optional[list] = None) -> list
 ```
 
 Where this value was read, as comment lines above its node: the

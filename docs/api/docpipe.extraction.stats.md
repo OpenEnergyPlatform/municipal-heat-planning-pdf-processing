@@ -28,6 +28,8 @@ numbers a report and the ontology side can act on:
   document has once and the values read of them, the works a document
   presents beside itself, and the search sentences that were questions
   (owner decisions 2026-11-08);
+- the numbers of the tables and figures no value took, per kind and per
+  document (owner decision 2026-11-17): where values may be missing;
 - how many requests were with the server at once, on average and at most,
   and the seconds they spent with it and waiting for a place, all and per
   stage; and per stage the requests answered with the answer of the same

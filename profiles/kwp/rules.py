@@ -123,6 +123,17 @@ GRAPH = (
          "sums.",
          least=0, most=0.5, decided="2026-09-23", steps=("compute",),
          where="profiles/kwp/kg.py (settle), profiles/kwp/compute.py"),
+    rule("drawn_tolerance", "graph", "One number, several occurrences",
+         "number",
+         "How far apart two occurrences of one number may lie, as a share of "
+         "the larger, where one of them was read off the picture of a figure "
+         "that only draws it, such as the height of a bar, and still count "
+         "as one statement. A number read off a picture is an estimate, so "
+         "it may lie further from a printed one than rounding explains. The "
+         "more precise one wins, else the one with the better trust level. 0 "
+         "merges only equal numbers.",
+         least=0, most=0.5, decided="2026-11-17",
+         where="docpipe/extraction/readings.py (settle)"),
     rule("contested_in_full", "graph", "One number, several occurrences",
          "switch",
          "On: numbers that still disagree about one node after wording, "

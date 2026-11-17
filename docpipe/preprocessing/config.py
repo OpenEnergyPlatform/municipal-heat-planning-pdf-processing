@@ -131,12 +131,18 @@ PP_ID2LABEL: dict[int, str] = {
 # Classes whose text blocks are removed from page content entirely. The image
 # variants are running furniture too (municipal logos in page corners).
 SUPPRESS_CLASSES = {"header", "header_image", "footer", "footer_image",
-                    "number", "footnote"}
+                    "number"}
 
-# The suppressed classes whose text is prose of the document and not furniture.
-# It is removed all the same, and stage 2 counts it per document so that how
-# much text that is does not stay unknown. A table's own note (vision_footnote)
-# is not one of them: it is a caption class and is not removed here.
+# The classes whose text is prose of the document and not furniture: the
+# footnotes at the foot of a page. Until 2026-11-17 they were removed like a
+# page number and only counted; since the owner's decision of that day ("wir
+# sollten die Fußnoten behalten") their text blocks stay, labelled
+# `footnote`, and Stage 3 puts each on a line of its own after the text of
+# its page, as the page transcription does for a page without a text layer.
+# A footnote names what a number of its page means ("¹ witterungsbereinigt",
+# "* ohne Industrie"); removed, it could be read by no request of the harvest.
+# A table's own note (vision_footnote) is not one of them: it is a caption
+# class. Stage 2 still counts the footnote blocks per document.
 FOOTNOTE_CLASSES = {"footnote"}
 
 # ─── RUNNING HEADER / FOOTER STRIPPING (Stage 3, deterministic) ────────────

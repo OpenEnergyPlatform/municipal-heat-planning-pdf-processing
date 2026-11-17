@@ -306,7 +306,8 @@ def __init__(self, drawing: Drawing, *, spec, rules: dict, bricks: dict,
              db_path=None, strict: bool = False,
              extra: Optional[dict] = None,
              required: Optional[dict] = None,
-             space: Optional[dict] = None)
+             space: Optional[dict] = None,
+             other_runs: Optional[dict] = None)
 ```
 
 #### Writer.brick
@@ -388,6 +389,15 @@ def unhung(self, doc: Document) -> Counter
 The readings of a box of names or of readings that no node of the
 box carries, per field and state; an out: entry is counted by
 choice instead.
+
+#### Writer.log_across_runs
+
+```python
+def log_across_runs(self) -> None
+```
+
+The total of the comparison with other runs, one log line; none
+without other runs.
 
 #### Writer.names_of
 
@@ -531,7 +541,7 @@ The drawing of *profile*'s graph file, or GraphError without one.
 def make_writer(profile, db_path=None, *, strict: bool = False,
                 extra: Optional[dict] = None,
                 drawing: Optional[Drawing] = None,
-                environ=None) -> Writer
+                environ=None, other_runs: Optional[dict] = None) -> Writer
 ```
 
 ### python_space
@@ -548,11 +558,13 @@ module of the graph (`kg`, the nearest one of its line) and its log.
 ```python
 def make_serializer(profile, db_path=None, *, strict: bool = False,
                     extra: Optional[dict] = None,
-                    drawing: Optional[Drawing] = None) -> Callable
+                    drawing: Optional[Drawing] = None,
+                    other_runs: Optional[dict] = None) -> Callable
 ```
 
 (document name, accepted rows) -> Turtle or None, written from the
 drawing of *profile*. `claims` holds per document what the provenance
-file records.
+file records. *other_runs* ({run: {document: rows}},
+`acrossruns.read_runs`) are compared with the numbers, never written.
 
 [Back to the index](../README.md)

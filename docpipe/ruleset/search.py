@@ -166,6 +166,69 @@ RULES: tuple = (
          steps=("docfield", "find", "coord", "search", "work_coordinate",
                 "works", "last_year", "quantity", "about"),
          where="addressed.py (resolve, the reply formats)"),
+    rule("reply_order", "flow", "Asking again and giving up", "choice",
+         "In which order an answer writes its keys, which the form of the "
+         "answer enforces. address_first: the line before its words, which "
+         "is the standard. words_first: the words of the value first, then "
+         "the line that prints them. The example a prompt shows follows the "
+         "same order. The keys and the checks stay the same; the order can "
+         "change what the model writes and is a setting to be measured.",
+         choices=("address_first", "words_first"), decided="2026-11-17",
+         steps=("docfield", "find", "coord", "search", "work_coordinate",
+                "works", "last_year", "quantity", "about"),
+         where="addressed.py (in_reply_order), runner.py (system_text)"),
+    rule("example_place", "flow", "Asking again and giving up", "choice",
+         "Where a request shows the example of its reply. prompt: in the "
+         "system prompt, which is the standard; the example carries the "
+         "request's own address, so two requests of a kind differ from that "
+         "point on and the server's prefix cache serves only the part "
+         "before it. message: the system prompt keeps its words and names "
+         "the keys \"example\" and \"nothing\" instead, and the example "
+         "stands under those keys at the end of the message; the whole "
+         "system prompt is then the same for every request of a kind and "
+         "step, and the server's prefix cache serves all of it. What "
+         "changes: the example moves into the message; the keys and the "
+         "checks stay the same.",
+         choices=("prompt", "message"), decided="2026-11-17",
+         steps=("docfield", "find", "coord", "search", "work_coordinate",
+                "works", "last_year", "quantity", "about"),
+         where="runner.py (system_text, example_keys, ask_in_grammar)"),
+    rule("find_again_below", "flow", "Asking again and giving up", "whole",
+         "A field the find step read piece by piece in a document is read "
+         "a second time over the same pieces where the first pass found at "
+         "least one value and fewer than this many; the finds of both "
+         "passes are united, each backed by its own quote, and a value "
+         "found twice at the same place counts once. A field that found "
+         "nothing is not read again, the document most likely does not "
+         "carry it. It costs about one more pass of find requests for each "
+         "such field. 0: no second pass.", least=0,
+         decided="2026-11-17", steps=("each piece",),
+         where="engine.py (Engine.find_again)"),
+    rule("find_again_way", "flow", "Asking again and giving up", "choice",
+         "How the second pass of a field's find step (`find_again_below`) "
+         "asks. Generous (standard, the strict and the generous wording "
+         "of RAME 2026): with a second wording of the prompt that asks for "
+         "every value of the field the shown lines print, also where it is "
+         "unsure; each value it names is checked like any other. Same: "
+         "with the words of the first pass; the request is sent again and, "
+         "at a temperature of 0, mostly answers the same. The first pass "
+         "always asks in the standard way.",
+         choices=("same", "generous"), decided="2026-11-17",
+         steps=("find",), where="engine.py (Engine.find_again), "
+                                "prompts find (way: find_again_way)"),
+    rule("ask_untaken", "flow", "Asking again and giving up", "switch",
+         "On: after the find steps of a document, each number of a table or "
+         "figure that no field's question took (a cell of a table's row, or "
+         "a number of a figure's line of numbers, other than a year) is "
+         "asked which field of the list that reads numbers it is, or none; "
+         "where a field is named, the number becomes a find of that field "
+         "at that address and goes through the same coordinates and checks "
+         "as every value. It costs one request for each such number, so a "
+         "plan with many cost and area tables has many; a profile without "
+         "the prompt `assign` asks nothing. Off: nothing is asked, the "
+         "numbers no question took stay unread.",
+         decided="2026-11-17", steps=("assign",),
+         where="targets.py (assigned), general.py (raw: untaken)"),
     rule("unit_searched", "flow", "Search", "switch",
          "Off: a unit that the value's own place does not settle is not "
          "searched; it is asked at the value's place only, as the spec's "

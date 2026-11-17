@@ -104,6 +104,16 @@ VARIABLES = {var.name: var for var in (
         "it stands in and its dimensions.",
         {"type": "array", "items": _VALUE}, lasting=True),
     Var("value", "the value", "One value read.", _VALUE),
+    Var("untaken", "the numbers no value took",
+        "The numbers of the document's tables and figures that no value "
+        "read so far took: each a cell of a table's row, or a number of a "
+        "figure's line of numbers, with its passage, its line and the "
+        "number as printed. A loop over it asks for each which field it is.",
+        {"type": "array", "items": {"type": "object", "properties": {
+            "owner": {"type": "array"}, "line": {"type": "integer"},
+            "cell": {"type": ["integer", "null"]},
+            "words": {"type": "string"}, "text": {"type": "string"}}}},
+        lasting=True),
     Var("dimensions", "the dimensions of the value",
         "What the Spec asks about a value besides itself, such as its year, "
         "its scenario or its energy carrier.",

@@ -136,6 +136,33 @@ every source says whose it is: the label the caller gives its document, or,
 where there is none, the name of the document's file without its ending
 (`_whose`).
 
+### The page index
+
+`docpipe/inference/pages.py` builds a third index beside the vectors and the
+words, for the harvest's search (owner decision 2026-11-17, from the literature
+on searching the page image directly; rule `search_pages` of the extraction
+stage). Where the transcription of a map or a chart does not hold a detail, the
+page does. The index embeds the image of each page of each document with the
+corpus's multimodal embedder, so that a search sentence embedded as the harvest
+embeds it lies in the same space as a page. It is two files beside the corpus
+database and built from it, never written into it, as the word index is:
+`<name>.pages.faiss`, one vector for each page, and `<name>.pages.db`, which
+document and page each vector is and the fingerprint. `docpipe pages DB` builds it
+(pages are rendered at 150 dpi, the size the embedder scales them to anyway, from
+the corpus's PDFs) and `docpipe pages DB --check` says whether it is missing,
+stale or current.
+
+The fingerprint is a digest over the model, the render size and the documents the
+corpus database names (file, size and page count). An index of another model, of
+another render size or of other documents is stale, and a stale index is not asked:
+a page of a document that has since changed, or a vector of another model, would be
+worse than none, and the harvest searches without it and says so once. An embedder
+that takes text only cannot embed a page; the build says so and writes nothing.
+`PageIndex.search` gives the page numbers of a document closest to any of a list of
+sentence vectors, and `passages_on` the sections, tables and figures that stand on
+those pages. A found page backs no value: those passages only join the candidates
+the reranker orders, and the reading still needs a line that holds the value.
+
 ### Packing sources into token-budgeted batches
 
 The top `MAX_CHUNK_ATTEMPTS` hits are packed by `chunker.pack_chunks`
@@ -875,7 +902,7 @@ described in Method. Called by the chat's drawing, and `coordinates_of` by `valu
 `hybrid.py` holds `retrieve`, the one ranking out of the search by meaning
 and the search by word, over one document or all; `answer.py` calls it.
 `lexical.py` builds and asks the word index (`docpipe lexical`), called by
-`hybrid.py` and the app. `values_route.py` answers a question for a number
+`hybrid.py` and the app. `pages.py` builds and asks the page index (`docpipe pages`), called by the harvest's search (`runner.make_more_sources`). `values_route.py` answers a question for a number
 from the harvest, by meaning or by closed questions, called only by the app.
 `values_index.py` builds and asks the vectors of the harvest's values
 (`docpipe values-index`), called by the app. `replies.py` holds the reply schema of

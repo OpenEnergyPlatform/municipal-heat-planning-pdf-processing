@@ -359,14 +359,15 @@ box's own numbers ("own") under the names of the flow's numbers.
 #### Engine.step
 
 ```python
-def step(self, node: Optional[dict])
+def step(self, node: Optional[dict], **extra)
 ```
 
 Read with *node*'s own values laid over those of the frames it
 stands in, while it runs (`rules.STEP`); work it hands to other
 threads takes them along (`runner.run_each` copies the context).
-No node (a step of the preparation that is not drawn): the run's
-values.
+*extra* are values of the run's rules laid over them, as the pass of
+a field's find step sets them (`find_again`). No node (a step of the
+preparation that is not drawn): the run's values.
 
 #### Engine.number
 
@@ -599,6 +600,35 @@ The items of *node* through its steps: how many its condition
 let through, None where the frame counts its own (values,
 dimensions).
 
+#### Engine.find_key
+
+```python
+@staticmethod
+def find_key(claim: dict) -> tuple
+```
+
+Where and what a find is: its passage, line and cell, and its
+words. A value found twice at one place has one key.
+
+#### Engine.find_again
+
+```python
+def find_again(self, node: dict, scope: Scope, done: list,
+               run: Callable) -> list
+```
+
+A second pass of a field's find step over the same pieces where
+the first found at least one value and fewer than the rule
+`find_again_below` says (owner decision 2026-11-17, from the
+literature on reading a place several times, LangExtract 2025): the
+same requests are asked again, each find holds its own quote, and
+what the second pass finds joins the first's; a value found at the
+same place in both passes is one value. A field that found nothing
+is not asked again, and 0 for the rule asks no second pass.
+*done* are the scopes of the pieces' first pass, *scope* the field's;
+what comes back are the scopes of the second pass, whose finds
+`after_items` keeps with those of the first.
+
 #### Engine.after_items
 
 ```python
@@ -693,6 +723,33 @@ value's place shows only its line and the lines around it (owner
 decision 2026-11-13, point 4). An own piece the rule
 `search_skips_own_piece` left out without showing it is shown here;
 one a request showed whole is not shown again.
+
+#### Engine.read_near
+
+```python
+@staticmethod
+def read_near(coord: CoordItem, plan: Plan, first: list) -> list
+```
+
+The pieces where the same dimension was read for another value
+of the value's table or section (`Plan.read_near`, owner decision
+2026-11-17: the place that holds the scenario or the year of one
+value of a table is the best first guess for the others), the one
+most of them read it in first, as many as the rule
+`sibling_places` says, those beside it and those shown left out.
+Each value is still asked for itself, with an address of its own.
+
+#### Engine.mention_pieces
+
+```python
+@staticmethod
+def mention_pieces(coord: CoordItem, plan: Plan, shown: list) -> list
+```
+
+The text pieces that name the value's table or figure by its
+label and number (`Plan.mentioning`, owner decision 2026-11-17, from
+the literature on DocFS), as many as the rule `mentioning_pieces`
+says, those beside the value, among its siblings or seen left out.
 
 #### Engine.locate
 
@@ -820,6 +877,26 @@ The frame of kind *each* beside *node* in the frame it stands in.
 def check_row(self, checking, scope: Scope, value: ValueItem, row: Row,
               parameter, coordinate: Optional[dict]) -> None
 ```
+
+#### Engine.conditions
+
+```python
+@staticmethod
+def conditions(plan: Plan, parameter, claim: dict) -> list
+```
+
+The conditions of the ontology a value read breaks (owner
+decision 2026-11-17, from the literature on correcting extracted
+facts: what breaks a condition of the ontology is read again):
+"over_bound", above the most the rule `value_bounds` gives its
+field, such as a share above 100 %; "part_over_whole", a part
+greater than its whole among the values of the document read so
+far, the whole being the value with the same entries but the one
+the rule `part_of_whole` names on one axis, such as a carrier's
+number above the total of all carriers. Compared in the field's own
+unit (`value_target`) and on the closed lists and numbers of the
+field alone, not on its free words. The value is noted for the
+values read after it.
 
 #### Engine.box_state
 

@@ -25,6 +25,7 @@ from typing import Optional
 
 from docpipe.artifacts import document_dirs
 from docpipe.captions import resolve_title
+from .context import load_document
 from .config import (
     DOCUMENT_JSON,
     PAGE_TRANSCRIPTION_REPORT_JSON,
@@ -153,6 +154,17 @@ def _ensure_caption_source_column(connection: sqlite3.Connection) -> None:
         if "caption_source" not in cols:
             connection.execute(
                 f'ALTER TABLE "{table}" ADD COLUMN "caption_source" TEXT')
+
+
+def _ensure_context_sentence_column(connection: sqlite3.Connection) -> None:
+    """Add `context_sentence` to Tables/Images on a DB that predates it: the
+    sentence of context the item's vectors were embedded with, NULL for none
+    (rule `context_sentence`, chunking/context.py)."""
+    for table in ("Tables", "Images"):
+        cols = {row[1] for row in connection.execute(f'PRAGMA table_info("{table}")')}
+        if "context_sentence" not in cols:
+            connection.execute(
+                f'ALTER TABLE "{table}" ADD COLUMN "context_sentence" TEXT')
 
 
 def _ensure_table_qa_column(connection: sqlite3.Connection) -> None:
@@ -400,16 +412,18 @@ def section_content(section: dict) -> str:
 
 def table_values(section_id: Optional[int], t: dict) -> tuple:
     """A merged table as its Tables row holds it: (section, block_id, path,
-    page_number, caption, markdown, bbox, qa)."""
+    page_number, caption, markdown, bbox, qa, context_sentence)."""
     return (section_id, t.get("id"), t.get("path", ""), t.get("page_number"),
-            t.get("caption"), t.get("markdown"), _bbox_json(t), _qa_json(t))
+            t.get("caption"), t.get("markdown"), _bbox_json(t), _qa_json(t),
+            t.get("context_sentence"))
 
 
 def image_values(section_id: Optional[int], fig: dict) -> tuple:
     """A merged figure as its Images row holds it: (section, block_id, path,
-    page_number, caption, description, bbox)."""
+    page_number, caption, description, bbox, context_sentence)."""
     return (section_id, fig.get("id"), fig.get("path", ""), fig.get("page_number"),
-            fig.get("caption"), fig.get("description"), _bbox_json(fig))
+            fig.get("caption"), fig.get("description"), _bbox_json(fig),
+            fig.get("context_sentence"))
 
 
 def page_rows(section: dict) -> list:
@@ -485,14 +499,14 @@ def _insert_sections(
         insert_provenance(document_id, section_id, section, connection, page_cache)
 
         connection.executemany(
-            "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox, qa) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO Tables (section, block_id, path, page_number, caption, markdown, bbox, qa, "
+            "context_sentence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [table_values(section_id, t) for t in section.get("tables", [])],
         )
 
         connection.executemany(
-            "INSERT INTO Images (section, block_id, path, page_number, caption, description, bbox) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO Images (section, block_id, path, page_number, caption, description, bbox, "
+            "context_sentence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [image_values(section_id, fig) for fig in section.get("figures", [])],
         )
 
@@ -522,6 +536,7 @@ def update_database(
     with closing(connect(db_path)) as conn:
         _ensure_bbox_columns(conn)
         _ensure_table_qa_column(conn)
+        _ensure_context_sentence_column(conn)
         for i, pdf_dir in enumerate(candidates):
             pdf_name = pdf_dir.name
             doc_id = _resolve_document_id(pdf_name, conn)
@@ -540,8 +555,7 @@ def update_database(
             if force and _sections_exist(doc_id, conn):
                 _delete_document_content(doc_id, conn)
 
-            with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
-                merged_data = json.load(f)
+            merged_data = load_document(pdf_dir)
 
             _insert_sections(doc_id, merged_data, conn)
             conn.commit()

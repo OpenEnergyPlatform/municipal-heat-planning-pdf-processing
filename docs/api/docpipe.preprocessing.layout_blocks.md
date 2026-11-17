@@ -7,8 +7,9 @@ layout_blocks.py: Turns the detections of one page into blocks.
 Each surviving box becomes a text suppression, a saved table or image crop,
 or a title or caption Block; classes outside those sets are ignored, since
 the Stage 1 PyMuPDF text blocks already cover that content. The text in a
-footnote box leaves the page like a page number does, and the document's log
-says how many text blocks and characters that was.
+footnote box stays on the page, labelled `footnote` (owner decision
+2026-11-17), and the document's log says how many text blocks and characters
+that was.
 
 Author: Felix Vossel
 
@@ -21,7 +22,7 @@ Author: Felix Vossel
 class FootnoteTally
 ```
 
-What the footnote class took off the pages of one document.
+What the footnote class found on the pages of one document.
 
 Fields:
 
@@ -31,7 +32,7 @@ Fields:
 #### FootnoteTally.add
 
 ```python
-def add(self, removed: list[Block]) -> None
+def add(self, found: list[Block]) -> None
 ```
 
 #### FootnoteTally.line
@@ -70,7 +71,7 @@ PageData and the crop jobs still to be written.
 
 *detections* are in detection-image pixel space (det_w x det_h), while
 crops come from *crop_image*, which may be rendered at a different DPI.
-*footnotes*, when given, is told which text blocks the footnote class took
-off this page.
+*footnotes*, when given, is told which text blocks the footnote class
+found on this page; they stay on it, labelled `footnote`.
 
 [Back to the index](../README.md)
