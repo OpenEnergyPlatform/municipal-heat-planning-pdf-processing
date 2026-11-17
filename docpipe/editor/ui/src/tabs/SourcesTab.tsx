@@ -2,13 +2,13 @@
    Fetch and Apply, and what the fetched shapes and ontology say otherwise than the spec, which Take puts into the spec. */
 import { useEffect, useReducer, useRef, useState } from 'react';
 import {
-  Accordion, ActionIcon, Alert, Badge, Button, Checkbox, Code, Grid, Group, Loader, NativeSelect, Paper, ScrollArea, Stack, Table,
-  Text, Tooltip,
+  Accordion, ActionIcon, Alert, Anchor, Badge, Button, Checkbox, Code, Grid, Group, Loader, NativeSelect, Paper, ScrollArea, Stack,
+  Table, Text, Tooltip,
 } from '@mantine/core';
 import { IconCheck, IconCloudDownload, IconDeviceFloppy, IconPlus, IconTrash } from '@tabler/icons-react';
 import { api, apiR } from '../lib/api';
 import { askConfirm, askText, showError, showInfo } from '../lib/dialogs';
-import { dirtyStore, loadState, openRules, request, setDirty, setTab, useTabActions } from '../lib/nav';
+import { dirtyStore, loadState, openRules, openSpec, request, setDirty, setTab, useTabActions } from '../lib/nav';
 import { clone, same, wrote } from '../lib/util';
 import { rich, t, tn, tr } from '../lib/i18n';
 import { shortId } from '../lib/spec';
@@ -188,7 +188,10 @@ export function SourcesTab() {
                           <Table.Td><NativeSelect value={l.kind} data={d.list_kinds || ['class', 'individual']}
                             onChange={e => { l.kind = e.currentTarget.value; changed(); }} /></Table.Td>
                           <Table.Td><TextBox mono value={l.root} onText={text => { l.root = text; changed(); }} /></Table.Td>
-                          <Table.Td>{now && now.members != null ? String(now.members) : ''}</Table.Td>
+                          <Table.Td>{now && now.members != null ? (
+                            <Anchor component="button" type="button" size="sm" title={t('Show the terms of this list in the Spec tab')}
+                              onClick={() => openSpec({ t: 'root', set: name })}>{String(now.members)}</Anchor>
+                          ) : ''}</Table.Td>
                           <Table.Td>
                             <ActionIcon variant="subtle" color="red" aria-label={t('Remove this list')} onClick={() => {
                               delete cur.lists[name];

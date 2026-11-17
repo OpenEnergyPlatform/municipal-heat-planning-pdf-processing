@@ -93,7 +93,7 @@ export function Dictionary({ name }: { name: string }) {
         {origin ? (
           <Alert color="blue" variant="light" title={t('From the ontology')}>
             <Text size="sm">{t('The entries come from the list {label} ({root}) of the ontology: {members} terms stand under it there. {under} entries of this list come from it, {own} are the spec\'s own.', { label: origin.root.label || origin.set, root: origin.root.root, members: origin.root.members.length, under: origin.under.length, own: origin.own.length })}</Text>
-            <Anchor component="button" type="button" size="sm" onClick={() => select({ t: 'root', set: origin.set })}>{t('What the ontology says of it')}</Anchor>
+            <Anchor component="button" type="button" size="sm" onClick={() => select({ t: 'root', set: origin.set, at: where })}>{t('What the ontology says of it')}</Anchor>
           </Alert>
         ) : <Alert color="gray">{t('No list of the ontology holds an entry of this list: all its entries are the spec\'s own.')}</Alert>}
         <Group gap="sm" align="flex-end">

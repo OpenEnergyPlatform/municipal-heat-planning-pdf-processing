@@ -265,8 +265,12 @@ export function expanded(data: Obj): Obj {
 
 /* a list of the ontology as the profile's sources name it: its root, and the terms the snapshot carries under it */
 export interface OntoSet { root: string; kind: string | null; label: string | null; definition: string | null; members: string[] }
-/* the lists of the sources, and which dimension the sources say draws from which of them */
-export interface Onto { sets: Record<string, OntoSet>; axis_sets: Record<string, string> }
+/* a term of the snapshot under one of those lists: its name, definition and the terms it stands under */
+export interface OntoTerm {
+  id: string; label: string | null; definition: string | null; alt_labels: string[]; deprecated: boolean; parents: string[];
+}
+/* the lists of the sources, which dimension the sources say draws from which of them, and the terms under them */
+export interface Onto { sets: Record<string, OntoSet>; axis_sets: Record<string, string>; terms?: Record<string, OntoTerm> }
 /* the key of an entry as the ontology names it: the last part of an IRI, else the key itself */
 export const termOf = (id: string): string => { const m = /[/#]([^/#]+)$/.exec(id); return m ? m[1] : id; };
 /* where a list takes its entries from: the list of the ontology (named by the sources for its dimension, or else the one

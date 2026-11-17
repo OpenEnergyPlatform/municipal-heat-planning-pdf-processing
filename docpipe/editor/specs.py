@@ -718,25 +718,37 @@ def ontology_lists(snapshot: Optional[dict], profile=None) -> dict:
     list of the profile's sources with the root it is drawn from, the root's
     label and definition and the terms the snapshot carries under it
     ({"sets": {name: {"root", "kind", "label", "definition", "members"}}}),
-    and which dimension the sources say draws from which list
-    ({"axis_sets": {dimension: list name}}). Empty where the profile has no
+    which dimension the sources say draws from which list
+    ({"axis_sets": {dimension: list name}}), and each of those terms as the
+    snapshot has it, with the terms it stands under, so the page can list
+    them under their root and put them into a list of the spec
+    ({"terms": {identifier: {"id", "label", "definition", "alt_labels",
+    "deprecated", "parents"}}}). Empty where the profile has no
     snapshot."""
     from .. import sources as sources_module
     if not snapshot:
-        return {"sets": {}, "axis_sets": {}}
+        return {"sets": {}, "axis_sets": {}, "terms": {}}
     made = sources_module.load(profile) if profile is not None \
         else sources_module.Sources()
     terms = snapshot.get("terms") or {}
     held = snapshot.get("sets") or {}
     out: dict = {}
+    listed: dict = {}
     for name, one in (made.lists or {}).items():
         root = ontology.identifier(one.get("root")) or ""
         term = terms.get(root) or {}
+        members = sorted(held.get(name) or [])
         out[name] = {"root": root, "kind": one.get("kind"),
                      "label": term.get("label"),
                      "definition": term.get("definition"),
-                     "members": sorted(held.get(name) or [])}
-    return {"sets": out, "axis_sets": dict(made.axis_lists or {})}
+                     "members": members}
+        for key in members:
+            if key in terms and key not in listed:
+                listed[key] = {**_term(key, terms[key]),
+                               "parents": list(terms[key].get("parents")
+                                               or [])}
+    return {"sets": out, "axis_sets": dict(made.axis_lists or {}),
+            "terms": listed}
 
 
 def _term(key: str, term: dict) -> dict:

@@ -188,6 +188,24 @@ another entry to move it there, typed in to add one, and taken out with its x. A
 list (a field's or a dimension's list, its answers outside the list) opens wide
 over the page with the table of its entries ("Edit the whole list…").
 
+The panel of a list of the ontology (opened by its box in the drawing, by "What
+the ontology says of it" in a shared dimension's dictionary, or by the count in
+the Sources tab) lists the terms the snapshot carries under it, each once, under
+the term it stands under, with identifier, definition and a "deprecated" mark
+(`specs.ontology_lists` sends them as `terms`, with their alternative labels and
+the terms above them). Each is compared with a list of the spec that takes its
+entries from that list of the ontology, first the one of the row the panel was
+opened from, else one chosen by a selector, and shows "In the list as" with the
+name of its entry (a link to the entry) or "Add". A filter shows all, missing or
+held terms, a search appears above 12 terms, and one button puts in all missing
+terms. A term put in becomes an entry with the ontology's name and definition,
+under the key the list spells its family with (an IRI where the list writes the
+terms of that family as IRIs, else the bare identifier), after the last entry the
+list takes from that list of the ontology, else before its first `out:` answer;
+every other entry stays where it was. It is an edit like any other, undone with
+Ctrl+Z and written with the next confirmed save (`spec/terms.ts`,
+`tests/test_editor_spec_terms.py`).
+
 **Untangle arrows** orders the left column so that fewer arrows cross
 (`lib/untangle.ts`) and says "Crossings: before → after". Every box can be dragged
 elsewhere; the frame of the entries takes its entries along (`lib/moved.ts`).
@@ -393,11 +411,13 @@ shared dimension that no field asks any more goes, and a question the `works` bl
 leaves the block.
 
 A new entry of a list is chosen from the profile's ontology snapshot
-(`vocabulary.json`) by a search over identifier, label and alternative labels,
-or typed as an entry of its own (`out:`). A spelling is typed and put right
-after the entry's name, so the file gains exactly one line. Beside an entry's
-own definition the page shows the snapshot's and marks the entry where they
-differ, with the line the profile check prints for it (`specs.notes`).
+(`vocabulary.json`) by a search over identifier, label and alternative labels, or
+typed as an entry of its own (`out:`); a term the list holds, in either spelling,
+shows "In list", and a new one is spelled as the list spells its family. A term
+can also be put in from the panel of its list of the ontology (above). A spelling
+is typed and put right after the entry's name, so the file gains exactly one line.
+Beside an entry's own definition the page shows the snapshot's and marks the entry
+where they differ, with the line the profile check prints for it (`specs.notes`).
 
 ## Prompts
 
@@ -1043,7 +1063,8 @@ fields, from and to, an empty one meaning no bound; no value is typed as JSON
 
 The Sources tab shows `sources.json`: the ontology, the shapes and the graph
 queries the profile is written against, the lists drawn from them and which
-coordinate answers from which list. It checks and saves the file. Fetch pulls
+coordinate answers from which list. The count of a list ("entries now") opens
+that list's panel in the Spec tab. It checks and saves the file. Fetch pulls
 the sources into a temporary folder; Apply writes the files a refresh writes
 into the profile and the fetched files and the lock into the upstream cache. The
 differences of the fetched shapes against the spec and the drawing are shown

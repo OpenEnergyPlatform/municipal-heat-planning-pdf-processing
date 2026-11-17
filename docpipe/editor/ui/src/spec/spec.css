@@ -90,6 +90,9 @@
 .sp-dict-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .sp-dict-words { align-content: flex-start; }
 
+/* a term of a list of the ontology, indented under the term it stands under */
+.sp-term { padding-top: 4px; padding-bottom: 6px; border-bottom: 1px solid var(--mantine-color-default-border); }
+
 /* the cards of the pages */
 .sp-card { cursor: pointer; }
 .sp-card.is-sel { border-color: var(--mantine-primary-color-filled); box-shadow: 0 0 0 1px var(--mantine-primary-color-filled); }

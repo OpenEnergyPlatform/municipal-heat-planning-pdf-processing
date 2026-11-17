@@ -227,8 +227,12 @@ What the Spec tab shows of where the spec's lists come from: each
 list of the profile's sources with the root it is drawn from, the root's
 label and definition and the terms the snapshot carries under it
 ({"sets": {name: {"root", "kind", "label", "definition", "members"}}}),
-and which dimension the sources say draws from which list
-({"axis_sets": {dimension: list name}}). Empty where the profile has no
+which dimension the sources say draws from which list
+({"axis_sets": {dimension: list name}}), and each of those terms as the
+snapshot has it, with the terms it stands under, so the page can list
+them under their root and put them into a list of the spec
+({"terms": {identifier: {"id", "label", "definition", "alt_labels",
+"deprecated", "parents"}}}). Empty where the profile has no
 snapshot.
 
 ### notes

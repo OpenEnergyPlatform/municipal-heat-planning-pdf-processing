@@ -39,7 +39,10 @@ export interface Row {
   count: number;
 }
 export interface FieldData extends Record<string, unknown> { uri: string; field: Obj; rows: Row[]; pick: string | null; selected: string | null }
-export interface RootData extends Record<string, unknown> { set: string; origin: Origin; feeds: string[]; selected: boolean }
+/* at: the list of the first row it gives entries to, which its terms are held against when it is opened */
+export interface RootData extends Record<string, unknown> {
+  set: string; origin: Origin; feeds: string[]; at: EntryData['where']; selected: boolean;
+}
 export interface UnitData extends Record<string, unknown> { uri: string; units: UnitOf[]; target: string; selected: boolean }
 export interface EntryData extends Record<string, unknown> {
   entry: Entry; own: boolean; where: { uri: string | null; name: string | null; key: string }; selected: boolean;
@@ -154,7 +157,7 @@ export function layoutField(input: {
       const f = feeds.get(set)!;
       nodes.push({
         id: b.id, type: 'root', position: { x: 0, y }, width: ROOT_W, height: ROOT_H, zIndex: 2,
-        data: { set, origin: f.origin, feeds: f.rows, selected: input.selected === b.id } as RootData,
+        data: { set, origin: f.origin, feeds: f.rows, at: listAt(data, uri, f.rows[0]).where, selected: input.selected === b.id } as RootData,
       });
     }
     y += b.height + GAP;

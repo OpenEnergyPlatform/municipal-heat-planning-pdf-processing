@@ -24,7 +24,7 @@ export function RootNode({ data }: NodeProps) {
   const d = data as RootData;
   const o = d.origin;
   return (
-    <div className={'sp-box sp-root' + (d.selected ? ' is-sel' : '')} onClick={() => select({ t: 'root', set: d.set })}>
+    <div className={'sp-box sp-root' + (d.selected ? ' is-sel' : '')} onClick={() => select({ t: 'root', set: d.set, at: d.at })}>
       <Group gap={6} wrap="nowrap" justify="space-between">
         <Text fw={650} size="sm" lineClamp={1}>{o.root.label || o.root.root}</Text>
         <Code>{o.root.root}</Code>

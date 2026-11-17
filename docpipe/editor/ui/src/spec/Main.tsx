@@ -1,11 +1,13 @@
 /* The right column of the Spec tab: the settings of what is selected. A field, its units, a dimension of a field (one it
    shares with other fields says so, and can become the field's own), a shared dimension, an entry of a list with the words
-   of the plans it gathers, a list of the ontology a dimension takes its entries from, the order of the questions, a field
-   of the whole document, the works, a value type, the questions of the spec. A list opens wide over the page
-   (ListModal). */
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
-import { Alert, Anchor, Badge, Box, Button, Code, Group, Menu, Modal, NativeSelect, Stack, Text, Title } from '@mantine/core';
-import { IconCopy, IconList, IconPlus, IconShare, IconTrash, IconX } from '@tabler/icons-react';
+   of the plans it gathers, a list of the ontology a dimension takes its entries from with the terms under it (which a
+   list of the spec holds, and the missing ones to put in), the order of the questions, a field of the whole document,
+   the works, a value type, the questions of the spec. A list opens wide over the page (ListModal). */
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  Alert, Anchor, Badge, Box, Button, Code, Group, Menu, Modal, NativeSelect, SegmentedControl, Stack, Text, TextInput, Title,
+} from '@mantine/core';
+import { IconCopy, IconList, IconPlus, IconSearch, IconShare, IconTrash, IconX } from '@tabler/icons-react';
 import { AreaBox, TextBox } from '../components/Inputs';
 import { useStore } from '../lib/nav';
 import { t, tn } from '../lib/i18n';
@@ -13,9 +15,10 @@ import { axisKinds, entryParts, setEntryField, setEntryName, UNIT_KEYS, type Spe
 import { isObj, type Obj } from '../lib/util';
 import {
   addAxis, addCheck, addUnit, closeList, copyNode, deleteNode, ensureSel, listCount, listOf, markDirty, meta, nodeObj, openList,
-  removeValueType, S, select, shareAt, show, touch, typeOf, unshareAt, view, wordAdded, wordRemoved,
+  removeValueType, rootAt, S, select, shareAt, show, termsPut, touch, typeOf, unshareAt, view, wordAdded, wordRemoved,
 } from './state';
-import { fieldOf, isSharedAt, originOf, sharedOf, termOf, usersOf } from './model';
+import { entryOf, fieldOf, isSharedAt, originOf, sharedOf, termOf, usersOf } from './model';
+import { listChosen, listsFrom, termRows, type ListWhere, type TermRow } from './terms';
 import { named, nameOf } from './names';
 import { FlaggedKey, SpecForm, StringsEditor, useEdit } from './widgets';
 import { EntriesTable, refFor } from './entries';
@@ -198,17 +201,100 @@ function EntryPanel({ n }: { n: Extract<SpecNode, { t: 'entry' }> }) {
   );
 }
 
-/* a list of the ontology: what it is and how many of its terms a list of the spec takes */
-function RootPanel({ set }: { set: string }) {
-  const s = S.onto.sets[set];
+/* the name of a list of the spec, as the page names fields and dimensions */
+function listName(w: ListWhere): string {
+  if (w.name == null) return t('List of {field}', { field: labelOf(w.uri || '') });
+  if (w.uri == null) return t('{name}, shared', { name: nameOf(w.name) });
+  return t('{name} of {field}', { name: nameOf(w.name), field: labelOf(w.uri) });
+}
+
+/* which terms the panel of a list of the ontology shows; kept while the panel is drawn again after an edit */
+type Shown = 'all' | 'missing' | 'held';
+const termView = { set: '', shown: 'all' as Shown, q: '' };
+
+/* a term of the list: its name, its identifier, its definition, and the entry of the list that holds it or the button
+   that puts it in */
+function TermLine({ r, at, set }: { r: TermRow; at: ListWhere | null; set: string }) {
+  const term = r.term;
+  return (
+    <Box className="sp-term" style={{ paddingLeft: r.depth * 16 }}>
+      <Group gap={6} justify="space-between" wrap="nowrap" align="flex-start">
+        <Box style={{ minWidth: 0 }}>
+          <Group gap={6}>
+            <Text size="sm" fw={600}>{(term && term.label) || r.id}</Text>
+            <Code>{r.id}</Code>
+            {term && term.deprecated ? <Badge color="red" size="xs">{t('deprecated')}</Badge> : null}
+          </Group>
+          {term && term.definition ? <Text size="xs" c="dimmed" lineClamp={2} title={term.definition}>{term.definition}</Text> : null}
+        </Box>
+        {!at ? null : r.held != null ? (
+          <Anchor component="button" type="button" size="xs" style={{ whiteSpace: 'nowrap' }}
+            onClick={() => select({ t: 'entry', uri: at.uri, name: at.name, key: at.key, id: r.held! })}>
+            {t('In the list as {name}', { name: entryOf(r.held, (listOf(S.data, at) || {})[r.held]).label || r.held })}
+          </Anchor>
+        ) : (
+          <Button size="compact-xs" variant="light" leftSection={<IconPlus size={12} />} onClick={() => termsPut(at, set, [r.id])}>{t('Add')}</Button>
+        )}
+      </Group>
+    </Box>
+  );
+}
+
+/* a list of the ontology: what it is, and the terms the snapshot carries under it, each held against a list of the spec
+   that draws from it (the one it was opened from first), with the missing ones to put in */
+function RootPanel({ n }: { n: Extract<SpecNode, { t: 'root' }> }) {
+  const s = S.onto.sets[n.set];
+  if (termView.set !== n.set) { termView.set = n.set; termView.shown = 'all'; termView.q = ''; }
+  const [shown, setShown] = useState<Shown>(termView.shown);
+  const [q, setQ] = useState(termView.q);
   if (!s) return null;
+  const lists = listsFrom(S.data, S.onto, n.set);
+  const at = listChosen(lists, n.at);
+  const rows = termRows(s, S.onto.terms, at ? listOf(S.data, at) : undefined);
+  const missing = rows.filter(r => r.held == null);
+  const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = (r: TermRow) => !words.length || words.every(w => [r.id, (r.term && r.term.label) || '', ...((r.term && r.term.alt_labels) || [])].join('\n').toLowerCase().includes(w));
+  const found = rows.filter(r => hit(r) && (shown === 'all' || !at || (shown === 'missing') === (r.held == null)));
+  const pick = (v: Shown) => { termView.shown = v; setShown(v); };
   return (
     <Stack gap="sm">
       <Group gap="xs"><Text fw={650}>{s.label || s.root}</Text><Code>{s.root}</Code></Group>
       <Text size="sm">{s.kind === 'individual' ? t('Its entries are the individuals of this class.') : t('Its entries are this class and the classes under it.')}</Text>
       {s.definition ? <Alert color="blue" variant="light" title={t('Definition in the ontology')}><Text size="sm">{s.definition}</Text></Alert> : null}
       <Text size="sm">{tn(s.members.length, 'The snapshot of the ontology carries {n} term under it.', 'The snapshot of the ontology carries {n} terms under it.')}</Text>
-      <Text size="sm" c="dimmed">{t('Which list of the ontology a dimension draws from stands in the Sources tab; new entries of it are put in under "Edit the whole list".')}</Text>
+      <Section>{t('The terms under it')}</Section>
+      {lists.length > 1 ? (
+        <NativeSelect label={t('Compared with the list')} value={String(lists.indexOf(at!))}
+          data={lists.map((w, i) => ({ value: String(i), label: listName(w) }))}
+          onChange={e => rootAt(lists[Number(e.currentTarget.value)])} />
+      ) : at ? <Text size="sm">{t('Compared with the list {name}.', { name: listName(at) })}</Text>
+        : <Text size="sm" c="dimmed">{t('No list of the spec takes its entries from this list of the ontology.')}</Text>}
+      {at ? (
+        <>
+          <Text size="sm">{t('{held} of them stand in the list, {missing} do not.', { held: rows.length - missing.length, missing: missing.length })}</Text>
+          <Group gap="xs">
+            <SegmentedControl size="xs" value={shown} onChange={v => pick(v as Shown)} data={[
+              { value: 'all', label: t('All {n}', { n: rows.length }) },
+              { value: 'missing', label: t('Missing {n}', { n: missing.length }) },
+              { value: 'held', label: t('In the list {n}', { n: rows.length - missing.length }) },
+            ]} />
+            {missing.length ? (
+              <Button size="xs" variant="light" leftSection={<IconPlus size={14} />} onClick={() => termsPut(at, n.set, missing.map(r => r.id))}>
+                {tn(missing.length, 'Put the missing term in', 'Put the {n} missing terms in')}
+              </Button>
+            ) : null}
+          </Group>
+        </>
+      ) : null}
+      {rows.length > 12 ? (
+        <TextInput size="xs" leftSection={<IconSearch size={14} />} placeholder={t('Find a term by name or identifier')} value={q}
+          onChange={e => { const v = e.currentTarget.value; termView.q = v; setQ(v); }} />
+      ) : null}
+      <Stack gap={6}>
+        {found.map(r => <TermLine key={r.id} r={r} at={at} set={n.set} />)}
+        {!found.length ? <Text size="sm" c="dimmed">{t('No term matches.')}</Text> : null}
+      </Stack>
+      <Text size="sm" c="dimmed">{t('Which list of the ontology a dimension draws from stands in the Sources tab. A term put in becomes an entry of the list with the name and the definition of the ontology; the words of the plans are added at the entry.')}</Text>
     </Stack>
   );
 }
@@ -306,7 +392,7 @@ export function Main() {
       </Stack>
     ); break;
     case 'entry': body = <EntryPanel n={n} />; break;
-    case 'root': body = <RootPanel set={n.set} />; break;
+    case 'root': body = <RootPanel n={n} />; break;
     case 'vtype': body = typeOf(n.name)?.builtin
       ? <Stack gap="xs"><Text size="sm" c="dimmed">{t('A built-in value type: a preset that cannot be changed. Add a value type of your own to change these settings.')}</Text>
         {Object.entries(obj || {}).map(([k, v]) => <Text key={k} size="sm"><b>{k}</b>: {String(v)}</Text>)}</Stack>

@@ -11,13 +11,13 @@ import { Help } from '../components/Bits';
 import { get } from '../lib/api';
 import { showError } from '../lib/dialogs';
 import {
-  entryMatches, entryParts, hasSpelling, insertSpelling, listWithEntryAfter, newEntryFromTerm, notesFor, setEntryField,
-  setEntryName, shortId,
+  entryMatches, entryParts, hasSpelling, insertSpelling, listWithEntryAfter, notesFor, setEntryField, setEntryName, shortId,
 } from '../lib/spec';
 import { isObj, own, type Obj } from '../lib/util';
 import { t, tn } from '../lib/i18n';
 import { findParam, markDirty, removeOnServer, S, structural } from './state';
 import { axisOf } from './model';
+import { entryOfTerm, heldKey, keyFor } from './terms';
 import { SpecForm } from './widgets';
 
 export interface ListRef {
@@ -184,7 +184,15 @@ function addToList(lref: ListRef, afterId: string | null, id: string, entry: unk
   return true;
 }
 
-interface Term { id: string; label?: string; definition?: string | null; deprecated?: boolean }
+interface Term { id: string; label?: string; definition?: string | null; alt_labels?: string[]; deprecated?: boolean }
+/* a term of the snapshot into the list: under the key the list spells its family with (terms.ts keyFor), the page knowing
+   its term at once */
+function putTerm(lref: ListRef, afterId: string | null, term: Term): boolean {
+  const key = keyFor(currentList(lref), term.id);
+  if (!addToList(lref, afterId, key, entryOfTerm(term, term.id))) return false;
+  S.pin[key] = term;
+  return true;
+}
 function TermDialog({ lref, afterId, modalId }: { lref: ListRef; afterId: string | null; modalId: string }) {
   const [q, setQ] = useState('');
   const [res, setRes] = useState<{ terms: Term[]; total: number } | null>(null);
@@ -215,9 +223,9 @@ function TermDialog({ lref, afterId, modalId }: { lref: ListRef; afterId: string
               <Group gap={6}><Code>{term.id}</Code><Text fw={600}>{term.label || ''}</Text>{term.deprecated ? <Badge color="red" size="sm">{t('deprecated')}</Badge> : null}</Group>
               <Text size="sm" c="dimmed">{(term.definition || '').slice(0, 200)}</Text>
             </Box>
-            <Button size="xs" variant="light" disabled={own(cur, term.id)}
-              onClick={() => { if (addToList(lref, afterId, term.id, newEntryFromTerm({ label: term.label || '', definition: term.definition }))) { modals.close(modalId); structural(); } }}>
-              {own(cur, term.id) ? t('In list') : t('Add')}
+            <Button size="xs" variant="light" disabled={heldKey(cur, term.id) != null}
+              onClick={() => { if (putTerm(lref, afterId, term)) { modals.close(modalId); structural(); } }}>
+              {heldKey(cur, term.id) != null ? t('In list') : t('Add')}
             </Button>
           </Group>
         ))}

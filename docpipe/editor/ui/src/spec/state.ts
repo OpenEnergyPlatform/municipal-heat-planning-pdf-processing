@@ -4,7 +4,7 @@
    of the spec); the right column edits what is selected (`S.sel`). `view` redraws the page, `meta` the toolbar and the
    result, so typing in a form does not draw everything again. Every edit is a step Ctrl+Z takes back. */
 import { askConfirm, askText, showError, showInfo } from '../lib/dialogs';
-import { t } from '../lib/i18n';
+import { t, tn } from '../lib/i18n';
 import { errText, get, post } from '../lib/api';
 import { loadState, setDirty, Store } from '../lib/nav';
 import { clone, isObj, own, type Obj } from '../lib/util';
@@ -15,6 +15,7 @@ import {
   usersOf, type Onto, type Special,
 } from './model';
 import { nameOf } from './names';
+import { withTerms, type ListWhere } from './terms';
 
 export interface Result { source: 'check' | 'save'; r: any }
 
@@ -25,7 +26,7 @@ export type View =
 
 export const S = {
   loaded: false, data: {} as Obj, orig: {} as Obj, base: '', form: {} as Obj, pin: {} as Obj, notes: [] as Note[],
-  onto: { sets: {}, axis_sets: {} } as Onto,
+  onto: { sets: {}, axis_sets: {}, terms: {} } as Onto,
   view: { t: 'spec' } as View, sel: { t: 'spec' } as SpecNode, dirty: false, result: null as Result | null, stale: false,
   generate: null as any, busy: false, panelOpen: true, flag: null as Flag | null, rev: 0, resetScroll: false,
   library: {} as Library,
@@ -83,10 +84,15 @@ export function nodeObj(data: Obj, n: SpecNode): any {
     }
   }
 }
-/* the list an entry stands in: a field's own list, a field's dimension's, or a shared dimension's */
-export function listOf(data: Obj, w: { uri: string | null; name: string | null; key: string }): Obj | undefined {
+/* what holds the list an entry stands in: the field for its own list, the field's dimension, or the shared dimension */
+function holderOf(data: Obj, w: { uri: string | null; name: string | null }): Obj | undefined {
   const holder = w.name == null ? (w.uri ? findParam(data, w.uri) : undefined)
     : w.uri ? axisOf(data, w.uri, w.name) : sharedOf(data)[w.name];
+  return isObj(holder) ? holder : undefined;
+}
+/* the list an entry stands in: a field's own list, a field's dimension's, or a shared dimension's */
+export function listOf(data: Obj, w: { uri: string | null; name: string | null; key: string }): Obj | undefined {
+  const holder = holderOf(data, w);
   return holder && isObj(holder[w.key]) ? holder[w.key] : undefined;
 }
 export const nodeKey = (n: SpecNode) => JSON.stringify(n);
@@ -201,7 +207,7 @@ export async function loadAll() {
   H.undo = []; H.redo = []; H.snap = S.origText; H.lastAt = 0;
   S.list = null; S.fit++;
   S.form = spec.form || {}; S.pin = spec.pin || {}; S.notes = spec.notes || [];
-  S.onto = spec.ontology || { sets: {}, axis_sets: {} };
+  S.onto = spec.ontology || { sets: {}, axis_sets: {}, terms: {} };
   S.library = spec.library || {};
   S.draft = !!spec.draft; S.missing = spec.missing || [];
   S.dirty = false; S.result = null; S.stale = false; S.generate = null; S.flag = null; S.loaded = true;
@@ -421,6 +427,29 @@ export async function shareAt(uri: string, name: string) {
   }
   if (said === 'none') return;
   markStep(); select({ t: 'axis', uri, name });
+}
+
+/* ---------- the terms of a list of the ontology ---------- */
+
+/* the list of the spec the terms of the list of the ontology selected are held against */
+export function rootAt(at: ListWhere) {
+  if (S.sel.t !== 'root') return;
+  S.sel = { ...S.sel, at };
+  touch();
+}
+/* terms of the list of the ontology *set* put into the list of the spec *at*, those it does not hold yet (terms.ts
+   withTerms); the page knows each new entry's term at once */
+export function termsPut(at: ListWhere, set: string, ids: string[]) {
+  const holder = holderOf(S.data, at);
+  const root = S.onto.sets[set];
+  if (!holder || !root) return;
+  const r = withTerms(holder[at.key], root, ids, S.onto.terms);
+  if (!r.added.length) return;
+  holder[at.key] = r.list;
+  for (const a of r.added) if (S.onto.terms && S.onto.terms[a.id]) S.pin[a.key] = S.onto.terms[a.id];
+  markStep(); S.rev++; touch();
+  showInfo(tn(r.added.length, 'Put {n} term into the list here. It is written with the next confirmed save.',
+    'Put {n} terms into the list here. They are written with the next confirmed save.'));
 }
 
 /* ---------- words, the order of the questions ---------- */

@@ -81,11 +81,6 @@ export function listWithEntryAfter(list: Obj, afterId: string | null, id: string
   if (!placed) out[id] = entry;
   return out;
 }
-export function newEntryFromTerm(t: { label: string; definition?: string | null }): Obj {
-  const e: Obj = { label: t.label };
-  if (t.definition != null && t.definition !== '') e.definition = t.definition;
-  return e;
-}
 /* an entry whose id is an IRI is shown by its last part; the whole id is its title */
 export function shortId(id: string): string { const m = /^[a-z][a-z0-9+.-]*:\/\/.*[/#]([^/#]+)$/i.exec(String(id)); return m ? m[1] : String(id); }
 export interface Note { where: string; id: string; kind: string; text: string }
@@ -100,12 +95,14 @@ export function axisKinds(axis: unknown): string[] {
 
 /* what the Spec tab shows: the top-level questions, a plan field, the works, the order of the questions, a field, a
    field's units, a field's list, a dimension of a field, a shared dimension, a value type, an entry of a list (of a
-   field: name null; of a shared dimension: uri null), a list of the ontology a dimension draws from */
+   field: name null; of a shared dimension: uri null), a list of the ontology a dimension draws from (with the list of
+   the spec it was opened from, which its terms are held against first) */
 export type SpecNode =
   | { t: 'spec' } | { t: 'plan'; key: string } | { t: 'works' } | { t: 'coordinates' }
   | { t: 'param'; uri: string } | { t: 'units'; uri: string } | { t: 'plist'; uri: string; list: string }
   | { t: 'axis'; uri: string; name: string } | { t: 'shared'; name: string } | { t: 'vtype'; name: string }
-  | { t: 'entry'; uri: string | null; name: string | null; key: string; id: string } | { t: 'root'; set: string };
+  | { t: 'entry'; uri: string | null; name: string | null; key: string; id: string }
+  | { t: 'root'; set: string; at?: { uri: string | null; name: string | null; key: string } | null };
 /* the keys of a field that its units box shows, where it has units */
 export const UNIT_KEYS = ['unit_target', 'units_accepted', 'integrated'];
 export interface Flag { field: string | null; entry: string | null }
