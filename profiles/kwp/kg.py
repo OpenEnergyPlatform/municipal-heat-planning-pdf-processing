@@ -432,8 +432,10 @@ BRICKS = (
           "value class its part holds, every required slot, every answer "
           "from the schema's closed lists.", "a reading", "a reason",
           _schema_admits,
-          (Setting("part", "text", "the box of the plan parts", "part"),
-           Setting("box", "text", "the box of the numbers", "value"))),
+          (Setting("part", "text", "the box of the plan parts", "part",
+                   title="Box of the plan parts"),
+           Setting("box", "text", "the box of the numbers", "value",
+                   title="Box of the numbers"))),
 )
 
 

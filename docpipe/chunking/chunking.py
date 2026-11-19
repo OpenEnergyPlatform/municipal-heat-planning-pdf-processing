@@ -131,10 +131,16 @@ def build_embedding_inputs(
     or figure's caption as the database holds it (`pieces.captions_of`); a
     caller whose document already holds those passes `pieces.as_held`.
     """
+    from docpipe import rules
     from .context import lead_of
     from .pieces import (captions_of, item_pieces, piece_lines,
                          section_pieces)
     size = piece_lines() if size is None else int(size)
+    # What of a document the index holds (the rules embed_section_titles,
+    # embed_item_texts, embed_item_pictures).
+    with_titles = bool(rules.get("embed_section_titles"))
+    texts_of = set(rules.get("embed_item_texts"))
+    pictures_of = set(rules.get("embed_item_pictures"))
     inputs: list[EmbeddingInput] = []
     # One directory listing per crop directory instead of a stat() per crop: the
     # corpus holds ~85k crops and metadata calls dominate on a parallel filesystem.
@@ -148,7 +154,7 @@ def build_embedding_inputs(
             inputs.append(_of_piece(piece, EMBEDDING_TYPE_SECTION_TEXT,
                                     pdf_name, sec_idx, None))
 
-        if title:
+        if title and with_titles:
             inputs.append(EmbeddingInput(
                 embedding_type=EMBEDDING_TYPE_SECTION_TITLE,
                 pdf_name=pdf_name, section_index=sec_idx, item_id=None,
@@ -162,9 +168,12 @@ def build_embedding_inputs(
             for item in items:
                 pieces = item_pieces(kind, section, item, captions, size,
                                      lead_of)
-                for piece in pieces:
-                    inputs.append(_of_piece(piece, text_type, pdf_name,
-                                            sec_idx, item["id"]))
+                if kind in texts_of:
+                    for piece in pieces:
+                        inputs.append(_of_piece(piece, text_type, pdf_name,
+                                                sec_idx, item["id"]))
+                if kind not in pictures_of:
+                    continue
                 image = _picture(item, kind, pdf_name, output_dir, listings)
                 if image is None:
                     continue

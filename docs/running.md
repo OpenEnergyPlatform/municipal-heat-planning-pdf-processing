@@ -307,7 +307,7 @@ and exits, to size the vLLM server's maximum context length
 (`docpipe/refinement/pipeline.py` lines 245 to 249). The number is the prompt,
 the largest input (a full window of maximum-size sections) and one largest
 reply: 28,543 tokens with the `kwp` profile and 29,065 with `scenarios`. That
-reply is `REFINE_REPLY_CEILING` tokens (16,384 by default; in edit mode
+reply is the rule `reply_tokens_ceiling` tokens (16,384 by default; in edit mode
 `LLM_MAX_TOKENS`, 8,192 by default). A server whose maximum context length is
 smaller than the number is refused by the preflight. The stage writes
 `sections_refined.json` and
@@ -343,7 +343,7 @@ A window the server does not serve (no connection, a timeout, a 429, a
 `unserved_windows` (`docpipe/refinement/refine.py` lines 1412 to 1419);
 `refinement_report.json` is left as it was. The next run, with or without
 `--force`, asks only for those windows, provided the sections, the prompts,
-`WINDOW_SIZE` and the model name are as they were; otherwise it drops the
+the rule `refine_window_sections` and the model name are as they were; otherwise it drops the
 partial file and starts over (lines 1375 to 1381). A
 `sections_refined.json` from an earlier pass stays in place until a pass
 finishes. The cut of an oversized section is asked again while the server does
@@ -369,7 +369,7 @@ so an interrupted run continues on exactly the items missing one.
 
 `--print-context-budget` prints the worst-case tokens one vision request needs:
 the longer of the two system prompts, one image and one reply of
-`VLM_MAX_TOKENS` tokens (8,192 by default), 13,992 tokens with the `kwp` profile
+`vision_max_tokens` tokens (8,192 by default), 13,992 tokens with the `kwp` profile
 and 14,163 with `scenarios`. A vision server whose maximum context length is
 smaller is refused by the preflight. The preflight also puts the two
 reply schemas to the server, and a profile without a sentence of `prompts/reading/phrases.json`

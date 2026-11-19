@@ -13,8 +13,10 @@ import { clone, same, wrote } from '../lib/util';
 import { rich, t, tn, tr } from '../lib/i18n';
 import { shortId } from '../lib/spec';
 import { AreaBox, TextBox } from '../components/Inputs';
+import { Named } from '../components/Bits';
 import { Report, type Reported } from '../components/Report';
 import { Put } from '../prompts/Reports';
+import { DataFiles } from './DataFiles';
 
 const sourcesData = (d: any) => ({
   sources: clone(Object.fromEntries(d.sources.map((s: any) => [s.name, Object.assign({ kind: s.kind }, s.source)]))) as Record<string, any>,
@@ -28,6 +30,8 @@ export function SourcesTab() {
   const R = useRef({
     data: null as any, cur: null as Cur | null, report: null as Reported | null, fetch: null as any,
     picks: new Map<string, Pick>(), busy: false as boolean | string, error: null as string | null,
+    /* whether a data file of the profile has unsaved edits (DataFiles) */
+    dataDirty: false,
   });
   const [, touch] = useReducer((x: number) => x + 1, 0);
   const SR = R.current;
@@ -39,7 +43,7 @@ export function SourcesTab() {
     touch();
   }
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setDirty('sources', isDirty); });
+  useEffect(() => { setDirty('sources', isDirty || SR.dataDirty); });
 
   const changed = () => { SR.report = null; touch(); };
 
@@ -163,7 +167,7 @@ export function SourcesTab() {
                           <Table.Tbody>
                             {[...k.needs, ...k.may].map((key: string) => (
                               <Table.Tr key={key}>
-                                <Table.Td w="22%"><Code>{key}{k.needs.includes(key) ? ' *' : ''}</Code></Table.Td>
+                                <Table.Td w="22%"><Named title={(d.titles || {})[key]} k={key} />{k.needs.includes(key) ? ' *' : ''}</Table.Td>
                                 <Table.Td><SourceField obj={src} field={key} onChange={changed} /></Table.Td>
                               </Table.Tr>
                             ))}
@@ -250,6 +254,7 @@ export function SourcesTab() {
               </Stack>
             </Grid.Col>
           </Grid>
+          <DataFiles onDirty={dirty => { if (SR.dataDirty !== dirty) { SR.dataDirty = dirty; touch(); } }} />
         </Stack>
       </ScrollArea>
     </Stack>

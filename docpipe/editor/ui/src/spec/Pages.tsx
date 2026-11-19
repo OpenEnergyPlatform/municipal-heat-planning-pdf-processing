@@ -3,13 +3,14 @@
    and the questions and note of the spec. On the left, the choice of what the middle shows. */
 import { ActionIcon, Anchor, Badge, Box, Button, Card, Checkbox, Code, Group, Menu, NavLink, ScrollArea, Stack, Table, Text, Title, Tooltip } from '@mantine/core';
 import { IconArrowDown, IconArrowUp, IconPlus } from '@tabler/icons-react';
-import { t, tn } from '../lib/i18n';
+import { t, tn, tr } from '../lib/i18n';
 import { useStore } from '../lib/nav';
 import { isObj, type Obj } from '../lib/util';
 import { askersOf, fieldsOf, orderOf, sharedOf, specialsOf, usersOf, type Special } from './model';
 import { named, nameOf } from './names';
 import {
-  addField, addOwnPlanField, addPlanField, addValueType, addWorks, orderSet, S, select, show, specialSet, view,
+  addField, addOwnPlanField, addPlanField, addValueType, addWorks, orderSet, S, select, show, specialSet, typeSettingTitle,
+  view,
 } from './state';
 
 const fieldName = (p: Obj) => p.label || p.uri;
@@ -60,9 +61,9 @@ export function Nav() {
 /* ---------- the order of the questions ---------- */
 
 const SPECIALS = (): [Special, string, string][] => [
-  ['own_passage', t('only where the value stands'), t('Asked again with the lines around the value, never searched for elsewhere in the plan.')],
+  ['own_passage', t('only where the value stands'), t('Asked again with the lines around the value, never searched for elsewhere in the document.')],
   ['own_value', t('once with the number'), t('Read once with the value, such as "ca."; never asked again.')],
-  ['frame', t('frame of the plan'), t('The pair that the base year and the target year of the plan date a value by.')],
+  ['frame', t('frame of the document'), t('The pair that the base year and the target year of the document date a value by.')],
 ];
 
 export function OrderPage() {
@@ -166,7 +167,7 @@ export function TypesPage() {
         {(S.library.types || []).map(x => (
           <Card key={x.name} withBorder className={'sp-card' + (S.sel.t === 'vtype' && S.sel.name === x.name ? ' is-sel' : '')} onClick={() => select({ t: 'vtype', name: x.name })}>
             <Group gap="sm"><Code>{x.name}</Code>{x.builtin ? <Badge size="xs" variant="light" color="gray" tt="none">{t('built in')}</Badge> : null}</Group>
-            <Text size="xs" c="dimmed">{Object.entries(x.settings || {}).map(([k, val]) => `${k}: ${String(val)}`).join(' · ')}</Text>
+            <Text size="xs" c="dimmed">{Object.entries(x.settings || {}).map(([k, val]) => `${tr(typeSettingTitle(k)) || k}: ${String(val)}`).join(' · ')}</Text>
           </Card>
         ))}
         <Button variant="light" size="xs" w="fit-content" leftSection={<IconPlus size={14} />} onClick={() => void addValueType()}>{t('A value type of its own')}</Button>

@@ -20,7 +20,7 @@ long enough to need splitting is by definition too long to echo.
 When no cut is asked for, or the model's cuts could not be read (a
 hole, with its cause), a mechanical fallback cuts at even word-count
 intervals instead, dropping a cut that would leave a sliver under
-about 100 words; the section is named in the refinement report with
+about the rule split_min_part_words; the section is named in the refinement report with
 the cause. A request whose reply was cut off is asked again for half
 of the outline, since the outline has one line per segment.
 
@@ -87,7 +87,7 @@ figure sits).
 ### needs_split
 
 ```python
-def needs_split(section: dict, max_words: int = SECTION_MAX_WORDS) -> bool
+def needs_split(section: dict, max_words: Optional[int] = None) -> bool
 ```
 
 ### outline
@@ -142,7 +142,7 @@ no hole.
 ### cut_to_limit
 
 ```python
-def cut_to_limit(section: dict, max_words: int = SECTION_MAX_WORDS) -> list
+def cut_to_limit(section: dict, max_words: Optional[int] = None) -> list
 ```
 
 *section* as refinement left it, in parts of at most *max_words* each.
@@ -162,7 +162,7 @@ in no part stays with the first. The segments follow the text
 
 ```python
 def split_oversized(sections: list, ask: Optional[Callable] = None,
-                    max_words: int = SECTION_MAX_WORDS,
+                    max_words: Optional[int] = None,
                     holes: Optional[list] = None) -> list
 ```
 

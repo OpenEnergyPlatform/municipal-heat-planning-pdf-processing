@@ -77,8 +77,9 @@ from ..profile import available_profiles
 from . import chatpage
 from . import flow as flow_view
 from . import flowtry
-from . import (graphpage, measured, phrases, prompts, rulespage,
-               sourcespage, specs, start, trying)
+from . import (datafiles, graphpage, measured, phrases, prompts,
+               rulespage, sourcespage, specs, staged, stagespage, start,
+               trying)
 from . import requests as recorded
 
 LOG = logging.getLogger(__name__)
@@ -96,7 +97,8 @@ PROMPT_ID = re.compile(r"[A-Za-z0-9_-]+/[A-Za-z0-9_-]+")
 PAGE_LIMIT = 500                            # requests in one answer, at most
 # the notes of a recorded request the preview shows
 PREVIEW_NOTES = ("parameter", "coordinate", "owner", "value", "at", "attempt",
-                 "ms", "prompt_tokens", "completion_tokens", "doc")
+                 "ms", "prompt_tokens", "completion_tokens", "doc", "page",
+                 "heading", "item", "sections")
 # what the model of a try is reached with: never sent to the page
 SECRET_SETTINGS = ("base_url", "api_key")
 # what is served at "/": path -> (file in WEB, content type)
@@ -256,10 +258,16 @@ class App:
         roots += [WEB, self.root / "docs", self.review_root]
         if self.harvest:
             roots.append(self.harvest)
+        # the documents' folders of stages 4 and 5, with their request
+        # logs and the pictures those requests showed (owner request
+        # 2026-11-19, A3)
+        self.processed = Path(profile.processed_dir).resolve()
+        roots.append(self.processed)
         self.files = Files(folder, roots)
         self.traces = recorded.Traces(
             self.harvest, lines=lambda path: trace_files.lines(
-                self.files.checked(path)))
+                self.files.checked(path)), stages=self.processed,
+            profile=profile)
         self.spec_path = profile.component("extraction", "SPEC_PATH")
         # A profile made with a draft of its spec and no spec yet (`docpipe
         # init --shapes`, a new profile of the page): its Spec tab edits the
@@ -405,6 +413,12 @@ class App:
             "/api/sources/fetch": ("POST", self._sources_fetch),
             "/api/sources/apply": ("POST", self._sources_apply),
             "/api/sources/take": ("POST", self._sources_take),
+            "/api/stages": ("GET", self._stages),
+            "/api/stages/measured": ("POST", self._stages_measured),
+            "/api/data": ("GET", self._data),
+            "/api/data/file": ("GET", self._data_file),
+            "/api/data/check": ("POST", self._data_check),
+            "/api/data/save": ("POST", self._data_save),
             "/api/graph": ("GET", self._graph),
             "/api/graph/check": ("POST", self._graph_check),
             "/api/graph/save": ("POST", self._graph_save),
@@ -450,7 +464,17 @@ class App:
             "harvest": self.harvest.as_posix() if self.harvest else None,
             "harvest_documents": (len(self.files.stamps(self.harvest))
                                   if self.harvest else None),
-            "tabs": ["spec", "prompts", "flow", "sources", "graph"],
+            "tabs": ["spec", "prompts", "flow", "sources", "graph",
+                     "stages"],
+            # the file each tab edits, as the head of the page names it
+            # (owner request 2026-11-19, A9)
+            "files": {
+                "spec": self.shown(self.spec_path or self.draft_path)
+                if self.spec_path or self.draft_path else None,
+                "prompts": self.shown(folder / "prompts"),
+                "flow": self.shown(flow_files.path_of(self.profile)),
+                "sources": self.shown(source_files.path_of(self.profile)),
+                "graph": self.shown(graphfile.path_of(self.profile))},
         }
 
     def _profiles(self) -> list:
@@ -754,16 +778,27 @@ class App:
 
     # -- the prompts --
 
-    def _no_trace(self) -> Optional[str]:
-        """Why the page has no recorded request to show, None where the
-        harvest folder holds a trace."""
-        if self.traces.names():
+    def _no_trace(self, which: Optional[str] = None) -> Optional[str]:
+        """Why the page has no recorded request to show, None where a
+        request log is there: one of the harvest folder or of the folders
+        of the documents (stages 4 and 5), for *which* "harvest" one of the
+        harvest folder."""
+        if self.traces.names(which):
             return None
-        return ("No harvest folder was given to the page (--harvest), so "
-                "there is no request log to show."
-                if self.harvest is None
-                else "The harvest folder holds no request log "
-                     "(*.trace.jsonl.gz), so there is no request to show.")
+        if which == "harvest" or not self.processed.is_dir():
+            return ("No harvest folder was given to the page (--harvest), "
+                    "so there is no request log to show."
+                    if self.harvest is None
+                    else "The harvest folder holds no request log "
+                         "(*.trace.jsonl.gz), so there is no request to "
+                         "show.")
+        return ("Neither the harvest folder nor the folders of the "
+                "documents hold a request log (*.trace.jsonl.gz), so there "
+                "is no request to show."
+                if self.harvest is not None
+                else "No harvest folder was given to the page (--harvest), "
+                     "and the folders of the documents hold no request log "
+                     "of stage 4 or 5, so there is no request to show.")
 
     def _prompts(self, query, body) -> dict:
         found = self.traces.names()
@@ -772,9 +807,18 @@ class App:
             "profile": self.profile.name,
             "lineage": [one.name for one in self.profile.lineage()],
             "prompts": prompts.listing(self.profile),
+            "steps": prompts.steps_asking(self.profile),
+            # the stages whose requests are read from the documents'
+            # folders: a prompt of one of them is shown with that stage's
+            # request logs (owner request 2026-11-19, A3)
+            "stages": list(prompts.STAGE_REQUESTS),
             "modules": list(phrase_files.MODULES),
             "try": {key: value for key, value in trying.settings().items()
                     if key not in SECRET_SETTINGS},
+            # where a request of the visuals (stage 5) is tried
+            "try_vision": {key: value for key, value
+                           in trying.settings("vlm").items()
+                           if key not in SECRET_SETTINGS},
             "traces": found, "traces_note": note}
 
     def _prompt(self, query, body) -> dict:
@@ -921,7 +965,7 @@ class App:
         return {**flow_view.view(self.profile, raw, data, self.shown,
                                  self._computes(), self._project_path()),
                 "harvest": self.harvest is not None,
-                "traces": self.traces.names()}
+                "traces": self.traces.names("harvest")}
 
     def _flow_check(self, query, body) -> dict:
         own, raw = self._flow_file()
@@ -1128,8 +1172,10 @@ class App:
     def _flow_measured(self, query, body) -> dict:
         numbers = body.get("numbers")
         numbers = numbers if isinstance(numbers, dict) else {}
-        names = [one["name"] for one in self.traces.names()]
-        why = self._no_trace()
+        # the harvest's traces only: a request of stage 4 or 5 is asked in
+        # no box of the flow
+        names = [one["name"] for one in self.traces.names("harvest")]
+        why = self._no_trace("harvest")
         if why:
             return {"harvest": self.harvest is not None, "why": why,
                     "traces": 0, "requests": 0, "says": {}, "steps": {},
@@ -1229,6 +1275,88 @@ class App:
         if written is not None:
             self.files.write(own, written)
         return report
+
+    # -- the stages before the harvest (owner request 2026-11-19, A1) --
+
+    def _stage_logs(self, stage: Optional[str]) -> list:
+        return ([one["name"] for one in self.traces.names(stage)]
+                if stage else [])
+
+    def _stages(self, query, body) -> dict:
+        return stagespage.view(self.profile, self._stage_logs)
+
+    def _stage_facts(self, name: str) -> dict:
+        """What the requests of the stage log *name* say
+        (`measured.facts`), read with each reply checked as the stage
+        checks it, counted once per state of its file."""
+        path = self.traces.path_of(name)
+        if path is None:
+            raise _Refusal(404, f"no such trace: {name!r}")
+        stat = path.stat()
+        key = (stat.st_mtime_ns, stat.st_size)
+        hit = self._measured.get(name)
+        if hit is None or hit[0] != key:
+            read = recorded.Trace(path, list(trace_files.lines(
+                self.files.checked(path))), self.profile)
+            hit = (key, measured.facts(read.requests))
+            self._measured[name] = hit
+        return hit[1]
+
+    def _stages_measured(self, query, body) -> dict:
+        stage = body.get("stage")
+        known = {one["key"]: one for one in stagespage.STAGES}
+        if stage not in known or not known[stage]["log"]:
+            raise _Refusal(400, "stage is the key of a stage that writes a "
+                                "request log")
+        names = self._stage_logs(known[stage]["log"])
+        return stagespage.says(self.profile, stage,
+                               [self._stage_facts(name) for name in names])
+
+    # -- the data files of the profile (owner request 2026-11-19, A2) --
+
+    def _data(self, query, body) -> dict:
+        return {"files": datafiles.listing(self.profile, self.files.read)}
+
+    def _data_name(self, source) -> str:
+        name = self._text_of(source, "name")
+        try:
+            datafiles.find(self.profile, name)
+        except KeyError:
+            raise _Refusal(404, f"no such data file: {name!r}") from None
+        return name
+
+    def _data_file(self, query, body) -> dict:
+        shown = datafiles.detail(self.profile, self._data_name(query),
+                                 self.files.read)
+        shown["path"] = self.shown(shown["path"])
+        return shown
+
+    def _data_check(self, query, body) -> dict:
+        name = self._data_name(body)
+        try:
+            report = datafiles.judge(self.profile, name, body.get("entries"),
+                                     self.files.read)
+        except datafiles.Refused as exc:
+            raise _Refusal(400, str(exc)) from None
+        report.pop("text", None)
+        return report
+
+    def _data_save(self, query, body):
+        name = self._data_name(body)
+        try:
+            datafiles.kept(self.profile, name)
+        except datafiles.Refused as exc:
+            raise _Refusal(400, str(exc)) from None
+        if body.get("base") != datafiles.current(self.profile, name,
+                                                 self.files.read):
+            return self._moved(f"the data file {name}")
+        try:
+            report, data, target = datafiles.save(
+                self.profile, name, body.get("entries"), self.files.read)
+        except datafiles.Refused as exc:
+            raise _Refusal(400, str(exc)) from None
+        self.files.write(target, data)
+        return {**report, "saved": True, "file": self.shown(target)}
 
     def _sources_fetch(self, query, body) -> dict:
         try:
@@ -1416,10 +1544,12 @@ class App:
             row = {key: request.get(key) for key in (
                 "kind", "asked", "parameter", "coordinate", "owner",
                 "value", "at", "attempt", "ms", "prompt_tokens",
-                "completion_tokens", "check")}
+                "completion_tokens", "check", "page", "heading", "item")}
             rows.append({"index": i, **row})
         return {
-            "trace": trace_files.name_of(trace.path),
+            "trace": query.get("trace"),
+            # which model Try sends these requests to (`trying.role_of`)
+            "asks": trying.role_of(trace),
             "total": len(every), "matching": len(matching),
             "kinds": sorted({every[i]["kind"] for i in scope}),
             "fields": sorted({every[i]["parameter"] for i in scope
@@ -1454,9 +1584,13 @@ class App:
                 "finish": request["finish"], "error": request["error"],
                 "check": request["check"], "spelled": request["spelled"]},
             "chain": recorded.chain_of(trace.requests, index),
-            "preview": prompts.preview(self.profile, request,
+            "preview": (staged.preview(self.profile, request,
                                        trace.sent(index) or {}, edits,
-                                       self.files.read)}
+                                       self.files.read, trace.head)
+                        if staged.is_staged(request) else
+                        prompts.preview(self.profile, request,
+                                        trace.sent(index) or {}, edits,
+                                        self.files.read))}
 
     def _request_try(self, query, body) -> dict:
         trace = self._trace(body)
@@ -1467,7 +1601,7 @@ class App:
         edits = self._edits(body)
         try:
             return trying.run(self.profile, trace, indexes, edits,
-                              self.files.read)
+                              self.files.read, read_bytes=self.files.read)
         except trying.Refused as exc:
             raise _Refusal(400, str(exc)) from None
 

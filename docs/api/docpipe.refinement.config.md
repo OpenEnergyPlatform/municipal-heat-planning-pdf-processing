@@ -8,10 +8,20 @@ Author: Felix Vossel
 
 ## Functions
 
+### prompt_ids
+
+```python
+def prompt_ids() -> tuple
+```
+
+The prompts a run of this stage is made of, the ones its stored
+results are versioned by. Only the window prompt actually in use is
+named, or merely having the second one on disk would count as a change
+against every stored result.
+
 ### refine_prompt
 
 ```python
-@prompts.per_profile
 def refine_prompt()
 ```
 
@@ -20,6 +30,14 @@ def refine_prompt()
 ```python
 def system_prompt() -> str
 ```
+
+### refine_prompt_id
+
+```python
+def refine_prompt_id() -> str
+```
+
+The prompt a window of this stage is asked with (`refine_prompt`).
 
 ### llm_temperature
 
@@ -64,12 +82,12 @@ def max_request_tokens() -> int
 
 Worst case for one window: prompt + a full window of maximum-size
 sections + the whole section before it as context (a section is at most
-SECTION_MAX_WORDS) + the largest reply we would ever ask for, once.
+the rule section_max_words) + the largest reply we would ever ask for, once.
 
 A section that cannot be split any further, whose reply was cut off, is
 asked once more with more room, but the room is bounded by what the served
 window leaves beyond this number (`further_room`), so the budget does not
-count a second reply. Rests on split.py holding SECTION_MAX_WORDS on its
+count a second reply. Rests on split.py holding section_max_words on its
 output. The one case it cannot hold, a single segment longer than the
 limit, is logged there.
 
@@ -83,22 +101,6 @@ The token limit of the one further attempt of a window or an outline
 that was cut off at *asked* tokens and cannot be split, or None when the
 served window leaves it no more room than it had. See
 `llm_preflight.further_room`.
-
-### clean_unicode
-
-```python
-def clean_unicode(s: str) -> str
-```
-
-Remove surrogates, control chars, non-characters.
-
-### clean_data
-
-```python
-def clean_data(obj)
-```
-
-Recursively clean unicode in nested dicts/lists/strings.
 
 ### dump_json_atomic
 

@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
+from docpipe import rules
 from docpipe.artifacts import document_dirs
 from docpipe.visuals.continuation import join
 from docpipe.visuals.holes import of as holes_of
@@ -149,7 +150,8 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
     # 2026-11-06): each part the transcription found to continue the table
     # before it is joined to it, its own transcription staying in
     # visuals.json.
-    stats.tables_joined = join(merged["sections"])
+    stats.tables_joined = (join(merged["sections"])
+                           if rules.get("join_continued_tables") else 0)
 
     # Atomic write: a killed job must not leave a half-written output.json that
     # the next run's cache check accepts.

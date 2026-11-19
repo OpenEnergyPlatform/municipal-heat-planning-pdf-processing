@@ -412,9 +412,10 @@ SETTINGS = (
       "Times a request that keeps failing may be halved.",
       stages=("extract",)),
     S("EXTRACT_TRACE", "extract.trace", "flag", None,
-      "Write a per-document event trace beside the harvest; 0 turns "
+      "Write a per-document event trace beside the harvest, and the "
+      "request log of stages 4 and 5 in each document's folder; 0 turns "
       "tracing off. Unset: the rule trace_on says it.",
-      stages=("extract",), rule="trace_on"),
+      stages=("refine", "visuals", "extract"), rule="trace_on"),
     S("EXTRACT_TRANSPORT_WAIT", "extract.transport_wait", "float", None,
       "Seconds before retrying a request that never reached the server; "
       "doubles each time. Unset: the profile's rules file says it (transport_wait_s).",
@@ -551,17 +552,19 @@ SETTINGS = (
       "Directories searched for profiles before the built-in ones, "
       "separated like PATH.",
       bootstrap=True, stages=ALL),
-    S("REFINE_REPLY_CEILING", "refine.reply_ceiling", "int", "16384",
-      "Upper limit of the reply token budget of one refinement request.",
-      stages=("refine",)),
-    S("REFINE_RETURN_CORRECTIONS", "refine.return_corrections", "flag", "0",
+    S("REFINE_REPLY_CEILING", "refine.reply_ceiling", "int", None,
+      "Upper limit of the reply token budget of one refinement request. "
+      "Unset: the profile's rules file says it (reply_tokens_ceiling).",
+      stages=("refine",), rule="reply_tokens_ceiling"),
+    S("REFINE_RETURN_CORRECTIONS", "refine.return_corrections", "flag", None,
       "Ask for a list of corrections, not rewritten sections; switching "
-      "marks results stale.",
-      stages=("refine",)),
+      "marks results stale. Unset: the profile's rules file says it "
+      "(refine_return_corrections).",
+      stages=("refine",), rule="refine_return_corrections"),
     S("REFINE_WINDOW_SIZE", "refine.window_size", "int", None,
-      "Sections per refinement request; default: the profile's setting, "
-      "else 3.",
-      stages=("refine",)),
+      "Sections per refinement request. Unset: the profile's rules file "
+      "says it (refine_window_sections).",
+      stages=("refine",), rule="refine_window_sections"),
     S("RERANK_API_KEY", "rerank.api_key", "str", None,
       "API key of the reranker's server.",
       secret=True, stages=("extract",), rule="rerank_api_key"),

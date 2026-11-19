@@ -32,7 +32,7 @@ Images, column `context_sentence`; the parts as one JSON list), which is how
 `--step sync` finds that a changed sentence is a changed entry.
 
 An answer that is not one JSON object with the key `sentence` is asked again,
-with its cause named, as often as the other stages ask (MAX_RETRIES), and is
+with its cause named, as often as stage 4 asks (refine_max_attempts), and is
 never embedded: the table or figure keeps its text as it was and is asked again
 by the next run. Nothing is repaired.
 

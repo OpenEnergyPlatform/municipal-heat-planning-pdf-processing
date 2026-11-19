@@ -911,6 +911,12 @@ def _validate_parameter(path: str, raw, types: Optional[dict] = None
         _validate_out_entries(f"{path}.beside", beside)
         value_definitions = {**value_definitions, **beside_definitions}
         value_glosses = {**value_glosses, **beside_glosses}
+    if kind.answer != "entry" and (vocabulary is not None
+                                   or vocabulary_dynamic):
+        # For every value type that is not an entry, a number with units
+        # too: such a list would give a number the entries of a category.
+        _fail(f"{path}.vocabulary",
+              "only a category parameter carries a value vocabulary")
     if kind.answer == "number" and kind.units:
         if not isinstance(unit_target, str) or not unit_target.strip():
             _fail(f"{path}.unit_target",
@@ -961,9 +967,6 @@ def _validate_parameter(path: str, raw, types: Optional[dict] = None
                         _fail(f"{path}.vocabulary.{uri}",
                               f"label {label!r} already maps to {other}")
                     seen[fold_label(label)] = uri
-        elif vocabulary is not None or vocabulary_dynamic:
-            _fail(f"{path}.vocabulary",
-                  "only a category parameter carries a value vocabulary")
 
     # Axes are what a measured value varies along — carrier, sector, year.
     # A document's title varies along nothing, and demanding an axis from it

@@ -17,8 +17,8 @@ once, in the section as the model received it, the only text it can
 honestly be quoting. Where two corrections cover the same passage,
 the longer one wins and the other is reported as overlapping. An
 edit may not add, drop or alter a [pN_tblM] or [pN_imgM] placeholder.
-The edits together may not remove more than MAX_SHRINK of the
-section.
+The edits together may not remove more than the rule
+corrections_max_shrink of the section.
 
 The first two rules used to be one: each find was looked up in the
 text left by its predecessors. That punished the model for following
@@ -40,14 +40,16 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from docpipe import rules
+
 # A placeholder stands for a table or figure that lives in its own file. Losing
 # one silently detaches an image from the text that explains it.
 PLACEHOLDER_RE = re.compile(r"\[p\d+_(?:img|tbl)\d+\]")
 
 # An edit list is meant to fix artefacts, not to rewrite the section. Removing
 # more than this much of it means the model is doing something other than what
-# it was asked, and the section is safer untouched.
-MAX_SHRINK = 0.30
+# it was asked, and the section is safer untouched. The rule
+# corrections_max_shrink says how much that is.
 
 
 @dataclass
@@ -158,11 +160,12 @@ def apply_corrections(original: str, edits) -> tuple:
         report.rejected.append((None, "placeholder set changed overall"))
         return original, report
 
-    if original and len(text) < len(original) * (1 - MAX_SHRINK):
+    max_shrink = rules.get("corrections_max_shrink")
+    if original and len(text) < len(original) * (1 - max_shrink):
         report.rejected.append(
             (None, f"section shrank by "
                    f"{100 * (1 - len(text) / len(original)):.0f}%, over the "
-                   f"{100 * MAX_SHRINK:.0f}% an edit pass may remove"))
+                   f"{100 * max_shrink:.0f}% an edit pass may remove"))
         return original, report
 
     return text, report

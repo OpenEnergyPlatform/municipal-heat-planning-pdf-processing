@@ -24,6 +24,13 @@ without the first, the text model of the run (LLM_BASE_URL, LLM_API_KEY,
 LLM_MODEL) where the environment names one. With neither, nothing is sent
 and the reason is said.
 
+A request of the request log of stage 4 or 5 is put together and sent by
+`staged` (owner request 2026-11-19, A3): a request of the refinement goes to
+the text model as above, one of the visuals to the vision model the stage
+asks (VLM_BASE_URL, VLM_API_KEY, VLM_MODEL), with its picture read again
+from the document's folder. Its reply is read as the stage reads it; it
+names no address.
+
 Author: Felix Vossel
 
 ## Classes
@@ -41,11 +48,12 @@ A try that is not sent, said in one sentence.
 ### settings
 
 ```python
-def settings() -> dict
+def settings(role: str = "llm") -> dict
 ```
 
 Where a try goes: `configured`, and then `base_url`, `api_key`,
-`model` and the `host` to show; else `why` not.
+`model` and the `host` to show; else `why` not. *role* "vlm" is the
+vision model of the visuals (stage 5), else the text model.
 
 ### client_of
 
@@ -53,8 +61,8 @@ Where a try goes: `configured`, and then `base_url`, `api_key`,
 def client_of(config: dict)
 ```
 
-The run's client for the text model, at the address of *config*.
-It repeats nothing.
+The run's client for the model of *config* (its `role`, the text
+model where it names none), at its address. It repeats nothing.
 
 ### shown_of
 
@@ -87,17 +95,29 @@ One call: the recorded request *sent* with the instruction (and,
 for a request asked again, the message) of *view*
 (`prompts.preview`), and what came back.
 
+### role_of
+
+```python
+def role_of(trace) -> str
+```
+
+Which model the requests of *trace* ask: the stage's for a request
+log of stage 4 or 5 (`staged.role_of`), else the text model.
+
 ### run
 
 ```python
 def run(profile, trace, indexes: list, edits: dict, read: Callable, *,
         config: Optional[dict] = None,
-        make_client: Optional[Callable] = None) -> dict
+        make_client: Optional[Callable] = None,
+        read_bytes: Optional[Callable] = None) -> dict
 ```
 
 The requests *indexes* of *trace* (`requests.Trace`), each sent once
 with the texts of *edits*. `Refused` where nothing may be sent: more
 than `LIMIT` requests, none, or no model named. A request whose
-instruction cannot be put together is not sent and says why.
+instruction cannot be put together is not sent and says why. A picture
+of a request of stage 5 is read with *read_bytes(path)*, from the
+folder of its log.
 
 [Back to the index](../README.md)

@@ -86,6 +86,17 @@ letter of its own, as often as the rule `fetch_rounds` says (owner
 decision 2026-11-12: where the document points to a missing detail,
 the model may fetch that place itself).
 
+### place_notes
+
+```python
+def place_notes(source) -> dict
+```
+
+The page and the heading of the passage *source* (a `Source`), as a
+request's log names where it reads (owner request 2026-11-19, A7: a
+request names the page and heading of its piece, not only the number
+the database gives it); {} for none.
+
 ### chunk_notes
 
 ```python
@@ -93,7 +104,8 @@ def chunk_notes(chunk) -> dict
 ```
 
 What the log notes of the chunk a request shows: its passage, its
-place and, for a piece of several passages, how many it has.
+place (page and heading too) and, for a piece of several passages, how
+many it has.
 
 ### values
 
@@ -159,10 +171,12 @@ or the profile writes no prompt for the request.
 ### coord_notes
 
 ```python
-def coord_notes(coord) -> dict
+def coord_notes(coord, plan=None) -> dict
 ```
 
-What the log notes of a request about a value's dimension.
+What the log notes of a request about a value's dimension: the
+field, the dimension, the value and the passage it stands in, with the
+page and heading of that passage where *plan* has it.
 
 ### dimension
 

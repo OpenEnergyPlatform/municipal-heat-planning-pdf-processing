@@ -87,11 +87,11 @@ def _rules(profile, files, below) -> list:
     for name, one in known.items():
         owner = files.owners.get(f"rules/{name}", "")
         out.append({
-            "name": name, "group": one.group, "kind": one.kind,
-            "help": one.help, "least": one.least, "most": one.most,
-            "choices": list(one.choices), "columns": list(one.columns),
-            "of": one.of, "empty": one.empty, "decided": one.decided,
-            "where": one.where, "setting": one.env,
+            "name": name, "title": one.title, "group": one.group,
+            "kind": one.kind, "help": one.help, "least": one.least,
+            "most": one.most, "choices": list(one.choices),
+            "columns": list(one.columns), "of": one.of, "empty": one.empty,
+            "decided": one.decided, "where": one.where, "setting": one.env,
             "setting_set": bool(one.env and one.env in os.environ),
             "value": files.rules.get(name),
             "inherited": below.rules.get(name),

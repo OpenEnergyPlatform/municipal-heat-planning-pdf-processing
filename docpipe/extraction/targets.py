@@ -162,13 +162,26 @@ def fetched_again(ask, req, shape: dict, example, reply, counts):
 
 # -- values of a field ---------------------------------------------------------------
 
+def place_notes(source) -> dict:
+    """The page and the heading of the passage *source* (a `Source`), as a
+    request's log names where it reads (owner request 2026-11-19, A7: a
+    request names the page and heading of its piece, not only the number
+    the database gives it); {} for none."""
+    seen = getattr(source, "provenance", None) or {}
+    heading = (seen.get("title") or seen.get("section_title") or "").strip()
+    return {**({"page": seen["page"]} if seen.get("page") is not None
+               else {}), **({"heading": heading} if heading else {})}
+
+
 def chunk_notes(chunk) -> dict:
     """What the log notes of the chunk a request shows: its passage, its
-    place and, for a piece of several passages, how many it has."""
+    place (page and heading too) and, for a piece of several passages, how
+    many it has."""
     members = list(chunk) if isinstance(chunk, (list, tuple)) else None
     first = members[0] if members else chunk
     return {"kind": first.passage.kind,
             "owner": first.passage.source.owner_id, "chunk": first.index,
+            **place_notes(first.passage.source),
             **({"chunks": len(members)} if members else {})}
 
 
@@ -390,7 +403,8 @@ def assigned(ask, counts):
     shape, example = forms.of(ask.reply, req)
     passage = plan.passages.get(tuple(item.owner))
     noted = {"kind": passage.kind if passage is not None else None,
-             "owner": item.owner[1], "value": item.words}
+             "owner": item.owner[1], "value": item.words,
+             **(place_notes(passage.source) if passage is not None else {})}
     counts.assigned["asked"] += 1
     reply = ask.ask(req, shape, example, counts, **noted)
     picks = reader._picks(reply, len(labels), False)
@@ -450,13 +464,18 @@ def assigned(ask, counts):
 
 # -- a dimension of a value -------------------------------------------------------
 
-def coord_notes(coord) -> dict:
-    """What the log notes of a request about a value's dimension."""
+def coord_notes(coord, plan=None) -> dict:
+    """What the log notes of a request about a value's dimension: the
+    field, the dimension, the value and the passage it stands in, with the
+    page and heading of that passage where *plan* has it."""
     claim = coord.row.claim
+    owner = (claim.get("at") or {}).get("owner") or [None, None]
+    passage = (plan.passages.get(tuple(owner))
+               if plan is not None and owner[0] is not None else None)
     return {"parameter": coord.read.batch.parameter.uri,
             "coordinate": coord.slot.name,
-            "owner": ((claim.get("at") or {}).get("owner")
-                      or [None, None])[1], "value": coord.row.label}
+            "owner": owner[1], "value": coord.row.label,
+            **(place_notes(passage.source) if passage is not None else {})}
 
 
 def dimension(ask, counts):
@@ -482,7 +501,7 @@ def at_own_place(ask, counts):
     reader, plan, engine = ask.reader, ask.plan, ask.engine
     coord = ask.scope.get("coord")
     read, row, slot = coord.read, coord.row, coord.slot
-    noted = coord_notes(coord)
+    noted = coord_notes(coord, plan)
     answered, made, more = False, [], []
     shown = None
     if shows.has_place(plan, row.claim):
@@ -542,7 +561,7 @@ def over_hits(ask, counts):
     batch, label = req.batch, req.label
     numbers = read.batch.parameter.is_numeric
     ways = sorted(set(coord.ways) | supply.ways)
-    noted = {**coord_notes(coord), "shows": label,
+    noted = {**coord_notes(coord, ask.plan), "shows": label,
              **second_ways(ways)}
     several = reader.several(slot)
     seen = coord.pictures

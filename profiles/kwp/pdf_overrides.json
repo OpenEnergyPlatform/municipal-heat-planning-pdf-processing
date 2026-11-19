@@ -1,0 +1,1756 @@
+{
+ "1051011": {
+  "file": "waermeplan_brunsbuettel_20241210.pdf",
+  "place": "Brunsbüttel"
+ },
+ "1051072": {
+  "file": "waermeplan_marne_20241104.pdf",
+  "place": "Marne"
+ },
+ "1053032": {
+  "file": "waermeplan_geesthacht_20241230.pdf",
+  "place": "Geesthacht"
+ },
+ "1061046": {
+  "file": "waermeplan_itzehoe_20240930.pdf",
+  "place": "Itzehoe"
+ },
+ "3352011": {
+  "file": "waermeplan_cuxhaven_20251106.pdf",
+  "place": "Cuxhaven"
+ },
+ "3359038": {
+  "file": "waermeplan_stade_20250327_komprimierte_version.pdf",
+  "place": "Stade"
+ },
+ "7143041": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Krümmel"
+ },
+ "7143044": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Marienrachdorf"
+ },
+ "7143045": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Maroth"
+ },
+ "7143046": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Maxsain"
+ },
+ "7143056": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Nordhofen"
+ },
+ "7143064": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Rückeroth"
+ },
+ "7143066": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Schenkelberg"
+ },
+ "7143067": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Selters (Westerwald)"
+ },
+ "7143085": {
+  "file": "waermeplan_selters_20250711.pdf",
+  "place": "Wölferlingen"
+ },
+ "8116012": {
+  "file": "waermeplan_bissingen_an_der_teck_2024q1.pdf",
+  "place": "Bissingen an der Teck"
+ },
+ "1059012": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Borgwedel",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "1059018": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Busdorf",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "1059019": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Dannewerk",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "1059026": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Fahrdorf",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "1059032": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Geltorf",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "1059043": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Jagel",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "1059056": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Lottorf",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "1059078": {
+  "file": "waermeplan_konvoi_amt_haddeby_20250606.pdf",
+  "place": "Selk",
+  "why": "Amt Haddeby (Konvoi, 8 Gemeinden): the KWW link 404s; the plan is published at daten.verwaltungsportal.de as \"Bericht_KWP_Haddeby_Versand_komprimiert\". Kept under the KWW name so the convoy marker and the date survive."
+ },
+ "3157001": {
+  "file": "waermeplan_edemissen_20250923.pdf",
+  "place": "Edemissen",
+  "why": "KWW link 404s; the plan is published on the municipality's own site."
+ },
+ "3159004": {
+  "file": "waermeplan_bad_sachsa_20250725.pdf",
+  "place": "Bad Sachsa",
+  "why": "Konvoi NI13 (Bad Sachsa und Walkenried); KWW link 404s, the plan comes from the town's own site."
+ },
+ "3159036": {
+  "file": "waermeplan_bad_sachsa_20250725.pdf",
+  "place": "Walkenried",
+  "why": "Konvoi NI13 (Bad Sachsa und Walkenried); KWW link 404s, the plan comes from the town's own site."
+ },
+ "3252003": {
+  "file": "waermeplan_bad-pyrmont_20260701.pdf",
+  "place": "Bad Pyrmont",
+  "why": "KWW link 404s; the Erläuterungsbericht is on the town's own site."
+ },
+ "3257031": {
+  "file": "waermeplan_rinteln_20260529.pdf",
+  "place": "Rinteln",
+  "why": "KWW link 404s; the Erläuterungsbericht is on the Stadtwerke's site."
+ },
+ "3257006": {
+  "file": "waermeplan_sg-nenndorf_20251218.pdf",
+  "place": "Bad Nenndorf",
+  "why": "Konvoi \"NI SG Nenndorf\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Samtgemeinde's own site."
+ },
+ "3257011": {
+  "file": "waermeplan_sg-nenndorf_20251218.pdf",
+  "place": "Haste",
+  "why": "Konvoi \"NI SG Nenndorf\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Samtgemeinde's own site."
+ },
+ "3257016": {
+  "file": "waermeplan_sg-nenndorf_20251218.pdf",
+  "place": "Hohnhorst",
+  "why": "Konvoi \"NI SG Nenndorf\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Samtgemeinde's own site."
+ },
+ "3257036": {
+  "file": "waermeplan_sg-nenndorf_20251218.pdf",
+  "place": "Suthfeld",
+  "why": "Konvoi \"NI SG Nenndorf\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Samtgemeinde's own site."
+ },
+ "3353007": {
+  "file": "waermeplan_elbmarsch_20250801.pdf",
+  "place": "Drage (Elbe)",
+  "why": "Konvoi \"NI SG Elbmarsch\" (3 Gemeinden); KWW link 404s (and ends in \".pdf.pdf\"), the Abschlussbericht is on klimaschutz-elbmarsch.de."
+ },
+ "3353023": {
+  "file": "waermeplan_elbmarsch_20250801.pdf",
+  "place": "Marschacht",
+  "why": "Konvoi \"NI SG Elbmarsch\" (3 Gemeinden); KWW link 404s (and ends in \".pdf.pdf\"), the Abschlussbericht is on klimaschutz-elbmarsch.de."
+ },
+ "3353033": {
+  "file": "waermeplan_elbmarsch_20250801.pdf",
+  "place": "Tespe",
+  "why": "Konvoi \"NI SG Elbmarsch\" (3 Gemeinden); KWW link 404s (and ends in \".pdf.pdf\"), the Abschlussbericht is on klimaschutz-elbmarsch.de."
+ },
+ "3356002": {
+  "file": "waermeplan_grasberg.pdf",
+  "place": "Grasberg",
+  "why": "KWW link 404s; the Abschlussbericht is on the municipality's own site. The KWW name carries no date, so neither does ours."
+ },
+ "3356011": {
+  "file": "waermeplan_worpswede_20250829.pdf",
+  "place": "Worpswede",
+  "why": "KWW link 404s; the Abschlussbericht is on the municipality's own site."
+ },
+ "3459033": {
+  "file": "waermeplan_wallenhorst_2025.pdf",
+  "place": "Wallenhorst",
+  "why": "KWW link 404s; the Abschlussbericht is on the municipality's own site."
+ },
+ "3462007": {
+  "file": "waermeplan_langeoog_20240327.pdf",
+  "place": "Langeoog",
+  "why": "KWW link 404s; the Abschlussbericht is on the municipality's own site."
+ },
+ "3462019": {
+  "file": "waermeplan_wittmund_20251213.pdf",
+  "place": "Wittmund",
+  "why": "KWW link 404s; the plan is in the town's Ratsinfo. Not to be confused with the Landkreis Friesland/Wittmund report, which is a different document."
+ },
+ "3462002": {
+  "file": "waermeplan_esens_20260502.pdf",
+  "place": "Dunum",
+  "why": "Konvoi \"NI SG Esens\" (7 Gemeinden); KWW link 404s, the Abschlussbericht is at daten.verwaltungsportal.de. The KWW name says 20260502, the plan and the register both say 05.02.2026 — the name is kept as KWW writes it."
+ },
+ "3462003": {
+  "file": "waermeplan_esens_20260502.pdf",
+  "place": "Esens",
+  "why": "Konvoi \"NI SG Esens\" (7 Gemeinden); KWW link 404s, the Abschlussbericht is at daten.verwaltungsportal.de. The KWW name says 20260502, the plan and the register both say 05.02.2026 — the name is kept as KWW writes it."
+ },
+ "3462006": {
+  "file": "waermeplan_esens_20260502.pdf",
+  "place": "Holtgast",
+  "why": "Konvoi \"NI SG Esens\" (7 Gemeinden); KWW link 404s, the Abschlussbericht is at daten.verwaltungsportal.de. The KWW name says 20260502, the plan and the register both say 05.02.2026 — the name is kept as KWW writes it."
+ },
+ "3462008": {
+  "file": "waermeplan_esens_20260502.pdf",
+  "place": "Moorweg",
+  "why": "Konvoi \"NI SG Esens\" (7 Gemeinden); KWW link 404s, the Abschlussbericht is at daten.verwaltungsportal.de. The KWW name says 20260502, the plan and the register both say 05.02.2026 — the name is kept as KWW writes it."
+ },
+ "3462010": {
+  "file": "waermeplan_esens_20260502.pdf",
+  "place": "Neuharlingersiel",
+  "why": "Konvoi \"NI SG Esens\" (7 Gemeinden); KWW link 404s, the Abschlussbericht is at daten.verwaltungsportal.de. The KWW name says 20260502, the plan and the register both say 05.02.2026 — the name is kept as KWW writes it."
+ },
+ "3462015": {
+  "file": "waermeplan_esens_20260502.pdf",
+  "place": "Stedesdorf",
+  "why": "Konvoi \"NI SG Esens\" (7 Gemeinden); KWW link 404s, the Abschlussbericht is at daten.verwaltungsportal.de. The KWW name says 20260502, the plan and the register both say 05.02.2026 — the name is kept as KWW writes it."
+ },
+ "3462017": {
+  "file": "waermeplan_esens_20260502.pdf",
+  "place": "Werdum",
+  "why": "Konvoi \"NI SG Esens\" (7 Gemeinden); KWW link 404s, the Abschlussbericht is at daten.verwaltungsportal.de. The KWW name says 20260502, the plan and the register both say 05.02.2026 — the name is kept as KWW writes it."
+ },
+ "5970040": {
+  "file": "waermeplan_siegen_20260618.pdf",
+  "place": "Siegen",
+  "why": "KWW link 404s; taken from the NRW participation portal, where it is filed as the draft (\"Entwurf\") — the document itself is the Erläuterungsbericht."
+ },
+ "7133018": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Bretzenheim",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133023": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Daxweiler",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133025": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Dörrebach",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133026": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Dorsheim",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133028": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Eckenroth",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133035": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Guldental",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133054": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Langenlonsheim",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133056": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Laubenheim",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133085": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Roth (bei Stromberg)",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133087": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Rümmelsheim",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133091": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Schöneberg (Hunsrück)",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133093": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Schweppenhausen",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133095": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Seibersbach",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133103": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Stromberg",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133108": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Waldlaubersheim",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133110": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Warmsroth",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7133114": {
+  "file": "waermeplan_konvoi_vg-langenlonsheim-stromberg_20260127.pdf",
+  "place": "Windesheim",
+  "why": "Konvoi \"RLP VG Langenlonsheim-Stromberg\" (17 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7137068": {
+  "file": "waermeplan_mayen_20260114.pdf",
+  "place": "Mayen",
+  "why": "KWW link 404s; the Fachgutachten is on the town's own site. The register has no convoy for Mayen even though the report calls itself one."
+ },
+ "7137203": {
+  "file": "waermeplan_bendorf_20260430.pdf",
+  "place": "Bendorf",
+  "why": "KWW link 404s; the Fachgutachten is on the town's own site. Same case as Mayen: a convoy report, but the register lists Bendorf on its own."
+ },
+ "7137023": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Einig",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137027": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Gappenach",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137029": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Gering",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137030": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Gierschnach",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137041": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Kalt",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137048": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Kerben",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137053": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Kollig",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137065": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Lonnig",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137070": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Mertloch",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137080": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Naunheim",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137086": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Ochtendung",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137087": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Pillig",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137089": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Polch",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137095": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Rüber",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137102": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Trimbs",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137112": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Welling",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137114": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Wierschem",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7137501": {
+  "file": "waermeplan_konvoi_vg-maifeld_20260311.pdf",
+  "place": "Münstermaifeld",
+  "why": "Konvoi \"RLP VG Maifeld\" (18 Gemeinden); KWW link 404s, the plan is on the Verbandsgemeinde's own site."
+ },
+ "7138003": {
+  "file": "waermeplan_vg-asbach_20260522.pdf",
+  "place": "Asbach (Westerwald)",
+  "why": "Konvoi \"RLP VG Asbach\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138044": {
+  "file": "waermeplan_vg-asbach_20260522.pdf",
+  "place": "Neustadt (Wied)",
+  "why": "Konvoi \"RLP VG Asbach\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138077": {
+  "file": "waermeplan_vg-asbach_20260522.pdf",
+  "place": "Windhagen",
+  "why": "Konvoi \"RLP VG Asbach\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138080": {
+  "file": "waermeplan_vg-asbach_20260522.pdf",
+  "place": "Buchholz (Westerwald)",
+  "why": "Konvoi \"RLP VG Asbach\" (4 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138002": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Anhausen",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138005": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Bonefeld",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138006": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Breitscheid (Westerwald)",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138007": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Hausen (Wied)",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138010": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Datzeroth",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138015": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Ehlscheid",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138026": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Hardert",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138030": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Hümmerich",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138036": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Kurtscheid",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138042": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Meinborn",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138043": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Melsbach",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138047": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Niederbreitbach",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138053": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Oberhonnefeld-Gierend",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138054": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Oberraden",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138061": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Rengsdorf",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138065": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Roßbach (Wied)",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138066": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Rüscheid",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138071": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Straßenhaus",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138072": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Thalhausen",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7138076": {
+  "file": "waermeplan_konvoi_vg-rengsdorf-waldbreitbach_20260501.pdf",
+  "place": "Waldbreitbach",
+  "why": "Konvoi \"RLP VG Rengsdorf-Waldbreitbach\" (20 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231001": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Altrich",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231003": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Arenrath",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231007": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Bergweiler",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231009": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Bettenfeld",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231010": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Binsfeld",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231013": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Bruch",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231021": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Dierfeld",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231022": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Dierscheid",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231023": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Dodenburg",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231024": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Dreis",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231025": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Eckfeld",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231026": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Eisenschmitt",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231031": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Esch (bei Wittlich)",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231036": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Gipperath",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231037": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Gladbach",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231044": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Greimerath (Eifel)",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231046": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Großlittgen",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231049": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Hasborn",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231050": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Heckenmünster",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231051": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Heidweiler",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231053": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Hetzerath",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231062": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Hupperath",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231065": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Karl",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231069": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Klausen",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231074": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Laufeld",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231080": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Manderscheid",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231082": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Meerfeld",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231085": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Minderlittgen",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231091": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Musweiler",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231095": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Niederöfflingen",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231096": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Niederscheidweiler",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231100": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Oberöfflingen",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231101": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Oberscheidweiler",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231103": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Osann-Monzel",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231104": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Pantenburg",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231107": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Platten",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231108": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Plein",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231111": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Rivenich",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231113": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Salmtal",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231114": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Schladt",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231116": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Schwarzenborn (Eifel)",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231117": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Sehlem",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231127": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Wallscheid",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231503": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Landscheid",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7231504": {
+  "file": "waermeplan_konvoi_vg-wittlich-land_20260331.pdf",
+  "place": "Niersbach",
+  "why": "Konvoi \"RLP VG Wittlich Land\" (45 Gemeinden); KWW link 404s, the Endbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233002": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Basberg",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233004": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Berlingen",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233005": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Berndorf",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233007": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Birgel",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233019": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Dohm-Lammersdorf",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233022": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Esch (bei Gerolstein)",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233023": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Feusdorf",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233026": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Gerolstein",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233028": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Gönnersdorf (Eifel)",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233029": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Hillesheim (Eifel)",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233033": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Hohenfels-Essingen",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233035": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Jünkerath",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233036": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Kalenborn-Scheuern",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233038": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Kerpen (Eifel)",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233041": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Lissendorf",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233050": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Neroth",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233053": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Oberbettingen",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233054": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Oberehe-Stroheich",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233056": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Pelm",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233058": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Rockeskyll",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233060": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Salm",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233076": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Üxheim",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233080": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Walsdorf (Eifel)",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233083": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Wiesbaum",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233204": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Birresborn",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233209": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Densborn",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233211": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Duppach",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233214": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Hallschlag",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233219": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Kerschenbach",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233223": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Kopp",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233227": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Mürlenbach",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233229": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Nohn",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233232": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Ormont",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233235": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Reuth",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233237": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Scheid",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233239": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Schüller",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233240": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Stadtkyll",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7233241": {
+  "file": "waermeplan_konvoi_vg-gerolstein_20260609.pdf",
+  "place": "Steffeln",
+  "why": "Konvoi \"RLP VG Gerolstein\" (38 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333005": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Bennhausen",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333007": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Bischheim",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333010": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Bolanden",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333013": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Dannenfels",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333022": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Gauersheim",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333031": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Ilbesheim",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333035": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Jakobsweiler",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333039": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Kirchheimbolanden",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333040": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Kriegsfeld",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333045": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Marnheim",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333046": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Mörsfeld",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333047": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Morschheim",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333056": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Oberwiesen",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333057": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Orbis",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333062": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Rittersheim",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7333076": {
+  "file": "waermeplan_konvoi_vg-kirchheimbolanden_20260115.pdf",
+  "place": "Stetten (Pfalz)",
+  "why": "Konvoi \"RLP VG Kirchheimbolanden\" (16 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7334006": {
+  "file": "waermeplan_konvoi_vg-lingenfeld_20260601.pdf",
+  "place": "Freisbach",
+  "why": "Konvoi \"RLP VG Lingenfeld\" (6 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7334017": {
+  "file": "waermeplan_konvoi_vg-lingenfeld_20260601.pdf",
+  "place": "Lingenfeld",
+  "why": "Konvoi \"RLP VG Lingenfeld\" (6 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7334018": {
+  "file": "waermeplan_konvoi_vg-lingenfeld_20260601.pdf",
+  "place": "Lustadt",
+  "why": "Konvoi \"RLP VG Lingenfeld\" (6 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7334028": {
+  "file": "waermeplan_konvoi_vg-lingenfeld_20260601.pdf",
+  "place": "Schwegenheim",
+  "why": "Konvoi \"RLP VG Lingenfeld\" (6 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7334032": {
+  "file": "waermeplan_konvoi_vg-lingenfeld_20260601.pdf",
+  "place": "Weingarten (Pfalz)",
+  "why": "Konvoi \"RLP VG Lingenfeld\" (6 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7334033": {
+  "file": "waermeplan_konvoi_vg-lingenfeld_20260601.pdf",
+  "place": "Westheim (Pfalz)",
+  "why": "Konvoi \"RLP VG Lingenfeld\" (6 Gemeinden); KWW link 404s, the Abschlussbericht is on the Verbandsgemeinde's own site."
+ },
+ "7338004": {
+  "file": "waermeplan_bobenheim-roxheim_20260309.pdf",
+  "place": "Bobenheim-Roxheim",
+  "why": "KWW link 404s; the Endbericht is on the municipality's own site."
+ },
+ "7339009": {
+  "file": "waermeplan_budenheim_20260226.pdf",
+  "place": "Budenheim",
+  "why": "KWW link 404s; the report is on the municipality's climate-protection site."
+ },
+ "8115050": {
+  "file": "waermeplan_weil-der-stadt_20260503.pdf",
+  "place": "Weil der Stadt",
+  "why": "KWW link 404s; the Abschlussbericht is in the town's Sitzungsdienst. The other two members of Konvoi \"BW Weissach\" have no public link at all."
+ },
+ "8415053": {
+  "file": "waermeplan_muensingen_20260316.pdf",
+  "place": "Münsingen",
+  "why": "KWW link 404s; taken from the town's own site, where the only version on offer carries the marking ENTWURF."
+ },
+ "9173147": {
+  "file": "waermeplan_wolfratshausen_20260708.pdf",
+  "place": "Wolfratshausen",
+  "why": "KWW link 404s; the plan is on the town's own site."
+ },
+ "9181121": {
+  "file": "waermeplan_fuchstal_20250901.pdf",
+  "place": "Fuchstal",
+  "why": "KWW link 404s; the Endfassung is on the municipality's own site."
+ },
+ "8317046": {
+  "file": "waermeplan_hofstetten_20251101.pdf",
+  "place": "Hofstetten (Baden)",
+  "why": "KWW link 404s. The August 2026 export has since split the two links (Baden 20260401, Oberbayern 20251101), but both still serve the SAME bytes, and those bytes are the Kinzigtal report. We keep the file the corpus already holds; Oberbayern's claim on it is settled in SHARED_FILE_OWNERS."
+ },
+ "9181140": {
+  "file": "waermeplan_schwifting_20251030.pdf",
+  "place": "Schwifting",
+  "why": "KWW link 404s; the plan is on the municipality's own site."
+ },
+ "9181141": {
+  "file": "waermeplan_puergen_20250527.pdf",
+  "place": "Pürgen",
+  "why": "KWW link 404s; the plan is on the municipality's own site."
+ },
+ "9184119": {
+  "file": "waermeplan_garching_20251201.pdf",
+  "place": "Garching b.München",
+  "why": "KWW link 404s; the Endbericht is on the town's own site."
+ },
+ "9184123": {
+  "file": "waermeplan_haar_20250801.pdf",
+  "place": "Haar",
+  "why": "KWW link 404s; the Abschlussbericht is on the town's own site."
+ },
+ "9184130": {
+  "file": "waermeplan_ismaning_20260226.pdf",
+  "place": "Ismaning",
+  "why": "KWW link 404s; the plan is on the municipality's own site."
+ },
+ "9184134": {
+  "file": "waermeplan_oberhaching_20260227.pdf",
+  "place": "Oberhaching",
+  "why": "KWW link 404s; the report is on the municipality's own site."
+ },
+ "9186125": {
+  "file": "waermeplan_gerolsbach_20250606.pdf",
+  "place": "Gerolsbach",
+  "why": "KWW link 404s; the report is on the municipality's own site."
+ },
+ "9186139": {
+  "file": "waermeplan_muenchsmuenster_20260301.pdf",
+  "place": "Münchsmünster",
+  "why": "KWW link 404s; the Abschlussbericht is on the municipality's own site."
+ },
+ "9186116": {
+  "file": "waermeplanung_ernsgaden_20260301.pdf",
+  "place": "Ernsgaden",
+  "why": "KWW link 404s; the report is at daten2.verwaltungsportal.de. KWW names this one \"Waermeplanung_\", not \"Waermeplan_\" — kept as they write it."
+ },
+ "9186144": {
+  "file": "waermeplan_poernbach_20260312.pdf",
+  "place": "Pörnbach",
+  "why": "KWW link 404s; the municipality serves the PDF straight off a page URL with no .pdf suffix."
+ },
+ "9187117": {
+  "file": "waermeplan_bad-aibling_20260201.pdf",
+  "place": "Bad Aibling",
+  "why": "KWW link 404s; the Abschlussbericht is on the town's own site."
+ },
+ "9187169": {
+  "file": "waermeplan_rohrdorf_20250401.pdf",
+  "place": "Rohrdorf (am Inn)",
+  "why": "KWW link 404s; the Abschlussbericht is on the municipality's own site."
+ },
+ "9187179": {
+  "file": "waermeplan_tuntenhausen_20250531.pdf",
+  "place": "Tuntenhausen",
+  "why": "KWW link 404s; the Abschlussbericht is at daten2.verwaltungsportal.de."
+ },
+ "9188113": {
+  "file": "waermeplan_berg_20260312.pdf",
+  "place": "Berg (Starnberger See)",
+  "why": "KWW link 404s; served straight off a page URL with no .pdf suffix."
+ },
+ "9189111": {
+  "file": "waermeplan_altenmarkt_20250729.pdf",
+  "place": "Altenmarkt a.d.Alz",
+  "why": "KWW link 404s; the Endbericht is on the municipality's own site."
+ },
+ "9271132": {
+  "file": "waermeplan_markt-metten-und-offenberg_20251201.pdf",
+  "place": "Metten",
+  "why": "Konvoi \"BY Metten und Offenberg\"; KWW link 404s, the Endbericht is on the market town's own site."
+ },
+ "9271140": {
+  "file": "waermeplan_markt-metten-und-offenberg_20251201.pdf",
+  "place": "Offenberg",
+  "why": "Konvoi \"BY Metten und Offenberg\"; KWW link 404s, the Endbericht is on the market town's own site."
+ },
+ "9272120": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Grafenau",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272140": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Ringelai",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272141": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Röhrnbach",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272142": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Saldenburg",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272116": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Eppenschlag",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272128": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Innernzell",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272145": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Schöfweg",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272147": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Schönberg (Niederbayern)",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272150": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Thurmansbang",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272119": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Fürsteneck",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272138": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Perlesreut",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9275128": {
+  "file": "waermeplan_konvoi-ilzer-land_20260301.pdf",
+  "place": "Hutthurm",
+  "why": "Konvoi \"BY Ilzer Land\" (12 Gemeinden); KWW link 404s, the Abschlussbericht is in the ILE's Nextcloud share."
+ },
+ "9272129": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Jandelsbrunn",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "9272136": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Neureichenau",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "9272151": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Waldkirchen",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "9275118": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Breitenberg (Niederbayern)",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "9275126": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Hauzenberg",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "9275137": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Obernzell",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "9275148": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Sonnen",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "9275150": {
+  "file": "waermeplan_konvoi-abteiland-jandelsbrunn_20260527.pdf",
+  "place": "Thyrnau",
+  "why": "Konvoi \"BY Abteiland\" (8 Gemeinden); KWW link 404s. Careful: jandelsbrunn.de serves a same-day report for that one municipality — this is the ILE-wide one from abteiland.de, which covers all eight."
+ },
+ "13072012": {
+  "file": "waermeplan_amt_rostocker_heide.pdf",
+  "place": "Bentwisch",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "13072015": {
+  "file": "waermeplan_amt_rostocker_heide.pdf",
+  "place": "Blankenhagen",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "13072032": {
+  "file": "waermeplan_amt_rostocker_heide.pdf",
+  "place": "Gelbensande",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "13072072": {
+  "file": "waermeplan_amt_rostocker_heide.pdf",
+  "place": "Mönchhagen",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "13072088": {
+  "file": "waermeplan_amt_rostocker_heide.pdf",
+  "place": "Rövershagen",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9674120": {
+  "file": "waermeplan_bundorf_20250601.pdf",
+  "place": "Bundorf",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9674121": {
+  "file": "waermeplan_burgpreppach_20250601.pdf",
+  "place": "Burgpreppach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9377116": {
+  "file": "waermeplan_erbendorf_20260218.pdf",
+  "place": "Erbendorf",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9674223": {
+  "file": "waermeplan_ermershausen_20250601.pdf",
+  "place": "Ermershausen",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9371122": {
+  "file": "waermeplan_freudenberg_20260416.pdf",
+  "place": "Freudenberg (Oberpfalz)",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9371123": {
+  "file": "waermeplan_gebenbach_20260416.pdf",
+  "place": "Gebenbach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "15086055": {
+  "file": "waermeplan_gommern_20250328.pdf",
+  "place": "Gommern",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "12067201": {
+  "file": "waermeplan_gruenheide__mark__20251009.pdf",
+  "place": "Grünheide (Mark)",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9371126": {
+  "file": "waermeplan_hahnbach_20260416.pdf",
+  "place": "Hahnbach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "10045114": {
+  "file": "waermeplan_homburg_20260512.pdf",
+  "place": "Homburg",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9571111": {
+  "file": "waermeplan_konvoi-adelshofen_mittelfranken__20260301.pdf",
+  "place": "Adelshofen (Mittelfranken)",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9471111": {
+  "file": "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",
+  "place": "Altendorf (Kreis Bamberg)",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9471123": {
+  "file": "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",
+  "place": "Buttenheim",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9474123": {
+  "file": "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",
+  "place": "Eggolsheim",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9474133": {
+  "file": "waermeplan_konvoi-allianz-regnitz-aisch_20260223.pdf",
+  "place": "Hallerndorf",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9276116": {
+  "file": "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",
+  "place": "Bischofsmais",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9276126": {
+  "file": "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",
+  "place": "Kirchberg i.Wald",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9276127": {
+  "file": "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",
+  "place": "Kirchdorf i.Wald",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9276139": {
+  "file": "waermeplan_konvoi-gruener-dreiberg_20251124.pdf",
+  "place": "Rinchnach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9272143": {
+  "file": "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",
+  "place": "Sankt Oswald-Riedlhütte",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9272146": {
+  "file": "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",
+  "place": "Neuschönau",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9272149": {
+  "file": "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",
+  "place": "Spiegelau",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9276115": {
+  "file": "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",
+  "place": "Bayerisch Eisenstein",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9276121": {
+  "file": "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",
+  "place": "Frauenau",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9276130": {
+  "file": "waermeplan_konvoi-nationalparkgemeinden_20251001.pdf",
+  "place": "Lindberg",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9571188": {
+  "file": "waermeplan_konvoi-ohrenbach_20260301.pdf",
+  "place": "Ohrenbach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9571205": {
+  "file": "waermeplan_konvoi-steinsfeld_20260301.pdf",
+  "place": "Steinsfeld",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9278140": {
+  "file": "waermeplan_konvoi-strasskirchen-und-irlbach_20250930.pdf",
+  "place": "Irlbach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9278192": {
+  "file": "waermeplan_konvoi-strasskirchen-und-irlbach_20250930.pdf",
+  "place": "Straßkirchen",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9474132": {
+  "file": "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",
+  "place": "Gräfenberg",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9474138": {
+  "file": "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",
+  "place": "Hiltpoltstein",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9474140": {
+  "file": "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",
+  "place": "Igensdorf",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9474173": {
+  "file": "waermeplan_konvoi-suedliche-fraenkische-schweiz_20260301.pdf",
+  "place": "Weißenohe",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9575113": {
+  "file": "waermeplan_konvoi-vg-diespeck_20260301.pdf",
+  "place": "Baudenbach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9575118": {
+  "file": "waermeplan_konvoi-vg-diespeck_20260301.pdf",
+  "place": "Diespeck",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9575128": {
+  "file": "waermeplan_konvoi-vg-diespeck_20260301.pdf",
+  "place": "Gutenstetten",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9575150": {
+  "file": "waermeplan_konvoi-vg-diespeck_20260301.pdf",
+  "place": "Münchsteinach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9375131": {
+  "file": "waermeplan_konvoi-vg-kallmuenz-duggendorf_20260301..pdf",
+  "place": "Duggendorf",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9375153": {
+  "file": "waermeplan_konvoi-vg-kallmuenz-holzheim-am-forst_20260301..pdf",
+  "place": "Holzheim a.Forst",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9375156": {
+  "file": "waermeplan_konvoi-vg-kallmuenz-kallmuenz_20260301.pdf",
+  "place": "Kallmünz",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9475174": {
+  "file": "waermeplan_konvoi-vg-sparneck_20260407.pdf",
+  "place": "Sparneck",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9475184": {
+  "file": "waermeplan_konvoi-vg-sparneck_20260407.pdf",
+  "place": "Weißdorf",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "15087275": {
+  "file": "waermeplan_mansfeld-suedharz_20251101.pdf",
+  "place": "Mansfeld",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "14729270": {
+  "file": "waermeplan_markranstaedt_20250825.pdf",
+  "place": "Markranstädt",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9371121": {
+  "file": "waermeplan_markt-freihung_20260416.pdf",
+  "place": "Freihung",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9375170": {
+  "file": "waermeplan_mintraching_20250731.pdf",
+  "place": "Mintraching",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9371141": {
+  "file": "waermeplan_neukirchen-bei-sulzbach-rosenberg_20260101.pdf",
+  "place": "Neukirchen b.Sulzbach-Rosenberg",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9678164": {
+  "file": "waermeplan_oberschwarzach_20251014.pdf",
+  "place": "Oberschwarzach",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9777158": {
+  "file": "waermeplan_pforzen_20250926.pdf",
+  "place": "Pforzen",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9371144": {
+  "file": "waermeplan_poppenricht_20260416.pdf",
+  "place": "Poppenricht",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9362000": {
+  "file": "waermeplan_regensburg_20260429.pdf",
+  "place": "Regensburg",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "16073076": {
+  "file": "waermeplan_rudolstadt_202506.pdf",
+  "place": "Rudolstadt",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "12061444": {
+  "file": "waermeplan_schulzendorf_2025.pdf",
+  "place": "Schulzendorf",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9677116": {
+  "file": "waermeplan_vg-burgsinn-aura-im-sinngrund_20260301.pdf",
+  "place": "Aura i.Sinngrund",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9677122": {
+  "file": "waermeplan_vg-burgsinn-burgsinn_20260301.pdf",
+  "place": "Burgsinn",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9677128": {
+  "file": "waermeplan_vg-burgsinn-fellen_20260301.pdf",
+  "place": "Fellen",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9677159": {
+  "file": "waermeplan_vg-burgsinn-mittelsinn_20260301.pdf",
+  "place": "Mittelsinn",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9677169": {
+  "file": "waermeplan_vg-burgsinn-obersinn_20260301.pdf",
+  "place": "Obersinn",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "15088216": {
+  "file": "waermeplan_wettin-loebejuen_20250724.pdf",
+  "place": "Wettin-Löbejün",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9674139": {
+  "file": "warmeplan_vg_theres_20260225.pdf",
+  "place": "Gädheim",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9674180": {
+  "file": "warmeplan_vg_theres_20260225.pdf",
+  "place": "Theres",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "9674219": {
+  "file": "warmeplan_vg_theres_20260225.pdf",
+  "place": "Wonfurt",
+  "why": "--- Aus dem Lauf vom 2026-08-07: 40 tote KWW-Links plus Regensburg, dessen KWW-PDF ein Scan ohne Textebene ist. Ersatz jeweils von der Kommune, dem Planer (waermeplan.net) oder verwaltungsportal.de."
+ },
+ "3154028": {
+  "file": "waermeplan_helmstedt_05.12.2025.pdf",
+  "place": "Helmstedt",
+  "why": "--- September 2026 export: KWW renamed four files it had already published. The server gives the same number of bytes under the new name as the registered file has, so these are the documents the corpus holds and not new editions. They stay under the name they are registered with: under the new one each would be a second document of its group."
+ },
+ "9179111": {
+  "file": "waermeplan_adelshofen_konvoi_20260130.pdf",
+  "place": "Adelshofen (Oberbayern)",
+  "why": "--- September 2026 export: KWW renamed four files it had already published. The server gives the same number of bytes under the new name as the registered file has, so these are the documents the corpus holds and not new editions. They stay under the name they are registered with: under the new one each would be a second document of its group."
+ },
+ "8425017": {
+  "file": "waermeplan_merklingen-et-al-konvoi_20260420.pdf",
+  "place": "Berghülen",
+  "why": "Konvoi \"BW Konvoi Berghülen\" (4 Gemeinden)"
+ },
+ "8425079": {
+  "file": "waermeplan_merklingen-et-al-konvoi_20260420.pdf",
+  "place": "Merklingen",
+  "why": "Konvoi \"BW Konvoi Berghülen\" (4 Gemeinden)"
+ },
+ "8425084": {
+  "file": "waermeplan_merklingen-et-al-konvoi_20260420.pdf",
+  "place": "Nellingen",
+  "why": "Konvoi \"BW Konvoi Berghülen\" (4 Gemeinden)"
+ },
+ "8425134": {
+  "file": "waermeplan_merklingen-et-al-konvoi_20260420.pdf",
+  "place": "Westerheim (Württemberg)",
+  "why": "Konvoi \"BW Konvoi Berghülen\" (4 Gemeinden)"
+ },
+ "13076002": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Alt Zachun",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076004": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Bandenitz",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076008": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Belsch",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076013": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Bobzin",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076019": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Bresegard bei Picher",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076041": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Gammelin",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076057": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Groß Krams",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076064": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Hoort",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076065": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Hülseburg",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076070": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Kirch Jesar",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076079": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Kuhstorf",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076099": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Moraas",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076110": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Pätow-Steegen",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076111": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Picher",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076116": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Pritzier",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076119": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Redefin",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076131": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Strohkirchen",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076145": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Warlitz",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "13076169": {
+  "file": "waermeplan_konvoi_amt-hagenow-land_30.09.2024.pdf",
+  "place": "Toddin",
+  "why": "Konvoi \"Amt Hagenow-Land\" (19 Gemeinden)"
+ },
+ "8216007": {
+  "file": "waermeplan_buehl_20251016.pdf",
+  "place": "Bühl (nicht Greding)",
+  "why": "KWW gave these three the link of a DIFFERENT town (see SHARED_FILE_OWNERS). Their own plans, verified by the town named in the document:"
+ },
+ "3252007": {
+  "file": "waermeplan_hessisch-oldendorf_20251216.pdf",
+  "place": "Hessisch Oldendorf (nicht Oldenburg)",
+  "why": "KWW gave these three the link of a DIFFERENT town (see SHARED_FILE_OWNERS). Their own plans, verified by the town named in the document:"
+ },
+ "8215090": {
+  "file": "waermeplan_weingarten-baden_20231113.pdf",
+  "place": "Weingarten (Baden) (nicht Ravensburg)",
+  "why": "KWW gave these three the link of a DIFFERENT town (see SHARED_FILE_OWNERS). Their own plans, verified by the town named in the document:"
+ }
+}

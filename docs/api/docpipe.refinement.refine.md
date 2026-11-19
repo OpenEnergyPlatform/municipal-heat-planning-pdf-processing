@@ -19,7 +19,7 @@ splitting are positional. Every request sends its reply schema as the
 grammar, and a reply is read as exactly one JSON object (see
 docpipe/reading.py): nothing is stripped, cut out or closed. A reply
 that is not that object is asked again with its cause named, up to
-MAX_RETRIES times, except on a 4xx response, which is not retried
+refine_max_attempts times, except on a 4xx response, which is not retried
 because the server has refused the request itself. A reply that was
 cut off at its token limit is never asked again as it stands: the
 window is asked in halves by sections, and a lone section gets more
@@ -109,7 +109,7 @@ def refine_sections(sections: list[dict],
                     title_page: Optional[int] = None) -> list[dict]
 ```
 
-Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
+Processes all sections through the LLM in windows of refine_window_sections, dispatched
 in parallel but assembled in order (merge/split semantics are positional).
 
 Mutates *sections* in place (source_text is stripped); returns the refined

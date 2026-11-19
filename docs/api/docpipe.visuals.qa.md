@@ -20,7 +20,8 @@ Author: Felix Vossel
 def salient_tokens(text: str) -> set[str]
 ```
 
-Lowercased numbers and words (>= 2 letters) found in *text*.
+Lowercased numbers and words (at least qa_token_min_letters
+letters) found in *text*.
 
 ### words
 
@@ -28,7 +29,8 @@ Lowercased numbers and words (>= 2 letters) found in *text*.
 def words(text: str) -> set[str]
 ```
 
-Lowercased words (>= 3 letters) found in *text*.
+Lowercased words (at least qa_word_min_letters letters) found in
+*text*.
 
 ### unreadable
 
@@ -53,7 +55,7 @@ scanned book whose OCR layer reads its sideways tables upside down
 
 ```python
 def coverage(source_text: str, markdown: str,
-             min_source_tokens: int = 8) -> Optional[float]
+             min_source_tokens: Optional[int] = None) -> Optional[float]
 ```
 
 Fraction of the source's salient tokens that also appear in the markdown.
@@ -63,6 +65,8 @@ None when the source has fewer than *min_source_tokens* salient tokens
 to judge fairly. Not 1.0: an unmeasurable table is unknown, not perfect,
 and a scanned corpus would otherwise report a flawless QA pass for every
 table nobody ever checked.
+
+*min_source_tokens* is the rule table_min_source_tokens where not given.
 
 ### duplication
 
@@ -87,12 +91,12 @@ def assess(
     markdown: str,
     source_text: str = "",
     *,
-    min_coverage: float = 0.5,
-    max_duplication: float = 0.4,
-    min_source_tokens: int = 8,
+    min_coverage: Optional[float] = None,
+    max_duplication: Optional[float] = None,
+    min_source_tokens: Optional[int] = None,
     known_words: Optional[set[str]] = None,
-    max_shared: float = 0.25,
-    min_known: float = 0.5,
+    max_shared: Optional[float] = None,
+    min_known: Optional[float] = None,
 ) -> tuple[bool, dict]
 ```
 
@@ -102,6 +106,8 @@ Fails when there are no data rows, duplication exceeds *max_duplication*,
 or coverage (when assessable) is below *min_coverage*. A coverage below it
 is not assessable where the source text is `unreadable` against
 *known_words*, the words of the rest of the document; without them it is
-taken as readable.
+taken as readable. A limit not given is its rule: table_min_coverage,
+table_max_duplication, table_min_source_tokens,
+table_unreadable_shared_below, table_unreadable_known_below.
 
 [Back to the index](../README.md)

@@ -8,7 +8,7 @@ import {
   IconArrowsSplit, IconBox, IconBraces, IconColumns, IconSearch,
 } from '@tabler/icons-react';
 import type { EdgeData, StepData } from './layout';
-import type { Library } from './model';
+import type { Library, PartUse } from './model';
 import { stepBox } from './model';
 import { num, t, tn, tr, useLang } from '../lib/i18n';
 
@@ -55,6 +55,19 @@ export interface FlowCtx {
   add(list: string, at: number): void;
   /* a flow of a follow-up pass: steps and its loops go in, no rounds and no branchings */
   loopsOnly?: boolean;
+  /* the frames whose steps stand once, as a part (owner request 2026-11-19) */
+  parts?: Record<string, PartUse>;
+}
+
+/* the mark of a frame whose steps stand once, as a part: a change to them is a change of every frame that uses it */
+function PartMark({ id }: { id: string }) {
+  const c = useCtx();
+  const use = c.parts && c.parts[id];
+  if (!use) return null;
+  const says = use.with.length
+    ? t('These steps stand once, as the part {part}, and {frames} goes through them too: a change to them here changes them there.', { part: use.part, frames: use.with.join(', ') })
+    : t('These steps stand once, as the part {part}.', { part: use.part });
+  return <Tooltip label={says} multiline w={320}><Badge size="xs" variant="light" color="cyan">{t('Part {part}', { part: use.part })}</Badge></Tooltip>;
 }
 export const Ctx = createContext<FlowCtx | null>(null);
 const useCtx = () => useContext(Ctx)!;
@@ -110,6 +123,7 @@ export function StepNode({ id, data, selected }: NodeProps) {
           <Group gap={6} wrap="nowrap">
             <Text size="xs" c="dimmed" lineClamp={1}>{off ? (d.step.off ? t('switched off') : t('never taken here')) : look.sub}</Text>
             <Counts d={d} />
+            {frame && <PartMark id={id} />}
           </Group>
         </Box>
         {d.problems.length > 0 && <Tooltip label={d.problems.join('\n')} multiline w={320}><Badge color="red" size="sm" circle>{d.problems.length}</Badge></Tooltip>}
@@ -144,6 +158,7 @@ export function FrameNode({ id, data, selected }: NodeProps) {
           <Text fw={650} size="sm" lineClamp={1}>{d.label}</Text>
           <Text size="xs" c="dimmed" lineClamp={1}>{frameSays(d, c.lib)}</Text>
         </Box>
+        <PartMark id={id} />
         {d.problems.length > 0 && <Tooltip label={d.problems.join('\n')} multiline w={320}><Badge color="red" size="sm" circle>{d.problems.length}</Badge></Tooltip>}
       </Group>
     </Box>

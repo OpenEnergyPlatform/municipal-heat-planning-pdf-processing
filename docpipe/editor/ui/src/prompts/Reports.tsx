@@ -3,11 +3,19 @@
 import { Fragment, type ReactNode } from 'react';
 import { Accordion, Alert, Badge, Button, Code, Group, List, Loader, Stack, Text } from '@mantine/core';
 import { IconAlertTriangle, IconCircleCheck, IconInfoCircle } from '@tabler/icons-react';
-import { Diff, Muted } from '../components/Bits';
+import { Diff, Muted, Named } from '../components/Bits';
 import { isObj } from '../lib/util';
 import { rich, t, tn, tr } from '../lib/i18n';
 import { textOf, stampOf, type X } from './logic';
 import { actSave, reloadFromDisk } from './store';
+
+/* the settings of a prompt's head by their names in words (owner request 2026-11-19, A5); '' for another key */
+export function settingTitle(key: string): string {
+  const titles: Record<string, string> = {
+    temperature: t('Temperature of answers'), max_tokens: t('Longest answer'), template: t('Template of the contract text'),
+  };
+  return titles[key] || '';
+}
 
 /* a translated text with {names} left in it, each filled with a node: Put text={t('{key} now: {text}')} slots={{ key: <Code>..</Code>, text }} */
 export function Put({ text, slots }: { text: string; slots: Record<string, ReactNode> }) {
@@ -49,7 +57,7 @@ function PromptReport({ r }: { r: any }) {
       {r.creates && <Alert color="yellow" icon={<IconInfoCircle />}>{t('Saving writes a new file of this profile: {file}', { file: r.creates })}</Alert>}
       {r.changed === false && <Muted>{t('The text is the same as the file on disk.')}</Muted>}
       {r.size && <Muted>{t('The text that is sent: {before} → {after} characters.', { before: r.size.before, after: r.size.after })}</Muted>}
-      {meta.map(k => <Muted key={k}><Put text={t('Setting {key}: {before} → {after}')} slots={{ key: <Code>{k}</Code>, before: textOf(r.meta.before[k]), after: textOf(r.meta.after[k]) }} /></Muted>)}
+      {meta.map(k => <Muted key={k}><Put text={t('Setting {key}: {before} → {after}')} slots={{ key: <Named title={settingTitle(k)} k={k} size="xs" />, before: textOf(r.meta.before[k]), after: textOf(r.meta.after[k]) }} /></Muted>)}
       {r.sentences && (
         <Accordion variant="contained" defaultValue="s">
           <Accordion.Item value="s"><Accordion.Control>{t('Changes by text block')}</Accordion.Control><Accordion.Panel><Diff text={String(r.sentences)} /></Accordion.Panel></Accordion.Item>

@@ -13,7 +13,7 @@ export interface FieldInfo {
   name: string; label: string; kind: 'field' | 'dimension' | 'reading'; help?: string; of?: string[];
   example?: { value: string; document: string } | null;
 }
-export interface BrickSetting { key: string; kind: string; help: string; default: unknown }
+export interface BrickSetting { key: string; title?: string; kind: string; help: string; default: unknown }
 export interface BrickInfo {
   name: string; kind: string; does: string; takes: string; gives: string; per: string; writes: string; own: boolean;
   settings: BrickSetting[];

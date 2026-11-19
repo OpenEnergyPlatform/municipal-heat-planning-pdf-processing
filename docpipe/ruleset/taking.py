@@ -30,7 +30,8 @@ RULES = (
          "stays outside the number, so a quote backs a number of either "
          "sign, and \"1.155\" backs -1155 as well as 1155.", choices=("on", "off"),
          decided="2026-11-01", steps=CHECKED,
-         where="verify.py (numbers_in, _times_number)"),
+         where="verify.py (numbers_in, _times_number)",
+         title="Printed sign belongs to number"),
     rule("refused_keeps_quote", "spec", "What a quote must show", "choice",
          "Dropped: a value that does not survive its checks loses its "
          "quote and its source, and its state changes from read to not "
@@ -38,7 +39,8 @@ RULES = (
          "source that quote stands in where one was found, and its state "
          "still says it is not backed.",
          choices=("dropped", "kept"), decided="2026-09-12", steps=CHECKED,
-         where="verify.py (verify_tuple)"),
+         where="verify.py (verify_tuple)",
+         title="Quote of a refused value"),
     # -- spec: numbers and years ----------------------------------------------
     rule("thousands_spaces", "spec", "Numbers and years", "chars",
          "The spaces that group the thousands of a number, as in "
@@ -46,7 +48,8 @@ RULES = (
          "the plain space. A number written with one of them is read as "
          "one number. Remove a character and a number grouped with it is "
          "read as several. Empty: no space groups digits.", empty=True,
-         steps=CHECKED, where="verify.py (canonical_number, numbers_in)"),
+         steps=CHECKED, where="verify.py (canonical_number, numbers_in)",
+         title="Spaces that group thousands"),
     rule("year_as_digit_run", "spec", "Numbers and years", "switch",
          "On: a year must stand in its quote as a run of digits of its "
          "own, so that \"2.022 MWh\" does not back the year 2022, while a "
@@ -54,36 +57,41 @@ RULES = (
          "compared like every other number, with its thousands grouping "
          "read as a grouping.",
          decided="2026-09-23", steps=CHECKED, where="pipeline.py "
-         "(answer_in_quote)"),
+         "(answer_in_quote)",
+         title="Year as its own digits"),
     rule("number_axis_whole_only", "spec", "Numbers and years", "switch",
          "On: a number that answers a coordinate such as a year must be a "
          "whole number inside the range of years, and an answer such as "
          "\"2030-2045\" or 2045.5 is refused and asked again. Off: a "
          "number with decimals is accepted as it is; the range of years "
          "and the rule that the answer is a number still hold.",
-         steps=TAKING, where="pipeline.py (_wrong_type)"),
+         steps=TAKING, where="pipeline.py (_wrong_type)",
+         title="Year answers must be whole numbers"),
     rule("keep_unlisted_unit", "spec", "Numbers and years", "choice",
          "A number whose unit is no entry of the field's list is not "
-         "refused: it stays read with the unit as the plan prints it and "
-         "without a converted value, and it is flagged. This is the only "
-         "way that exists for now.",
+         "refused: it stays read with the unit as the document prints it and "
+         "without a converted value, and it is flagged. This is the only way "
+         "that exists for now.",
          choices=("kept",), decided="2026-11-07", steps=TAKING,
-         where="verify.py (_check_value), pipeline.py (printed_only)"),
+         where="verify.py (_check_value), pipeline.py (printed_only)",
+         title="Keep numbers with unlisted units"),
     rule("flag_missing_period", "spec", "Numbers and years", "switch",
          "On: a number of a field that is an amount over a time span, "
          "whose unit names no time span, is flagged as having no period. "
          "The value is read either way. Off: no flag is set.",
-         steps=CHECKED, where="verify.py (verify_tuple)"),
+         steps=CHECKED, where="verify.py (verify_tuple)",
+         title="Flag a missing period"),
     rule("plan_year_states", "spec", "Numbers and years", "texts",
-         "The states of a plan that a word such as \"Basisjahr\" or "
+         "The states of a document that a word such as \"Basisjahr\" or "
          "\"Zieljahr\" may mean, in the order their years are shown to the "
-         "model and matched: base is the plan's own state and target is "
+         "model and matched: base is the document's own state and target is "
          "its target scenario. A year that both states carry stands under "
-         "each and is cited from the first. Remove a state and its years "
-         "are not offered.",
+         "each and is cited from the first. Remove a state and its years are "
+         "not offered.",
          choices=("base", "target"), empty=True,
          decided="2026-09-22, 2026-10-06", steps=TAKING,
-         where="pipeline.py (named_years)"),
+         where="pipeline.py (named_years)",
+         title="States a document's word may mean"),
     # -- spec: lists and wording ----------------------------------------------
     rule("outside_list", "spec", "Lists and wording", "choice",
          "What an answer to a closed list does that is none of its "
@@ -95,46 +103,53 @@ RULES = (
          "graph knows the kind, such as regions.",
          choices=("ask_again", "keep"), decided="2026-09-11",
          steps=TAKING, where="pipeline.py (merge_field), addressed.py "
-         "(_finds)"),
+         "(_finds)",
+         title="Answer outside a closed list"),
     rule("answer_in_quote_spellings", "spec", "Lists and wording", "switch",
          "On: where an answer gives no wording, a choice is looked for in "
          "its quote under its name and under every spelling the spec "
          "lists for it. Off: only its name is looked for.", decided="2026-09-13", steps=CHECKED,
-         where="pipeline.py (answer_in_quote)"),
+         where="pipeline.py (answer_in_quote)",
+         title="Find entries by spellings"),
     rule("longest_entry_wins", "spec", "Lists and wording", "switch",
          "On: an entry of a list is backed only where no longer entry of "
          "the same list stands at the same place, so that \"MWh\" in "
          "\"MWh/a\" backs the second one only. Off: a shorter entry is "
          "backed wherever its letters stand.",
          decided="2026-09-23", steps=CHECKED,
-         where="pipeline.py (stands_in)"),
+         where="pipeline.py (stands_in)",
+         title="The longest entry wins"),
     rule("mark_foreign_wording", "spec", "Lists and wording", "switch",
          "On: a wording that does not name the chosen entry in whole words "
          "is counted and the row is marked with it; the value stays read. "
          "Off: wordings are not compared with the chosen entry, and no row "
          "is marked.", decided="2026-09-13",
-         steps=TAKING, where="pipeline.py (merge_field)"),
+         steps=TAKING, where="pipeline.py (merge_field)",
+         title="Mark a foreign wording"),
     rule("entry_once_per_wording", "spec", "Lists and wording", "switch",
          "On: the entry of a list that a wording means is asked once for "
          "each document, field, dimension and wording, and every place the "
          "wording stands in takes that answer. Off: it is asked again for "
          "every place the wording stands in, so two places of one wording "
          "may get two entries and each is a request.", decided="2026-11-08, 2026-11-09",
-         steps=LISTED, where="addressed.py (entry)"),
+         steps=LISTED, where="addressed.py (entry)",
+         title="Ask an entry once per wording"),
     rule("list_shows_earlier", "spec", "Lists and wording", "switch",
          "Off: the question that asks an entry of a list shows the list "
          "and the words, and never the wordings it settled before. On: it "
          "also shows the wordings of this document already settled for the "
          "same list, each with its entry, so the model answers alike for "
          "alike wordings; an earlier answer may then steer later ones.", decided="2026-11-09", steps=LISTED,
-         where="addressed.py (_entry)"),
+         where="addressed.py (_entry)",
+         title="Show earlier wordings with the list"),
     rule("name_may_be_none", "spec", "Lists and wording", "switch",
          "On: the question that asks which entry of the document's list a "
          "name means may answer 0, none, and the name then has no entry. "
          "Off: 0 counts as an answer outside the list, so the question is "
          "asked again with its reason.",
          decided="2026-11-09", steps=LISTED + ("works",),
-         where="addressed.py (_name_picks)"),
+         where="addressed.py (_name_picks)",
+         title="A name may mean no entry"),
     rule("work_without_line", "spec", "Lists and wording", "switch",
          "Off: a value takes the work of the line it stands in only where "
          "a line names that work, and otherwise asks for its work. On: a "
@@ -142,7 +157,8 @@ RULES = (
          "publication where the piece names none, with the value's own "
          "line as its quote; a piece that names two works leaves the value "
          "to ask.", decided="2026-11-09",
-         steps=("work_coordinate",), where="addressed.py (inherit_work)"),
+         steps=("work_coordinate",), where="addressed.py (inherit_work)",
+         title="Take the chunk's only work"),
     # -- spec: defaults where the spec says nothing ---------------------------
     rule("derive_from_unit", "spec", "Defaults where the spec says nothing",
          "choice",
@@ -154,7 +170,8 @@ RULES = (
          "stays open.",
          choices=("ask_first_then_derive", "ask_only"),
          decided="2026-11-07", steps=TAKING + ("state",),
-         where="fields.py (derives)"),
+         where="fields.py (derives)",
+         title="How a derived dimension is read"),
     rule("parameter_from_unit", "spec", "Defaults where the spec says "
                                          "nothing", "switch",
          "On: where exactly one field accepts the unit of a number, the "
@@ -162,7 +179,8 @@ RULES = (
          "coordinate is not asked; a wording belongs to the one text "
          "field. Off: the field of every number is asked.", decided="2026-11-05",
          steps=TAKING + ("state", "classify", "derive"),
-         where="fields.py (derive_parameter, parameter_undecidable)"),
+         where="fields.py (derive_parameter, parameter_undecidable)",
+         title="The unit alone decides the field"),
     # -- flow: reading from the quote -----------------------------------------
     rule("unstated_needs_no_quote", "flow", "Reading from the quote",
          "switch",
@@ -172,7 +190,8 @@ RULES = (
          "noticed is kept beside it. Off: \"not stated\" must cite a "
          "shown line like any other answer, and without one it is not "
          "backed.", decided="2026-11-06",
-         steps=TAKING, where="pipeline.py (merge_field)"),
+         steps=TAKING, where="pipeline.py (merge_field)",
+         title="\"Not stated\" needs no quote"),
     rule("reading_wins", "flow", "Reading from the quote", "choice",
          "Which answer a coordinate keeps when a later request answers it "
          "again after it was read and backed. First: the first backed "
@@ -180,13 +199,15 @@ RULES = (
          "takes its place, and one that is not backed changes nothing. "
          "Keeping both is not available.",
          choices=("first", "later_backed"), steps=TAKING,
-         where="pipeline.py (merge_field)"),
+         where="pipeline.py (merge_field)",
+         title="Which answer stays"),
     rule("check_accepts", "flow", "Reading from the quote", "choice",
          "What an own check of the flow may do. It adds refusals to the "
          "fixed checks and never accepts what they refuse. Accepting "
          "what the fixed checks refuse is not available.",
          choices=("only_refuses",), steps=TAKING, where="engine.py "
-         "(own_checks)"),
+         "(own_checks)",
+         title="What an own check may do"),
     # -- flow: reading from images --------------------------------------------
     rule("read_off_figures", "flow", "Reading from images", "switch",
          "On: a number that a figure only draws, as a bar or a point of a "
@@ -194,7 +215,8 @@ RULES = (
          "the sentence of what was read is its evidence; the value is an "
          "estimate. Off: such a number needs its quote like any other.",
          decided="2026-11-05, 2026-11-07", steps=TAKING,
-         where="verify.py (read_off)"),
+         where="verify.py (read_off)",
+         title="Read numbers off figures"),
     # -- flow: calculation ----------------------------------------------------
     rule("computed_from_inputs", "flow", "Calculation", "choice",
          "On: a calculated number counts only where it follows from the "
@@ -203,7 +225,8 @@ RULES = (
          "when the code printed it and its quote shows its inputs, "
          "whether or not the inputs make it.",
          choices=("on", "off"), decided="2026-11-03", steps=CHECKED,
-         where="verify.py (computed_from_inputs)"),
+         where="verify.py (computed_from_inputs)",
+         title="Calculated numbers must follow inputs"),
     rule("computed_rounding_half_units", "flow", "Calculation", "number",
          "How far a calculated number may lie from what its inputs make, "
          "as a share of the unit of its last printed place: 0.5 is half "
@@ -211,24 +234,28 @@ RULES = (
          "116.15. A larger share accepts more. 0 accepts only equal "
          "numbers, apart from the floating point noise.", least=0,
          decided="2026-11-03", steps=CHECKED,
-         where="verify.py (printed_rounding)"),
+         where="verify.py (printed_rounding)",
+         title="Rounding tolerance of a calculated number"),
     rule("computed_float_noise", "flow", "Calculation", "number",
          "The share of the larger number that two calculated numbers may "
          "differ by because a computer adds the same parts in another "
          "order. It is added to the rounding of the printed places.",
          least=0, decided="2026-11-03", steps=CHECKED,
-         where="verify.py (computed_from_inputs)"),
+         where="verify.py (computed_from_inputs)",
+         title="Tolerance for computer arithmetic noise"),
     rule("compute_used_if_none", "flow", "Calculation", "choice",
          "Which numbers a calculated row names as its inputs when the "
          "model names none. All: every number the question showed. None: "
          "no number, and the row has no inputs to stand on.", choices=("all", "none"), decided="2026-11-03",
-         steps=("compute",), where="compute.py (used_numbers)"),
+         steps=("compute",), where="compute.py (used_numbers)",
+         title="Inputs when the model names none"),
     # -- flow: search ---------------------------------------------------------
     rule("fetch_next", "flow", "Search", "whole",
          "How many sections an ask for the next or the previous section "
-         "brings in one go. A larger number shows more text of the plan "
+         "brings in one go. A larger number shows more text of the document "
          "per ask.", least=1, steps=("search", "compute"),
-         where="lookup.py (fetch_run)"),
+         where="lookup.py (fetch_run)",
+         title="Sections per next or previous request"),
     # -- flow: chunks ---------------------------------------------------------
     rule("table_continues_pages", "flow", "Chunks", "whole",
          "How many pages back a table that has lost its head may look for "
@@ -236,12 +263,14 @@ RULES = (
          "or up to this many pages after a table with a head is marked as "
          "its continuation, and inherits its title, head and unit. 0: "
          "only a table on the same page.", least=0, decided="2026-11-06, 2026-11-07",
-         steps=("split", "document"), where="lookup.py (continued)"),
+         steps=("split", "document"), where="lookup.py (continued)",
+         title="Pages back to a table head"),
     # -- flow: documents ------------------------------------------------------
     rule("trace_quote_chars", "flow", "Documents", "whole",
          "The most characters of the quote of a refused answer that the "
          "log's schema allows. A longer quote is not valid for the schema.",
-         least=1, steps=WRITING, where="schema.py (build)"),
+         least=1, steps=WRITING, where="schema.py (build)",
+         title="Longest quote in the log"),
     rule("found_stale_fallback", "flow", "Documents", "choice",
          "What a run that starts at the places an earlier harvest found "
          "does when the document no longer holds one of them. Plan in "
@@ -249,7 +278,8 @@ RULES = (
          "the document fails with the reason. A harvest without a stamp "
          "is never read.",
          choices=("plan_in_full", "stop"), decided="2026-11-02",
-         where="found.py (_read)"),
+         where="found.py (_read)",
+         title="When a found place is gone"),
     rule("stale_keys", "flow", "Documents", "texts",
          "Which questions of the spec decide that a stored harvest is out "
          "of date: a field, a coordinate, the list of a field, the question "
@@ -259,7 +289,8 @@ RULES = (
          "document stale.",
          choices=("parameter", "axis", "value", "parameter_slot",
                   "unit_slot"), empty=True,
-         steps=("classify", "write"), where="spec.py (fingerprints)"),
+         steps=("classify", "write"), where="spec.py (fingerprints)",
+         title="Questions that make a harvest stale"),
     rule("route_claims_by", "flow", "Documents", "choice",
          "How a combined answer for several passages is sorted into its "
          "passages. Quote first: the passage that holds the quote gets "
@@ -267,7 +298,8 @@ RULES = (
          "several do. Label first: the passage the model named gets the "
          "claim whenever the name is real.",
          choices=("quote_first", "label_first"), decided="2026-11-05",
-         where="pipeline.py (route_claims)"),
+         where="pipeline.py (route_claims)",
+         title="How a combined answer is sorted"),
     # -- flow: states ---------------------------------------------------------
     rule("state_rules", "flow", "States", "map",
          "The state a coordinate or a field ends in, for each case: "
@@ -294,25 +326,29 @@ RULES = (
          "out_of_slice.", of="text", steps=TAKING + ("each value", "state"),
          decided="2026-11-19",
          where="pipeline.py, trust.py (parameter_states), verify.py, "
-               "engine.py (box_state)"),
+               "engine.py (box_state)",
+         title="State for each case"),
     # -- flow: writing --------------------------------------------------------
     rule("drop_repeats", "flow", "Writing", "switch",
          "On: a row that is the same as another row of its document, "
          "except for the parts named in the rule for repeats, is written "
          "once, and the first one is kept. Off: every row is written, "
          "also a repeated one.", steps=WRITING,
-         where="pipeline.py (drop_repeats)"),
+         where="pipeline.py (drop_repeats)",
+         title="Write repeated rows once"),
     rule("repeat_key", "flow", "Writing", "texts",
          "The parts of a row that are left out when two rows are compared "
          "to find a repeat. Everything else of the row must be equal. The "
          "place a row was read from is left out, because it says how the "
          "row was found and not what it says.", empty=True,
-         steps=WRITING, where="pipeline.py (repeat_key)"),
+         steps=WRITING, where="pipeline.py (repeat_key)",
+         title="Parts ignored when finding repeats"),
     rule("write_checks_schema", "flow", "Writing", "switch",
          "On: every row a document writes is held against the published "
          "schema, and a row the schema refuses is counted and logged; it "
          "is written all the same. Off: the check is not made.",
-         steps=WRITING, where="runner.py (check_against_schema)"),
+         steps=WRITING, where="runner.py (check_against_schema)",
+         title="Check every row against the schema"),
     # -- graph: trust ---------------------------------------------------------
     rule("trust_reason_levels", "graph", "Trust", "map",
          "The reasons a value is not trusted fully, each with the level "
@@ -325,13 +361,15 @@ RULES = (
          "C. The same table is read when the harvest is written and when "
          "the graph is.",
          of="text", decided="2026-11-02, 2026-11-04, 2026-11-07",
-         steps=TRUSTING, where="trust.py (trust, reasons)"),
+         steps=TRUSTING, where="trust.py (trust, reasons)",
+         title="Level each distrust reason gives"),
     rule("trust_image_cap", "graph", "Trust", "choice",
          "The best level a value can have that comes out of a table or "
          "figure transcribed by a model, or out of a document whose pages "
          "had no text and were transcribed. A is no limit.",
          choices=("A", "B", "C", "D"), steps=TRUSTING,
-         where="trust.py (trust)"),
+         where="trust.py (trust)",
+         title="Best level of a model-transcribed value"),
     rule("review_levels", "graph", "Trust", "texts",
          "The trust levels whose values are looked at again: such a value "
          "gets the line \"review\" in the graph's comment, and the second "
@@ -340,12 +378,14 @@ RULES = (
          "needed no repair has nothing for a narrower window to find.",
          choices=("A", "B", "C", "D"), empty=True,
          steps=("write", "review"),
-         where="trust.py (marks), review.py (rows_to_review)"),
+         where="trust.py (marks), review.py (rows_to_review)",
+         title="Levels looked at again"),
     rule("evidence_tiers", "graph", "Trust", "map",
          "How well a place of the document backs a value, by the kind of "
          "the place. Text located: the document's own prose, which the "
          "value can be shown highlighted in. Visual source: a table, a "
          "caption or a figure's description, which a model read from a "
          "picture. A kind that is not listed counts as a visual source.",
-         of="text", steps=CHECKED, where="verify.py (verify_tuple)"),
+         of="text", steps=CHECKED, where="verify.py (verify_tuple)",
+         title="Backing strength per kind of place"),
 )

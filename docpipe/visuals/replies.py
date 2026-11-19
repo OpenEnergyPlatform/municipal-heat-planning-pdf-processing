@@ -38,3 +38,14 @@ PAGE = ("page_reply", {
     "type": "object",
     "properties": {"markdown": TEXT},
     "required": ["markdown"], "additionalProperties": False})
+
+# The prompts each kind of request of this stage is made of, as its request
+# log names them (`process._traced`, `made`): which requests of a log the
+# editor lists under a prompt (owner request 2026-11-19, A3).
+REQUESTS = {
+    "table": ("visuals/table_system", "visuals/table_user",
+              "visuals/table_continued", "visuals/table_retry_hint",
+              "visuals/caption_keep", "visuals/caption_generate_table"),
+    "figure": ("visuals/figure_system", "visuals/figure_user",
+               "visuals/caption_keep", "visuals/caption_generate_figure"),
+}

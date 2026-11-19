@@ -100,7 +100,8 @@ steady gain on number questions) the chat model is asked once for each table and
 figure, after the merge, for one sentence that says what it is about, in which
 unit, for which area, scenario and years, as far as its caption, its head and
 the heading of its section say it (`docpipe/chunking/context.py`, prompt
-`visuals/context_sentence`). The request shows the kind, the section heading, the
+`visuals/context_sentence`; the sentence for a piece the model gave no context
+sentence is the prompt `visuals/context_sentence_empty`). The request shows the kind, the section heading, the
 caption and the whole text, the table's markdown or the figure's description. A
 request over the window of the chat model is asked in parts, each with the caption,
 the heading and the table's head, every row in exactly one part. The embedding

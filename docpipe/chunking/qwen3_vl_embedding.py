@@ -22,10 +22,8 @@ from transformers.utils import TransformersKwargs
 from transformers.cache_utils import Cache
 from qwen_vl_utils.vision_process import process_vision_info
 
-from docpipe import usage
-from docpipe.embedding.config import (EMBEDDING_MAX_TOKEN_LENGTH,
-                                      IMAGE_FACTOR,
-                                      IMAGE_MAX_PIXELS as MAX_PIXELS)
+from docpipe import rules, usage
+from docpipe.embedding.config import EMBEDDING_MAX_TOKEN_LENGTH, IMAGE_FACTOR
 
 logger = logging.getLogger(__name__)
 
@@ -172,12 +170,12 @@ class Qwen3VLEmbedder:
         model_name_or_path: str,
         max_length: int = EMBEDDING_MAX_TOKEN_LENGTH,
         min_pixels: int = MIN_PIXELS,
-        max_pixels: int = MAX_PIXELS,
+        max_pixels: Optional[int] = None,
         total_pixels: int = MAX_TOTAL_PIXELS,
         fps: float = FPS,
         num_frames: int = MAX_FRAMES,
         max_frames: int = MAX_FRAMES,
-        default_instruction: str = "Represent the user's input.",
+        default_instruction: Optional[str] = None,
         device: Optional[Union[str, torch.device]] = None,
         torch_dtype: Optional[torch.dtype] = None,
         **kwargs
@@ -190,12 +188,17 @@ class Qwen3VLEmbedder:
 
         self.max_length = max_length
         self.min_pixels = min_pixels
-        self.max_pixels = max_pixels
+        # The rules embed_picture_max_pixels and embed_instruction where not
+        # given.
+        self.max_pixels = (int(rules.get("embed_picture_max_pixels"))
+                           if max_pixels is None else max_pixels)
         self.total_pixels = total_pixels
         self.fps = fps
         self.num_frames = num_frames
         self.max_frames = max_frames
-        self.default_instruction = default_instruction
+        self.default_instruction = (rules.get("embed_instruction")
+                                    if default_instruction is None
+                                    else default_instruction)
         self.model_name = model_name_or_path
 
         if torch_dtype is None:

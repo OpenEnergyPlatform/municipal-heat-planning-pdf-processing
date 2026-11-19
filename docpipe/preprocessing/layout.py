@@ -29,15 +29,12 @@ from pathlib import Path
 import fitz
 from PIL import Image
 
+from .. import rules
 from .config import (
     DIR_IMAGES,
     LAYOUT_BATCH_SIZE,
-    LAYOUT_DETECT_DPI,
     LAYOUT_PREFETCH_BATCHES,
     LAYOUT_RENDER_PROCS,
-    PAGE_RENDER_DPI,
-    SECTION_TITLE_CLASSES,
-    NMS_OVERLAP_THRESHOLD,
 )
 from .models import PageData
 from .rendering import FITZ_LOCK, render_page_to_pil, as_image
@@ -109,6 +106,7 @@ def _process_batch(rendered: list, dets_per_page: list, same_dpi: bool,
     *page_by_number* and hands its crops to *writer*; returns one future per
     crop, true once the crop is written."""
     futures = []
+    crop_dpi = rules.get("crop_render_dpi")
     for (pg, fp, det_img, rendered_crop), dets in zip(rendered, dets_per_page):
         try:
             if same_dpi:
@@ -117,7 +115,7 @@ def _process_batch(rendered: list, dets_per_page: list, same_dpi: bool,
                 crop_img = rendered_crop
             else:
                 with FITZ_LOCK:      # the prefetch thread is rendering too
-                    crop_img = render_page_to_pil(fp, PAGE_RENDER_DPI)
+                    crop_img = render_page_to_pil(fp, crop_dpi)
             updated_pg, crop_jobs = layout_blocks.process_page(
                 pg, fp, det_img.width, det_img.height, crop_img, dets, images_dir,
                 footnotes,
@@ -155,11 +153,17 @@ def detect_layout_all_pages(
             f"{len(fitz_pages)} fitz pages"
         )
 
-    same_dpi = LAYOUT_DETECT_DPI == PAGE_RENDER_DPI
+    # The rules are read here, once, in this thread: the prefetch thread
+    # that renders ahead uses the values below.
+    detect_dpi = rules.get("layout_detect_dpi")
+    crop_dpi = rules.get("crop_render_dpi")
+    heading_classes = set(rules.get("heading_classes"))
+    failed_allowed = rules.get("layout_failed_batches_allowed")
+    same_dpi = detect_dpi == crop_dpi
     log.info(
         f"Stage 2: PP-DocLayoutV3 – {len(pages)} pages | batch {LAYOUT_BATCH_SIZE} | "
-        f"detect DPI {LAYOUT_DETECT_DPI} | crop DPI {PAGE_RENDER_DPI} | "
-        f"NMS {NMS_OVERLAP_THRESHOLD} | render processes {LAYOUT_RENDER_PROCS}"
+        f"detect DPI {detect_dpi} | crop DPI {crop_dpi} | "
+        f"NMS {rules.get('layout_overlap_limit')} | render processes {LAYOUT_RENDER_PROCS}"
     )
 
     page_by_number: dict[int, PageData] = {pg.page_number: pg for pg in pages}
@@ -187,7 +191,7 @@ def detect_layout_all_pages(
         for pg, fp in zip(chunk_pages, chunk_fitz):
             try:
                 with FITZ_LOCK:
-                    image = render_page_to_pil(fp, LAYOUT_DETECT_DPI)
+                    image = render_page_to_pil(fp, detect_dpi)
                 rendered.append((pg, fp, image, None))
             except Exception as e:
                 log.error(f"Page {pg.page_number}: render failed, skipping detection: {e}")
@@ -199,8 +203,8 @@ def detect_layout_all_pages(
         path = fitz_pages[0].parent.name
         if not path:
             raise ValueError("Stage 2: the document has no path to render from")
-        dpis = ((LAYOUT_DETECT_DPI,) if same_dpi
-                else (LAYOUT_DETECT_DPI, PAGE_RENDER_DPI))
+        dpis = ((detect_dpi,) if same_dpi
+                else (detect_dpi, crop_dpi))
         spans = [(b * LAYOUT_BATCH_SIZE, min((b + 1) * LAYOUT_BATCH_SIZE, n))
                  for b in range(n_batches)]
         got = rendering.batches(
@@ -212,8 +216,8 @@ def detect_layout_all_pages(
                 if isinstance(res, str):
                     log.error(f"Page {pg.page_number}: render failed, skipping detection: {res}")
                     continue
-                crop = None if same_dpi else as_image(res[PAGE_RENDER_DPI])
-                rendered.append((pg, fp, as_image(res[LAYOUT_DETECT_DPI]), crop))
+                crop = None if same_dpi else as_image(res[crop_dpi])
+                rendered.append((pg, fp, as_image(res[detect_dpi]), crop))
             yield b_idx, pages[s:e], rendered
 
     def with_inputs(batch):
@@ -285,7 +289,7 @@ def detect_layout_all_pages(
     total_tables = sum(sum(1 for b in pg.blocks if b.type == "table") for pg in updated_pages)
     total_images = sum(sum(1 for b in pg.blocks if b.type == "image") for pg in updated_pages)
     total_titles = sum(
-        sum(1 for b in pg.blocks if b.layout_label in SECTION_TITLE_CLASSES)
+        sum(1 for b in pg.blocks if b.layout_label in heading_classes)
         for pg in updated_pages
     )
     log.info(
@@ -298,7 +302,7 @@ def detect_layout_all_pages(
     # on to be cached, sectioned and embedded, and would look complete
     # everywhere downstream. Refuse it instead — the caller drops the document
     # and the next run retries it.
-    if failed_batches:
+    if len(failed_batches) > failed_allowed:
         raise LayoutDetectionFailed(
             "%d of %d batches failed (%s); %d page(s) have no layout"
             % (len(failed_batches), n_batches,

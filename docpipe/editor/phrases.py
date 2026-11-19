@@ -54,6 +54,12 @@ def stage_of(module: str):
     if module == "reading":
         from .. import reading
         return reading
+    if module == "chat":
+        # the words a person reads in the app (owner request 2026-11-19, A2)
+        from types import SimpleNamespace
+        from ..inference import wording
+        return SimpleNamespace(REQUIRED=wording.CHAT_REQUIRED,
+                               NOTES=wording.CHAT_NOTES)
     raise KeyError(f"no module {module!r} speaks outside its prompts; one "
                    f"of {phrase_files.MODULES}")
 

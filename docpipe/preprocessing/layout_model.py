@@ -15,21 +15,21 @@ from dataclasses import dataclass
 
 import torch
 
+from .. import rules
 from .config import (
     LAYOUT_AUTOCAST,
-    PP_CLASS_THRESHOLDS,
     PP_DOCLAYOUT_MODEL_ID,
-    PP_GLOBAL_MIN_CONF,
     PP_ID2LABEL,
-    TABLE_CLASSES,
-    IMAGE_CLASSES,
-    NMS_OVERLAP_THRESHOLD,
 )
 
 log = logging.getLogger(__name__)
 
-# Classes whose detections produce a saved crop.
-MEDIA_LABELS = TABLE_CLASSES | IMAGE_CLASSES
+
+def media_labels() -> frozenset:
+    """The classes whose detections produce a saved crop: the tables and
+    the figures of the rules."""
+    return frozenset(rules.get("table_classes")) \
+        | frozenset(rules.get("figure_classes"))
 
 
 def load_model():
@@ -148,7 +148,8 @@ def _suppress_cross_class_media(
     """
     if iou_threshold >= 1.0:
         return detections
-    media = [d for d in detections if d.label in MEDIA_LABELS]
+    labels = media_labels()
+    media = [d for d in detections if d.label in labels]
     if len(media) < 2:
         return detections
 
@@ -281,15 +282,20 @@ def infer_batch(
         device="cpu",
     )
     per_image: list[list[Detection]] = []
-    for scores, labels, boxes in kept_detections(outputs, target_sizes,
-                                                  PP_GLOBAL_MIN_CONF):
+    # Read once for the batch: the confidence of each kind, keyed by the
+    # kind's name (the model's label of the class).
+    class_scores = rules.get("layout_class_min_scores")
+    default_score = rules.get("layout_default_min_score")
+    overlap = rules.get("layout_overlap_limit")
+    for scores, labels, boxes in kept_detections(
+            outputs, target_sizes, rules.get("layout_min_score")):
         dets: list[Detection] = []
         for score, lid, box in zip(scores, labels, boxes):
             lid   = int(lid)
             score = float(score)
             label = PP_ID2LABEL.get(lid, "unknown")
 
-            if score < PP_CLASS_THRESHOLDS.get(lid, 0.4):
+            if score < class_scores.get(label, default_score):
                 continue
 
             dets.append(Detection(
@@ -299,8 +305,8 @@ def infer_batch(
                 bbox_px=[float(v) for v in box],
             ))
 
-        dets = _apply_nms(dets, NMS_OVERLAP_THRESHOLD)
-        dets = _suppress_cross_class_media(dets, NMS_OVERLAP_THRESHOLD)
+        dets = _apply_nms(dets, overlap)
+        dets = _suppress_cross_class_media(dets, overlap)
         per_image.append(dets)
 
     return per_image

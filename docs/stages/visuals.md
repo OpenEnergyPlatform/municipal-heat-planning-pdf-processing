@@ -62,11 +62,11 @@ it.
 input path is given, and, on `--print-context-budget`, prints
 `max_request_tokens()` and exits early: the longer, by word count, of the
 two requests' prompts, system and user (the table's with the continuation
-prompt), times `TOKENS_PER_WORD`, plus the texts they show, whole, counted in UTF-8
+prompt), times the rule `vision_tokens_per_word`, plus the texts they show, whole, counted in UTF-8
 bytes (`config.shown_bytes`; the longest section text, between-text and table head of the
 documents the run reads, `config.longest_shown` and `config.longest_in`; a byte
 bounds a token from above),
-plus `IMAGE_TOKENS` for a full-page crop, plus `VLM_MAX_TOKENS` for the one reply, all over-estimated.
+plus `IMAGE_TOKENS` for a full-page crop, plus the rule `vision_max_tokens` for the one reply, all over-estimated.
 No second reply is counted. The job scripts derive `--max-model-len` from it. `assert_serving` keeps the window the server reported
 (`llm_preflight.served_window`, role `vlm`), and what it holds beyond this
 budget is what a reply that was cut off is asked once more with (see The vision
@@ -125,26 +125,26 @@ without content.
 ### Transcribing a table and its QA gate
 
 `process_table` fills `table_user_prompt()` and calls `call_vision` at
-`TABLE_VLM_TEMPERATURE`. The Markdown returned passes through `qa.assess`,
+the rule `table_temperature`. The Markdown returned passes through `qa.assess`,
 which fails a table with no data rows, duplicate rows over
-`TABLE_QA_MAX_DUPLICATION`, or coverage, when assessable, below
-`TABLE_QA_MIN_COVERAGE`. Coverage is the share of the source text's salient
-tokens, numbers and words of two or more letters, also found in the Markdown
+the rule `table_max_duplication`, or coverage, when assessable, below
+the rule `table_min_coverage`. Coverage is the share of the source text's salient
+tokens, numbers and words of `qa_token_min_letters` or more letters, also found in the Markdown
 (`qa.coverage`); it is `None`, reported as unknown rather than a pass, when
-the source has fewer than `TABLE_QA_MIN_SOURCE_TOKENS` salient tokens (an
+the source has fewer than `table_min_source_tokens` salient tokens (an
 image-only table with no PyMuPDF text layer). It is also `None` where the PDF text in
 the table's frame cannot be read as the table (`qa.unreadable`): coverage
-fell below `TABLE_QA_MIN_COVERAGE`, less than `TABLE_QA_MAX_SHARED_UNREADABLE`
+fell below `table_min_coverage`, less than `table_unreadable_shared_below`
 of the transcription's salient tokens stand in that text, and less than
-`TABLE_QA_MIN_KNOWN_WORDS` of its words (three letters or more) occur in the
+`table_unreadable_known_below` of its words (`qa_word_min_letters` letters or more) occur in the
 document's section titles and texts (`_document_words`). The case is a scanned
 book whose OCR layer reads a sideways table upside down ("Ayjiqixayy" for
 "flexibility"). The table then passes or fails on rows and duplication alone,
-and `qa.source_unreadable` is true. A gate failure triggers exactly one retry, with a correction hint, higher
-temperature and penalty; a pass beats a fail, otherwise the
+and `qa.source_unreadable` is true. A gate failure triggers `table_qa_retries` retries (one by default), each with a correction hint (the prompt `visuals/table_retry_hint`), higher
+temperature and penalty (`table_retry_temperature`, `table_retry_penalty`); a pass beats a fail, otherwise the
 higher-coverage attempt is kept, and an unassessable coverage never
 displaces the first attempt. Only a table still failing the retry has its consecutive duplicate
-rows collapsed (`qa.dedup_consecutive_rows`); a passing table keeps them,
+rows collapsed (`qa.dedup_consecutive_rows`, while the rule `collapse_stutter_rows` is on); a passing table keeps them,
 since a real table can legitimately repeat a row. An existing caption is
 copied through unchanged; one is generated only where none existed and the
 model returned one.
@@ -200,7 +200,7 @@ current predecessor is asked again. The count of such tables is
 ### Describing a figure
 
 `process_figure` fills `figure_user_prompt()` and calls `call_vision` at the
-default `VLM_TEMPERATURE`, higher than a table's, since some paraphrase is
+default, the rule `figure_temperature`, higher than a table's, since some paraphrase is
 acceptable where a transcription must be verbatim. There is no QA gate for
 a figure: no text layer exists to check a description's coverage against.
 
@@ -247,7 +247,7 @@ for the item's schema: a list where the schema holds an array, else text
 closed or salvaged, and no second request without a schema fills in for a
 reply that could not be read.
 
-A reply that is not that object is asked again, up to `MAX_RETRIES` attempts
+A reply that is not that object is asked again, up to the rule `vision_max_attempts` attempts
 in all: the failed answer is echoed back whole as the model's own turn, with the
 cause named in the profile's words (`prompts/reading/phrases.json`; the place and
 the message only, as the reply is in the request once) and the shape that was
@@ -264,8 +264,8 @@ asked again as it stands, and the model is not told its answer was too long:
 that would re-run the same loop. The usual cause is a sparse schedule grid,
 where the model loses count of its empty cells and keeps emitting them until
 the limit. An image has no halves, so the request starts over from the
-original prompt with more room and the next step of `RETRY_PENALTIES`. The token
-limit of that attempt is the smaller of twice `max_tokens` (`VLM_MAX_TOKENS` for
+original prompt with more room and the next step of the rule `vision_retry_penalties`. The token
+limit of that attempt is the smaller of twice `max_tokens` (`vision_max_tokens` for
 a table or a figure) and `max_tokens` plus what the served window holds beyond
 the stage's budget: `min(2 x max_tokens, max_tokens + window - budget)`, in
 tokens (`llm_preflight.further_room`). The budget is the `budget` that
@@ -328,6 +328,24 @@ directory's exception without stopping the rest; total in-flight requests
 can reach roughly `DOC_PARALLEL` times `VLM_NUM_PARALLEL` (`pipeline.py`'s
 comment on `DOC_PARALLEL`).
 
+## The request log
+
+The stage writes a request log for each document, `visuals.trace.jsonl.gz` in
+the document's folder, in the line form of the harvest's trace: one event per
+line, each request as sent with what came back, a repeated text as a piece
+(`trace.open_stage`, `trace.stage_request`; the rule `trace_on` switches it).
+Its events name the document by its folder, and their kinds are the stage's
+own (`table_ask`, `figure_ask`): the trace record schema
+(`schema.trace_schema`) describes the harvest's events, not these. Its
+head names the stage, the code, the profile, the model and the text of every
+prompt as the run read it (`trace.stage_head`), and each request names what its
+messages are made of (`made`: the prompt files and the values that filled them,
+`prompts.composed`, `prompts.values_in`). A picture is logged as the file it was
+cut from (`vision.logged`) and, for a table read in strips, the strip
+(`strips.strip_of`), so that a request can be sent again from the document's
+folder. The editor's Prompts tab previews and tries these requests (see
+[the editor](editor.md)).
+
 ## Data model
 
 | file | written by | shape |
@@ -378,14 +396,14 @@ partial, tested shape rather than objects the code builds.
 | `VLM_TIMEOUT` | env var, seconds | `180` | wall-clock bound on one request | `config.py` |
 | `VLM_NUM_PARALLEL` | env var | `8` | items enriched concurrently per document | `config.py`, `pipeline.py` |
 | `DOC_PARALLEL` | env var | `8` | documents enriched concurrently, `--batch` | `pipeline.py` |
-| `MAX_RETRIES` | constant | `4` | attempts at one request, a re-ask after an unreadable reply included | `config.py` |
-| `VLM_TEMPERATURE` / `TABLE_VLM_TEMPERATURE` | constant | `0.6` / `0.1` | sampling temperature, figure / table | `config.py` |
-| `VLM_MAX_TOKENS` | constant | `8192` | reply token budget; a reply cut off at it is asked once more with more room, and the context budget counts one reply of this size | `config.py` |
-| `RETRY_PENALTIES` | constant | `[None, 1.1, 1.3]` | penalty after the indexed attempt failed (a timeout, or a reply cut off) | `config.py` |
-| `TABLE_QA_MIN_COVERAGE`/`MAX_DUPLICATION`/`MIN_SOURCE_TOKENS` | constant | `0.5`/`0.4`/`8` | QA gate pass thresholds | `config.py`, `qa.py` |
-| `TABLE_QA_MAX_SHARED_UNREADABLE`/`MIN_KNOWN_WORDS` | constant | `0.25`/`0.5` | a coverage below the minimum is not assessed where both hold: under the first share of the transcription's salient tokens stand in the PDF text, and under the second share of its words occur in the document's text | `config.py`, `qa.py` |
-| `TABLE_QA_RETRY_TEMPERATURE`/`RETRY_PENALTY` | constant | `0.4`/`1.3` | sampling for the QA-failure retry | `config.py` |
-| `TOKENS_PER_WORD` | constant | `3.0` | word-to-token factor in the context budget estimate | `config.py` |
+| `vision_max_attempts` | rule | `4` | attempts at one request, a re-ask after an unreadable reply included | `vision.py` |
+| `figure_temperature` / `table_temperature` | rule | `0.6` / `0.1` | sampling temperature, figure / table | `vision.py`, `process.py` |
+| `vision_max_tokens` | rule | `8192` | reply token budget; a reply cut off at it is asked once more with more room, and the context budget counts one reply of this size | `vision.py`, `config.py` |
+| `vision_retry_penalties` | rule | `1.1` / `1.3` / `1.3` | penalty of the second, the third and every later attempt (after a timeout, or a reply cut off) | `vision.py` |
+| `table_min_coverage`/`table_max_duplication`/`table_min_source_tokens` | rule | `0.5`/`0.4`/`8` | QA gate pass thresholds | `process.py`, `qa.py` |
+| `table_unreadable_shared_below`/`table_unreadable_known_below` | rule | `0.25`/`0.5` | a coverage below the minimum is not assessed where both hold: under the first share of the transcription's salient tokens stand in the PDF text, and under the second share of its words occur in the document's text | `process.py`, `qa.py` |
+| `table_retry_temperature`/`table_retry_penalty` | rule | `0.4`/`1.3` | sampling for the QA-failure retry | `process.py` |
+| `vision_tokens_per_word` | rule | `3.0` | word-to-token factor in the context budget estimate | `config.py` |
 | `IMAGE_TOKENS` | constant | `4096` | tokens charged per image crop in the context budget estimate | `config.py` |
 | `--batch` | CLI flag | off | input path is a root of output directories | `pipeline.py` |
 | `--dry-run` | CLI flag | off | report counts only, no server call | `pipeline.py` |
@@ -438,12 +456,12 @@ given.
 On the August 2026 run, sparse Gantt-style tables produced runs of 29 to 75
 consecutive empty Markdown cells before the reply hit its token limit, where
 no real table exceeded a handful (`config.py`, comment above
-`RETRY_PENALTIES`). That reply ends at its limit and says so, so the retry
+the rule `vision_retry_penalties`). That reply ends at its limit and says so, so the retry
 ladder goes by `finish_reason` and not by what the text looks like; the detector
 of empty-cell runs, `VLM_RUNAWAY_CELL_RUN`, was removed. A harder penalty
 ladder, 1.4 then 1.8, was tried and reverted: at 1.8 the pipe token is
 penalised so hard that a table is barely writable (`config.py`, comment above
-`RETRY_PENALTIES`) holds that no stop sequence
+the rule `vision_retry_penalties`) holds that no stop sequence
 is sent. Every profile
 that ships a `profile.py` states a positive context budget when its config
 module is imported in a subprocess and asked for it.

@@ -9,6 +9,7 @@ import pytest
 
 from docpipe import cli, newprofile, profile as profile_module
 from docpipe.editor import server
+from docpipe.extraction import flow as flow_map
 from docpipe.extraction import spec as spec_module
 
 
@@ -58,9 +59,20 @@ def test_a_copy_extends_its_profile_and_has_its_own_files(project):
     kwp = profile_module.load_profile("kwp")
     assert copy.extends == "kwp" and copy.document_noun == kwp.document_noun
     folder = project / "profiles" / "kwp_copy"
-    for name in ("extraction_spec.json", "graph.json", "flow.json"):
+    for name in ("extraction_spec.json", "graph.json"):
         assert (folder / name).read_bytes() \
             == (kwp.package_dir / name).read_bytes()
+    # the flow: the copy draws what kwp draws; kwp's file holds only the
+    # changes it makes in the default's drawing, which the copy inherits
+    # with kwp's, so the copy needs no flow file of its own
+    assert flow_map.load(copy).tree == flow_map.load(kwp).tree
+    assert not (folder / "flow.json").exists()
+    # the failure by construction: kwp's file as it is makes its changes a
+    # second time in a drawing that holds them
+    (folder / "flow.json").write_bytes(
+        (kwp.package_dir / "flow.json").read_bytes())
+    with pytest.raises(flow_map.FlowError):
+        flow_map.load(copy)
     assert copy.component("extraction", "SPEC_PATH") \
         == folder / "extraction_spec.json"
     # what the copy does not have itself is the profile's it copies

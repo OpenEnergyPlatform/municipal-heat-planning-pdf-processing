@@ -15,11 +15,17 @@ import json
 import re
 import threading
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 from ..extraction import trace
+from .prompts import STAGE_REQUESTS
 
 NOTES = ("parameter", "coordinate", "owner", "value")
+# The stages before the harvest that write a request log in each document's
+# folder, by the name the log has there (`trace.open_stage`): those whose
+# requests the editor knows (`prompts.STAGE_REQUESTS`).
+STAGES = tuple(STAGE_REQUESTS)
 CHAINED = ("coord", "search", "check", "follow")
 
 
@@ -90,8 +96,10 @@ def _reasons(user) -> str:
     return ", ".join(parts)
 
 
-def requests_of(events: list) -> list:
-    """One dict per `*_ask` event, in trace order."""
+def requests_of(events: list, profile=None) -> list:
+    """One dict per `*_ask` event, in trace order. A reply of a stage
+    before the harvest is read with the sentences of *profile*
+    (`stage_check`), the ambient one's where not given."""
     pieces = trace.pieces_of(events)
     out = []
     for i, e in enumerate(events):
@@ -115,6 +123,7 @@ def requests_of(events: list) -> list:
         if "kind" in e:
             req["note_kind"] = e["kind"]  # the passage's or list's kind
         req.update({
+            "_reply": reply_key(sent.get("response_format")),
             "kind": t[:-4], "system": system, "messages": rest,
             "user": user_text, "answer": answer_text,
             "answer_json": answer if isinstance(answer, (dict, list)) else None,
@@ -124,22 +133,73 @@ def requests_of(events: list) -> list:
             "check": "", "_event": i, "_user": user,
         })
         out.append(req)
-    _check(out, events)
+    _check(out, events, profile)
     for r in out:
         r.pop("_event")
         r.pop("_user")
+        r.pop("_reply")
     return out
+
+
+# The type of a reply's key as its schema names it.
+_OF = {"array": list, "string": str, "object": dict, "boolean": bool,
+       "integer": int, "number": (int, float)}
+
+
+def reply_key(shape) -> Optional[tuple]:
+    """(the key a stage before the harvest reads its reply by, the type it
+    has to be) from the reply form *shape* a request was sent with: the
+    first required key of its schema, as the stage reads it
+    (`vision.reply_type`, `refine`); None where it names none."""
+    form = shape.get("json_schema") if isinstance(shape, dict) else None
+    schema = form.get("schema") if isinstance(form, dict) else None
+    if not isinstance(schema, dict) or not schema.get("required"):
+        return None
+    key = schema["required"][0]
+    kind = ((schema.get("properties") or {}).get(key) or {}).get("type")
+    if isinstance(kind, list):
+        kind = next((one for one in kind if one != "null"), None)
+    return key, _OF.get(kind, object)
+
+
+def stage_check(request: dict, profile=None) -> str:
+    """What became of a request of a stage before the harvest, read as the
+    stage reads its reply (`reading.read`, by the key of its reply form):
+    "taken", or "unreadable: <cause>", a reply the stage asks again. The
+    sentences of *profile* where it is not the ambient one."""
+    import contextlib
+    from .. import reading
+    reply = request.get("_reply")
+    choice = SimpleNamespace(
+        message=SimpleNamespace(content=request.get("answer")),
+        finish_reason=request.get("finish"))
+    key, of = reply if reply else (None, list)
+    frame = (reading.speaking(profile) if profile is not None
+             else contextlib.nullcontext())
+    try:
+        with frame:
+            _found, cause, _said = reading.read(choice, key=key, of=of)
+    except LookupError:
+        # No profile speaks here: the cause is all that is wanted, and
+        # it is the same with any profile's sentences.
+        from ..profile import load_profile
+        with reading.speaking(load_profile("default")):
+            _found, cause, _said = reading.read(choice, key=key, of=of)
+    return "taken" if not cause else f"unreadable: {cause}"
 
 
 def _same_notes(a, b) -> bool:
     return a.get("doc") == b.get("doc") and all(a.get(k) == b.get(k) for k in NOTES)
 
 
-def _check(reqs: list, events: list) -> None:
+def _check(reqs: list, events: list, profile=None) -> None:
     """What became of each request: taken, asked again, no answer, unreadable."""
     for pos, r in enumerate(reqs):
         if r["answer"] is None:
             r["check"] = "no answer"
+            continue
+        if isinstance(r.get("made"), dict):
+            r["check"] = stage_check(r, profile)
             continue
         nxt = next((x for x in events[r["_event"] + 1:]
                     if x.get("t") != trace.PIECE), None)
@@ -214,11 +274,13 @@ def keep(request: dict, kinds=(), fields=(), owners=(), values=(),
 class Trace:
     """One trace file read once: its events, its pieces and its requests."""
 
-    def __init__(self, path, events: list):
+    def __init__(self, path, events: list, profile=None):
         self.path = Path(path)
         self.events = events
         self.pieces = trace.pieces_of(events)
-        self.requests = requests_of(events)
+        # what the run was (`runner.run_head`, `trace.stage_head`)
+        self.head = trace.head_of(events, self.pieces)
+        self.requests = requests_of(events, profile)
         # the index in `events` of each request's event, in the same order
         self.event_of = [i for i, e in enumerate(events)
                          if str(e.get("t", "")).endswith("_ask")]
@@ -256,30 +318,60 @@ class Trace:
 
 
 class Traces:
-    """The traces of a harvest folder, each read at most once per state of
-    its file."""
+    """The traces of a harvest folder, and the request logs of the stages
+    before the harvest in the documents' folders of *stages* (the processed
+    folder: `<document>/<stage>.trace.jsonl.gz`, named "<document>/<stage>";
+    owner request 2026-11-19, A3), each read at most once per state of its
+    file."""
 
-    def __init__(self, folder: Optional[Path], lines=trace.lines):
+    def __init__(self, folder: Optional[Path], lines=trace.lines,
+                 stages: Optional[Path] = None, profile=None):
         # *lines(path)* yields the events of a file; a caller that guards
         # its file reads passes its own
         self.folder = Path(folder) if folder is not None else None
+        self.stages = Path(stages) if stages is not None else None
+        # whose sentences read the replies of a stage log (`stage_check`)
+        self.profile = profile
         self._lines = lines
         self._lock = threading.Lock()
         self._cache: dict = {}
 
-    def _files(self) -> list:
-        if self.folder is None or not self.folder.is_dir():
-            return []
-        return trace.files(self.folder)
+    def _named(self) -> list:
+        """[(name, path)] of every trace and stage log, harvest first."""
+        out = []
+        if self.folder is not None and self.folder.is_dir():
+            out += [(trace.name_of(p), p) for p in trace.files(self.folder)]
+        if self.stages is not None and self.stages.is_dir():
+            for folder in sorted(p for p in self.stages.iterdir()
+                                 if p.is_dir()):
+                out += [(f"{folder.name}/{trace.name_of(p)}", p)
+                        for p in trace.files(folder)
+                        if trace.name_of(p) in STAGES]
+        return out
 
-    def names(self) -> list:
-        return [{"name": trace.name_of(p), "file": p.name,
-                 "bytes": p.stat().st_size} for p in self._files()]
+    def names(self, which: Optional[str] = None) -> list:
+        """The traces by name: every one, or for *which* "harvest" the
+        harvest's only, for a stage's name ("refinement", "visuals") that
+        stage's logs only."""
+        out = []
+        for name, path in self._named():
+            stage = name.rpartition("/")[2] if "/" in name else None
+            if which is None or (which == "harvest" and stage is None) \
+                    or (which is not None and stage == which):
+                out.append({"name": name, "file": path.name,
+                            "bytes": path.stat().st_size, "stage": stage})
+        return out
 
     def path_of(self, name: str) -> Optional[Path]:
-        for path in self._files():
-            if trace.name_of(path) == name:
-                return path
+        if self.folder is not None and self.folder.is_dir():
+            for path in trace.files(self.folder):
+                if trace.name_of(path) == name:
+                    return path
+        document, slash, stage = name.rpartition("/")
+        if (slash and self.stages is not None and stage in STAGES
+                and document and "/" not in document
+                and document not in (".", "..")):
+            return trace.path_of(self.stages / document, stage)
         return None
 
     def load(self, name: str) -> Trace:
@@ -293,6 +385,7 @@ class Traces:
             key = (path, stat.st_mtime_ns, stat.st_size)
             hit = self._cache.get(name)
             if hit is None or hit[0] != key:
-                hit = (key, Trace(path, list(self._lines(path))))
+                hit = (key, Trace(path, list(self._lines(path)),
+                                  self.profile))
                 self._cache[name] = hit
             return hit[1]

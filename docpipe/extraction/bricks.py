@@ -55,6 +55,7 @@ class Setting:
     kind: str
     help: str
     default: object = None
+    title: str = ""     # its name in words (owner request 2026-11-19, A5)
 
 
 @dataclass(frozen=True)
@@ -82,8 +83,9 @@ class Brick:
         return {"name": self.name, "kind": self.kind, "does": self.does,
                 "takes": self.takes, "gives": self.gives, "per": self.per,
                 "writes": self.writes,
-                "settings": [{"key": one.key, "kind": one.kind,
-                              "help": one.help, "default": one.default}
+                "settings": [{"key": one.key, "title": one.title,
+                              "kind": one.kind, "help": one.help,
+                              "default": one.default}
                              for one in self.settings]}
 
 
@@ -276,11 +278,13 @@ CORE = {brick.name: brick for brick in (
     Brick("text", "object", "Writes the reading as it is, as a text.",
           "a reading", "a text", _text,
           (Setting("form", "text", "long (may run over lines) or line "
-                   "(one line, breaks escaped)", "long"),)),
+                   "(one line, breaks escaped)", "long",
+                   title="Long text or one line"),)),
     Brick("node_name", "object",
           "Writes the name of the node: the first spelling of the readings "
           "that are this node.", "a node", "a text", _node_name,
-          (Setting("form", "text", "long or line", "long"),), per="node"),
+          (Setting("form", "text", "long or line", "long",
+                   title="Long text or one line"),), per="node"),
     Brick("year_to_datetime", "object",
           "Writes the four-digit year of the reading as the first of "
           "January of that year, midnight (xsd:dateTime); a reading without "
@@ -293,19 +297,24 @@ CORE = {brick.name: brick for brick in (
     Brick("fixed", "object",
           "Writes the classes a rule of the graph file lists, on every node "
           "of the box.", "a node", "classes", _fixed,
-          (Setting("rule", "rule", "the rule that lists them"),
+          (Setting("rule", "rule", "the rule that lists them",
+                   title="Rule that lists them"),
            Setting("prefix", "text", "the prefix they are written with",
-                   "oeo")), per="node"),
+                   "oeo",
+                   title="Prefix to write with")), per="node"),
     Brick("template", "object",
           "Writes a text made of words and what is known of the document "
           "and the node ({place}, {year}, {label}).", "a node", "a text",
           _template, (Setting("text", "text", "the text, with {name} where "
-                              "a fact goes"),), per="node"),
+                              "a fact goes",
+                              title="Text with places for facts"),), per="node"),
     Brick("fact", "object",
           "Writes one thing known of the document as a literal of a "
           "datatype.", "a document", "a literal", _fact,
-          (Setting("fact", "text", "which fact"),
-           Setting("datatype", "text", "its datatype")), per="node",
+          (Setting("fact", "text", "which fact",
+                   title="Which fact"),
+           Setting("datatype", "text", "its datatype",
+                   title="Datatype of the value")), per="node",
           writes="setting:datatype"),
     Brick("decimal", "object",
           "Writes the number as a decimal (xsd:float).", "a number",
@@ -319,16 +328,21 @@ CORE = {brick.name: brick for brick in (
           "is no class writes nothing.", "an answer", "a class",
           _answer_class,
           (Setting("prefix", "text", "the prefix the class is written with",
-                   "oeo"),
+                   "oeo",
+                   title="Prefix to write with"),
            Setting("prefix_by_family", "table", "a prefix per family of "
                    "identifiers (UO_ -> obo); an identifier of no family "
-                   "listed writes nothing"),
+                   "listed writes nothing",
+                   title="Prefix per family of identifiers"),
            Setting("family", "text", "only classes of this family "
-                   "(OEO_)", ""),
+                   "(OEO_)", "",
+                   title="Only this family of classes"),
            Setting("total_class", "class", "the class written for "
-                   "out:total"),
+                   "out:total",
+                   title="Class for no breakdown"),
            Setting("outside_root", "labels", "classes counted as outside "
-                   "the property's range: class -> name")),
+                   "the property's range: class -> name",
+                   title="Classes outside the property's range")),
           writes="answers"),
     Brick("kept_coordinates", "condition",
           "Takes a reading only where every dimension with an entry it "
@@ -345,17 +359,22 @@ CORE = {brick.name: brick for brick in (
           "at its end where it is set.", "a value", "a value",
           _remove_words,
           (Setting("pattern", "text", "a regular expression of what is "
-                   "taken out; empty: nothing"),
+                   "taken out; empty: nothing",
+                   title="Pattern to take out"),
            Setting("legal_forms", "flag", "also a legal form at the end "
-                   "(the drawing's legal_forms)", False),
+                   "(the drawing's legal_forms)", False,
+                   title="Also take out a legal form"),
            Setting("trim", "flag", "spaces and commas at the ends go too",
-                   True))),
+                   True,
+                   title="Also trim spaces and commas"))),
     Brick("lookup", "value",
           "Looks the value up in a table and gives what the table says for "
           "it.", "a value", "a value", _lookup,
-          (Setting("table", "table", "value -> what it becomes"),
+          (Setting("table", "table", "value -> what it becomes",
+                   title="Table of replacements"),
            Setting("otherwise", "text", "a value the table does not list: "
-                   "keep (as it is) or drop (nothing)", "keep"))),
+                   "keep (as it is) or drop (nothing)", "keep",
+                   title="Value the table does not list"))),
 )}
 
 

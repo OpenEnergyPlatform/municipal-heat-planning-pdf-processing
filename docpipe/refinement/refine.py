@@ -16,7 +16,7 @@ splitting are positional. Every request sends its reply schema as the
 grammar, and a reply is read as exactly one JSON object (see
 docpipe/reading.py): nothing is stripped, cut out or closed. A reply
 that is not that object is asked again with its cause named, up to
-MAX_RETRIES times, except on a 4xx response, which is not retried
+refine_max_attempts times, except on a 4xx response, which is not retried
 because the server has refused the request itself. A reply that was
 cut off at its token limit is never asked again as it stands: the
 window is asked in halves by sections, and a lone section gets more
@@ -46,13 +46,13 @@ import hashlib
 import json
 import logging
 import re
+import contextvars
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable, Collection, Optional
 
-from docpipe import prompts, providers, reading, usage
-from docpipe.profile import profile_value
+from docpipe import prompts, providers, reading, rules, usage
 from docpipe.llm_preflight import request_extras, served_window, stage_fits
 from docpipe.reading import Hole
 
@@ -62,11 +62,9 @@ from .split import (NotServed, cut_to_limit, split_max_tokens, split_oversized,
                     split_temperature)
 from .config import (
     further_room,
-    PROMPT_IDS,
+    prompt_ids,
     REFINEMENT_PARTIAL_JSON,
     REFINEMENT_REPORT_JSON,
-    SECTION_MAX_WORDS,
-    SECTION_SPLIT_ENABLE,
     SECTIONS_JSON,
     SECTIONS_REFINED_JSON,
     LLM_MODEL,
@@ -75,12 +73,9 @@ from .config import (
     LLM_TIMEOUT,
     LLM_NUM_PARALLEL,
     llm_temperature,
-    REFINE_RETURN_CORRECTIONS,
     reply_tokens,
-    MAX_RETRIES,
-    WINDOW_SIZE,
     system_prompt,
-    TITLE_CLEANUP_ENABLE,
+    refine_prompt_id,
     clean_data,
     dump_json_atomic,
 )
@@ -143,7 +138,7 @@ class Unfinished(Exception):
 
 def _backoff(attempt: int) -> None:
     """Sleep between retries (skipped after the final attempt)."""
-    if attempt < MAX_RETRIES:
+    if attempt < rules.get("refine_max_attempts"):
         time.sleep(min(2 * attempt, 10))
 
 
@@ -203,6 +198,11 @@ def _reask(base_messages: list, content, said: str, cause: str,
     return messages
 
 
+# The sentence that gives a window the section before it as read-only context:
+# the whole user message of such a window, made from this prompt.
+CONTEXT_PROMPT_ID = "refinement/window_context"
+
+
 def _stripped(sections_window: list) -> list:
     """The sections of a window as the model gets them: segments and pages
     are stripped (the model must not see or rewrite them; they are
@@ -211,7 +211,7 @@ def _stripped(sections_window: list) -> list:
         {k: v for k, v in s.items() if k not in ("segments", "pages")}
         for s in sections_window
     ]
-    if REFINE_RETURN_CORRECTIONS:
+    if rules.get("refine_return_corrections"):
         # The reply carries no text, so it needs a handle back to its section.
         # Media keeps only id and caption: the model must not restate a path or
         # a page number it is forbidden to change (and used to drop).
@@ -234,16 +234,9 @@ def _user_content(stripped: list, prev_context: Optional[dict]) -> str:
         "title": prev_context.get("title", ""),
         "content": _whole_text(prev_context.get("content", "")),
     }
-    return (
-        "CONTEXT (read-only — do NOT include this in your output): the "
-        "section immediately before the first section below, whole. "
-        "Use it ONLY to decide whether the first section is a "
-        "broken continuation of it (then set that first section's "
-        '_action to "merge_into_previous").\n'
-        + json.dumps(ctx, ensure_ascii=False, indent=2)
-        + "\n\nSECTIONS TO PROCESS:\n"
-        + user_payload
-    )
+    return prompts.load(CONTEXT_PROMPT_ID).render(
+        context=json.dumps(ctx, ensure_ascii=False, indent=2),
+        sections=user_payload)
 
 
 def _window_fits(window: list, prev_context: Optional[dict]) -> bool:
@@ -349,6 +342,35 @@ def _further_tokens(asked: int, unit: str) -> Optional[int]:
     return more
 
 
+def _logged(kind: str, sent: dict, attempt: int, asked_at: float,
+            window: Optional[list], *, response=None, error=None,
+            context: bool = False) -> None:
+    """One attempt of a request of this stage in the log of the document it
+    works on (`trace.stage_request`; owner request 2026-11-19, A3): a
+    window's ("refine": its instruction the refine prompt, its message the
+    sections it shows; a window with the section before it as context has
+    its message made from the context prompt) or a split's ("split": its
+    instruction the split prompt filled with the target, its message the
+    split request prompt filled with the title and the outline), with the
+    page and heading of the first section it shows."""
+    from docpipe.extraction import trace
+    if kind == "split":
+        made = {"system": [{"prompt": "refinement/split", "fill": "render"}],
+                "user": [{"prompt": "refinement/split_user",
+                          "fill": "render"}]}
+    else:
+        made = {"system": [{"prompt": refine_prompt_id()}],
+                "user": ([{"prompt": CONTEXT_PROMPT_ID, "fill": "render"}]
+                         if context else [{"data": True}])}
+    first = (window or [{}])[0]
+    notes = {"made": made}
+    if window:
+        notes.update(sections=len(window), heading=first.get("title"),
+                     page=first.get("page_number"))
+    trace.stage_request(kind, sent, attempt, asked_at, response=response,
+                        error=error, **notes)
+
+
 def _call_llm(
     sections_window: list[dict],
     client,
@@ -363,7 +385,7 @@ def _call_llm(
     the model can judge whether the first section is a continuation that should
     be merged across the window boundary. The reply schema is the grammar of
     the request. A reply that is not exactly one object with a ``sections``
-    list is asked again, up to MAX_RETRIES times, with its cause named in the
+    list is asked again, up to refine_max_attempts times, with its cause named in the
     profile's words. A reply cut off at its token limit is not asked again as
     it stands: the caller splits the window (see `_ask_window`). A 4xx ends it
     at once: the server refused the request itself, so a retry of it is
@@ -387,6 +409,8 @@ def _call_llm(
         {"role": "user", "content": user_content},
     ]
     messages = list(base_messages)
+    corrections = rules.get("refine_return_corrections")
+    attempts = rules.get("refine_max_attempts")
     # What the last attempt came to. The last attempt decides: a 503 and then
     # replies nobody can read is a window the model got and could not do; the
     # other way round it is a window nobody answered.
@@ -407,22 +431,23 @@ def _call_llm(
             return Hole("cut_off", f"{asked} tokens")
     shape = providers.grammar(
         "refined_sections",
-        replies.CORRECTIONS if REFINE_RETURN_CORRECTIONS
+        replies.CORRECTIONS if corrections
         else replies.window(stripped))
 
-    for attempt in range(1, MAX_RETRIES + 1):
+    for attempt in range(1, attempts + 1):
+        # Reasoning models must not spend the token budget on a <think>
+        # block; that truncates the JSON answer.
+        sent = dict(model=LLM_MODEL, messages=messages, response_format=shape,
+                    temperature=temperature, max_tokens=max_tokens,
+                    extra_body=request_extras())
+        asked_at = time.time()
         try:
-            response = client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=messages,
-                response_format=shape,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                # Reasoning models must not spend the token budget on a
-                # <think> block; that truncates the JSON answer.
-                extra_body=request_extras(),
-            )
+            response = client.chat.completions.create(**sent)
+            _logged("refine", sent, attempt, asked_at, sections_window,
+                    response=response, context=bool(prev_context))
         except Exception as e:
+            _logged("refine", sent, attempt, asked_at, sections_window,
+                    error=e, context=bool(prev_context))
             status = _client_error_status(e)
             if status is not None:
                 if "maximum context length" in str(e):
@@ -442,7 +467,7 @@ def _call_llm(
                 return Hole("refused", f"HTTP {status}")
             # Covers connection errors, the request timeout, 429 and 5xx.
             log.error(
-                f"   Attempt {attempt}/{MAX_RETRIES}: LLM request failed: {e}"
+                f"   Attempt {attempt}/{attempts}: LLM request failed: {e}"
             )
             outcome = NOT_SERVED
             messages = list(base_messages)
@@ -456,7 +481,7 @@ def _call_llm(
             choice = reading.first(response)
             found, cause, said = reading.read(choice, key="sections")
             if not cause:
-                if REFINE_RETURN_CORRECTIONS:
+                if corrections:
                     return _materialise_corrections(found["sections"],
                                                     sections_window)
                 return found["sections"]
@@ -473,7 +498,7 @@ def _call_llm(
                           for s in sections_window))
             return Hole("cut_off", f"{max_tokens} tokens")
         log.warning(
-            f"   Attempt {attempt}/{MAX_RETRIES}: {cause} reply "
+            f"   Attempt {attempt}/{attempts}: {cause} reply "
             f"(finish: {getattr(choice, 'finish_reason', None)})"
         )
         outcome = Hole(cause)
@@ -578,12 +603,15 @@ def _apply_actions(
         so the next window can merge into it if needed.
     """
     result: list[dict] = []
+    keep_media = rules.get("keep_sections_with_media")
+    keep_opening = rules.get("keep_opening_section")
+    keep_front = rules.get("keep_front_matter")
 
     for sec in processed_sections:
         sec = _coerce_section(sec)
         action = sec.pop("_action", "keep")
 
-        if action == "cover":
+        if action == "cover" and rules.get("drop_cover_pages"):
             # A page the publisher, a repository or the download put in front
             # of the publication is no part of it (owner decision 2026-11-14):
             # its text, its heading and its pictures go, on the first page
@@ -606,18 +634,19 @@ def _apply_actions(
             # looks empty to a reader of the text alone. Eleven plans lost this
             # way: no text layer, so every section was markers, "remove" looked
             # right, and 1270 transcribed tables and figures went with them.
-            if sec.get("tables") or sec.get("figures"):
+            if keep_media and (sec.get("tables") or sec.get("figures")):
                 log.warning(
                     "  Refusing to remove '%s': it carries %d table(s) and "
                     "%d figure(s)", sec.get("title", "?"),
                     len(sec.get("tables") or []), len(sec.get("figures") or []))
-            elif _synthetic_heading(sec.get("title", "").strip()):
+            elif keep_opening and _synthetic_heading(
+                    sec.get("title", "").strip()):
                 # What stands before the first heading is the head of the first
                 # page: a journal line, and often the title with it. Removed
                 # as a running head, it took a scenario document's title along.
                 log.info("  Refusing to remove the text before the first "
                          "heading: the title may stand in it")
-            elif _starts_on(sec, front_pages):
+            elif keep_front and _starts_on(sec, front_pages):
                 # Authors often come out of layout detection as a one-line
                 # heading; removed as a running head, 19 of 85 author lines
                 # were gone from the scenarios corpus.
@@ -868,13 +897,13 @@ def _reattach_media_bbox(inputs: list[dict], outputs: list[dict]) -> None:
 
 
 def _hold_to_limit(sections: list[dict]) -> list[dict]:
-    """Every refined section at most SECTION_MAX_WORDS long (`cut_to_limit`).
+    """Every refined section at most section_max_words long (`cut_to_limit`).
 
     The limit is held before the model reads, and the model's merges and its
     BibTeX lists undo it: 22 sections in 20 scenario documents went into the
     embedding over its budget and lost their tail there.
     """
-    if not SECTION_SPLIT_ENABLE:
+    if not rules.get("split_long_sections"):
         return sections
     out: list[dict] = []
     held = 0
@@ -884,7 +913,7 @@ def _hold_to_limit(sections: list[dict]) -> list[dict]:
         out.extend(parts)
     if held:
         log.info("Stage 4: cut %d refined section(s) back to %d words "
-                 "→ %d sections", held, SECTION_MAX_WORDS, len(out))
+                 "→ %d sections", held, rules.get("section_max_words"), len(out))
     return out
 
 
@@ -985,7 +1014,7 @@ def _front_pages(sections: list[dict], title_page: Optional[int]) -> set:
 
 def _synthetic_heading(title: str) -> bool:
     """Whether *title* is the name Stage 3 gives the text before any heading."""
-    return title == profile_value("preprocessing", "FRONT_SECTION_TITLE")
+    return title == rules.get("front_section_title")
 
 
 def _fold_bare_headings(sections: list[dict]) -> list[dict]:
@@ -1005,12 +1034,14 @@ def _fold_bare_headings(sections: list[dict]) -> list[dict]:
     """
     out: list[dict] = []
     pending: list[str] = []
+    fold = rules.get("fold_bare_headings")
     for sec in sections:
         sec.pop("_removed", None)
         title = str(sec.get("title") or "").strip()
         own = [title] if title and not _synthetic_heading(title) else []
         if _is_empty_section(sec):
-            pending += own
+            if fold:
+                pending += own
             continue
         if pending and isinstance(sec.get("content", ""), str):
             sec["content"] = "\n".join(pending + own
@@ -1023,16 +1054,16 @@ def _fold_bare_headings(sections: list[dict]) -> list[dict]:
     return out
 
 
-# Leading numbering prefix. A 1–2 digit bare number is stripped; 4-digit years
-# are not.
-_TITLE_NUM_PREFIX_RE = re.compile(
-    r"^\s*(?:"
-    r"\d+(?:[.\-]\d+)+[.\)]?"   # 3.3.3  / 4-1
-    r"|\d{1,2}[.\)]?"           # 6  / 11.  / 7)
-    r"|[A-Z][.\)]"             # A.  / B)
-    r"|[IVXLCDM]{1,6}[.\)]"     # IV.  / VII)
-    r")\s+"
-)
+def _title_number_re():
+    """The leading numbering prefix of a heading, made of the patterns of the
+    rule title_number_patterns (3.3.3 / 4-1, a 1-2 digit bare number, A. /
+    B), IV. / VII); a 4-digit year is not one); None where it lists none."""
+    def build():
+        patterns = rules.get("title_number_patterns")
+        if not patterns:
+            return None
+        return re.compile(r"^\s*(?:" + "|".join(patterns) + r")\s+")
+    return rules.derived("refine_title_number", build)
 
 
 def _normalize_title(title: str) -> str:
@@ -1047,15 +1078,19 @@ def _normalize_title(title: str) -> str:
     if not t or t == "[LITERATURE]":
         return title
     # Prefixes can stack ("6.1 Foo").
-    prev = None
-    while prev != t:
-        prev = t
-        t = _TITLE_NUM_PREFIX_RE.sub("", t).strip()
+    number = _title_number_re()
+    if number is not None:
+        prev = None
+        while prev != t:
+            prev = t
+            t = number.sub("", t).strip()
     alpha = [c for c in t if c.isalpha()]
-    if len(alpha) > 5 and all(c.isupper() for c in alpha):
+    acronym = rules.get("title_acronym_max_letters")
+    if (len(alpha) >= rules.get("title_shout_min_letters")
+            and all(c.isupper() for c in alpha)):
         def _fix(w: str) -> str:
             core = [c for c in w if c.isalpha()]
-            if core and len(core) <= 4 and all(c.isupper() for c in core):
+            if core and len(core) <= acronym and all(c.isupper() for c in core):
                 return w  # acronym (KWP, CO2, …)
             return w[:1] + w[1:].lower()
         t = " ".join(_fix(w) for w in t.split())
@@ -1079,7 +1114,7 @@ def reply_shapes() -> dict:
                           "page_number": 1, "caption": None}],
               "figures": [{"id": "p1_img0", "path": "images/p1_img0.png",
                            "page_number": 1, "caption": "Caption"}]}
-    window = (replies.CORRECTIONS if REFINE_RETURN_CORRECTIONS
+    window = (replies.CORRECTIONS if rules.get("refine_return_corrections")
               else replies.window([sample]))
     return {"refined_sections": window, "section_cuts": replies.SPLIT}
 
@@ -1113,26 +1148,28 @@ def _make_splitter(client) -> Callable[..., dict | Hole]:
                          {"role": "user", "content": user_content}]
         messages = list(base_messages)
         outcome: Optional[Hole] = None
-        for attempt in range(1, MAX_RETRIES + 1):
+        attempts = rules.get("refine_max_attempts")
+        for attempt in range(1, attempts + 1):
+            sent = dict(model=LLM_MODEL, messages=messages,
+                        response_format=providers.grammar("section_cuts",
+                                                          replies.SPLIT),
+                        temperature=temperature, max_tokens=max_tokens,
+                        extra_body=request_extras())
+            asked_at = time.time()
             try:
-                response = client.chat.completions.create(
-                    model=LLM_MODEL,
-                    messages=messages,
-                    response_format=providers.grammar("section_cuts",
-                                                      replies.SPLIT),
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    extra_body=request_extras(),
-                )
+                response = client.chat.completions.create(**sent)
+                _logged("split", sent, attempt, asked_at, None,
+                        response=response)
             except Exception as e:
+                _logged("split", sent, attempt, asked_at, None, error=e)
                 status = _client_error_status(e)
                 if status is not None:
                     log.error("   Split request rejected (HTTP %d): %s",
                               status, e)
                     return Hole("refused", f"HTTP {status}")
-                log.warning(f"   Split attempt {attempt}/{MAX_RETRIES}: "
+                log.warning(f"   Split attempt {attempt}/{attempts}: "
                             f"LLM request failed: {e}")
-                if attempt == MAX_RETRIES:
+                if attempt == attempts:
                     raise NotServed(str(e)) from e
                 messages = list(base_messages)
                 _backoff(attempt)
@@ -1150,7 +1187,7 @@ def _make_splitter(client) -> Callable[..., dict | Hole]:
             if cause == "cut_off":
                 log.warning("   Split reply cut off at %d tokens", max_tokens)
                 return Hole("cut_off", f"{max_tokens} tokens")
-            log.warning(f"   Split attempt {attempt}/{MAX_RETRIES}: {cause} "
+            log.warning(f"   Split attempt {attempt}/{attempts}: {cause} "
                         f"reply")
             outcome = Hole(cause)
             content = getattr(getattr(choice, "message", None), "content", None)
@@ -1167,7 +1204,7 @@ def refine_sections(sections: list[dict],
                     left: Optional[dict] = None,
                     title_page: Optional[int] = None) -> list[dict]:
     """
-    Processes all sections through the LLM in windows of WINDOW_SIZE, dispatched
+    Processes all sections through the LLM in windows of refine_window_sections, dispatched
     in parallel but assembled in order (merge/split semantics are positional).
 
     Mutates *sections* in place (source_text is stripped); returns the refined
@@ -1221,9 +1258,10 @@ def refine_sections(sections: list[dict],
         except NotServed as lost_cut:
             raise Unfinished(None, {}, [], 0) from lost_cut
     done = done or {}
+    window_size = rules.get("refine_window_sections")
 
     log.info(
-        f"Stage 4: {len(sections)} sections, window size {WINDOW_SIZE}, "
+        f"Stage 4: {len(sections)} sections, window size {window_size}, "
         f"parallel slots {LLM_NUM_PARALLEL}"
     )
 
@@ -1231,8 +1269,8 @@ def refine_sections(sections: list[dict],
     windows: list[list[dict]] = []
     i = 0
     while i < len(sections):
-        windows.append(sections[i : i + WINDOW_SIZE])
-        i += WINDOW_SIZE
+        windows.append(sections[i : i + window_size])
+        i += window_size
 
     total_windows = len(windows)
     log.info(f"Stage 4: {total_windows} windows to process")
@@ -1248,7 +1286,10 @@ def refine_sections(sections: list[dict],
                 continue
             # Read-only context for merges across the window boundary.
             prev_ctx = windows[win_idx - 1][-1] if win_idx > 0 else None
-            future = executor.submit(_ask_window, window, client, prev_ctx)
+            # The thread asks for this document: its requests go into its
+            # log (`trace.working_on`).
+            future = executor.submit(contextvars.copy_context().run,
+                                     _ask_window, window, client, prev_ctx)
             futures[future] = (win_idx, window)
 
         for future in futures:  # iterate in submission order
@@ -1308,7 +1349,7 @@ def refine_sections(sections: list[dict],
 
     def _note_failure(win_idx: int, start: int, part: list,
                       cause: str) -> None:
-        first = win_idx * WINDOW_SIZE + start
+        first = win_idx * window_size + start
         failed.append({
             "window": win_idx + 1,
             "reason": cause,
@@ -1368,7 +1409,7 @@ def refine_sections(sections: list[dict],
         _finalize_pages(s)
     _backfill_empty_pages(refined)
 
-    if TITLE_CLEANUP_ENABLE:
+    if rules.get("clean_titles"):
         for s in refined:
             s["title"] = _normalize_title(s.get("title", ""))
 
@@ -1583,10 +1624,14 @@ def run_refine(output_dir: Path, data: Optional[dict] = None,
         title_page = data.get("title_page")
         if not isinstance(title_page, int):
             title_page = None
-        refined = (refine_sections(sections, report, left=left,
-                                   title_page=title_page) if done is None
-                   else refine_sections(sections, report, done, left=left,
-                                        title_page=title_page))
+        # The requests of this document go into its log of the stage.
+        from docpipe.extraction import trace
+        with trace.working_on(output_dir):
+            refined = (refine_sections(sections, report, left=left,
+                                       title_page=title_page) if done is None
+                       else refine_sections(sections, report, done,
+                                            left=left,
+                                            title_page=title_page))
     except Unfinished as unfinished:
         if unfinished.sections is None:
             log.error("Stage 4: %s: the model server did not serve the cut "
@@ -1642,8 +1687,8 @@ def _partial_key(sections: list) -> str:
     windows. Half a document from one model and half from another is not
     one refinement."""
     return hashlib.sha256(json.dumps(
-        {"sections": sections, "window": WINDOW_SIZE, "model": LLM_MODEL,
-         "prompts": prompts.versions(PROMPT_IDS)},
+        {"sections": sections, "window": rules.get("refine_window_sections"),
+         "model": LLM_MODEL, "prompts": prompts.versions(prompt_ids())},
         ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
 
 

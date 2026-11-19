@@ -30,11 +30,11 @@ def ink_rows(image) -> list
 ```
 
 For each pixel row of *image* (a PIL image), how many of its pixels
-are writing: darker by STRIP_INK_CONTRAST than both what their column
+are writing: darker by strip_ink_contrast than both what their column
 holds in most rows and what their own row holds in most columns. A rule
 across the table (a row of one colour), a shaded row and a vertical rule
 (a column of one colour, also where a scan tilts it by up to
-STRIP_RULE_DRIFT pixels) are no writing.
+strip_rule_drift pixels) are no writing.
 
 ### cut_at
 
@@ -43,7 +43,7 @@ def cut_at(ink: list) -> Optional[int]
 ```
 
 The pixel row to cut an image with these *ink* rows (`ink_rows`) at:
-the middle of the run of blank rows (at most STRIP_BLANK_PIXELS pixels of
+the middle of the run of blank rows (at most strip_blank_pixels pixels of
 writing) nearest the image's middle that has writing right above and
 right below it; None where there is no such run.
 
@@ -79,5 +79,17 @@ the first strip's with the rows of each later strip that stand under its
 head, and "strips", how many strips it was read in. A Hole of another
 cause than "cut_off" ends the reading with that hole; a strip cut off
 again is cut again, and one that cannot be cut is the Hole "cut_off".
+
+### strip_of
+
+```python
+def strip_of(png: bytes, sha: str, most: int = 4096) -> Optional[bytes]
+```
+
+The strip of the table image *png* whose sha256 is *sha*, cut from
+it as `read` cuts one (the image itself, a half, a half of a half, ...),
+so that a request the stage's log names by its strip is sent again with
+the same picture (owner request 2026-11-19, A3); None where no cut of at
+most *most* gives it.
 
 [Back to the index](../README.md)

@@ -193,6 +193,11 @@ const answers = jobs.map(job => {
     return { drawing: job.broken && job.broken !== 'mutates' ? spoil(job.broken, d) : d, same: JSON.stringify(job.data) === before };
   }
   if (job.op === 'drag') return drag(job);
+  if (job.op === 'reads') {
+    // whether the form of a field shows each key for a value type (spec/widgets.tsx readByType)
+    const reads = job.broken === 'every' ? () => true : M.typeReads;
+    return Object.fromEntries(Object.entries(job.when).map(([key, when]) => [key, reads(when, job.settings)]));
+  }
   if (job.op === 'untangle') {
     // as the page's button does (spec/Canvas.tsx untangleField): the order found, then the drawing laid out with it
     const first = place(job, null);

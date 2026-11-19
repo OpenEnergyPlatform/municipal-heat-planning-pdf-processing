@@ -51,6 +51,7 @@ Fields:
 - `kind: str`
 - `help: str`
 - `default: object = None`
+- `title: str = ""`: its name in words (owner request 2026-11-19, A5)
 
 ### Brick
 

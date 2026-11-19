@@ -22,17 +22,17 @@ from __future__ import annotations
 import os
 import re
 
-from .profile import ENV_VAR, load_profile
+from . import rules
+from .profile import ENV_VAR
 
 
 # A placeholder as Stage 3 writes it: [p85_tbl0], [p17_img1].
 _ITEM_PLACEHOLDER = re.compile(r"\[p\d+_(?:tbl|img)\d+\]")
 
 # How a caption opens is a fact about the language a corpus is written in,
-# so the core holds no pattern of it. The profile lists them in
-# `preprocessing.CAPTION_START`, each with its own anchor, and a text opens a
-# caption when any of them matches. Compiled once per profile.
-_openers: dict = {}
+# so the core holds no pattern of it. The profile lists them in the rule
+# `caption_opener_patterns`, each with its own anchor, and a text opens a
+# caption when any of them matches. Compiled once per state of the rules.
 
 
 def _compile(name: str, patterns) -> "re.Pattern":
@@ -43,17 +43,17 @@ def _compile(name: str, patterns) -> "re.Pattern":
     if (not isinstance(patterns, (list, tuple)) or not patterns
             or not all(isinstance(each, str) for each in patterns)):
         raise ValueError(
-            f"profile {name!r}: preprocessing.CAPTION_START must be a "
+            f"profile {name!r}: caption_opener_patterns must be a "
             f"non-empty list of patterns, got {patterns!r}")
     try:
         opener = re.compile("|".join(f"(?:{each})" for each in patterns))
     except re.error as exc:
         raise ValueError(f"profile {name!r}: a pattern of "
-                         f"preprocessing.CAPTION_START does not compile: "
+                         f"caption_opener_patterns does not compile: "
                          f"{exc}") from exc
     if opener.match(""):
         raise ValueError(
-            f"profile {name!r}: a pattern of preprocessing.CAPTION_START "
+            f"profile {name!r}: a pattern of caption_opener_patterns "
             f"matches the empty text, so every text would open a caption: "
             f"{patterns!r}")
     return opener
@@ -63,11 +63,8 @@ def _caption_start() -> "re.Pattern":
     """What opens a caption under the profile in force. Where none is named,
     the read side still runs, on the profile the package brings itself."""
     name = os.environ.get(ENV_VAR) or "default"
-    if name not in _openers:
-        profile = load_profile(name)
-        _openers[name] = _compile(
-            profile.name, profile.require("preprocessing", "CAPTION_START"))
-    return _openers[name]
+    return rules.derived("captions:opener", lambda: _compile(
+        name, rules.get("caption_opener_patterns")))
 
 
 def looks_like_a_caption(text) -> bool:

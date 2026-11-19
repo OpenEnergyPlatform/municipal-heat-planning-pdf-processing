@@ -22,52 +22,36 @@ from pathlib import Path
 
 import openai
 
+from docpipe import prompts, rules
 from docpipe.reading import Hole
 
 from . import continuation, qa, replies, strips
 from .config import (
     max_request_tokens,
     shown_bytes,
-    table_continued_prompt,
     table_system_prompt,
-    table_user_prompt,
-    TABLE_VLM_TEMPERATURE,
-    TABLE_QA_MIN_COVERAGE,
-    TABLE_QA_MAX_DUPLICATION,
-    TABLE_QA_MIN_SOURCE_TOKENS,
-    TABLE_QA_MAX_SHARED_UNREADABLE,
-    TABLE_QA_MIN_KNOWN_WORDS,
-    TABLE_QA_RETRY_TEMPERATURE,
-    TABLE_QA_RETRY_PENALTY,
     figure_system_prompt,
-    figure_user_prompt,
-    caption_keep_instruction,
-    caption_generate_table_instruction,
-    caption_generate_figure_instruction,
 )
 from .models import ProcessingStats
 from .vision import call_vision
 
 log = logging.getLogger(__name__)
 
-# Appended to the user prompt on a QA-failure retry.
-_QA_RETRY_HINT = (
-    "\n\nIMPORTANT: A previous attempt was incomplete or repeated rows. Read "
-    "the table again carefully, row by row, and reproduce EVERY row exactly "
-    "once — do not omit any row and do not repeat any row."
-)
+# Appended to the user prompt on a QA-failure retry: the prompt file
+# visuals/table_retry_hint.
+RETRY_HINT_PROMPT = "visuals/table_retry_hint"
 
 
 def _assess_table(markdown: str, source_text: str,
                   known_words: set[str] | None) -> tuple[bool, dict]:
     return qa.assess(
         markdown, source_text,
-        min_coverage=TABLE_QA_MIN_COVERAGE,
-        max_duplication=TABLE_QA_MAX_DUPLICATION,
-        min_source_tokens=TABLE_QA_MIN_SOURCE_TOKENS,
+        min_coverage=float(rules.get("table_min_coverage")),
+        max_duplication=float(rules.get("table_max_duplication")),
+        min_source_tokens=int(rules.get("table_min_source_tokens")),
         known_words=known_words,
-        max_shared=TABLE_QA_MAX_SHARED_UNREADABLE,
-        min_known=TABLE_QA_MIN_KNOWN_WORDS,
+        max_shared=float(rules.get("table_unreadable_shared_below")),
+        min_known=float(rules.get("table_unreadable_known_below")),
     )
 
 
@@ -80,13 +64,47 @@ def _table_text(reply: dict) -> str:
     return "\n".join(str(row) for row in reply["rows"])
 
 
-def _caption_instruction(existing: str, kind: str) -> str:
-    """Returns the appropriate caption instruction fragment."""
+def _caption_prompt(existing: str, kind: str) -> str:
+    """The prompt whose words say what to do with the caption: keep the one
+    the item has, else write one for a table or a figure."""
     if existing:
-        return caption_keep_instruction()
-    if kind == "table":
-        return caption_generate_table_instruction()
-    return caption_generate_figure_instruction()
+        return "visuals/caption_keep"
+    return ("visuals/caption_generate_table" if kind == "table"
+            else "visuals/caption_generate_figure")
+
+
+def _text(prompt_id: str) -> str:
+    """The text of the stage's prompt *prompt_id*, as the profile has it."""
+    return prompts.text(prompt_id)
+
+
+def _blank(name: str) -> str:
+    """The words a request shows where an item is missing (the rule
+    request_blank_words): `section_title`, `caption`, `head`, `between`."""
+    return rules.get("request_blank_words")[name]
+
+
+def _user(parts: list, values: list, hint: bool = False) -> tuple:
+    """(the user text, its parts) of a request made of the prompt files
+    *parts* filled with *values* (`prompts.composed`, as the editor makes it
+    again from the stage's log), the prompt file of the retry hint after
+    them where *hint*."""
+    if hint:
+        parts, values = (parts + [{"prompt": RETRY_HINT_PROMPT}],
+                         values + [{}])
+    return prompts.composed(parts, _text, values), parts
+
+
+def _traced(base_path: Path, kind: str, system: str, parts: list,
+            item: dict, section: dict, **more) -> dict:
+    """What the stage's request log notes of a request about *item*
+    (`vision.logged`): its document, its kind, the prompts its messages are
+    made of, the item, and the page and heading it stands under."""
+    return {"doc": base_path.name, "doc_dir": str(base_path), "kind": kind,
+            "made": {"system": [{"prompt": system}], "user": parts},
+            "item": item.get("id"),
+            "page": item.get("page_number", section.get("page_number")),
+            "heading": section.get("title"), **more}
 
 
 # ---------------------------------------------------------------------------
@@ -144,20 +162,27 @@ def process_table(
 
     existing_caption = table.get("caption") or ""
 
-    user_prompt = table_user_prompt().format(
-        section_title=section.get("title", "Unknown"),
+    # The user text as prompt files and what fills them, so that the log of
+    # the stage says what it was made of (owner request 2026-11-19, A3).
+    own_part = {"prompt": "visuals/table_user", "fill": "format",
+                "nested": {"caption_instruction":
+                           _caption_prompt(existing_caption, "table")}}
+    own_values = dict(
+        section_title=section.get("title", _blank("section_title")),
         page_number=table.get("page_number", section.get("page_number", "?")),
-        existing_caption=existing_caption or "(none)",
+        existing_caption=existing_caption or _blank("caption"),
         section_content=section.get("content", ""),
-        caption_instruction=_caption_instruction(existing_caption, "table"),
     )
+    continued = {"prompt": "visuals/table_continued", "fill": "format"}
+    user_parts, user_values = [own_part], [own_values]
     reply = replies.TABLE
     if before is not None:
-        user_prompt += table_continued_prompt().format(
-            previous_caption=before.get("caption") or "(none)",
-            previous_head=before.get("head") or "(no head)",
-            between=before.get("between") or "(nothing)",
-        )
+        user_parts.append(continued)
+        user_values.append(dict(
+            previous_caption=before.get("caption") or _blank("caption"),
+            previous_head=before.get("head") or _blank("head"),
+            between=before.get("between") or _blank("between"),
+        ))
         reply = replies.TABLE_CONTINUED
 
     kwargs = {"model": model} if model else {}
@@ -166,33 +191,34 @@ def process_table(
     budget = max_request_tokens(shown_bytes(
         section.get("content", ""),
         (before or {}).get("head") or "", (before or {}).get("between") or ""))
-    own_prompt = user_prompt if before is None else table_user_prompt().format(
-        section_title=section.get("title", "Unknown"),
-        page_number=table.get("page_number", section.get("page_number", "?")),
-        existing_caption=existing_caption or "(none)",
-        section_content=section.get("content", ""),
-        caption_instruction=_caption_instruction(existing_caption, "table"),
-    )
+    def traced(parts: list) -> dict:
+        return _traced(base_path, "table", "visuals/table_system", parts,
+                       table, section)
 
-    def ask(hint: str = "", temperature: float = TABLE_VLM_TEMPERATURE,
+    def ask(hint: bool = False, temperature: float | None = None,
             penalty: float | None = None):
-        """The table asked once, with *hint* after the prompt; read in
+        """The table asked once, with the retry hint after the prompt where
+        *hint* (the rule table_temperature where no temperature); read in
         strips (`strips`) where its reply does not fit the most room it can
         be given. Returns the reply or a Hole."""
+        if temperature is None:
+            temperature = float(rules.get("table_temperature"))
+        text, parts = _user(user_parts, user_values, hint)
         got = call_vision(
-            client, table_system_prompt(), user_prompt + hint, image_path,
+            client, table_system_prompt(), text, image_path,
             temperature=temperature, repetition_penalty=penalty,
-            reply=reply, budget=budget, **kwargs)
-        if not (isinstance(got, Hole) and got.cause == "cut_off"):
+            reply=reply, budget=budget, traced=traced(parts), **kwargs)
+        if (not (isinstance(got, Hole) and got.cause == "cut_off")
+                or not rules.get("read_cut_tables_in_strips")):
             return got
 
         def strip(png: bytes, first: dict | None):
             if first is None:
                 return call_vision(
-                    client, table_system_prompt(), user_prompt + hint,
+                    client, table_system_prompt(), text,
                     image_path, temperature=temperature,
                     repetition_penalty=penalty, reply=reply, budget=budget,
-                    picture=png, **kwargs)
+                    picture=png, traced=traced(parts), **kwargs)
             # A later strip continues the table the first one was read as:
             # the table before it where the first strip continues that one,
             # else the first strip itself.
@@ -202,16 +228,18 @@ def process_table(
             else:
                 caption = existing_caption or first.get("caption") or ""
                 head = continuation.head_lines(_table_text(first))
-            shown = table_continued_prompt().format(
-                previous_caption=caption or "(none)",
-                previous_head=head or "(no head)", between="(nothing)")
+            later, later_parts = _user(
+                [own_part, continued],
+                [own_values, dict(previous_caption=caption or _blank("caption"),
+                                  previous_head=head or _blank("head"),
+                                  between=_blank("between"))], hint)
             return call_vision(
-                client, table_system_prompt(), own_prompt + shown + hint,
+                client, table_system_prompt(), later,
                 image_path, temperature=temperature,
                 repetition_penalty=penalty, reply=replies.TABLE_CONTINUED,
                 budget=max_request_tokens(shown_bytes(
                     section.get("content", ""), head)),
-                picture=png, **kwargs)
+                picture=png, traced=traced(later_parts), **kwargs)
 
         log.warning("  Table %s: cut off with the most room it can be "
                     "given, read in strips", table["id"])
@@ -232,10 +260,13 @@ def process_table(
     raw_md = _table_text(response)
     passed, metrics = _assess_table(raw_md, source_text, known_words)
 
-    if not passed:
-        retry = ask(_QA_RETRY_HINT, TABLE_QA_RETRY_TEMPERATURE,
-                    TABLE_QA_RETRY_PENALTY)
-        # A retry that is a hole keeps the first attempt, which was read.
+    for _reread in range(int(rules.get("table_qa_retries"))):
+        if passed:
+            break
+        retry = ask(True, float(rules.get("table_retry_temperature")),
+                    float(rules.get("table_retry_penalty")))
+        # A retry that is a hole keeps the attempt kept so far, which was
+        # read.
         if not isinstance(retry, Hole):
             retry_md = _table_text(retry)
             passed2, metrics2 = _assess_table(retry_md, source_text,
@@ -250,7 +281,9 @@ def process_table(
 
     # Only collapse stutter rows on the failure path: a passing table may
     # legitimately contain identical adjacent rows, so don't touch it.
-    result["markdown"] = raw_md if passed else qa.dedup_consecutive_rows(raw_md)
+    result["markdown"] = (raw_md if passed
+                          or not rules.get("collapse_stutter_rows")
+                          else qa.dedup_consecutive_rows(raw_md))
     result["qa"] = {"passed": passed, **metrics}
     # How many strips the image was read in, where it was (`strips`).
     if response.get("strips"):
@@ -333,19 +366,23 @@ def process_figure(
 
     existing_caption = figure.get("caption") or ""
 
-    user_prompt = figure_user_prompt().format(
-        section_title=section.get("title", "Unknown"),
-        page_number=figure.get("page_number", section.get("page_number", "?")),
-        existing_caption=existing_caption or "(none)",
-        section_content=section.get("content", ""),
-        caption_instruction=_caption_instruction(existing_caption, "figure"),
-    )
+    user_prompt, parts = _user(
+        [{"prompt": "visuals/figure_user", "fill": "format",
+          "nested": {"caption_instruction":
+                     _caption_prompt(existing_caption, "figure")}}],
+        [dict(section_title=section.get("title", _blank("section_title")),
+              page_number=figure.get("page_number",
+                                     section.get("page_number", "?")),
+              existing_caption=existing_caption or _blank("caption"),
+              section_content=section.get("content", ""))])
 
     kwargs = {"model": model} if model else {}
     response = call_vision(
         client, figure_system_prompt(), user_prompt, image_path,
         reply=replies.FIGURE,
         budget=max_request_tokens(shown_bytes(section.get("content", ""))),
+        traced=_traced(base_path, "figure", "visuals/figure_system", parts,
+                       figure, section),
         **kwargs
     )
 

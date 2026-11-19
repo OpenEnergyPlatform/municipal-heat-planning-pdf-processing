@@ -29,7 +29,8 @@ from docpipe.chunking.database import ids_of_document
 from docpipe.chunking.embedding import Unembedded, index_ids
 from docpipe.chunking.reembed import (check_target, embed_into, plan,
                                       record_path, run_reembed)
-from docpipe.embedding.api import DEFAULT_INSTRUCTION, ApiEmbedder, conversation
+from docpipe import rules
+from docpipe.embedding.api import ApiEmbedder, conversation
 
 DIM = 4
 
@@ -66,7 +67,7 @@ def new_index():
 def test_the_messages_form_is_the_chat_of_the_models_own_code():
     plain = conversation({"text": "Wärmebedarf 2045"})
     assert [turn["role"] for turn in plain] == ["system", "user", "assistant"]
-    assert plain[0]["content"][0]["text"] == DEFAULT_INSTRUCTION
+    assert plain[0]["content"][0]["text"] == rules.get("embed_instruction")
     assert plain[1]["content"] == [{"type": "text", "text": "Wärmebedarf 2045"}]
     assert plain[2]["content"][0]["text"] == ""
 

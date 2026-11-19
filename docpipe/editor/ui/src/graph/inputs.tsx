@@ -1,9 +1,10 @@
 /* The inputs of the settings of a box, an arrow and the document: a field, a brick with its settings, a table of
    words. They change the drawing in place and say so through `edit`; none takes JSON. */
+import type { ReactNode } from 'react';
 import { Box, Button, Code, Group, MultiSelect, NumberInput, Select, Stack, Switch, TagsInput, Text, ActionIcon, Tooltip } from '@mantine/core';
 import { IconPlus, IconX } from '@tabler/icons-react';
 import { TextBox } from '../components/Inputs';
-import { Help } from '../components/Bits';
+import { Help, Named } from '../components/Bits';
 import { rich, t, tr } from '../lib/i18n';
 import type { BrickInfo, Cur, GraphData, Obj } from './model';
 import { BlockEditor, PresetSelect } from './blocks';
@@ -39,13 +40,13 @@ export function FieldSelect({ k, label, value, onChange, clearable = true, descr
 }
 
 export function FieldsSelect({ k, label, value, onChange, description }: {
-  k: Kit; label?: string; value: string[]; onChange: (v: string[]) => void; description?: string;
+  k: Kit; label?: ReactNode; value: string[]; onChange: (v: string[]) => void; description?: string;
 }) {
   return <MultiSelect label={label} description={description} searchable placeholder={t('Choose fields')} data={fieldOptions(k.d, value)} value={value}
     onChange={onChange} nothingFoundMessage={t('No field matches.')} />;
 }
 
-export function Flag({ label, help, checked, onChange }: { label: string; help?: string; checked: boolean; onChange: (v: boolean) => void }) {
+export function Flag({ label, help, checked, onChange }: { label: ReactNode; help?: string; checked: boolean; onChange: (v: boolean) => void }) {
   return <Switch label={label} description={help} checked={checked} onChange={e => onChange(e.currentTarget.checked)} />;
 }
 
@@ -98,7 +99,7 @@ export function SettingsEditor({ k, brick, settings, onChange }: { k: Kit; brick
     <Stack gap="xs">
       {declared.map(s => (
         <Box key={s.key}>
-          <SettingInput k={k} kind={s.kind} label={s.key.replace(/_/g, ' ')} help={s.help} value={settings[s.key]} onChange={(v, typing) => put(s.key, v, typing)} />
+          <SettingInput k={k} kind={s.kind} label={<Named title={s.title} k={s.key} />} help={s.help} value={settings[s.key]} onChange={(v, typing) => put(s.key, v, typing)} />
         </Box>
       ))}
       {Object.keys(settings).filter(key => !names.has(key)).map(key => (
@@ -112,7 +113,7 @@ export function SettingsEditor({ k, brick, settings, onChange }: { k: Kit; brick
 }
 
 function SettingInput({ k, kind, label, help, value, onChange }: {
-  k: Kit; kind: string; label: string; help: string; value: any; onChange: (v: unknown, typing?: boolean) => void;
+  k: Kit; kind: string; label: ReactNode; help: string; value: any; onChange: (v: unknown, typing?: boolean) => void;
 }) {
   const about = <Help text={tr(help)} size="xs" />;
   switch (kind) {

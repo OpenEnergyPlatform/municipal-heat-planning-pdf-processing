@@ -20,20 +20,10 @@ from typing import Optional
 import fitz
 from PIL import Image
 
+from .. import rules
 from .config import (
     DIR_IMAGES,
-    SUPPRESS_CLASSES,
-    FOOTNOTE_CLASSES,
-    TABLE_CLASSES,
-    IMAGE_CLASSES,
-    CAPTION_CLASSES,
-    SECTION_TITLE_CLASSES,
-    TEXT_SUPPRESS_OVERLAP,
     title_exclude_prefixes,
-    TITLE_SAME_ROW_OVERLAP_FRACTION,
-    TABLE_BOX_MARGIN_PT,
-    IMAGE_BOX_MARGIN_PT,
-    MASK_FIGURES_IN_TABLE_CROPS,
 )
 from .models import Block, PageData
 from .rendering import FITZ_LOCK
@@ -114,6 +104,17 @@ def _expand_bbox_pt(
     return [x0_exp, y0_exp, x1_exp, y1_exp]
 
 
+def _margins(name: str) -> tuple:
+    """The margins (left, top, right, bottom) of the rule *name*, a map of
+    four numbers."""
+    given = rules.get(name)
+    try:
+        return tuple(given[side] for side in ("left", "top", "right", "bottom"))
+    except KeyError as missing:
+        raise ValueError(f"the rule {name} names no {missing}: it needs "
+                         f"left, top, right and bottom")
+
+
 def _overlap_fraction(text_bbox: list[float], region_bbox: list[float]) -> float:
     """
     Fraction of *text_bbox*'s area covered by *region_bbox*. Asymmetric by
@@ -163,12 +164,14 @@ def _text_from_bbox(fp: fitz.Page, bbox_pt: list[float]) -> str:
         return ""
 
 
-def _lies_in(block: Block, boxes: list[list[float]]) -> bool:
+def _lies_in(block: Block, boxes: list[list[float]],
+             overlap: float) -> bool:
     """Whether *boxes* take this block off the page: a text block that lies in
-    one of them by TEXT_SUPPRESS_OVERLAP. Removal and the footnote count ask
-    this one question, so the count cannot drift from what is removed."""
+    one of them by *overlap* (the rule `text_suppress_overlap`). Removal and
+    the footnote count ask this one question, so the count cannot drift from
+    what is removed."""
     return block.type == "text" and any(
-        _overlap_fraction(block.bbox, box) >= TEXT_SUPPRESS_OVERLAP
+        _overlap_fraction(block.bbox, box) >= overlap
         for box in boxes
     )
 
@@ -194,6 +197,19 @@ def process_page(
     """
     prefix = f"p{pg.page_number - 1}"
 
+    # The rules of the page, read once.
+    suppress_classes = set(rules.get("furniture_classes"))
+    footnote_classes = set(rules.get("footnote_classes"))
+    table_classes = set(rules.get("table_classes"))
+    image_classes = set(rules.get("figure_classes"))
+    caption_classes = set(rules.get("caption_classes"))
+    title_classes = set(rules.get("heading_classes"))
+    suppress_overlap = rules.get("text_suppress_overlap")
+    same_row_gap = rules.get("heading_same_row_gap")
+    excluded_prefixes = title_exclude_prefixes()
+    table_margins = _margins("table_crop_margins_pt")
+    image_margins = _margins("figure_crop_margins_pt")
+
     new_blocks: list[Block] = []
     crop_jobs: list[CropJob] = []
     suppress_bboxes: list[list[float]] = []
@@ -207,8 +223,8 @@ def process_page(
     # Figure/chart boxes in detection-pixel space, for pre-masking figures
     # embedded in a table crop.
     figure_dets_px = (
-        [d.bbox_px for d in detections if d.label in IMAGE_CLASSES]
-        if MASK_FIGURES_IN_TABLE_CROPS else []
+        [d.bbox_px for d in detections if d.label in image_classes]
+        if rules.get("mask_figures_in_tables") else []
     )
 
     for det in detections:
@@ -220,15 +236,15 @@ def process_page(
             pg.width_pt, pg.height_pt,
         )
 
-        if label in FOOTNOTE_CLASSES:
+        if label in footnote_classes:
             footnote_bboxes.append(bbox_pt)
             continue
 
-        if label in SUPPRESS_CLASSES:
+        if label in suppress_classes:
             suppress_bboxes.append(bbox_pt)
             continue
 
-        if label in SECTION_TITLE_CLASSES:
+        if label in title_classes:
             title_text = _text_from_bbox(fp, bbox_pt)
             if not title_text:
                 log.debug(
@@ -236,13 +252,13 @@ def process_page(
                 )
                 continue
 
-            if any(title_text.lower().startswith(p) for p in title_exclude_prefixes()):
+            if any(title_text.lower().startswith(p) for p in excluded_prefixes):
                 log.debug(f"Page {pg.page_number}: title rejected (excluded prefix)")
                 continue
 
             overlaps_same_row = any(
                 vertical_overlap_fraction(bbox_pt, sb)
-                > (1.0 - TITLE_SAME_ROW_OVERLAP_FRACTION)
+                > (1.0 - same_row_gap)
                 for sb in suppress_bboxes
             )
             if overlaps_same_row:
@@ -262,7 +278,7 @@ def process_page(
             suppress_bboxes.append(bbox_pt)
             continue
 
-        if label in CAPTION_CLASSES:
+        if label in caption_classes:
             caption_text = _text_from_bbox(fp, bbox_pt)
             block_id = f"{prefix}_cap{cap_counter}"
             cap_counter += 1
@@ -277,9 +293,9 @@ def process_page(
             suppress_bboxes.append(bbox_pt)
             continue
 
-        if label in TABLE_CLASSES:
+        if label in table_classes:
             bbox_pt_expanded = _expand_bbox_pt(
-                bbox_pt, TABLE_BOX_MARGIN_PT, pg.width_pt, pg.height_pt
+                bbox_pt, table_margins, pg.width_pt, pg.height_pt
             )
             bbox_px_expanded = _bbox_pt_to_px(
                 bbox_pt_expanded,
@@ -333,9 +349,9 @@ def process_page(
             suppress_bboxes.append(bbox_pt_expanded)
             continue
 
-        if label in IMAGE_CLASSES:
+        if label in image_classes:
             bbox_pt_expanded = _expand_bbox_pt(
-                bbox_pt, IMAGE_BOX_MARGIN_PT, pg.width_pt, pg.height_pt
+                bbox_pt, image_margins, pg.width_pt, pg.height_pt
             )
             bbox_px_expanded = _bbox_pt_to_px(
                 bbox_pt_expanded,
@@ -373,8 +389,9 @@ def process_page(
         # A footnote stays a text block of its page, labelled so that
         # Stage 3 can set it on a line of its own after the page's text.
         kept = [b for b in pg.blocks
-                if b.type == "text" and _lies_in(b, footnote_bboxes)
-                and not _lies_in(b, suppress_bboxes)]
+                if b.type == "text"
+                and _lies_in(b, footnote_bboxes, suppress_overlap)
+                and not _lies_in(b, suppress_bboxes, suppress_overlap)]
         for block in kept:
             block.layout_label = "footnote"
         if footnotes is not None:
@@ -382,7 +399,8 @@ def process_page(
 
     if suppress_bboxes:
         before = len(pg.blocks)
-        pg.blocks = [b for b in pg.blocks if not _lies_in(b, suppress_bboxes)]
+        pg.blocks = [b for b in pg.blocks
+                     if not _lies_in(b, suppress_bboxes, suppress_overlap)]
         suppressed = before - len(pg.blocks)
         if suppressed:
             log.debug(f"Page {pg.page_number}: {suppressed} text block(s) suppressed")

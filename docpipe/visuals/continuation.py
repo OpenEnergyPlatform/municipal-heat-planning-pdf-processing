@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from typing import Callable, Iterator, Optional
 
+from docpipe import rules
+
 # What a joined part keeps beside its start's rows: where it stood and what
 # the transcription measured of it.
 PART_KEYS = ("id", "page_number", "path", "bbox", "qa")
@@ -93,11 +95,14 @@ def _said(kind: str, item) -> str:
     """What a piece between two tables shows of itself."""
     if kind == "text":
         return str(item).strip()
+    words = rules.get("between_tables_words")
     if kind == "figure":
         caption = (item.get("caption") or "").strip()
-        return f"[Figure: {caption}]" if caption else "[Figure]"
+        if caption:
+            return words["figure_with_caption"].replace("{caption}", caption)
+        return words["figure"]
     title = (item.get("title") or "").strip()
-    return f"# {title}" if title else ""
+    return words["heading"].replace("{title}", title) if title else ""
 
 
 def links(sections: list) -> dict:
@@ -109,6 +114,7 @@ def links(sections: list) -> dict:
     out: dict = {}
     previous: Optional[tuple] = None     # (page, table)
     between: list = []                   # (kind, item)
+    gap = int(rules.get("table_continuation_page_gap"))
     for kind, page, item in _stream(sections):
         if kind != "table":
             if previous is not None:
@@ -116,7 +122,7 @@ def links(sections: list) -> dict:
             continue
         if (previous is not None and page is not None
                 and previous[0] is not None
-                and page in (previous[0], previous[0] + 1)):
+                and previous[0] <= page <= previous[0] + gap):
             said = [_said(other, one) for other, one in between]
             out[item.get("id")] = {
                 "after": previous[1].get("id"),

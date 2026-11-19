@@ -4,9 +4,9 @@ import type { ReactNode } from 'react';
 import { Alert, Anchor, Badge, Button, Code, Collapse, Group, Loader, NativeSelect, SimpleGrid, Stack, Switch, Text, TextInput } from '@mantine/core';
 import { IconChevronDown, IconChevronRight, IconPlayerPlay } from '@tabler/icons-react';
 import { Muted } from '../components/Bits';
-import { rich, t, tn, tr } from '../lib/i18n';
+import { rich, t, tn, tr, trCheck } from '../lib/i18n';
 import { addrs, lineKey, prettyAnswer, reqLabel, reqSub } from './logic';
-import { P, doTry, page, selectRequest, setFilter, setText, bump } from './store';
+import { P, doTry, page, selectRequest, setFilter, setText, bump, stageOf } from './store';
 import { TraceSelect } from './Editors';
 import './prompts.css';
 
@@ -17,7 +17,8 @@ export function RightColumn() {
   if (P.sel.t === 'phrases') return note(t('Requests are shown beside a prompt. To see the requests that use a text block, choose a request log in the editor of the text block and press "Requests with this text block".'));
   const kinds = ((P.list.prompts || []).find((x: any) => x.id === (P.sel as any).id) || {}).kinds || [];
   if (!kinds.length) return note(t('No request in the request log uses this prompt on its own, so there is no request to preview. Choose another request log or another prompt.'));
-  if (!P.req) return note(P.list.traces_note ? tr(P.list.traces_note) : t('There is no request to show.'));
+  if (!P.req) return note(stageOf((P.sel as any).id) ? t('The folders of the documents hold no request log of this stage yet. A run of the stage writes one beside what it writes for each document.')
+    : P.list.traces_note ? tr(P.list.traces_note) : t('There is no request to show.'));
   return (
     <Stack gap="md">
       <Group><Text fw={600}>{t('Request log')}</Text><TraceSelect /></Group>
@@ -61,7 +62,7 @@ function ReqList() {
       <div className="pr-reqlist">
         {reqs.map(r => (
           <button key={r.index} type="button" className={'pr-req' + (R.sel === r.index ? ' sel' : '')} onClick={() => selectRequest(r.index)}>
-            <b>{reqLabel(r)}</b><small>{reqSub(r)}</small><small>{r.check || ''}</small>
+            <b>{reqLabel(r)}</b><small>{reqSub(r)}</small><small>{trCheck(r.check || '')}</small>
           </button>
         ))}
         {!reqs.length && <Text size="sm" c="dimmed" p="sm">{t('No request matches.')}</Text>}
@@ -126,6 +127,16 @@ function Chat() {
   const gone = usable && !R.showSent && (p.gone || []).length > 0;
   const first = msgs[0] ? String(msgs[0][1] == null ? '' : msgs[0][1]) : '';
   const userText = pv.kind === 'follow' && usable && typeof p.edit.user === 'string' ? p.edit.user : first;
+  /* a request of stage 4 or 5 makes its message from prompt files too (owner request 2026-11-19, A3): the edited message
+     with its changed sentences marked, a picture it shows named after the text */
+  const made = usable && !!p.made && !R.showSent;
+  const userMarked: ReactNode = made && (p.user_lines || []).length ? <>
+    {p.user_lines.map((line: any, i: number) => (
+      <span key={i} className="pr-ln">{(line || []).map((pair: any, j: number) => <span key={j} className={pair && pair[1] ? 'dp-changed' : undefined}>{pair ? pair[0] : ''}</span>)}</span>))}
+    {/* the request log's own mark of a picture (requests._text) */}
+    {/\[image\]\s*$/.test(first) && <span className="pr-ln">{'[image]'}</span>}
+  </> : null;
+  const userGone = made && (p.user_gone || []).length > 0;
   return (
     <Stack gap="xs">
       <Text fw={600}>{reqLabel({ kind: pv.kind, parameter: notes.parameter, coordinate: notes.coordinate, asked: pv.asked })}</Text>
@@ -155,10 +166,18 @@ function Chat() {
           )}
         </Collapse>
       </div>
-      <Bubble role={t('request')} cls="user"><UserNodes text={userText} hit={hit} /></Bubble>
+      <Bubble role={t('request')} cls="user">
+        {userMarked || <UserNodes text={userText} hit={hit} />}
+        {userGone && (
+          <div className="pr-gonebox">
+            <div className="pr-role">{t('removed by your change')}</div>
+            {p.user_gone.map((x: string, i: number) => <div key={i} className="dp-gone">{x}</div>)}
+          </div>
+        )}
+      </Bubble>
       {msgs.slice(1).map((m, i) => <Bubble key={i} role={t('{role} (this attempt)', { role: m[0] })} cls={m[0] === 'assistant' ? 'assistant' : 'user'}>{String(m[1] == null ? '' : m[1])}</Bubble>)}
       <Bubble role={rec.finish ? t('answer · {finish}', { finish: rec.finish }) : t('answer')} cls="assistant">{rec.answer == null ? (rec.error || t('no answer')) : prettyAnswer(rec)}</Bubble>
-      <Bubble role={t('result')} cls="check">{rec.check || ''}</Bubble>
+      <Bubble role={t('result')} cls="check">{trCheck(rec.check || '')}</Bubble>
     </Stack>
   );
 }
@@ -169,7 +188,8 @@ const lineWhy = (why: string): string => why === 'not_an_address' ? t('names no 
 
 function TryBox() {
   const R = P.req!;
-  const T = (P.list && P.list.try) || {};
+  /* a request of the visuals (stage 5) is tried on the vision model the stage asks */
+  const T = (P.list && (R.listing && R.listing.asks === 'vlm' ? P.list.try_vision : P.list.try)) || {};
   const listed: any[] = R.listing && R.listing.requests ? R.listing.requests : [];
   const n = Math.min(T.limit || 3, listed.length);
   const run = P.tryRes;
@@ -197,8 +217,11 @@ function TryResults({ res, listed }: { res: any; listed: any[] }) {
   const q = (v: any) => v == null ? '?' : v;
   return (
     <Stack gap="xs">
-      <Muted>{t('You chose {named} requests and {sent} were sent, {failed} of them failed. The model gave the same answer {same} times, a different answer {different} times and an answer not in the required form {out_of_form} times. In {pass} requests every line number passes the checks, and in {fail} requests a line number fails.', {
-        named: q(c.named), sent: q(c.sent), failed: q(c.failed), same: q(c.same), different: q(c.different), out_of_form: q(c.out_of_form), pass: q(c.addresses_hold), fail: q(c.addresses_fail) })}</Muted>
+      <Muted>{res.staged
+        ? t('You chose {named} requests and {sent} were sent, {failed} of them failed. The model gave the same answer {same} times, a different answer {different} times and an answer not in the required form {out_of_form} times.', {
+          named: q(c.named), sent: q(c.sent), failed: q(c.failed), same: q(c.same), different: q(c.different), out_of_form: q(c.out_of_form) })
+        : t('You chose {named} requests and {sent} were sent, {failed} of them failed. The model gave the same answer {same} times, a different answer {different} times and an answer not in the required form {out_of_form} times. In {pass} requests every line number passes the checks, and in {fail} requests a line number fails.', {
+          named: q(c.named), sent: q(c.sent), failed: q(c.failed), same: q(c.same), different: q(c.different), out_of_form: q(c.out_of_form), pass: q(c.addresses_hold), fail: q(c.addresses_fail) })}</Muted>
       {(res.results || []).map((r: any, i: number) => {
         const found = listed.find(x => x.index === r.index);
         const head = <Text><b>#{r.index}</b>{found ? ' ' + reqLabel(found) : ''}</Text>;
@@ -217,12 +240,12 @@ function TryResults({ res, listed }: { res: any; listed: any[] }) {
               {nw.in_form === true && <Badge color="teal" variant="light">{t('in the required form')}</Badge>}
               {nw.in_form === false && <Badge color="red" variant="light">{nw.fault ? t('not in the required form ({fault})', { fault: nw.fault }) : t('not in the required form')}</Badge>}
               {r.changed_request === false && <Badge color="gray" variant="light">{t('the edit did not change what was sent')}</Badge>}
-              {r.holds === true ? <Badge color="teal" variant="light">{t('every line number passes the checks')}</Badge>
+              {res.staged ? null : r.holds === true ? <Badge color="teal" variant="light">{t('every line number passes the checks')}</Badge>
                 : r.holds === false ? <Badge color="red" variant="light">{t('a line number fails a check')}</Badge>
                 : <Badge color="gray" variant="light">{t('names no line number')}</Badge>}
             </Group>
             <SimpleGrid cols={2} spacing="xs" mt={6}>
-              <div><Text size="sm" fw={600}>{t('recorded')}</Text><pre className="pr-out">{prettyAnswer(o) || t('(no answer)')}</pre>{o.check && <Muted>{o.check}</Muted>}</div>
+              <div><Text size="sm" fw={600}>{t('recorded')}</Text><pre className="pr-out">{prettyAnswer(o) || t('(no answer)')}</pre>{o.check && <Muted>{trCheck(o.check)}</Muted>}</div>
               <div><Text size="sm" fw={600}>{t('new')}</Text><pre className="pr-out">{nw.error ? nw.error : (prettyAnswer(nw) || t('(no answer)'))}</pre>{nw.error && <Muted>{t('The server gave an error.')}</Muted>}</div>
             </SimpleGrid>
             {(r.addresses || []).length > 0 && (

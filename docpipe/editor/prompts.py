@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import importlib
 import json
 import re
 from pathlib import Path
@@ -62,13 +63,31 @@ class Refused(ValueError):
     """Something the editor does not do, said in one sentence."""
 
 
+# The stages before the harvest whose requests the editor reads from their
+# logs, and the module that says which prompts each kind of their requests
+# is made of (`REQUESTS`; owner request 2026-11-19, A3).
+STAGE_REQUESTS = {"refinement": "docpipe.refinement.replies",
+                  "visuals": "docpipe.visuals.replies"}
+
+
+def stage_requests(stage: str) -> dict:
+    """{kind: the prompt ids it is made of} of a stage before the harvest,
+    {} for any other stage."""
+    module = STAGE_REQUESTS.get(stage)
+    return importlib.import_module(module).REQUESTS if module else {}
+
+
 # -- which prompts there are -----------------------------------------------------
 
 def concerns(prompt_id: str, request: dict) -> bool:
     """Whether the prompt has a say in a recorded request: it makes its
     instruction, or it is the follow-up prompt and the request is one
-    asked again."""
+    asked again; for a request of a stage before the harvest, its messages
+    are made of it (`made`)."""
     from ..extraction import addressed
+    made = request.get("made")
+    if isinstance(made, dict):
+        return prompt_id in prompt_files.prompts_of(made)
     if prompt_id == addressed.PROMPT_IDS[FOLLOW]:
         return request.get("kind") == FOLLOW
     return prompt_of(request) == prompt_id
@@ -79,6 +98,9 @@ def kinds_of(prompt_id: str) -> list:
     of its own kind, and for the follow-up prompt those asked again."""
     from ..extraction import addressed
     stage, _, name = prompt_id.partition("/")
+    if stage in STAGE_REQUESTS:
+        return sorted(kind for kind, ids in stage_requests(stage).items()
+                      if prompt_id in ids)
     if stage != "extraction" or name not in addressed.KINDS:
         return []
     if name == FOLLOW or name in CUT or name in WHOLE:
@@ -104,6 +126,60 @@ def listing(profile) -> list:
                     "owner": owner.name, "own": owner.name == profile.name,
                     "kinds": kinds_of(prompt_id)})
     return out
+
+
+# -- where a prompt is asked ------------------------------------------------------
+
+# The drawing of the Flow tab a step stands in: the main flow is "", the
+# chat's is "#chat" (ui/src/flow/FlowTab.tsx CHAT), a follow-up pass by its
+# name.
+CHAT_FLOW = "#chat"
+
+
+def steps_asking(profile) -> dict:
+    """{prompt id: [{"flow", "id", "label"}]} of every step of the
+    profile's drawings that asks with a prompt the profile has, in the
+    order the drawings stand (owner request 2026-11-19, A7: from a prompt
+    to the steps that ask it, as the Flow tab names them). A step whose
+    prompt no profile of the line writes is never taken and stands under
+    none; a drawing the page cannot read names no step."""
+    from ..extraction import blocks, passflow
+    from ..extraction import flow as flow_map
+    from ..inference import chatflow
+    out: dict = {}
+
+    def put(prompt_id: str, flow: str, node: dict, label: str) -> None:
+        out.setdefault(prompt_id, []).append(
+            {"flow": flow, "id": str(node.get("id") or ""), "label": label})
+
+    def extraction(flow: str, tree: list) -> None:
+        for node, _frames in flow_map.walk(tree):
+            box = blocks.box_of(node) if "box" in node else None
+            if box is not None and box.asks:
+                put(f"extraction/{box.asks}", flow, node, box.label)
+    try:
+        extraction("", flow_map.load(profile).tree)
+    except (flow_map.FlowError, OSError, ValueError):
+        pass
+    for name in passflow.names(profile):
+        if name == passflow.MAIN:
+            continue
+        try:
+            extraction(name, passflow.load(name, profile))
+        except (OSError, ValueError, LookupError):
+            continue
+    try:
+        chat = chatflow.load(profile).tree
+    except (OSError, ValueError):
+        chat = []
+    for node in chatflow.walk(chat):
+        box = (chatflow.LIBRARY.get(node.get("box"))
+               if isinstance(node, dict) else None)
+        if box is not None and box.asks:
+            put(f"inference/{box.asks}", CHAT_FLOW, node, box.label)
+    have = {row["id"] for row in listing(profile)}
+    return {prompt_id: steps for prompt_id, steps in out.items()
+            if prompt_id in have}
 
 
 # -- one file, cut for editing ----------------------------------------------------

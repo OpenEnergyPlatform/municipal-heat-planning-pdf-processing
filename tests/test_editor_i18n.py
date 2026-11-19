@@ -14,7 +14,9 @@ test of its own, with a case that breaks it by construction:
 3. Every explanation the server sends the page for both profiles (the
    library of the flow, its conditions, numbers, switches and notes, the
    rules of every tab and of the graph, the help of the spec form, the
-   details of the sources, the notes of the prompts) has a German entry,
+   details of the sources, the notes of the prompts) and the name in words
+   of every setting it shows (rules, numbers, the keys of the spec form, of
+   a brick and of a source) has a German entry,
    as it stands or, where the server fills in names, by one of the
    server's templates (i18n/templates.json).
 4. A German entry keeps the {names} of its English key; a template is none
@@ -407,7 +409,8 @@ ANSWERS = {
         "library.boxes[].settings[].words.*", "library.each.*",
         "library.each_titles.*", "library.which.*", "library.order_words.*",
         "library.arrows.*", "conditions[].label", "conditions[].props[].label",
-        "conditions[].props[].words.*", "numbers[].help", "notes[].says",
+        "conditions[].props[].words.*", "numbers[].help", "numbers[].title",
+        "notes[].says",
         "switches.*.label", "switches.*.none", "never.*",
         # every question is "Ask the model" with a preset (owner decision
         # 2026-11-12 evening): the presets, the forms of an answer, the
@@ -419,12 +422,16 @@ ANSWERS = {
         "library.forms.*.label", "library.forms.*.says",
         "library.targets.*.label", "library.targets.*.says",
         "shows.*.label", "shows.*.says"),
-    "/api/spec": ("form.*[].help", "form.*[].about"),
-    "/api/prompts": ("traces_note", "try.why"),
-    "/api/graph": ("rules[].group", "rules[].help", "skipped",
-                   "bricks[].does", "bricks[].takes", "bricks[].gives",
-                   "bricks[].settings[].help"),
-    "/api/sources": ("kinds.*.stands", "differences.skipped",
+    "/api/spec": ("form.*[].help", "form.*[].about", "form.*[].title"),
+    "/api/prompts": ("traces_note", "try.why", "try_vision.why"),
+    "/api/data": ("files[].about",),
+    "/api/stages": ("stages[].name", "stages[].says", "before.name",
+                    "before.says", "after.name", "after.says"),
+    "/api/graph": ("rules[].group", "rules[].help", "rules[].title",
+                   "skipped", "bricks[].does", "bricks[].takes",
+                   "bricks[].gives", "bricks[].settings[].help",
+                   "bricks[].settings[].title"),
+    "/api/sources": ("kinds.*.stands", "titles.*", "differences.skipped",
                      "differences.fields[].rows[].detail",
                      "differences.fields[].rows[].entries[].why",
                      "differences.unasked[].detail"),
@@ -437,7 +444,7 @@ REFUSED_ROWS = ({"id": "no_kind|x", "action": "add"},
                 {"id": "definition_rewritten|no_field||key",
                  "action": "replace"},
                 {"id": "not_asked|no_shape|path", "action": "merge"})
-RULE_TABS = ("spec", "prompts", "flow", "sources", "graph")
+RULE_TABS = ("spec", "prompts", "flow", "sources", "graph", "stages")
 # What the server explains of one flow of a follow-up pass.
 PASS_ANSWER = ("library.boxes[].label", "library.boxes[].says",
                "library.boxes[].fixed", "library.boxes[].marks",
@@ -501,7 +508,7 @@ def server_texts() -> dict:
                                      None)
             assert status == 200, (name, tab, shown)
             for text in _texts_of(shown, ("rules[].group", "rules[].help",
-                                          "cost")):
+                                          "rules[].title", "cost")):
                 out.setdefault(text, f"{name} rules {tab}")
         spec_raw = json.loads(app.spec_path.read_text(encoding="utf-8"))
         taken = sourcespage.take(spec_raw, list(REFUSED_ROWS), None, profile,
@@ -510,7 +517,8 @@ def server_texts() -> dict:
             out.setdefault(refused["why"], f"{name} sources take")
     for text in (*rulespage.COST.values(), flow_view.STALE, graphpage.COST,
                  graphpage.GATE, sourcespage.COST, prompts.NO_STALE,
-                 phrases.NO_STALE, trying.NO_MODEL, flowtry.ORDER_SAID):
+                 phrases.NO_STALE, trying.NO_MODEL, trying.NO_VISION,
+                 flowtry.ORDER_SAID):
         out.setdefault(text, "report")
     for text in measured_texts():
         out.setdefault(text, "measured")
@@ -733,6 +741,8 @@ def test_the_german_speaks_to_the_reader_as_sie():
 # reasons it says and writes as {"message": ...} only)
 CHECK_SOURCES = {
     "docpipe/extraction/flow.py": set(),
+    # what a save of a drawing with parts says (owner request 2026-11-19)
+    "docpipe/extraction/flowparts.py": {"expand", "fold"},
     "docpipe/extraction/passflow.py": set(),
     "docpipe/editor/flow.py": set(),
     "docpipe/extraction/conditions.py": {"problems", "row_problem", "_rows",

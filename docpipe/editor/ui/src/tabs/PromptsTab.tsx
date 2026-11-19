@@ -4,12 +4,22 @@ import { useEffect } from 'react';
 import { Alert, Badge, Group, Loader, NavLink, Stack, Text, TextInput } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
 import { setDirty, useRequests, useStore, useTabActions } from '../lib/nav';
-import { t } from '../lib/i18n';
-import { PhrasesEditor, PromptEditor } from '../prompts/Editors';
+import { t, tn, tr } from '../lib/i18n';
+import { PhrasesEditor, PromptEditor, stepsOf } from '../prompts/Editors';
 import { RightColumn } from '../prompts/Requests';
 import { edDirty, phDirty, stageOrder } from '../prompts/logic';
 import { P, actCheck, actSave, bump, currentX, loadPrompts, promptsDirty, selectModule, selectPrompt, tick } from '../prompts/store';
 import '../prompts/prompts.css';
+
+/* under a prompt's name: the step that asks with it, as the Flow tab names it, and how many more do; whose file it is
+   where it is not the profile's own */
+function stepLine(p: any): string | undefined {
+  const steps = stepsOf(p.id);
+  const names = [...new Set(steps.map(s => tr(s.label)))];
+  const asked = !names.length ? '' : names.length === 1 ? names[0] : tn(names.length - 1, '{first} and {n} more step', '{first} and {n} more steps', { first: names[0] });
+  const owner = p.own ? '' : t('default from profile {name}', { name: p.owner });
+  return [asked, owner].filter(Boolean).join(' · ') || undefined;
+}
 
 function ListColumn() {
   const L = P.list;
@@ -17,7 +27,8 @@ function ListColumn() {
   if (!L) return <Group gap="xs"><Loader size="xs" /><Text size="sm" c="dimmed">{t('Loading…')}</Text></Group>;
   const words = P.filter.toLowerCase().split(/\s+/).filter(Boolean);
   const match = (...parts: string[]) => { const hay = parts.join('\n').toLowerCase(); return words.every(w => hay.includes(w)); };
-  const prompts: any[] = (L.prompts || []).filter((p: any) => match(p.id, p.owner || ''));
+  /* a prompt is found by its name, its profile and the names of the steps that ask with it */
+  const prompts: any[] = (L.prompts || []).filter((p: any) => match(p.id, p.owner || '', ...stepsOf(p.id).map(s => tr(s.label))));
   const stages = [...new Set(prompts.map(p => p.stage as string))].sort(stageOrder);
   const sel = P.sel;
   return (
@@ -33,7 +44,7 @@ function ListColumn() {
             const E = P.eds.get(p.id);
             return (
               <NavLink key={p.id} component="button" type="button" active={!!sel && sel.t === 'prompt' && sel.id === p.id}
-                label={p.name} description={p.own ? undefined : t('default from profile {name}', { name: p.owner })} onClick={() => selectPrompt(p.id)}
+                label={p.name} description={stepLine(p)} onClick={() => selectPrompt(p.id)}
                 rightSection={
                   <Group gap={4} wrap="nowrap">
                     {(p.kinds || []).length > 0 && <Badge size="xs" variant="light" color="teal" title={t('The requests of the request log that use this prompt can be shown')}>{t('requests')}</Badge>}

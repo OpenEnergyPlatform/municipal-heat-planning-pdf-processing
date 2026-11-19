@@ -117,3 +117,13 @@ def window(sections: list) -> dict:
     return {"type": "object",
             "properties": {"sections": {"type": "array", "items": section}},
             "required": ["sections"], "additionalProperties": False}
+
+
+# The prompts each kind of request of this stage is made of, as its request
+# log names them (`refine._logged`, `made`): which requests of a log the
+# editor lists under a prompt (owner request 2026-11-19, A3).
+REQUESTS = {
+    "refine": ("refinement/refine", "refinement/refine_corrections",
+               "refinement/window_context"),
+    "split": ("refinement/split", "refinement/split_user"),
+}

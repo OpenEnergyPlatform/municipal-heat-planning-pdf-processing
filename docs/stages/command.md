@@ -271,7 +271,7 @@ where the stages themselves say what they ask:
   prompts](../profiles.md)). The `extract` line covers the prompts of the harvest (one for each kind of
   request, `transcribe` to `follow`), the search-sentence prompt and the review prompt,
   and the `compile` line the example prompt.
-- `wording`: the profile's phrase and UI tables for extraction and the chat,
+- `wording`: the profile's phrase files for extraction and the chat's words,
   and the hooks of the graph route, each checked by the code that raises for
   what is missing.
 - `embedding`: the model and the dimension the database records for its

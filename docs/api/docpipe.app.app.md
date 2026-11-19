@@ -7,7 +7,7 @@ values are reviewed. The only module of the package that imports Streamlit.
 
 What the corpus is about comes from the profile: its catalog supplies the
 labels, the filters and the detail shown for a selected document, and its
-`inference.UI` every word on these pages. A question goes to one document,
+`prompts/chat/phrases.json` every word on these pages. A question goes to one document,
 to several (each asked by itself, then compared) or to the whole corpus.
 Where a harvest is configured, the numbers it holds for a question are
 shown first, as they were read and checked, and the answer from the
@@ -271,8 +271,9 @@ def chat_page() -> None
 def axis_names() -> dict
 ```
 
-{axis: its name in the profile's words}, `inference.AXIS_NAMES`; an
-axis the profile does not name is shown by its key.
+{axis: its name in the profile's words} (`wording.axis_names`, the
+profile's `prompts/chat/phrases.json`); an axis the profile does not
+name is shown by its key.
 
 ### reason_words
 

@@ -5,7 +5,7 @@ import { ActionIcon, Alert, Box, Button, Checkbox, Code, Group, NativeSelect, St
 import { IconArrowDown, IconArrowUp, IconPlus, IconTrash, IconX } from '@tabler/icons-react';
 import { AreaBox, NumberBox, TextBox } from '../components/Inputs';
 import { FormNode, useFormField } from '../components/FormNode';
-import { Help, K } from '../components/Bits';
+import { Help, Named } from '../components/Bits';
 import { DF, type Kind } from '../lib/forms';
 import { showError } from '../lib/dialogs';
 import {
@@ -16,10 +16,14 @@ import { rich, t, tr } from '../lib/i18n';
 import { CondEditor } from '../flow/Conditions';
 import type { Subject } from '../flow/model';
 import { markDirty, S } from './state';
-import { axisOf } from './model';
+import { axisOf, typeReads } from './model';
 import { EntriesTable, type ListRef } from './entries';
 
-export interface FormField { key: string; widget: string; help?: string; choices?: string[]; default?: any; of?: string; year?: boolean }
+export interface FormField {
+  key: string; widget: string; title?: string; help?: string; choices?: string[]; default?: any; of?: string; year?: boolean;
+  /* the settings of a value type under which the loader reads the key: {setting: the values it reads it under} */
+  when?: Record<string, unknown[]>;
+}
 export interface WidgetCtx {
   coordNames?: string[];
   onUri?: (v: string) => void;
@@ -35,11 +39,11 @@ function useEdit() {
   return (fn: () => void | false) => { if (fn() === false) return; markDirty(); redraw(); };
 }
 
-function FieldWrap({ k, help, children }: { k: string; help?: string; children: ReactNode }) {
+function FieldWrap({ k, title, help, children }: { k: string; title?: string; help?: string; children: ReactNode }) {
   const flagged = S.flag != null && S.flag.field === k;
   return (
     <Box data-key={k} className={flagged ? 'dp-flag' : undefined} p={flagged ? 6 : 0}>
-      <Text fw={600} mb={2}><K>{k}</K></Text>
+      <Text fw={600} mb={2}><Named title={title} k={k} /></Text>
       <Help text={tr(help)} />
       <Box mt={4}>{children}</Box>
     </Box>
@@ -200,9 +204,9 @@ function ExampleW({ f, obj }: { f: FormField; obj: Obj }) {
   }, [obj, extra]); // eslint-disable-line react-hooks/exhaustive-deps
   const { root: st, api } = useFormField(obj, f.key, spec, markDirty, [extra.join('\u0000')]);
   if (st.odd) return <FormNode spec={spec} st={st} api={api} path={[]} />;
-  const part = (key: string, label: string, help: string) => (
+  const part = (key: string, label: string, title: string, help: string) => (
     <Box>
-      <Text size="sm" fw={600}><Code>{label}</Code></Text>
+      <Text size="sm" fw={600}><Named title={title} k={label} /></Text>
       <Text size="xs" c="dimmed">{help}</Text>
       <FormNode spec={spec.fields!.find(x => x.key === key)!.kind} st={st.cells[key]} api={api} path={[key]} />
     </Box>
@@ -210,9 +214,9 @@ function ExampleW({ f, obj }: { f: FormField; obj: Obj }) {
   const offers = DF().exampleOffers(coords).filter(c => !cols.includes(c));
   return (
     <Stack gap="sm">
-      {part('source', 'source', t('The text as the document prints it, plain text.'))}
-      {part('defaults', 'defaults', t('What every row says unless the row says otherwise.'))}
-      {part('tuples', 'rows', t('One row per value the text states: its value, its quote and its dimensions.'))}
+      {part('source', 'source', t('Source text'), t('The text as the document prints it, plain text.'))}
+      {part('defaults', 'defaults', t('Shared values of the rows'), t('What every row says unless the row says otherwise.'))}
+      {part('tuples', 'rows', t('Rows of the example'), t('One row per value the text states: its value, its quote and its dimensions.'))}
       {offers.length ? (
         <NativeSelect w={200} value="" data={[{ value: '', label: t('+ column') }, ...offers.map(c => ({ value: c, label: c }))]}
           onChange={e => { const v = e.currentTarget.value; if (v) setExtra([...extra, v]); }} />
@@ -442,7 +446,15 @@ function Widget({ f, obj, orig, ctx }: { f: FormField; obj: Obj; orig: Obj | nul
 /* is a field of the whole document a year: its own kind, else its key (base_year, target_year) */
 const planIsYear = (key: string, obj: Obj) => (obj && obj.kind ? obj.kind === 'year' : key === 'base_year' || key === 'target_year');
 
-/* the form of one object: every key the description names, then a line for the keys it does not */
+/* whether the value type of the field *obj* reads the key *f* (model.ts typeReads, owner request 2026-11-19, A6) */
+function readByType(f: FormField, obj: Obj): boolean {
+  const name = String(obj.value_type || 'float');
+  const type = (S.library.types || []).find(one => one.name === name);
+  return typeReads(f.when, type ? (type.settings || {}) as Obj : undefined);
+}
+
+/* the form of one object: every key the description names that its value type reads (or that it has), then a line for
+   the keys it does not name */
 export function SpecForm({ fields, obj, orig, ctx }: { fields: FormField[] | undefined; obj: Obj; orig: Obj | null; ctx?: WidgetCtx }) {
   const c = ctx || {};
   const skip = c.skip || new Set<string>();
@@ -451,8 +463,9 @@ export function SpecForm({ fields, obj, orig, ctx }: { fields: FormField[] | und
   for (const f of fields || []) {
     if (skip.has(f.key)) { shown.add(f.key); continue; }
     if (f.year && !(S.sel.t === 'plan' && planIsYear(S.sel.key, obj))) continue;
+    if (obj[f.key] === undefined && !readByType(f, obj)) continue;
     shown.add(f.key);
-    parts.push(<FieldWrap key={f.key} k={f.key} help={f.help}><Widget f={f} obj={obj} orig={orig} ctx={c} /></FieldWrap>);
+    parts.push(<FieldWrap key={f.key} k={f.key} title={f.title} help={f.help}><Widget f={f} obj={obj} orig={orig} ctx={c} /></FieldWrap>);
   }
   const other = Object.keys(obj).filter(k => !shown.has(k) && !(c.skipQuiet && c.skipQuiet.has(k)));
   return (

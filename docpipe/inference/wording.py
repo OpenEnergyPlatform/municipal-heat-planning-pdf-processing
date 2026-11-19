@@ -13,11 +13,16 @@ profile that extends another one writes only the pieces it words
 differently: its file is laid over those of the profile it extends.
 
 The words of the app's pages come the same way, from the profile's
-`inference.py`: its `UI` table, which a person reads where a model reads the
-sentences. That
-includes the picker's labels, the tag after a document's name and the noun
-for one. Both tables are checked for the entries the core asks for
-(`REQUIRED`, `UI_REQUIRED`).
+`prompts/chat/phrases.json` (`CHAT`; its `inference.py` until 2026-11-19,
+owner request A2: so that they have a place in the page and are edited
+where the other sentences are). A person reads them where a model reads the
+sentences: the labels of the pages and of the picker, the tag after a
+document's name and the noun for one (`UI_REQUIRED`), the name of each axis
+of the spec where the chat shows a value's coordinates (`axis_<axis>`), why
+the graph route did not answer (`graph_note_<reason>`), and the marker and
+note of a value read off a figure (`readoff_marker`, `readoff_note`). Both
+tables are checked for the entries the core asks for (`REQUIRED`,
+`CHAT_REQUIRED`).
 
 Author: Felix Vossel
 """
@@ -30,6 +35,13 @@ from .. import phrases as phrase_files
 from ..profile import ENV_VAR, Profile, active_profile, load_profile
 
 MODULE = "inference"
+# The module of the words a person reads in the app (`docpipe/phrases.py`).
+CHAT = "chat"
+# The families of the chat's words besides those of its pages, by the
+# prefix of their names: the name of an axis of the spec, and why the graph
+# route did not answer, a sentence for each reason of `kg_route.REASONS`.
+AXIS_PREFIX = "axis_"
+GRAPH_NOTE_PREFIX = "graph_note_"
 
 log = logging.getLogger(__name__)
 
@@ -101,6 +113,18 @@ UI_REQUIRED = frozenset({
     # document's name, and the noun for a profile that names none.
     "version_current", "version_old", "document_noun_fallback",
 })
+# What the chat cannot run without: the words of its pages and the marker
+# and note of a value read off a figure.
+CHAT_REQUIRED = UI_REQUIRED | {"readoff_marker", "readoff_note"}
+# What the editor says of the chat's words beside each (`docpipe edit`).
+CHAT_NOTES = {
+    "readoff_marker": (
+        "How an answer that says itself that it read values off a figure is "
+        "recognised, in the answer's own language."),
+    "readoff_note": (
+        "Appended to an answer with values read off a figure unless it says "
+        "so itself."),
+}
 
 
 # What a comment said above a sentence while the sentences were tables in
@@ -149,10 +173,6 @@ def chat_profile(profile: Optional[Profile] = None) -> Profile:
     return profile
 
 
-def _component(attr: str, profile: Optional[Profile] = None):
-    return chat_profile(profile).require("inference", attr)
-
-
 _checked: dict = {}
 
 
@@ -176,26 +196,54 @@ def phrases(profile: Optional[Profile] = None) -> dict:
     return got
 
 
-_ui_checked: dict = {}
+_chat_checked: dict = {}
+
+
+def chat_words(profile: Optional[Profile] = None) -> dict:
+    """Every word of the chat a person reads (`CHAT`), complete: the
+    profile's file laid over those of the profiles it extends. Without a
+    profile they are those of the profile the package brings itself: the app
+    starts on any corpus, and what it shows then is in English. A name of
+    none of its families is refused: no page would show it."""
+    profile = profile or active_profile() or load_profile(BUILT_IN)
+    if profile.name in _chat_checked:
+        return _chat_checked[profile.name]
+    got = phrase_files.table(profile, CHAT)
+    missing = sorted(CHAT_REQUIRED - set(got))
+    extra = sorted(key for key in got if key not in CHAT_REQUIRED
+                   and not key.startswith((AXIS_PREFIX, GRAPH_NOTE_PREFIX)))
+    if missing or extra:
+        raise LookupError(
+            f"the chat words of profile {profile.name!r} are missing "
+            f"{missing} and have {extra} no page uses "
+            f"({phrase_files.path_of(profile, CHAT)})")
+    _chat_checked[profile.name] = got
+    return got
 
 
 def ui(profile: Optional[Profile] = None) -> dict:
-    """The words of the app's pages and of the picker, complete. Without a
-    profile they are those of the profile the package brings itself: the app
-    starts on any corpus, and what it shows then is in English."""
-    profile = profile or active_profile() or load_profile(BUILT_IN)
-    if profile.name in _ui_checked:
-        return _ui_checked[profile.name]
-    got: dict = {}
-    for layer in reversed(profile.layers("inference", "UI")):
-        got.update(layer)
-    missing = sorted(UI_REQUIRED - set(got))
-    extra = sorted(set(got) - UI_REQUIRED)
-    if missing or extra:
-        raise LookupError(f"inference.UI of profile {profile.name!r} is "
-                          f"missing {missing} and has {extra} no page uses")
-    _ui_checked[profile.name] = got
-    return got
+    """The words of the app's pages and of the picker, complete
+    (`chat_words`, those of `UI_REQUIRED`)."""
+    got = chat_words(profile)
+    return {key: got[key] for key in got if key in UI_REQUIRED}
+
+
+def axis_names(profile: Optional[Profile] = None) -> dict:
+    """{axis: its name in the profile's words} where the chat shows a
+    value's coordinates; an axis the profile does not name is shown by its
+    key."""
+    return {key[len(AXIS_PREFIX):]: value
+            for key, value in chat_words(profile).items()
+            if key.startswith(AXIS_PREFIX)}
+
+
+def graph_notes(profile: Optional[Profile] = None) -> Optional[dict]:
+    """{reason of kg_route.REASONS: why the graph route did not answer, in
+    the profile's words}; None where the profile words none."""
+    got = {key[len(GRAPH_NOTE_PREFIX):]: value
+           for key, value in chat_words(profile).items()
+           if key.startswith(GRAPH_NOTE_PREFIX)}
+    return got or None
 
 
 def readoff(profile: Optional[Profile] = None) -> tuple:
@@ -204,4 +252,5 @@ def readoff(profile: Optional[Profile] = None) -> tuple:
     The note is appended unless the answer already says so itself, and the
     marker is how that is recognised — both in the answer's own language.
     """
-    return _component("READOFF_MARKER", profile), _component("READOFF_NOTE", profile)
+    got = chat_words(chat_profile(profile))
+    return got["readoff_marker"], got["readoff_note"]

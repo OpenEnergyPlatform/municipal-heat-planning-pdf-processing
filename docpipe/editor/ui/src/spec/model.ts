@@ -11,6 +11,16 @@ export const isObj = (v: unknown): v is Obj => v !== null && typeof v === 'objec
 const own = (o: unknown, k: string): boolean => o != null && Object.prototype.hasOwnProperty.call(o, k);
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v));
 
+/* whether a value type with *settings* reads a key of a field that is read only under some of them (*when*, the server's
+   `specs.READ_FOR`: {setting: the values it reads the key under}); a setting the type leaves out counts as false, a key
+   with no *when* is read under every type, and a type the page does not know reads every key (owner request 2026-11-19,
+   A6) */
+export function typeReads(when: Record<string, unknown[]> | undefined, settings: Obj | undefined): boolean {
+  if (!when) return true;
+  if (!settings) return true;
+  return Object.entries(when).every(([k, want]) => want.includes(settings[k] === undefined ? false : settings[k]));
+}
+
 /* a field's dimension written as this word is the spec's shared dimension of that name */
 export const SHARED = 'shared';
 /* the coordinate that is the unit a number is printed in */

@@ -8,14 +8,14 @@ import { showError, showInfo } from '../lib/dialogs';
 import { clone, same, wrote } from '../lib/util';
 import { rich, t, tr, useLang } from '../lib/i18n';
 import { GroupedRules, RuleInput, type Rule } from '../rules/RuleInputs';
-import { Help } from '../components/Bits';
+import { Help, Named } from '../components/Bits';
 import type { Panel } from './Settings';
 
 interface Loaded { rules: Rule[]; base: string | null; file: string }
 
 /* where a value in effect comes from, in words (the rules file, a setting of the start, the environment) */
 const fromWords = (origin: string) => origin
-  ? (/^(rules|flow)\.json of /.test(origin) ? t('standard in {file}', { file: origin }) : t('from the start: {origin}', { origin }))
+  ? (/^(rules|flow)\.json of /.test(origin) ? t('standard in {file}', { file: tr(origin) }) : t('from the start: {origin}', { origin: tr(origin) }))
   : '';
 
 export function RunSection({ P }: { P: Panel }) {
@@ -119,7 +119,7 @@ function Machine({ P }: { P: Panel }) {
       {rows.map(r => (
         <Paper key={r.name} withBorder radius="md" p="sm" data-machine={r.name}>
           <Stack gap={6}>
-            <Text fw={600} size="sm" className="dp-mono">{r.name}</Text>
+            <Named title={r.title} k={r.name} />
             <Help text={tr(r.help)} size="xs" />
             <RuleInput r={{ ...r, value: r.in_effect }} cur={curOf(r.name, r.in_effect)} epoch={ref.epoch}
               onChange={v => { ref.cur[r.name] = v; ref.report = null; touch(); }} />

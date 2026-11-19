@@ -251,7 +251,8 @@ def stale(stored: Optional[Mapping], current: Mapping) -> list
 Prompt ids whose hash changed since the stored result was produced.
 
 An absent entry counts as changed: results from before prompts were
-versioned cannot be vouched for either.
+versioned cannot be vouched for either. A prompt the code worded before
+it had a file counts as its first file (`FROM_CODE`).
 
 ### line_at
 
@@ -283,5 +284,33 @@ def read_parts(raw_body: str, fail, offset: int = 0) -> dict
 lines into the file. A section starts with a line `<!-- part: name -->`;
 its text is what follows up to the next one, without the blank lines
 around it.
+
+### composed
+
+```python
+def composed(parts: list, text_of, values: list) -> str
+```
+
+The message *parts* make: each part made with the prompt texts
+*text_of(prompt id)* gives and its own *values* ({name: value}, for a
+data part {"data": what it shows}), joined as they stand.
+
+### prompts_of
+
+```python
+def prompts_of(made: Mapping) -> list
+```
+
+Every prompt id a request's parts name, nested ones too, in order.
+
+### values_in
+
+```python
+def values_in(parts: list, text_of, message: str) -> Optional[list]
+```
+
+The values *message* was made with by *parts* and the texts
+*text_of* gives, read back from it: each part's {name: value}; None
+where those texts cannot make the message, character for character.
 
 [Back to the index](../README.md)

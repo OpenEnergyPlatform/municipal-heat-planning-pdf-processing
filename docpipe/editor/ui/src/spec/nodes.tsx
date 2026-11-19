@@ -55,7 +55,7 @@ export function UnitsNode({ data }: NodeProps) {
 }
 
 const SPECIAL_WORDS = (): Record<Special, string> => ({
-  own_passage: t('only where the value stands'), own_value: t('once with the number'), frame: t('frame of the plan'),
+  own_passage: t('only where the value stands'), own_value: t('once with the number'), frame: t('frame of the document'),
 });
 function rowSays(r: Row): string {
   if (r.kind === 'unit') return tn(r.count, '{n} unit', '{n} units');
@@ -64,7 +64,7 @@ function rowSays(r: Row): string {
     : tn(r.count, '{n} entry of the spec\'s own', '{n} entries of the spec\'s own');
   if (r.kind === 'per_document') return t('a list for each document');
   if (r.kind === 'number') return t('a number');
-  if (r.kind === 'words') return t('the words of the plan');
+  if (r.kind === 'words') return t('the words of the document');
   if (r.kind === 'choice') return tn(r.count, 'one of {n} words', 'one of {n} words');
   return '';
 }
@@ -122,7 +122,7 @@ export function FrameNode({ data }: NodeProps) {
     <div className="sp-frame">
       <Handle id="in" type="target" position={Position.Left} style={hidden} />
       <Text fw={650} size="sm">{t('Entries of {name}', { name: nameOf(d.name) })}</Text>
-      <Text size="xs" c="dimmed">{d.shown < d.count ? t('{shown} of {count} shown: those the plans have words for', { shown: d.shown, count: d.count }) : tn(d.count, '{n} entry', '{n} entries')}</Text>
+      <Text size="xs" c="dimmed">{d.shown < d.count ? t('{shown} of {count} shown: those the documents have words for', { shown: d.shown, count: d.count }) : tn(d.count, '{n} entry', '{n} entries')}</Text>
     </div>
   );
 }
@@ -154,7 +154,7 @@ export function EntryNode({ data }: NodeProps) {
               onDragStart={ev => { ev.stopPropagation(); ev.dataTransfer.setData(WORD, JSON.stringify({ from: e.id, word: w })); ev.dataTransfer.effectAllowed = 'move'; }}>{w}</span>
           ))}
         </div>
-      ) : <Text size="xs" c="dimmed">{t('No word of the plans')}</Text>}
+      ) : <Text size="xs" c="dimmed">{t('No word of the documents')}</Text>}
     </div>
   );
 }
@@ -164,7 +164,7 @@ export function MoreNode({ data }: NodeProps) {
   return (
     <div className="sp-box sp-more">
       <Group justify="space-between" wrap="nowrap">
-        <Text size="sm">{d.open ? t('Shown with the others: entries without a word of the plans') : tn(d.count, '{n} more entry without a word of the plans', '{n} more entries without a word of the plans')}</Text>
+        <Text size="sm">{d.open ? t('Shown with the others: entries without a word of the documents') : tn(d.count, '{n} more entry without a word of the documents', '{n} more entries without a word of the documents')}</Text>
         <Button size="compact-xs" variant="light" onClick={e => { e.stopPropagation(); toggleOpen(); }}>{d.open ? t('Fold') : t('Show')}</Button>
       </Group>
     </div>

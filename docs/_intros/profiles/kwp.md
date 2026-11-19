@@ -74,7 +74,7 @@ rule `drawn_tolerance` is described on [the knowledge graph](../stages/graph.md)
 | File processing | `source.py` | `SOURCE`, `backfill_meta` | the KWW register as a `Source`: filtering, convoy grouping, overrides |
 | File processing | `schema.sql`, `store.py` | `OrganisationUnits`, `Municipalities`, `DocumentMeta`, `MunicipalityMeta` | the profile's own tables and their upsert helpers |
 | Layout detection | `profile.py` | `column_layout` | `"auto"`, a multi-column page read column by column |
-| Structure assembly | `preprocessing.py` | `HYPHEN_EXCEPTIONS`, `CAPTION_MAX_WORDS`, `CAPTION_START`, `TITLE_EXCLUDE_PREFIXES`, `DIRECTORY_FIGTAB_WORDS`, `DIRECTORY_TITLE_WORDS`, `BIBLIOGRAPHY_TITLE_WORDS` | German hyphenation, caption length, what opens a caption (a word, a number and a colon, as `Tabelle 17:`), title and directory rules (the title words of a table of contents are the profile's: "inhalt", "verzeichnis", "contents", "directory") |
+| Structure assembly | `rules.json` (the stage rules) | `hyphen_exceptions`, `caption_max_words`, `caption_opener_patterns`, `heading_excluded_prefixes`, `directory_figure_words`, `directory_title_words`, `bibliography_title_words`, `front_section_title`, `part_section_title` | German hyphenation, caption length, what opens a caption (a word, a number and a colon, as `Tabelle 17:`), title and directory rules (the title words of a table of contents are the profile's: "inhalt", "verzeichnis", "contents", "directory") |
 | Preprocessing (page transcription) | `prompts/preprocessing/page_transcribe.md` | one prompt id | reads a page with no text layer, verbatim, into Markdown |
 | Refinement | `prompts/refinement/*.md` | `refine`, `refine_corrections`, `split` | repairs German extraction artefacts, proposes section cuts |
 | Visuals | `prompts/visuals/*.md` | six prompt ids of its own | table transcription, figure description and captions, in German; `visuals/caption_keep` is the built-in profile's, inherited byte for byte |
@@ -84,7 +84,7 @@ rule `drawn_tolerance` is described on [the knowledge graph](../stages/graph.md)
 | Extraction | `prompts/extraction/phrases.json` | 55 sentences | the German sentences the stage writes to the model outside its prompts (the list of a closed coordinate in a refused pair stands under `"scenarios"`), laid over the built-in profile's |
 | Extraction | `prompts/extraction/*.md` | 13 prompt ids | phrase as a plain file; node_check; review and example as parts files that name a template of the core; `compute`; and the eight prompts of the harvest, `transcribe`, `find`, `docfield`, `coord`, `search`, `list`, `check` and `follow` (see The prompts) |
 | The graph | `graph.json`, `kg.py` | the drawing (`map`), `BRICKS`, `context`, `has_property` and the query names | MHPKG Turtle (written by the core's program from the drawing), the coordinate query, the trust wording |
-| The answer app | `inference.py` | `READOFF_MARKER`, `READOFF_NOTE`, `ROUTE_NOTES` | the marker of a value read off a chart and the graph route's refusal sentences |
+| The answer app | `prompts/chat/phrases.json` | 141 words | the labels of the app's pages and of the picker, the names of the axes, the graph route's refusal sentences and the marker and note of a value read off a chart, in German, laid over the built-in profile's |
 | The answer app | `prompts/inference/phrases.json` | 33 sentences | the German chat wording |
 | The answer app | `prompts/inference/*.md`, `prompts/kg/coordinate.md` | 12 plus 1 prompt ids | the answer loop's own prompts and the graph route's closed question |
 
@@ -472,14 +472,16 @@ stands. Trust levels and their closed reason list are on
 
 ## The chat wording and the graph route
 
-`profiles/kwp/inference.py` supplies the German wording the answer app
-wraps around every turn. Its sentences are the file
+The German wording the answer app wraps around every turn is the file
 `profiles/kwp/prompts/inference/phrases.json`: 33 keys matching
 `docpipe.inference.wording.REQUIRED` exactly, covering the task and history
 headings, the code-execution sandbox's own headings, the image read-off
 headings, and how a citation names its page, section, table or figure.
-`READOFF_MARKER` and `READOFF_NOTE` mark a value read off a chart image
-rather than table text. `make_search_phrase` (see
+What a person reads in the app is the file `profiles/kwp/prompts/chat/phrases.json`
+(`wording.chat_words`): the labels of its pages and of the picker, the name of
+each axis (`axis_<axis>`), the graph route's refusal sentences
+(`graph_note_<reason>`), and `readoff_marker` and `readoff_note`, which mark a
+value read off a chart image rather than table text. `make_search_phrase` (see
 [inference](../stages/inference.md)) no longer filters the model's anchor
 sentence for a refusal or an evaluation; it takes whatever non-empty
 phrase the model wrote and falls back to the raw task only on an error or
@@ -496,10 +498,10 @@ German; so the correction the chat appends to a request is English although its
 prompts and its answers are German. The file is laid over the built-in
 profile's entry by entry (`phrases.table`, `docpipe/phrases.py`).
 
-`ROUTE_NOTES` words the five reasons `docpipe.inference.kg_route` can give
+The `graph_note_<reason>` words are the five reasons `docpipe.inference.kg_route` can give
 for not answering from the graph at all: no graph loaded, no plan node for
 this document, no coordinate the question named, no matching row, or a
-matching row with no trust line (`profiles/kwp/inference.py:10` to `27`),
+matching row with no trust line,
 checked against the core's own five-token list when the app builds its
 graph-route hooks at start-up (`docpipe/inference/kg_route.py:52` to `57`,
 `80` to `92`).

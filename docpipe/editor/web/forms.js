@@ -41,7 +41,7 @@ function ruleSpec(rule) {
   if (rule.kind === 'range') return BOUNDS;
   if (rule.kind === 'table') return { k: 'rows', item: { k: 'record', fields: (rule.columns || []).map(c => f(c, KEPT)) } };
   if (rule.kind === 'map') {
-    const value = rule.of === 'texts' ? { k: 'rows', item: TEXT } : rule.of === 'whole' ? { k: 'number' } : KEPT;
+    const value = rule.of === 'texts' ? { k: 'rows', item: TEXT } : rule.of === 'whole' || rule.of === 'number' ? { k: 'number' } : KEPT;
     return { k: 'map', value };
   }
   return null;

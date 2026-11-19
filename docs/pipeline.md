@@ -118,8 +118,8 @@ An LLM repairs what a fixed rule cannot: hyphen breaks across a line,
 leaked headers or footers, garbled ligatures, and numbering or label
 prefixes left on a caption; it also converts bibliography sections to
 BibTeX. It reads a sliding window of a document's sections at a time,
-`WINDOW_SIZE` sections per call, 3 by default
-(`docpipe/refinement/config.py:39` to `41`), keeping
+`refine_window_sections` sections per call (a rule), 3 by default,
+keeping
 context from the previous window so a merge can cross a boundary. A second,
 mechanical pass then holds every section to a fixed word ceiling for the
 embedding stage that follows; the model only proposes where to cut, the cut

@@ -192,7 +192,8 @@ def _report_unreachable(unreachable: dict, db_file: Path) -> None:
     banner = "=" * 78
     log.error("\n%s\n%d PDF(s) UNREACHABLE — not in the corpus.\n"
               "Source each one by hand, drop it in the data dir and add it to the "
-              "profile's PDF_OVERRIDES, then re-run.\n%s",
+              "profile's exceptions (kwp: pdf_overrides.json, in the "
+              "editor's Sources tab), then re-run.\n%s",
               banner, len(unreachable), banner)
     for (filename, _), (group_key, url, reason) in sorted(unreachable.items()):
         log.error("  %-12s %-55s %s", group_key or "-", filename, reason)

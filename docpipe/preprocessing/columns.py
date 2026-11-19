@@ -24,21 +24,15 @@ from __future__ import annotations
 import logging
 from typing import Sequence
 
-from .config import (
-    COLUMN_ALIGN_TOL_PT,
-    COLUMN_GUTTER_WIDTH_PT,
-    COLUMN_MAX_COLUMNS,
-    COLUMN_MAX_SPAN_FRAC,
-    COLUMN_MIN_ALIGNED_FRAC,
-    COLUMN_MIN_COLUMN_SHARE,
-    COLUMN_MIN_TEXT_BLOCKS,
-    COLUMN_MIN_WIDTH_PT,
-    COLUMN_SEARCH_STEP_PT,
-)
+from .. import rules
 
 log = logging.getLogger(__name__)
 
-_HALF = COLUMN_GUTTER_WIDTH_PT / 2.0
+
+def _half() -> float:
+    """Half the width of the strip between two columns (the rule
+    `column_gutter_width_pt`), read once by whoever needs it for a page."""
+    return rules.get("column_gutter_width_pt") / 2.0
 
 
 def _valid(block) -> bool:
@@ -55,16 +49,18 @@ def _bodies(blocks: Sequence) -> list:
     return [b for b in blocks if getattr(b, "type", None) == "text" and _valid(b)]
 
 
-def _reaches_into(block, x: float) -> bool:
-    """True when the block overlaps the gutter strip centred on *x*."""
-    return block.bbox[0] < x + _HALF and block.bbox[2] > x - _HALF
+def _reaches_into(block, x: float, half: float) -> bool:
+    """True when the block overlaps the gutter strip centred on *x*, a strip
+    *half* wide to either side."""
+    return block.bbox[0] < x + half and block.bbox[2] > x - half
 
 
 def _center(block) -> float:
     return (block.bbox[0] + block.bbox[2]) / 2.0
 
 
-def _clear_runs(bodies: list, left: float, right: float, tolerance: int) -> list:
+def _clear_runs(bodies: list, left: float, right: float, tolerance: int,
+                half: float) -> list:
     """
     Candidate gutters: the midpoints of every run of x positions that at most
     *tolerance* blocks reach into, and that has text on both sides.
@@ -73,17 +69,19 @@ def _clear_runs(bodies: list, left: float, right: float, tolerance: int) -> list
     whose two-column body sits under a full-width heading has no strictly empty
     column of whitespace anywhere, and would never split.
     """
+    step = rules.get("column_search_step_pt")
+    join = step * rules.get("column_run_join_steps")
     runs: list[list[float]] = []
     x = left
     while x <= right:
-        blocking = sum(1 for b in bodies if _reaches_into(b, x))
+        blocking = sum(1 for b in bodies if _reaches_into(b, x, half))
         if blocking <= tolerance and any(b.bbox[2] <= x for b in bodies) \
                 and any(b.bbox[0] >= x for b in bodies):
-            if runs and x - runs[-1][-1] <= COLUMN_SEARCH_STEP_PT * 1.5:
+            if runs and x - runs[-1][-1] <= join:
                 runs[-1].append(x)
             else:
                 runs.append([x])
-        x += COLUMN_SEARCH_STEP_PT
+        x += step
     return [(run[0] + run[-1]) / 2.0 for run in runs]
 
 
@@ -91,11 +89,11 @@ def _weakest_column(counts: list) -> int:
     return min(range(len(counts)), key=lambda i: counts[i])
 
 
-def _columns_of(bodies: list, gutters: list) -> list:
+def _columns_of(bodies: list, gutters: list, half: float) -> list:
     """The non-spanning blocks grouped by column, left to right."""
     grouped: list[list] = [[] for _ in range(len(gutters) + 1)]
     for b in bodies:
-        if _spans(b, gutters):
+        if _spans(b, gutters, half):
             continue
         centre = _center(b)
         i = 0
@@ -105,8 +103,8 @@ def _columns_of(bodies: list, gutters: list) -> list:
     return grouped
 
 
-def _column_counts(bodies: list, gutters: list) -> list:
-    return [len(c) for c in _columns_of(bodies, gutters)]
+def _column_counts(bodies: list, gutters: list, half: float) -> list:
+    return [len(c) for c in _columns_of(bodies, gutters, half)]
 
 
 def _edge_clusters(column: list) -> list:
@@ -118,10 +116,11 @@ def _edge_clusters(column: list) -> list:
     calls them two.
     """
     edges = sorted(b.bbox[0] for b in column)
+    tolerance = rules.get("column_edge_tolerance_pt")
     sizes: list[int] = []
     start = None
     for x in edges:
-        if start is None or x - start > COLUMN_ALIGN_TOL_PT:
+        if start is None or x - start > tolerance:
             sizes.append(1)
             start = x
         else:
@@ -147,12 +146,13 @@ def _aligned_like_a_column(column: list) -> bool:
     if not column:
         return False
     sizes = _edge_clusters(column)
-    return sum(sizes[:2]) / len(column) >= COLUMN_MIN_ALIGNED_FRAC
+    return (sum(sizes[:rules.get("column_edge_groups")]) / len(column)
+            >= rules.get("column_min_aligned_share"))
 
 
-def _spans(block, gutters: Sequence) -> bool:
+def _spans(block, gutters: Sequence, half: float) -> bool:
     """True when the block crosses at least one gutter."""
-    return any(block.bbox[0] < g - _HALF and block.bbox[2] > g + _HALF for g in gutters)
+    return any(block.bbox[0] < g - half and block.bbox[2] > g + half for g in gutters)
 
 
 def find_gutters(blocks: Sequence, page_width: float) -> list:
@@ -161,19 +161,22 @@ def find_gutters(blocks: Sequence, page_width: float) -> list:
     for a single-column page.
     """
     bodies = _bodies(blocks)
-    if len(bodies) < COLUMN_MIN_TEXT_BLOCKS or not page_width:
+    if len(bodies) < rules.get("column_min_text_blocks") or not page_width:
         return []
 
+    half = _half()
+    min_width = rules.get("column_min_width_pt")
+    max_span = rules.get("column_max_span_share")
     left = min(b.bbox[0] for b in bodies)
     right = max(b.bbox[2] for b in bodies)
-    if right - left < 2 * COLUMN_MIN_WIDTH_PT:
+    if right - left < 2 * min_width:
         return []
 
-    tolerance = int(COLUMN_MAX_SPAN_FRAC * len(bodies))
-    gutters = _clear_runs(bodies, left, right, tolerance)
+    tolerance = int(max_span * len(bodies))
+    gutters = _clear_runs(bodies, left, right, tolerance, half)
     # Keep the widest-apart ones if a page somehow offers more splits than any
     # real layout has columns.
-    if len(gutters) > COLUMN_MAX_COLUMNS - 1:
+    if len(gutters) > rules.get("column_max_columns") - 1:
         return []
 
     # Drop splits that produce a column too narrow or too empty to be one. Each
@@ -181,15 +184,16 @@ def find_gutters(blocks: Sequence, page_width: float) -> list:
     while gutters:
         edges = [left] + list(gutters) + [right]
         widths = [edges[i + 1] - edges[i] for i in range(len(edges) - 1)]
-        counts = _column_counts(bodies, gutters)
+        counts = _column_counts(bodies, gutters, half)
         total = sum(counts)
         if not total:
             return []
         weak = _weakest_column(counts)
-        too_thin = min(widths) < COLUMN_MIN_WIDTH_PT
+        too_thin = min(widths) < min_width
         # Scale-free: the weakest column must carry its share of the average
         # load, whether the page has two columns or four.
-        floor = max(2.0, COLUMN_MIN_COLUMN_SHARE * total / len(counts))
+        floor = max(float(rules.get("column_min_blocks")),
+                    rules.get("column_min_load_share") * total / len(counts))
         if counts[weak] >= floor and not too_thin:
             break
         if too_thin:
@@ -204,9 +208,10 @@ def find_gutters(blocks: Sequence, page_width: float) -> list:
 
     if not gutters:
         return []
-    if sum(1 for b in bodies if _spans(b, gutters)) / len(bodies) > COLUMN_MAX_SPAN_FRAC:
+    if sum(1 for b in bodies if _spans(b, gutters, half)) / len(bodies) > max_span:
         return []
-    if not all(_aligned_like_a_column(c) for c in _columns_of(bodies, gutters)):
+    if not all(_aligned_like_a_column(c)
+               for c in _columns_of(bodies, gutters, half)):
         return []
     return gutters
 
@@ -219,6 +224,7 @@ def order_blocks(blocks: Sequence, gutters: Sequence) -> list:
     by_position = sorted(blocks, key=lambda b: (b.bbox[1], b.bbox[0]))
     if not gutters:
         return by_position
+    half = _half()
 
     out: list = []
     band: list = []
@@ -238,7 +244,7 @@ def order_blocks(blocks: Sequence, gutters: Sequence) -> list:
         band.clear()
 
     for block in by_position:
-        if _valid(block) and _spans(block, gutters):
+        if _valid(block) and _spans(block, gutters, half):
             flush()               # the spanning block closes the columns above it
             out.append(block)
         else:

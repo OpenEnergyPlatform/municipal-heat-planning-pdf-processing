@@ -249,9 +249,11 @@ def window_of(embedder):
     own = getattr(embedder, "window", None)
     if own is not None:
         return own()
-    from docpipe.embedding.config import IMAGE_FACTOR, IMAGE_MAX_PIXELS
+    from docpipe import rules
+    from docpipe.embedding.config import IMAGE_FACTOR
     from docpipe.window import Window, picture_tokens
-    most = IMAGE_MAX_PIXELS // (IMAGE_FACTOR * IMAGE_FACTOR) + 2
+    most = (int(rules.get("embed_picture_max_pixels"))
+            // (IMAGE_FACTOR * IMAGE_FACTOR) + 2)
     return Window(limit=MAX_TOKEN_LENGTH,
                   picture=lambda path: picture_tokens(path, IMAGE_FACTOR, most))
 

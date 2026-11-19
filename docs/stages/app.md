@@ -23,7 +23,7 @@ files of its own: a cache of query vectors and a log of requests. Every
 retrieval and answering decision is made by `docpipe.inference` and
 `docpipe.embedding`; this package adds the pickers, the history, the cited
 page drawn from the source PDF and the optional calculation sandbox. Every word
-on its pages comes from the profile (`inference.UI`). Without a profile the
+on its pages comes from the profile (the chat words, `prompts/chat/phrases.json`). Without a profile the
 chat runs on the built-in `default` profile: its English words, and its prompts
 and phrases for the answer loop, so the first question is answered instead of
 stopping (`wording.chat_profile`, the one place that falls back, with one
@@ -182,7 +182,7 @@ above, and its default drawing runs in this order:
    value's quote, or a part of it that names the value as the plan writes
    it), one line each in the profile's words (number, coordinates, document
    and page, level), with their coordinates by name and the reasons of their
-   level, in words (`AXIS_NAMES`, `reason_*`), in an expander. A question for
+   level, in words (the `axis_<axis>` chat words, `reason_*`), in an expander. A question for
    which the model chooses no value, or that names no parameter, gets nothing
    here. `INFERENCE_VALUES_LEVEL` leaves out values below a trust level and
    `INFERENCE_VALUES_LIMIT` caps how many values, and so passages, the closed
@@ -251,7 +251,7 @@ The values of step 1 are not narrowed that way: they come from every
 harvested document, older versions included, and the help text of the
 checkbox (`whole_corpus_help` of the profile) says so.
 
-The answer route (`route` of the profile's UI words) chooses where an answer
+The answer route (`route` of the profile's chat words) chooses where an answer
 comes from. Automatic is both of the steps above at once: the harvest's answer
 above the answer from the documents. Harvest answers from the harvest alone, and where
 it holds nothing it says why in the profile's words (`values_no_parameter`,
@@ -259,7 +259,7 @@ it holds nothing it says why in the profile's words (`values_no_parameter`,
 documents are not asked, because a silent fallback would hide that the
 chosen source holds nothing. Knowledge graph answers from the graph
 `--serialize` wrote (`INFERENCE_KG_TTL_PATH`) through `kg_route`, or says
-why not in the profile's `ROUTE_NOTES`; it is offered only where the profile
+why not in the profile's `graph_note_<reason>` words; it is offered only where the profile
 contributes to the graph route and the file is there, and only for one
 document, because the graph is asked per plan. Documents searches the
 documents alone. `routes_offered` decides what is offered, and where only the
@@ -308,7 +308,7 @@ that calls PyMuPDF to draw: it puts the highlights on in memory, which holds
 for rotated pages, never writes the file, and draws at most 2600 pixels on the
 longest side. Only a section's quote is a passage of the page. The quote of a
 table or a figure is a title or a reading, so its page is shown without a mark
-and without a note. Where the page shows no mark, the expander says so (UI
+and without a note. Where the page shows no mark, the expander says so (chat
 word `page_not_located`). Where the file is not in the folder it names the
 file and nothing else, the folder going to the log, and where the page cannot
 be drawn (PyMuPDF missing, a PDF that does not open, a page the PDF does not
@@ -404,7 +404,7 @@ follow-up is its question, its anchor, the sources it examined and its answer as
 `answer_text`, the statements that stood without list marks and numbers, so a
 statement that was removed is in no later request.
 Turns are never dropped: where the conversation no longer fits the model's
-window, the turn is not asked and the page says so (UI word `conversation_full`).
+window, the turn is not asked and the page says so (chat word `conversation_full`).
 
 `QUERY_CACHE_PATH` holds one table, `query_cache` (a key, the vector as a
 float32 blob, a timestamp). The key is over the embedding model and the
@@ -490,7 +490,7 @@ values are reviewed. The only module of the package that imports Streamlit.
 
 What the corpus is about comes from the profile: its catalog supplies the
 labels, the filters and the detail shown for a selected document, and its
-`inference.UI` every word on these pages. A question goes to one document,
+`prompts/chat/phrases.json` every word on these pages. A question goes to one document,
 to several (each asked by itself, then compared) or to the whole corpus.
 Where a harvest is configured, the numbers it holds for a question are
 shown first, as they were read and checked, and the answer from the

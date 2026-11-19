@@ -1060,6 +1060,74 @@ ABOUT = {
         "here."),
 }
 
+# What each key of the form is called (owner request 2026-11-19, A5): the
+# page shows it above the help, the key small beside it; German in the
+# page's catalogue.
+TITLES = {
+    ("spec", "_comment"): "Note for the editors",
+    ("spec", "parameter_question"): "Question that asks which field",
+    ("spec", "unit_question"): "Question that asks the unit",
+    ("coordinates", "order"): "Order of the questions",
+    ("coordinates", "own_passage"): "Only where the value stands",
+    ("coordinates", "own_value"): "Once with the number",
+    ("coordinates", "frame"): "Frame of the document",
+    ("parameter", "uri"): "Identifier of the field",
+    ("parameter", "label"): "Name of the field",
+    ("parameter", "description"): "Full description",
+    ("parameter", "brief"): "Short description",
+    ("parameter", "value_type"): "Kind of value",
+    ("parameter", "once_per_document"): "Asked once per document",
+    ("parameter", "takes_group"): "Group words become members",
+    ("parameter", "merged"): "Kind of thing named",
+    ("parameter", "vocabulary_dynamic"): "List differs per document",
+    ("parameter", "unit_target"): "Target unit",
+    ("parameter", "integrated"): "Amount over a period",
+    ("parameter", "units_accepted"): "Accepted units",
+    ("parameter", "example"): "Example passage",
+    ("parameter", "checks"): "Own checks",
+    ("axis", "question"): "Question of the dimension",
+    ("axis", "required"): "Answer required",
+    ("axis", "several"): "Several entries per value",
+    ("axis", "merged"): "Kind of thing named",
+    ("axis", "keep"): "Entry a value must have",
+    ("axis", "derive"): "Decided without a request",
+    ("entry", "label"): "Name of the entry",
+    ("entry", "spellings"): "Other spellings",
+    ("entry", "definition"): "Definition of the entry",
+    ("entry", "gloss"): "Short explanation",
+    ("entry", "group"): "Group of the entry",
+    ("unit", "factor"): "Conversion factor",
+    ("unit", "names_period"): "Names a period",
+    ("unit", "target"): "Own target unit",
+    ("plan_field", "name"): "Name of the field",
+    ("plan_field", "means"): "What the field is",
+    ("plan_field", "sentence"): "Search sentence",
+    ("plan_field", "kind"): "Kind of field",
+    ("plan_field", "state"): "State of the document",
+    ("plan_field", "of"): "Which values have this year",
+    ("value_type", "answer"): "Kind of answer",
+    ("value_type", "in_quote"): "How the quote shows the answer",
+    ("value_type", "units"): "Has units",
+    ("value_type", "converts"): "Converted to the target unit",
+    ("value_type", "note"): "Note on the type",
+    ("works", "name"): "Name of a work",
+    ("works", "means"): "What counts as a work",
+    ("works", "fields"): "Questions about a new work",
+}
+
+# The keys of a field that the loader reads only under some settings of the
+# field's value type (`spec._parameter`: a unit for an answer that is a
+# number with units, a name to merge for free text, a list closed per
+# document for an entry), as {setting: the values it reads the key under}.
+# The form shows such a key only for a value type with those settings, or
+# where the field has it (owner request 2026-11-19, A6).
+_NUMBER_WITH_UNITS = {"answer": ["number"], "units": [True]}
+READ_FOR = {"unit_target": _NUMBER_WITH_UNITS,
+            "units_accepted": _NUMBER_WITH_UNITS,
+            "integrated": _NUMBER_WITH_UNITS,
+            "merged": {"answer": ["words"]},
+            "vocabulary_dynamic": {"answer": ["entry"]}}
+
 # kind -> (key, widget, extras)
 _FORM = {
     "spec": [("_comment", "lines", {}),
@@ -1079,11 +1147,15 @@ _FORM = {
                   ("once_per_document", "bool", {"default": False}),
                   ("takes_group", "bool",
                    {"default_rule": "default_takes_group"}),
-                  ("merged", "line", {}),
-                  ("vocabulary_dynamic", "bool", {"default": False}),
-                  ("unit_target", "line", {}),
-                  ("integrated", "bool", {"default": True}),
-                  ("units_accepted", "units", {}),
+                  ("merged", "line", {"when": READ_FOR["merged"]}),
+                  ("vocabulary_dynamic", "bool",
+                   {"default": False,
+                    "when": READ_FOR["vocabulary_dynamic"]}),
+                  ("unit_target", "line", {"when": READ_FOR["unit_target"]}),
+                  ("integrated", "bool",
+                   {"default": True, "when": READ_FOR["integrated"]}),
+                  ("units_accepted", "units",
+                   {"when": READ_FOR["units_accepted"]}),
                   ("example", "example", {}),
                   ("checks", "checks", {})],
     "axis": [("question", "text", {}),
@@ -1200,6 +1272,7 @@ def form(profile=None) -> dict:
                 # The default a run takes is a rule's, as the rules say it.
                 extras["default"] = rules.get(extras.pop("default_rule"))
             out[kind].append({"key": key, "widget": widget,
+                              "title": TITLES.get((kind, key), ""),
                               "help": HELP.get((kind, key), ""), **extras})
     for kind, said in ABOUT.items():
         out[kind][0]["about"] = said

@@ -824,7 +824,7 @@ def stamp_schema() -> dict:
                                "size of the file as the database recorded "
                                "them, and the tables and figures an earlier "
                                "stage had left without content when it was "
-                               "read (holes, owner request 2026-11-19). "
+                               "read (holes). "
                                "Absent for a database that records none. "
                                "Another sha256 than this one makes the "
                                "document stale, as a changed ontology key "

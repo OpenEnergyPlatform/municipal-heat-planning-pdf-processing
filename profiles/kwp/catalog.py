@@ -17,7 +17,6 @@ from typing import Optional
 from docpipe.inference.catalog import Catalog, format_published
 
 from .config import PDF_OVERRIDES, SHARED_FILE_OWNERS, link_filename
-from .inference import UI
 
 # Filename prefixes that are not a place name (convoy plans are named after
 # their lead municipality, behind one of these).
@@ -75,7 +74,8 @@ class KwpCatalog(Catalog):
         return out
 
     def label(self, row, facets: Optional[dict] = None) -> str:
-        return document_label(row, (facets or {}).get("gemeinde"))
+        return document_label(row, self._words(),
+                              (facets or {}).get("gemeinde"))
 
     def name(self, row, facets: Optional[dict] = None) -> str:
         covered = (facets or {}).get("gemeinde") or []
@@ -235,9 +235,10 @@ def municipality_coverage(conn: sqlite3.Connection, documents) -> dict:
     return out
 
 
-def document_label(row, covered: Optional[list] = None) -> str:
+def document_label(row, words: dict, covered: Optional[list] = None) -> str:
     """
-    Plan-centric picker label.
+    Plan-centric picker label, with the version words of *words* (the
+    profile's chat words, `wording.ui`).
 
     `covered` = the municipalities this plan covers (from municipality_coverage).
     A plan covering several is labelled by its administrative unit + the count,
@@ -247,7 +248,8 @@ def document_label(row, covered: Optional[list] = None) -> str:
     filename = row["filename"] or ""
     konvoi = "konvoi" in filename.lower()
     published = format_published(row["published"])
-    tail = UI["version_current"] if row["is_current"] else UI["version_old"]
+    tail = words["version_current"] if row["is_current"] \
+        else words["version_old"]
 
     if covered and len(covered) > 1:
         anchor = row["organisation_unit_name"] or _konvoi_lead(filename) or covered[0]

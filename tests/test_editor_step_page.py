@@ -29,6 +29,7 @@ from docpipe.profile import load_profile
 REPO = Path(__file__).resolve().parent.parent
 SETTINGS = sorted({number.env for number in flow.NUMBERS if number.env})
 BOX, FRAME = "own_place", "values"          # a coord box in an each value
+PARTNER = "document_" + BOX                 # the box in the other frame
 RULE = "lines_around"                       # read by coord, not by split
 STANDARD = rules.BY_NAME[RULE]
 
@@ -136,7 +137,9 @@ def test_a_rule_the_box_does_not_read_is_refused_at_that_box(profile):
     node_of(tree, BOX)["rules"] = {"abbreviations": ["Dr."]}   # split reads it
     said = judge(profile, tree)
     assert not said["ok"]
-    assert [e["id"] for e in said["errors"]] == [BOX]
+    # the box stands in the steps for one value, which both frames of
+    # values go through (owner request 2026-11-19, C2)
+    assert [e["id"] for e in said["errors"]] == [PARTNER, BOX]
     assert "is not read here" in said["errors"][0]["message"]
     before = raw_of(profile)
     told = save(profile, tree)
@@ -168,10 +171,10 @@ def test_the_rules_say_at_which_steps_they_have_an_own_value(profile):
     node_of(tree, FRAME)["rules"] = {RULE: 5}
     assert save(profile, tree)["saved"]
     at = flow_view.own_at(flow.load(profile).tree)
-    assert {row["id"] for row in at[RULE]} == {BOX, FRAME}
+    assert {row["id"] for row in at[RULE]} == {PARTNER, BOX, FRAME}
     shown = rulespage.view(profile, STANDARD.tab, None, str, at)
     row = next(r for r in shown["rules"] if r["name"] == RULE)
-    assert {s["id"] for s in row["own_at"]} == {BOX, FRAME}
+    assert {s["id"] for s in row["own_at"]} == {PARTNER, BOX, FRAME}
     # the failure by construction: a rule no step sets has none
     other = next(r for r in shown["rules"] if r["name"] != RULE
                  and r["name"] not in at)

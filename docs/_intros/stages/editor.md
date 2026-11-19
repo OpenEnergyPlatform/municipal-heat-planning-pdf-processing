@@ -5,19 +5,20 @@ closed lists the answers are chosen from, the texts a model is shown about a
 document and the examples. It is a long file, and one line of it can make a
 stored harvest stale. A profile also holds its prompts, the files a model is
 told its task in, and the sentences its stages say to the model outside them.
-`docpipe edit` shows these as a page in the browser with five tabs and a Rules
+`docpipe edit` shows these as a page in the browser with six tabs and a Rules
 drawer. The Spec tab lists the fields, shared dimensions and parts of the spec, draws
 a field with the lists of the ontology its answers come from and the entries the
 model chooses from, edits each with a form, and says what an edit costs the next run before it is written. The Prompts tab
 edits the prompt files and the sentence files of the profile; with a harvest
 folder it also shows
 what an edit does to the requests recorded there, and it can send a few of them
-once more. The Flow tab draws how a document is read, as steps, loops, rounds
+once more; the requests of the request logs of stages 4 and 5 are among them. The Flow tab draws how a document is read, as steps, loops, rounds
 and branchings, edits that flow, the numbers that bound it and the rules each
 step reads, which stand in the profile's `flow.json`, and runs it on a
 document as a dry run with placeholder answers. It also draws the flows of the
 follow-up passes. What a box does is code and is not in the page. The Sources
-tab edits `sources.json`, the Graph tab `graph.json`, and the Rules drawer,
+tab edits `sources.json` and the data files of the profile, the Graph tab `graph.json`,
+the Stages tab shows stages 1 to 6 as a picture, and the Rules drawer,
 which the Rules button of a tab opens, the rules of that tab.
 
 ```
@@ -115,8 +116,8 @@ The head shows the profile, as a choice among every profile the installation
 finds (`docpipe profiles`; a server not started by `docpipe edit` shows only
 its own) with a last entry **New profile …** (where the page cannot switch, a +
 button beside the profile's name opens the same dialog; see New profile), and
-the branch, the five tabs **Spec**, **Prompts**,
-**Flow**, **Sources** and **Graph** as pills with a dot on a tab that holds
+the branch, the six tabs **Spec**, **Prompts**,
+**Flow**, **Sources**, **Graph** and **Stages** as pills with a dot on a tab that holds
 edits not yet saved, a badge that says **Unsaved edits** or **All saved**, a
 **Rules** button on the tabs that have rules, which opens the rules of the tab
 in a drawer on the right (with Check, Save and Discard there), and a switch
@@ -286,7 +287,10 @@ asks for:
   layout, shareable flag and facets, and copies of its `extraction_spec.json`,
   `extraction_schema.json`, `flow.json`, `graph.json`, `chat.json`,
   `rules.json` and `sources.json` where it has them, so an edit leaves the
-  profile copied as it was; every other part is inherited by `extends`;
+  profile copied as it was (the copy of `flow.json` leaves out the changes the
+  profile makes in the drawing it inherits, which the copy inherits with them,
+  and is not written where nothing else is in it); every other part is
+  inherited by `extends`;
 - optionally the addresses of an ontology, of shapes and of a graph. They
   become sources of kind `url` named `ontology`, `shapes` and `graph` in the new
   profile's `sources.json` (laid over those of a copy) and are fetched
@@ -565,9 +569,10 @@ Which requests can be put together again:
 
 A request of another kind, a request whose record shows no payload in its first
 message, and a request for which the loader refuses the edited text is shown as
-it was sent, with the reason. The prompts of the other stages (refinement,
-visuals, preprocessing, the answer app, the graph) have no recorded requests, so
-they have no preview.
+it was sent, with the reason. The prompts of the other stages (preprocessing,
+the answer app, the graph) have no recorded requests, so
+they have no preview; those of stages 4 and 5 have theirs (see Requests of
+stages 4 and 5).
 
 ## Try
 
@@ -622,6 +627,32 @@ or more.
 Above the results one line counts them: how many requests were named, sent,
 failed, answered the same and differently, answered out of form, and how many
 had addresses that all hold or that do not.
+
+## Requests of stages 4 and 5
+
+The refinement (stage 4) and the visuals stage (stage 5) write a request log for
+each document, `<processed folder>/<document>/refinement.trace.jsonl.gz` and
+`visuals.trace.jsonl.gz`, in the form of the harvest's trace
+(`extraction/trace.py`: `open_stage`, `stage_head`, `working_on`,
+`stage_request`; the rule `trace_on` covers them). The head of a log names the
+stage, the code, the profile, the model and the text of every prompt as the run
+read it (`head_of`). Each request names what its messages are made of (`made`,
+`prompts.composed`), and a picture is logged as the file it was cut from
+(`vision.logged`) and, for a table read in strips, the strip
+(`strips.strip_of`).
+
+The Prompts tab reads these logs from the processed folder of the profile
+(`requests.Traces(stages=...)`; a log is named `<document>/<stage>`) and lists
+their requests under the prompts they are made of. What filled the parts of the
+messages is read back from the recorded messages with the prompt texts of the
+head (`prompts.values_in`); the messages are then made again from the files on
+disk and the text being edited, which is the preview, and sent once more, which
+is Try (`staged.py`, `trying.py`). A request of the refinement goes to the text
+model, one of the visuals to the vision model (`VLM_BASE_URL`, `VLM_API_KEY`,
+`VLM_MODEL`), with its picture read again from the document's folder; where no
+vision model is set up the page says so. The reply is read as the stage reads
+it, by the first required key of its reply form, and names no address. The
+limit of three requests a click is the same.
 
 ## Sentences
 
@@ -697,15 +728,38 @@ one file, `flow.json` (`extraction.flow`); a step or a frame may also carry
 
 ```
 {"numbers": {"piece_lines": 8, ...},
- "flow": [{"id": "document", "box": "document"}, ..., {"id": "write", "box": "write"}]}
+ "flow": [{"id": "document", "box": "document"}, ...,
+          {"id": "values", "each": "value", "order": "names_first", "part": "value"}, ...,
+          {"id": "write", "box": "write"}],
+ "parts": {"value": [{"id": "coordinates", "each": "coordinate", ...}, ...]}}
 ```
 
-The default profile's file is the whole flow: every number and the drawing. A
-profile that extends it writes only the numbers that differ, laid over the
-inherited ones number by number, and the drawing only where it differs; a
-drawing of its own is then the whole drawing. The loader is strict: an unknown
-key, a key written twice, a number that is no whole number or lies below its
-least, and a drawing the run could not do (below) are refused by name.
+The default profile's file is the whole flow: every number, the drawing and its
+parts. Steps that several frames go through stand once, as a part (`parts`), and
+each frame that goes through them names it in place of its steps, with a prefix
+for the ids of its copy (`extraction.flowparts`, owner request 2026-11-19): the
+steps for one value are the part `value`, gone through by `document_values`
+(prefix `document_`) and by `values`. A profile that extends it writes only the
+numbers that differ, laid over the inherited ones number by number, and only the
+`changes` it makes in the drawing it inherits (a step set, inserted, moved or
+removed, in the drawing or in a part); a `flow` of its own is the whole drawing.
+The loader is strict: an unknown key, a key written twice, a number that is no
+whole number or lies below its least, a change that names no step or part, and a
+drawing the run could not do (below) are refused by name.
+
+The tab shows and edits the drawing with every part drawn. A frame that goes
+through a part carries the mark "Part value"; its tooltip names the other frames
+that go through the same steps. A save folds the drawing back: the steps a
+frame of a part shows, their ids without its prefix, are the part, so a change
+to them in one frame is made in every frame that uses it (the check lists the
+steps of both), and two frames of one part changed differently are refused. A
+frame whose id the edit changed no longer uses its part and keeps its steps as
+its own. A profile's file then holds the changes from the drawing it inherits,
+checked by making them; where they cannot say the drawing, the file holds the
+whole drawing. A save that leaves the drawing as it was, for example one of the
+numbers only, leaves the drawing in the file as the file writes it. Above the
+drawing the status says how many changes the profile's own file makes ("3
+changes of its own to the flow of default").
 
 ### The library
 
@@ -1084,6 +1138,32 @@ box where the drawing has none, and hands the drawing back with the spec (`take`
 its `map`). A new field brings its arrow in the same way. The arrows drawn are
 in the Graph tab; check and save them there. The graph then holds what the
 field reads under the further property as well (see [the graph](graph.md)).
+
+Below stands "Data files of the profile": the files of the profile's folder that
+no other tab edits, which the profile names in `DATA_FILES` of its `profile.py`
+(`datafiles.py`). Each entry gives the file, what it holds, and whether a person
+keeps it or a fetch writes it. The files are JSON objects, a key and its entry.
+The page lists them and shows the entries of one; a kept file is checked
+against what its key and its entry have to be (a pattern and a JSON schema) and
+written, keeping its indent, the order of its keys and its line ends, and is
+not overwritten where it changed on disk after the page read it. A file a fetch
+writes is shown and not written, because the next fetch would replace the
+change. The `kwp` profile names its register's exceptions, `pdf_overrides.json`
+and `shared_file_owners.json`; the `scenarios` profile its region files.
+
+## Stages
+
+The sixth tab draws the stages before the harvest as one picture
+(`stagespage.py`): the documents of the profile's source, stages 1 to 6 (page
+text, layout, sections, refinement, tables and figures, pieces and vectors) and
+the harvest, each with what it does and the command that runs it. A stage shows
+how many rules it has and how many the profile sets itself (they stand in the
+Rules drawer, on the tab "stages", one group a stage), the prompts it asks with,
+and for stages 4 and 5 how many request logs it left. A click counts what the
+logs of a stage say, on demand: the requests, and the replies read and lost at
+the number of attempts the stage's rule allows (`refine_max_attempts`,
+`vision_max_attempts`), in the sentences the Flow tab says of the harvest's. The
+harvest is drawn in the Flow tab.
 
 ## Graph
 

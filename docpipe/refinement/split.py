@@ -17,7 +17,7 @@ long enough to need splitting is by definition too long to echo.
 When no cut is asked for, or the model's cuts could not be read (a
 hole, with its cause), a mechanical fallback cuts at even word-count
 intervals instead, dropping a cut that would leave a sliver under
-about 100 words; the section is named in the refinement report with
+about the rule split_min_part_words; the section is named in the refinement report with
 the cause. A request whose reply was cut off is asked again for half
 of the outline, since the outline has one line per segment.
 
@@ -32,14 +32,14 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
+import contextvars
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
-from docpipe import prompts
+from docpipe import prompts, rules
 from docpipe.llm_preflight import stage_fits
-from docpipe.profile import profile_value
 from docpipe.reading import Hole
 
 from .config import (
@@ -47,9 +47,6 @@ from .config import (
     LLM_BASE_URL,
     LLM_MODEL,
     LLM_NUM_PARALLEL,
-    SECTION_MAX_WORDS,
-    SECTION_SPLIT_ENABLE,
-    SECTION_TARGET_WORDS,
 )
 
 log = logging.getLogger(__name__)
@@ -73,14 +70,16 @@ def split_prompt():
 
 
 def split_temperature() -> float:
-    return float(split_prompt().meta.get("temperature", 0.1))
+    return float(split_prompt().meta.get(
+        "temperature", rules.get("split_default_temperature")))
 
 
 def split_max_tokens() -> int:
-    return int(split_prompt().meta.get("max_tokens", 1024))
+    return int(split_prompt().meta.get(
+        "max_tokens", rules.get("split_default_max_tokens")))
 
 
-PROMPT_IDS = ("refinement/split",)
+PROMPT_IDS = ("refinement/split", "refinement/split_user")
 
 
 def word_count(text: str) -> int:
@@ -118,7 +117,9 @@ def _rebuild_matches(section: dict) -> bool:
         == norm(section.get("content") or "")
 
 
-def needs_split(section: dict, max_words: int = SECTION_MAX_WORDS) -> bool:
+def needs_split(section: dict, max_words: Optional[int] = None) -> bool:
+    if max_words is None:
+        max_words = rules.get("section_max_words")
     content = section.get("content")
     if not isinstance(content, str):        # [LITERATURE] sections hold a list
         return False
@@ -156,7 +157,7 @@ def _outline_fits(section: dict, start: int, stop: int) -> bool:
     return fits(
         [{"role": "system",
           "content": prompts.text("refinement/split",
-                                  target=SECTION_TARGET_WORDS)},
+                                  target=rules.get("section_target_words"))},
          {"role": "user", "content": split_user(section, start, stop)}],
         split_max_tokens())
 
@@ -164,12 +165,15 @@ def _outline_fits(section: dict, start: int, stop: int) -> bool:
 def split_user(section: dict, start: int, stop: int) -> str:
     """The user message of the split request of the segments *start* to
     *stop*: the title and the outline."""
-    return (f"TITLE: {section.get('title') or ''}\n\nOUTLINE:\n"
-            f"{outline(section, start=start, stop=stop)}")
+    return prompts.load("refinement/split_user").render(
+        title=section.get("title") or "",
+        outline=outline(section, start=start, stop=stop))
 
 
-def _even_cuts(section: dict, target: int = SECTION_TARGET_WORDS) -> list:
+def _even_cuts(section: dict, target: Optional[int] = None) -> list:
     """Fallback: cut at the segment boundary nearest each target multiple."""
+    if target is None:
+        target = rules.get("section_target_words")
     cuts, running = [], 0
     for i, seg in enumerate(section.get("segments") or []):
         if i and running >= target:
@@ -197,16 +201,17 @@ def _sanitize(cuts, n_segments: int, section: dict) -> list:
         title = (title.strip() or None) if isinstance(title, str) else None
         clean.append({"at": at, "title": title})
     clean.sort(key=lambda c: c["at"])
-    # Drop a cut that would leave a sliver: below ~100 words a part is not a
-    # chunk, it is debris.
+    # Drop a cut that would leave a sliver: below the rule split_min_part_words
+    # a part is not a chunk, it is debris.
+    sliver = rules.get("split_min_part_words")
     segments = section.get("segments") or []
     kept, previous = [], 0
     for c in clean:
-        if sum(word_count(_segment_text(s)) for s in segments[previous:c["at"]]) < 100:
+        if sum(word_count(_segment_text(s)) for s in segments[previous:c["at"]]) < sliver:
             continue
         kept.append(c)
         previous = c["at"]
-    if kept and sum(word_count(_segment_text(s)) for s in segments[kept[-1]["at"]:]) < 100:
+    if kept and sum(word_count(_segment_text(s)) for s in segments[kept[-1]["at"]:]) < sliver:
         kept.pop()
     return kept
 
@@ -235,7 +240,7 @@ def apply_cuts(section: dict, cuts: list, first_title: Optional[str] = None) -> 
         part["segments"] = chunk
         part["content"] = content_from_segments(chunk)
         part["title"] = (titles[k] or section.get("title") or "").strip() \
-            or (f"{section.get('title') or profile_value('preprocessing', 'PART_TITLE')}"
+            or (f"{section.get('title') or rules.get('part_section_title')}"
                 f" ({k + 1})")
         # Each part keeps only the media its own text refers to.
         refs = [s.get("ref") for s in chunk if s.get("kind") in ("table", "figure")]
@@ -274,7 +279,8 @@ def _ask_range(section: dict, ask: Callable, start: int, stop: int,
                  "served window: outlined as two parts", start, stop - 1,
                  section.get("title"))
         return _ask_halves(section, ask, start, stop)
-    got = ask(prompts.text("refinement/split", target=SECTION_TARGET_WORDS),
+    got = ask(prompts.text("refinement/split",
+                           target=rules.get("section_target_words")),
               split_user(section, start, stop), again)
     if not (isinstance(got, Hole) and got.cause == "cut_off"):
         return got
@@ -404,7 +410,7 @@ def _enforce_max(part: dict, max_words: int) -> list:
     """
     # Aim below the limit, not at it: a cut lands on a segment boundary, so the
     # piece is the target plus whatever the straddling segment adds.
-    target = min(SECTION_TARGET_WORDS, max(1, max_words // 2))
+    target = min(rules.get("section_target_words"), max(1, max_words // 2))
     out, queue = [], [part]
     while queue:
         piece = queue.pop(0)
@@ -448,8 +454,14 @@ def _ask_all_cuts(sections: list, ask: Optional[Callable],
             if needs_split(s, max_words) and _rebuild_matches(s)]
     if not todo:
         return {}
+    # Each thread asks for this document, so its requests go into the
+    # document's log (`trace.working_on`): it runs in a copy of the caller's
+    # context, one copy per request, as a context is entered by one thread
+    # at a time.
+    asked = [(i, contextvars.copy_context()) for i in todo]
     with ThreadPoolExecutor(max_workers=min(LLM_NUM_PARALLEL, len(todo))) as pool:
-        return dict(zip(todo, pool.map(lambda i: _ask_cuts(sections[i], ask), todo)))
+        return dict(zip(todo, pool.map(
+            lambda one: one[1].run(_ask_cuts, sections[one[0]], ask), asked)))
 
 
 _LINE_END = re.compile(r"\n\s*")
@@ -488,21 +500,23 @@ def _words(text: str, start: int, end: int, target: int) -> list:
 
 def _group(sizes: list, target: int, max_words: int) -> list:
     """Start indices of the parts *sizes* (words per unit) are grouped into:
-    a part closes once it reaches *target*, and a last part under ~100 words
-    joins the one before where both fit *max_words* (`_sanitize`'s rule)."""
+    a part closes once it reaches *target*, and a last part under the rule
+    split_min_part_words joins the one before where both fit *max_words*
+    (`_sanitize`'s rule)."""
     starts, running = [0], 0
     for i, size in enumerate(sizes):
         if i and running >= target:
             starts.append(i)
             running = 0
         running += size
-    if len(starts) > 1 and sum(sizes[starts[-1]:]) < 100 \
+    if len(starts) > 1 and sum(sizes[starts[-1]:]) \
+            < rules.get("split_min_part_words") \
             and sum(sizes[starts[-2]:]) <= max_words:
         starts.pop()
     return starts
 
 
-def cut_to_limit(section: dict, max_words: int = SECTION_MAX_WORDS) -> list:
+def cut_to_limit(section: dict, max_words: Optional[int] = None) -> list:
     """*section* as refinement left it, in parts of at most *max_words* each.
 
     The cut before refinement (`split_oversized`) holds the limit only on what
@@ -516,8 +530,10 @@ def cut_to_limit(section: dict, max_words: int = SECTION_MAX_WORDS) -> list:
     in no part stays with the first. The segments follow the text
     (`_spread_segments`), so a part's pages are those of its own text.
     """
+    if max_words is None:
+        max_words = rules.get("section_max_words")
     content = section.get("content")
-    target = min(SECTION_TARGET_WORDS, max(1, max_words // 2))
+    target = min(rules.get("section_target_words"), max(1, max_words // 2))
     if isinstance(content, list):
         if sum(word_count(str(e)) for e in content) <= max_words:
             return [section]
@@ -608,14 +624,16 @@ _MARKER = re.compile(r"\[([A-Za-z0-9_]+)\]")
 
 
 def split_oversized(sections: list, ask: Optional[Callable] = None,
-                    max_words: int = SECTION_MAX_WORDS,
+                    max_words: Optional[int] = None,
                     holes: Optional[list] = None) -> list:
     """Split every section longer than *max_words*; returns the new list.
 
     *holes*, when given, gets {"title", "why"} for every section whose cut the
     model did not place and that was cut mechanically instead."""
-    if not SECTION_SPLIT_ENABLE:
+    if not rules.get("split_long_sections"):
         return sections
+    if max_words is None:
+        max_words = rules.get("section_max_words")
     replies = _ask_all_cuts(sections, ask, max_words)
     out, n_split, n_recut = [], 0, 0
     for i, section in enumerate(sections):

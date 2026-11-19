@@ -21,7 +21,7 @@ from pathlib import Path
 
 import openai
 
-from docpipe import providers, reading, usage
+from docpipe import providers, reading, rules, usage
 from docpipe.llm_preflight import further_room, request_extras, served_window, stage_fits
 from docpipe.reading import Hole
 
@@ -30,10 +30,6 @@ from .config import (
     VLM_MODEL,
     VLM_API_KEY,
     VLM_TIMEOUT,
-    VLM_TEMPERATURE,
-    VLM_MAX_TOKENS,
-    MAX_RETRIES,
-    RETRY_PENALTIES,
     IMAGE_TOKENS,
 )
 
@@ -131,6 +127,44 @@ def reply_type(reply: tuple) -> type:
     return _TYPES[schema["properties"][schema["required"][0]]["type"]]
 
 
+def logged(traced: dict | None, sent: dict, image_path: Path,
+           picture: bytes | None, attempt: int, asked_at: float, *,
+           response=None, error=None) -> None:
+    """One attempt of a request in the request log of the stage, as the
+    harvest writes its own (`docpipe.extraction.trace`; owner request
+    2026-11-19, A3): the request as sent, its reply or error, its times,
+    the tokens it cost and what *traced* says of it (`doc`, `kind`, what
+    its messages are `made` of, its item, page and heading). The picture is
+    written as the file it is cut from (its path in the document's folder,
+    for a strip with the strip's sha256 and height), not as its data: the
+    file stays beside the log, and a strip is cut from it again the same
+    way (`strips.strip_of`). Nothing where *traced* is None."""
+    if traced is None:
+        return
+    from docpipe.extraction import trace
+    folder = Path(traced["doc_dir"])
+    shown = {"file": image_path.relative_to(folder).as_posix()
+             if image_path.is_relative_to(folder) else image_path.name}
+    if picture is not None:
+        import hashlib
+        from .strips import height_of
+        shown.update(strip=hashlib.sha256(picture).hexdigest(),
+                     height=height_of(picture))
+    messages = []
+    for message in sent["messages"]:
+        content = message.get("content")
+        if isinstance(content, list):
+            content = [{"type": "image_url", "image_url": shown}
+                       if part.get("type") == "image_url" else part
+                       for part in content]
+        messages.append({**message, "content": content})
+    notes = {key: value for key, value in traced.items()
+             if key not in ("doc", "doc_dir", "kind")}
+    trace.stage_request(traced["kind"], {**sent, "messages": messages},
+                        attempt, asked_at, response=response, error=error,
+                        doc=traced["doc"], **notes)
+
+
 def call_vision(
     client: openai.OpenAI,
     system_prompt: str,
@@ -139,16 +173,21 @@ def call_vision(
     *,
     reply: tuple,
     model: str = VLM_MODEL,
-    max_retries: int = MAX_RETRIES,
-    temperature: float = VLM_TEMPERATURE,
-    max_tokens: int = VLM_MAX_TOKENS,
+    max_retries: int | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     repetition_penalty: float | None = None,
     budget: int | None = None,
     picture: bytes | None = None,
+    traced: dict | None = None,
 ) -> dict | Hole:
     """
     Sends an image + prompt to the vision model and reads the one JSON object
     it answers with.
+
+    *max_retries*, *temperature* and *max_tokens* are the rules
+    vision_max_attempts, figure_temperature and vision_max_tokens where not
+    given.
 
     The wall-clock bound per request is the client timeout set by
     create_client(), not *max_retries*. *reply* is the (name, schema) of the
@@ -176,6 +215,10 @@ def call_vision(
     *image_path* (a strip of it, `strips`); the file still names the request
     in the log.
 
+    *traced*, where given, writes every attempt into the request log of
+    the stage (`stage_log`): {"doc", "kind", "made", and what else the log
+    notes of the request}; see `logged`.
+
     Returns:
         The parsed JSON dict, or a Hole that names why there is none:
         "refused" for a request the server rejected itself (a 4xx, which no
@@ -186,10 +229,22 @@ def call_vision(
     # A timeout usually means the model is stuck in a repetition loop, so the
     # penalty is escalated per retry. First attempt: none, to preserve table
     # quality.
-    def penalty_after(failed_attempt: int) -> float:
-        """How hard to push back on repetition for the next try."""
-        return RETRY_PENALTIES[min(failed_attempt, len(RETRY_PENALTIES) - 1)]
+    ladder = rules.get("vision_retry_penalties")
 
+    def penalty_after(failed_attempt: int) -> float:
+        """How hard to push back on repetition for the next try: the
+        penalty of the second attempt after the first failed, of the third
+        after the second, the last one for every later."""
+        return (ladder["second_attempt"] if failed_attempt <= 1 else
+                ladder["third_attempt"] if failed_attempt == 2 else
+                ladder["later_attempts"])
+
+    if max_retries is None:
+        max_retries = int(rules.get("vision_max_attempts"))
+    if temperature is None:
+        temperature = float(rules.get("figure_temperature"))
+    if max_tokens is None:
+        max_tokens = int(rules.get("vision_max_tokens"))
     name, schema = reply
     key = schema["required"][0]
     of = reply_type(reply)
@@ -232,14 +287,18 @@ def call_vision(
             if current_penalty is not None:
                 extra_body["repetition_penalty"] = current_penalty
 
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                response_format=shape,
-                temperature=temperature,
-                max_tokens=room,
-                extra_body=extra_body or None,
-            )
+            asked_at = time.time()
+            sent = dict(model=model, messages=messages, response_format=shape,
+                        temperature=temperature, max_tokens=room,
+                        extra_body=extra_body or None)
+            try:
+                response = client.chat.completions.create(**sent)
+            except Exception as e:
+                logged(traced, sent, image_path, picture, attempt, asked_at,
+                       error=e)
+                raise
+            logged(traced, sent, image_path, picture, attempt, asked_at,
+                   response=response)
         except (openai.APITimeoutError, providers.ProviderTimeout) as e:
             log.warning("  Attempt %d: request timed out (%s)", attempt, e)
             outcome = Hole("not_served", "timeout")

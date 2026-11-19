@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Sequence
 
-from . import settings, usage
+from . import rules, settings, usage
 from .artifacts import (REFINEMENT_PARTIAL_JSON, SECTIONS_JSON,
                         SECTIONS_REFINED_JSON, VISUALS_JSON, DOCUMENT_JSON)
 from .extraction import trace
@@ -270,7 +270,7 @@ def refine(where: Where) -> Estimate:
     # requests read
     est = Estimate("refine", "stage 4: repair the text of each section",
                    model=stage.LLM_MODEL)
-    window = stage.WINDOW_SIZE
+    window = rules.get("refine_window_sections")
     documents = sections_n = windows = cuts = resumed = unreadable = 0
     words_in = 0
     for doc in _doc_dirs(where.processed):
@@ -328,15 +328,16 @@ def refine(where: Where) -> Estimate:
     if not _measured(est, where, "refinement"):
         # a request is the system prompt and the window; its reply is the
         # window handed back, which the stage sizes by this headroom
-        per = config.TOKENS_PER_WORD
+        per = rules.get("tokens_per_word")
         est.tokens_in = int(windows * _words(config.system_prompt()) * per
                             + words_in * per)
         est.basis += (f"; the system prompt and each window as the JSON it is "
                       f"sent in, at {per:g} tokens per word")
-        if not config.REFINE_RETURN_CORRECTIONS:
-            est.tokens_out = int(words_in * per * config.REPLY_HEADROOM)
+        headroom = rules.get("reply_headroom")
+        if not rules.get("refine_return_corrections"):
+            est.tokens_out = int(words_in * per * headroom)
             est.basis += (f", and a reply as long as its window times "
-                          f"{config.REPLY_HEADROOM:g}")
+                          f"{headroom:g}")
         est.notes.append("the cuts of oversized sections are not counted in "
                          "tokens")
     return est
@@ -411,7 +412,7 @@ def visuals(where: Where) -> Estimate:
         est.notes.append("the mean is over tables and figures together: the "
                          "ledger does not tell them apart")
     else:
-        per = config.TOKENS_PER_WORD
+        per = float(rules.get("vision_tokens_per_word"))
         prompts = {"table": _words(config.table_system_prompt())
                    + _words(config.table_user_prompt()),
                    "figure": _words(config.figure_system_prompt())
@@ -461,7 +462,7 @@ def chunk(where: Where) -> Estimate:
     merged document that have no embedding in the database yet. The merge and
     the database step come first in the same run and ask no model."""
     from docpipe.chunking import chunking, config
-    from docpipe.refinement.config import TOKENS_PER_WORD
+    TOKENS_PER_WORD = rules.get("tokens_per_word")
 
     est = Estimate("chunk", "stage 6: merge, database, embeddings",
                    model=config.EMBEDDING_MODEL)

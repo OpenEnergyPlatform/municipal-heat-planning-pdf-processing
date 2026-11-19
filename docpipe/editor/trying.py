@@ -21,6 +21,13 @@ without the first, the text model of the run (LLM_BASE_URL, LLM_API_KEY,
 LLM_MODEL) where the environment names one. With neither, nothing is sent
 and the reason is said.
 
+A request of the request log of stage 4 or 5 is put together and sent by
+`staged` (owner request 2026-11-19, A3): a request of the refinement goes to
+the text model as above, one of the visuals to the vision model the stage
+asks (VLM_BASE_URL, VLM_API_KEY, VLM_MODEL), with its picture read again
+from the document's folder. Its reply is read as the stage reads it; it
+names no address.
+
 Author: Felix Vossel
 """
 from __future__ import annotations
@@ -28,6 +35,7 @@ from __future__ import annotations
 import os
 import re
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Optional
 from urllib.parse import urlsplit
@@ -40,6 +48,9 @@ NO_MODEL = ("No model is set up for Try, so no request can be sent. To "
             "set one up, set EDIT_TRY_BASE_URL together with "
             "EDIT_TRY_API_KEY and EDIT_TRY_MODEL, or set LLM_BASE_URL for "
             "the text model of the run.")
+NO_VISION = ("No vision model is set up for Try, so no request of the "
+             "visuals can be sent. To set one up, set VLM_BASE_URL together "
+             "with VLM_API_KEY and VLM_MODEL, which the stage reads too.")
 # A line as a request shows it: a block's letter, its number, its text.
 _SHOWN = re.compile(r"^([A-Z]?)(\d+) (.*)$", re.S)
 # The key of a message under which the entries of a list stand, each under
@@ -51,10 +62,23 @@ class Refused(ValueError):
     """A try that is not sent, said in one sentence."""
 
 
-def settings() -> dict:
+def settings(role: str = "llm") -> dict:
     """Where a try goes: `configured`, and then `base_url`, `api_key`,
-    `model` and the `host` to show; else `why` not."""
+    `model` and the `host` to show; else `why` not. *role* "vlm" is the
+    vision model of the visuals (stage 5), else the text model."""
     env = os.environ
+    if role == "vlm":
+        if not env.get("VLM_BASE_URL"):
+            return {"configured": False, "why": NO_VISION, "limit": LIMIT,
+                    "role": role}
+        base = env["VLM_BASE_URL"]
+        model = env.get("VLM_MODEL")
+        if not model:
+            from ..visuals.config import VLM_MODEL as model
+        return {"configured": True, "why": None, "limit": LIMIT,
+                "role": role, "base_url": base,
+                "api_key": env.get("VLM_API_KEY") or "EMPTY",
+                "model": model, "host": urlsplit(base).hostname or base}
     if env.get("EDIT_TRY_BASE_URL"):
         base, key = env["EDIT_TRY_BASE_URL"], env.get("EDIT_TRY_API_KEY")
         model = env.get("EDIT_TRY_MODEL") or env.get("LLM_MODEL")
@@ -62,20 +86,22 @@ def settings() -> dict:
         base, key = env["LLM_BASE_URL"], env.get("LLM_API_KEY")
         model = env.get("LLM_MODEL")
     else:
-        return {"configured": False, "why": NO_MODEL, "limit": LIMIT}
+        return {"configured": False, "why": NO_MODEL, "limit": LIMIT,
+                "role": "llm"}
     if not model:
         from ..extraction import runner
         model = runner.llm_model()
-    return {"configured": True, "why": None, "limit": LIMIT,
+    return {"configured": True, "why": None, "limit": LIMIT, "role": "llm",
             "base_url": base, "api_key": key or "EMPTY", "model": model,
             "host": urlsplit(base).hostname or base}
 
 
 def client_of(config: dict):
-    """The run's client for the text model, at the address of *config*.
-    It repeats nothing."""
+    """The run's client for the model of *config* (its `role`, the text
+    model where it names none), at its address. It repeats nothing."""
     from .. import providers
-    return providers.client("llm", base_url=config["base_url"],
+    return providers.client(config.get("role") or "llm",
+                            base_url=config["base_url"],
                             api_key=config["api_key"], timeout=TIMEOUT,
                             max_retries=0)
 
@@ -223,22 +249,39 @@ def _same(old: dict, new: dict) -> bool:
     return (old.get("answer") or "").strip() == (new["answer"] or "").strip()
 
 
+def role_of(trace) -> str:
+    """Which model the requests of *trace* ask: the stage's for a request
+    log of stage 4 or 5 (`staged.role_of`), else the text model."""
+    from . import staged
+    head = getattr(trace, "head", None) or {}
+    if head.get("stage") or any(staged.is_staged(one)
+                                for one in trace.requests[:1]):
+        return staged.role_of(head, trace.sent(0) if trace.requests
+                              else None)
+    return "llm"
+
+
 def run(profile, trace, indexes: list, edits: dict, read: Callable, *,
         config: Optional[dict] = None,
-        make_client: Optional[Callable] = None) -> dict:
+        make_client: Optional[Callable] = None,
+        read_bytes: Optional[Callable] = None) -> dict:
     """The requests *indexes* of *trace* (`requests.Trace`), each sent once
     with the texts of *edits*. `Refused` where nothing may be sent: more
     than `LIMIT` requests, none, or no model named. A request whose
-    instruction cannot be put together is not sent and says why."""
+    instruction cannot be put together is not sent and says why. A picture
+    of a request of stage 5 is read with *read_bytes(path)*, from the
+    folder of its log."""
+    from . import staged
     indexes = list(indexes)
     if not indexes:
         raise Refused("Choose at least one request to send.")
     if len(indexes) > LIMIT:
         raise Refused(f"One click on Try sends {LIMIT} requests at most, "
                       f"but {len(indexes)} were chosen.")
-    config = config or settings()
+    config = config or settings(role_of(trace))
     if not config.get("configured"):
         raise Refused(config.get("why") or NO_MODEL)
+    read_bytes = read_bytes or (lambda path: Path(path).read_bytes())
     client = None
     results = []
     for index in indexes:
@@ -249,18 +292,34 @@ def run(profile, trace, indexes: list, edits: dict, read: Callable, *,
         old = {"answer": request.get("answer"),
                "answer_json": request.get("answer_json"),
                "check": request.get("check")}
-        view = prompts.preview(profile, request, sent or {}, edits, read)
+        own = staged.is_staged(request)
+        view = (staged.preview(profile, request, sent or {}, edits, read,
+                               getattr(trace, "head", None))
+                if own else
+                prompts.preview(profile, request, sent or {}, edits, read))
         if view["why"]:
             results.append({"index": index, "sent": False,
                             "why": view["why"], "old": old, "new": None})
             continue
         if client is None:
             client = (make_client or client_of)(config)
-        new = once(client, config["model"], request, sent, view)
+        if own:
+            try:
+                new = staged.once(client, config["model"], sent, view,
+                                  Path(trace.path).parent, read_bytes,
+                                  profile)
+            except (LookupError, OSError, PermissionError) as exc:
+                results.append({"index": index, "sent": False,
+                                "why": str(exc), "old": old, "new": None})
+                continue
+        else:
+            new = once(client, config["model"], request, sent, view)
         row = {"index": index, "sent": True, "why": None, "old": old,
                "new": new, "changed_request": view["changed"],
                "same": None, "addresses": [], "holds": None}
-        if new["error"] is None:
+        if new["error"] is None and own:
+            row["same"] = _same(old, new)
+        elif new["error"] is None:
             row["same"] = _same(old, new)
             payload, _, _ = prompts.payload_of(sent)
             row["addresses"] = addresses(new["answer_json"], payload) \
@@ -273,6 +332,9 @@ def run(profile, trace, indexes: list, edits: dict, read: Callable, *,
     answered = [row for row in sent_rows if row["new"]["error"] is None]
     return {
         "model": config["model"], "host": config.get("host"),
+        # requests of stage 4 or 5 name no address
+        "staged": any(staged.is_staged(trace.requests[index])
+                      for index in indexes),
         "results": results,
         "counts": {
             "named": len(indexes), "sent": len(sent_rows),

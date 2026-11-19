@@ -3,7 +3,7 @@ the next section's text, in order, and only a heading with no text after it,
 or one before a literature list, goes as it did. A section the model removes
 leaves its heading the same way, and is no section to merge into; the
 profile's name for the text before any heading is never handed on."""
-from docpipe.profile import profile_value
+from docpipe import rules
 from docpipe.refinement.refine import (_apply_actions, _fold_bare_headings,
                                        _is_empty_section)
 
@@ -65,7 +65,7 @@ def test_a_continuation_after_a_removed_section_joins_the_section_before_it():
 
 
 def test_the_text_before_the_first_heading_stays_and_its_name_is_never_handed_on():
-    front = profile_value("preprocessing", "FRONT_SECTION_TITLE")
+    front = rules.get("front_section_title")
     applied, _ = _apply_actions([
         {**section(front, f"Energy Policy 110 {TITLE}"), "_action": "remove"},
         {**section(front), "_action": "keep"},

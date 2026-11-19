@@ -37,7 +37,7 @@ MODULES = sorted(
        for p in (ROOT / "profiles" / name).glob("*.py")
        if p.name not in ("kg.py", "vocabulary.py", "__init__.py",
                          "profile.py", "config.py", "source.py",
-                         "store.py", "preprocessing.py", "inference.py",
+                         "store.py",
                          "mhpkg.py", "oekg_api.py")
        and not p.name.startswith("migrate_")])
 ENV_CALLS = {("os.environ", "get"), ("os", "getenv"), ("environ", "get")}

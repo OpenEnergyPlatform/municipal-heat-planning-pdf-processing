@@ -167,16 +167,17 @@ def test_a_hole_of_another_cause_ends_the_reading_with_it():
 
 @pytest.fixture
 def prompts_stub(monkeypatch):
-    texts = {"table_system_prompt": "table system",
-             "table_user_prompt": "{section_title}|{page_number}|"
-                                  "{existing_caption}|{section_content}|"
-                                  "{caption_instruction}",
-             "table_continued_prompt": " BEFORE {previous_caption}|"
-                                       "{previous_head}|{between}",
-             "caption_keep_instruction": "keep",
-             "caption_generate_table_instruction": "make table"}
-    for name, text in texts.items():
-        monkeypatch.setattr(process, name, lambda t=text: t)
+    texts = {"visuals/table_system": "table system",
+             "visuals/table_user": "{section_title}|{page_number}|"
+                                   "{existing_caption}|{section_content}|"
+                                   "{caption_instruction}",
+             "visuals/table_continued": " BEFORE {previous_caption}|"
+                                        "{previous_head}|{between}",
+             "visuals/caption_keep": "keep",
+             "visuals/caption_generate_table": "make table"}
+    monkeypatch.setattr(process, "_text", texts.__getitem__)
+    monkeypatch.setattr(process, "table_system_prompt",
+                        lambda: texts["visuals/table_system"])
 
 
 def test_process_table_reads_a_table_in_strips_where_it_does_not_fit(

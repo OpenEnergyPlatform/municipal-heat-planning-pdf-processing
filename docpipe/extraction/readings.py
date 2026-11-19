@@ -297,7 +297,8 @@ RULES = (
          "A check that is removed is not made, and where every check ties "
          "the reading that came first wins.",
          choices=("not_contained", "most_sources", "located", "longer"),
-         empty=True, where="docpipe/extraction/readings.py (pick_one)"),
+         empty=True, where="docpipe/extraction/readings.py (pick_one)",
+         title="How one reading is chosen"),
     rule("settle_order", "graph", "One number, several readings", "texts",
          "In which order the graph decides between different numbers that "
          "one place of the graph would hold. wording gives each number the "
@@ -311,7 +312,8 @@ RULES = (
          "is not made.",
          choices=("wording", "rounding", "trust", "contested"), empty=True,
          decided="2026-09-23",
-         where="docpipe/extraction/readings.py (settle)"),
+         where="docpipe/extraction/readings.py (settle)",
+         title="Order of deciding between numbers"),
     rule("corroborated_by_place", "graph", "One number, several readings",
          "switch",
          "On: a value that two different passages of the document print, "
@@ -320,7 +322,8 @@ RULES = (
          "marked as confirmed.",
          decided="2026-11-05",
          where="docpipe/extraction/readings.py (settle), graph.py "
-               "(_evidence)"),
+               "(_evidence)",
+         title="Confirm by two passages"),
 )
 
 FRONT_RULES = (
@@ -330,7 +333,8 @@ FRONT_RULES = (
          "its title page only.",
          choices=("first page and title page", "first page", "title page"),
          decided="2026-11-05",
-         where="docpipe/extraction/readings.py (front_pages)"),
+         where="docpipe/extraction/readings.py (front_pages)",
+         title="Which pages are front pages"),
     rule("front_pages_extra", "graph", GROUP, "whole",
          "How many pages after each front page count as front pages too. 0 "
          "means only the front pages themselves. A larger number helps "
@@ -338,12 +342,14 @@ FRONT_RULES = (
          "of a publication, and may take a value from a page that belongs "
          "to another work.",
          least=0, most=20,
-         where="docpipe/extraction/readings.py (front_pages)"),
+         where="docpipe/extraction/readings.py (front_pages)",
+         title="Extra pages after a front page"),
     rule("front_order", "graph", GROUP, "texts",
          "In which order the readings of a front field count: those read "
          "on a front page (front), those looked up in the catalogue "
          "(catalogue) and any other reading (any). The first of them that "
          "has a reading decides. Remove one to never take from it.",
          choices=("front", "catalogue", "any"), decided="2026-11-05",
-         where="docpipe/extraction/readings.py (in_order)"),
+         where="docpipe/extraction/readings.py (in_order)",
+         title="Order of front-field readings"),
 )

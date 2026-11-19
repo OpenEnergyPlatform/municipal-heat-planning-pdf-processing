@@ -8,13 +8,7 @@
     "span_marks": {
       "qualifier": "out:approximate"
     },
-    "compute_parts": {
-      "carrier": "out:total",
-      "sector": "out:total",
-      "technology": "out:total",
-      "spatial_scope": "municipality"
-    },
-    "computed_same_once": "on",
+    "context_sentence": true,
     "value_bounds": [
       {
         "parameter": "share",
@@ -26,6 +20,76 @@
       "sector": "out:total",
       "technology": "out:total"
     },
+    "hyphen_exceptions": [
+      "und",
+      "oder",
+      "bzw",
+      "etc",
+      "sowie",
+      "als",
+      "wie",
+      "auch",
+      "denn",
+      "noch",
+      "sondern",
+      "doch",
+      "jedoch",
+      "allerdings",
+      "hingegen",
+      "beziehungsweise",
+      "insbesondere",
+      "zum",
+      "zur",
+      "im",
+      "in",
+      "am",
+      "an",
+      "auf",
+      "von",
+      "mit",
+      "für",
+      "über",
+      "unter",
+      "zwischen",
+      "ohne",
+      "gegen",
+      "bis",
+      "durch",
+      "trotz",
+      "wegen",
+      "während"
+    ],
+    "heading_excluded_prefixes": [
+      "abbildung",
+      "abb.",
+      "tabelle",
+      "tab."
+    ],
+    "caption_max_words": 45,
+    "directory_figure_words": [
+      "Abbildung",
+      "Tabelle",
+      "Abb\\.",
+      "Tab\\."
+    ],
+    "bibliography_title_words": [
+      "literatur",
+      "quellen",
+      "referenz",
+      "bibliograf"
+    ],
+    "caption_opener_patterns": [
+      "(?:^|(?<=[\\s\\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\\s+\\d+(?:[-.–]\\d+)*\\s*:)"
+    ],
+    "front_section_title": "Dokument",
+    "part_section_title": "Abschnitt",
+    "compute_parts": {
+      "carrier": "out:total",
+      "sector": "out:total",
+      "technology": "out:total",
+      "spatial_scope": "municipality"
+    },
+    "computed_same_once": "on",
     "compute_least_parts": 2,
     "sum_printed_least_numbers": 3,
     "shown_number_places": 6,
@@ -40,7 +104,6 @@
     ],
     "alt_label_language": "de",
     "contract_language": "de",
-    "prompt_checks": [],
-    "context_sentence": true
+    "prompt_checks": []
   }
 }

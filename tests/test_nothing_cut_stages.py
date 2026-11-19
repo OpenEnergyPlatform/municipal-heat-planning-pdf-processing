@@ -27,7 +27,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from docpipe import estimate, llm_preflight
+from docpipe import estimate, llm_preflight, rules
 from docpipe import window as windows
 from docpipe.reading import Hole
 from docpipe.refinement import config as rconfig
@@ -301,8 +301,8 @@ def test_the_budget_counts_the_section_before_the_window(monkeypatch):
     monkeypatch.setattr(rconfig, "system_prompt", lambda: "")
     monkeypatch.setattr(rconfig, "largest_reply_tokens", lambda: 0)
     assert rconfig.max_request_tokens() == int(
-        (rconfig.WINDOW_SIZE + 1) * rconfig.SECTION_MAX_WORDS
-        * rconfig.TOKENS_PER_WORD)
+        (rules.get("refine_window_sections") + 1) * rules.get("section_max_words")
+        * rules.get("tokens_per_word"))
 
 
 def segments_of(n, words):

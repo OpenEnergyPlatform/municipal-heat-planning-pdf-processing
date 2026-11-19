@@ -11,7 +11,9 @@ beside a folder for its PDFs (`data/<name>/pdf`). It starts empty, extending
 the profile docpipe brings itself, or as a copy of a profile the installation
 finds: then it extends that one and has a copy of each of its files a page
 edits (the spec, the flow, the graph, the chat, the rules, the sources), so
-editing them leaves the other profile as it was. Where it is given the
+editing them leaves the other profile as it was; the flow's copy leaves out
+the changes the profile makes in the drawing it inherits, which the copy
+inherits with them. Where it is given the
 addresses of an ontology, shapes or a graph, they are its sources; a draft of
 its spec is made from shapes with the same code `docpipe init --shapes` uses.
 Everything is read before anything is written: a name taken, a file that

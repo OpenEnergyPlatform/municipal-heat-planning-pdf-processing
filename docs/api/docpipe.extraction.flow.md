@@ -39,10 +39,25 @@ Only a rule the step reads may be set at it (`Rule.steps`,
 
 The default profile writes the whole file: every number (`NUMBERS`) and the
 drawing. A profile that extends it writes the numbers it sets differently,
-laid over the default's number by number (`load`), and may write a drawing
-of its own, which is then the whole drawing. A setting of the run wins over
-the file for the numbers that have one (`Number.env`), never over a box's
-own value.
+laid over the default's number by number (`load`), and what it changes in
+the drawing it inherits ("changes"), or a drawing of its own, which is then
+the whole drawing. Steps that several frames go through stand once, as a
+part ("parts"), and each frame names it (owner request 2026-11-19, point C2
+of the review of that day; `flowparts.py`):
+
+    {"numbers": {...},
+     "flow": [..., {"id": "values", "each": "value", "order": "names_first",
+                    "together": true, "part": "value"}, ...],
+     "parts": {"value": [{"id": "coordinates", "each": "coordinate", ...},
+                         {"id": "values_check", "box": "check_value"}]}}
+
+    {"numbers": {"replies": 5},
+     "changes": [{"insert": {"id": "work", "box": "ask", ...},
+                  "into": "coordinate_way", "way": 2, "part": "value"}]}
+
+The run reads the drawing with every part drawn in its frames (`Flow.tree`).
+A setting of the run wins over the file for the numbers that have one
+(`Number.env`), never over a box's own value.
 
 Before a drawing is kept, `problems` says everything the run could not do
 with it (owner decisions 2026-11-10, section 11 of the plan): a box where it
@@ -86,6 +101,7 @@ Fields:
 - `env: Optional[str] = None`: the setting that wins over the file
 - `part: Optional[int] = None`: its place where the setting lists several
 - `steps: tuple = ()`: the kinds of steps that read it
+- `title: str = ""`: its name in words (owner request
 
 ### Numbers
 
@@ -139,10 +155,12 @@ Fields:
 
 - `numbers: dict`: name -> value, in the order of NUMBERS
 - `owners: dict`: name -> the profile whose file says it
-- `tree: list`: the drawing
+- `tree: list`: the drawing, every part drawn
 - `files: tuple`: ((profile name, path)), nearest first
 - `sha256: str`
-- `tree_from: str = ""`: the profile whose file draws it
+- `tree_from: str = ""`: The profile whose file draws it or changes it last.
+- `top: list = field(default_factory=list)`: The drawing as the files write it: its frames name their parts.
+- `parts: dict = field(default_factory=dict)`
 
 ## Functions
 
@@ -391,11 +409,14 @@ the reading (`addressed.KINDS`) and the calculation after it.
 def parse(raw: str, where, whole: bool, profile=None) -> dict
 ```
 
-{"numbers": {name: value}, "flow": [...]} of the text *raw*, read
-strictly. A *whole* file names every number and the drawing; any other
-is laid over one and names numbers, and may draw a whole drawing of
-its own. *where* names the file in what is said about it, *profile*
-(a profile or its name) the profile it belongs to.
+{"numbers": {name: value}, "flow": [...], "parts": {...}} or
+{"numbers", "changes": [...]} of the text *raw*, read strictly. A
+*whole* file names every number and the drawing; any other is laid over
+one and names numbers, and may change the drawing it is laid over or
+draw a whole drawing of its own. *where* names the file in what is said
+about it, *profile* (a profile or its name) the profile it belongs to.
+A drawing is checked with its parts drawn; what changes do is checked
+where they are made (`_merged`).
 
 ### dump
 

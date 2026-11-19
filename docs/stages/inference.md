@@ -182,7 +182,7 @@ denser than a flat divide by 4 assumes (`answer.py:313-318`).
 
 The conversation of a follow-up is passed with all its turns and whole answers.
 Where it no longer fits the model's window beside the rest, the turn is not asked,
-its fault has the cause `conversation_too_long`, and the page says so (UI word
+its fault has the cause `conversation_too_long`, and the page says so (chat word
 `conversation_full`). A reply that could not be read is shown back to the model
 whole with what was wrong; where that does not fit the window, the request starts
 anew with its cause named in one sentence (phrase `asked_anew`). This `again` is
@@ -328,7 +328,7 @@ four count statements, not batches and not citations.
 
 What the reader is told is the count and nothing finer. The app puts one
 sentence directly under the answer, "n of m statement(s) removed" in the
-profile's words (`UI["statements_dropped"]`), also where every statement was
+profile's words (the chat word `statements_dropped`), also where every statement was
 removed; n counts the dropped statements and m every one the model made, the
 repeated ones included. The cause per dropped statement goes to the process log at info level
 (`answer.py:384-385`) and nowhere else; the request log keeps the two counts
@@ -359,8 +359,8 @@ unreadable or blank reply is left in the faults.
 `statements.assemble` writes the answer. One shown statement is a sentence
 followed by its `[n]`; two or more are a list, one `- statement [n]` line each,
 in the order they were made. A statement read off a picture has to say so: where
-a visual statement does not carry the profile's `READOFF_MARKER` (compared
-without regard to case), the profile's `READOFF_NOTE` is added once, under the
+a visual statement does not carry the profile's chat word `readoff_marker` (compared
+without regard to case), its `readoff_note` is added once, under the
 answer and under `answer_text`.
 `answer_text` is the same statements without list marks and numbers: what the
 history of a follow-up and a comparison are given.
@@ -860,7 +860,7 @@ index asks for it (`values_index.document_names`). The words the
 generic label needs, the tag after a document's name (`version_current`,
 `version_old`) and the noun for a document where a profile names none
 (`document_noun_fallback`), are not in the module: it reads them from the
-`inference.UI` table of the profile it is given, through `wording.ui`, so the
+chat words of the profile it is given (`prompts/chat/phrases.json`), through `wording.ui`, so the
 built-in profile says `(current)` and `(old)` and `kwp` `(aktuell)` and `(alt)`.
 
 `chunker.py` holds `pack_chunks`, the token-budgeted batching,
@@ -914,8 +914,9 @@ records another embedding model than the one that embeds the queries, else
 the extraction stage's `runner.py` (as `inference_db`).
 
 `wording.py` holds `REQUIRED`, `phrases` and `readoff`, the profile's
-phrase contract described in Method and Failure modes, and `chat_profile`, `ui`
-and `UI_REQUIRED` for the profile the chat answers in and the words of its pages.
+phrase contract described in Method and Failure modes, and `chat_profile`, `chat_words`,
+`ui`, `axis_names`, `graph_notes` and `CHAT_REQUIRED` for the profile the chat answers in and the words
+of its pages, its axes and its graph route.
 Called by `answer.py`, `chunker.py` and, on first use, `llm_client.py`.
 
 `code_exec.py` holds `is_enabled` and `run_code`, the sandbox client.
@@ -1240,11 +1241,16 @@ profile that extends another one writes only the pieces it words
 differently: its file is laid over those of the profile it extends.
 
 The words of the app's pages come the same way, from the profile's
-`inference.py`: its `UI` table, which a person reads where a model reads the
-sentences. That
-includes the picker's labels, the tag after a document's name and the noun
-for one. Both tables are checked for the entries the core asks for
-(`REQUIRED`, `UI_REQUIRED`).
+`prompts/chat/phrases.json` (`CHAT`; its `inference.py` until 2026-11-19,
+owner request A2: so that they have a place in the page and are edited
+where the other sentences are). A person reads them where a model reads the
+sentences: the labels of the pages and of the picker, the tag after a
+document's name and the noun for one (`UI_REQUIRED`), the name of each axis
+of the spec where the chat shows a value's coordinates (`axis_<axis>`), why
+the graph route did not answer (`graph_note_<reason>`), and the marker and
+note of a value read off a figure (`readoff_marker`, `readoff_note`). Both
+tables are checked for the entries the core asks for (`REQUIRED`,
+`CHAT_REQUIRED`).
 
 Author: Felix Vossel
 

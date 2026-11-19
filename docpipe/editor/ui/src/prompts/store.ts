@@ -18,7 +18,9 @@ export interface TryCell { running?: boolean; n: number; res?: any; err?: string
 
 export const P = {
   loaded: false, loading: false, loadErr: null as string | null, list: null as any, sel: null as Sel | null, selErr: null as string | null,
-  filter: '', eds: new Map<string, Ed>(), phs: new Map<string, Ph>(), trace: null as string | null,
+  /* trace: the chosen request log of the harvest; stageTrace: the chosen one of each stage before the harvest (owner request
+     2026-11-19, A3), whose prompts are shown with the request logs of their own stage */
+  filter: '', eds: new Map<string, Ed>(), phs: new Map<string, Ph>(), trace: null as string | null, stageTrace: {} as Record<string, string>,
   req: null as Req | null, tryRes: null as TryCell | null, pvSeq: 0, rqSeq: 0,
   pvTimer: undefined as ReturnType<typeof setTimeout> | undefined, rqTimer: undefined as ReturnType<typeof setTimeout> | undefined,
 };
@@ -42,6 +44,24 @@ export function currentX(): X | null {
   return P.sel.t === 'prompt' ? P.eds.get(P.sel.id) || null : P.phs.get(P.sel.module) || null;
 }
 export function kindsOf(id: string): string[] { const p = ((P.list && P.list.prompts) || []).find((x: any) => x.id === id); return p ? (p.kinds || []) : []; }
+/* the stage before the harvest a prompt belongs to ("visuals/table_user" -> "visuals"), null for the harvest's and for a text block */
+export function stageOf(id: string | null): string | null {
+  const stage = id ? id.split('/')[0] : '';
+  return ((P.list && P.list.stages) || []).includes(stage) ? stage : null;
+}
+/* the request logs shown with a prompt: those of its stage, the harvest's for any other prompt and for a text block */
+export function logsFor(id: string | null): any[] {
+  const stage = stageOf(id);
+  return ((P.list && P.list.traces) || []).filter((l: any) => (l.stage || null) === stage);
+}
+const selId = (): string | null => P.sel && P.sel.t === 'prompt' ? P.sel.id : null;
+/* the request log the selected prompt is shown with: the one chosen for its stage while there is one, else the first */
+export function currentTrace(): string | null {
+  const id = selId(), stage = stageOf(id), logs = logsFor(id);
+  const chosen = stage ? P.stageTrace[stage] : P.trace;
+  if (chosen && logs.some((l: any) => l.name === chosen)) return chosen;
+  return logs.length ? logs[0].name : null;
+}
 
 /* ---------- load and select ---------- */
 
@@ -51,7 +71,7 @@ export async function loadPrompts() {
   try {
     P.list = await api('GET', '/api/prompts');
     P.loaded = true;
-    const logs = P.list.traces || [];
+    const logs = logsFor(null);
     if (!P.trace || !logs.some((l: any) => l.name === P.trace)) P.trace = logs.length ? logs[0].name : null;
   } catch (e) {
     P.loadErr = (e as Error).message;
@@ -95,7 +115,9 @@ export async function selectModule(m: string) {
 }
 
 export function setTrace(name: string) {
-  P.trace = name;
+  const stage = stageOf(selId());
+  if (stage) P.stageTrace[stage] = name;
+  else P.trace = name;
   for (const x of P.phs.values()) x.shown = {};
   if (P.sel && P.sel.t === 'prompt') { resetRequests(); bump(); startRequests(); }
   else bump();
@@ -207,8 +229,9 @@ export function resetRequests() {
   clearTimeout(P.pvTimer); clearTimeout(P.rqTimer);
   P.pvSeq++; P.rqSeq++;
   P.req = null; P.tryRes = null;
-  if (P.sel && P.sel.t === 'prompt' && P.trace && kindsOf(P.sel.id).length) {
-    P.req = { prompt: P.sel.id, trace: P.trace, kind: '', field: '', carries: '', text: '', offset: 0, listing: null, listErr: null, listLoading: false,
+  const trace = currentTrace();
+  if (P.sel && P.sel.t === 'prompt' && trace && kindsOf(P.sel.id).length) {
+    P.req = { prompt: P.sel.id, trace, kind: '', field: '', carries: '', text: '', offset: 0, listing: null, listErr: null, listLoading: false,
       opts: null, sel: null, pv: null, pvErr: null, pvLoading: false, pvEdited: false, showSent: false, sysOpen: false };
   }
 }

@@ -40,6 +40,15 @@ Something the editor does not do, said in one sentence.
 
 ## Functions
 
+### stage_requests
+
+```python
+def stage_requests(stage: str) -> dict
+```
+
+{kind: the prompt ids it is made of} of a stage before the harvest,
+{} for any other stage.
+
 ### concerns
 
 ```python
@@ -48,7 +57,8 @@ def concerns(prompt_id: str, request: dict) -> bool
 
 Whether the prompt has a say in a recorded request: it makes its
 instruction, or it is the follow-up prompt and the request is one
-asked again.
+asked again; for a request of a stage before the harvest, its messages
+are made of it (`made`).
 
 ### kinds_of
 
@@ -67,6 +77,19 @@ def listing(profile) -> list
 
 Every prompt the profile runs with, its own and those of the
 profiles it extends, by stage and name.
+
+### steps_asking
+
+```python
+def steps_asking(profile) -> dict
+```
+
+{prompt id: [{"flow", "id", "label"}]} of every step of the
+profile's drawings that asks with a prompt the profile has, in the
+order the drawings stand (owner request 2026-11-19, A7: from a prompt
+to the steps that ask it, as the Flow tab names them). A step whose
+prompt no profile of the line writes is never taken and stands under
+none; a drawing the page cannot read names no step.
 
 ### segments
 

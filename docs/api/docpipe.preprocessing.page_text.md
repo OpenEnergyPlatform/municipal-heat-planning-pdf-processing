@@ -24,8 +24,8 @@ Words that must not be pulled across a line-ending hyphen.
 
 "Wärme-" + "und Kälteversorgung" is one construction, not one word, and so
 is "short-" + "and long-term". Which words do that is a property of the
-language, so the profile says so; the core would silently glue the wrong
-corpus together.
+language, so the profile says so (the rule `hyphen_exceptions`); the core
+would silently glue the wrong corpus together.
 
 ### extract_all_pages
 

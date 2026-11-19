@@ -30,7 +30,7 @@ from docpipe.llm_preflight import assert_serving
 from docpipe.profile import add_profile_argument, program, require_profile
 
 from .config import (DIR_RESULTS, LLM_API_KEY, LLM_BASE_URL, LLM_MODEL,
-                     SECTIONS_REFINED_JSON, PROMPT_IDS, SECTIONS_JSON,
+                     SECTIONS_REFINED_JSON, prompt_ids, SECTIONS_JSON,
                      llm_max_tokens, llm_temperature, max_request_tokens)
 from .refine import reply_shapes, run_refine
 
@@ -62,7 +62,7 @@ def run_single(doc_dir: Path, *, force: bool = False,
     results_dir = doc_dir / DIR_RESULTS
     final = doc_dir / SECTIONS_REFINED_JSON
 
-    changed = prompts.check(results_dir, PROMPT_IDS) if final.exists() else []
+    changed = prompts.check(results_dir, prompt_ids()) if final.exists() else []
     if changed and not force:
         if force_stale:
             log.info("Stage 4: %s was refined with an older prompt (%s) – redoing",
@@ -75,7 +75,7 @@ def run_single(doc_dir: Path, *, force: bool = False,
 
     result = run_refine(doc_dir, force=force, holes=holes)
     if result is not None:
-        prompts.record(results_dir, PROMPT_IDS)
+        prompts.record(results_dir, prompt_ids())
     return result
 
 
@@ -286,6 +286,11 @@ def main() -> None:
         args.input = str(profile.processed_dir)
 
     holes: list = []
+    # The request log of the stage, each document's in its folder (owner
+    # request 2026-11-19, A3).
+    from docpipe.extraction import trace
+    trace.open_stage(args.input, args.batch, "refinement",
+                     prompt_ids=prompt_ids(), model=LLM_MODEL)
     try:
         assert_serving(LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
                        max_request_tokens(), what="refinement",
@@ -307,6 +312,8 @@ def main() -> None:
     except Exception as e:
         log.error("Fatal error: %s", e, exc_info=True)
         sys.exit(1)
+    finally:
+        trace.close_stage()
 
 
 if __name__ == "__main__":

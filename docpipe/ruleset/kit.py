@@ -13,7 +13,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 # The tabs of `docpipe edit` a rule stands in.
-TABS = ("spec", "prompts", "flow", "sources", "graph")
+# "stages": the rules of the stages before the harvest, 1 to 6 (owner
+# request 2026-11-19, A1).
+TABS = ("spec", "prompts", "flow", "sources", "graph", "stages")
 # What a rule's value is.
 KINDS = ("whole", "number", "switch", "choice", "text", "chars", "texts",
          "map", "table", "range")
@@ -31,7 +33,8 @@ class Rule:
     most: Optional[float] = None
     choices: tuple = ()
     columns: tuple = ()             # a table's columns
-    of: str = "text"                # a map's values: text, texts or whole
+    of: str = "text"                # a map's values: text, texts, whole
+                                    # or number
     empty: bool = False             # an empty text, list or map; no range
     env: Optional[str] = None       # the setting that wins over the file
     env_flag: tuple = ()            # (the value where that setting is off,
@@ -48,6 +51,10 @@ class Rule:
                                     # project file
     secret: bool = False            # a key: set at the start only (.env),
                                     # never shown, never written
+    title: str = ""                 # its name in words, as the page shows
+                                    # it above the help with the name small
+                                    # beside it (owner request 2026-11-19,
+                                    # A5); German in the page's catalogue
 
 
 def rule(name, tab, group, kind, help, **more) -> Rule:

@@ -44,7 +44,8 @@ RULES = (
          where="blocks.py (CHECKS), pipeline.py (place_of: merge_field), "
                "reading.py (passage_of), addressed.py (resolve), engine.py",
          steps=tuple(dict.fromkeys(("find", "docfield", "coord", "search")
-                                   + CHECKED))),
+                                   + CHECKED)),
+         title="Quote must be in shown text"),
     rule("check_answer_in_quote", "spec", "What a quote must show",
          "switch",
          "On: the words of an answer have to stand in the line or cell it "
@@ -55,7 +56,8 @@ RULES = (
          where="blocks.py (CHECKS), addressed.py (resolve), pipeline.py "
                "(merge_field), verify.py",
          steps=tuple(dict.fromkeys(("find", "docfield", "coord", "search")
-                                   + CHECKED))),
+                                   + CHECKED)),
+         title="Answer must be in its quote"),
     # -- spec: lists and wording ----------------------------------------------
     # -- spec: numbers and years ----------------------------------------------
     rule("settled_years_taken", "spec", "Numbers and years", "choice",
@@ -64,7 +66,8 @@ RULES = (
          "First: only the first year the words name, so that words such as "
          "\"2020 and 2019\" give one year.", choices=("all", "first"),
          decided="2026-09-22, 2026-10-06", where="engine.py (box_settle)",
-         steps=("settle",)),
+         steps=("settle",),
+         title="Years taken as base or target"),
     # -- spec: spans ----------------------------------------------------------
     rule("link_range_ends", "spec", "Spans of years and groups", "switch",
          "On: when a text prints a range, the value read as its lower end "
@@ -72,33 +75,38 @@ RULES = (
          "have the same quote and the same answers to every other "
          "dimension, and both carry the two ends. Off: the two values stay "
          "apart.", decided="2026-11-06",
-         where="reading.py (link_ranges)", steps=("each value",)),
+         where="reading.py (link_ranges)", steps=("each value",),
+         title="Link ends of a range"),
     # -- flow: chunks ---------------------------------------------------------
     rule("split_across", "flow", "Chunks", "switch",
          "On: a chunk is filled up across the end of a section, table or "
          "figure, so it may hold lines of several of them. Off: every "
          "section, table and figure begins a new chunk. A value set at the "
          "box itself wins over this rule.",
-         where="blocks.py (split), engine.py (cut)", steps=("split",)),
+         where="blocks.py (split), engine.py (cut)", steps=("split",),
+         title="Fill chunks across section ends"),
     rule("split_table_head", "flow", "Chunks", "switch",
          "On: every chunk of a table starts with the table's title and "
          "head, so a row is always read under its column headings. Off: "
          "only the first chunk of the table has them. A value set at the "
          "box itself wins over this rule.",
          decided="2026-11-02", where="blocks.py (split), engine.py (cut)",
-         steps=("split",)),
+         steps=("split",),
+         title="Table head in every chunk"),
     rule("split_caption", "flow", "Chunks", "switch",
          "On: every chunk of a figure starts with the figure's caption, so "
          "its numbers are read with title, axes and legend. Off: only the "
          "first chunk of the figure has the caption. A value set at the "
          "box itself wins over this rule.",
-         where="blocks.py (split), engine.py (cut)", steps=("split",)),
+         where="blocks.py (split), engine.py (cut)", steps=("split",),
+         title="Figure caption in every chunk"),
     rule("split_figure_numbers", "flow", "Chunks", "switch",
          "On: the caption of a figure is a chunk of its own and its "
          "numbers are chunks of their own, each shown with the caption. "
          "Off: the lines of a figure are cut like any other lines. A value "
          "set at the box itself wins over this rule.", decided="2026-11-09",
-         where="blocks.py (split), engine.py (cut)", steps=("split",)),
+         where="blocks.py (split), engine.py (cut)", steps=("split",),
+         title="Figure numbers in own chunks"),
     # -- flow: documents ------------------------------------------------------
     rule("include_kinds", "flow", "Documents", "texts",
          "Which kinds of passages of a document are read: text, tables and "
@@ -106,19 +114,22 @@ RULES = (
          "any request; a figure left out is not transcribed either. At "
          "least one kind must stay.",
          choices=("section", "table", "figure"),
-         where="engine.py (plan)", steps=("document",)),
+         where="engine.py (plan)", steps=("document",),
+         title="Kinds of content read"),
     rule("pages", "flow", "Documents", "range",
          "The pages of a document that are read, from the first to the "
          "last. Passages on other pages, and passages whose page is not "
          "known, are left out of every request. Empty: all pages are "
          "read.", empty=True, where="engine.py (plan)",
-         steps=("document",)),
+         steps=("document",),
+         title="Pages read"),
     rule("plans_kept", "flow", "Documents", "whole",
          "How many documents a pass over a stored harvest keeps in memory "
          "at once, each with its chunks. A larger number saves cutting a "
          "document again when a pass asks several batches of it, and uses "
          "more memory.", least=1,
-         where="surveyed.py (plan_of, read_plan)"),
+         where="surveyed.py (plan_of, read_plan)",
+         title="Documents kept in memory"),
     # -- flow: search ---------------------------------------------------------
     rule("search_list_factor_on", "flow", "Search", "switch",
          "On: a field whose values are chosen from a list gets the number "
@@ -126,37 +137,43 @@ RULES = (
          "to choose among many entries. Off: it gets as many chunks as any "
          "other field. A value set at the box itself wins over this rule.",
          where="blocks.py (order), engine.py (_order)",
-         steps=("order",)),
+         steps=("order",),
+         title="More chunks for list fields"),
     rule("search_rest_after", "flow", "Search", "switch",
          "On: after the best chunks the remaining chunks of the document "
          "follow in the order of the search, so every chunk can still be "
          "shown. Off: only the best chunks are offered. A value set at the "
          "box itself wins over this rule.",
-         where="blocks.py (order), engine.py (_order)", steps=("order",)),
+         where="blocks.py (order), engine.py (_order)", steps=("order",),
+         title="Rest follows the best chunks"),
     rule("phrase_anew", "flow", "Search", "switch",
          "On: from the second round on the model writes a new search "
          "sentence and sees the sentences of the earlier rounds, so it can "
          "try another wording. Off: the first sentence is used in every "
          "round. A value set at the box itself wins over this rule.",
          where="presets.py (phrase), shows.py (sentences_before)",
-         steps=("phrase",)),
+         steps=("phrase",),
+         title="New search sentence each round"),
     rule("phrase_new_from_round", "flow", "Search", "whole",
          "From which round on a new search sentence is written, where "
          "writing a new sentence is on. Round 2 is the first round that can "
          "know an earlier sentence.", least=1,
-         where="shows.py (sentences_before)", steps=("phrase",)),
+         where="shows.py (sentences_before)", steps=("phrase",),
+         title="First round with a new sentence"),
     rule("search_skips_own_piece", "flow", "Search", "switch",
          "On: the chunk in which the value stands is left out of every "
          "search, because the first request about the dimension has shown "
          "it already. Off: the search may show that chunk again.", decided="2026-11-09",
          where="engine.py (locate)",
-         steps=("order", "beside", "coord", "search", "state")),
+         steps=("order", "beside", "coord", "search", "state"),
+         title="Leave out the value's own chunk"),
     rule("fetch_after_found", "flow", "Search", "switch",
          "On: chunks that an answer asked to see are still fetched when "
          "the same answer already gave a value, or a value not backed by "
          "its quote. Off: such a request lapses as soon as a value is read "
          "or not backed.", decided="2026-11-09",
-         where="targets.py (over_hits)", steps=("search",)),
+         where="targets.py (over_hits)", steps=("search",),
+         title="Fetch after a value was found"),
     rule("supply_order", "flow", "Search", "texts",
          "The order in which a search shows the chunks it can show: "
          "\"fetched\" are the chunks an earlier answer asked to see, "
@@ -166,7 +183,8 @@ RULES = (
          "chunks follow only where none of them is left. Chunks of a kind "
          "that is left out are never shown.",
          choices=("fetched", "beside", "ranked"), decided="2026-11-09",
-         where="engine.py (SearchSupply)", steps=("search",)),
+         where="engine.py (SearchSupply)", steps=("search",),
+         title="Order of the chunks shown"),
     rule("round_ends", "flow", "Search", "choice",
          "When a round that runs until its supply is used up ends. After a "
          "turn without a chunk: the round ends after any turn in which no "
@@ -176,7 +194,8 @@ RULES = (
          "A round with no most of its own still ends after such a turn, so "
          "that it cannot run for ever.",
          choices=("no_chunk_shown", "supply_used_up"),
-         where="engine.py (round)", steps=("round",)),
+         where="engine.py (round)", steps=("round",),
+         title="When a round ends"),
     # -- flow: asking again ---------------------------------------------------
     rule("hole_passage", "flow", "Asking again and giving up", "choice",
          "Where the hole of a field asked once per document stands, when "
@@ -186,21 +205,24 @@ RULES = (
          "field's first request showed.",
          choices=("first_passage", "last_passage", "first_asked"),
          decided="2026-09-12", where="engine.py (after_items)",
-         steps=("each field",)),
+         steps=("each field",),
+         title="Place named for a missing value"),
     # -- flow: order ----------------------------------------------------------
     rule("coordinate_order", "flow", "Order", "texts",
          "The order in which the dimensions of a value are asked. Empty: "
          "the order of the questions in the spec (coordinates.order). "
          "Otherwise the dimensions named here come first, in this order, "
          "and the other dimensions follow in the spec's order.", empty=True,
-         where="engine.py (each_coordinate)", steps=("each coordinate",)),
+         where="engine.py (each_coordinate)", steps=("each coordinate",),
+         title="Order the dimensions are asked in"),
     rule("names_first", "flow", "Order", "switch",
          "On: the values that name a scenario of the document are asked "
          "before all other values, so that the other values can name the "
          "scenarios found. Off: values are asked in the order they were "
          "found. A frame of values with an order of its own wins over "
          "this rule.", where="engine.py (each_value)",
-         steps=("each value",)),
+         steps=("each value",),
+         title="Ask scenario names first"),
     rule("this_publication_first", "flow", "Lists", "switch",
          "On: the list of works of a document starts with the publication "
          "itself, as its first entry, and a value that says it is the "
@@ -209,20 +231,23 @@ RULES = (
          "that every work a value is read for is another work.",
          where="addressed.py (lists_of, take_work)",
          steps=("lists", "works", "coord", "search", "work_coordinate",
-                "each value")),
+                "each value"),
+         title="Publication first among works"),
     rule("publication_description", "flow", "Lists", "choice",
          "How the first entry of the list of works, the publication "
          "itself, is described to the model. With title: as this "
          "publication and the first line of the title page, which names "
          "it. Plain: as this publication alone.",
          choices=("with_title", "plain"),
-         where="addressed.py (lists_of)", steps=("lists",)),
+         where="addressed.py (lists_of)", steps=("lists",),
+         title="How the publication is described"),
     rule("together_pooled", "flow", "Order", "switch",
          "On: a frame side by side whose only step is another frame side "
          "by side asks both in one pool, for example each field with each "
          "of its chunks. Off: the items of the outer frame are asked side "
          "by side and the items inside each of them one after the other.",
-         where="engine.py (each)", steps=EACH),
+         where="engine.py (each)", steps=EACH,
+         title="Pool nested side-by-side loops"),
     rule("settled_fields", "flow", "Fields of the whole document", "texts",
          "The fields of the whole document that the run keeps for every "
          "later request: \"settings\" are the document's settings, "
@@ -232,7 +257,8 @@ RULES = (
          "request. A field left out is not asked before the reading and "
          "not shown. A field of the whole document the spec keeps under a "
          "key of its own is asked after these.",
-         where="engine.py (items)", steps=("each settled",)),
+         where="engine.py (items)", steps=("each settled",),
+         title="Fields kept for later requests"),
     # -- flow: states ---------------------------------------------------------
     rule("state_mode", "flow", "States", "choice",
          "The state this step gives a dimension that is still open. By the "
@@ -244,7 +270,8 @@ RULES = (
          "the box itself wins over this rule.",
          choices=("by_supply", "unstated", "unanswered", "out_of_slice"),
          where="blocks.py (state), engine.py (box_state)",
-         steps=("state",)),
+         steps=("state",),
+         title="State of an open dimension"),
     rule("open_states", "flow", "States", "texts",
          "The states of a dimension that count as still open: the "
          "dimension was not read and may still be read. A condition "
@@ -252,6 +279,7 @@ RULES = (
          "reads them again.", choices=_STATES,
          decided="2026-11-02",
          where="fields.py (open_states), conditions.py, topup.py, stats.py",
-         steps=FRAMES + BOXES + ("open", "summary")),
+         steps=FRAMES + BOXES + ("open", "summary"),
+         title="States that count as open"),
     # -- flow: calculation ----------------------------------------------------
 )

@@ -1,11 +1,12 @@
 /* The input of one rule of the profile's rules file, its row and the rules grouped; the rules drawer and the Graph tab
    both draw them. Every keystroke goes on through onChange as the value the rules file holds. */
-import type { ReactNode } from 'react';
-import { Accordion, Badge, Box, Button, Code, Group, NativeSelect, Paper, Stack, Switch, Text, Tooltip } from '@mantine/core';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Accordion, Badge, Box, Button, Group, NativeSelect, Paper, Stack, Switch, Text, TextInput, Tooltip } from '@mantine/core';
+import { IconSearch } from '@tabler/icons-react';
 import { DF, type Kind } from '../lib/forms';
 import { FormNode, useFormState } from '../components/FormNode';
 import { AreaBox, NumberBox, TextBox } from '../components/Inputs';
-import { Help } from '../components/Bits';
+import { Help, Named } from '../components/Bits';
 import { OwnAt } from './OwnAt';
 import { clone, same } from '../lib/util';
 import { rich, t, tr } from '../lib/i18n';
@@ -32,6 +33,10 @@ export function RuleInput({ r, cur, onChange, epoch }: { r: Rule; cur: any; onCh
   if (kind === 'choice') {
     const opts: string[] = (r.choices || []).slice();
     const v = cur == null ? '' : String(cur);
+    /* a rule with one way only is no choice: it says how the run does it (owner request 2026-11-19, A4) */
+    if (opts.length === 1 && (v === '' || v === opts[0])) {
+      return <Text size="sm">{rich(t('The only way there is: `{choice}`', { choice: opts[0] }))}</Text>;
+    }
     if (v !== '' && !opts.includes(v)) opts.push(v);
     return <NativeSelect w={260} value={v} data={opts} onChange={e => onChange(e.currentTarget.value)} />;
   }
@@ -60,7 +65,7 @@ export function RuleRow({ r, cur, onChange, epoch, extra }: { r: Rule; cur: any;
       style={changed ? { borderLeft: '4px solid var(--mantine-color-orange-5)' } : undefined}>
       <Stack gap={6}>
         <Group gap={6}>
-          <Code fw={600}>{r.name}</Code>
+          <Named title={r.title} k={r.name} />
           {r.own || r.declared_here ? <Badge color="teal" variant="light">{t('set in this profile')}</Badge>
             : <Badge color="gray" variant="light">{r.set_in ? t('set in profile {name}', { name: r.set_in }) : t('default')}</Badge>}
           {r.setting ? <Badge color={wins ? 'orange' : 'gray'} variant="light">
@@ -89,26 +94,53 @@ export function RuleRow({ r, cur, onChange, epoch, extra }: { r: Rule; cur: any;
   );
 }
 
-export function GroupedRules({ rules, curOf, onChange, epoch, extra }: {
+export function GroupedRules({ rules, curOf, onChange, epoch, extra, focus }: {
   rules: Rule[]; curOf: (name: string) => any; onChange: (name: string, v: any, reset?: boolean) => void; epoch: number;
   extra?: (r: Rule) => ReactNode;
+  /* a rule to show: its group opens, and it is scrolled to and marked; n tells one request from the next */
+  focus?: { name: string; n: number } | null;
 }) {
+  /* the groups start closed; a search over name, title, help and group opens every group with a rule it finds
+     (owner request 2026-11-19, A8) */
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState<string[]>([]);
+  useEffect(() => {
+    if (!focus) return;
+    const r = rules.find(one => one.name === focus.name);
+    if (!r) return;
+    setQuery('');
+    setOpen(was => (was.includes(r.group) ? was : [...was, r.group]));
+    const timer = setTimeout(() => {
+      const el = document.querySelector('[data-rule="' + focus.name + '"]');
+      if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('dp-flag'); setTimeout(() => el.classList.remove('dp-flag'), 2500); }
+    }, 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus && focus.n]);
+  const q = query.trim().toLowerCase();
+  const found = (r: Rule) => !q || [r.name, r.title, r.title ? tr(r.title) : '', r.help, tr(r.help || ''), tr(r.group || '')]
+    .some(s => typeof s === 'string' && s.toLowerCase().includes(q));
   const groups = new Map<string, Rule[]>();
-  for (const r of rules) { if (!groups.has(r.group)) groups.set(r.group, []); groups.get(r.group)!.push(r); }
+  for (const r of rules.filter(found)) { if (!groups.has(r.group)) groups.set(r.group, []); groups.get(r.group)!.push(r); }
   const names = [...groups.keys()];
   return (
-    <Accordion multiple variant="separated" radius="md" defaultValue={names} key={names.join('|')}>
-      {[...groups.entries()].map(([g, rs]) => (
-        <Accordion.Item key={g} value={g}>
-          <Accordion.Control>{rich(tr(g))} ({rs.length})</Accordion.Control>
-          <Accordion.Panel>
-            <Stack gap="sm">
-              {rs.map(r => <RuleRow key={r.name} r={r} cur={curOf(r.name)} epoch={epoch} extra={extra}
-                onChange={(v, reset) => onChange(r.name, v, reset)} />)}
-            </Stack>
-          </Accordion.Panel>
-        </Accordion.Item>
-      ))}
-    </Accordion>
+    <Stack gap="sm">
+      <TextInput leftSection={<IconSearch size={16} />} placeholder={t('Search the rules by name or help')} value={query}
+        onChange={e => setQuery(e.currentTarget.value)} />
+      {q && !names.length ? <Text size="sm" c="dimmed">{t('No rule matches the search.')}</Text> : null}
+      <Accordion multiple variant="separated" radius="md" value={q ? names : open} onChange={v => { if (!q) setOpen(v); }}>
+        {[...groups.entries()].map(([g, rs]) => (
+          <Accordion.Item key={g} value={g}>
+            <Accordion.Control>{rich(tr(g))} ({rs.length})</Accordion.Control>
+            <Accordion.Panel>
+              <Stack gap="sm">
+                {rs.map(r => <RuleRow key={r.name} r={r} cur={curOf(r.name)} epoch={epoch} extra={extra}
+                  onChange={(v, reset) => onChange(r.name, v, reset)} />)}
+              </Stack>
+            </Accordion.Panel>
+          </Accordion.Item>
+        ))}
+      </Accordion>
+    </Stack>
   );
 }

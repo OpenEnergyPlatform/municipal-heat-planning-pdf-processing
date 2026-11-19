@@ -19,8 +19,9 @@ Author: Felix Vossel
 def resolve_captions(pages: list[PageData]) -> list[PageData]
 ```
 
-Attaches captions to table/image blocks: nearest CAPTION_CLASSES block (no
-distance limit), else nearest plain text block within CAPTION_MAX_DIST_PT.
+Attaches captions to table/image blocks: nearest block of the rule
+`caption_classes` (no distance limit), else nearest plain text block
+within the rule `caption_max_distance_pt`.
 
 The winning block's content goes into Block.caption and the block itself is
 removed from the page, so it never reaches section content. Each caption is

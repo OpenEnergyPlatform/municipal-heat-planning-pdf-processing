@@ -110,8 +110,9 @@ def view(profile, tab: str, own_raw: Optional[bytes], shown,
         owner = files.owners.get(name, "")
         hidden = one.secret
         out.append({
-            "name": name, "group": one.group, "kind": one.kind,
-            "help": one.help, "least": one.least, "most": one.most,
+            "name": name, "title": one.title, "group": one.group,
+            "kind": one.kind, "help": one.help, "least": one.least,
+            "most": one.most,
             "choices": list(one.choices), "columns": list(one.columns),
             "of": one.of, "empty": one.empty, "decided": one.decided,
             "where": one.where, "setting": one.env,
@@ -190,7 +191,8 @@ def judge(profile, own_raw: Optional[bytes], values, name: str) -> dict:
     diff = [] if writes == "unchanged" else list(difflib.unified_diff(
         (old or "").splitlines(), (new or "").splitlines(), name, name,
         lineterm=""))
-    changed = [{"name": key, "from": files.values.get(key), "to": now[key]}
+    changed = [{"name": key, "title": known[key].title,
+                "from": files.values.get(key), "to": now[key]}
                for key in known if now.get(key) != files.values.get(key)]
     tabs = sorted({known[row["name"]].tab for row in changed})
     says = [COST[tab] for tab in tabs if tab in COST]
@@ -244,8 +246,9 @@ def machine_rows(profile) -> list:
             continue
         setting = settings.BY_ENV.get(one.env) if one.env else None
         out.append({
-            "name": one.name, "tab": one.tab, "group": one.group,
-            "kind": one.kind, "help": one.help, "least": one.least,
+            "name": one.name, "title": one.title, "tab": one.tab,
+            "group": one.group, "kind": one.kind, "help": one.help,
+            "least": one.least,
             "most": one.most, "choices": list(one.choices),
             "columns": list(one.columns), "of": one.of,
             "empty": one.empty, "decided": one.decided,

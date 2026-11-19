@@ -21,10 +21,17 @@ what the page draws and decides what a save does to the profile's own file:
   into the spec; and what the run could not do with the drawing.
 - `judge`: whether edited numbers are numbers of the flow and an edited
   drawing one the run can do (`flow.problems`, `flow.prompt_problems`),
-  what changes and what the profile's file would then be. A profile that
-  extends another writes only the numbers that differ from what it
-  inherits and the drawing where it differs, so a number set back leaves
-  the file, and a file that would hold nothing is removed.
+  what changes and what the profile's file would then be. The page edits
+  the drawing with every part drawn; a save folds it back
+  (`flowparts.fold`): a frame that used a part uses it again, and a change
+  to the steps of a part in one frame is made in every frame that uses it
+  (owner request 2026-11-19, point C2 of the review of that day). A
+  profile that extends another writes only the numbers that differ from
+  what it inherits and what it changes in the drawing it inherits
+  (`flowparts.as_changes`; the whole drawing where the changes cannot say
+  it), so a number set back leaves the file, and a file that would hold
+  nothing is removed. A drawing the edit left as it was stays in the file
+  as the file says it.
 - `save`: `judge`, and the bytes to write where it holds.
 - `pass_names`, `pass_view`, `pass_judge`, `pass_save`: the same for the
   flow of a follow-up pass (`extraction.passflow`), one file for each, by
@@ -81,6 +88,16 @@ has none; *data* its spec as written, None where it has none;
 *shown(path)* a path as the user sees it; *computes* whether the
 profile computes. *project* is the project file the machine's values
 are written to, None where the page cannot say.
+
+### parts_at
+
+```python
+def parts_at(top: list) -> dict
+```
+
+{id of a frame that uses a part: {"part", "prefix", "with": the
+other frames that use it}} of the drawing *top* as its file writes
+it.
 
 ### tree_changes
 

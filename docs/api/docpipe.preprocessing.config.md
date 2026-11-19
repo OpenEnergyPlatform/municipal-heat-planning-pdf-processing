@@ -8,12 +8,6 @@ Author: Felix Vossel
 
 ## Functions
 
-### caption_max_words
-
-```python
-def caption_max_words() -> int
-```
-
 ### caption_like
 
 ```python
@@ -41,18 +35,22 @@ def strip_private_use(text: str) -> tuple
 ### clean_unicode
 
 ```python
-def clean_unicode(s: str) -> str
+def clean_unicode(s: str, nfkc=None) -> str
 ```
 
-Remove surrogates, control chars, non-characters.
+Remove surrogates, control chars, non-characters. The text is first
+brought to the compatible normal form unless the rule
+`normalize_unicode_nfkc` is off; *nfkc* says it for a caller that read
+the rule once for many strings.
 
 ### clean_data
 
 ```python
-def clean_data(obj)
+def clean_data(obj, nfkc=None)
 ```
 
-Recursively clean unicode in nested dicts/lists/strings.
+Recursively clean unicode in nested dicts/lists/strings. The rule
+`normalize_unicode_nfkc` is read once for the whole structure.
 
 ### dump_json_atomic
 

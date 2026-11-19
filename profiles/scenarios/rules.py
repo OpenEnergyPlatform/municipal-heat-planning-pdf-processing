@@ -17,14 +17,16 @@ RULES = (
          "Remove a row to have the property reported as missing again.",
          columns=("shape", "property", "reason"), empty=True,
          decided="2026-10-05",
-         where="docpipe/extraction/preflight.py, docpipe edit (sources)"),
+         where="docpipe/extraction/preflight.py, docpipe edit (sources)",
+         title="Properties no field asks for"),
     rule("catalogue_address", "flow", "Catalogue of publications", "text",
          "The address of the catalogue (OpenAlex) that fills in a "
          "publication's DOI, year and authors when the paper prints none. "
          "Change it to use another catalogue that answers the same way.",
          decided="2026-11-04",
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py"),
+         where="profiles/scenarios/completion.py",
+         title="Address of the catalogue"),
     rule("catalogue_family_names", "flow", "Catalogue of publications",
          "whole",
          "The fewest family names a catalogue hit found by title must share "
@@ -35,7 +37,8 @@ RULES = (
          least=1,
          decided="2026-11-05",
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py"),
+         where="profiles/scenarios/completion.py",
+         title="Family names that must agree"),
     rule("catalogue_fewer_authors_suffice", "flow",
          "Catalogue of publications", "switch",
          "On: where the paper or the hit names fewer authors than the number "
@@ -45,14 +48,16 @@ RULES = (
          "is never accepted by its title.",
          decided="2026-11-05",
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py"),
+         where="profiles/scenarios/completion.py",
+         title="Accept when few authors all agree"),
     rule("catalogue_user_agent", "flow", "Catalogue of publications", "text",
          "The name the run gives itself when it asks the catalogue. Empty: "
          "a generic client name. A value of the machine: it is set at the "
          "start or in the project file, never in a file of the profile.",
          empty=True, machine=True,
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py"),
+         where="profiles/scenarios/completion.py",
+         title="Name used toward the catalogue"),
     rule("catalogue_key_order", "flow", "Catalogue of publications", "texts",
          "The keys the catalogue is asked for a publication with, in this "
          "order, and the first record any of them finds is the one taken: "
@@ -63,7 +68,8 @@ RULES = (
          "ask with it.",
          choices=("index_doi", "doi", "title"), decided="2026-11-04",
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py (complete)"),
+         where="profiles/scenarios/completion.py (complete)",
+         title="Ways to look up a publication"),
     rule("catalogue_fills", "flow", "Catalogue of publications", "texts",
          "The values of a publication the catalogue fills in where its front "
          "pages give none: its DOI, its year and its authors. Remove one to "
@@ -71,14 +77,16 @@ RULES = (
          choices=("publication_doi", "publication_date",
                   "publication_author"), decided="2026-11-04",
          steps=("catalogue", "write"),
-         where="profiles/scenarios/completion.py (complete)"),
+         where="profiles/scenarios/completion.py (complete)",
+         title="Values the catalogue fills in"),
     rule("catalogue_inherited_flags", "flow", "Catalogue of publications",
          "texts",
          "The remarks of the row a value was found with that a looked-up "
          "value shares with it: those that speak about the row's quote, not "
          "about its own reading. Empty: none is shared.", empty=True,
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py (row_of)"),
+         where="profiles/scenarios/completion.py (row_of)",
+         title="Remarks a looked-up value inherits"),
     rule("catalogue_stop_when_offline", "flow", "Catalogue of publications",
          "switch",
          "On: when the catalogue cannot be reached at all, the run does not "
@@ -86,7 +94,8 @@ RULES = (
          "instead of waiting out the time. Off: every document tries again. "
          "A new run always tries again.",
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py (offline)"),
+         where="profiles/scenarios/completion.py (offline)",
+         title="Stop asking an unreachable catalogue"),
     rule("catalogue_hits_taken", "flow", "Catalogue of publications",
          "whole",
          "How many hits of the title search are looked at. The first of "
@@ -94,7 +103,8 @@ RULES = (
          "is taken and then refused. 1: only the first hit counts.",
          least=1,
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py (search_hits)"),
+         where="profiles/scenarios/completion.py (search_hits)",
+         title="Title hits looked at"),
     rule("catalogue_title_hit_needs_authors", "flow",
          "Catalogue of publications", "switch",
          "On: a record found by the title is taken only when its authors "
@@ -103,7 +113,8 @@ RULES = (
          "the title is taken whoever wrote it.",
          decided="2026-11-05",
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py"),
+         where="profiles/scenarios/completion.py",
+         title="Title hit needs agreeing authors"),
     rule("name_word_least_letters", "flow", "Catalogue of publications",
          "whole",
          "How many letters a part of a person's name has to have to count "
@@ -111,12 +122,14 @@ RULES = (
          "A larger number leaves out initials and short parts of a name.",
          least=1,
          steps=("catalogue",),
-         where="profiles/scenarios/completion.py (words, family)"),
+         where="profiles/scenarios/completion.py (words, family)",
+         title="Fewest letters of a name part"),
     rule("catalogue_timeout_s", "flow", "Catalogue of publications", "number",
          "The seconds the catalogue is waited for per request. A larger "
          "number waits longer for a slow catalogue. A smaller number gives "
          "up sooner.", least=1,
-         steps=("catalogue",), where="profiles/scenarios/completion.py"),
+         steps=("catalogue",), where="profiles/scenarios/completion.py",
+         title="Time limit per catalogue request"),
     rule("country_groups", "sources", "Regions", "table",
          "Groups of countries that no source lists country by country. Each "
          "row gives the key, the ways the group's name is written (separated "
@@ -125,38 +138,44 @@ RULES = (
          "base group and the added countries. Used at the next fetch of the "
          "sources.",
          columns=("key", "labels", "union", "joined", "source"), empty=True,
-         decided="2026-11-04", where="profiles/scenarios/vocabulary.py"),
+         decided="2026-11-04", where="profiles/scenarios/vocabulary.py",
+         title="Groups of countries"),
     rule("short_forms", "sources", "Regions", "map",
          "Short forms a paper writes for a group that the World Bank lists "
          "under a longer name, as its code -> the short forms. Each short "
          "form becomes another way the group's name is found in a paper. "
          "Used at the next fetch of the sources.",
          of="texts", empty=True, decided="2026-11-04",
-         where="profiles/scenarios/vocabulary.py"),
+         where="profiles/scenarios/vocabulary.py",
+         title="Short forms of groups"),
     rule("name_abbreviations", "sources", "Regions", "map",
          "How the sources abbreviate a word of a country's name, written out "
          "before a member is looked up, such as \"St. Lucia\" or \"Congo, "
          "Dem. Rep.\". Add a pair when a member of a group is not found "
          "under its name. Used at the next fetch of the sources.", empty=True,
-         where="profiles/scenarios/vocabulary.py"),
+         where="profiles/scenarios/vocabulary.py",
+         title="Abbreviations in country names"),
     rule("world_labels", "sources", "Regions", "texts",
          "The ways the whole world is written, such as \"global\". The world "
          "is offered as a region for every document, and each of these "
          "labels finds it. Add a label a paper uses for the world. Used at "
          "the next fetch of the sources.",
-         where="profiles/scenarios/vocabulary.py"),
+         where="profiles/scenarios/vocabulary.py",
+         title="Ways to write the world"),
     rule("acronym_most_chars", "sources", "Regions", "whole",
          "A region's name in capitals that is no longer than this many "
          "characters is matched by its capitals only, so \"US\" is not found "
          "in \"thus\". A larger number treats longer names in capitals the "
          "same way. 0 matches every name regardless of its capitals.",
-         least=0, where="profiles/scenarios/extraction.py"),
+         least=0, where="profiles/scenarios/extraction.py",
+         title="Longest name matched by capitals"),
     rule("region_whole_words", "sources", "Regions", "switch",
          "On: the name of a region counts as named in a paper only as a "
          "whole word, so Niger is not found in Nigeria, India not in "
          "Indiana. Off: a name counts wherever its letters stand, which "
          "offers regions the paper never names.",
-         where="profiles/scenarios/extraction.py"),
+         where="profiles/scenarios/extraction.py",
+         title="Region names as whole words"),
     rule("region_search_texts", "sources", "Regions", "texts",
          "The texts of a document that are searched for the regions it "
          "names: its sections, tables, the captions of tables, the "
@@ -165,26 +184,30 @@ RULES = (
          "offered.",
          choices=("sections", "tables", "table captions",
                   "image descriptions", "image captions"),
-         where="profiles/scenarios/extraction.py (_document_text)"),
+         where="profiles/scenarios/extraction.py (_document_text)",
+         title="Texts searched for regions"),
     rule("model_region_needs_model", "sources", "Regions", "switch",
          "On: a model's own region is offered to a document only when the "
          "paper names that model and the region. Off: it is offered whenever "
          "the paper names the region. Off finds more regions but also "
          "regions of a model the paper never uses.",
          decided="2026-11-07",
-         where="profiles/scenarios/extraction.py"),
+         where="profiles/scenarios/extraction.py",
+         title="Model regions need the model named"),
     rule("alt_label_language", "spec", "Defaults where the spec says nothing",
          "choice",
          "The language of the ontology's alternative labels that the "
          "vocabulary of the profile keeps: the words its spec is held "
          "against. Used when the vocabulary is fetched again.",
-         choices=("de", "en"), where="profiles/scenarios/extraction.py"),
+         choices=("de", "en"), where="profiles/scenarios/extraction.py",
+         title="Language of alternative labels"),
     rule("contract_language", "prompts", "Defaults where the prompt says "
          "nothing", "choice",
          "The language of the core's contract text, which is put into the "
          "prompts of the profile that name a template. It has to be the "
          "language the profile's own prompts are in.",
-         choices=("de", "en"), where="profiles/scenarios/extraction.py"),
+         choices=("de", "en"), where="profiles/scenarios/extraction.py",
+         title="Language of the contract text"),
     rule("prompt_checks", "prompts", "Defaults where the prompt says "
          "nothing", "table",
          "The wordings the check before the run holds the profile's prompts "
@@ -193,7 +216,8 @@ RULES = (
          "are in the profile's language, so the wording is too. Empty: no "
          "check beyond the ones the run makes by itself.",
          columns=("what", "prompt", "passage", "required"), empty=True,
-         where="profiles/scenarios/extraction.py"),
+         where="profiles/scenarios/extraction.py",
+         title="Wordings the prompts must have"),
 )
 
 # The rules this profile's graph writer (kg.py) follows. Their values stand in
@@ -207,14 +231,16 @@ GRAPH = (
          "of the graph from the stored harvest, no model. A setting of the "
          "run overrides the file.",
          env="OEKG_ID_BASE",
-         where="profiles/scenarios/kg.py (BASE, mint)"),
+         where="profiles/scenarios/kg.py (BASE, mint)",
+         title="Address of every node"),
     rule("scenario_types_always", "graph", "Scenarios", "texts",
          "The scenario types, as ontology IDs, that every scenario carries "
          "besides the ones read; for now every IAM scenario gets "
          "OEO_00020517. Add a type to give it to every scenario. Empty: a "
          "scenario carries only the types read.",
          empty=True, decided="2026-11-04",
-         where="profiles/scenarios/kg.py (factsheet)"),
+         where="profiles/scenarios/kg.py (factsheet)",
+         title="Scenario types every scenario has"),
     rule("evidence_as", "graph", "Evidence", "choice",
          "Where the place a value was read from goes in the graph. Comment: "
          "Turtle comments above its triple, which the closed shapes accept. "
@@ -222,7 +248,8 @@ GRAPH = (
          "shapes. A setting of the run overrides the file.",
          choices=("comment", "node"), env="OEKG_EVIDENCE",
          env_flag=("comment", "node"),
-         where="profiles/scenarios/kg.py (evidence_for)"),
+         where="profiles/scenarios/kg.py (evidence_for)",
+         title="Where a value's place goes"),
     rule("front_first_fields", "graph", "One value, several occurrences",
          "texts",
          "The fields for which a value read on the publication's front pages "
@@ -230,5 +257,6 @@ GRAPH = (
          "catalogue comes next, then any other occurrence. Remove a field to "
          "treat all its occurrences alike.",
          decided="2026-11-05",
-         where="profiles/scenarios/front.py, profiles/scenarios/kg.py"),
+         where="profiles/scenarios/front.py, profiles/scenarios/kg.py",
+         title="Fields won by front-page readings"),
 ) + FRONT_RULES + READINGS

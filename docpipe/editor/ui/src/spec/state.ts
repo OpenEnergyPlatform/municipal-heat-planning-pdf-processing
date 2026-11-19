@@ -478,3 +478,10 @@ export function specialSet(name: string, key: Special, on: boolean) {
   if (!setSpecial(S.data, name, key, on)) return;
   markStep(); S.rev++; touch();
 }
+
+/* the name in words of a setting of a value type (`answer`, `units`, ...), as the form names it (owner request
+   2026-11-19, A5); '' where the form has none */
+export function typeSettingTitle(key: string): string {
+  const one = ((S.form && S.form.value_type) || []).find((f: { key: string }) => f.key === key);
+  return (one && one.title) || '';
+}

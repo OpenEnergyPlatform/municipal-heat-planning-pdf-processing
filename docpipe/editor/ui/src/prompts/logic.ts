@@ -77,7 +77,11 @@ export function diffSegs(a: unknown, b: unknown) {
 export const reqLabel = (r: any) => [r.kind, r.parameter, r.coordinate].filter(Boolean).join(' · ') + (r.asked ? ' ' + t('(asks again: {asked})', { asked: r.asked }) : '');
 export function reqSub(r: any): string {
   const a: string[] = [];
-  if (r.owner != null) a.push(t('section, table or figure {owner}', { owner: String(r.owner) }));
+  /* where the request reads: the page and heading of its piece (owner request 2026-11-19, A7), else, in a log written
+     before they were noted, the number the database gives the section, table or figure */
+  if (r.page != null || r.heading) {
+    a.push([r.page != null ? t('page {page}', { page: String(r.page) }) : '', r.heading ? String(r.heading) : ''].filter(Boolean).join(': '));
+  } else if (r.owner != null) a.push(t('section, table or figure {owner}', { owner: String(r.owner) }));
   if (r.value != null) a.push(r.at ? t('value {value}, line {at}', { value: String(r.value), at: String(r.at) }) : t('value {value}', { value: String(r.value) }));
   if (r.ms != null) a.push(t('{n} ms', { n: Math.round(r.ms) }));
   a.push(t('{prompt}/{completion} tokens', { prompt: r.prompt_tokens == null ? '?' : r.prompt_tokens, completion: r.completion_tokens == null ? '?' : r.completion_tokens }));

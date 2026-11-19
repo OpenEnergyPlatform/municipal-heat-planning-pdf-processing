@@ -1,0 +1,22 @@
+{
+ "waermeplan_greding_20251016.pdf": {
+  "owner": 9576122,
+  "place": "Greding",
+  "why": "\"KOMMUNALE WÄRMEPLANUNG für die Stadt Greding\"; Bühl (8216007) not named once."
+ },
+ "waermeplan_oldenburg_20251112.pdf": {
+  "owner": 3403000,
+  "place": "Oldenburg (Oldb)",
+  "why": "\"Abschlussbericht für die Stadt Oldenburg\"; Hessisch Oldendorf (3252007) absent."
+ },
+ "waermeplan_weingarten_20231113.pdf": {
+  "owner": 8436082,
+  "place": "Weingarten (Ravensburg)",
+  "why": "Weingarten 190x, Ravensburg 63x, Karlsruhe 0x → the Württemberg one, not Weingarten (Baden) (8215090)."
+ },
+ "waermeplan_hofstetten_20251101.pdf": {
+  "owner": 8317046,
+  "place": "Hofstetten (Baden)",
+  "why": "\"Gemeinde Hofstetten im Kinzigtal\", Konvoiführer Haslach i.K. — Baden. Hofstetten (Oberbayern) (9181124) is 600 km away and is not named in it; its KWW row simply points at this file. It has no plan of its own here."
+ }
+}

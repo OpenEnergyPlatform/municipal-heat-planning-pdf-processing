@@ -80,8 +80,8 @@ with a `LookupError`, not in the middle of the first document.
 
 `max_request_tokens()` is the worst case of one window: the prompt, a full
 window of maximum-size sections, the whole section before it as context and one
-largest reply (`largest_reply_tokens()`). That reply is `REFINE_REPLY_CEILING` tokens (16,384
-by default) in window mode and `LLM_MAX_TOKENS` tokens (8,192 by default) in
+largest reply (`largest_reply_tokens()`). That reply is the rule `reply_tokens_ceiling` tokens (16,384
+by default; the setting `REFINE_REPLY_CEILING` wins over the file) in window mode and `LLM_MAX_TOKENS` tokens (8,192 by default) in
 edit mode, whose replies are sized by that setting and not by the window. It
 prints the number for the profile in force.
 `assert_serving` checks the served window against it and keeps the window for
@@ -103,7 +103,7 @@ finishes.
 ### Splitting oversized sections
 
 Before any window is built, `refine_sections` calls `split_oversized`.
-`needs_split` flags every section over `SECTION_MAX_WORDS` words;
+`needs_split` flags every section over the rule `section_max_words` words;
 `_rebuild_matches` then checks that its `segments` still reproduce its
 `content` exactly, the precondition for a safe cut along a segment
 boundary. `_ask_all_cuts` fires every document's split requests at once,
@@ -137,7 +137,7 @@ output (see A window the server did not serve).
 ### Windowed dispatch
 
 `refine_sections` groups the bounded sections into consecutive windows of
-`WINDOW_SIZE` and submits each to `_ask_window`, which calls `_call_llm`, on a `ThreadPoolExecutor`
+the rule `refine_window_sections` and submits each to `_ask_window`, which calls `_call_llm`, on a `ThreadPoolExecutor`
 sized to `LLM_NUM_PARALLEL`. Every window but the first also receives
 `prev_ctx`, the previous window's last section shown whole and read-only, so the
 model can recognise a heading split across the boundary and mark the new
@@ -168,8 +168,8 @@ one; an entry that is no object is dropped before the window is assembled,
 and a list with no object in it (an empty one too) is a hole named
 `wrong_shape`.
 
-A reply that is not that object is asked again, up to `MAX_RETRIES`
-attempts in all, with `_backoff` between them (`min(2 * attempt, 10)`
+A reply that is not that object is asked again, up to the rule
+`refine_max_attempts` attempts in all, with `_backoff` between them (`min(2 * attempt, 10)`
 seconds). The next request is the original one, then an assistant turn with
 the whole bad reply, then a user turn
 that names the cause in the profile's words (`prompts/reading/phrases.json`; the
@@ -287,7 +287,7 @@ the sections again and asks only for the windows without a usable reply
 (`refine.py:1352-1353`, `1386-1391`). It does so only if the unfinished
 pass agrees with this one: `_partial_key` hashes the input sections (after
 `run_refine` has stripped `source_text` from their tables, before the key is
-taken), the prompt hashes (`PROMPT_IDS`), `WINDOW_SIZE` and the model name
+taken), the prompt hashes (`prompt_ids()`), the rule `refine_window_sections` and the model name
 `LLM_MODEL` (`refine.py:1372-1375`, `1453-1461`). On a mismatch the partial
 file is deleted with a warning and the pass starts over, an existing
 `sections_refined.json` being served from cache unless `--force` is given
@@ -297,7 +297,7 @@ deletes the partial file (`refine.py:1441-1445`).
 
 The cut of an oversized section is the other request whose outage ends a
 pass. `_make_splitter` asks again while the server does not answer, up to
-`MAX_RETRIES` attempts with the backoff a window gets, and raises
+`refine_max_attempts` attempts with the backoff a window gets, and raises
 `split.NotServed` when it stays that way (`refine.py:911-988`,
 `docpipe/refinement/split.py:59`). A refused request (a 4xx) or a reply that
 stays unreadable is a hole and falls back to the mechanical cut at once
@@ -315,7 +315,7 @@ not cut again and so could not find out.
 
 ### Materialising an edit-mode reply
 
-When `REFINE_RETURN_CORRECTIONS` is set, the model returns
+When the rule `refine_return_corrections` is on, the model returns
 find-and-replace edits instead of a rewritten section, and
 `_materialise_corrections` rebuilds each output section from the
 original, not the reply: every section starts as itself, and only what
@@ -346,11 +346,11 @@ home at the nearest surviving output.
 reattached. `remove` drops the section unless it still carries tables or
 figures, in which case the removal is refused and the section kept with a
 warning. It is refused too for the text before the first heading (the
-profile's `FRONT_SECTION_TITLE`): the head of the first page, a journal line
+rule `front_section_title`): the head of the first page, a journal line
 and often the title with it. The text of a removed section goes, its heading stays behind as
 a bare heading for the cleanup below to hand on, since a contents page or
-an authors' block can be headed by the document's title; the profile's
-`FRONT_SECTION_TITLE` is not a heading of the document and is not kept.
+an authors' block can be headed by the document's title; the rule
+`front_section_title` is not a heading of the document and is not kept.
 `merge_into_previous` folds a section's content, tables,
 figures, and segments into the previous kept section (never into a heading
 left behind by a removal), whether that
@@ -372,7 +372,7 @@ before a literature list, goes with them.
 The model can undo the cut that came before it: it merges the parts of a
 split section back together, and it rewrites a literature list as BibTeX,
 which names every field and makes the list about half as long again. So
-`_hold_to_limit` holds every refined section to `SECTION_MAX_WORDS` once more,
+`_hold_to_limit` holds every refined section to `section_max_words` once more,
 with no model (`split.cut_to_limit`): a literature list after whole entries,
 other text where a line ends, else where a sentence ends, else after a run of
 words, so that no word is changed or lost, aiming at half the limit as
@@ -383,13 +383,28 @@ there as well, since the refined text no longer rebuilds them word for word.
 `_finalize_pages` recomputes each section's `pages` from its segments and
 media; `_backfill_empty_pages` gives a still-empty one its nearest
 neighbour's page rather than leaving it uncitable. With
-`TITLE_CLEANUP_ENABLE`, `_normalize_title` strips leading numbering
+the rule `clean_titles`, `_normalize_title` strips leading numbering
 prefixes and capitalizes an ALL-CAPS title word-by-word (first letter
 kept, rest lowercased; short acronyms excepted). `_report_dropped_text`
 then compares input and output text by word-shingle overlap, logging the
 count and size of every section that vanished, naming only the largest
 six; a falling count is not itself a fault, since removing an index or an
 abbreviations list is expected here.
+
+## The request log
+
+The stage writes a request log for each document, `refinement.trace.jsonl.gz` in
+the document's folder, in the line form of the harvest's trace: one event per
+line, each request as sent with what came back, a repeated text as a piece
+(`trace.open_stage`, `trace.working_on`, `trace.stage_request`; the rule
+`trace_on` switches it). Its events name the document by its folder, and
+their kinds are the stage's own (`refine_ask`, `split_ask`): the trace record
+schema (`schema.trace_schema`) describes the harvest's events, not these. Its
+head names the stage, the code, the profile, the model and the text of every
+prompt as the run read it (`trace.stage_head`), and each request names what its
+messages are made of (`made`: the prompt files and the values that filled them,
+`prompts.composed`, `prompts.values_in`). The editor's Prompts tab previews and
+tries these requests (see [the editor](editor.md)).
 
 ## Data model
 
@@ -416,7 +431,7 @@ window of the output is a hole (it sits beside the output):
 `{"key": ..., "sections": [...], "total_windows": N, "unserved_windows":
 [...], "mechanical_cuts": [...], "windows": {...}}`. `key` is the hash
 `_partial_key` computes over the input sections, the prompt hashes,
-`WINDOW_SIZE` and `LLM_MODEL`; `sections` are the sections as cut;
+the rule `refine_window_sections` and `LLM_MODEL`; `sections` are the sections as cut;
 `total_windows` is the number of windows of the pass and `unserved_windows`
 the 1-based numbers of those the server did not serve (empty beside an
 output); `mechanical_cuts` are the sections whose cut the model did not
@@ -448,9 +463,9 @@ list) and `titles` (each truncated to 80 characters). Each `mechanical_cuts`
 entry carries `title` and `why`, a cause of the same kind.
 
 `.prompt_versions.json` is written by `docpipe.prompts.record` and maps a
-prompt id to its sha256, for the two `PROMPT_IDS`: `refinement/refine` or
-`refinement/refine_corrections` per `REFINE_RETURN_CORRECTIONS`, plus
-`refinement/split` (see [Artifacts](../artifacts.md) for every stage's
+prompt id to its sha256, for the prompts of `prompt_ids()`: `refinement/refine` or
+`refinement/refine_corrections` per the rule `refine_return_corrections`, plus
+`refinement/split`, `refinement/split_user` and `refinement/window_context` (see [Artifacts](../artifacts.md) for every stage's
 file layout).
 
 ## Configuration
@@ -463,19 +478,22 @@ file layout).
 | `LLM_TIMEOUT` | env, seconds | `180` | per-request timeout of the OpenAI client | `config.py` |
 | `LLM_NUM_PARALLEL` | env, int | `8` | windows dispatched concurrently per document | `config.py` |
 | `DOC_PARALLEL` | env, int | `8` | documents refined concurrently in `--batch` mode | `pipeline.py` |
-| `MAX_RETRIES` | constant | `4` | attempts at one request (a window, a cut of a section), a re-ask after an unreadable reply included | `config.py` |
-| `REFINE_WINDOW_SIZE` | env, int, or profile hook `refinement.WINDOW_SIZE` | `3` | sections sent to the LLM per call (`WINDOW_SIZE`) | `config.py` |
-| `SECTION_SPLIT_ENABLE` | constant | `True` | whether oversized sections are split at all | `config.py` |
-| `SECTION_MAX_WORDS` | constant | `1000` | threshold above which a section is split | `config.py` |
-| `SECTION_TARGET_WORDS` | constant | `600` | size a split aims each part at | `config.py` |
-| `split_temperature()` | prompt front matter, float | `0.1` (both profiles) | sampling temperature for the section-split LLM call | `split.py` |
-| `split_max_tokens()` | prompt front matter, int | `1024` (both profiles) | reply token ceiling for the section-split LLM call | `split.py` |
-| `TITLE_CLEANUP_ENABLE` | constant | `True` | whether the prefix strip and ALL-CAPS capitalization run | `config.py` |
-| `REFINE_RETURN_CORRECTIONS` | env, bool | off | switches the reply from a full rewrite to a find-and-replace edit list | `config.py` |
-| `MAX_SHRINK` | constant | `0.30` | ceiling on how much edit mode may shrink a section | `corrections.py` |
-| `REFINE_REPLY_CEILING` | env, int | `16384` | ceiling on one request's reply token budget (`REPLY_TOKENS_CEILING`); the context budget counts it once, as the largest reply, see Preflight and caching | `config.py` |
-| `LLM_TEMPERATURE` | env, float, or the prompt's front matter | `0.1` (both profiles) | sampling temperature, read by `llm_temperature()`; `main` reads it once at the start, so an unparseable value ends the run there | `config.py` |
-| `LLM_MAX_TOKENS` | env, int, or the prompt's front matter | `8192` (both profiles) | floor for the reply token budget on small windows, read by `llm_max_tokens()`, which `main` also reads once at the start | `config.py` |
+| `refine_max_attempts` | rule, whole | `4` | attempts at one request (a window, a cut of a section; stage 6's sentence request too), a re-ask after an unreadable reply included | `refine.py`, `chunking/context.py` |
+| `refine_window_sections` | rule, whole; the setting `REFINE_WINDOW_SIZE` wins | `3` | sections sent to the LLM per call | `refine.py` |
+| `split_long_sections` | rule, switch | on | whether oversized sections are split at all | `config.py` |
+| `section_max_words` | rule, whole | `1000` | threshold above which a section is split | `split.py` |
+| `section_target_words` | rule, whole | `600` | size a split aims each part at | `split.py` |
+| `split_min_part_words` | rule, whole | `100` | fewest words of a part; a cut that leaves less is dropped | `split.py` |
+| `split_temperature()` | prompt front matter, float; the rule `split_default_temperature` where it names none | `0.1` (both profiles) | sampling temperature for the section-split LLM call | `split.py` |
+| `split_max_tokens()` | prompt front matter, int; the rule `split_default_max_tokens` where it names none | `1024` (both profiles) | reply token ceiling for the section-split LLM call | `split.py` |
+| `clean_titles` | rule, switch | on | whether the prefix strip and ALL-CAPS capitalization run; `title_number_patterns`, `title_shout_min_letters` and `title_acronym_max_letters` say what they take | `refine.py` |
+| `refine_return_corrections` | rule, switch; the setting `REFINE_RETURN_CORRECTIONS` wins | off | switches the reply from a full rewrite to a find-and-replace edit list | `config.py` |
+| `corrections_max_shrink` | rule, number | `0.3` | ceiling on how much edit mode may shrink a section | `corrections.py` |
+| `reply_tokens_ceiling` | rule, whole; the setting `REFINE_REPLY_CEILING` wins | `16384` | ceiling on one request's reply token budget; the context budget counts it once, as the largest reply, see Preflight and caching | `config.py` |
+| `tokens_per_word`, `reply_headroom` | rules, numbers | `3.0`, `1.35` | the over-estimate of tokens per word and the factor a reply is expected to exceed its window by, for `reply_tokens()` and the budget | `config.py` |
+| `keep_sections_with_media`, `keep_opening_section`, `keep_front_matter`, `drop_cover_pages`, `fold_bare_headings` | rules, switches | on | the guards of a removal, the cover action and the folding of bare headings | `refine.py` |
+| `LLM_TEMPERATURE` | env, float, or the prompt's front matter; the rule `refine_default_temperature` where there is none | `0.1` (both profiles) | sampling temperature, read by `llm_temperature()`; `main` reads it once at the start, so an unparseable value ends the run there | `config.py` |
+| `LLM_MAX_TOKENS` | env, int, or the prompt's front matter; the rule `refine_default_max_tokens` where there is none | `8192` (both profiles) | floor for the reply token budget on small windows, read by `llm_max_tokens()`, which `main` also reads once at the start | `config.py` |
 | `--force` | CLI flag | off | ignores an existing `sections_refined.json` and re-refines | `pipeline.py` |
 | `--force-stale` | CLI flag | off | re-refines only documents whose recorded prompt hash changed | `pipeline.py` |
 | `--print-context-budget` | CLI flag | off | prints `max_request_tokens()` and exits, for sizing the server's `--max-model-len`; asks nothing of the model and needs no profile sentence | `pipeline.py` |
@@ -484,16 +502,16 @@ file layout).
 
 `LLM_SCHEMA` does not govern this stage: its reply schemas are sent with every
 request, on every provider, and there is no value that turns that off. Neither
-current profile overrides `WINDOW_SIZE` (see
+current profile sets `refine_window_sections` in its rules (see
 [Profiles](../profiles.md)), so both run at the default of 3. Flipping
-`REFINE_RETURN_CORRECTIONS` changes which prompt id `PROMPT_IDS` names, so
+`refine_return_corrections` changes which prompt id `prompt_ids()` names, so
 a document cached under the other mode reads as stale on the next run.
 
 ## Failure modes
 
 `_call_llm` asks again a reply that is not the one JSON object (empty,
 reasoning only, no object, broken syntax, text beside the object, not an
-object, `sections` missing or no list) up to `MAX_RETRIES` (4) attempts in
+object, `sections` missing or no list) up to `refine_max_attempts` (4) attempts in
 all, naming the cause in the re-ask (see Method for the echo and for what a
 cut-off reply does instead); a 4xx status other than 429 is not retried, and
 a "maximum context length" error is logged at error level. 429, 5xx,
@@ -522,10 +540,10 @@ rather than dropped.
 
 In edit mode, an edit is refused, original text kept, when its quoted
 text is absent, occurs more than once, touches a placeholder, or the
-edits together shrink the section by more than `MAX_SHRINK`. A
+edits together shrink the section by more than `corrections_max_shrink`. A
 section whose `segments` no longer reproduce its `content` is left
 oversized rather than split at a guessed position; a split reply still
-over `SECTION_MAX_WORDS` is re-cut mechanically by `_enforce_max`.
+over `section_max_words` is re-cut mechanically by `_enforce_max`.
 
 `run()`'s preflight (see Method) refuses to start before the first
 document rather than mid-run: an undersized or wrong server, and a server that
@@ -549,7 +567,7 @@ full rewrite, the median section was 99% unchanged, and only 166 of 4887
 sections were real conversions (`docpipe/refinement/corrections.py:6-8`,
 `docpipe/refinement/config.py:64-65`): the stage spent output tokens, a
 request's costliest part, retyping input it was not changing, which is
-why `REFINE_RETURN_CORRECTIONS` exists.
+why `refine_return_corrections` exists.
 
 Isolating each edit's quoted text against the original, rather than
 against the text left by earlier edits in the same section, changed how
@@ -574,7 +592,7 @@ truncated mid-string, each an "Unterminated string" error
 
 Before segments could be subdivided, 51 sections in one run of the scenarios corpus stayed
 oversized however often the split was asked, up to 1409 words against the
-1000-word `SECTION_MAX_WORDS` limit, since their whole text sat in one
+1000-word `section_max_words` limit, since their whole text sat in one
 segment with no boundary to cut on (`docpipe/refinement/split.py:333-334`).
 The model's proposed cut is a suggestion, not a bound: an 11596-word
 section came back as 10 parts, one still 2392 words, which is what
@@ -583,21 +601,20 @@ section came back as 10 parts, one still 2392 words, which is what
 ## Modules
 
 `config.py` holds the stage's tunable constants and the readers of its
-prompt: the LLM connection settings, `WINDOW_SIZE`, the oversized-section
-thresholds, the reply-budget arithmetic (`max_request_tokens()` counts the prompt,
+prompt: the LLM connection settings, the reply-room rules, the reply-budget arithmetic (`max_request_tokens()` counts the prompt,
 a full window and one largest reply, `largest_reply_tokens()`; `further_room` is
 the room a unit that cannot be split is asked once more with), and `system_prompt()`,
 `llm_temperature()` and `llm_max_tokens()`, which read the profile's
 prompt on first use. `pipeline.py`, `refine.py`,
-and `split.py` import from it; `corrections.py` keeps its own
-`MAX_SHRINK` and placeholder-pattern constants independently.
+and `split.py` import from it; `corrections.py` reads its
+rule `corrections_max_shrink` and keeps its placeholder pattern itself.
 
 `corrections.py` holds `apply_corrections`, checking one section's
 find-and-replace edits against the text the model was given: a single,
-exact match per edit, placeholders intact, `MAX_SHRINK` held on the whole
+exact match per edit, placeholders intact, `corrections_max_shrink` held on the whole
 list. Called from `refine.py`'s `_materialise_corrections` in edit mode.
 
-`split.py` cuts a section over `SECTION_MAX_WORDS` at segment boundaries:
+`split.py` cuts a section over `section_max_words` at segment boundaries:
 `split_oversized` drives the pass, `_ask_all_cuts` dispatches every
 document's requests concurrently, and `_enforce_max` with
 `_subdivide_segments` re-cut any part still oversized; its prompt and
@@ -677,7 +694,7 @@ splitting are positional. Every request sends its reply schema as the
 grammar, and a reply is read as exactly one JSON object (see
 docpipe/reading.py): nothing is stripped, cut out or closed. A reply
 that is not that object is asked again with its cause named, up to
-MAX_RETRIES times, except on a 4xx response, which is not retried
+refine_max_attempts times, except on a 4xx response, which is not retried
 because the server has refused the request itself. A reply that was
 cut off at its token limit is never asked again as it stands: the
 window is asked in halves by sections, and a lone section gets more
@@ -723,7 +740,7 @@ long enough to need splitting is by definition too long to echo.
 When no cut is asked for, or the model's cuts could not be read (a
 hole, with its cause), a mechanical fallback cuts at even word-count
 intervals instead, dropping a cut that would leave a sliver under
-about 100 words; the section is named in the refinement report with
+about the rule split_min_part_words; the section is named in the refinement report with
 the cause. A request whose reply was cut off is asked again for half
 of the outline, since the outline has one line per segment.
 
@@ -759,8 +776,8 @@ once, in the section as the model received it, the only text it can
 honestly be quoting. Where two corrections cover the same passage,
 the longer one wins and the other is reported as overlapping. An
 edit may not add, drop or alter a [pN_tblM] or [pN_imgM] placeholder.
-The edits together may not remove more than MAX_SHRINK of the
-section.
+The edits together may not remove more than the rule
+corrections_max_shrink of the section.
 
 The first two rules used to be one: each find was looked up in the
 text left by its predecessors. That punished the model for following

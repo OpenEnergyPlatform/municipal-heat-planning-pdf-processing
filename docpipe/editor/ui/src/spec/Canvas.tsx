@@ -2,14 +2,15 @@
    middle, the entries of the dimension chosen with the words of the plans on the right (layout.ts, nodes.tsx). Clicking a
    box edits it on the right; a box can be dragged elsewhere; "Untangle arrows" orders the left column so that fewer arrows
    cross. */
-import { useEffect, useReducer, useRef } from 'react';
-import { Background, Controls, getNodesBounds, MarkerType, ReactFlow, useReactFlow, type Node, type NodeChange } from '@xyflow/react';
+import { useReducer, useRef } from 'react';
+import { Background, Controls, MarkerType, ReactFlow, useReactFlow, type Node, type NodeChange } from '@xyflow/react';
 import { Box } from '@mantine/core';
 import { showInfo } from '../lib/dialogs';
 import { t, useLang } from '../lib/i18n';
 import { shownNodes, takeMoves } from '../lib/moved';
 import { useStore } from '../lib/nav';
 import { untangle } from '../lib/untangle';
+import { useReadableView } from '../lib/view';
 import { termOf } from './model';
 import { layoutField, type Placed } from './layout';
 import { EDGE_TYPES, NODE_TYPES } from './nodes';
@@ -77,26 +78,17 @@ export function FieldCanvas({ uri }: { uri: string }) {
   const moved = S.moved[uri] || (S.moved[uri] = new Map());
   const nodes = shownNodes(placed.nodes, moved);
   const onNodesChange = (changes: NodeChange[]) => { if (takeMoves(changes, nodes, moved)) redraw(); };
-  /* after a field is chosen, the drawing as wide as the canvas, read from the top */
+  /* after a field is chosen, and whenever the canvas changes its size until the view is moved by hand: the drawing
+     readable, as in every tab with a drawing (lib/view.ts) */
   const canvas = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const h = setTimeout(() => {
-      const el = canvas.current;
-      const boxes = nodes.filter(n => n.type !== 'label');
-      if (!el || !boxes.length) return;
-      const b = getNodesBounds(boxes);
-      const pad = 24;
-      const zoom = Math.min(1, Math.max(0.3, (el.clientWidth - 2 * pad) / Math.max(1, b.width)));
-      flow.setViewport({ x: pad - b.x * zoom, y: pad - b.y * zoom + 8, zoom });
-    }, 60);
-    return () => clearTimeout(h);
-  }, [S.fit, uri]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onMoveStart = useReadableView(flow, canvas, () => nodes.filter(n => n.type !== 'label'), S.fit + ':' + uri);
   const click = (_: unknown, n: Node) => { if (n.type === 'more') toggleOpen(); };
   return (
     <Box ref={canvas} className="sp-canvas gr-canvas" style={{ flex: 1, minHeight: 0, minWidth: 0, position: 'relative' }}>
       <ReactFlow nodes={nodes} edges={placed.edges} nodeTypes={NODE_TYPES} edgeTypes={EDGE_TYPES} defaultEdgeOptions={edgeDefaults}
         nodesDraggable onNodesChange={onNodesChange} nodesConnectable={false} elementsSelectable={false} onNodeClick={click} ariaLabelConfig={flowWords()}
-        onPaneClick={() => select({ t: 'param', uri })} minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }}>
+        onPaneClick={() => select({ t: 'param', uri })} minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }}
+        onMoveStart={onMoveStart}>
         <Background gap={24} size={1} />
         <Controls showInteractive={false} />
       </ReactFlow>

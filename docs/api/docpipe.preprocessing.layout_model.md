@@ -31,6 +31,15 @@ Fields:
 
 ## Functions
 
+### media_labels
+
+```python
+def media_labels() -> frozenset
+```
+
+The classes whose detections produce a saved crop: the tables and
+the figures of the rules.
+
 ### load_model
 
 ```python

@@ -77,14 +77,14 @@ block's spans into text through `_spans_to_text()` (rejoining a
 line-ending hyphen unless the following word is a profile exception or
 starts uppercase), and measures the block's dominant font with
 `_dominant_font()`. `_is_valid_text_block()` drops a block under
-`TEXT_BLOCK_MIN_CHARS` characters or with no alphanumeric content, and a
+the rule `text_block_min_chars` characters or with no alphanumeric content, and a
 page whose extraction raises is skipped and counted in `n_failed`
 (`docpipe/preprocessing/page_text.py:144-243`).
 
 ### Stage 2: detecting layout
 
 `detect_layout_all_pages()` (`layout.py`) renders the open `fitz` pages at
-`LAYOUT_DETECT_DPI` (150) in `LAYOUT_BATCH_SIZE` batches. Worker processes
+`layout_detect_dpi` (150) in `LAYOUT_BATCH_SIZE` batches. Worker processes
 (`rendering.py`) render every page at both resolutions, each opening the PDF
 itself. There are as many as the CPUs the process may run on, less two for the
 main and prefetch threads, or the number in `DOCPIPE_LAYOUT_RENDER_PROCS`. In one
@@ -112,7 +112,7 @@ every box from the masks (0.037 s a page), which Stage 2 never reads.
 `layout_blocks.process_page()` turns each surviving detection into a
 suppression, a title or caption `Block`, or a crop job (`crops.CropJob`),
 whiting out any figure region overlapping a table crop; a crop is
-re-rendered at the higher `PAGE_RENDER_DPI` only when that differs from the
+re-rendered at the higher `crop_render_dpi` only when that differs from the
 detection resolution. A batch's crops are PNG-encoded and written by one
 writer thread (`crops.write_crop`, 0.023 s a page) while the next batch runs;
 the main thread waits for one batch's writes before it hands over the next,
@@ -157,7 +157,7 @@ When `transcribe_missing_text` is set, `_fill_missing_page_text()` builds
 a page renderer and a profile-bound transcriber and calls
 `fill_missing_page_text()` (`docpipe/preprocessing/page_text_without_layer.py:162`),
 which selects pages where `needs_transcription()` finds under
-`MIN_PAGE_CHARS` (60) characters of Stage 1 text and, for each, replaces its
+`page_text_min_chars` (60) characters of Stage 1 text and, for each, replaces its
 text blocks with the list `synthesize_blocks()` returns
 (`page_text_without_layer.py:111-160` builds the blocks; line 267 is the
 replacement). `results/page_transcription_report.json` is written
@@ -203,7 +203,7 @@ a check (`_assert_page_server`, wrapped by `_once` and passed down as
 any is sent, and the check runs once per run. It asks `assert_serving` that the
 server serves `VLM_MODEL`, that its window holds a page request
 (`page_request_tokens(profile)`: the page prompt's words times
-`TOKENS_PER_WORD`, `IMAGE_TOKENS`, and one reply, the prompt's `max_tokens`
+the rule `vision_tokens_per_word`, `IMAGE_TOKENS`, and one reply, the prompt's `max_tokens`
 (4,096 by default), no second reply being counted: 9,260 tokens with the `kwp`
 profile and 9,449 with `scenarios`; there is no print flag for it) and that it
 takes the page reply schema. A run in which every page has its text asks no server and ends
@@ -243,7 +243,7 @@ page of the first `doc_title` block with text, else the first page,
 `title_page` for stage 4; a cover before the title page and a title detected
 further in both leave the first page protected),
 then walks every block: a
-`SECTION_TITLE_CLASSES` block opens a new `Section`, a table or image
+block of a kind of the rule `heading_classes` opens a new `Section`, a table or image
 block becomes a `TableRef` or `FigureRef` plus a `[block_id]` placeholder
 whose caption is settled by `docpipe.captions.resolve_title()`, and text
 accumulates into `Section.content` and `Section.segments`. A footnote block
@@ -339,34 +339,36 @@ to `"auto"`, `run()` falls back to `"auto"` even with no active profile
 the answer, `double` falls back to a centre split if none is found, and
 `single` never looks.
 
-A profile must additionally supply the following, or a
-`LookupError`/`SystemExit` follows:
+The words and numbers of a corpus's language are rules of the stages, set in
+the default profile's `rules.json` and laid over by a profile's own (tab
+"stages" of `docpipe edit`); the page request of the page transcription is the
+prompt `preprocessing/page_request`:
 
 | Name | Default | Effect |
 |---|---|---|
-| `preprocessing.HYPHEN_EXCEPTIONS` | none | words that keep a line-ending hyphen from gluing to the next line |
-| `preprocessing.CAPTION_MAX_WORDS` | none; kwp = 45, scenarios = 160 | word-count ceiling for a caption |
-| `preprocessing.CAPTION_START` | none; each profile lists its own | a non-empty list of regular expressions, each with its own anchor, that open a caption; `docpipe/captions.py` joins them and compiles once per profile. kwp and scenarios list one pattern (a word, a number, a colon); the built-in profile adds letter-numbered forms (`Table A.1:`) and the colon-less ones (`Figure 3.`, `Fig. 2`, `Table 1`), the latter only where a text, a line or a sentence begins, so `see Table 1.` and `Table 1 shows` stay prose. An empty list, a bare string or a pattern that does not compile or matches the empty text is a `ValueError`, a missing list a `LookupError` |
-| `preprocessing.TITLE_EXCLUDE_PREFIXES` | none | prefixes that keep a block from being read as a heading |
-| `preprocessing.DIRECTORY_FIGTAB_WORDS` | none | words opening a figure/table list entry, for directory-section detection |
-| `preprocessing.DIRECTORY_TITLE_WORDS` | none; "inhalt", "verzeichnis", "contents", "directory" in kwp, scenarios and the built-in profile | the words by which a section title says it is a directory (a table of contents, a list of figures): fragments of a pattern, joined with `\|` and matched case-insensitively anywhere in the title, so a section so titled is dropped at the lower directory score. An empty list gives a pattern that never matches. The core fixes none, and a profile outside this repository that extends nothing and has none stops with a `LookupError` at the first directory candidate |
-| `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | none | title words routing a section to the literature path instead of directory-stripping |
+| rule `hyphen_exceptions` | the default profile's English list; kwp lists German words | words that keep a line-ending hyphen from gluing to the next line |
+| rule `caption_max_words` | 60; kwp = 45, scenarios = 160 | word-count ceiling for a caption |
+| rule `caption_opener_patterns` | the default profile's three patterns; kwp and scenarios list one | a non-empty list of regular expressions, each with its own anchor, that open a caption; `docpipe/captions.py` joins them and compiles once per profile. kwp and scenarios list one pattern (a word, a number, a colon); the built-in profile adds letter-numbered forms (`Table A.1:`) and the colon-less ones (`Figure 3.`, `Fig. 2`, `Table 1`), the latter only where a text, a line or a sentence begins, so `see Table 1.` and `Table 1 shows` stay prose. An empty list or a pattern that does not compile or matches the empty text is a `ValueError` |
+| rule `heading_excluded_prefixes` | the default profile's English words; kwp and scenarios list their own | prefixes that keep a block from being read as a heading |
+| rule `directory_figure_words` | the default profile's English words; kwp and scenarios list their own | words opening a figure/table list entry, for directory-section detection |
+| rule `directory_title_words` | "inhalt", "verzeichnis", "contents", "directory" in kwp, scenarios and the built-in profile | the words by which a section title says it is a directory (a table of contents, a list of figures): fragments of a pattern, joined with `\|` and matched case-insensitively anywhere in the title, so a section so titled is dropped at the lower directory score. An empty list gives a pattern that never matches. The default profile's file holds the four words |
+| rule `bibliography_title_words` | the default profile's English words; kwp lists German ones | title words routing a section to the literature path instead of directory-stripping |
 
 The colon-less forms of the built-in profile cannot tell every prose line from
 a caption: `Table 1 Germany leads ...` at the start of a sentence counts as a
 caption, an indented line after a line break does not.
 
-A selection of the module constants that tune detection and assembly:
+A selection of the rules that tune detection and assembly (the stage rules, in the default profile's `rules.json`):
 
 | Name | Default | Effect |
 |---|---|---|
-| `LAYOUT_DETECT_DPI` / `PAGE_RENDER_DPI` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`layout.py:112-126,158`) |
+| `layout_detect_dpi` / `crop_render_dpi` | 150 / 300 | render resolution for the detection pass and for saved table/figure crops; a page is re-rendered only when the two differ (`layout.py:112-126,158`) |
 | `LAYOUT_BATCH_SIZE` | 12 | pages per Stage 2 forward pass |
-| `PP_GLOBAL_MIN_CONF` / `PP_CLASS_THRESHOLDS` | 0.4 / per class, 0.40 to 0.85 | confidence floors before and after per-class filtering |
-| `NMS_OVERLAP_THRESHOLD` | 0.5 | IoU above which two overlapping same-class (or cross-class table/image) boxes collapse to the higher-confidence one |
-| `STRIP_PRIVATE_USE` / `MASK_FIGURES_IN_TABLE_CROPS` | `True` / `True` | drops Unicode Private Use Area glyphs, and whites out figure pixels inside a table crop |
-| `FONT_HEADING_ENABLE`, `HEADER_FOOTER_STRIP_ENABLE`, `DIRECTORY_STRIP_ENABLE` and their thresholds | all `True` | gate font-based heading promotion, running-header/footer stripping, and directory-section removal |
-| `COLUMN_*` thresholds | gutter 8.0 pt, align tolerance 4.0 pt, aligned fraction 0.75 | tune gutter finding and column-validity checks |
+| `layout_min_score` / `layout_class_min_scores` | 0.4 / per kind of region, by its name, 0.40 to 0.85 | confidence floors before and after per-class filtering |
+| `layout_overlap_limit` | 0.5 | IoU above which two overlapping same-class (or cross-class table/image) boxes collapse to the higher-confidence one |
+| `drop_private_use_glyphs` / `mask_figures_in_tables` | `true` / `true` | drops Unicode Private Use Area glyphs, and whites out figure pixels inside a table crop |
+| `font_headings`, `strip_running_headers`, `strip_directory_sections` and their thresholds | all `true` | gate font-based heading promotion, running-header/footer stripping, and directory-section removal |
+| the `column_*` rules | gutter 8.0 pt, align tolerance 4.0 pt, aligned fraction 0.75 | tune gutter finding and column-validity checks |
 
 (`docpipe/preprocessing/config.py`.)
 
@@ -401,19 +403,18 @@ A selection of the module constants that tune detection and assembly:
   (`layout_model.py:175-194`).
 - Real text columns measure an aligned-left-edge fraction of at least 0.90,
   labels scattered around a chart at most 0.43, the gap
-  `COLUMN_ALIGN_TOL_PT`/`COLUMN_MIN_ALIGNED_FRAC` are set to separate
-  (`docpipe/preprocessing/config.py:154-158`). A bulleted list on one
+  `column_edge_tolerance_pt`/`column_min_aligned_share` are set to separate. A bulleted list on one
   two-column page produced 0.71 against the 0.75 single-edge threshold;
   allowing alignment on one or two edges instead of one keeps it from
   reading across the gutter (`docpipe/preprocessing/columns.py:132-150`).
 - 423 sections across 99 documents in a corpus snapshot carry Unicode
-  Private Use Area glyphs from a symbol font; `STRIP_PRIVATE_USE` drops
-  them (`docpipe/preprocessing/config.py:210-217`).
+  Private Use Area glyphs from a symbol font; `drop_private_use_glyphs` drops
+  them (`docpipe/preprocessing/config.py`).
 - Captions run to a median of 8 words on the kwp corpus, 24 at the 99th
-  percentile, so `CAPTION_MAX_WORDS` is 45 there
-  (`profiles/kwp/preprocessing.py:35-39`); scenarios panel descriptions and
-  legends routinely run 60 to 150 words, so `CAPTION_MAX_WORDS` is 160
-  there (`profiles/scenarios/preprocessing.py:39-43`).
+  percentile, so `caption_max_words` is 45 there
+  (`profiles/kwp/rules.json`); scenarios panel descriptions and
+  legends routinely run 60 to 150 words, so `caption_max_words` is 160
+  there (`profiles/scenarios/rules.json`).
 - Eleven plans in the heat-plan corpus carry no PDF text layer, together
   holding 1,270 tables and figures Stage 2 transcribed with no surrounding
   text (`docpipe/preprocessing/page_text_without_layer.py:1-8`). Treating the
@@ -474,10 +475,11 @@ only from `pipeline._fill_missing_page_text()` when `--transcribe-missing-text`
 is set.
 
 Two more modules define the shapes this stage produces without a chapter
-of their own: `models.py` (the dataclasses) and `config.py` (most tunable
-constants; `page_text_without_layer.py` holds its own set outside it:
-`MIN_PAGE_CHARS`, `PAGE_WORKERS`, `PAGE_RENDER_WORKERS`, `TEXT_AREA` and
-`RENDER_DPI`). Three cross-cutting modules this stage calls into are
+of their own: `models.py` (the dataclasses) and `config.py` (the
+machine's constants; `page_text_without_layer.py` holds its own set outside it:
+`PAGE_WORKERS` and `PAGE_RENDER_WORKERS`; the thresholds of the stage are rules,
+among them `page_text_min_chars`, `transcribed_text_area` and
+`page_transcribe_dpi`). Three cross-cutting modules this stage calls into are
 documented on [The parts every stage uses](core.md): `docpipe/artifacts.py`,
 `docpipe/captions.py` for `resolve_title()`, and `docpipe/profile.py`.
 

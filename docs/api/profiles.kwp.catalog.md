@@ -78,10 +78,11 @@ so sibling-plan claims match what the picker shows.
 ### document_label
 
 ```python
-def document_label(row, covered: Optional[list] = None) -> str
+def document_label(row, words: dict, covered: Optional[list] = None) -> str
 ```
 
-Plan-centric picker label.
+Plan-centric picker label, with the version words of *words* (the
+profile's chat words, `wording.ui`).
 
 `covered` = the municipalities this plan covers (from municipality_coverage).
 A plan covering several is labelled by its administrative unit + the count,

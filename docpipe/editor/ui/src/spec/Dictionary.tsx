@@ -77,7 +77,7 @@ export function Dictionary({ name }: { name: string }) {
     </Stack>
   );
   if (kind !== 'list') {
-    return <Box className="dp-scroll sp-center-page" p="md">{head}<Alert mt="md" color="gray">{t('This dimension has no list: the model answers it with the words or the number of the plan.')}</Alert></Box>;
+    return <Box className="dp-scroll sp-center-page" p="md">{head}<Alert mt="md" color="gray">{t('This dimension has no list: the model answers it with the words or the number of the document.')}</Alert></Box>;
   }
   const all = entriesOf(axis.vocabulary);
   const origin = originOf(axis.vocabulary, name, S.onto);
@@ -101,10 +101,10 @@ export function Dictionary({ name }: { name: string }) {
           <Switch checked={S.open} onChange={toggleOpen} label={tn(all.filter(e => !e.words.length).length, 'Show the {n} entry without a word too', 'Show the {n} entries without a word too')} />
           <Button variant="light" leftSection={<IconList size={16} />} disabled={!users.length} onClick={() => openList(users[0], name, 'vocabulary')}>{t('Edit the whole list…')}</Button>
         </Group>
-        <Text size="sm" c="dimmed">{t('Each entry gathers the words the plans write for it. Drag a word onto another entry to move it there.')}</Text>
+        <Text size="sm" c="dimmed">{t('Each entry gathers the words the documents write for it. Drag a word onto another entry to move it there.')}</Text>
         <Stack gap={4}>
           {shown.map(e => <EntryLine key={e.id} e={e} where={where} />)}
-          {folded > 0 ? <Text size="sm" c="dimmed">{tn(folded, '{n} more entry without a word of the plans', '{n} more entries without a word of the plans')}</Text> : null}
+          {folded > 0 ? <Text size="sm" c="dimmed">{tn(folded, '{n} more entry without a word of the documents', '{n} more entries without a word of the documents')}</Text> : null}
           {!found.length ? <Text size="sm" c="dimmed">{t('No entry matches.')}</Text> : null}
         </Stack>
       </Stack>

@@ -334,7 +334,7 @@ Reading the tables back out is not this package's job.
   and the app's document picker both select `is_current = 1` documents by
   default, so a superseded document is never harvested or shown, even
   when named explicitly; the app labels a row with the profile's own words
-  for current and old, the `UI` entries `version_current` and `version_old`
+  for current and old, the chat words `version_current` and `version_old`
   (`kwp` says `(aktuell)` and `(alt)`, the built-in profile and `scenarios`
   say `(current)` and `(old)`), and calls a document by `Profile.document_noun`,
   which is `"document"` unless a profile names its own, falling back to the
@@ -342,8 +342,8 @@ Reading the tables back out is not this package's job.
   empty noun
   (`docpipe/extraction/runner.py:4888` to `4913`, docstrings;
   `docpipe/inference/catalog.py:70` to `75` and `93` to `103`). A profile
-  that stands alone and words its own `UI` has to carry those three entries
-  and the others `wording.UI_REQUIRED` lists, or the app and the picker raise
+  that stands alone and words its own chat words has to carry those three entries
+  and the others `wording.CHAT_REQUIRED` lists, or the app and the picker raise
   a `LookupError` naming what is missing. The catalogs of the built-in profile
   and of `scenarios` print no tag after a name, so for them the words are
   reached only through the base `Catalog`.

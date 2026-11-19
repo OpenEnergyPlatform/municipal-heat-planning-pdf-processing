@@ -105,8 +105,8 @@ again, up to `HOSTED_ATTEMPTS` times in all (`docpipe/embedding/api.py:133` to
 
 The `messages` form is the chat a vLLM server takes. `conversation(item)`
 builds the turns of `Qwen3VLEmbedder.format_model_input`. The system turn
-carries the instruction, `DEFAULT_INSTRUCTION` ("Represent the user's
-input.") when the item names none, with a full stop added when it ends
+carries the instruction, the rule `embed_instruction` ("Represent the user's
+input." by default) when the item names none, with a full stop added when it ends
 without punctuation. The user turn holds the picture, an `image_url` data URI,
 before the text, and "NULL" stands for an item with neither. An empty
 assistant turn follows, which the request continues

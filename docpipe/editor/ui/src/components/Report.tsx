@@ -2,7 +2,7 @@
    what a save writes, the diff and the sentences the server adds. */
 import { Accordion, Alert, Anchor, Button, Code, List, Stack, Text } from '@mantine/core';
 import { IconAlertTriangle, IconCircleCheck } from '@tabler/icons-react';
-import { Diff } from './Bits';
+import { Diff, Named } from './Bits';
 import { shown } from '../lib/util';
 import { rich, t, tr } from '../lib/i18n';
 
@@ -53,7 +53,7 @@ export function Report({ R, onName, onReload }: { R: Reported | null; onName?: (
       {!errs.length && Array.isArray(r.changed) && (
         <Alert color="gray" title={t('Changes ({n})', { n: r.changed.length })}>
           {r.changed.length
-            ? <List size="sm" spacing={2}>{r.changed.map((c: any, i: number) => <List.Item key={i}><Code>{c.name}</Code>: {shown(c.from)} → {shown(c.to)}</List.Item>)}</List>
+            ? <List size="sm" spacing={2}>{r.changed.map((c: any, i: number) => <List.Item key={i}><Named title={c.title} k={c.name} />: {shown(c.from)} → {shown(c.to)}</List.Item>)}</List>
             : <Text size="sm" c="dimmed">{t('Nothing differs from the files on disk.')}</Text>}
         </Alert>
       )}

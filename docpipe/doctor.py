@@ -482,10 +482,11 @@ def _prompt_ids(stage: str) -> tuple:
     """The prompts a stage's own module says it loads."""
     if stage == "preprocess":
         from .preprocessing import page_text_without_layer
-        return (page_text_without_layer.PAGE_TRANSCRIBE_PROMPT_ID,)
+        return (page_text_without_layer.PAGE_TRANSCRIBE_PROMPT_ID,
+                page_text_without_layer.PAGE_REQUEST_PROMPT_ID)
     if stage == "refine":
         from .refinement import config
-        return tuple(config.PROMPT_IDS)
+        return tuple(config.prompt_ids())
     if stage == "visuals":
         from .visuals import config
         return tuple(config.PROMPT_IDS)
@@ -567,10 +568,11 @@ def _inference_phrases(profile) -> list:
                   f"{len(wording.phrases(profile))} phrase(s), none missing")]
 
 
-def _inference_ui(profile) -> list:
+def _chat_words(profile) -> list:
     from .inference import wording
-    return [Check("wording", "inference.UI", OK,
-                  f"{len(wording.ui(profile))} label(s), none missing")]
+    return [Check("wording", "prompts/chat/phrases.json", OK,
+                  f"{len(wording.chat_words(profile))} word(s), none "
+                  f"missing")]
 
 
 def _graph_route(profile) -> list:
@@ -589,7 +591,7 @@ def _graph_route(profile) -> list:
 WORDING = (
     ("extract", "prompts/extraction/phrases.json", _extraction_phrases),
     ("chat", "prompts/inference/phrases.json", _inference_phrases),
-    ("chat", "inference.UI", _inference_ui),
+    ("chat", "prompts/chat/phrases.json", _chat_words),
     ("chat", "graph route", _graph_route),
 )
 

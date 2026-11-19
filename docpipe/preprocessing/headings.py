@@ -12,17 +12,8 @@ import logging
 import re
 from typing import Optional
 
-from .config import (
-    CAPTION_CLASSES,
-    SECTION_TITLE_CLASSES,
-    title_exclude_prefixes,
-    TITLE_SAME_ROW_OVERLAP_FRACTION,
-    FONT_HEADING_ENABLE,
-    FONT_HEADING_SIZE_RATIO,
-    FONT_HEADING_MIN_CHARS,
-    FONT_HEADING_MAX_CHARS,
-    FONT_HEADING_ALLCAPS_MIN_CHARS,
-)
+from .. import rules
+from .config import title_exclude_prefixes
 from .models import PageData
 from .layout_blocks import vertical_overlap_fraction
 
@@ -40,30 +31,41 @@ def _body_font_size(pages: list[PageData]) -> Optional[float]:
     return max(weights, key=weights.get)
 
 
+def _prose_break(marks: str):
+    """A sentence mark, a space and a capital letter: the inside of running
+    text. Built from the marks of the rule `heading_prose_end_marks`."""
+    return rules.derived("stage_layout:prose_break", lambda: re.compile(
+        "[" + "".join(re.escape(mark) for mark in marks) + r"]\s+[A-ZÄÖÜ]"))
+
+
 def _looks_like_heading(
     text: str, font_size: Optional[float], bold: bool, body_size: Optional[float]
 ) -> bool:
     """Conservative font/style test for whether a text block is a section heading."""
     n = len(text)
-    if n < FONT_HEADING_MIN_CHARS or n > FONT_HEADING_MAX_CHARS:
+    if (n < rules.get("font_heading_min_chars")
+            or n > rules.get("font_heading_max_chars")):
         return False
     if any(text.lower().startswith(p) for p in title_exclude_prefixes()):
         return False
     # Prose guard: filters bold/emphasised body lines.
-    if text.endswith((".", "!", "?")):
+    marks = rules.get("heading_prose_end_marks")
+    if text.endswith(tuple(marks)):
         return False
-    if re.search(r"[.!?]\s+[A-ZÄÖÜ]", text):
+    if _prose_break(marks).search(text):
         return False
 
     if font_size and body_size:
-        if font_size >= body_size * FONT_HEADING_SIZE_RATIO:
+        if font_size >= body_size * rules.get("font_heading_size_ratio"):
             return True
-        if bold and font_size > body_size:   # bold AND strictly larger than body
+        # bold AND strictly larger than body
+        if (bold and font_size > body_size
+                and rules.get("bold_larger_is_heading")):
             return True
 
     letters = [c for c in text if c.isalpha()]
     is_allcaps = bool(letters) and all(c.isupper() for c in letters)
-    if (is_allcaps and n >= FONT_HEADING_ALLCAPS_MIN_CHARS
+    if (is_allcaps and n >= rules.get("font_heading_caps_min_chars")
             and (not body_size or not font_size or font_size >= body_size)):
         return True
     return False
@@ -75,8 +77,11 @@ def promote_headings_by_font(pages: list[PageData]) -> list[PageData]:
     opens a section there. Only blocks the layout model left unclassified
     (layout_label is None) are considered. Mutates *pages* in place.
     """
-    if not FONT_HEADING_ENABLE:
+    if not rules.get("font_headings"):
         return pages
+    caption_classes = set(rules.get("caption_classes"))
+    title_classes = set(rules.get("heading_classes"))
+    same_row_gap = rules.get("heading_same_row_gap")
 
     body = _body_font_size(pages)
     promoted = 0
@@ -87,8 +92,8 @@ def promote_headings_by_font(pages: list[PageData]) -> list[PageData]:
         occupied = [
             b.bbox for b in pg.blocks
             if b.type in ("table", "image")
-            or b.layout_label in SECTION_TITLE_CLASSES
-            or b.layout_label in CAPTION_CLASSES
+            or b.layout_label in title_classes
+            or b.layout_label in caption_classes
         ]
         for b in pg.blocks:
             if not (b.type == "text" and b.layout_label is None and b.content):
@@ -99,7 +104,7 @@ def promote_headings_by_font(pages: list[PageData]) -> list[PageData]:
                 continue
             if any(
                 vertical_overlap_fraction(b.bbox, ob)
-                > (1.0 - TITLE_SAME_ROW_OVERLAP_FRACTION)
+                > (1.0 - same_row_gap)
                 for ob in occupied
             ):
                 continue

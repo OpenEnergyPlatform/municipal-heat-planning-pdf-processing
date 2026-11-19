@@ -263,7 +263,8 @@ def _learn_window(base: str, model: str, api_key: str,
     """The `window_for` of a server and model as the server says it now;
     None where it says no window or counts no pair."""
     from docpipe import window as windows
-    from docpipe.embedding.config import IMAGE_FACTOR, IMAGE_MAX_PIXELS
+    from docpipe import rules
+    from docpipe.embedding.config import IMAGE_FACTOR
     limit = windows.served_limit(base, model, api_key)
     if not limit:
         log.warning("rerank: %s reports no window; pairs go as they are "
@@ -280,7 +281,8 @@ def _learn_window(base: str, model: str, api_key: str,
         log.warning("rerank: %s counted no tokens for a pair; pairs go as "
                     "they are until it is asked again", base)
         return None
-    most = IMAGE_MAX_PIXELS // (IMAGE_FACTOR * IMAGE_FACTOR) + 2
+    most = (int(rules.get("embed_picture_max_pixels"))
+            // (IMAGE_FACTOR * IMAGE_FACTOR) + 2)
     return windows.Window(
         limit=int(limit), frame=frame,
         count=windows.server_counter(base, model, api_key),

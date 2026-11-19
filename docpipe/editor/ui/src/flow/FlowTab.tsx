@@ -17,11 +17,13 @@ import {
   IconFocusCentered, IconFrame, IconArrowsMinimize, IconArrowsMaximize, IconPlayerPlay, IconPower, IconTrash, IconX,
 } from '@tabler/icons-react';
 import { api, apiR } from '../lib/api';
-import { rich, t, tr, trCheck, useLang } from '../lib/i18n';
+import { rich, t, tn, tr, trCheck, useLang } from '../lib/i18n';
 import { askConfirm, showError, showInfo } from '../lib/dialogs';
 import { loadState, setDirty, tabStore, useRequests, useTabActions } from '../lib/nav';
+import { CHAT, PASS_ORDER, passWord } from './flows';
 import { clone, wrote } from '../lib/util';
 import { shownNodes, takeMoves, type Moved } from '../lib/moved';
+import { useReadableView } from '../lib/view';
 import { Diff } from '../components/Bits';
 import { layout, type Decor } from './layout';
 import {
@@ -53,8 +55,6 @@ const flowWords = () => ({
   'minimap.ariaLabel': t('Overview of the flow'),
   'handle.ariaLabel': t('End of an arrow'),
 });
-const READABLE = 0.8;    // below this zoom the words of a step are too small to read
-
 interface Report { source: 'check' | 'save'; r?: any; error?: string }
 
 /* a flow of a follow-up pass the run can start (/api/flow/passes), and one of them as the server draws it
@@ -72,20 +72,6 @@ interface ChatView {
   prompts: FlowData['prompts'];
 }
 /* the entry of the drawing of the chat in the choice of the flow shown: no flow of a pass has this name */
-const CHAT = '#chat';
-/* the flows of the follow-up passes in the order the plan of a run takes them */
-const PASS_ORDER = ['top_up', 'top_up_open', 'top_up_parameters', 'remap', 'recheck', 'review', 'start_at', 'example'];
-/* the name of each flow of a follow-up pass, with the switch of the call that starts it */
-const passWord = (name: string): string => ({
-  top_up: t('Read changed questions again (--top-up)'),
-  top_up_open: t('Read the open places again (--top-up-open)'),
-  top_up_parameters: t('Read further parameters (--top-up-parameters)'),
-  remap: t('Map the lists again (--remap)'),
-  recheck: t('Check the quotes again (--recheck)'),
-  review: t('Second reading (--review)'),
-  start_at: t('Start at the places found (--start-at)'),
-  example: t('Example for a field (while a spec is compiled)'),
-} as Record<string, string>)[name] || name;
 
 interface State {
   loaded: boolean; loading: boolean; data: FlowData | null; tree: Step[]; cur: Record<string, number | string>;
@@ -378,22 +364,7 @@ function FlowInner() {
   /* the first view: the whole flow if it can be read whole, else its top at a size that can be read, scrolled down
      with the wheel */
   const canvas = useRef<HTMLDivElement>(null);
-  const showTop = (duration: number) => {
-    const el = canvas.current;
-    const top = shown.filter(n => !n.parentId);
-    if (!el || !top.length) return;
-    const W = el.clientWidth, H = el.clientHeight;
-    const b = flow.getNodesBounds(top);
-    const whole = Math.min(W / (b.width * 1.12), H / (b.height * 1.12));
-    if (whole >= READABLE) { flow.fitView({ padding: 0.06, maxZoom: 1, duration }); return; }
-    const z = Math.max(READABLE, Math.min(1, W / (b.width + 80)));
-    flow.setViewport({ x: (W - b.width * z) / 2 - b.x * z, y: 28 - b.y * z, zoom: z }, { duration });
-  };
-  useEffect(() => {
-    if (!F.fit) return;
-    const t = setTimeout(() => showTop(300), 120);
-    return () => clearTimeout(t);
-  }, [F.fit]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onMoveStart = useReadableView(flow, canvas, () => shown.filter(n => !n.parentId), F.fit);
 
   /* opens every loop, round and branching around a step, chooses it and brings it to the middle */
   const reveal = (id: string) => {
@@ -401,7 +372,12 @@ function FlowInner() {
     F.sel = id; F.multi = new Set([id]); touch();
     setTimeout(() => flow.fitView({ nodes: [{ id }], maxZoom: 1.1, duration: 400, padding: 0.6 }), 60);
   };
-  useRequests('flow', F.loaded, p => { if (p && p.id && find(F.tree, p.id)) reveal(p.id); });
+  /* a link to a step names the drawing it stands in (`which`, '' for the main flow): that drawing is shown first */
+  useRequests('flow', F.loaded, p => {
+    if (!p || !p.id) return;
+    const go = () => { if (find(F.tree, p.id)) reveal(p.id); };
+    if (typeof p.which === 'string' && p.which !== F.which) void choose(p.which).then(go); else go();
+  });
   const toggle = (id: string) => { pin(...around(id)); if (F.open.has(id)) F.open.delete(id); else F.open.add(id); touch(); };
   const openAll = (open: boolean) => {
     F.open = new Set(open ? [...walk(F.tree)].filter(([n]) => kindOf(n) !== 'box').map(([n]) => n.id) : []);
@@ -477,7 +453,7 @@ function FlowInner() {
   const isChat = F.which === CHAT;
   const loopsOnly = !!F.which && !isChat;
   const ctx: FlowCtx | null = F.data ? {
-    lib: F.data.library, never: F.data.never || {}, toggle, loopsOnly,
+    lib: F.data.library, never: F.data.never || {}, toggle, loopsOnly, parts: F.which ? {} : F.data.parts || {},
     add: (list, at) => setLib({ list, at, after: null }),
   } : null;
 
@@ -503,7 +479,9 @@ function FlowInner() {
   const status = isChat ? (d.exists ? t('its own drawing of the chat') : t('not written yet: the chat runs the drawing of {name}', { name: d.starts_from }))
     : F.which ? (d.exists ? t('its own flow') : t('not written yet: the flow comes from {name}', { name: d.starts_from || t('the program') }))
     : !d.exists ? t('not written yet: the flow and every number come from {name}', { name: d.starts_from })
-    : d.whole ? t('the whole flow of this profile') : (d.drawn_by === d.starts_from ? t('numbers of its own, the flow of {name}', { name: d.drawn_by }) : t('its own flow'));
+    : d.whole ? t('the whole flow of this profile')
+    : d.changes != null ? tn(d.changes, '{n} change of its own to the flow of {name}', '{n} changes of its own to the flow of {name}', { name: d.inherits_from || d.starts_from })
+    : (d.drawn_by === d.starts_from ? t('numbers of its own, the flow of {name}', { name: d.drawn_by }) : t('its own flow'));
   /* another flow is shown: edits not saved are given up first, as on a reload */
   const choose = async (name: string) => {
     if (name === F.which || F.busy) return;
@@ -561,7 +539,7 @@ function FlowInner() {
               defaultEdgeOptions={edgeDefaults} nodesDraggable onNodesChange={onNodesChange} nodesConnectable={false} elementsSelectable
               deleteKeyCode={null} selectionKeyCode={null} multiSelectionKeyCode={null} panOnScroll zoomOnDoubleClick={false}
               minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }} ariaLabelConfig={flowWords()}
-              onNodeClick={onNodeClick} onNodeContextMenu={onNodeContextMenu}
+              onMoveStart={onMoveStart} onNodeClick={onNodeClick} onNodeContextMenu={onNodeContextMenu}
               onPaneClick={() => { if (F.sel || F.multi.size) { F.sel = null; F.multi = new Set(); touch(); } }}>
               <Background gap={24} size={1} />
               <MiniMap pannable zoomable nodeStrokeWidth={2} />

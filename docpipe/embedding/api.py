@@ -40,9 +40,9 @@ log = logging.getLogger(__name__)
 # Attempts at one batch for a hosted API that answers "not now".
 HOSTED_ATTEMPTS = 6
 
-# The instruction an item is embedded under when it names none, as the
-# model's own code sets it (Qwen3VLEmbedder in chunking/qwen3_vl_embedding.py).
-DEFAULT_INSTRUCTION = "Represent the user's input."
+# The instruction an item is embedded under when it names none is the rule
+# embed_instruction, as it is for the model's own code (Qwen3VLEmbedder in
+# chunking/qwen3_vl_embedding.py).
 
 
 def data_uri(image) -> str:
@@ -81,7 +81,7 @@ def conversation(item: dict) -> list:
         content.append({"type": "text", "text": "NULL"})
     return [
         {"role": "system",
-         "content": [{"type": "text", "text": instruction or DEFAULT_INSTRUCTION}]},
+         "content": [{"type": "text", "text": instruction or rules.get("embed_instruction")}]},
         {"role": "user", "content": content},
         {"role": "assistant", "content": [{"type": "text", "text": ""}]},
     ]
@@ -225,7 +225,7 @@ class ApiEmbedder:
             import json
             frame = len(json.dumps(conversation({"text": "."}),
                                    ensure_ascii=False).encode("utf-8"))
-        most = (config.IMAGE_MAX_PIXELS
+        most = (int(rules.get("embed_picture_max_pixels"))
                 // (config.IMAGE_FACTOR * config.IMAGE_FACTOR) + 2)
         return window.Window(
             limit=limit, frame=frame,

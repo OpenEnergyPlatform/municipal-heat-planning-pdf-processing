@@ -8,7 +8,9 @@ beside a folder for its PDFs (`data/<name>/pdf`). It starts empty, extending
 the profile docpipe brings itself, or as a copy of a profile the installation
 finds: then it extends that one and has a copy of each of its files a page
 edits (the spec, the flow, the graph, the chat, the rules, the sources), so
-editing them leaves the other profile as it was. Where it is given the
+editing them leaves the other profile as it was; the flow's copy leaves out
+the changes the profile makes in the drawing it inherits, which the copy
+inherits with them. Where it is given the
 addresses of an ontology, shapes or a graph, they are its sources; a draft of
 its spec is made from shapes with the same code `docpipe init --shapes` uses.
 Everything is read before anything is written: a name taken, a file that
@@ -30,6 +32,8 @@ from .profile import available_profiles, load_profile, profile_locations
 # The files of a profile its copy gets its own of, where the profile has one.
 COPIED = ("extraction_spec.json", "extraction_schema.json", "flow.json",
           "graph.json", "chat.json", "rules.json", "sources.json")
+# The flow file: a copy takes its numbers, not its changes (`_copy_flow`).
+FLOW_FILE = "flow.json"
 # What a source given by its address is called in the new profile's
 # sources.json, in the order a page asks them.
 ADDRESSED = ("ontology", "shapes", "graph")
@@ -64,8 +68,8 @@ PROFILE_PY = """\
 
 It extends the profile docpipe brings itself. What is written here, and in
 the files beside this one, replaces that profile's part of the same name: a
-prompt under prompts/<stage>/<name>.md, a word list in preprocessing.py, the
-labels in inference.py, the tables in schema.sql. `docpipe doctor` shows what
+prompt under prompts/<stage>/<name>.md, a word list in rules.json, the
+chat's words in prompts/chat/phrases.json, the tables in schema.sql. `docpipe doctor` shows what
 is in effect.
 \"\"\"
 from docpipe.profile import Facet, Profile
@@ -184,6 +188,20 @@ def _copy_py(name: str, source) -> str:
         facets=facets + ("\n    " if facets else ""))
 
 
+def _copy_flow(path: Path, target: Path) -> bool:
+    """The flow file of a copy: that of the profile it copies, without the
+    changes it makes in the drawing it inherits, which the copy inherits
+    with them (owner request 2026-11-19, point C2 of the review of that
+    day); False where nothing is left to write."""
+    from .extraction import flow as flow_map
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data.pop("changes", None)
+    if not data:
+        return False
+    target.write_text(flow_map.dump(data), encoding="utf-8")
+    return True
+
+
 def write_profile(home: Path, name: str, *, copy_of: Optional[str] = None,
                   draft: Optional[dict] = None,
                   sources: Optional[dict] = None) -> list:
@@ -212,7 +230,11 @@ def write_profile(home: Path, name: str, *, copy_of: Optional[str] = None,
     (folder / "extraction.py").write_text(EXTRACTION_PY, encoding="utf-8")
     written = [folder / "profile.py", folder / "extraction.py"]
     for path in copied:
-        shutil.copyfile(path, folder / path.name)
+        if path.name == FLOW_FILE:
+            if not _copy_flow(path, folder / path.name):
+                continue
+        else:
+            shutil.copyfile(path, folder / path.name)
         written.append(folder / path.name)
     if draft is not None:
         (folder / DRAFT_FILE).write_text(

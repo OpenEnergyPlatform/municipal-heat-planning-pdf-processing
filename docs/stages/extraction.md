@@ -1955,7 +1955,7 @@ the key; the pass that appends a parameter holds the stamp against it, leaves a
 document whose PDF moved stale as a whole, and never writes it. `docpipe
 estimate` counts such a document as stale the way the run does. Beside every harvest sits
 `trace/<document>.trace.jsonl.gz`, on by default and disabled with
-`EXTRACT_TRACE=0`. Every event that reports a model request carries the
+`EXTRACT_TRACE=0`; stages 4 and 5 write their request logs in the same line form in each document's folder, `refinement.trace.jsonl.gz` and `visuals.trace.jsonl.gz`, with events of their own kinds that name the document by its folder (the trace record schema below is the harvest's). Every event that reports a model request carries the
 request as it was sent (`input`) and what came back (`output`: the reply, or
 the error the request ended in), taken where every request of the stage
 passes (`scheduler.Repeats`, `trace.exchanged`) and put into the next event
@@ -2802,7 +2802,7 @@ and `places/<document id>.json`.
 How a document is read is a drawing, and the numbers that bound it stand beside
 it, in one file of the profile, `flow.json` (`extraction.flow`; `docpipe edit`
 has a Flow tab for it, see [the editor](editor.md)): `{"numbers": {...},
-"flow": [...]}`. The drawing is a tree of boxes (`extraction.blocks`, the library
+"flow": [...], "parts": {...}}`. The drawing is a tree of boxes (`extraction.blocks`, the library
 of kinds: the document, the cutting into pieces, an ordering of pieces, a
 question, a check, a state, the writing and so on) and frames: "each" (for each
 thing the document settles, field, piece, value or coordinate, optionally side by
@@ -2896,14 +2896,31 @@ default (for example `conversation`, `answer_with`, `repair_replies`,
 catalogue search is the box `catalogue`, after the step `compute` at the end (`flow.ENDS`), with
 settings of its own; switched off, nothing is looked up.
 
-The default profile's file is the whole flow, `numbers` and `flow`, drawn with
-the general boxes only. A profile that extends it may have a `flow.json` of its
-own that holds the `numbers` it sets differently, laid over the inherited file
-number by number (`flow.load`), and a `flow` where it draws otherwise, which is
-then the whole drawing; kwp and scenarios each draw their own, the default's with
-the boxes of their profile. The file is read
+The default profile's file is the whole flow, `numbers`, `flow` and `parts`,
+drawn with the general boxes only. Steps that several frames go through stand
+once, as a part (`parts`: a name and its steps), and each frame that goes through
+them names it in place of its steps (`"part"`, with a `"prefix"` for the ids of
+its copy; owner request 2026-11-19, point C2 of the review of that day,
+`extraction.flowparts`): the steps for one value are the part `value`, used by
+the frame of the fields a document has once (`document_values`, prefix
+`document_`) and by the frame of the values of its pieces (`values`), so a change
+to them is made once. A profile that extends it may have a `flow.json` of its own
+that holds the `numbers` it sets differently, laid over the inherited file number
+by number (`flow.load`), and the `changes` it makes in the drawing it inherits: a
+step set to other settings (`set` with `to`), inserted (`insert`, with `after`
+a step or `into` a frame and its `way`), moved (`move`) or removed (`remove`),
+named by its id, in the drawing or, with `"part"`, in a part, where it changes
+every frame that uses it; `define` gives a part of its own. A `flow` in place of
+changes is a whole drawing of its own. kwp makes three changes (a third way of
+`coordinate_way` for what a number is, and the year among the plan's years),
+scenarios four (a third way for the work of a value, the entry of a name after
+the check of a value, and the works of a chunk after the sentences); a change to
+the default's drawing reaches both. The run reads the drawing with every part
+drawn (`Flow.tree`), and the fingerprint of the flow is that of this drawing, so
+the same drawing written with parts or without has the same. The file is read
 strictly: an unknown key, a key written twice, a number that is no whole number or
-below its least, and a drawing the run could not do (`flow.problems`: a box
+below its least, a change that names no step or part, and a drawing the run could
+not do (`flow.problems`: a box
 where it cannot stand, a round that may not end, a frame of coordinates without
 a state, a condition about something not there yet at its place, a step that
 takes what no step before it gives, a box of another profile, the writing not
@@ -2992,7 +3009,7 @@ harvest read with.
 | `shapes_files` | profile hook | none (the check is skipped for a profile without the hook or a refresh) | A callable that returns the SHACL files the profile's graph is held against, those of its last refresh. Each profile names the SHACL files of its last refresh (kwp the MHPKG shapes) | `preflight.shapes_verdict` |
 | `ALT_LABEL_LANGUAGE` | profile hook | required by the profile's `vocabulary` module | The language tag of the alternative labels a vocabulary snapshot keeps: `de` for kwp, `en` for scenarios and the built-in profile. The core fixes none | `profiles/*/vocabulary.py`, `ontology.build` |
 | `span_marks` | rule | none | What each row of a value stated for a span of years takes where it read nothing of its own: a mapping from a coordinate to its entry, kwp's `{"qualifier": "out:approximate"}` (see Asking a coordinate of a value) | `runner.span_marks_of`, `reading.span_rows` |
-| `flow.json` | profile file | the default profile's whole flow | The drawing of the reading and the numbers that bound it; a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and the `flow` (the drawing) where it draws otherwise. `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
+| `flow.json` | profile file | the default profile's whole flow | The drawing of the reading and the numbers that bound it, the steps several frames go through once as a part (`parts`); a profile that extends another writes the `numbers` it sets differently, laid over the inherited ones, and the `changes` it makes in the drawing it inherits (`flowparts.apply`). `piece_lines` is the lines of a piece a plan is read in, and it moves the key of a kept order (see The flow file and Pieces and addresses) | `flow.load`, `runner.take_flow`, `addressed.order_key` |
 | `plan_fields` | spec block | none | What a plan settles for all its values and its own years, each asked once, as a field a document has once: a mapping of a key to `{name, means, sentence, kind, state}` (`settings`, `base_year` and `target_year` say their `kind` by their key, any other key has to say it: `settings` or `year` with a `state`; one field per kind and state; kwp all three, scenarios the settings only; in no fingerprint; `of` at the two year fields says which frame pairs are that state, read only by the passes over a stored harvest; see What the plan settles) | `spec.load`, `runner.make_reader`, `addressed.Reader.settled` |
 | `works` | spec block | none | The field that finds the works a publication presents, compares or cites beside itself, and the question asked of each new work for each of its fields, `{name, means, fields: {uri: question}}` (scenarios; a question for a uri the spec does not have is refused; in no fingerprint; see Works beside the publication) | `spec.load`, `runner.make_reader`, `runner.names_asked`, `profiles/scenarios/blocks.works` |
 | `beside` | key of a parameter with `vocabulary_dynamic` | none | The `out:` entries a list closed per document always has beside the names the document gives (scenarios: `out:multiregion` and `out:other` for `scenario_region`); in no fingerprint | `spec.load`, `runner.fill_dynamic_axes` |
@@ -4054,10 +4071,25 @@ Only a rule the step reads may be set at it (`Rule.steps`,
 
 The default profile writes the whole file: every number (`NUMBERS`) and the
 drawing. A profile that extends it writes the numbers it sets differently,
-laid over the default's number by number (`load`), and may write a drawing
-of its own, which is then the whole drawing. A setting of the run wins over
-the file for the numbers that have one (`Number.env`), never over a box's
-own value.
+laid over the default's number by number (`load`), and what it changes in
+the drawing it inherits ("changes"), or a drawing of its own, which is then
+the whole drawing. Steps that several frames go through stand once, as a
+part ("parts"), and each frame names it (owner request 2026-11-19, point C2
+of the review of that day; `flowparts.py`):
+
+    {"numbers": {...},
+     "flow": [..., {"id": "values", "each": "value", "order": "names_first",
+                    "together": true, "part": "value"}, ...],
+     "parts": {"value": [{"id": "coordinates", "each": "coordinate", ...},
+                         {"id": "values_check", "box": "check_value"}]}}
+
+    {"numbers": {"replies": 5},
+     "changes": [{"insert": {"id": "work", "box": "ask", ...},
+                  "into": "coordinate_way", "way": 2, "part": "value"}]}
+
+The run reads the drawing with every part drawn in its frames (`Flow.tree`).
+A setting of the run wins over the file for the numbers that have one
+(`Number.env`), never over a box's own value.
 
 Before a drawing is kept, `problems` says everything the run could not do
 with it (owner decisions 2026-11-10, section 11 of the plan): a box where it

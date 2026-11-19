@@ -4,7 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { get } from './api';
 import { t } from './i18n';
 
-export type TabName = 'spec' | 'prompts' | 'flow' | 'sources' | 'graph';
+export type TabName = 'spec' | 'prompts' | 'flow' | 'sources' | 'graph' | 'stages';
 /* the name of a tab in the page's language (read where it is shown, so it follows a change of the language) */
 export function tabLabel(name: string): string {
   switch (name) {
@@ -13,11 +13,12 @@ export function tabLabel(name: string): string {
     case 'flow': return t('Flow');
     case 'sources': return t('Sources');
     case 'graph': return t('Graph');
+    case 'stages': return t('Stages');
     default: return name;
   }
 }
 /* the tabs whose rules stand in the profile's rules file (GET /api/rules?tab=...) */
-export const RULE_TABS = ['spec', 'prompts', 'flow', 'sources'];
+export const RULE_TABS = ['spec', 'prompts', 'flow', 'sources', 'stages'];
 
 export class Store<T> {
   private listeners = new Set<() => void>();
@@ -32,6 +33,8 @@ export function useStore<T>(s: Store<T>): T { return useSyncExternalStore(s.subs
 export interface PageState {
   profile: string; profiles: string[]; spec: string; branch: string | null; changed: string[];
   harvest: string | null; harvest_documents: number | null; tabs: string[];
+  /* the file each tab edits (owner request 2026-11-19, A9) */
+  files?: Record<string, string | null>;
 }
 export const stateStore = new Store<PageState | null>(null);
 export async function loadState() { stateStore.set(await get<PageState>('/api/state')); }
@@ -85,5 +88,6 @@ export function openPrompt(id: string) { setTab('prompts'); request('prompts', {
 /* A link to a rule opens the tab the rule stands in: the rules drawer of that tab, or the tab itself where its rules
    are not in the drawer (the Graph tab shows its own). The numbers of the flow stand in the Flow tab, not in its drawer. */
 export function openRule(tab: string) { if (RULE_TABS.includes(tab)) openRules(tab); else setTab(tab as TabName); }
-/* the step of the Flow tab a rule's count points at */
-export function openStep(id: string) { closeRules(); setTab('flow'); request('flow', { id }); }
+/* the step of the Flow tab a rule's count or a prompt points at; *which* names the drawing it stands in ('' the main
+   flow, '#chat' the chat's, else a follow-up pass), the drawing shown where it is left out */
+export function openStep(id: string, which?: string) { closeRules(); setTab('flow'); request('flow', { id, which }); }

@@ -77,6 +77,61 @@ def open_trace(directory, name_of: Callable) -> None
 
 Start writing traces under `directory`, naming files via `name_of(id)`.
 
+### open_stage
+
+```python
+def open_stage(given, batch: bool, stage: str, prompt_ids=(),
+               model: Optional[str] = None) -> None
+```
+
+Start the request log of *stage* for the documents of the folder a
+run of it was *given*: the processed root where it reads every document
+(*batch*), else one document's folder. Each document's log starts with
+the head of the run (`stage_head`).
+
+### stage_head
+
+```python
+def stage_head(stage: str, prompt_ids=(), model: Optional[str] = None) -> dict
+```
+
+What a run of a stage is, at the head of each document's log: the
+stage, the commit of its code, the profile, the *model* it asks, and the
+text of each prompt of *prompt_ids* as the run reads it. With those
+texts the editor reads back what a request's messages were filled with
+after a prompt file has changed (`editor.staged`).
+
+### working_on
+
+```python
+@contextlib.contextmanager
+def working_on(folder)
+```
+
+The requests of the block are those of the document in *folder*.
+
+### working
+
+```python
+def working() -> Optional[tuple]
+```
+
+(name, folder) of the document a stage works on here, None outside
+one.
+
+### stage_request
+
+```python
+def stage_request(kind: str, sent: dict, attempt: int, asked_at: float, *,
+                  response=None, error=None, doc=None, **notes) -> None
+```
+
+One attempt of a request of a stage before the harvest, in its
+document's log: the request as *sent*, its reply or *error*, its times
+and tokens, and *notes* (what it is `made` of, its page and heading).
+*doc* is the document's name, the one the stage `working_on` where not
+given; nothing outside a document.
+
 ### set_head
 
 ```python
@@ -204,6 +259,16 @@ def flush(document_id: Optional[int] = None) -> None
 
 Push what is buffered to disk, for one document or for all of them.
 
+### close_stage
+
+```python
+def close_stage() -> None
+```
+
+End the request log `open_stage` began: close every trace and forget
+the stage's head, so that what traces next in the process starts with a
+head of its own or with none.
+
 ### close
 
 ```python
@@ -266,6 +331,16 @@ def pieces_of(events) -> dict
 ```
 
 {reference: text} of the pieces among *events*.
+
+### head_of
+
+```python
+def head_of(events, pieces: Optional[dict] = None) -> dict
+```
+
+The head of a trace (`run`, `_write_head`), each value written as a
+piece put back; {} where the trace has none. *pieces* are those of its
+file (`pieces_of`), read from *events* where not given.
 
 ### sent
 

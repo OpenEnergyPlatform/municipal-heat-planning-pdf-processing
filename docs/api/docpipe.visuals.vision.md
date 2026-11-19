@@ -45,6 +45,24 @@ def reply_type(reply: tuple) -> type
 What the first required key of *reply* (a `replies` entry) has to be
 in the reply: a list where its schema is an array, else text.
 
+### logged
+
+```python
+def logged(traced: dict | None, sent: dict, image_path: Path,
+           picture: bytes | None, attempt: int, asked_at: float, *,
+           response=None, error=None) -> None
+```
+
+One attempt of a request in the request log of the stage, as the
+harvest writes its own (`docpipe.extraction.trace`; owner request
+2026-11-19, A3): the request as sent, its reply or error, its times,
+the tokens it cost and what *traced* says of it (`doc`, `kind`, what
+its messages are `made` of, its item, page and heading). The picture is
+written as the file it is cut from (its path in the document's folder,
+for a strip with the strip's sha256 and height), not as its data: the
+file stays beside the log, and a strip is cut from it again the same
+way (`strips.strip_of`). Nothing where *traced* is None.
+
 ### call_vision
 
 ```python
@@ -56,17 +74,22 @@ def call_vision(
     *,
     reply: tuple,
     model: str = VLM_MODEL,
-    max_retries: int = MAX_RETRIES,
-    temperature: float = VLM_TEMPERATURE,
-    max_tokens: int = VLM_MAX_TOKENS,
+    max_retries: int | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
     repetition_penalty: float | None = None,
     budget: int | None = None,
     picture: bytes | None = None,
+    traced: dict | None = None,
 ) -> dict | Hole
 ```
 
 Sends an image + prompt to the vision model and reads the one JSON object
 it answers with.
+
+*max_retries*, *temperature* and *max_tokens* are the rules
+vision_max_attempts, figure_temperature and vision_max_tokens where not
+given.
 
 The wall-clock bound per request is the client timeout set by
 create_client(), not *max_retries*. *reply* is the (name, schema) of the
@@ -93,6 +116,10 @@ preflight checked the window against. Without it the room is twice.
 *picture*, where given, is the PNG sent instead of the file at
 *image_path* (a strip of it, `strips`); the file still names the request
 in the log.
+
+*traced*, where given, writes every attempt into the request log of
+the stage (`stage_log`): {"doc", "kind", "made", and what else the log
+notes of the request}; see `logged`.
 
 Returns:
     The parsed JSON dict, or a Hole that names why there is none:

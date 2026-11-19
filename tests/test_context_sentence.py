@@ -38,9 +38,10 @@ from docpipe.artifacts import DOCUMENT_JSON
 from docpipe.chunking import context
 from docpipe.chunking.chunking import build_embedding_inputs
 from docpipe.chunking.config import CONTEXT_SENTENCES_JSON
-from docpipe.refinement.config import MAX_RETRIES
 
 from test_sync import Corpus, HEAD, section, table
+
+MAX_RETRIES = rules.get("refine_max_attempts")
 
 
 def doc():

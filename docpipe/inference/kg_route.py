@@ -52,7 +52,8 @@ COORDINATE_PROMPT_ID = "kg/coordinate"
 CONSTRAINTS_MARKER = "##CONSTRAINTS##"
 
 # Why the route did not answer, as a closed machine vocabulary. The profile
-# words each in the reader's language (`inference.ROUTE_NOTES`), and
+# words each in the reader's language (`graph_note_<reason>` of its chat
+# words, `wording.graph_notes`), and
 # `check_notes` holds the two against each other so a token nobody worded is
 # reported when the route is built and not as a blank caption once in a
 # thousand turns.
@@ -73,7 +74,7 @@ class Hooks:
     bindings: Callable    # ({axis: uri | int}) -> (constraint text, {var: (kind, value)})
     label: Callable       # (IRI or bare id) -> what a reader calls it
     prose: dict           # the profile's trust wording, kg.trust_prose
-    notes: dict           # reason token -> sentence, inference.ROUTE_NOTES
+    notes: dict           # reason token -> sentence, wording.graph_notes
     prompt: Any           # the coordinate prompt, a docpipe.prompts.Prompt
 
 
@@ -107,7 +108,10 @@ def hooks(profile) -> Optional[Hooks]:
     pieces = {name: profile.component("kg", name)
               for name in ("COORDINATE_AXES", "spec", "heatplan_iri",
                            "value_bindings", "label_of", "trust_prose")}
-    pieces["ROUTE_NOTES"] = profile.component("inference", "ROUTE_NOTES")
+    from .. import phrases as phrase_files
+    from . import wording
+    # the reasons the route words, in the chat words of the profile
+    pieces["graph_note_*"] = wording.graph_notes(profile)
     missing = sorted(name for name, value in pieces.items() if value is None)
     if missing:
         raise LookupError(f"profile {profile.name!r} has kg.value_query and "
@@ -118,9 +122,9 @@ def hooks(profile) -> Optional[Hooks]:
                  spec=pieces["spec"](), plan_iri=pieces["heatplan_iri"],
                  bindings=pieces["value_bindings"], label=pieces["label_of"],
                  prose=pieces["trust_prose"](),
-                 notes=check_notes(pieces["ROUTE_NOTES"],
-                                   f"profiles/{profile.name}/inference.py "
-                                   f"ROUTE_NOTES"),
+                 notes=check_notes(pieces["graph_note_*"],
+                                   f"the graph_note_* sentences of "
+                                   f"{phrase_files.path_of(profile, wording.CHAT)}"),
                  prompt=prompts.load(COORDINATE_PROMPT_ID, profile))
 
 

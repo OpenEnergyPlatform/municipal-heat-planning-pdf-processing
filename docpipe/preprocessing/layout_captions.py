@@ -14,13 +14,8 @@ import logging
 import math
 from typing import Optional
 
-from .config import (
-    CAPTION_CLASSES,
-    SECTION_TITLE_CLASSES,
-    CAPTION_MAX_DIST_PT,
-    caption_like,
-    CAPTION_REJECT_ACROSS_TITLE,
-)
+from .. import rules
+from .config import caption_like
 from .models import Block, PageData
 
 log = logging.getLogger(__name__)
@@ -43,26 +38,31 @@ def _title_between(y_a: float, y_b: float, title_ys: list[float]) -> bool:
 
 def resolve_captions(pages: list[PageData]) -> list[PageData]:
     """
-    Attaches captions to table/image blocks: nearest CAPTION_CLASSES block (no
-    distance limit), else nearest plain text block within CAPTION_MAX_DIST_PT.
+    Attaches captions to table/image blocks: nearest block of the rule
+    `caption_classes` (no distance limit), else nearest plain text block
+    within the rule `caption_max_distance_pt`.
 
     The winning block's content goes into Block.caption and the block itself is
     removed from the page, so it never reaches section content. Each caption is
     claimed by at most one media block. Mutates *pages* in place.
     """
+    caption_classes = set(rules.get("caption_classes"))
+    title_classes = set(rules.get("heading_classes"))
+    max_distance = rules.get("caption_max_distance_pt")
+    not_across_title = rules.get("caption_not_across_heading")
     for pg in pages:
         media_blocks  = [b for b in pg.blocks if b.type in ("table", "image")]
         # A block too long to be a label is body prose, whatever its distance
         # to the figure — and adopting it would delete it from the page.
         caption_pool  = [
             b for b in pg.blocks
-            if b.layout_label in CAPTION_CLASSES and caption_like(b.content)
+            if b.layout_label in caption_classes and caption_like(b.content)
         ]
         fallback_pool = [
             b for b in pg.blocks
             if b.type == "text"
-            and b.layout_label not in SECTION_TITLE_CLASSES
-            and b.layout_label not in CAPTION_CLASSES
+            and b.layout_label not in title_classes
+            and b.layout_label not in caption_classes
             and caption_like(b.content)
         ]
 
@@ -70,8 +70,8 @@ def resolve_captions(pages: list[PageData]) -> list[PageData]:
         # heading lies vertically between it and the media block.
         title_ys = (
             [_bbox_center(b.bbox)[1] for b in pg.blocks
-             if b.layout_label in SECTION_TITLE_CLASSES]
-            if CAPTION_REJECT_ACROSS_TITLE else []
+             if b.layout_label in title_classes]
+            if not_across_title else []
         )
 
         used_caption_ids: set[str] = set()
@@ -100,7 +100,7 @@ def resolve_captions(pages: list[PageData]) -> list[PageData]:
                     if _title_between(mb_center[1], fb_center[1], title_ys):
                         continue
                     dist = _euclidean_dist(mb_center, fb_center)
-                    if dist < best_dist and dist <= CAPTION_MAX_DIST_PT:
+                    if dist < best_dist and dist <= max_distance:
                         best_cap  = fb
                         best_dist = dist
 

@@ -163,6 +163,96 @@ def _handle(document_id: int):
     return handle
 
 
+# -- the stages before the harvest ------------------------------------------------
+#
+# The refinement (stage 4) and the visuals (stage 5) write the request log the
+# harvest writes, in its form (owner request 2026-11-19, A3: "Die Stufen 4 und
+# 5 schreiben dieselbe Mitschrift wie die Ernte"): each document's in its own
+# folder, beside what the stage writes there, as `<stage>.trace.jsonl.gz`. A
+# request names what its messages are made of (`made`, the parts of
+# `prompts.composed`), so that the editor makes it again from the prompt
+# files and tries it.
+
+# The document a stage works on where its requests do not name it, as
+# (its name, its folder): set per document (`working_on`) and handed to the
+# threads that ask for it.
+_WORKING: contextvars.ContextVar = contextvars.ContextVar("trace_working",
+                                                         default=None)
+
+
+def open_stage(given, batch: bool, stage: str, prompt_ids=(),
+               model: Optional[str] = None) -> None:
+    """Start the request log of *stage* for the documents of the folder a
+    run of it was *given*: the processed root where it reads every document
+    (*batch*), else one document's folder. Each document's log starts with
+    the head of the run (`stage_head`)."""
+    root = Path(given) if batch else Path(given).parent
+    open_trace(root, lambda document: f"{document}/{stage}")
+    set_head(lambda: stage_head(stage, prompt_ids, model))
+
+
+def stage_head(stage: str, prompt_ids=(), model: Optional[str] = None) -> dict:
+    """What a run of a stage is, at the head of each document's log: the
+    stage, the commit of its code, the profile, the *model* it asks, and the
+    text of each prompt of *prompt_ids* as the run reads it. With those
+    texts the editor reads back what a request's messages were filled with
+    after a prompt file has changed (`editor.staged`)."""
+    from .. import _revision
+    from .. import prompts as prompt_files
+    from ..profile import active_profile
+    texts: dict = {}
+    for prompt_id in prompt_ids:
+        try:
+            texts[prompt_id] = prompt_files.load(prompt_id).text
+        except (LookupError, OSError, ValueError) as exc:
+            log.warning("trace: prompt %s is not in the head of the log: %s",
+                        prompt_id, exc)
+    profile = active_profile()
+    return {"stage": stage, "code": _revision.revision(),
+            "profile": getattr(profile, "name", None),
+            "started_at": round(time.time(), 3), "model": model,
+            "prompts": texts}
+
+
+@contextlib.contextmanager
+def working_on(folder):
+    """The requests of the block are those of the document in *folder*."""
+    token = _WORKING.set((Path(folder).name, str(folder)))
+    try:
+        yield
+    finally:
+        _WORKING.reset(token)
+
+
+def working() -> Optional[tuple]:
+    """(name, folder) of the document a stage works on here, None outside
+    one."""
+    return _WORKING.get()
+
+
+def stage_request(kind: str, sent: dict, attempt: int, asked_at: float, *,
+                  response=None, error=None, doc=None, **notes) -> None:
+    """One attempt of a request of a stage before the harvest, in its
+    document's log: the request as *sent*, its reply or *error*, its times
+    and tokens, and *notes* (what it is `made` of, its page and heading).
+    *doc* is the document's name, the one the stage `working_on` where not
+    given; nothing outside a document."""
+    if doc is None:
+        doc = (working() or (None,))[0]
+    if doc is None:
+        return
+    exchanged(sent, response, error, times=(asked_at, None, time.time()))
+    if error is not None:
+        event("error", doc, where=kind, kind="exception", attempt=attempt,
+              error=f"{type(error).__name__}: {error}", **notes)
+        return
+    spent = getattr(response, "usage", None)
+    event(f"{kind}_ask", doc, attempt=attempt,
+          prompt_tokens=getattr(spent, "prompt_tokens", None),
+          completion_tokens=getattr(spent, "completion_tokens", None),
+          **notes)
+
+
 def set_head(maker: Optional[Callable]) -> None:
     """What every document's trace starts with: *maker()* -> {field: value},
     made once a run, the first time a trace is opened (`run`). None: no
@@ -431,6 +521,14 @@ def flush(document_id: Optional[int] = None) -> None:
                 pass
 
 
+def close_stage() -> None:
+    """End the request log `open_stage` began: close every trace and forget
+    the stage's head, so that what traces next in the process starts with a
+    head of its own or with none."""
+    close()
+    set_head(None)
+
+
 def close() -> None:
     """Close every open trace. Safe to call twice."""
     with _lock:
@@ -622,6 +720,29 @@ def pieces_of(events) -> dict:
     """{reference: text} of the pieces among *events*."""
     return {e["id"]: e.get("text") for e in events
             if e.get("t") == PIECE and isinstance(e.get("id"), str)}
+
+
+def head_of(events, pieces: Optional[dict] = None) -> dict:
+    """The head of a trace (`run`, `_write_head`), each value written as a
+    piece put back; {} where the trace has none. *pieces* are those of its
+    file (`pieces_of`), read from *events* where not given."""
+    pieces = pieces_of(events) if pieces is None else pieces
+    for record in events:
+        if record.get("t") != "run":
+            continue
+        out = {}
+        for key, value in record.items():
+            if key in ("t", "doc"):
+                continue
+            if isinstance(value, dict) and set(value) == {"piece"} \
+                    and value["piece"] in pieces:
+                try:
+                    value = json.loads(pieces[value["piece"]])
+                except (TypeError, ValueError):
+                    pass
+            out[key] = value
+        return out
+    return {}
 
 
 def _back(value, refs: dict, pieces: dict):

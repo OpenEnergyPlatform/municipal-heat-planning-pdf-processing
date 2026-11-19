@@ -385,7 +385,10 @@ def test_the_questions_before_about_a_value_are_messages_of_their_own(
         "system", "user", "assistant", "user", "assistant", "user"]
     assert json.loads(sent[0][1]["content"]) == first
     assert json.loads(sent[0][2]["content"]) == {"at": "9"}
-    shown = json.dumps(again, ensure_ascii=False, indent=1)
+    # the earlier question as it went out in its own request: its fields in
+    # the order every message has (`runner.first_shown`, rule message_first)
+    shown = json.dumps(runner.first_shown(again), ensure_ascii=False,
+                       indent=1)
     assert sent[0][3]["content"].startswith(shown + "\n\n")
     assert json.loads(sent[0][4]["content"]) == {"at": "3", "words": "2021"}
     own = json.loads(sent[0][5]["content"])

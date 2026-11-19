@@ -13,14 +13,13 @@ Author: Felix Vossel
 """
 from __future__ import annotations
 
-import copy
 import dataclasses
 import json
 
 import pytest
 
-from docpipe.extraction import (addressed, blocks, conditions, flow, remap,
-                                runner)
+from docpipe.extraction import (addressed, blocks, conditions, flow,
+                                flowparts, remap, runner)
 from docpipe.extraction.pipeline import Source
 from docpipe.profile import load_profile
 
@@ -53,7 +52,9 @@ def default() -> dict:
 
 
 def tree() -> list:
-    return copy.deepcopy(default()["flow"])
+    """The default's drawing as the run reads it, every part drawn."""
+    data = default()
+    return flowparts.expand(data["flow"], data.get("parts"))
 
 
 def refused(data, whole: bool = True) -> str:
@@ -223,6 +224,7 @@ def test_a_drawing_the_run_cannot_do_is_refused_by_what_is_wrong(change,
 def test_a_file_without_a_drawing_or_with_steps_is_refused():
     data = default()
     data.pop("flow")
+    data.pop("parts")
     assert "draws the flow" in refused(data)
     data = default()
     data["steps"] = data.pop("flow")

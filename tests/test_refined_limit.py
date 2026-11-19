@@ -1,11 +1,13 @@
-"""Every section refinement hands on is at most SECTION_MAX_WORDS long, and the
+"""Every section refinement hands on is at most section_max_words long, and the
 cut changes and loses no word: a literature list is cut after whole entries,
 other text where a line or a sentence ends, else after a run of words; a part
 keeps the tables and figures its text marks, and the pages of the segments its
 text holds."""
-from docpipe.refinement.config import SECTION_MAX_WORDS
+from docpipe import rules
 from docpipe.refinement.refine import _hold_to_limit
 from docpipe.refinement.split import cut_to_limit
+
+SECTION_MAX_WORDS = rules.get("section_max_words")
 
 
 def sentence(n: int, word: str) -> str:

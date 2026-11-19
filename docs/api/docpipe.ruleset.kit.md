@@ -32,7 +32,7 @@ Fields:
 - `most: Optional[float] = None`
 - `choices: tuple = ()`
 - `columns: tuple = ()`: a table's columns
-- `of: str = "text"`: a map's values: text, texts or whole
+- `of: str = "text"`: a map's values: text, texts, whole
 - `empty: bool = False`: an empty text, list or map; no range
 - `env: Optional[str] = None`: the setting that wins over the file
 - `env_flag: tuple = ()`: (the value where that setting is off,
@@ -41,6 +41,7 @@ Fields:
 - `steps: tuple = ()`: the kinds of steps that read it
 - `machine: bool = False`: a value of the machine (a server's
 - `secret: bool = False`: a key: set at the start only (.env),
+- `title: str = ""`: its name in words, as the page shows
 
 ## Functions
 

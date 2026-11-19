@@ -8,7 +8,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from docpipe import prompts
+from docpipe import prompts, rules
 from docpipe.artifacts import (DIR_IMAGES,                # noqa: F401  (re-exported)
                                SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON)
 
@@ -49,18 +49,14 @@ VLM_TIMEOUT  = float(os.environ.get("VLM_TIMEOUT", "180"))
 # Concurrent in-flight vision requests; the main throughput lever for images.
 VLM_NUM_PARALLEL = int(os.environ.get("VLM_NUM_PARALLEL", "8"))
 
-MAX_RETRIES = 4
-
-# Table transcription must be verbatim, so tables use their own near-
-# deterministic temperature.
-VLM_TEMPERATURE       = 0.6
-TABLE_VLM_TEMPERATURE = 0.1
-VLM_MAX_TOKENS        = 8192
+# The attempts, the temperatures and the reply room of a vision request are
+# rules (`ruleset/stage_visuals.py`): vision_max_attempts, figure_temperature,
+# table_temperature, vision_max_tokens.
 
 # ── Context budget ─────────────────────────────────────────────────────────
 # What one request can cost the server, so a serving flag can be checked
-# against this number instead of guessed. Deliberately an over-estimate.
-TOKENS_PER_WORD = 3.0
+# against this number instead of guessed. Deliberately an over-estimate; the
+# words-to-tokens factor is the rule vision_tokens_per_word.
 # A full-page crop at the resolution this stage sends. An over-estimate: the
 # exact count depends on the model's patch grid, and getting it wrong upwards
 # only costs KV cache, downwards costs the run.
@@ -140,65 +136,40 @@ def max_request_tokens(shown: int | None = None) -> int:
         profile = active_profile()
         shown = longest_in(getattr(profile, "processed_dir", None))
     text = shown
+    per_word = float(rules.get("vision_tokens_per_word"))
     table = ((len(table_system_prompt().split())
               + len(table_user_prompt().split())
-              + len(table_continued_prompt().split())) * TOKENS_PER_WORD
+              + len(table_continued_prompt().split())) * per_word
              + text)
     figure = ((len(figure_system_prompt().split())
-               + len(figure_user_prompt().split())) * TOKENS_PER_WORD
+               + len(figure_user_prompt().split())) * per_word
               + text)
-    return int(max(table, figure) + IMAGE_TOKENS + VLM_MAX_TOKENS)
+    return int(max(table, figure) + IMAGE_TOKENS
+               + int(rules.get("vision_max_tokens")))
 
 # ---------------------------------------------------------------------------
-# Retry ladder
+# Retry ladder, strips and table check
 # ---------------------------------------------------------------------------
 # Sparse Gantt grids ("Zeitlicher Rahmen", "Maßnahmenzeitplan 2024–2030") make
-# the model lose count and emit empty cells until it hits VLM_MAX_TOKENS: the
+# the model lose count and emit empty cells until it hits its reply room: the
 # reply ends at its limit, cut off. Measured on the August 2026 run: runs of 29
 # to 75 consecutive empty cells, where no real table exceeded a handful. The
 # reply says so itself (finish_reason "length"), and call_vision starts over
-# from the original prompt with the next penalty below.
+# from the original prompt with the next penalty of the rule
+# vision_retry_penalties. A table legitimately repeats pipes, dashes, units and
+# years, and a penalty blunts exactly that, hence the gentle start; a penalty
+# of 1.8 broke answers off after ten tokens.
 #
-# repetition_penalty for the attempt AFTER the indexed one failed, so index 0 is
-# unused: the first attempt runs clean. A table legitimately repeats pipes,
-# dashes, units and years, and a penalty blunts exactly that — hence the gentle
-# start. A harder ladder (1.4 / 1.8) was tried and reverted: at 1.8 the pipe
-# token is penalised so hard that a table is barely writable, and answers
-# broke off after ten tokens.
-RETRY_PENALTIES = [None, 1.1, 1.3]
-
-# ---------------------------------------------------------------------------
-# Strips (strips.py)
-# ---------------------------------------------------------------------------
-# A table whose reply is cut off with the most room it can be given is read in
-# strips, cut at a pixel row without writing (owner request 2026-11-19). A
-# pixel is writing where it is this many grey levels (of 255) darker than
-# what its column and its row hold in most places; a row is blank with at
-# most this many pixels of writing (specks of a scan); a vertical rule a scan
-# tilts by up to this many pixels is still a rule and no writing.
-STRIP_INK_CONTRAST = 64
-STRIP_BLANK_PIXELS = 2
-STRIP_RULE_DRIFT = 2
-
-# ---------------------------------------------------------------------------
-# Table QA gate (see qa.py / process.py)
-# ---------------------------------------------------------------------------
-# Coverage is only assessed when the table has a text layer.
-TABLE_QA_MIN_COVERAGE      = 0.5
-TABLE_QA_MAX_DUPLICATION   = 0.4
-TABLE_QA_MIN_SOURCE_TOKENS = 8
-# A source text below the coverage is no measure where both hold (qa.unreadable):
-# under this share of the transcription stands in it, and under this share of
-# its words occurs in the rest of the document. Measured on the scenarios
-# rebuild of 2026-11-11: of 1,609 assessable tables 31 fell below the coverage.
-# 27 were sideways tables of a scanned book with an upside-down OCR layer
-# (shared <= 0.11, known <= 0.41), one a frame whose layer is a heading with
-# two links (0.04, 0.44); the 3 with a readable layer had >= 0.57 and >= 0.86.
-TABLE_QA_MAX_SHARED_UNREADABLE = 0.25
-TABLE_QA_MIN_KNOWN_WORDS       = 0.5
-# Used for the single retry on QA failure.
-TABLE_QA_RETRY_TEMPERATURE = 0.4
-TABLE_QA_RETRY_PENALTY     = 1.3
+# The strips (strips.py) are cut by the rules strip_ink_contrast,
+# strip_blank_pixels and strip_rule_drift; the table check (qa.py,
+# process.py) follows table_min_coverage, table_max_duplication,
+# table_min_source_tokens, table_unreadable_shared_below,
+# table_unreadable_known_below, table_retry_temperature and
+# table_retry_penalty. Measured on the scenarios rebuild of 2026-11-11: of
+# 1,609 assessable tables 31 fell below the coverage; 27 were sideways tables
+# of a scanned book with an upside-down OCR layer (shared <= 0.11, known <=
+# 0.41), one a frame whose layer is a heading with two links (0.04, 0.44); the
+# 3 with a readable layer had >= 0.57 and >= 0.86.
 
 # Input / output paths: see docpipe/artifacts.py, imported above. This module
 # reads SECTIONS_REFINED_JSON (falling back to SECTIONS_JSON) and writes
@@ -210,7 +181,7 @@ TABLE_QA_RETRY_PENALTY     = 1.3
 # ---------------------------------------------------------------------------
 
 PROMPT_IDS = ("visuals/table_system", "visuals/table_user",
-              "visuals/table_continued",
+              "visuals/table_continued", "visuals/table_retry_hint",
               "visuals/figure_system", "visuals/figure_user",
               "visuals/caption_keep", "visuals/caption_generate_table",
               "visuals/caption_generate_figure")

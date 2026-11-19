@@ -25,3 +25,38 @@ PROFILE = Profile(
         Facet("jahr", "Jahr"),
     ),
 )
+
+
+# The data files of this profile that no other tab of the editor edits, shown
+# in its Sources tab (owner request 2026-11-19, A2: "Daten eines Profils ohne
+# Platz in der Seite"): the file in this folder, what it holds, whether a
+# person keeps it (kept) or a fetch writes it, and for a kept one what a key
+# and an entry have to be (a pattern, a JSON schema). Read by config.py.
+DATA_FILES = (
+    {"file": "pdf_overrides.json", "kept": True,
+     "about": "Municipalities whose PDF link in the register is broken, by "
+              "Gemeindeschlüssel: the local file used instead (file), the "
+              "municipality (place) and why (why). The file is placed in "
+              "the data folder by hand and never downloaded; a file the "
+              "register renamed is held to the name it is registered under "
+              "the same way.",
+     "key": r"^\d{7,8}$",
+     "value": {"type": "object", "required": ["file"],
+               "properties": {"file": {"type": "string", "minLength": 1},
+                              "place": {"type": "string"},
+                              "why": {"type": "string"}},
+               "additionalProperties": False}},
+    {"file": "shared_file_owners.json", "kept": True,
+     "about": "Files the register hands to several municipalities that are "
+              "not a convoy, by local file name: the Gemeindeschlüssel of "
+              "the municipality the document belongs to (owner), read off "
+              "the document, its name (place) and why (why). The other "
+              "municipality has no plan of its own until it has its real "
+              "link.",
+     "key": r"^\S+\.pdf$",
+     "value": {"type": "object", "required": ["owner"],
+               "properties": {"owner": {"type": "integer"},
+                              "place": {"type": "string"},
+                              "why": {"type": "string"}},
+               "additionalProperties": False}},
+)

@@ -44,6 +44,23 @@ KEYS = {
     "sparql": (("endpoint", "query", "token_env"), ()),
     "url": (("url", "file"), ()),
 }
+# What each key of a source is called on the page (owner request 2026-11-19,
+# A5), German in the page's catalogue.
+TITLES = {
+    "repo": "Source repository",
+    "asset": "File of the release",
+    "file": "File name",
+    "until_released": "Until it is released",
+    "ref": "Branch or version",
+    "files": "Files taken",
+    "reviewed": "Reviewed version",
+    "paths": "Folders taken",
+    "suffix": "File ending",
+    "endpoint": "Address of the query service",
+    "query": "Query text",
+    "token_env": "Place of the access token",
+    "url": "Web address",
+}
 # What a list draws: the subclasses of a class, or the individuals of one.
 LIST_KINDS = ("class", "individual")
 # Where a source's version comes from, as a page shows it.

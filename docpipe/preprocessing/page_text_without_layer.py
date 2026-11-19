@@ -37,17 +37,17 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
+from docpipe import prompts, rules
 from docpipe.reading import Hole
 
 from .models import Block, PageData
 
 log = logging.getLogger(__name__)
 
-# A page with less real text than this is treated as having no text layer.
-# Not zero: a scanned page often still carries a stamped page number or a
-# copyright line from a digital overlay, which is text by the letter and
-# nothing by the meaning.
-MIN_PAGE_CHARS = 60
+# A page with less real text than the rule `page_text_min_chars` is treated as
+# having no text layer. Not zero: a scanned page often still carries a stamped
+# page number or a copyright line from a digital overlay, which is text by the
+# letter and nothing by the meaning.
 
 # Pages read concurrently. The server batches requests continuously, so this
 # is the number in flight at it and the only throughput lever this stage has:
@@ -63,9 +63,9 @@ PAGE_WORKERS = int(os.environ.get("PAGE_TRANSCRIBE_WORKERS", "64"))
 PAGE_RENDER_WORKERS = int(os.environ.get("PAGE_RENDER_WORKERS", "4"))
 
 # Where synthesized blocks are placed on the page, as a fraction of page height
-# and width. A transcription has no coordinates, so the boxes are stacked down
-# a typical text column instead of being measured.
-TEXT_AREA = (0.08, 0.07, 0.92, 0.95)      # left, top, right, bottom
+# and width (the rule `transcribed_text_area`). A transcription has no
+# coordinates, so the boxes are stacked down a typical text column instead of
+# being measured.
 
 
 def page_text_length(page: PageData) -> int:
@@ -74,8 +74,11 @@ def page_text_length(page: PageData) -> int:
                for b in page.blocks if b.type == "text")
 
 
-def needs_transcription(page: PageData, min_chars: int = MIN_PAGE_CHARS) -> bool:
-    """True if this page's text layer is missing or too thin to be real."""
+def needs_transcription(page: PageData, min_chars: Optional[int] = None) -> bool:
+    """True if this page's text layer is missing or too thin to be real
+    (fewer characters than *min_chars*, else the rule `page_text_min_chars`)."""
+    if min_chars is None:
+        min_chars = rules.get("page_text_min_chars")
     return page_text_length(page) < min_chars
 
 
@@ -120,7 +123,7 @@ def synthesize_blocks(page: PageData, markdown: str,
 
     A markdown heading becomes a block labelled `paragraph_title`, because that
     label - not the font size - is what Stage 3 opens a section on
-    (SECTION_TITLE_CLASSES). Sizes and boldness are set as well, for the rules
+    (the rule `heading_classes`). Sizes and boldness are set as well, for the rules
     further up that read them, but the label is the part that decides. Getting
     this wrong put every transcribed page back into one pseudo-section, which
     is the exact failure this module exists to end.
@@ -130,7 +133,13 @@ def synthesize_blocks(page: PageData, markdown: str,
         return []
 
     prefix = prefix if prefix is not None else f"p{page.page_number - 1}"
-    left, top, right, bottom = TEXT_AREA
+    area = rules.get("transcribed_text_area")
+    try:
+        left, top, right, bottom = (area[side] for side in
+                                    ("left", "top", "right", "bottom"))
+    except KeyError as missing:
+        raise ValueError(f"the rule transcribed_text_area names no "
+                         f"{missing}: it needs left, top, right and bottom")
     x0 = round(page.width_pt * left, 2)
     x1 = round(page.width_pt * right, 2)
     y_top = page.height_pt * top
@@ -164,7 +173,7 @@ def fill_missing_page_text(
     render: Callable[[int], object],
     transcribe: Callable[[object, int], "str | Hole"],
     *,
-    min_chars: int = MIN_PAGE_CHARS,
+    min_chars: Optional[int] = None,
     max_pages: Optional[int] = None,
     workers: int = 1,
     render_workers: int = PAGE_RENDER_WORKERS,
@@ -192,6 +201,8 @@ def fill_missing_page_text(
     return an empty string for those. Booking them as failures said 106 broken
     calls for a run in which not one call broke.
     """
+    if min_chars is None:
+        min_chars = rules.get("page_text_min_chars")
     candidates = [p for p in pages if needs_transcription(p, min_chars)]
     report = {"pages_total": len(pages), "pages_missing_text": len(candidates),
               "pages_transcribed": 0, "pages_empty": 0, "pages_failed": 0,
@@ -293,11 +304,13 @@ def fill_missing_page_text(
 # ---------------------------------------------------------------------------
 
 PAGE_TRANSCRIBE_PROMPT_ID = "preprocessing/page_transcribe"
+# The one line of the user's turn, with the number of the page in it.
+PAGE_REQUEST_PROMPT_ID = "preprocessing/page_request"
 
-# Rendering resolution for the page handed to the model. Higher than the table
-# crops need: a full page holds body text at 9-10 pt, and that is the size at
-# which a digit stops being legible first.
-RENDER_DPI = 200
+# Rendering resolution for the page handed to the model (the rule
+# `page_transcribe_dpi`). Higher than the table crops need: a full page holds
+# body text at 9-10 pt, and that is the size at which a digit stops being
+# legible first.
 
 
 def make_page_renderer(pdf_path, scratch_dir=None):
@@ -305,7 +318,7 @@ def make_page_renderer(pdf_path, scratch_dir=None):
 
     Written to disk rather than held in memory: the call layer takes a path.
     Into scratch by default, NOT next to the document: a full page at
-    RENDER_DPI is about a megabyte, and a corpus-wide run would leave gigabytes
+    the rule's resolution is about a megabyte, and a corpus-wide run would leave gigabytes
     of them behind for nothing. The page is reproducible from the PDF at any
     time, so the transcription is what is worth keeping, not the picture.
 
@@ -320,6 +333,7 @@ def make_page_renderer(pdf_path, scratch_dir=None):
     from .rendering import render_page_to_pil
 
     pdf_path = Path(pdf_path)
+    dpi = rules.get("page_transcribe_dpi")
     if scratch_dir is None:
         scratch_dir = tempfile.mkdtemp(prefix="pagetext_")
     pages_dir = Path(scratch_dir)
@@ -338,16 +352,15 @@ def make_page_renderer(pdf_path, scratch_dir=None):
         out = pages_dir / f"p{page_number - 1}_page.png"
         if not out.exists():
             image: Image.Image = render_page_to_pil(_doc()[page_number - 1],
-                                                     RENDER_DPI)
+                                                     dpi)
             image.save(out, format="PNG")
         return out
 
     return render
 
 
-# What a page request is allowed to answer with, when the prompt says nothing.
-PAGE_TEMPERATURE = 0.1
-PAGE_MAX_TOKENS = 4096
+# What a page request is allowed to answer with, when the prompt says nothing:
+# the rules `page_transcribe_temperature` and `page_transcribe_max_tokens`.
 
 
 def page_request_tokens(profile) -> int:
@@ -358,12 +371,13 @@ def page_request_tokens(profile) -> int:
     server has to be started for when it is asked to transcribe pages; the page
     is as large as a table crop at its largest, so the image is counted as
     there."""
-    from docpipe import prompts
-    from docpipe.visuals.config import IMAGE_TOKENS, TOKENS_PER_WORD
+    from docpipe.visuals.config import IMAGE_TOKENS
 
     prompt = prompts.load(PAGE_TRANSCRIBE_PROMPT_ID, profile)
-    room = int((prompt.meta or {}).get("max_tokens", PAGE_MAX_TOKENS))
-    return int(len(prompt.text.split()) * TOKENS_PER_WORD + IMAGE_TOKENS + room)
+    room = int((prompt.meta or {}).get(
+        "max_tokens", rules.get("page_transcribe_max_tokens")))
+    per_word = float(rules.get("vision_tokens_per_word"))
+    return int(len(prompt.text.split()) * per_word + IMAGE_TOKENS + room)
 
 
 def make_transcriber(profile, *, client=None, model=None):
@@ -378,30 +392,27 @@ def make_transcriber(profile, *, client=None, model=None):
     string is an answer (a page that is one large map holds no prose). A reply
     that is not that object is a Hole with its cause, as it is for a table.
     """
-    from docpipe import prompts
     from docpipe.visuals import replies, vision
-
-    from docpipe.profile import profile_value
 
     prompt = prompts.load(PAGE_TRANSCRIBE_PROMPT_ID, profile)
     # The one line of the user's turn, in the prompt's language.
-    request = (profile.require("preprocessing", "PAGE_REQUEST")
-               if profile is not None
-               else profile_value("preprocessing", "PAGE_REQUEST"))
+    request = prompts.load(PAGE_REQUEST_PROMPT_ID, profile)
     client = client or vision.create_client()
     model = model or vision.VLM_MODEL
     meta = prompt.meta or {}
     # The page request's own budget: the room a cut page is given once more is
     # what the served window leaves beyond it, not beyond the visuals stage's.
     budget = page_request_tokens(profile)
+    temperature_default = rules.get("page_transcribe_temperature")
+    max_tokens_default = rules.get("page_transcribe_max_tokens")
 
     def transcribe(image_path, page_number: int):
         reply = vision.call_vision(
             client, prompt.text,
-            request.format(page=page_number),
+            request.render(page=page_number),
             image_path, model=model,
-            temperature=float(meta.get("temperature", PAGE_TEMPERATURE)),
-            max_tokens=int(meta.get("max_tokens", PAGE_MAX_TOKENS)),
+            temperature=float(meta.get("temperature", temperature_default)),
+            max_tokens=int(meta.get("max_tokens", max_tokens_default)),
             reply=replies.PAGE, budget=budget,
         )
         return reply if isinstance(reply, Hole) else reply["markdown"]

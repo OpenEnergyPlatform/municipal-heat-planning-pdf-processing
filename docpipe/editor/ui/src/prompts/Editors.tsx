@@ -1,14 +1,16 @@
 /* The middle column: the editor of a prompt in its parts and the editor of a module's text blocks
    (old renderPromptEditor, renderPhrasesEditor, sentenceRow, shownNodes). */
-import { Alert, Badge, Button, Code, Group, Loader, NativeSelect, Paper, Stack, Text, Textarea, Title } from '@mantine/core';
+import { Alert, Anchor, Badge, Button, Code, Group, Loader, NativeSelect, Paper, Stack, Text, Textarea, Title } from '@mantine/core';
 import { IconAlertTriangle, IconArrowBackUp, IconCheck, IconDeviceFloppy, IconHistory, IconInfoCircle, IconSearch } from '@tabler/icons-react';
 import { AreaBox, TextBox } from '../components/Inputs';
-import { Muted } from '../components/Bits';
+import { Muted, Named } from '../components/Bits';
+import { openStep } from '../lib/nav';
+import { flowWord } from '../flow/flows';
 import { clone, mb, own } from '../lib/util';
 import { t, tr, rich } from '../lib/i18n';
 import { diffSegs, inheritedOf, isDirty, settingRest, textOf, withSetting, type Ed, type Ph, type ShownCell, type X } from './logic';
-import { P, actCheck, actDiscard, actSave, edited, fetchShown, setTrace } from './store';
-import { Put, Reports } from './Reports';
+import { P, actCheck, actDiscard, actSave, currentTrace, edited, fetchShown, logsFor, setTrace, stageOf } from './store';
+import { Put, Reports, settingTitle } from './Reports';
 import './prompts.css';
 
 function Area({ value, onText, readOnly }: { value: string; onText?: (t: string) => void; readOnly?: boolean }) {
@@ -34,8 +36,31 @@ function Setting({ E, k }: { E: Ed; k: string }) {
   const rest = settingRest(E.cut.front, k) ?? '';
   const lead = /^[ \t]*/.exec(settingRest(E.detail.cut.front, k) ?? rest)![0];
   return (
-    <TextBox mono w={160} label={<Code>{k}</Code>} value={rest.slice(lead.length)}
+    <TextBox mono w={220} label={<Named title={settingTitle(k)} k={k} />} value={rest.slice(lead.length)}
       onText={v => { E.cut.front = withSetting(E.cut.front, k, lead, v); edited(E); }} />
+  );
+}
+
+/* the steps that ask with the prompt *id*, as the Flow tab names them, each a link to it (owner request 2026-11-19,
+   A7); grouped by the drawing they stand in */
+export interface AskingStep { flow: string; id: string; label: string }
+export const stepsOf = (id: string): AskingStep[] => ((P.list && P.list.steps) || {})[id] || [];
+function AskedBy({ id }: { id: string }) {
+  const steps = stepsOf(id);
+  if (!steps.length) return <Muted>{t('No step of a drawing of this profile asks with this prompt.')}</Muted>;
+  const flows = [...new Set(steps.map(s => s.flow))];
+  return (
+    <Stack gap={2}>
+      {flows.map(flow => (
+        <Text key={flow} size="sm">
+          {t('Asked in {flow} by:', { flow: flowWord(flow) })}{' '}
+          {steps.filter(s => s.flow === flow).map((s, i) => (
+            <span key={s.id}>{i ? ' · ' : ''}<Anchor component="button" type="button" size="sm" onClick={() => openStep(s.id, s.flow)}>
+              <Named title={s.label} k={s.id} size="sm" /></Anchor></span>
+          ))}
+        </Text>
+      ))}
+    </Stack>
   );
 }
 
@@ -50,6 +75,7 @@ export function PromptEditor({ E }: { E: Ed }) {
         {isDirty(E) && <Badge color="orange" variant="light">{t('unsaved changes')}</Badge>}
       </Group>
       <Muted>{rich(t('File: `{path}`', { path: d.path || '' }))}</Muted>
+      <AskedBy id={d.id} />
       {!d.own && <Alert color="yellow" icon={<IconInfoCircle />}>{t('This profile runs with the file of {owner}. Saving does not change that file: it writes a file of its own for this profile, {file}.', { owner: d.owner, file: d.target || '' })}</Alert>}
 
       {keys.length > 0 && (
@@ -169,10 +195,14 @@ function SentenceRow({ X, s, redraw }: { X: Ph; s: any; redraw: () => void }) {
 }
 
 function TraceSelect() {
-  const logs: any[] = (P.list && P.list.traces) || [];
-  if (!logs.length) return <Muted>{(P.list && P.list.traces_note) ? tr(P.list.traces_note) : t('There is no request log.')}</Muted>;
+  const id = P.sel && P.sel.t === 'prompt' ? P.sel.id : null;
+  const logs: any[] = logsFor(id);
+  if (!logs.length) {
+    if (stageOf(id)) return <Muted>{t('The folders of the documents hold no request log of this stage yet. A run of the stage writes one beside what it writes for each document.')}</Muted>;
+    return <Muted>{(P.list && P.list.traces_note) ? tr(P.list.traces_note) : t('There is no request log.')}</Muted>;
+  }
   if (logs.length === 1) return <Text size="sm">{t('Request log')} <Code>{logs[0].name}</Code> <Muted>{mb(logs[0].bytes || 0)}</Muted></Text>;
-  return <NativeSelect w="auto" value={P.trace || ''} onChange={e => setTrace(e.currentTarget.value)} data={logs.map(l => ({ value: l.name, label: l.name + ' (' + mb(l.bytes || 0) + ')' }))} />;
+  return <NativeSelect w="auto" value={currentTrace() || ''} onChange={e => setTrace(e.currentTarget.value)} data={logs.map(l => ({ value: l.name, label: l.name + ' (' + mb(l.bytes || 0) + ')' }))} />;
 }
 export { TraceSelect };
 

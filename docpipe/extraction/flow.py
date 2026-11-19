@@ -36,10 +36,25 @@ Only a rule the step reads may be set at it (`Rule.steps`,
 
 The default profile writes the whole file: every number (`NUMBERS`) and the
 drawing. A profile that extends it writes the numbers it sets differently,
-laid over the default's number by number (`load`), and may write a drawing
-of its own, which is then the whole drawing. A setting of the run wins over
-the file for the numbers that have one (`Number.env`), never over a box's
-own value.
+laid over the default's number by number (`load`), and what it changes in
+the drawing it inherits ("changes"), or a drawing of its own, which is then
+the whole drawing. Steps that several frames go through stand once, as a
+part ("parts"), and each frame names it (owner request 2026-11-19, point C2
+of the review of that day; `flowparts.py`):
+
+    {"numbers": {...},
+     "flow": [..., {"id": "values", "each": "value", "order": "names_first",
+                    "together": true, "part": "value"}, ...],
+     "parts": {"value": [{"id": "coordinates", "each": "coordinate", ...},
+                         {"id": "values_check", "box": "check_value"}]}}
+
+    {"numbers": {"replies": 5},
+     "changes": [{"insert": {"id": "work", "box": "ask", ...},
+                  "into": "coordinate_way", "way": 2, "part": "value"}]}
+
+The run reads the drawing with every part drawn in its frames (`Flow.tree`).
+A setting of the run wins over the file for the numbers that have one
+(`Number.env`), never over a box's own value.
 
 Before a drawing is kept, `problems` says everything the run could not do
 with it (owner decisions 2026-11-10, section 11 of the plan): a box where it
@@ -68,7 +83,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from . import blocks, conditions
+from . import blocks, conditions, flowparts
 
 FILE = "flow.json"
 # The file every flow starts from.
@@ -90,6 +105,8 @@ class Number:
     env: Optional[str] = None       # the setting that wins over the file
     part: Optional[int] = None      # its place where the setting lists several
     steps: tuple = ()               # the kinds of steps that read it
+    title: str = ""                 # its name in words (owner request
+                                    # 2026-11-19, A5)
 
 
 # Every number the reading takes from the flow, in the order a file writes
@@ -101,53 +118,62 @@ NUMBERS = (
            "this size, and a request reads one chunk at a time. A table's "
            "head is shown with each of its chunks. A larger number sends "
            "fewer, longer chunks; a smaller number sends more, shorter "
-           "chunks and more requests."),
+           "chunks and more requests.",
+           title="Lines per chunk"),
     Number("search_pieces", 1,
            "The number of chunks a search shows when it looks for an open "
            "dimension or for a field asked once per document. A larger "
            "number searches further down the ranking and finds more, at the "
            "price of more requests. A smaller number is cheaper and can "
-           "miss a value.", "EXTRACT_SEARCH_PIECES"),
+           "miss a value.", "EXTRACT_SEARCH_PIECES",
+           title="Chunks per search"),
     Number("search_tables", 0,
            "The share of a search's chunks that are the best chunks of "
            "tables; these are taken first. The shares of tables, figures and "
            "text are scaled to the number of chunks of the search, and the "
            "rest are the best chunks of any kind. A larger share favours "
            "tables.",
-           "EXTRACT_SEARCH_SHARES", 0),
+           "EXTRACT_SEARCH_SHARES", 0,
+           title="Share of tables in a search"),
     Number("search_figures", 0,
            "The share of a search's chunks that are the best chunks of "
            "figures; these are taken first, as for tables. A larger share "
            "favours figures and leaves fewer places for the other kinds. A "
-           "share of 0 takes no figure first.", "EXTRACT_SEARCH_SHARES", 1),
+           "share of 0 takes no figure first.", "EXTRACT_SEARCH_SHARES", 1,
+           title="Share of figures in a search"),
     Number("search_text", 0,
            "The share of a search's chunks that are the best chunks of "
            "running text; these are taken first, as for tables. A larger "
            "share favours text and leaves fewer places for the other kinds. "
-           "A share of 0 takes no text first.", "EXTRACT_SEARCH_SHARES", 2),
+           "A share of 0 takes no text first.", "EXTRACT_SEARCH_SHARES", 2,
+           title="Share of text in a search"),
     Number("search_per_request", 1,
            "The number of chunks of a search that one request shows. A "
            "search with more chunks than this is split into several "
            "requests. A larger number needs fewer requests, each longer; a "
            "smaller number needs more requests, each shorter.",
-           "EXTRACT_SEARCH_CHUNKS"),
+           "EXTRACT_SEARCH_CHUNKS",
+           title="Chunks per search request"),
     Number("listed_field_factor", 1,
            "The factor by which a search for a field asked once per "
            "document shows more chunks when the field's values come from a "
            "list. Such a field has to be found among many possible entries. "
            "A larger factor searches more chunks for it; 1 searches as many "
-           "as for any other field."),
+           "as for any other field.",
+           title="Factor for fields with a list"),
     Number("follow_ups", 0,
            "How often a request is asked again when its answer failed a "
            "check. Each time the request shows the answer and what failed. "
            "A larger number gives the model more chances to correct a "
-           "value; 0 never asks again."),
+           "value; 0 never asks again.",
+           title="Follow-up questions"),
     Number("replies", 1,
            "How many answers in the wrong form a request accepts before it "
            "is left without an answer. A request the server refuses is asked "
            "as often. A larger number is more patient with a model that "
            "answers badly, at the price of more requests.",
-           "EXTRACT_MAX_RETRIES"),
+           "EXTRACT_MAX_RETRIES",
+           title="Answers in the wrong form"),
 )
 # Which steps read each number (`rules.step_kind`), as for the rules
 # (`rules.STEPS`).
@@ -237,10 +263,14 @@ class Flow:
     """A profile's flow as its files say it, no setting applied."""
     numbers: dict                   # name -> value, in the order of NUMBERS
     owners: dict                    # name -> the profile whose file says it
-    tree: list                      # the drawing
+    tree: list                      # the drawing, every part drawn
     files: tuple                    # ((profile name, path)), nearest first
     sha256: str
-    tree_from: str = ""             # the profile whose file draws it
+    # The profile whose file draws it or changes it last.
+    tree_from: str = ""
+    # The drawing as the files write it: its frames name their parts.
+    top: list = field(default_factory=list)
+    parts: dict = field(default_factory=dict)
 
 
 def number(numbers: Numbers, name: str) -> int:
@@ -1411,12 +1441,18 @@ def _profile_of(profile):
     return profile
 
 
+KEYS = ("numbers", "flow", "parts", "changes")
+
+
 def parse(raw: str, where, whole: bool, profile=None) -> dict:
-    """{"numbers": {name: value}, "flow": [...]} of the text *raw*, read
-    strictly. A *whole* file names every number and the drawing; any other
-    is laid over one and names numbers, and may draw a whole drawing of
-    its own. *where* names the file in what is said about it, *profile*
-    (a profile or its name) the profile it belongs to."""
+    """{"numbers": {name: value}, "flow": [...], "parts": {...}} or
+    {"numbers", "changes": [...]} of the text *raw*, read strictly. A
+    *whole* file names every number and the drawing; any other is laid over
+    one and names numbers, and may change the drawing it is laid over or
+    draw a whole drawing of its own. *where* names the file in what is said
+    about it, *profile* (a profile or its name) the profile it belongs to.
+    A drawing is checked with its parts drawn; what changes do is checked
+    where they are made (`_merged`)."""
     def once(pairs: list) -> dict:
         out: dict = {}
         for key, value in pairs:
@@ -1436,12 +1472,23 @@ def parse(raw: str, where, whole: bool, profile=None) -> dict:
                         f"\"numbers\" and, in the file a flow starts from, "
                         f"\"flow\"")
     for key in data:
-        if key not in ("numbers", "flow"):
+        if key not in KEYS:
             raise FlowError(f"{where}: has no key {key!r}; a flow file "
-                            f"holds \"numbers\" and \"flow\""
+                            f"holds \"numbers\", \"flow\" and \"parts\", "
+                            f"or \"changes\" to the flow it extends"
                             + (" (the steps of a flow are drawn under "
                                "\"flow\")"
                                if key == "steps" else ""))
+    if "parts" in data and "flow" not in data:
+        raise FlowError(f"{where}: names parts and draws no flow; parts are "
+                        f"drawn in a flow, and a file that changes the flow "
+                        f"it extends defines a part with a change")
+    if "changes" in data and ("flow" in data or whole):
+        raise FlowError(f"{where}: "
+                        + ("the file a flow starts from draws the flow and "
+                           "changes none" if whole else
+                           "draws a whole flow and changes the one it "
+                           "extends; a file does one of them"))
     numbers = data.get("numbers", {})
     if not isinstance(numbers, dict):
         raise FlowError(f"{where}: numbers must be an object, the name of a "
@@ -1456,15 +1503,34 @@ def parse(raw: str, where, whole: bool, profile=None) -> dict:
         if "flow" not in data:
             raise FlowError(f"{where}: the file a flow starts from draws "
                             f"the flow")
+    if "changes" in data:
+        changes = data["changes"]
+        if not isinstance(changes, list) or not all(
+                isinstance(one, dict) for one in changes):
+            raise FlowError(f"{where}: changes must be a list of changes, "
+                            f"each an object")
+        return {"numbers": read, "changes": changes}
     if "flow" not in data:
         return {"numbers": read}
-    said = problems(data["flow"], profile=profile)
+    if not isinstance(data["flow"], list):
+        raise FlowError(f"{where}: the flow is a list of boxes and frames")
+    try:
+        parts = flowparts.checked_parts(data.get("parts"), str(where))
+        drawn = flowparts.expand(data["flow"], parts, str(where))
+    except flowparts.PartError as exc:
+        raise FlowError(str(exc)) from None
+    _refuse(drawn, where, profile)
+    return {"numbers": read, "flow": data["flow"], "parts": parts}
+
+
+def _refuse(tree: list, where, profile) -> None:
+    """FlowError with the first problem of the drawing *tree*, if any."""
+    said = problems(tree, profile=profile)
     if said:
         first = said[0]
         raise FlowError(f"{where}: "
                         + (f"{first['id']}: " if first["id"] else "")
                         + first["message"])
-    return {"numbers": read, "flow": data["flow"]}
 
 
 def dump(data: dict, newline: str = "\n") -> str:
@@ -1491,8 +1557,9 @@ LOADED_KEPT = 16
 def _merged(written: list) -> Flow:
     """The flow of the files *written* ([(profile name, path)], nearest
     first, each a file): the farthest is the whole flow, the numbers of
-    every nearer one are laid over it, and a nearer drawing is the
-    drawing. Read once per state of the files."""
+    every nearer one are laid over it, its changes are made in the drawing,
+    and a nearer drawing is the drawing. Read once per state of the
+    files."""
     key = tuple((str(path), path.stat().st_mtime_ns, path.stat().st_size)
                 for _, path in written)
     if key in _loaded:
@@ -1501,18 +1568,35 @@ def _merged(written: list) -> Flow:
     whole = parse(start.read_text(encoding="utf-8"), start, True, first)
     numbers = dict(whole["numbers"])
     owners = {name: first for name in numbers}
-    tree, tree_from = whole["flow"], first
+    top, parts, tree_from = whole["flow"], whole["parts"], first
+    changed = None
     for name, path in reversed(nearer):
         own = parse(path.read_text(encoding="utf-8"), path, False, name)
         for number, value in own["numbers"].items():
             numbers[number], owners[number] = value, name
         if "flow" in own:
-            tree, tree_from = own["flow"], name
+            top, parts, tree_from, changed = (own["flow"], own["parts"],
+                                              name, None)
+        elif "changes" in own:
+            try:
+                top, parts = flowparts.apply(top, parts, own["changes"])
+            except flowparts.PartError as exc:
+                raise FlowError(f"{path}: {exc}") from None
+            tree_from, changed = name, path
+    try:
+        tree = flowparts.expand(top, parts, str(changed or start))
+    except flowparts.PartError as exc:
+        raise FlowError(str(exc)) from None
+    if changed is not None:
+        _refuse(tree, changed, tree_from)
     numbers = {number.name: numbers[number.name] for number in NUMBERS}
     sha = hashlib.sha256(json.dumps(
         {"numbers": numbers, "flow": tree}, ensure_ascii=False,
         sort_keys=True).encode("utf-8")).hexdigest()
-    flow = Flow(numbers, owners, tree, tuple(written), sha, tree_from)
+    used = {node[flowparts.PART] for node in flowparts.uses(top)}
+    flow = Flow(numbers, owners, tree, tuple(written), sha, tree_from, top,
+                {name: steps for name, steps in parts.items()
+                 if name in used})
     while len(_loaded) >= LOADED_KEPT:
         _loaded.pop(next(iter(_loaded)))
     _loaded[key] = flow

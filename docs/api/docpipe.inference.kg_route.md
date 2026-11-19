@@ -50,7 +50,7 @@ Fields:
 - `bindings: Callable`: ({axis: uri | int}) -> (constraint text, {var: (kind, value)})
 - `label: Callable`: (IRI or bare id) -> what a reader calls it
 - `prose: dict`: the profile's trust wording, kg.trust_prose
-- `notes: dict`: reason token -> sentence, inference.ROUTE_NOTES
+- `notes: dict`: reason token -> sentence, wording.graph_notes
 - `prompt: Any`: the coordinate prompt, a docpipe.prompts.Prompt
 
 ## Functions

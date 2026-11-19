@@ -22,10 +22,11 @@ import { FlowTab } from './flow/FlowTab';
 import { SourcesTab } from './tabs/SourcesTab';
 import { GraphTab } from './graph/GraphTab';
 import { RulesDrawer } from './tabs/RulesDrawer';
+import { StagesTab } from './tabs/StagesTab';
 
 const PANES: Record<TabName, () => ReactNode> = {
   spec: () => <SpecTab />, prompts: () => <PromptsTab />, flow: () => <FlowTab />,
-  sources: () => <SourcesTab />, graph: () => <GraphTab />,
+  sources: () => <SourcesTab />, graph: () => <GraphTab />, stages: () => <StagesTab />,
 };
 
 function SchemeToggle() {
@@ -108,19 +109,24 @@ function Head() {
   const dirty = useStore(dirtyStore);
   const unsaved = Object.values(dirty).some(Boolean);
   if (!st) return null;
+  /* the file the open tab edits; what does not fit beside the tabs is cut short, never laid over them (A9) */
+  const file = (st.files && st.files[tab]) || st.spec;
   return (
     <Group h="100%" px="md" gap="md" wrap="nowrap" justify="space-between">
-      <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
+      <Group gap="sm" wrap="nowrap" style={{ minWidth: 0, flex: '1 1 auto', overflow: 'hidden' }}>
         <Text fw={700} size="lg" style={{ whiteSpace: 'nowrap' }}>docpipe edit</Text>{/* i18n-ignore: the program's name */}
         <ProfileSwitch st={st} />
         <NewProfile st={st} onSwitch={name => switchProfile(name).catch(showError)} />
-        <Tooltip label={t('The spec file of this profile')}>
-          <Group gap={4} wrap="nowrap" visibleFrom="xl"><IconFileText size={16} /><Code>{st.spec}</Code></Group>
-        </Tooltip>
-        {st.branch && <Group gap={4} wrap="nowrap" visibleFrom="md"><IconGitBranch size={16} /><Text size="sm">{st.branch}</Text></Group>}
+        {file && <Tooltip label={t('The file this tab edits: {file}', { file })}>
+          <Group gap={4} wrap="nowrap" visibleFrom="xl" style={{ minWidth: 0, flexShrink: 1 }}>
+            <IconFileText size={16} style={{ flexShrink: 0 }} />
+            <Code style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{file}</Code>
+          </Group>
+        </Tooltip>}
+        {st.branch && <Group gap={4} wrap="nowrap" visibleFrom="md" style={{ flexShrink: 0 }}><IconGitBranch size={16} /><Text size="sm">{st.branch}</Text></Group>}
         {st.harvest && (
           <Tooltip label={st.harvest}>
-            <Text size="sm" c="dimmed" visibleFrom="xl" style={{ whiteSpace: 'nowrap' }}>{st.harvest_documents == null ? t('harvest') : t('harvest: {documents}', { documents: tn(st.harvest_documents, '{n} document', '{n} documents') })}</Text>
+            <Text size="sm" c="dimmed" visibleFrom="xl" truncate="end" style={{ minWidth: 0, flexShrink: 1 }}>{st.harvest_documents == null ? t('harvest') : t('harvest: {documents}', { documents: tn(st.harvest_documents, '{n} document', '{n} documents') })}</Text>
           </Tooltip>
         )}
         {st.changed && st.changed.length > 0 && (

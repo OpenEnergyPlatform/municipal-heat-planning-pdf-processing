@@ -4,7 +4,7 @@ import { useEffect, useReducer, useRef } from 'react';
 import { Button, Code, Drawer, Group, Loader, Stack, Text } from '@mantine/core';
 import { api, apiR } from '../lib/api';
 import { askConfirm, showError, showInfo } from '../lib/dialogs';
-import { closeRules, loadState, openRules, setDirty, tabLabel, useTabActions } from '../lib/nav';
+import { closeRules, loadState, openRules, setDirty, tabLabel, useRequests, useTabActions } from '../lib/nav';
 import { rich, t, tr } from '../lib/i18n';
 import { clone, wrote } from '../lib/util';
 import { Report, type Reported } from '../components/Report';
@@ -12,11 +12,12 @@ import { GroupedRules, ruleChanged } from '../rules/RuleInputs';
 
 interface State {
   tab: string | null; data: any; cur: Record<string, any>; report: Reported | null; busy: boolean; epoch: number; loading: boolean;
-  error: string | null;
+  error: string | null; focus: { name: string; n: number } | null;
 }
 
 export function RulesDrawer({ tab }: { tab: string | null }) {
-  const ref = useRef<State>({ tab: null, data: null, cur: {}, report: null, busy: false, epoch: 0, loading: false, error: null });
+  const ref = useRef<State>({ tab: null, data: null, cur: {}, report: null, busy: false, epoch: 0, loading: false, error: null,
+    focus: null });
   const [, touch] = useReducer((x: number) => x + 1, 0);
   const RU = ref.current;
   const dirty = () => !!RU.data && RU.data.rules.some((r: any) => ruleChanged(r, RU.cur[r.name]));
@@ -74,10 +75,10 @@ export function RulesDrawer({ tab }: { tab: string | null }) {
     for (const r of RU.data.rules) RU.cur[r.name] = clone(r.value);
     RU.report = null; RU.epoch++; touch();
   };
-  const onName = (name: string) => {
-    const el = document.querySelector('[data-rule="' + name + '"]');
-    if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('dp-flag'); setTimeout(() => el.classList.remove('dp-flag'), 2500); }
-  };
+  /* a rule a reason names: its group opens and it is shown (GroupedRules) */
+  const onName = (name: string) => { RU.focus = { name, n: (RU.focus ? RU.focus.n : 0) + 1 }; touch(); };
+  /* a rule another tab asks to show (the Stages tab, the first rule of a stage's group) */
+  useRequests('rules', !!RU.data && !RU.loading, (payload: any) => { if (payload && payload.name) onName(payload.name); });
 
   const d = RU.data;
   return (
@@ -101,7 +102,7 @@ export function RulesDrawer({ tab }: { tab: string | null }) {
           {d.cost && <Text size="sm" c="dimmed">{rich(tr(d.cost))}</Text>}
           <Report R={RU.report} onName={onName} onReload={() => load(RU.tab!)} />
           {d.rules.length
-            ? <GroupedRules rules={d.rules} epoch={RU.epoch} curOf={n => RU.cur[n]}
+            ? <GroupedRules rules={d.rules} epoch={RU.epoch} curOf={n => RU.cur[n]} focus={RU.focus}
                 onChange={(n, v, reset) => { RU.cur[n] = v; RU.report = null; if (reset) RU.epoch++; touch(); }} />
             : <Text c="dimmed">{t('This profile has no rule for this tab, so there is nothing to set here.')}</Text>}
         </Stack>

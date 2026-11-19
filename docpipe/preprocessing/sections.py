@@ -42,29 +42,15 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
+from .. import rules
 from .config import (
     SECTIONS_JSON,
-    SECTION_TITLE_CLASSES,
-    FOOTNOTE_CLASSES,
-    HEADER_FOOTER_STRIP_ENABLE,
-    HEADER_FOOTER_ZONE_FRAC,
-    HEADER_FOOTER_MAX_LEN,
-    HEADER_FOOTER_MIN_NORM_LEN,
-    HEADER_FOOTER_MIN_PAGE_FRAC,
-    DIRECTORY_STRIP_ENABLE,
-    DIRECTORY_MIN_ENTRIES,
-    DIRECTORY_SCORE_THRESHOLD,
-    DIRECTORY_TITLE_SCORE_THRESHOLD,
-    DIRECTORY_HEAD_LEN,
-    DIRECTORY_HEAD_SCORE_THRESHOLD,
-    DIRECTORY_MAX_RESIDUAL_CHARS,
     caption_like,
     clean_data,
     dump_json_atomic,
 )
 from docpipe.artifacts import SECTIONS_VERSION
 from docpipe.captions import resolve_title
-from docpipe.profile import active_profile, profile_value
 
 from .columns import sort_pages
 from .models import Block, FigureRef, PageData, Section, TableRef
@@ -78,22 +64,27 @@ log = logging.getLogger(__name__)
 
 def _block_is_title(block: Block) -> bool:
     """True when the block represents a section-title heading."""
-    return block.layout_label in SECTION_TITLE_CLASSES
+    return block.layout_label in rules.get("heading_classes")
 
 
 def _block_is_footnote(block: Block) -> bool:
     """True when the block is the text of a footnote at the foot of a page
     (Stage 2 keeps it, labelled, owner decision 2026-11-17)."""
-    return block.layout_label in FOOTNOTE_CLASSES
+    return block.layout_label in rules.get("footnote_classes")
 
 
-# The end of a sentence: a mark, then only what closes it.
-_SENTENCE_END = re.compile(r"[.!?][\"'”“»)\]]*$")
+def _sentence_end():
+    """The end of a sentence: a mark of the rule `sentence_end_marks`, then
+    only what closes it."""
+    return rules.derived("stage_sections:sentence_end", lambda: re.compile(
+        "[" + "".join(re.escape(mark) for mark
+                      in rules.get("sentence_end_marks")) + "]"
+        + r"[\"'”“»)\]]*$"))
 
 
 def _ends_sentence(text: str) -> bool:
     """Does *text* end a sentence, so that a footnote may follow it?"""
-    return bool(_SENTENCE_END.search((text or "").rstrip()))
+    return bool(_sentence_end().search((text or "").rstrip()))
 
 
 def _rect(bbox) -> Optional[list[float]]:
@@ -121,15 +112,18 @@ def _resolve_title_text(block: Block) -> Optional[str]:
 # Deterministic running-header / footer stripping
 # ---------------------------------------------------------------------------
 
-# Standalone numbers are normalised out so a header that only varies by its
-# page number collapses to one key across pages.
-_HDR_NUM_RE = re.compile(r"\b\d{1,4}\b")
+def _hdr_num_re():
+    """Standalone numbers of up to the rule `running_header_number_digits`
+    digits: normalised out so a header that only varies by its page number
+    collapses to one key across pages."""
+    return rules.derived("stage_sections:header_number", lambda: re.compile(
+        r"\b\d{1,%d}\b" % rules.get("running_header_number_digits")))
 
 
 def _norm_header(text: str) -> str:
     """Page-number-normalized, punctuation-stripped, lower-cased header key."""
     t = re.sub(r"\s+", " ", text).strip()
-    t = _HDR_NUM_RE.sub("", t)
+    t = _hdr_num_re().sub("", t)
     return re.sub(r"\s+", " ", t).strip(" |-–—•·.").lower()
 
 
@@ -139,9 +133,10 @@ def _header_zone(block: Block, height: float) -> Optional[str]:
     if not bbox or len(bbox) < 4 or not height:
         return None
     y_center = (bbox[1] + bbox[3]) / 2.0
-    if y_center < HEADER_FOOTER_ZONE_FRAC * height:
+    band = rules.get("running_header_band")
+    if y_center < band * height:
         return "H"
-    if y_center > (1.0 - HEADER_FOOTER_ZONE_FRAC) * height:
+    if y_center > (1.0 - band) * height:
         return "F"
     return None
 
@@ -151,7 +146,7 @@ def _header_candidate(block: Block) -> bool:
     if block.type != "text" or _block_is_title(block):
         return False
     txt = (block.content or "").strip()
-    return bool(txt) and len(txt) <= HEADER_FOOTER_MAX_LEN
+    return bool(txt) and len(txt) <= rules.get("running_header_max_chars")
 
 
 def title_page_of(pages: list[PageData]) -> Optional[int]:
@@ -169,7 +164,8 @@ def title_page_of(pages: list[PageData]) -> Optional[int]:
 def strip_running_headers(pages: list[PageData]) -> int:
     """
     Drop text blocks whose page-number-normalized text recurs in the same
-    header/footer zone on at least HEADER_FOOTER_MIN_PAGE_FRAC of the pages.
+    header/footer zone on at least the share `running_header_page_share` of
+    the pages.
     Section titles are never touched. The first page and the title page
     (`title_page_of`) keep their blocks: their copy of a running head is the
     document's citation line (journal, volume, year), though it still counts
@@ -178,8 +174,10 @@ def strip_running_headers(pages: list[PageData]) -> int:
     page its own.
     Mutates *pages* in place; returns the number of blocks dropped.
     """
-    if not HEADER_FOOTER_STRIP_ENABLE or len(pages) < 4:
+    if (not rules.get("strip_running_headers")
+            or len(pages) < rules.get("running_header_min_pages")):
         return 0
+    min_norm_chars = rules.get("running_header_min_chars")
 
     zone_pages: dict[tuple[str, str], set[int]] = defaultdict(set)
     for pg in pages:
@@ -190,16 +188,18 @@ def strip_running_headers(pages: list[PageData]) -> int:
             if zone is None:
                 continue
             key = _norm_header(b.content or "")
-            if len(key) < HEADER_FOOTER_MIN_NORM_LEN:
+            if len(key) < min_norm_chars:
                 continue
             zone_pages[(zone, key)].add(pg.page_number)
 
-    threshold = max(3, int(HEADER_FOOTER_MIN_PAGE_FRAC * len(pages)))
+    threshold = max(rules.get("running_header_min_repeats"),
+                    int(rules.get("running_header_page_share") * len(pages)))
     headers = {k for k, pgs in zone_pages.items() if len(pgs) >= threshold}
     if not headers:
         return 0
 
-    front = {min(pg.page_number for pg in pages), title_page_of(pages)}
+    front = ({min(pg.page_number for pg in pages), title_page_of(pages)}
+             if rules.get("keep_front_page_headers") else set())
     dropped = 0
     for pg in pages:
         if pg.page_number in front:
@@ -224,58 +224,47 @@ def strip_running_headers(pages: list[PageData]) -> int:
 # Which words open one is the corpus language's business: the German pattern
 # matched nothing in an English corpus, so its lists of figures were never
 # recognised and landed in the index as sections.
-_dir_figtab: dict = {}
-
-
+# The words are the rule `directory_figure_words`; an entry is at most
+# `directory_entry_max_chars` long before its page number.
 def _dir_figtab_re():
-    profile = active_profile()
-    name = profile.name if profile else None
-    if name not in _dir_figtab:
-        words = profile_value("preprocessing", "DIRECTORY_FIGTAB_WORDS")
-        _dir_figtab[name] = re.compile(
-            r"(?:" + "|".join(words) + r")\s*\d+\s*[:.]?\s*.{2,90}?\s\d{1,4}(?=\s|$)",
-            re.IGNORECASE,
-        )
-    return _dir_figtab[name]
+    return rules.derived("stage_sections:figtab", lambda: re.compile(
+        r"(?:" + "|".join(rules.get("directory_figure_words"))
+        + r")\s*\d+\s*[:.]?\s*.{2,"
+        + str(rules.get("directory_entry_max_chars"))
+        + r"}?\s\d{1,4}(?=\s|$)",
+        re.IGNORECASE,
+    ))
 
 
 # A dot-leader entry ("Einleitung ............ 10").
-_DIR_LEADER_RE = re.compile(r".{2,90}?\.{2,}\s*\d{1,4}(?=\s|$)")
+def _dir_leader_re():
+    return rules.derived("stage_sections:leader", lambda: re.compile(
+        r".{2," + str(rules.get("directory_entry_max_chars"))
+        + r"}?\.{2,}\s*\d{1,4}(?=\s|$)"))
+
 # Real media placeholders — a section holding one references actual
 # tables/figures, so it is not a directory listing.
 _DIR_PLACEHOLDER_RE = re.compile(r"\[p\d+_(?:img|tbl)\d+\]")
 # Bibliography titles → routed to the Stage-4 [LITERATURE] BibTeX path, not
 # dropped. "References" did not match the German pattern, so an English
 # bibliography was a directory listing and got thrown away.
-_dir_lit: dict = {}
-
-
 def _dir_lit_title_re():
-    profile = active_profile()
-    name = profile.name if profile else None
-    if name not in _dir_lit:
-        words = profile_value("preprocessing", "BIBLIOGRAPHY_TITLE_WORDS")
-        _dir_lit[name] = re.compile("|".join(words), re.IGNORECASE)
-    return _dir_lit[name]
+    return rules.derived("stage_sections:bibliography", lambda: re.compile(
+        "|".join(rules.get("bibliography_title_words")), re.IGNORECASE))
 
 
 # Titles that are themselves directory headings → drop at a lower score bar.
 # Which words make one is the corpus language's business, like the two lists
-# above: the profile says them (DIRECTORY_TITLE_WORDS), as fragments of a
-# pattern found anywhere in the title.
-_dir_title: dict = {}
-
-
+# above: the profile says them (the rule `directory_title_words`), as
+# fragments of a pattern found anywhere in the title.
 def _dir_title_re():
-    profile = active_profile()
-    name = profile.name if profile else None
-    if name not in _dir_title:
-        words = profile_value("preprocessing", "DIRECTORY_TITLE_WORDS")
+    def build():
+        words = rules.get("directory_title_words")
         # No words is a statement, not an empty alternative: joined it would
         # be the pattern that matches every title.
-        _dir_title[name] = re.compile(
-            "|".join(words) if words else r"(?!)", re.IGNORECASE)
-    return _dir_title[name]
+        return re.compile("|".join(words) if words else r"(?!)",
+                          re.IGNORECASE)
+    return rules.derived("stage_sections:directory_title", build)
 
 
 def _directory_metrics(content: str) -> tuple[float, int, int]:
@@ -284,9 +273,9 @@ def _directory_metrics(content: str) -> tuple[float, int, int]:
     fraction is the share of chars covered by directory-listing entries, with
     overlaps counted once.
     """
-    if not content or len(content) < 40:
+    if not content or len(content) < rules.get("directory_min_chars"):
         return 0.0, 0, len(content or "")
-    matches = list(_dir_figtab_re().finditer(content)) + list(_DIR_LEADER_RE.finditer(content))
+    matches = list(_dir_figtab_re().finditer(content)) + list(_dir_leader_re().finditer(content))
     if not matches:
         return 0.0, 0, len(content)
     covered = bytearray(len(content))
@@ -304,24 +293,27 @@ def _is_directory_section(section: Section) -> bool:
     if _dir_lit_title_re().search(section.title or ""):   # bibliography → Stage-4 BibTeX
         return False
     score, entries, residual = _directory_metrics(content)
-    if entries < DIRECTORY_MIN_ENTRIES:
+    if entries < rules.get("directory_min_entries"):
         return False
     # Explicit directory title (a table of contents, a list of figures, …).
-    if _dir_title_re().search(section.title or "") and score >= DIRECTORY_TITLE_SCORE_THRESHOLD:
+    if (_dir_title_re().search(section.title or "")
+            and score >= rules.get("directory_titled_listing_share")):
         return True
     # Otherwise drop only a section that is a listing FROM THE START and has
     # almost no prose left over — this protects content sections that merely
     # reference a few figures or carry a short trailing list.
-    if score >= DIRECTORY_SCORE_THRESHOLD and residual <= DIRECTORY_MAX_RESIDUAL_CHARS:
-        head_score, _, _ = _directory_metrics(content[:DIRECTORY_HEAD_LEN])
-        if head_score >= DIRECTORY_HEAD_SCORE_THRESHOLD:
+    if (score >= rules.get("directory_listing_share")
+            and residual <= rules.get("directory_max_other_chars")):
+        head_score, _, _ = _directory_metrics(
+            content[:rules.get("directory_head_chars")])
+        if head_score >= rules.get("directory_head_share"):
             return True
     return False
 
 
 def drop_directory_sections(sections: list[Section]) -> tuple[list[Section], int]:
     """Remove directory/index sections; returns (kept_sections, dropped_count)."""
-    if not DIRECTORY_STRIP_ENABLE:
+    if not rules.get("strip_directory_sections"):
         return sections, 0
     kept = [s for s in sections if not _is_directory_section(s)]
     return kept, len(sections) - len(kept)
@@ -457,7 +449,7 @@ def build_sections(pages: list[PageData], column_layout: str = "auto") -> list[S
 
     # What comes before the first heading. Its title is the profile's word:
     # it is stored, shown in a citation and read by the model.
-    front = profile_value("preprocessing", "FRONT_SECTION_TITLE")
+    front = rules.get("front_section_title")
     # page_number=None, not 1: a leading cover/blank page can push real content
     # to page 2+, so the derivation step below sets it from the first segment.
     _open_section(front, page_number=None)

@@ -6,17 +6,18 @@ Author: Felix Vossel
 import json
 import os
 import tempfile
-import unicodedata
 from pathlib import Path
-from re import compile
 
-from docpipe import llm_preflight, prompts
-from docpipe.profile import active_profile
+from docpipe import llm_preflight, prompts, rules
 from docpipe.artifacts import (DIR_RESULTS,               # noqa: F401  (re-exported)
                                REFINEMENT_PARTIAL_JSON,   # output (unfinished)
                                REFINEMENT_REPORT_JSON,    # output (what failed)
                                SECTIONS_JSON,             # input
                                SECTIONS_REFINED_JSON)     # output
+# The text a stage stores is cleaned by one cleaner under one rule
+# (normalize_unicode_nfkc), stages 1 to 3 and this one alike.
+from docpipe.preprocessing.config import (clean_data,     # noqa: F401  (re-exported)
+                                          clean_unicode)
 
 # ---------------------------------------------------------------------------
 # LLM (OpenAI-compatible API)
@@ -30,71 +31,73 @@ LLM_TIMEOUT  = float(os.environ.get("LLM_TIMEOUT", "180"))
 # Concurrent in-flight requests; the main throughput lever.
 LLM_NUM_PARALLEL = int(os.environ.get("LLM_NUM_PARALLEL", "8"))
 
-MAX_RETRIES = 4
-
-# Sections per LLM call — the one lever that decides how much context a corpus
-# needs. It had neither an env override nor a profile hook, so a corpus with
-# long sections left only one response: make the server bigger. The profile may
-# say otherwise; without a say, three.
-WINDOW_SIZE = int(os.environ.get(
-    "REFINE_WINDOW_SIZE",
-    (active_profile() and active_profile().component("refinement", "WINDOW_SIZE")) or 3))
-
-# ── Oversized sections ─────────────────────────────────────────────────────
-# A section is one retrieval chunk and one vector. Above SECTION_MAX_WORDS it
-# is cut into parts of roughly SECTION_TARGET_WORDS (see split.py). Short
-# sections are left alone: a short chunk is precise, a long one is mush.
-SECTION_SPLIT_ENABLE  = True
-SECTION_MAX_WORDS     = 1000
-SECTION_TARGET_WORDS  = 600
-
-# Numbering-prefix strip + ALL-CAPS de-shout applied on top of the LLM's pass.
-TITLE_CLEANUP_ENABLE = True
-
-# ---------------------------------------------------------------------------
-# Misc
-# ---------------------------------------------------------------------------
-SURROGATES = compile(r"[\uD800-\uDFFF]")
+# What the stage decides is read from the rules where it decides, when it
+# runs (docpipe/ruleset/stage_refine.py): the attempts at a request
+# (refine_max_attempts), the sections of a window (refine_window_sections),
+# the cutting of oversized sections (split_long_sections, section_max_words,
+# section_target_words) and the cleaning of headings (clean_titles).
 
 # ---------------------------------------------------------------------------
 # System prompt for the LLM
 # ---------------------------------------------------------------------------
-# Ask the model for the changes instead of the whole section. Measured over 60
-# scenarios documents: 28% of sections came back byte-identical, the median section
-# was 99% unchanged, and only 166 of 4887 were real conversions — the stage was
-# paying output tokens, the expensive kind, to retype its own input.
+# The rule refine_return_corrections asks the model for the changes instead of
+# the whole section. Measured over 60 scenarios documents: 28% of sections came
+# back byte-identical, the median section was 99% unchanged, and only 166 of
+# 4887 were real conversions — the stage was paying output tokens, the
+# expensive kind, to retype its own input.
 # Off by default: the two modes use different prompts, so switching marks every
 # cached document stale (correctly — its output came from the other prompt).
-REFINE_RETURN_CORRECTIONS = os.environ.get(
-    "REFINE_RETURN_CORRECTIONS", "0").strip().lower() in ("1", "true", "yes", "on")
 
-# Only the prompt actually in use is versioned, or merely having the second one
-# on disk would count as a change against every stored result.
-PROMPT_IDS = (("refinement/refine_corrections" if REFINE_RETURN_CORRECTIONS
-               else "refinement/refine"), "refinement/split")
+
+def prompt_ids() -> tuple:
+    """The prompts a run of this stage is made of, the ones its stored
+    results are versioned by. Only the window prompt actually in use is
+    named, or merely having the second one on disk would count as a change
+    against every stored result."""
+    return (("refinement/refine_corrections"
+             if rules.get("refine_return_corrections")
+             else "refinement/refine"), "refinement/split",
+            "refinement/split_user", "refinement/window_context")
+
 
 # Read on first use, not on import: a prompt belongs to a profile, and the
 # stage is imported before its command line names one.
 @prompts.per_profile
+def _plain_prompt():
+    return prompts.load("refinement/refine")
+
+
+@prompts.per_profile
+def _corrections_prompt():
+    return prompts.load("refinement/refine_corrections")
+
+
 def refine_prompt():
     # Both spelled out, so the architecture test can still find them by AST.
-    return (prompts.load("refinement/refine_corrections") if REFINE_RETURN_CORRECTIONS
-            else prompts.load("refinement/refine"))
+    return (_corrections_prompt() if rules.get("refine_return_corrections")
+            else _plain_prompt())
 
 
 def system_prompt() -> str:
     return refine_prompt().text
 
 
+def refine_prompt_id() -> str:
+    """The prompt a window of this stage is asked with (`refine_prompt`)."""
+    return refine_prompt().id
+
+
 # Sampling belongs to the prompt, so both travel together in the .md front matter.
 def llm_temperature() -> float:
-    return float(os.environ.get("LLM_TEMPERATURE",
-                                refine_prompt().meta.get("temperature", 0.1)))
+    return float(os.environ.get(
+        "LLM_TEMPERATURE", refine_prompt().meta.get(
+            "temperature", rules.get("refine_default_temperature"))))
 
 
 def llm_max_tokens() -> int:
-    return int(os.environ.get("LLM_MAX_TOKENS",
-                              refine_prompt().meta.get("max_tokens", 8192)))
+    return int(os.environ.get(
+        "LLM_MAX_TOKENS", refine_prompt().meta.get(
+            "max_tokens", rules.get("refine_default_max_tokens"))))
 
 # ---------------------------------------------------------------------------
 # Context budget
@@ -102,16 +105,16 @@ def llm_max_tokens() -> int:
 # What one request can cost the server, so a serving flag can be checked
 # against this number instead of guessed from a comment. Deliberately an
 # over-estimate: too large costs a bit of KV cache, too small costs the run.
-TOKENS_PER_WORD = 3.0
-
+# (the rule tokens_per_word).
+#
 # The reply is the window handed back refined, so it is about as long as the
 # window plus JSON scaffolding — a refined sentence is rarely shorter than the
-# original. A flat max_tokens truncated the answer mid-string on big windows:
-# 24 of 1030 in the scenarios book run, every one "Unterminated string".
-REPLY_HEADROOM = 1.35
-# Ceiling, so one runaway window cannot demand a context nobody has. The
-# preflight checks the server against this, not against the flat default.
-REPLY_TOKENS_CEILING = int(os.environ.get("REFINE_REPLY_CEILING", "16384"))
+# original (the rule reply_headroom). A flat max_tokens truncated the answer
+# mid-string on big windows: 24 of 1030 in the scenarios book run, every one
+# "Unterminated string".
+# Ceiling (the rule reply_tokens_ceiling), so one runaway window cannot demand
+# a context nobody has. The preflight checks the server against this, not
+# against the flat default.
 
 
 def reply_tokens(user_words: int) -> int:
@@ -123,32 +126,36 @@ def reply_tokens(user_words: int) -> int:
     not the length of the section. That is the entire saving. The budget still
     has to cover a bibliography, which is the one case that writes text out.
     """
-    if REFINE_RETURN_CORRECTIONS:
+    if rules.get("refine_return_corrections"):
         return llm_max_tokens()
-    wanted = int(user_words * TOKENS_PER_WORD * REPLY_HEADROOM)
-    return max(llm_max_tokens(), min(wanted, REPLY_TOKENS_CEILING))
+    wanted = int(user_words * rules.get("tokens_per_word")
+                 * rules.get("reply_headroom"))
+    return max(llm_max_tokens(), min(wanted, rules.get("reply_tokens_ceiling")))
 
 
 def largest_reply_tokens() -> int:
     """The largest reply a request of this stage asks for: the one reply the
     context budget counts."""
-    return llm_max_tokens() if REFINE_RETURN_CORRECTIONS else REPLY_TOKENS_CEILING
+    return (llm_max_tokens() if rules.get("refine_return_corrections")
+            else rules.get("reply_tokens_ceiling"))
 
 
 def max_request_tokens() -> int:
     """Worst case for one window: prompt + a full window of maximum-size
     sections + the whole section before it as context (a section is at most
-    SECTION_MAX_WORDS) + the largest reply we would ever ask for, once.
+    the rule section_max_words) + the largest reply we would ever ask for, once.
 
     A section that cannot be split any further, whose reply was cut off, is
     asked once more with more room, but the room is bounded by what the served
     window leaves beyond this number (`further_room`), so the budget does not
-    count a second reply. Rests on split.py holding SECTION_MAX_WORDS on its
+    count a second reply. Rests on split.py holding section_max_words on its
     output. The one case it cannot hold, a single segment longer than the
     limit, is logged there.
     """
-    system = len(system_prompt().split()) * TOKENS_PER_WORD
-    window = (WINDOW_SIZE + 1) * SECTION_MAX_WORDS * TOKENS_PER_WORD
+    per_word = rules.get("tokens_per_word")
+    system = len(system_prompt().split()) * per_word
+    window = ((rules.get("refine_window_sections") + 1)
+              * rules.get("section_max_words") * per_word)
     return int(system + window + largest_reply_tokens())
 
 
@@ -162,31 +169,9 @@ def further_room(asked: int):
         role="llm")
 
 # ---------------------------------------------------------------------------
-# Unicode cleaning + atomic JSON I/O
+# Atomic JSON I/O (the cleaning of the text is the one of stages 1 to 3,
+# imported above)
 # ---------------------------------------------------------------------------
-def clean_unicode(s: str) -> str:
-    """Remove surrogates, control chars, non-characters."""
-    s = unicodedata.normalize("NFKC", s)
-    s = SURROGATES.sub("", s)
-    s = "".join(
-        c for c in s
-        if unicodedata.category(c) != "Cn"
-        and not (0xFDD0 <= ord(c) <= 0xFDEF or (ord(c) & 0xFFFE) == 0xFFFE)
-    )
-    return s
-
-
-def clean_data(obj):
-    """Recursively clean unicode in nested dicts/lists/strings."""
-    if isinstance(obj, dict):
-        return {k: clean_data(v) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [clean_data(v) for v in obj]
-    if isinstance(obj, str):
-        return clean_unicode(obj)
-    return obj
-
-
 def dump_json_atomic(data, path) -> None:
     """
     Serialise *data* as UTF-8 JSON to *path* atomically (temp file in the same

@@ -16,11 +16,16 @@ profile that extends another one writes only the pieces it words
 differently: its file is laid over those of the profile it extends.
 
 The words of the app's pages come the same way, from the profile's
-`inference.py`: its `UI` table, which a person reads where a model reads the
-sentences. That
-includes the picker's labels, the tag after a document's name and the noun
-for one. Both tables are checked for the entries the core asks for
-(`REQUIRED`, `UI_REQUIRED`).
+`prompts/chat/phrases.json` (`CHAT`; its `inference.py` until 2026-11-19,
+owner request A2: so that they have a place in the page and are edited
+where the other sentences are). A person reads them where a model reads the
+sentences: the labels of the pages and of the picker, the tag after a
+document's name and the noun for one (`UI_REQUIRED`), the name of each axis
+of the spec where the chat shows a value's coordinates (`axis_<axis>`), why
+the graph route did not answer (`graph_note_<reason>`), and the marker and
+note of a value read off a figure (`readoff_marker`, `readoff_note`). Both
+tables are checked for the entries the core asks for (`REQUIRED`,
+`CHAT_REQUIRED`).
 
 Author: Felix Vossel
 
@@ -54,15 +59,45 @@ The profile's labels and guides, complete.
 Cached: citation_label asks once per retrieval hit, and the completeness
 check has nothing new to say the second time.
 
+### chat_words
+
+```python
+def chat_words(profile: Optional[Profile] = None) -> dict
+```
+
+Every word of the chat a person reads (`CHAT`), complete: the
+profile's file laid over those of the profiles it extends. Without a
+profile they are those of the profile the package brings itself: the app
+starts on any corpus, and what it shows then is in English. A name of
+none of its families is refused: no page would show it.
+
 ### ui
 
 ```python
 def ui(profile: Optional[Profile] = None) -> dict
 ```
 
-The words of the app's pages and of the picker, complete. Without a
-profile they are those of the profile the package brings itself: the app
-starts on any corpus, and what it shows then is in English.
+The words of the app's pages and of the picker, complete
+(`chat_words`, those of `UI_REQUIRED`).
+
+### axis_names
+
+```python
+def axis_names(profile: Optional[Profile] = None) -> dict
+```
+
+{axis: its name in the profile's words} where the chat shows a
+value's coordinates; an axis the profile does not name is shown by its
+key.
+
+### graph_notes
+
+```python
+def graph_notes(profile: Optional[Profile] = None) -> Optional[dict]
+```
+
+{reason of kg_route.REASONS: why the graph route did not answer, in
+the profile's words}; None where the profile words none.
 
 ### readoff
 

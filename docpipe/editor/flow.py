@@ -18,10 +18,17 @@ what the page draws and decides what a save does to the profile's own file:
   into the spec; and what the run could not do with the drawing.
 - `judge`: whether edited numbers are numbers of the flow and an edited
   drawing one the run can do (`flow.problems`, `flow.prompt_problems`),
-  what changes and what the profile's file would then be. A profile that
-  extends another writes only the numbers that differ from what it
-  inherits and the drawing where it differs, so a number set back leaves
-  the file, and a file that would hold nothing is removed.
+  what changes and what the profile's file would then be. The page edits
+  the drawing with every part drawn; a save folds it back
+  (`flowparts.fold`): a frame that used a part uses it again, and a change
+  to the steps of a part in one frame is made in every frame that uses it
+  (owner request 2026-11-19, point C2 of the review of that day). A
+  profile that extends another writes only the numbers that differ from
+  what it inherits and what it changes in the drawing it inherits
+  (`flowparts.as_changes`; the whole drawing where the changes cannot say
+  it), so a number set back leaves the file, and a file that would hold
+  nothing is removed. A drawing the edit left as it was stays in the file
+  as the file says it.
 - `save`: `judge`, and the bytes to write where it holds.
 - `pass_names`, `pass_view`, `pass_judge`, `pass_save`: the same for the
   flow of a follow-up pass (`extraction.passflow`), one file for each, by
@@ -46,7 +53,7 @@ from .. import graphfile, rules, settings
 from ..extraction import blocks, conditions, shows
 from ..extraction import spec as spec_module
 from ..extraction import flow as flow_map
-from ..extraction import passflow
+from ..extraction import flowparts, passflow
 from ..extraction.spec import plan_field_kind
 from . import prompts as prompt_files
 from . import rulespage as rule_page
@@ -315,8 +322,9 @@ def step_rules(profile) -> dict:
             continue
         hidden = one.secret
         out.append({
-            "name": one.name, "source": "rule", "tab": one.tab,
-            "group": one.group, "kind": one.kind, "help": one.help,
+            "name": one.name, "title": one.title, "source": "rule",
+            "tab": one.tab, "group": one.group, "kind": one.kind,
+            "help": one.help,
             "least": one.least, "most": one.most,
             "choices": list(one.choices), "columns": list(one.columns),
             "of": one.of, "empty": one.empty, "decided": one.decided,
@@ -328,8 +336,8 @@ def step_rules(profile) -> dict:
             "origin": taken_of(one.name)[1]})
     for number in flow_map.NUMBERS:
         out.append({
-            "name": number.name, "source": "number", "tab": "flow",
-            "group": "Numbers of the flow", "kind": "whole",
+            "name": number.name, "title": number.title, "source": "number",
+            "tab": "flow", "group": "Numbers of the flow", "kind": "whole",
             "help": number.help, "least": number.least, "most": None,
             "choices": [], "columns": [], "of": "text", "empty": False,
             "decided": "", "setting": number.env, "machine": False,
@@ -410,12 +418,13 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
     below = flow_map.inherited(profile)
     in_effect = flow_map.in_effect(profile)
     owned = own_at(flow.tree)
+    written = json.loads(_text(own_raw)) if own_raw is not None else {}
     numbers = []
     for number in flow_map.NUMBERS:
         name = number.name
         numbers.append({
-            "name": name, "help": number.help, "least": number.least,
-            "value": flow.numbers[name],
+            "name": name, "title": number.title, "help": number.help,
+            "least": number.least, "value": flow.numbers[name],
             "own": flow.owners[name] == profile.name,
             "inherited": below.numbers[name] if below is not None else None,
             "owner": flow.owners[name], "setting": number.env,
@@ -429,6 +438,15 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
             "whole": below is None, "starts_from": flow.files[-1][0],
             "drawn_by": flow.tree_from,
             "inherited_tree": below.tree if below is not None else None,
+            # How many changes the profile's own file makes in the drawing
+            # it inherits, None where it makes none.
+            "changes": len(written["changes"])
+            if isinstance(written, dict)
+            and isinstance(written.get("changes"), list) else None,
+            "inherits_from": below.files[0][0] if below is not None
+            else None,
+            # The frames that use a part (owner request 2026-11-19, C2).
+            "parts": parts_at(flow.top),
             "numbers": numbers, "tree": flow.tree,
             "library": blocks.catalogue(profile),
             "conditions": conditions.catalogue(),
@@ -461,6 +479,20 @@ def view(profile, own_raw: Optional[bytes], data: Optional[dict],
 
 def _text(raw: Optional[bytes]) -> Optional[str]:
     return None if raw is None else raw.decode("utf-8").replace(CR + LF, LF)
+
+
+def parts_at(top: list) -> dict:
+    """{id of a frame that uses a part: {"part", "prefix", "with": the
+    other frames that use it}} of the drawing *top* as its file writes
+    it."""
+    found = flowparts.uses(top)
+    return {node.get("id"): {
+        "part": node[flowparts.PART],
+        "prefix": node.get(flowparts.PREFIX, ""),
+        "with": [other.get("id") for other in found
+                 if other is not node
+                 and other[flowparts.PART] == node[flowparts.PART]]}
+        for node in found}
 
 
 def _boxes(tree: list) -> dict:
@@ -508,6 +540,15 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
     errors = []
     values = dict(flow.numbers)
     drawing = flow.tree if tree is None else tree
+    top, parts = flow.top, flow.parts
+    if isinstance(tree, list):
+        # The drawing as it would be written: each part once, a change to
+        # it made in every frame that uses it.
+        try:
+            top, parts = flowparts.fold(tree, flow.top, flow.parts)
+            drawing = flowparts.expand(top, parts)
+        except flowparts.PartError as exc:
+            errors.append({"name": None, "id": None, "message": str(exc)})
     if tree is not None:
         said = flow_map.problems(drawing, flow_map.known_rules(profile),
                                  profile) \
@@ -540,18 +581,38 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
     old = _text(own_raw)
     # A file keeps its line ends; one that is new is written with plain ones.
     newline = CR + LF if (CR + LF).encode() in (own_raw or b"") else LF
+    written = json.loads(old) if old else {}
+    # A drawing the edit left as it was is written as the file says it.
+    kept = {key: written[key] for key in ("flow", "parts", "changes")
+            if key in written} \
+        if top == flow.top and parts == flow.parts else None
     if below is None:
         # The profile's own file is the whole flow.
-        new = flow_map.dump({"numbers": {
-            number.name: values[number.name]
-            for number in flow_map.NUMBERS}, "flow": drawing})
+        data = {"numbers": {number.name: values[number.name]
+                            for number in flow_map.NUMBERS}}
+        if kept is not None and "flow" in kept:
+            data.update(kept)
+        else:
+            data["flow"] = top
+            if parts:
+                data["parts"] = parts
+        new = flow_map.dump(data)
     else:
         own = {number.name: values[number.name]
                for number in flow_map.NUMBERS
                if values[number.name] != below.numbers[number.name]}
         data = {"numbers": own} if own else {}
-        if drawing != below.tree:
-            data["flow"] = drawing
+        if kept is not None:
+            data.update(kept)
+        else:
+            changes = flowparts.as_changes(below.top, below.parts, top,
+                                           parts)
+            if changes is None:
+                data["flow"] = top
+                if parts:
+                    data["parts"] = parts
+            elif changes:
+                data["changes"] = changes
         new = flow_map.dump(data) if data else None
     if errors:
         new = old
@@ -580,7 +641,8 @@ def judge(profile, own_raw: Optional[bytes], numbers, name: str,
             "available": flow_map.available_by_id(drawing),
             "changed": [{"name": "flow", "from": "", "to": line}
                         for line in edited]
-            + [{"name": number.name, "from": flow.numbers[number.name],
+            + [{"name": number.name, "title": number.title,
+                "from": flow.numbers[number.name],
                 "to": values[number.name]}
                for number in flow_map.NUMBERS
                if values[number.name] != flow.numbers[number.name]],

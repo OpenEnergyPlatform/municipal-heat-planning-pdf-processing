@@ -109,6 +109,11 @@ def own_table(profile, module: str) -> dict:
 def test_the_page_gets_the_file_back_when_nothing_is_changed():
     for profile in (DEFAULT, KWP, SCENARIOS):
         for module in phrases.MODULES:
+            if not edited.detail(profile, module, read)["own_file"]:
+                # a profile that words nothing of a module differently has
+                # no file of it (the scenarios profile's chat words)
+                assert not phrases.path_of(profile, module).is_file()
+                continue
             report = edited.judge(profile, module,
                                   own_table(profile, module), read)
             assert report["ok"] and report["changed"] is False

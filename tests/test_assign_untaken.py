@@ -33,8 +33,10 @@ import pytest
 
 from docpipe import rules
 from docpipe.extraction import addressed, stats, trace
+from docpipe.extraction import flow as flow_map
 from docpipe.extraction.addressed import Asks, Counts, Plan
 from docpipe.extraction.spec import load as load_spec
+from docpipe.profile import load_profile
 
 from test_addressed import (CAPTION, ENERGY, FIGURE, SPEC, TABLE, TEXT,
                             Model, plan_of, reader_of)
@@ -251,11 +253,11 @@ def test_a_profile_without_the_prompt_asks_nothing_and_every_profile_has_it():
                 ).read_text(encoding="utf-8")
         assert "{{example}}" in text and "`" not in text.replace(
             "No Backticks", "")
-        flow = json.loads((ROOT / place / "flow.json").read_text(
-            encoding="utf-8"))
-        ids = [s.get("id") for s in flow["flow"]]
+        drawn = flow_map.load(None if place.endswith("default") else
+                              load_profile(place.rsplit("/", 1)[-1])).tree
+        ids = [s.get("id") for s in drawn]
         assert ids.index("in_pieces") < ids.index("untaken_numbers") \
             < ids.index("values")
-        frame = flow["flow"][ids.index("untaken_numbers")]
+        frame = drawn[ids.index("untaken_numbers")]
         assert frame["each"] == "list" and frame["list"] == "untaken"
         assert frame["steps"][0]["preset"] == "assign"

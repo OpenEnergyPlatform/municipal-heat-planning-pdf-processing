@@ -268,15 +268,39 @@ def check(directory: Path, prompt_ids: Iterable[str],
     return stale(stored, versions(prompt_ids, profile))
 
 
+# The prompts whose words a stage sent from its code before they had a file
+# (owner request 2026-11-19, A1: the sentences a model reads stand in prompt
+# files), each with the sha256 of each profile's file as it was first
+# written: the words the code sent. A result recorded before the file
+# existed holds no hash of it and was made with exactly those words, so it
+# is not stale for that prompt while the file is unchanged (`stale`).
+FROM_CODE: dict = {
+    "refinement/window_context": (
+        "6bc07d8f81fc7bf9aee4fd0e420f2065b933095a3c772608a4435d338172d9f4",),
+    "refinement/split_user": (
+        "89c3980939d642ee048e8fca2b731fb3e6a6239fc04028c114282aee61071b63",),
+    "visuals/table_retry_hint": (
+        "45889410fb3f6d347348383e432e805b9ae5bc7902502c1d7b995ca4f4166604",),
+}
+
+
 def stale(stored: Optional[Mapping], current: Mapping) -> list:
     """Prompt ids whose hash changed since the stored result was produced.
 
     An absent entry counts as changed: results from before prompts were
-    versioned cannot be vouched for either.
+    versioned cannot be vouched for either. A prompt the code worded before
+    it had a file counts as its first file (`FROM_CODE`).
     """
     if not stored:
         return sorted(current)
-    return sorted(pid for pid, sha in current.items() if stored.get(pid) != sha)
+    out = []
+    for pid, sha in current.items():
+        if pid in stored:
+            if stored[pid] != sha:
+                out.append(pid)
+        elif sha not in FROM_CODE.get(pid, ()):
+            out.append(pid)
+    return sorted(out)
 
 
 def _split(raw: str) -> tuple:
@@ -821,3 +845,130 @@ class _PutBack(_MappingABC):
 
     def __len__(self) -> int:
         return len(self._labels)
+
+
+# -- a request made of prompt files ---------------------------------------------
+#
+# A stage before the harvest (4, the refinement; 5, the visuals) makes each
+# message of a request out of prompt files, the values it fills in and the
+# data it shows (owner request 2026-11-19, A3: the stages write the request
+# log the harvest writes, so that the editor shows, rebuilds and tries their
+# requests). How a message is made is said once, as its parts, and made by
+# `composed` both in the run and in the editor:
+#
+#     {"prompt": id}                         the prompt's text as it is
+#     {"prompt": id, "fill": "format",       its text with Python's format
+#      "nested": {name: id}}                 fields filled, a nested name
+#                                            with the text of that prompt
+#     {"prompt": id, "fill": "render"}       its {{name}} places filled
+#     {"text": words}                        these words
+#     {"data": true}                         what the request shows, as given
+#
+# The run writes the parts into its log (`made`), never the values: the
+# editor reads them back from the message the log holds (`values_in`).
+
+def _fields(text: str, how: str) -> list:
+    """[(words before, the name filled in after them, or None)] of *text*
+    filled as *how* says."""
+    if how == "format":
+        import string
+        return [(literal, name) for literal, name, _spec, _conversion
+                in string.Formatter().parse(text)]
+    out, at = [], 0
+    for match in _PLACEHOLDER.finditer(text):
+        out.append((text[at:match.start()], match.group(1)))
+        at = match.end()
+    out.append((text[at:], None))
+    return out
+
+
+def _filled(part: Mapping, text_of, values: Mapping) -> str:
+    """One part of a message made with its prompt text and its values."""
+    if "text" in part:
+        return str(part["text"])
+    if part.get("data"):
+        return str(values.get("data", ""))
+    text = text_of(part["prompt"])
+    how = part.get("fill")
+    if not how:
+        return text
+    given = dict(values)
+    for name, nested in (part.get("nested") or {}).items():
+        given[name] = text_of(nested)
+    if how == "format":
+        return text.format(**given)
+    return _PLACEHOLDER.sub(lambda m: str(given[m.group(1)]), text)
+
+
+def composed(parts: list, text_of, values: list) -> str:
+    """The message *parts* make: each part made with the prompt texts
+    *text_of(prompt id)* gives and its own *values* ({name: value}, for a
+    data part {"data": what it shows}), joined as they stand."""
+    return "".join(_filled(part, text_of, one)
+                   for part, one in zip(parts, values))
+
+
+def prompts_of(made: Mapping) -> list:
+    """Every prompt id a request's parts name, nested ones too, in order."""
+    out: list = []
+    for parts in made.values():
+        for part in parts or ():
+            for one in ([part.get("prompt")]
+                        + list((part.get("nested") or {}).values())):
+                if one and one not in out:
+                    out.append(one)
+    return out
+
+
+# What a value read back may be: any text, as short as the message lets it.
+ANY = r"[\s\S]*?"
+
+
+def values_in(parts: list, text_of, message: str) -> Optional[list]:
+    """The values *message* was made with by *parts* and the texts
+    *text_of* gives, read back from it: each part's {name: value}; None
+    where those texts cannot make the message, character for character."""
+    pattern, slots = [], []
+    seen: dict = {}
+    for index, part in enumerate(parts):
+        if "text" in part:
+            pattern.append(re.escape(str(part["text"])))
+            continue
+        if part.get("data"):
+            name = f"g{len(slots)}"
+            pattern.append(f"(?P<{name}>{ANY})")
+            slots.append((index, "data", name))
+            continue
+        how = part.get("fill")
+        text = text_of(part["prompt"])
+        if not how:
+            pattern.append(re.escape(text))
+            continue
+        nested = part.get("nested") or {}
+        for literal, name in _fields(text, how):
+            pattern.append(re.escape(literal))
+            if name is None:
+                continue
+            if name in nested:
+                pattern.append(re.escape(text_of(nested[name])))
+            elif (index, name) in seen:
+                pattern.append(f"(?P={seen[(index, name)]})")
+            else:
+                group = f"g{len(slots)}"
+                seen[(index, name)] = group
+                pattern.append(f"(?P<{group}>{ANY})")
+                slots.append((index, name, group))
+    try:
+        match = re.fullmatch("".join(pattern), message)
+    except re.error:
+        return None
+    if match is None:
+        return None
+    values: list = [{} for _ in parts]
+    for index, name, group in slots:
+        values[index][name] = match.group(group)
+    try:
+        again = composed(parts, text_of, values)
+    except (KeyError, IndexError, ValueError):
+        return None
+    return values if again == message else None

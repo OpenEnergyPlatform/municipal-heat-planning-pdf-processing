@@ -642,6 +642,13 @@ def main() -> None:
     if args.input_json:
         common["input_json"] = args.input_json
 
+    # The request log of the stage, each document's in its folder (owner
+    # request 2026-11-19, A3); a dry run asks nothing and writes none.
+    from docpipe.extraction import trace
+    if not args.dry_run:
+        trace.open_stage(args.input, args.batch, "visuals",
+                         prompt_ids=PROMPT_IDS,
+                         model=args.model or VLM_MODEL)
     try:
         # The CLI may point at another server than the config default, so the
         # check has to use what run_* will actually talk to.
@@ -667,6 +674,8 @@ def main() -> None:
     except Exception as e:
         log.error("Fatal error: %s", e, exc_info=True)
         sys.exit(1)
+    finally:
+        trace.close_stage()
 
 
 if __name__ == "__main__":

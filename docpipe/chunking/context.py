@@ -29,7 +29,7 @@ Images, column `context_sentence`; the parts as one JSON list), which is how
 `--step sync` finds that a changed sentence is a changed entry.
 
 An answer that is not one JSON object with the key `sentence` is asked again,
-with its cause named, as often as the other stages ask (MAX_RETRIES), and is
+with its cause named, as often as stage 4 asks (refine_max_attempts), and is
 never embedded: the table or figure keeps its text as it was and is asked again
 by the next run. Nothing is repaired.
 
@@ -56,6 +56,9 @@ from .config import CONTEXT_SENTENCES_JSON, DOCUMENT_JSON
 log = logging.getLogger(__name__)
 
 PROMPT_ID = "visuals/context_sentence"
+# What the model is told when its sentence came back empty, before the request
+# is asked again.
+EMPTY_PROMPT_ID = "visuals/context_sentence_empty"
 SCHEMA = {"type": "object",
           "properties": {"sentence": {"type": "string"}},
           "required": ["sentence"], "additionalProperties": False}
@@ -415,13 +418,16 @@ def make_ask() -> tuple:
                               api_key=llm.LLM_API_KEY, timeout=llm.LLM_TIMEOUT,
                               max_retries=0)
     prompt = prompts.load(PROMPT_ID)
-    max_tokens = int(prompt.meta.get("max_tokens", 400))
+    max_tokens = int(prompt.meta.get(
+        "max_tokens", rules.get("context_default_max_tokens")))
     fits = window_fits(prompt.text, max_tokens, base_url=llm.LLM_BASE_URL,
                        model=llm.LLM_MODEL, api_key=llm.LLM_API_KEY)
     ask = lambda request: ask_model(
         client, request, system=prompt.text, model=llm.LLM_MODEL,
-        temperature=float(prompt.meta.get("temperature", 0.1)),
-        max_tokens=max_tokens, max_retries=llm.MAX_RETRIES, fits=fits)
+        temperature=float(prompt.meta.get(
+            "temperature", rules.get("context_default_temperature"))),
+        max_tokens=max_tokens,
+        max_retries=int(rules.get("refine_max_attempts")), fits=fits)
     return ask, fits
 
 
@@ -467,7 +473,6 @@ def ask_model(client, request: dict, *, system: str, model: str,
                     max_retries, cause)
         content = getattr(getattr(choice, "message", None), "content", None)
         messages = reading.again(
-            base, content,
-            said or "The sentence is empty. Answer with one JSON object with "
-                    "a non-empty sentence.", cause, fits=fits)
+            base, content, said or prompts.text(EMPTY_PROMPT_ID), cause,
+            fits=fits)
     return None

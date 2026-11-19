@@ -48,14 +48,14 @@ export interface Prop { name: string; kind: string; label: string; ops: string[]
 /* a thing a condition is about; "variable" takes any variable by its path and every comparison */
 export interface Subject { name: string; label: string; props: Prop[]; variable?: boolean; ops?: string[] }
 export interface FlowNumber {
-  name: string; help: string; least: number; value: number; own: boolean; inherited: number | null; owner: string;
+  name: string; title?: string; help: string; least: number; value: number; own: boolean; inherited: number | null; owner: string;
   setting: string | null; in_effect: number; origin: string; own_at?: StepRef[];
 }
 /* a step of the saved flow that gives a rule or number a value of its own */
 export interface StepRef { id: string; kind: string }
 /* a rule or number a step can read (editor/flow.py step_rules); a key has no value here */
 export interface StepRule {
-  name: string; source: 'rule' | 'number'; tab: string; group: string; kind: string; help: string;
+  name: string; title?: string; source: 'rule' | 'number'; tab: string; group: string; kind: string; help: string;
   least: number | null; most: number | null; choices: string[]; columns: string[]; of: string; empty: boolean;
   decided: string; setting: string | null; machine: boolean; secret: boolean; steps: string[];
   standard: unknown; standard_from: string; in_effect: unknown; origin: string;
@@ -64,9 +64,14 @@ export interface StepRule {
 export interface MachineRule extends Omit<StepRule, 'steps' | 'standard' | 'standard_from' | 'source' | 'machine' | 'secret'> {
   key: string | null; value: unknown;
 }
+/* a frame whose steps stand once, as a part of the drawing, and the other frames that go through them too */
+export interface PartUse { part: string; prefix: string; with: string[] }
 export interface FlowData {
   file: string; exists: boolean; base: string | null; whole: boolean; starts_from: string; drawn_by: string;
   inherited_tree: Step[] | null; numbers: FlowNumber[]; tree: Step[]; library: Library; conditions: Subject[];
+  /* how many changes the profile's own file makes in the drawing it inherits (null: none), the profile it inherits
+     the drawing from, the frames that use a part (owner request 2026-11-19) */
+  changes?: number | null; inherits_from?: string | null; parts?: Record<string, PartUse>;
   prompts: Record<string, { id: string; written: boolean; owner: string | null }>;
   never: Record<string, string>; switches: Record<string, { name: string; label: string; none: string; items: { label: string; to: unknown }[] }>;
   problems: { id?: string; name?: string; message: string }[];

@@ -35,7 +35,7 @@ Three profiles ship. The built-in `default` profile
 (`docpipe/builtin/default/`) is the one the package brings itself: any folder
 of English documents, with no subject. It reads a folder of PDFs
 (`docpipe ingest`), carries English prompts for every stage, the English
-wording (the chat's labels in `inference.py`, the sentences each stage says to
+wording (the chat's labels in `prompts/chat/phrases.json`, the sentences each stage says to
 the model outside its prompts in `prompts/<module>/phrases.json`, among them the
 ones a model hears when its reply was not the one JSON object) and a catalog that
 filters by subfolder, and has no extraction spec. `kwp` and `scenarios` both
@@ -107,8 +107,8 @@ parser to report (`:435-436`). So `--profile` alone
 is enough, and a stage's usage text needs no profile: refinement and visuals
 read their prompts on first use, once per ambient profile
 (`prompts.per_profile`, `docpipe/prompts.py:208-225`), not when the module is
-imported. What a stage binds on import is the refinement
-`WINDOW_SIZE` (`docpipe/refinement/config.py:39-41`); the answer chat's
+imported. The refinement binds nothing on import: its window size and the
+other decisions are rules, read where they decide; the answer chat's
 prompts are read on first use too, once per profile
 (`docpipe/inference/llm_client.py:82` to `94`). `resolve_profile`
 refuses one case rather than running it on a mix of two profiles: a caller
@@ -148,9 +148,10 @@ Which of the two a caller uses is a choice, not a fixed rule.
 `docpipe/inference/kg_route.py`'s `hooks()` reads `kg.VALUE_QUERY` through
 `component`, not `require`, so a profile with no answerable graph
 (`scenarios`) is not forced to provide one; an absent one is no failure there.
-`preprocessing.py`'s constants, by contrast, are all read through
-`require` or `profile_value`, so their absence is a hard failure for any
-profile the pipeline runs text through.
+The words and numbers that text extraction needs for a corpus's language
+are rules of the stages (`rules.json`, the tab "stages" of `docpipe edit`),
+not constants of a profile module: the default profile's file holds a value
+for each, so no profile has to provide one.
 
 No test walks the profiles for these lookups. What holds a profile to what a
 stage asks of it is the stage's own check, made when the stage first reads it:
@@ -161,7 +162,7 @@ got against their `REQUIRED` names and name what is missing and the file that
 should hold it. `docpipe doctor` runs the same checks for the profile in effect
 without a model: the prompts each stage loads, and the wording lines
 `prompts/extraction/phrases.json`, `prompts/inference/phrases.json` and
-`inference.UI`. A profile that is never run and never checked is not looked at
+`prompts/chat/phrases.json`. A profile that is never run and never checked is not looked at
 by anything.
 
 ## Extending a profile
@@ -170,18 +171,18 @@ A profile that sets `extends="default"`, or the name of another profile, gets
 what it does not provide from that profile. `Profile.component` walks the line
 of profiles nearest first and returns the first attribute it finds;
 `Profile.layers` returns the value of every profile along the line, for a
-table a profile lays over the one it extends entry by entry. The wording
-table `inference.UI` works that way: a profile writes only the labels it words
-differently. So do the sentences a stage says outside its prompts, which are
-files and not tables: `prompts/extraction/phrases.json`,
+table a profile lays over the one it extends entry by entry. The words
+of the chat a person reads work that way: a profile writes only the ones it words
+differently, in `prompts/chat/phrases.json`. So do the sentences a stage says outside its prompts:
+`prompts/extraction/phrases.json`,
 `prompts/inference/phrases.json` and `prompts/reading/phrases.json`, one JSON
 object each, a sentence's name to its words. `docpipe/phrases.py` reads them
 strictly and lays a profile's file over those of the profiles it extends,
 entry by entry, the farthest first (`phrases.table`); a profile writes only
-the sentences it words differently. The words of the picker are in `inference.UI` too (`version_current`, `version_old` and
+the sentences it words differently. The words of the picker are in the chat's words too (`version_current`, `version_old` and
 `document_noun_fallback`): `kwp` says `(aktuell)`, `(alt)` and `Dokument`, the
 built-in profile and `scenarios` `(current)`, `(old)` and `document`. A profile
-that stands alone has to word all of `wording.UI_REQUIRED`, those three
+that stands alone has to word all of `wording.CHAT_REQUIRED`, those three
 included, or the app and the picker raise a `LookupError` naming what is
 missing. A prompt it does
 not have is the extended profile's, and so is `schema.sql`; a profile that adds
@@ -215,7 +216,7 @@ constants. `docpipe edit` shows and sets each of them.
 | `rules.json` | every value a run follows (`docpipe/rules.py`): quote minimum length, decimal mark, year range, span words, request letters, retry waits, image size, country groups, `not_extracted`, compute parts); a setting from the environment or the project file is laid over it, and a step of the flow may set its own value for a rule it reads (the rule's `steps`). Values of the machine (a model's address, slots per model, connections) are not set here but in the project file `docpipe.toml` | rule by rule |
 | `sources.json` | the ontology, shapes and graph queries the profile is written against, the lists drawn from them and which coordinate answers from which list (`docpipe/sources.py`); read by the profile's `vocabulary.py` through `sources()`, `sets()` and `axis_sets()` | not inherited |
 | `graph.json` | the drawing of the graph (`map`: boxes, arrows and bricks), the classes not written, address rules, the effect of each constraint and the rules the one writer, `docpipe/extraction/graph.py`, follows: which reading wins, how front pages are found, how different numbers on one place are settled, whether a value two passages print is marked as confirmed, the base IRI (`docpipe/graphfile.py`, applied by `serialize.apply_graph_file`) | not inherited |
-| `flow.json` | the drawing of the reading (boxes and frames), the numbers that bound it and the values a step or frame sets for the rules it reads | number by number; a drawing of its own is the whole drawing |
+| `flow.json` | the drawing of the reading (boxes and frames; steps several frames go through stand once, as a part), the numbers that bound it and the values a step or frame sets for the rules it reads | number by number; the drawing by the changes the file makes in the inherited one, or a drawing of its own, which is then the whole drawing |
 | `flows/<name>.json` | a follow-up pass as a flow of its own (`top_up`, `top_up_open`, `top_up_parameters`, `remap`, `recheck`, `review`, `start_at`, `example`); the default profile ships all of them, and a profile may write a file of the same name | the nearest file of the profile's line is the flow |
 | `rules.py` | `RULES`, the rules the profile's own code follows, and `GRAPH`, the rules of its graph writer; the code knows name, kind, bounds and help, never the value | not inherited |
 
@@ -229,18 +230,17 @@ shipped profile provides.
 |---|---|---|---|---|
 | Getting the documents in | `source.SOURCE` | required to run the stage (`component`, `docpipe/ingest/cli.py:76`) | a class over the KWW Excel sheet | a class over the crawl's `pdf_index.json` |
 | Getting the documents in | `source.backfill_meta` | optional, for `--backfill-meta` (`component`, `docpipe/ingest/cli.py:67`) | provided (`profiles/kwp/source.py:199`) | not provided; the flag ends the run |
-| Reading the page | `preprocessing.HYPHEN_EXCEPTIONS` | required (`profile.require`, `docpipe/preprocessing/page_text.py:45`) | German continuation words ("und", "oder", ...) | English ones ("and", "or", ...) |
-| Reading the page | `preprocessing.CAPTION_MAX_WORDS` | required (`profile_value`, `docpipe/preprocessing/config.py:182`) | 45 (median caption 8 words, 205 past 40, `profiles/kwp/preprocessing.py:35-39`) | 160 (journal/IPCC captions run 60 to 150 words, `profiles/scenarios/preprocessing.py:39-43`) |
-| Reading the page | `preprocessing.CAPTION_START` | required, a non-empty list of regular expressions each carrying its own anchor (`profile.require`, `docpipe/captions.py:64-71`); an empty list, a bare string or a pattern that does not compile or matches the empty text is a `ValueError` naming the profile, a missing list a `LookupError` | one German-shaped pattern: a word, a number, a colon ("Tabelle 17:") | the same pattern; the built-in profile adds letter-numbered forms ("Table A.1:") and the colon-less forms ("Figure 3.", "Fig. 2", "Table 1 Annual totals") only where a text, a line or a sentence begins |
-| Reading the page | `preprocessing.TITLE_EXCLUDE_PREFIXES` | required (`profile_value`, `docpipe/preprocessing/config.py:192`) | "abbildung", "tabelle", and their abbreviations | "figure", "table", "box", "plate", and their abbreviations |
-| Reading the page | `preprocessing.DIRECTORY_FIGTAB_WORDS` | required (`profile_value`, `docpipe/preprocessing/sections.py:211`) | German figure/table list openers | English ones |
-| Reading the page | `preprocessing.DIRECTORY_TITLE_WORDS` | required (`profile_value`, `docpipe/preprocessing/sections.py:250`); fragments of a pattern joined with `\|`, matched case-insensitively anywhere in a section title; an empty list never matches | "inhalt", "verzeichnis", "contents", "directory" | the same four, which keeps every verdict where they were |
-| Reading the page | `preprocessing.BIBLIOGRAPHY_TITLE_WORDS` | required (`profile_value`, `docpipe/preprocessing/sections.py:234`) | "literatur", "quellen", ... | "references", "bibliography", ... |
-| Repairing the text | `refinement.WINDOW_SIZE` | optional (`component`, `docpipe/refinement/config.py:41`) | not set, falls back to 3 | not set, falls back to 3 |
+| Reading the page | rule `hyphen_exceptions` | a rule of the default profile's file, set by a profile in its own (`rules.get`, `docpipe/preprocessing/page_text.py`) | German continuation words ("und", "oder", ...) | English ones ("and", "or", ...) |
+| Reading the page | rule `caption_max_words` | a rule (default 60; `rules.get`, `docpipe/preprocessing/config.py`) | 45 (median caption 8 words, 205 past 40) | 160 (journal/IPCC captions run 60 to 150 words) |
+| Reading the page | rule `caption_opener_patterns` | a rule, a non-empty list of regular expressions each carrying its own anchor (`rules.get`, `docpipe/captions.py`); an empty list or a pattern that does not compile or matches the empty text is a `ValueError` naming the profile | one German-shaped pattern: a word, a number, a colon ("Tabelle 17:") | the same pattern; the built-in profile adds letter-numbered forms ("Table A.1:") and the colon-less forms ("Figure 3.", "Fig. 2", "Table 1 Annual totals") only where a text, a line or a sentence begins |
+| Reading the page | rule `heading_excluded_prefixes` | a rule (`rules.get`, `docpipe/preprocessing/config.py`) | "abbildung", "tabelle", and their abbreviations | "figure", "table", "box", "plate", and their abbreviations |
+| Reading the page | rule `directory_figure_words` | a rule (`rules.get`, `docpipe/preprocessing/sections.py`) | German figure/table list openers | English ones |
+| Reading the page | rule `directory_title_words` | a rule (`rules.get`, `docpipe/preprocessing/sections.py`); fragments of a pattern joined with `\|`, matched case-insensitively anywhere in a section title; an empty list never matches | "inhalt", "verzeichnis", "contents", "directory" | the same four, which keeps every verdict where they were |
+| Reading the page | rule `bibliography_title_words` | a rule (`rules.get`, `docpipe/preprocessing/sections.py`) | "literatur", "quellen", ... | "references", "bibliography", ... |
 | Repairing the text, the visuals, page transcription, the answer app | the file `prompts/reading/phrases.json` | required, laid over the extended profile's file entry by entry (`phrases.table`, `docpipe/phrases.py`); checked as a set against `reading.REQUIRED`, ten names, by `reading.phrases()` before the first request of refinement, of the visuals stage and of page transcription, and in the chat when a reply was not the one object asked for | the ten sentences said to a model whose reply was not the one JSON object, in English, the language of the profile's prompts for these stages | the same ten, in English; its extraction prompts are German and `prompts/extraction/phrases.json` is another file |
 | The answer app | `catalog.CATALOG` | optional (`component`, `docpipe/inference/catalog.py:158`) | `KwpCatalog`: municipality, Land, year | `ScenarioCatalog`: year, venue |
 | The answer app | the file `prompts/inference/phrases.json` | required, laid over the extended profile's file (`phrases.table`); checked at first use against `wording.REQUIRED` (`wording.phrases`) | German phrasing, 33 keys | English phrasing, same 33 keys |
-| The answer app | `inference.READOFF_MARKER`, `READOFF_NOTE` | required at first use (`profile.require`, variable `attr`, `docpipe/inference/wording.py`) | German | English |
+| The answer app | the chat words `readoff_marker`, `readoff_note` in the file `prompts/chat/phrases.json` | required, checked with the rest of the chat's words at first use (`wording.chat_words`, `wording.readoff`, `docpipe/inference/wording.py`) | German | English |
 | Reading the values out | the file `prompts/extraction/phrases.json` | required, laid over the extended profile's file (`phrases.table`), checked against `wording.REQUIRED` (`docpipe/extraction/wording.py`) | German sentences the stage writes to the model | German sentences, the language of its extraction prompts |
 | Reading the values out | `extraction.PROMPT_CHECKS` | optional, read by `docpipe preflight` (`component`); a profile that declares none has the extended profile's | none: an empty tuple since 2026-11-08, when the field and rows prompts it checked went | none |
 | Reading the values out | `extraction.CONTRACT_LANGUAGE` | required of a profile that holds a parts file: the language of the core's template the file is put together with, read from the profile that owns the file (`Profile.own`, `docpipe/extraction/contract.py:85-88`) and not inherited | `"de"` | `"en"` for scenarios and the built-in profile |
@@ -250,12 +250,12 @@ shipped profile provides.
 | Reading the values out | `extraction.SPEC_PATH` | required in practice; refused with `SystemExit` otherwise (`component`, `docpipe/extraction/runner.py:5433-5436`) | `extraction_spec.json` | `extraction_spec.json` |
 | Reading the values out | `extraction.FRAME` | optional (`component`, `runner.main`): the frame coordinates, the ones the plan's base and target years date a value by | `("scenario", "year")`; each value is asked them for itself | not provided |
 | Reading the values out | the key `of` of the spec's plan fields `base_year` and `target_year` (the profile hooks `BASE_YEAR` and `TARGET_YEAR` were deleted on 2026-11-10) | optional, checked by `spec.load` (`spec._validate_of`): which frame pairs are the plan's own state and its target; only the passes over a stored harvest (`--top-up`, `--top-up-open`) read it, to say where the plan's own years are looked for. A year answer naming only the plan's word for one of them ("Basisjahr", "Zieljahr") is read when its number is one of the plan's years | `{"scenario": "status_quo"}` and `{"scenario": "target"}` | not provided; no state has years |
-| Reading the values out | the file `flow.json` of the profile's folder | optional for a profile that extends another: the `numbers` it sets differently, laid over the inherited file number by number, and the `flow` (the drawing) where it draws otherwise; the default profile's file is the whole flow, `numbers` and `flow`, drawn with the general boxes only (`extraction.flow`) | its own drawing: the default's with "what a number is" and "the year among the plan's years"; the default's numbers are read | its own drawing: the default's with the works, the work of a value and the entry of a name; the default's numbers are read |
+| Reading the values out | the file `flow.json` of the profile's folder | optional for a profile that extends another: the `numbers` it sets differently, laid over the inherited file number by number, and the `changes` it makes in the drawing it inherits; the default profile's file is the whole flow, `numbers`, `flow` and `parts`, drawn with the general boxes only (`extraction.flow`, `extraction.flowparts`) | three changes to the default's drawing: "what a number is" and "the year among the plan's years"; the default's numbers are read | four changes to the default's drawing: the works, the work of a value and the entry of a name; the default's numbers are read |
 | Reading the values out | `blocks.PRESETS`, `blocks.TARGETS` (and `NESTED_PRESETS`) | optional (`profile.own`, `extraction.blocks`): the presets of "Ask the model" only this profile's flow takes (`presets.Preset`) and the targets that say what becomes of their answers, each with the code of its step (`run(ask, counts)`, `targets.Target`); the page offers them where the profile is open, and a flow of another profile cannot take them | `quantity`, `last_year` | `works`, `work_detail`, `work_coordinate`, `names` |
 | Reading the values out | `extraction.document_axes` | optional (`component`, `docpipe/extraction/runner.py:5505`) | not provided | the study regions this publication names, out of 249 (`profiles/scenarios/regions.json`) |
 | Reading the values out | `extraction.document_context` | optional (`component`, `docpipe/extraction/runner.py:5510`) | the plan's own municipality name | not provided |
 | The knowledge graph | the `map` (drawing) of the profile's `graph.json`; `kg.BRICKS` for the bricks only the profile needs | required for `--serialize`: every profile's graph is written by the core's program from its drawing (`docpipe/extraction/graph.py`), and a graph file without a drawing is refused with the reason (`parser.error`) | the drawing of tuples to MHPKG Turtle | the drawing of tuples to OEKG Turtle |
-| The answer app | `kg.VALUE_QUERY` plus six more attributes, and `inference.ROUTE_NOTES` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
+| The answer app | `kg.VALUE_QUERY` plus six more attributes, and the chat words `graph_note_<reason>` | optional; absent returns `None` (`component`, `docpipe/inference/kg_route.py:104-106`), present but missing any of the other seven raises `LookupError` instead (`111-114`), all eight present builds the route | provided; the app can answer a coordinate question straight from the graph | not provided; the app never queries a graph |
 
 Two entries say more than the table. `prompts/extraction/phrases.json` names
 the key of a list as well as its sentences. A request names the list of a
@@ -405,7 +405,7 @@ word" (see [Running the pipeline](running.md)).
 | `--backfill-meta` | provided, refreshes `MunicipalityMeta` from a re-read KWW sheet | not provided |
 | `FRAME` | the frame coordinates scenario and year | not set |
 | `of` at the plan fields `base_year` and `target_year` (spec) | the pairs `{"scenario": "status_quo"}` and `{"scenario": "target"}` | none |
-| `flow.json` of the profile's folder | its own drawing; the default's numbers are read | its own drawing; the default's numbers are read |
+| `flow.json` of the profile's folder | three changes to the default's drawing; the default's numbers are read | four changes to the default's drawing; the default's numbers are read |
 | `blocks.py` (presets and targets of its own) | `quantity`, `last_year` | `works`, `work_detail`, `work_coordinate`, `names` |
 | Per-document choice lists (`document_axes`) | not used | the study regions a publication names, out of 249 in `regions.json` (`profiles/scenarios/extraction.py`) |
 | Answer app's graph route (`kg_route`) | wired; a coordinate question can be answered straight from MHPKG | not wired; every answer comes from retrieval |
@@ -433,8 +433,10 @@ word" (see [Running the pipeline](running.md)).
    table plus a `store.py` for the SQL that fills it.
 
 3. **Teach text extraction the corpus's language, together with the first
-   prompt file.** Add `preprocessing.py`'s constants (the table
-   above), and one file under `prompts/`.
+   prompt file.** Set the stage rules that differ from the default
+   profile's in the profile's `rules.json` (the table above), and add the
+   prompt files under `prompts/`, among them `preprocessing/page_request.md`
+   (the sentence that asks for one page, with `{{page}}`).
 
 4. **Add the prompts each stage asks for.** The id set is fixed by the
    core's own code, not invented per profile; copying an existing
@@ -452,12 +454,13 @@ word" (see [Running the pipeline](running.md)).
    disk for every profile once its `prompts/` directory holds any `.md`
    file, regardless of whether its corpus has a textless PDF.
 
-5. **Wire up the answer app.** Add `inference.py`
-   (`READOFF_MARKER`, `READOFF_NOTE`), the sentences in
+5. **Wire up the answer app.** Add the chat's words in
+   `prompts/chat/phrases.json` (the labels of its pages, `readoff_marker` and
+   `readoff_note`), the sentences in
    `prompts/inference/phrases.json`, and the twelve
    `prompts/inference/*.md` the answer loop loads (`llm_client.PROMPT_IDS`), then
    `catalog.py` if the generic picker (filename, published date, current or superseded) is not enough. A
-   missing one of these two `inference.py` attributes, or a missing sentence,
+   missing chat word, or a missing sentence,
    fails only at the answer app's first real question.
 
 6. **Add extraction, if this corpus should feed a knowledge graph.** Write

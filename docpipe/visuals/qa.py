@@ -14,28 +14,41 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-# Salient content tokens: numbers (incl. German decimals like "45,2") and words
-# of at least two letters. Single letters and punctuation are deliberately
-# ignored, so formatting differences ("24V" vs "24 V") do not affect coverage.
-_TOKEN_RE = re.compile(r"\d+(?:[.,]\d+)*|[^\W\d_]{2,}", re.UNICODE)
+from docpipe import rules
+
+
+def _token_re():
+    """Salient content tokens: numbers (incl. German decimals like "45,2")
+    and words of at least qa_token_min_letters letters (two). Single letters
+    and punctuation are deliberately ignored, so formatting differences
+    ("24V" vs "24 V") do not affect coverage."""
+    return rules.derived("qa.token", lambda: re.compile(
+        r"\d+(?:[.,]\d+)*|[^\W\d_]{%d,}" % int(rules.get("qa_token_min_letters")),
+        re.UNICODE))
 
 # A Markdown table separator row (e.g. "| --- | --- |") uses only these chars.
 _SEPARATOR_CHARS = set("|-: ")
 
 
 def salient_tokens(text: str) -> set[str]:
-    """Lowercased numbers and words (>= 2 letters) found in *text*."""
-    return {m.group(0).lower() for m in _TOKEN_RE.finditer(text or "")}
+    """Lowercased numbers and words (at least qa_token_min_letters
+    letters) found in *text*."""
+    return {m.group(0).lower() for m in _token_re().finditer(text or "")}
 
 
-# Words, for judging whether a source text can be read at all: letters only and
-# at least three, so numbers and stray letter pairs decide nothing.
-_WORD_RE = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
+def _word_re():
+    """Words, for judging whether a source text can be read at all: letters
+    only and at least qa_word_min_letters (three), so numbers and stray
+    letter pairs decide nothing."""
+    return rules.derived("qa.word", lambda: re.compile(
+        r"[^\W\d_]{%d,}" % int(rules.get("qa_word_min_letters")),
+        re.UNICODE))
 
 
 def words(text: str) -> set[str]:
-    """Lowercased words (>= 3 letters) found in *text*."""
-    return {m.group(0).lower() for m in _WORD_RE.finditer(text or "")}
+    """Lowercased words (at least qa_word_min_letters letters) found in
+    *text*."""
+    return {m.group(0).lower() for m in _word_re().finditer(text or "")}
 
 
 def unreadable(source_text: str, markdown: str, known_words: set[str], *,
@@ -73,7 +86,7 @@ def _data_rows(markdown: str) -> list[str]:
 
 
 def coverage(source_text: str, markdown: str,
-             min_source_tokens: int = 8) -> Optional[float]:
+             min_source_tokens: Optional[int] = None) -> Optional[float]:
     """
     Fraction of the source's salient tokens that also appear in the markdown.
 
@@ -82,7 +95,11 @@ def coverage(source_text: str, markdown: str,
     to judge fairly. Not 1.0: an unmeasurable table is unknown, not perfect,
     and a scanned corpus would otherwise report a flawless QA pass for every
     table nobody ever checked.
+
+    *min_source_tokens* is the rule table_min_source_tokens where not given.
     """
+    if min_source_tokens is None:
+        min_source_tokens = int(rules.get("table_min_source_tokens"))
     src = salient_tokens(source_text)
     if len(src) < min_source_tokens:
         return None
@@ -116,12 +133,12 @@ def assess(
     markdown: str,
     source_text: str = "",
     *,
-    min_coverage: float = 0.5,
-    max_duplication: float = 0.4,
-    min_source_tokens: int = 8,
+    min_coverage: Optional[float] = None,
+    max_duplication: Optional[float] = None,
+    min_source_tokens: Optional[int] = None,
     known_words: Optional[set[str]] = None,
-    max_shared: float = 0.25,
-    min_known: float = 0.5,
+    max_shared: Optional[float] = None,
+    min_known: Optional[float] = None,
 ) -> tuple[bool, dict]:
     """
     Judge a table Markdown transcription. Returns (passed, metrics).
@@ -130,8 +147,18 @@ def assess(
     or coverage (when assessable) is below *min_coverage*. A coverage below it
     is not assessable where the source text is `unreadable` against
     *known_words*, the words of the rest of the document; without them it is
-    taken as readable.
+    taken as readable. A limit not given is its rule: table_min_coverage,
+    table_max_duplication, table_min_source_tokens,
+    table_unreadable_shared_below, table_unreadable_known_below.
     """
+    if min_coverage is None:
+        min_coverage = float(rules.get("table_min_coverage"))
+    if max_duplication is None:
+        max_duplication = float(rules.get("table_max_duplication"))
+    if max_shared is None:
+        max_shared = float(rules.get("table_unreadable_shared_below"))
+    if min_known is None:
+        min_known = float(rules.get("table_unreadable_known_below"))
     cov = coverage(source_text, markdown, min_source_tokens)
     source_unreadable = (cov is not None and cov < min_coverage
                          and known_words is not None

@@ -7,6 +7,7 @@ import {
 } from '@mantine/core';
 import { IconArrowLeft, IconPlus, IconTrash } from '@tabler/icons-react';
 import { NumberBox, TextBox } from '../components/Inputs';
+import { Named } from '../components/Bits';
 import { GENERAL_KINDS, GeneralField, ioOf } from './General';
 import { openPrompt, openRule, openSpec } from '../lib/nav';
 import { own, type Obj } from '../lib/util';
@@ -301,7 +302,7 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
     return (
       <Field label={tr(s.label)} help={tr(s.help)}>
         <Anchor component="button" type="button" size="sm" onClick={() => (s.number ? P.select(null) : openRule(P.data.step_rules.tabs[s.key] || 'flow'))}>
-          {s.number ? t('{name} = {value} →', { name: s.number, value: String(P.cur[s.number]) }) : t('rule {key} →', { key: s.key })}
+          {s.number ? t('{name} = {value} →', { name: titleOf(P, s.number), value: String(P.cur[s.number]) }) : t('rule {key} →', { key: titleOf(P, s.key) })}
         </Anchor>
       </Field>
     );
@@ -329,6 +330,12 @@ function SettingField({ P, n, s }: { P: Panel; n: Step; s: LibSetting }) {
   return null;
 }
 
+/* a number or rule of the flow by its name in words where the server gives one (owner request 2026-11-19, A5) */
+function titleOf(P: Panel, name: string): string {
+  const one = P.data.numbers.find(n => n.name === name) || (P.data.step_rules?.rules || []).find(r => r.name === name);
+  return one && one.title ? tr(one.title) : name;
+}
+
 export function NumbersPane({ P }: { P: Panel }) {
   useLang();
   const meas = P.meas;
@@ -345,10 +352,10 @@ export function NumbersPane({ P }: { P: Panel }) {
         return (
           <Box key={n.name} data-number={n.name}>
             <Group gap="xs" align="center" wrap="nowrap">
-              <NumberBox w={96} min={n.least} value={v == null ? '' : String(v)} aria-label={n.name} title={tr(n.help)}
+              <NumberBox w={96} min={n.least} value={v == null ? '' : String(v)} aria-label={n.title ? tr(n.title) : n.name} title={tr(n.help)}
                 className={v !== n.value ? 'fl-edited' : undefined} onText={() => {}}
                 onCommit={v => { const nv = /^-?\d+$/.test(v.trim()) ? Number(v) : v; if (nv === P.cur[n.name]) return; P.numberSet(n.name, nv); }} />
-              <Text fw={600} size="sm" className="dp-mono" style={{ minWidth: 0 }}>{n.name}</Text>
+              <Box style={{ minWidth: 0 }}><Named title={n.title} k={n.name} /></Box>
             </Group>
             <Group gap={4} mt={4}>
               {n.own && <Badge size="sm" color="teal" variant="light">{t('set in profile {name}', { name: n.owner })}</Badge>}

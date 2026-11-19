@@ -20,8 +20,8 @@ once, in the section as the model received it, the only text it can
 honestly be quoting. Where two corrections cover the same passage,
 the longer one wins and the other is reported as overlapping. An
 edit may not add, drop or alter a [pN_tblM] or [pN_imgM] placeholder.
-The edits together may not remove more than MAX_SHRINK of the
-section.
+The edits together may not remove more than the rule
+corrections_max_shrink of the section.
 
 The first two rules used to be one: each find was looked up in the
 text left by its predecessors. That punished the model for following

@@ -30,8 +30,9 @@ from pathlib import Path
 from typing import Optional
 
 FILE = "phrases.json"
-# The modules that speak outside their prompts, each with a file of its own.
-MODULES = ("extraction", "inference", "reading")
+# The modules that speak outside their prompts, each with a file of its own;
+# "chat" holds the words a person reads in the app (`inference.wording`).
+MODULES = ("extraction", "inference", "reading", "chat")
 
 
 class PhrasesError(ValueError):

@@ -152,6 +152,7 @@ def view(profile, own_raw: Optional[bytes], shown,
                       for kind, (needed, optional)
                       in source_files.KEYS.items()},
             "list_kinds": list(source_files.LIST_KINDS),
+            "titles": dict(source_files.TITLES),
             "lock": {"file": shown(upstream.lock_path(lock_name(profile),
                                                       cache)),
                      "fetched_at": lock.get("fetched_at")},

@@ -24,9 +24,9 @@ import io
 import logging
 from typing import Callable, Optional, Union
 
+from docpipe import rules
 from docpipe.reading import Hole
 
-from .config import STRIP_BLANK_PIXELS, STRIP_INK_CONTRAST, STRIP_RULE_DRIFT
 from .continuation import body_rows
 
 log = logging.getLogger(__name__)
@@ -34,17 +34,17 @@ log = logging.getLogger(__name__)
 
 def ink_rows(image) -> list:
     """For each pixel row of *image* (a PIL image), how many of its pixels
-    are writing: darker by STRIP_INK_CONTRAST than both what their column
+    are writing: darker by strip_ink_contrast than both what their column
     holds in most rows and what their own row holds in most columns. A rule
     across the table (a row of one colour), a shaded row and a vertical rule
     (a column of one colour, also where a scan tilts it by up to
-    STRIP_RULE_DRIFT pixels) are no writing."""
+    strip_rule_drift pixels) are no writing."""
     import numpy as np
     gray = np.asarray(image.convert("L"), dtype=np.int16)
     if gray.ndim != 2 or not gray.size:
         return []
     column = np.median(gray, axis=0)
-    drift = max(0, int(STRIP_RULE_DRIFT))
+    drift = max(0, int(rules.get("strip_rule_drift")))
     padded = np.pad(column, drift, mode="edge")
     near = column.copy()
     for shift in range(-drift, drift + 1):
@@ -52,16 +52,17 @@ def ink_rows(image) -> list:
                                        drift + shift + len(column)])
     row = np.median(gray, axis=1)
     level = np.minimum(near[None, :], row[:, None])
-    return [int(n) for n in (gray < level - int(STRIP_INK_CONTRAST)).sum(axis=1)]
+    return [int(n) for n in (gray < level - int(rules.get("strip_ink_contrast"))).sum(axis=1)]
 
 
 def cut_at(ink: list) -> Optional[int]:
     """The pixel row to cut an image with these *ink* rows (`ink_rows`) at:
-    the middle of the run of blank rows (at most STRIP_BLANK_PIXELS pixels of
+    the middle of the run of blank rows (at most strip_blank_pixels pixels of
     writing) nearest the image's middle that has writing right above and
     right below it; None where there is no such run."""
     height = len(ink)
-    blank = [n <= int(STRIP_BLANK_PIXELS) for n in ink]
+    most = int(rules.get("strip_blank_pixels"))
+    blank = [n <= most for n in ink]
     runs: list = []
     y = 0
     while y < height:
@@ -149,3 +150,23 @@ def read(png: bytes, ask: Ask, name: str = "") -> tuple:
     log.info("  %s: read in %d strips (%d requests)", name, len(replies),
              asked)
     return {**first, "rows": rows, "strips": len(replies)}, asked
+
+
+def strip_of(png: bytes, sha: str, most: int = 4096) -> Optional[bytes]:
+    """The strip of the table image *png* whose sha256 is *sha*, cut from
+    it as `read` cuts one (the image itself, a half, a half of a half, ...),
+    so that a request the stage's log names by its strip is sent again with
+    the same picture (owner request 2026-11-19, A3); None where no cut of at
+    most *most* gives it."""
+    import hashlib
+    pending = [png]
+    tried = 0
+    while pending and tried < most:
+        one = pending.pop(0)
+        tried += 1
+        if hashlib.sha256(one).hexdigest() == sha:
+            return one
+        more = halves(one)
+        if more is not None:
+            pending.extend(more)
+    return None

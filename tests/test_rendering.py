@@ -18,6 +18,7 @@ import fitz
 import pytest
 from PIL import Image
 
+from docpipe import rules
 from docpipe.preprocessing import rendering
 from docpipe.preprocessing.page_text import extract_all_pages
 from docpipe.preprocessing.rendering import render_page_to_pil
@@ -109,8 +110,8 @@ def test_stage_2_sees_the_same_pages_with_workers_as_without(tmp_path,
     expected = {}
     ref = fitz.open(path)
     for i, page in enumerate(ref):
-        det = render_page_to_pil(page, layout.LAYOUT_DETECT_DPI)
-        crop = render_page_to_pil(page, layout.PAGE_RENDER_DPI)
+        det = render_page_to_pil(page, rules.get("layout_detect_dpi"))
+        crop = render_page_to_pil(page, rules.get("crop_render_dpi"))
         expected[i + 1] = (det.width, det.height, digest(crop))
     assert seen == expected
 

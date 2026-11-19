@@ -193,7 +193,11 @@ def test_a_save_writes_only_what_differs_from_the_inherited(profile):
     assert report["ok"] and report["writes"] == "created"
     assert json.loads(report["text"]) == {"numbers": {"search_pieces": 35}}
     assert "\r" not in report["text"]      # a new file has plain line ends
-    assert report["changed"] == [{"name": "search_pieces",
+    # each change is named in words, as the page names the number
+    title = next(one.title for one in flow.NUMBERS
+                 if one.name == "search_pieces")
+    assert title and "_" not in title
+    assert report["changed"] == [{"name": "search_pieces", "title": title,
                                   "from": flow.default().search_pieces,
                                   "to": 35}]
     assert report["diff"][-5:] == ['+{', '+  "numbers": {',
@@ -211,9 +215,21 @@ def test_a_drawing_is_written_only_where_it_differs_from_the_inherited(
     report = flow_view.judge(profile, None, numbers_of(profile), "flow.json",
                              tree)
     assert report["ok"] and report["writes"] == "created"
-    assert json.loads(report["text"]) == {"flow": tree}
-    assert report["changed"] == [{"name": "flow", "from": "",
-                                  "to": "search_round: changed"}]
+    # the file says only what the profile changes in the drawing it
+    # inherits: the round in the steps for one value, which both frames of
+    # values go through (owner request 2026-11-19, C2)
+    written = json.loads(report["text"])
+    assert list(written) == ["changes"] and [
+        (one.get("set"), one.get("part"))
+        for one in written["changes"]] == [("search_round", "value")]
+    assert report["changed"] == [
+        {"name": "flow", "from": "", "to": "document_search_round: changed"},
+        {"name": "flow", "from": "", "to": "search_round: changed"}]
+    own_file(profile).write_text(report["text"], encoding="utf-8")
+    drawn = flow.tree_of(profile)
+    assert node_of(drawn, "search_round")["round"] \
+        == node_of(drawn, "document_search_round")["round"] == {"most": 3}
+    own_file(profile).unlink()
     # the failure by construction: the inherited drawing writes nothing
     same = flow_view.judge(profile, None, numbers_of(profile), "flow.json",
                            copy.deepcopy(flow.tree_of(profile)))
@@ -389,9 +405,11 @@ def test_the_page_is_given_the_flow_and_a_check_writes_nothing(tmp_path,
     status, told = post(app, "/api/flow/save", {
         "numbers": {**numbers, "search_pieces": 35}, "base": None,
         "tree": tree})
-    assert told["saved"] and json.loads(own_file(profile).read_text(
-        encoding="utf-8")) == {"numbers": {"search_pieces": 35},
-                               "flow": tree}
+    written = json.loads(own_file(profile).read_text(encoding="utf-8"))
+    assert told["saved"] and written["numbers"] == {"search_pieces": 35}
+    assert list(written) == ["numbers", "changes"]
+    assert node_of(flow.tree_of(profile), "search_round")["round"] \
+        == {"most": 3}
     assert told["base"] == server.sha256(own_file(profile).read_bytes())
     assert flow.DEFAULT.read_bytes() == (
         REPO / "docpipe" / "builtin" / "default" / "flow.json").read_bytes()

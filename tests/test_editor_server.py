@@ -46,6 +46,9 @@ class Stand:
 
     def __init__(self, folder: Path, spec: Path, vocabulary=None):
         self.package_dir = folder
+        # the documents' folders, where stages 4 and 5 write their logs:
+        # none here
+        self.processed_dir = folder / "processed"
         self._spec = spec
         self._vocabulary = vocabulary
 

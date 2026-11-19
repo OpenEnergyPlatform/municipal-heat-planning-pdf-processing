@@ -3,7 +3,7 @@
    to the rule in its tab. A frame has the same panel: what it sets holds for everything in it. */
 import { useState } from 'react';
 import { Accordion, Anchor, Badge, Box, Group, Stack, Switch, Text, Title } from '@mantine/core';
-import { Help } from '../components/Bits';
+import { Help, Named } from '../components/Bits';
 import { openRule, tabLabel } from '../lib/nav';
 import { clone, own, same } from '../lib/util';
 import { rich, t, tn, tr, useLang } from '../lib/i18n';
@@ -37,7 +37,7 @@ export function originOf(P: Panel, n: Step, r: StepRule): { value: unknown; from
   if (!/^(rules|flow)\.json of /.test(r.origin || '')) {
     return { value: r.in_effect, from: 'start', words: t('from the start: {setting}', { setting: r.setting || r.origin }) };
   }
-  return { value: r.in_effect, from: 'standard', words: t('standard in {file}', { file: r.origin }) };
+  return { value: r.in_effect, from: 'standard', words: t('standard in {file}', { file: tr(r.origin) }) };
 }
 
 export function StepRules({ P, n }: { P: Panel; n: Step }) {
@@ -102,7 +102,7 @@ function StepRuleRow({ P, n, r }: { P: Panel; n: Step; r: StepRule }) {
   return (
     <Stack gap={6} data-step-rule={r.name}>
       <Group gap={6} justify="space-between" wrap="nowrap" align="flex-start">
-        <Text fw={600} size="sm" className="dp-mono" style={{ minWidth: 0, wordBreak: 'break-word' }}>{r.name}</Text>
+        <Box style={{ minWidth: 0 }}><Named title={r.title} k={r.name} /></Box>
         <Switch size="sm" label={t('only here')} checked={mine} onChange={e => only(e.currentTarget.checked)}
           title={t('a value of its own for this step, instead of the value in effect')} />
       </Group>

@@ -123,12 +123,10 @@ print its usage, before anybody has named a profile. Refinement reads
 `refine_prompt()` this way (`docpipe/refinement/config.py:77-83`), and
 `system_prompt()`, `llm_temperature()` and `llm_max_tokens()` take the
 text and the front matter off it (`:86-98`; see Data model);
-`refinement/split.py` and `visuals/config.py` do the same. What a config
-module binds on import is the refinement `WINDOW_SIZE`
-(`docpipe/refinement/config.py:39-41`), which reads `active_profile()`
-when the module loads, so `DOCPIPE_PROFILE` must be set before that
-module is first imported; `bind_command_line()` sets it for a
-`python -m` run.
+`refinement/split.py` and `visuals/config.py` do the same. The refinement's config module binds no profile value on import: its
+decisions are rules (`docpipe/ruleset/stage_refine.py`), read where they
+decide; `bind_command_line()` sets `DOCPIPE_PROFILE` for a `python -m`
+run.
 
 ### Composing a prompt from a template and a profile's parts
 
@@ -352,6 +350,13 @@ compares that file against today's prompts and returns the ids changed
 `docpipe/refinement/pipeline.py:65` and
 `docpipe/visuals/pipeline.py:156`); a non-empty result decides whether
 `--force-stale` is warranted.
+A prompt whose words the code sent before it had a file is listed in
+`prompts.FROM_CODE` with the hash of its first file, and `stale()` counts it as
+unchanged while the file still has that hash: a result recorded before the move,
+which holds no hash for it, stays current, and becomes stale once the file is
+edited. Listed are `refinement/window_context`, `refinement/split_user` and
+`visuals/table_retry_hint`; the page request of stage 1 and the empty sentence of
+stage 6 are not, since those stages record no prompt hashes.
 
 ### Counting tokens across a run
 
@@ -397,7 +402,7 @@ current_section.content, block.id)` before the next block, settling the
 caption the moment the section is written
 (`docpipe/preprocessing/sections.py:438-440` for a table,
 `:461-463` for a figure). What opens a caption is the profile's:
-`captions.py` holds no pattern and reads the list `preprocessing.CAPTION_START`
+`captions.py` holds no pattern and reads the rule `caption_opener_patterns`
 of the profile in force (the built-in `default` profile where none is named),
 joins it into one pattern and compiles it once per profile
 (`docpipe/captions.py:40-71`).
@@ -474,7 +479,7 @@ caption's first whole sentence, with no cap on its length. The list of patterns 
 first use: a list that is empty, a bare string, a pattern that does not
 compile or one that matches the empty text (which would make every text a
 caption) is a `ValueError` naming the profile, and a standalone profile with
-no `CAPTION_START` at all is a `LookupError`.
+no pattern at all is a `ValueError`.
 
 ## Configuration
 
@@ -491,7 +496,7 @@ no `CAPTION_START` at all is a `LookupError`.
 | `what` / `flag` (`assert_serving`) | function parameters | `"this stage"` / `CONTEXT_FLAG` (`"--max-model-len"`) | substituted into the error and success log; each call site names itself | `docpipe/llm_preflight.py:305-306`, `:47-48` |
 | `shapes` (`assert_serving`) | function parameter | none | `{name: schema}`, the reply schemas a stage sends as the grammar of every request; each is put to the server once before the first document | `docpipe/llm_preflight.py:308` |
 | the sentences of `reading` | profile file (`prompts/reading/phrases.json`) | none; required, thirteen names (`reading.REQUIRED`) | the sentences a stage says to the model when its reply was not the one JSON object; checked before the first request | `reading.phrases`, `phrases.table` |
-| `preprocessing.CAPTION_START` | profile component | none; each profile lists its own | the non-empty list of regular expressions, each carrying its own anchor, that open a caption | `docpipe/captions.py:40-71` |
+| `caption_opener_patterns` | rule | the default profile's list; kwp and scenarios list their own | the non-empty list of regular expressions, each carrying its own anchor, that open a caption | `docpipe/captions.py` |
 | `DOCPIPE_USAGE_DB` | environment variable | `data/usage.db` | SQLite file the token counts are written to | `docpipe/usage.py:91-92` |
 | `cached` price | key of a `[prices]` entry in the project file | the model's `input` price | per million tokens, what an input token costs that the provider served from its cache | `docpipe/settings.py` (`PRICED`), `docpipe/usage.py` (`cost`) |
 
@@ -644,7 +649,7 @@ sentence page of [the editor](editor.md).
 `captions.py` decides whether a stored caption already looks like one
 (`looks_like_a_caption`) and, if not, resolves the real title from the
 sentence before its placeholder (`resolve_title`), by the patterns of the
-profile in force (`preprocessing.CAPTION_START`) and none of its own. Called from the write
+profile in force (the rule `caption_opener_patterns`) and none of its own. Called from the write
 side while Stage 3 assembles a section, and from the read side both as
 `chunking/database.py`'s one-time backfill and on every read by
 `inference/db.py`.

@@ -163,6 +163,7 @@ def line_pages(texts: list, section: dict) -> list:
     out: list = []
     cursor = 0
     before = first
+    probes = _probes()
     for text in texts:
         found = None
         ref = _PLACEHOLDER.match((text or "").strip())
@@ -175,9 +176,9 @@ def line_pages(texts: list, section: dict) -> list:
             # found by its first words. A line of fewer letters than the
             # shortest says too little to be placed, and stands where the
             # line before it stands.
-            for size in _PROBES:
+            for size in probes:
                 probe = key[:size]
-                if len(probe) < _PROBES[-1]:
+                if len(probe) < probes[-1]:
                     break
                 hit = whole.find(probe, cursor)
                 if hit >= 0:
@@ -193,8 +194,12 @@ def line_pages(texts: list, section: dict) -> list:
 
 # The lengths, in letters and digits, of the beginnings of a line looked for
 # in the PDF's text of its section (`line_pages`): where a line is found, not
-# what any request shows.
-_PROBES = (48, 24, 12)
+# what any request shows. The rule page_locate_probe_chars: long, medium and
+# short, tried longest first.
+def _probes() -> tuple:
+    return tuple(sorted(
+        (int(n) for n in rules.get("page_locate_probe_chars").values()),
+        reverse=True))
 
 
 @dataclass

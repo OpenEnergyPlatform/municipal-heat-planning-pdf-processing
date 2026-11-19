@@ -18,16 +18,11 @@ from typing import Optional
 
 import fitz
 
-from ..profile import ENV_VAR, active_profile
-from .config import (
-    TEXT_BLOCK_MIN_CHARS,
-    strip_private_use,
-)
+from .. import rules
+from .config import strip_private_use
 from .models import Block, PageData
 
 log = logging.getLogger(__name__)
-
-_hyphen_exceptions: dict = {}
 
 
 def hyphen_exceptions():
@@ -35,17 +30,13 @@ def hyphen_exceptions():
 
     "Wärme-" + "und Kälteversorgung" is one construction, not one word, and so
     is "short-" + "and long-term". Which words do that is a property of the
-    language, so the profile says so; the core would silently glue the wrong
-    corpus together.
+    language, so the profile says so (the rule `hyphen_exceptions`); the core
+    would silently glue the wrong corpus together.
     """
-    profile = active_profile()
-    if profile is None:
-        raise LookupError(f"text extraction needs a profile; set ${ENV_VAR}")
-    if profile.name not in _hyphen_exceptions:
-        words = profile.require("preprocessing", "HYPHEN_EXCEPTIONS")
-        _hyphen_exceptions[profile.name] = re.compile(
-            r"^(?:" + "|".join(re.escape(w) for w in words) + r")\b", re.IGNORECASE)
-    return _hyphen_exceptions[profile.name]
+    return rules.derived("stage_text:hyphen_exceptions", lambda: re.compile(
+        r"^(?:" + "|".join(re.escape(w) for w in
+                           rules.get("hyphen_exceptions")) + r")\b",
+        re.IGNORECASE))
 
 
 def _rect_to_bbox(rect: fitz.Rect) -> list[float]:
@@ -78,6 +69,7 @@ def _spans_to_text(block: dict) -> str:
 
     result: list[str] = []
     keep_the_hyphen = hyphen_exceptions()
+    join_words = rules.get("join_hyphenated_words")
 
     for line in lines_text:
         if not result:
@@ -93,7 +85,8 @@ def _spans_to_text(block: dict) -> str:
             exception_match = keep_the_hyphen.match(line)
 
             if (
-                before_dash.isalpha()
+                join_words
+                and before_dash.isalpha()
                 and before_dash.islower()
                 and after_dash.isalpha()
                 and after_dash.islower()
@@ -128,13 +121,14 @@ def _dominant_font(block: dict) -> tuple[Optional[float], bool]:
     if total_chars == 0:
         return None, False
     dominant_size = max(sizes, key=sizes.get)
-    return dominant_size, bold_chars >= total_chars / 2
+    return dominant_size, bold_chars >= total_chars * rules.get(
+        "bold_block_share")
 
 
 def _is_valid_text_block(text: str) -> bool:
     """Returns True if the text block contains enough content to be useful."""
     stripped = text.strip()
-    if len(stripped) < TEXT_BLOCK_MIN_CHARS:
+    if len(stripped) < rules.get("text_block_min_chars"):
         return False
     if not any(c.isalnum() for c in stripped):
         return False

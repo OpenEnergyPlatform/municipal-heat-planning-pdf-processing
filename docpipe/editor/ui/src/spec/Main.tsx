@@ -9,13 +9,15 @@ import {
 } from '@mantine/core';
 import { IconCopy, IconList, IconPlus, IconSearch, IconShare, IconTrash, IconX } from '@tabler/icons-react';
 import { AreaBox, TextBox } from '../components/Inputs';
+import { Named } from '../components/Bits';
 import { useStore } from '../lib/nav';
 import { t, tn } from '../lib/i18n';
 import { axisKinds, entryParts, setEntryField, setEntryName, UNIT_KEYS, type SpecNode } from '../lib/spec';
 import { isObj, type Obj } from '../lib/util';
 import {
   addAxis, addCheck, addUnit, closeList, copyNode, deleteNode, ensureSel, listCount, listOf, markDirty, meta, nodeObj, openList,
-  removeValueType, rootAt, S, select, shareAt, show, termsPut, touch, typeOf, unshareAt, view, wordAdded, wordRemoved,
+  removeValueType, rootAt, S, select, shareAt, show, termsPut, touch, typeOf, typeSettingTitle, unshareAt, view, wordAdded,
+  wordRemoved,
 } from './state';
 import { entryOf, fieldOf, isSharedAt, originOf, sharedOf, termOf, usersOf } from './model';
 import { listChosen, listsFrom, termRows, type ListWhere, type TermRow } from './terms';
@@ -185,7 +187,7 @@ function EntryPanel({ n }: { n: Extract<SpecNode, { t: 'entry' }> }) {
       ) : <Text size="sm" c="dimmed">{t('An entry of the spec\'s own: no ontology has it.')}</Text>}
       <TextBox label={t('Name')} description={help('label')} value={p.name} onText={v => edit(() => { setEntryName(list, n.id, v); })} />
       <Box>
-        <Text size="sm" fw={500}>{t('Words of the plans')}</Text>
+        <Text size="sm" fw={500}>{t('Words of the documents')}</Text>
         <Text size="xs" c="dimmed" mb={4}>{help('spellings')}</Text>
         <Group gap={6}>
           {p.spellings.map(w => (
@@ -294,7 +296,7 @@ function RootPanel({ n }: { n: Extract<SpecNode, { t: 'root' }> }) {
         {found.map(r => <TermLine key={r.id} r={r} at={at} set={n.set} />)}
         {!found.length ? <Text size="sm" c="dimmed">{t('No term matches.')}</Text> : null}
       </Stack>
-      <Text size="sm" c="dimmed">{t('Which list of the ontology a dimension draws from stands in the Sources tab. A term put in becomes an entry of the list with the name and the definition of the ontology; the words of the plans are added at the entry.')}</Text>
+      <Text size="sm" c="dimmed">{t('Which list of the ontology a dimension draws from stands in the Sources tab. A term put in becomes an entry of the list with the name and the definition of the ontology; the words of the documents are added at the entry.')}</Text>
     </Stack>
   );
 }
@@ -395,7 +397,7 @@ export function Main() {
     case 'root': body = <RootPanel n={n} />; break;
     case 'vtype': body = typeOf(n.name)?.builtin
       ? <Stack gap="xs"><Text size="sm" c="dimmed">{t('A built-in value type: a preset that cannot be changed. Add a value type of your own to change these settings.')}</Text>
-        {Object.entries(obj || {}).map(([k, v]) => <Text key={k} size="sm"><b>{k}</b>: {String(v)}</Text>)}</Stack>
+        {Object.entries(obj || {}).map(([k, v]) => <Text key={k} size="sm"><Named title={typeSettingTitle(k)} k={k} />: {String(v)}</Text>)}</Stack>
       : <SpecForm fields={f.value_type} obj={obj} orig={orig} />;
       break;
   }

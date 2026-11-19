@@ -1,5 +1,27 @@
 {
   "rules": {
+    "context_sentence": true,
+    "heading_excluded_prefixes": [
+      "figure",
+      "fig.",
+      "table",
+      "tab.",
+      "box",
+      "plate"
+    ],
+    "caption_max_words": 160,
+    "directory_figure_words": [
+      "Figure",
+      "Table",
+      "Fig\\.",
+      "Tab\\.",
+      "Box"
+    ],
+    "caption_opener_patterns": [
+      "(?:^|(?<=[\\s\\]]))([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.]{2,14}\\s+\\d+(?:[-.–]\\d+)*\\s*:)"
+    ],
+    "front_section_title": "Dokument",
+    "part_section_title": "Abschnitt",
     "not_extracted": [
       {
         "shape": "study",
@@ -173,7 +195,6 @@
     "model_region_needs_model": true,
     "alt_label_language": "en",
     "contract_language": "en",
-    "prompt_checks": [],
-    "context_sentence": true
+    "prompt_checks": []
   }
 }

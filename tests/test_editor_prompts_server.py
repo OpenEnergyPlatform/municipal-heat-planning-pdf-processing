@@ -291,7 +291,7 @@ def test_try_sends_exactly_the_named_requests_and_nothing_else_sends(
         tmp_path, profile, monkeypatch):
     model = counting_model()
     monkeypatch.setattr(trying, "client_of", lambda config: model)
-    monkeypatch.setattr(trying, "settings", lambda: {
+    monkeypatch.setattr(trying, "settings", lambda role="llm": {
         "configured": True, "why": None, "limit": 3, "base_url": "http://x/",
         "api_key": "k", "model": "m", "host": "x"})
     app = traced(tmp_path, profile)

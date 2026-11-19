@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from 'react';
 import { Anchor, Box, Code, Text } from '@mantine/core';
 import { diffClass } from '../lib/util';
-import { rich, t } from '../lib/i18n';
+import { rich, t, tr } from '../lib/i18n';
 
 /* the help of a form field; a long one is folded to three lines with "more" */
 export function Help({ text, size = 'sm' }: { text?: string | null; size?: string }) {
@@ -28,4 +28,15 @@ export function Diff({ text }: { text: string | string[] }) {
 }
 
 export const K = ({ children }: { children: ReactNode }) => <Code className="dp-key">{children}</Code>;
+
+/* a setting by its name in words, its key small beside it (owner request 2026-11-19, A5); a setting the server gives
+   no name shows its key alone */
+export function Named({ title, k, size = 'sm' }: { title?: string | null; k: string; size?: string }) {
+  if (!title) return <Code fw={600}>{k}</Code>;
+  return (
+    <Text span size={size} fw={600} style={{ minWidth: 0, wordBreak: 'break-word' }}>
+      {rich(tr(title))} <Code fz={11} c="dimmed" fw={400}>{k}</Code>
+    </Text>
+  );
+}
 export const Muted = ({ children, size = 'sm' }: { children: ReactNode; size?: string }) => <Text size={size} c="dimmed">{children}</Text>;

@@ -12,7 +12,7 @@ scripts/inference_app/app.py` still works: that file only hands over to the pack
 itself lives in `docpipe.inference.answer`; the app is the UI around it. What the corpus is about
 comes from the profile (`--profile`, `docpipe.toml` or `DOCPIPE_PROFILE`): its catalog supplies
 the document labels, the sidebar filters and the detail shown for the selected document, and its
-`inference.UI` every word on the pages. Without a profile the chat runs on the built-in `default`
+`prompts/chat/phrases.json` every word on the pages. Without a profile the chat runs on the built-in `default`
 profile: its English words and prompts, and filename-and-date labels with no filters. The app
 shows one line at the top saying so, and the log names the profile once. Another one is named
 with `--profile`, the `profile` key of `docpipe.toml` or `DOCPIPE_PROFILE`. Only the chat does

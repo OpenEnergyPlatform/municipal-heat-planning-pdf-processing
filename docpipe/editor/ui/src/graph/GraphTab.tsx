@@ -23,6 +23,7 @@ import { rich, t, tn, tr, useLang } from '../lib/i18n';
 import { wrote } from '../lib/util';
 import { shownNodes, takeMoves, type Moved } from '../lib/moved';
 import { untangle } from '../lib/untangle';
+import { useReadableView } from '../lib/view';
 import { Diff } from '../components/Bits';
 import { TextBox } from '../components/Inputs';
 import { GroupedRules } from '../rules/RuleInputs';
@@ -196,11 +197,8 @@ function GraphInner() {
   };
 
   const fitAll = useCallback((duration = 300) => { flow.fitView({ padding: 0.08, maxZoom: 1, duration }); }, [flow]);
-  useEffect(() => {
-    if (!G.fit) return;
-    const h = setTimeout(() => fitAll(300), 150);
-    return () => clearTimeout(h);
-  }, [G.fit]); // eslint-disable-line react-hooks/exhaustive-deps
+  /* the first view: readable, as in every tab with a drawing (lib/view.ts) */
+  const onMoveStart = useReadableView(flow, canvas, () => shown, G.fit);
 
   /* ---- edits of the drawing ---- */
   const select = (kind: Sel['kind'], id: string | null) => { G.sel = { kind, id }; touch(); };
@@ -374,7 +372,7 @@ function GraphInner() {
               <ReactFlow nodes={shown} edges={placed.edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} defaultEdgeOptions={edgeDefaults}
                 nodesDraggable onNodesChange={onNodesChange} nodesConnectable elementsSelectable deleteKeyCode={['Backspace', 'Delete']} selectionKeyCode={null}
                 multiSelectionKeyCode={null} panOnScroll zoomOnDoubleClick={false} minZoom={0.15} maxZoom={1.6} proOptions={{ hideAttribution: true }}
-                ariaLabelConfig={flowWords()} onConnect={connect} isValidConnection={isValid} onEdgesDelete={onEdgesDelete}
+                ariaLabelConfig={flowWords()} onMoveStart={onMoveStart} onConnect={connect} isValidConnection={isValid} onEdgesDelete={onEdgesDelete}
                 onEdgeClick={(_, e) => { const dd = e.data as Obj; if (dd.kind === 'of') select('box', dd.box); else select('arrow', dd.key); }}
                 onNodeClick={(_, n) => { if (n.type === 'field') select('field', String(n.id).slice(2)); }}
                 onPaneClick={() => { if (G.sel.kind) select(null, null); }}>

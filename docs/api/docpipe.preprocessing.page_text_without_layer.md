@@ -43,10 +43,11 @@ Characters of real text Stage 1 found on this page.
 ### needs_transcription
 
 ```python
-def needs_transcription(page: PageData, min_chars: int = MIN_PAGE_CHARS) -> bool
+def needs_transcription(page: PageData, min_chars: Optional[int] = None) -> bool
 ```
 
-True if this page's text layer is missing or too thin to be real.
+True if this page's text layer is missing or too thin to be real
+(fewer characters than *min_chars*, else the rule `page_text_min_chars`).
 
 ### split_into_blocks
 
@@ -78,7 +79,7 @@ be counted as one.
 
 A markdown heading becomes a block labelled `paragraph_title`, because that
 label - not the font size - is what Stage 3 opens a section on
-(SECTION_TITLE_CLASSES). Sizes and boldness are set as well, for the rules
+(the rule `heading_classes`). Sizes and boldness are set as well, for the rules
 further up that read them, but the label is the part that decides. Getting
 this wrong put every transcribed page back into one pseudo-section, which
 is the exact failure this module exists to end.
@@ -91,7 +92,7 @@ def fill_missing_page_text(
     render: Callable[[int], object],
     transcribe: Callable[[object, int], "str | Hole"],
     *,
-    min_chars: int = MIN_PAGE_CHARS,
+    min_chars: Optional[int] = None,
     max_pages: Optional[int] = None,
     workers: int = 1,
     render_workers: int = PAGE_RENDER_WORKERS,
@@ -131,7 +132,7 @@ render(page_number) -> path of the rendered page PNG.
 
 Written to disk rather than held in memory: the call layer takes a path.
 Into scratch by default, NOT next to the document: a full page at
-RENDER_DPI is about a megabyte, and a corpus-wide run would leave gigabytes
+the rule's resolution is about a megabyte, and a corpus-wide run would leave gigabytes
 of them behind for nothing. The page is reproducible from the PDF at any
 time, so the transcription is what is worth keeping, not the picture.
 
