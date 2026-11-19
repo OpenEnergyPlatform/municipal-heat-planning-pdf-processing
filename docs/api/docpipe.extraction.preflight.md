@@ -155,6 +155,19 @@ Every check of one profile: (profile, what, ok | warn | FAIL, detail).
 Makes the profile the one in effect for this process (the environment
 names it), because its prompts and its wording are read through that.
 
+### requests_name_their_fields
+
+```python
+def requests_name_their_fields(profile, spec) -> tuple
+```
+
+(ok, detail): does every request of a dry run of *profile*'s flow
+name in its instruction each field it carries (`thread.unnamed`)? The
+run reads a plan made of the examples of *spec*, once with every answer
+empty and once with every answer the first line, so that every way of
+asking is built; the detail names each kind of request with the fields
+it carried unnamed and how many requests carried each.
+
 ### report
 
 ```python

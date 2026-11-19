@@ -231,6 +231,47 @@ def enrich_page_source(db_path: Path, root_dir: Path,
     return stats
 
 
+def note_holes(db_path: Path, root_dir: Path) -> dict:
+    """Documents.holes of every document under *root_dir* from its merged
+    document.json: the tables and figures an earlier stage left without
+    content, with why (owner request 2026-11-19, `docpipe.visuals.holes`),
+    as JSON, "[]" for none. A document.json merged before it carried them
+    leaves the row as it is. Returns {"documents": written, "with_holes":
+    documents that have some, "items": tables and figures without content}.
+    No model, one JSON read per document."""
+    root_dir = Path(root_dir)
+    stats = {"documents": 0, "with_holes": 0, "items": 0}
+    candidates = document_dirs(root_dir, DOCUMENT_JSON)
+    if not candidates:
+        return stats
+    with closing(connect(db_path)) as conn:
+        from docpipe.store.schema import add_missing_column
+        add_missing_column(conn, "Documents", "holes", "TEXT")
+        for pdf_dir in candidates:
+            doc_id = _resolve_document_id(pdf_dir.name, conn)
+            if doc_id is None:
+                continue
+            try:
+                with open(pdf_dir / DOCUMENT_JSON, "r", encoding="utf-8") as f:
+                    merged = json.load(f)
+            except (OSError, ValueError) as exc:
+                log.warning("holes: %s unreadable: %s", pdf_dir.name, exc)
+                continue
+            holes = merged.get("holes") if isinstance(merged, dict) else None
+            if not isinstance(holes, list):
+                continue
+            conn.execute("UPDATE Documents SET holes = ? WHERE id = ?",
+                         (json.dumps(holes, ensure_ascii=False), doc_id))
+            stats["documents"] += 1
+            stats["with_holes"] += bool(holes)
+            stats["items"] += len(holes)
+        conn.commit()
+    log.info("holes: %d document(s) recorded, %d of them with %d table(s) "
+             "and figure(s) without content", stats["documents"],
+             stats["with_holes"], stats["items"])
+    return stats
+
+
 def enrich_caption(db_path: Path, *, force: bool = False) -> dict:
     """Give every table and figure the sentence that names it. No model.
 
@@ -572,6 +613,7 @@ def update_database(
                 i + 1, len(candidates), pdf_name, n_sec, n_tbl, n_fig, n_seg,
             )
 
+    note_holes(db_path, root_dir)
     log.info("Step 2 complete.")
 
 

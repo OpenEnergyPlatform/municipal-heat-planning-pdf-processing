@@ -14,6 +14,13 @@ some are told, each opened by a marker line and running to the next one:
   fields, such as what a search fetched; never part of a system prompt
   (`Parts.follow_up`).
 
+Every field a request carries is named in its instruction, by a part for it
+or by its name in quotes in what the request is told (`unnamed`, owner
+request 2026-11-19): the profile check builds every request of a dry run and
+names a field that is not, the page refuses a prompt that drops the part of
+a field, and the check of a flow names a step whose answer may carry a field
+its prompt has no word for.
+
 No request is told what another one may bring (owner decision 2026-11-07:
 "Jede Anfrage sollte genau die Prompt bekommen, die beschreibt, was sie tun
 soll").
@@ -214,6 +221,27 @@ class Parts:
             return words
         return words + "\n\n" + json.dumps(data, ensure_ascii=False,
                                             indent=2)
+
+
+def named(parts: Parts, key: str, text: Optional[str] = None) -> bool:
+    """Does the instruction a request is told name the field *key*: has the
+    prompt a part for it (<!-- with: key -->), or does *text*, the system
+    prompt it is told (what every request of the kind is told where none is
+    given), have its name in quotes ("key"), as the prompts write the
+    fields of a message?"""
+    if any(key in part.keys for part in parts.of(WITH)):
+        return True
+    return f'"{key}"' in (parts.common if text is None else text)
+
+
+def unnamed(parts: Parts, carried: Iterable) -> list:
+    """The fields of *carried* the instruction of a request that carries
+    them does not name (`named`), in their order: told nothing, the model
+    reads a field nobody said the meaning of (owner request 2026-11-19:
+    every field a request carries is named in its instruction)."""
+    carried = list(dict.fromkeys(carried))
+    text = parts.system(carried).text
+    return [key for key in carried if not named(parts, key, text)]
 
 
 def shown_with(text: str, example: Optional[dict], where: str) -> str:

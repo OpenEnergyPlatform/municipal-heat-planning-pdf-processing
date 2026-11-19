@@ -80,7 +80,11 @@ available, preferring `sections_refined.json` over `sections.json`, and
 writes `visuals.json` (`docpipe/visuals/pipeline.py:62-71`).
 [Chunking](stages/chunking.md)'s merge step folds `sections_refined.json`
 and `visuals.json` into `document.json`, which a separate load step reads
-into the database (`docpipe/chunking/merge.py:71-147`).
+into the database (`docpipe/chunking/merge.py:71-147`). The merge also writes
+into `document.json` a key `holes`: the tables and figures that have no content
+after stage 5, each with its id, kind, page and cause (`vlm_why`, else
+`not_asked`), so that the database and the harvest know what the document lacks
+(owner request 2026-11-19).
 
 ## The shape of the two files stages 3 and 5 hand on
 

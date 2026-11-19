@@ -77,6 +77,7 @@ from . import mend
 from . import passflow
 from . import compute as computing
 from . import fields
+from . import holes
 from . import flow as flow_map
 from . import shows as shows_map
 from . import found as found_places
@@ -2408,6 +2409,31 @@ def request_prompt(parts, payload: dict, shape: Optional[dict] = None):
     return parts.system(set(payload.keys()) | reply_offers(shape))
 
 
+# What a request's message holds beside the fields its prompt tells it of:
+# the questions asked before and a figure's picture, which go beside the JSON.
+NOT_FIELDS = ("conversation", addressed_map.PICTURE)
+
+
+def first_shown(payload: dict) -> dict:
+    """*payload* with the fields of the rule `message_first` first, in its
+    order, and every other field after them in its own order (owner request
+    2026-11-19): what stays the same over the requests of a field or a
+    document stands at the beginning a server computes once for requests
+    that share it. The same fields, in another order."""
+    first = [key for key in rules.get("message_first") or () if key in payload]
+    return {**{key: payload[key] for key in first},
+            **{key: value for key, value in payload.items()
+               if key not in first}}
+
+
+def carried_fields(payload: dict, shape: Optional[dict] = None) -> list:
+    """The fields a request carries that its instruction has to name
+    (`thread.unnamed`): the keys of its message, those that go beside it
+    aside, and what its reply form offers besides (`reply_offers`)."""
+    return ([key for key in payload if key not in NOT_FIELDS]
+            + sorted(reply_offers(shape) - set(payload)))
+
+
 def reply_offers(shape: Optional[dict]) -> set:
     """{"more", "get_image", "get_region", "get_section"} as far as the
     reply form *shape* offers them: what a request's prompt tells about
@@ -2453,8 +2479,9 @@ def make_asks(profile=None) -> Optional[addressed_map.Asks]:
         return json.dumps(own(payload), ensure_ascii=False, indent=1)
 
     def own(payload: dict) -> dict:
-        return {key: value for key, value in payload.items()
-                if key not in ("conversation", addressed_map.PICTURE)}
+        # What stays the same first (rule `message_first`).
+        return first_shown({key: value for key, value in payload.items()
+                            if key not in NOT_FIELDS})
 
     def messages(payload: dict, content: str) -> list:
         """The messages of a request: where the rule `conversation` keeps
@@ -4409,21 +4436,38 @@ DOCUMENT_KEY = "document"
 
 
 def note_documents(db_path) -> int:
-    """Read which bytes each document of the database is. Returns how many
-    documents have that recorded."""
+    """Read which bytes each document of the database is, and what an
+    earlier stage left without content in it (Documents.holes, `holes`: the
+    stamp records them under `DOCUMENT_KEY`, owner request 2026-11-19).
+    Returns how many documents have their bytes recorded."""
     DOCUMENT_CONTENT.clear()
+    holes.clear()
     try:
         with sqlite3.connect(readonly_uri(db_path), uri=True) as conn:
+            held = {row[1] for row in conn.execute(
+                'PRAGMA table_info("Documents")')}
+            if "sha256" not in held:    # a database older than the record
+                return 0
             rows = conn.execute(
-                "SELECT filename, sha256, bytes FROM Documents "
-                "WHERE sha256 IS NOT NULL").fetchall()
-    except sqlite3.Error:               # a database older than the record
+                "SELECT id, filename, sha256, bytes, "
+                + ("holes" if "holes" in held else "NULL")
+                + " FROM Documents").fetchall()
+    except sqlite3.Error:
         return 0
-    for filename, sha256, size in rows:
-        content = {"sha256": sha256, "bytes": size}
-        DOCUMENT_CONTENT[filename] = content
-        DOCUMENT_CONTENT[Path(filename).stem] = content
-    return len(rows)
+    known = 0
+    for document_id, filename, sha256, size, held_holes in rows:
+        found = holes.parse(held_holes)
+        holes.note(document_id, found)
+        content: dict = {}
+        if sha256 is not None:
+            content = {"sha256": sha256, "bytes": size}
+            known += 1
+        if found:
+            content["holes"] = found
+        if content:
+            DOCUMENT_CONTENT[filename] = content
+            DOCUMENT_CONTENT[Path(filename).stem] = content
+    return known
 
 
 def note_index_model(db_path, command: str = "extraction") -> None:
@@ -4464,6 +4508,26 @@ def document_current(name: str) -> dict:
     if name in DOCUMENT_CONTENT:
         return {DOCUMENT_KEY: DOCUMENT_CONTENT[name]}
     return {}
+
+
+def holes_filled(stamp_path: Path, current: dict) -> set:
+    """The ids of the tables and figures that had no content when the
+    stamp's document was harvested and have content now: the holes the stamp
+    records under `DOCUMENT_KEY` that *current* (`document_current`) no
+    longer has (owner request 2026-11-19). Empty where the stamp records
+    none or cannot be read, and where this run knows nothing of the
+    document's holes (a database older than the record)."""
+    now = current.get(DOCUMENT_KEY)
+    if not isinstance(now, dict):
+        return set()
+    try:
+        stored = json.loads(stamp_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    then = stored.get(DOCUMENT_KEY) if isinstance(stored, dict) else None
+    if not isinstance(then, dict):
+        return set()
+    return holes.ids(then.get("holes")) - holes.ids(now.get("holes"))
 
 
 def document_moved(stored: dict, current: dict) -> bool:
@@ -4636,6 +4700,14 @@ def already_done(name: str, out_dir: Path, spec_sha: str, *,
         log.info("extraction: %s was read at its found places alone — "
                  "harvested again", name)
         return False
+    filled = holes_filled(stamp_path, document_current(name))
+    if filled:
+        # What the harvest could not read is there now (owner request
+        # 2026-11-19): the document is work again, as one never read.
+        log.info("extraction: %s: %d table(s) or figure(s) that had no "
+                 "content when it was harvested have content now — "
+                 "harvested again", name, len(filled))
+        return False
     changed = stale(stamp_path, {**_stamp_current(spec_sha, spec),
                                  **document_current(name)})
     if not changed:
@@ -4749,7 +4821,9 @@ def finish_document(report, name: str, out_dir: Path, spec_sha: str,
                                harvested=report.owners_harvested,
                                answered=answered,
                                sources_of=getattr(report, "sources_of", None),
-                               uncombed=getattr(report, "uncombed", ()))
+                               uncombed=getattr(report, "uncombed", ()),
+                               holes=bool((DOCUMENT_CONTENT.get(name) or {})
+                                          .get("holes")))
               if spec is not None else None)
     if spec is not None:
         check_against_schema(report, name, spec, states)

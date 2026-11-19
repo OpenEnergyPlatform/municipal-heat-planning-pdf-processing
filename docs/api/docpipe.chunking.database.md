@@ -88,6 +88,20 @@ The count already exists: preprocessing writes it per document. It just
 never reached the database, so nothing downstream could tell the two
 kinds of plan apart. Additive, no model, one JSON read per directory.
 
+### note_holes
+
+```python
+def note_holes(db_path: Path, root_dir: Path) -> dict
+```
+
+Documents.holes of every document under *root_dir* from its merged
+document.json: the tables and figures an earlier stage left without
+content, with why (owner request 2026-11-19, `docpipe.visuals.holes`),
+as JSON, "[]" for none. A document.json merged before it carried them
+leaves the row as it is. Returns {"documents": written, "with_holes":
+documents that have some, "items": tables and figures without content}.
+No model, one JSON read per document.
+
 ### enrich_caption
 
 ```python

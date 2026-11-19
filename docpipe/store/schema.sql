@@ -41,7 +41,12 @@ CREATE TABLE IF NOT EXISTS "Documents" (
     -- Which bytes this document is: the sha256 and the size of the file as
     -- it was registered. NULL for a row written before this was recorded.
     "sha256"      TEXT,
-    "bytes"       INTEGER
+    "bytes"       INTEGER,
+    -- The tables and figures an earlier stage left without content, as JSON
+    -- [{"id", "kind", "page", "why"}] ("[]" for none), written from the
+    -- merged document.json (docpipe/visuals/holes.py); NULL for a row whose
+    -- document was merged before this was recorded.
+    "holes"       TEXT
 );
 
 -- What this database is, in its own words: one row per fact. Written by the

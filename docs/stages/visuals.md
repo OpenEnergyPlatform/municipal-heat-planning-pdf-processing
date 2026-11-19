@@ -279,6 +279,21 @@ window in tokens. If the further attempt is cut off too, the item is a hole
 `cut_off`; so it is when the cut-off comes on the last attempt and none is left
 to ask.
 
+A table that is still cut off with the most room it can be given is not left
+without content at once: it is read in strips (`docpipe/visuals/strips.py`,
+called from `process.process_table`; owner request 2026-11-19, on the rule that
+a request whose reply does not fit is split and nothing is cut, 2026-09-12 and
+2026-11-17). The image is cut at a pixel row with no writing, between two table
+rows and never through one: the blank run nearest the middle that has writing
+above and below. The first strip is asked as the whole table was. Every later
+strip is asked with prompt `visuals/table_continued`, as a table that continues
+the table before it, shown the caption and head the table was read with, and
+its rows are joined under that one head (`continuation.body_rows`). A strip
+that is cut off again is cut again. A strip with no blank row left between
+writing has no halves, and then the table stays without content (`cut_off`) as
+before. Figures are not split. The table records `"strips": n` in
+`visuals.json`, and the run's summary counts the tables read in strips.
+
 What `call_vision` returns is the object or a `Hole` (`reading.Hole`) with
 one of these causes: the causes of an unreadable reply (`reasoning_only`,
 `empty`, `no_object`, `syntax`, `outside_text`, `not_an_object`,
@@ -326,7 +341,8 @@ points, unused by this stage). It loses `source_text`,
 present only in `sections.json` and stripped before every write. It gains
 `markdown` (absent when the model gave no object for it), optionally
 `caption`, optionally `qa_warning`, `after` and `continues` (only on a table that may continue the
-table before it), a
+table before it), `strips` (the number of strips, only on a table read in
+strips), a
 `{"coverage": float or null, "coverage_assessed": bool, "duplication":
 float, "has_rows": bool, "source_unreadable": bool}` dict present only when the kept attempt did not
 pass the QA gate, and `qa`, the same metrics plus `"passed": bool`, present for
@@ -432,6 +448,16 @@ is sent. Every profile
 that ships a `profile.py` states a positive context budget when its config
 module is imported in a subprocess and asked for it.
 
+### Listing what has no content
+
+`docpipe/visuals/holes.py` lists the tables and figures of a document that have
+no content after this stage: id, kind, page and why, which is the item's
+`vlm_why`, or `not_asked` where no request was sent for it (no `visuals.json`,
+no entry for the item, or no image). `python -m docpipe.visuals <root>
+--count-holes` prints three numbers: tables, figures and documents without
+content, so that a job can repeat the stage while a pass still fills any. The
+merge writes the list into `document.json` (see [chunking](chunking.md)).
+
 ## Modules
 
 `__init__.py` re-exports `run`, `run_single` and `run_batch` and states, in
@@ -528,10 +554,12 @@ process.py: Core processing logic for table and figure enrichment.
 Sends one table or figure image to the vision model, together with
 its section context, and returns a copy of the item carrying the
 model's markdown or description. A table's transcription passes a
-quality gate and gets one retry with a stronger prompt on failure. An
-image the model could not be read an object for (see vision.call_vision)
-has no content: the item carries no markdown or description, says why in
-`vlm_why`, and is counted by cause. No plain-text request fills in for it.
+quality gate and gets one retry with a stronger prompt on failure. A table
+whose reply does not fit the most room it can be given is read in strips
+(`strips`). An image the model could not be read an object for (see
+vision.call_vision) has no content: the item carries no markdown or
+description, says why in `vlm_why`, and is counted by cause. No plain-text
+request fills in for it.
 
 Author: Felix Vossel
 

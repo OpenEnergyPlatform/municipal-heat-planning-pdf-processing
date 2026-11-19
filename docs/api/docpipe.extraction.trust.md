@@ -191,7 +191,7 @@ def parameter_states(spec, tuples: list, refusals: list, *,
                      harvested: int = 0,
                      answered: Optional[int] = None,
                      sources_of: Optional[dict] = None,
-                     uncombed=()) -> list
+                     uncombed=(), holes: bool = False) -> list
 ```
 
 One state per parameter of the spec, in spec order.
@@ -216,6 +216,9 @@ request that names no source, a cut anywhere counts for every parameter.
 A field of the document that found nothing while chunks of the
 document were never shown to it (*uncombed*) ends in the state of
 `parameter_uncombed`, not "the plan does not say" (owner decision
-2026-11-13, point 3).
+2026-11-13, point 3). In a document in which an earlier stage left a
+table or figure without content (*holes*) a field with no value and
+nothing refused ends in the state of `parameter_with_holes` (owner
+request 2026-11-19).
 
 [Back to the index](../README.md)

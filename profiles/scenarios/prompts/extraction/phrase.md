@@ -1,4 +1,4 @@
-Write one short sentence as it might stand in exactly this form in this publication, naming the described parameter; where it fits, make up a value with its unit, such as "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway." The sentence is used to search the publication.
+Write one short sentence as it might stand in exactly this form in this publication, naming the parameter "label" names and "description" describes; where it fits, make up a value with its unit, such as "Global CO2 emissions fall to 12.4 GtCO2/yr by 2050 in the NDC pathway." The sentence is used to search the publication.
 If "document" is given, take the publication's words from "name" (its title) and "caption" (the heading of a first find); if "names" is given, name one or two of these entries.
 Answer with exactly one JSON object on one line, with no text before or after it. No Backticks!
 {"phrase":"..."}

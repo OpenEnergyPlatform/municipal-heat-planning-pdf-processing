@@ -10706,7 +10706,7 @@
    },
    "document": {
     "additionalProperties": false,
-    "description": "Which bytes were read: the sha256 and the size of the file as the database recorded them. Absent for a database that records none. Another sha256 than this one makes the document stale, as a changed ontology key does. The size is recorded and never compared, and a stamp without this key is not compared at all.",
+    "description": "Which bytes were read: the sha256 and the size of the file as the database recorded them, and the tables and figures an earlier stage had left without content when it was read (holes, owner request 2026-11-19). Absent for a database that records none. Another sha256 than this one makes the document stale, as a changed ontology key does; a hole that has content now makes it work again. The size is recorded and never compared, and a stamp without this key is not compared at all.",
     "properties": {
      "bytes": {
       "type": [
@@ -10714,14 +10714,45 @@
        "null"
       ]
      },
+     "holes": {
+      "items": {
+       "properties": {
+        "id": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "kind": {
+         "enum": [
+          "table",
+          "figure"
+         ]
+        },
+        "page": {
+         "type": [
+          "integer",
+          "null"
+         ]
+        },
+        "why": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "id",
+        "kind",
+        "why"
+       ],
+       "type": "object"
+      },
+      "type": "array"
+     },
      "sha256": {
       "pattern": "^[0-9a-f]{64}$",
       "type": "string"
      }
     },
-    "required": [
-     "sha256"
-    ],
     "type": "object"
    },
    "model": {

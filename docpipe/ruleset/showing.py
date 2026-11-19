@@ -3,7 +3,7 @@ showing.py: What a request shows, cutting a document into chunks, the order of
 the flow, conditions (addressed.py, units.py, engine.py, flow.py, blocks.py,
 conditions.py, reading.py).
 """
-from .kit import TAKING, rule
+from .kit import ASKING, TAKING, rule
 
 _r = rule
 
@@ -26,6 +26,19 @@ RULES: tuple = (
        "which plan it is read from.",
        choices=("always", "first", "never"), steps=PLACED,
        where="addressed.py (title_page_shown)"),
+    _r("message_first", "flow", SHOWN, "texts",
+       "The fields a request's message shows first, in this order; every "
+       "other field follows in the order of the step's inputs. What stays "
+       "the same over the requests of a field or of a document stands "
+       "first: the list, the field and its question, then the title page "
+       "and what the document settles; the value's place and the chunks "
+       "come after it. The server computes a beginning that two requests "
+       "share only once, so a list of a hundred entries asked for twenty "
+       "chunks is read once instead of twenty times. Every request shows "
+       "the same fields as before. Empty: every field in the order of the "
+       "step's inputs.",
+       empty=True, steps=ASKING, decided="2026-11-19",
+       where="runner.py (make_asks: first_shown), flowtry.py"),
     _r("show_headings", "flow", SHOWN, "switch",
        "Whether a request shows the headings above the place it asks about, "
        "all of them in reading order, the nearest last. Headings tell the "
@@ -72,7 +85,8 @@ RULES: tuple = (
        "better and takes more room.",
        choices=("short", "whole"),
        steps=("docfield", "works", "find", "coord", "work_coordinate",
-              "search"), where="addressed.py (field_shown)"),
+              "search", "phrase", "sentences"),
+       where="addressed.py (field_shown), shows.py (_description)"),
     _r("show_passage_page", "flow", SHOWN, "switch",
        "Whether a request shows the page of each chunk it shows. The page "
        "tells the model where in the document a chunk stands. Off: no page "

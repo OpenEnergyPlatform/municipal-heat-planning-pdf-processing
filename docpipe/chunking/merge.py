@@ -3,10 +3,12 @@ merge.py: Merges the preprocessing and imageprocessing outputs as
 chunking's first step.
 
 Replaces each table and figure in sections_refined.json with its
-enriched counterpart from visuals.json, matched by item id, joins each
-table the transcription found to continue the table before it to the
-table it continues (`docpipe.visuals.continuation.join`), and writes the
-result to document.json with an atomic replace. A directory is cached and
+enriched counterpart from visuals.json, matched by item id, writes the
+tables and figures that have none as the document's "holes"
+(`docpipe.visuals.holes`), joins each table the transcription found to
+continue the table before it to the table it continues
+(`docpipe.visuals.continuation.join`), and writes the result to
+document.json with an atomic replace. A directory is cached and
 skipped on rerun once document.json is newer than both inputs, unless
 force is set.
 
@@ -23,6 +25,7 @@ from typing import Optional
 
 from docpipe.artifacts import document_dirs
 from docpipe.visuals.continuation import join
+from docpipe.visuals.holes import of as holes_of
 
 from .config import (SECTIONS_JSON, SECTIONS_REFINED_JSON, VISUALS_JSON,
                      DOCUMENT_JSON)
@@ -100,6 +103,7 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
         final_data = json.load(f)
 
     enriched_lookup: dict[str, dict] = {}
+    images_data: dict = {}
     if images_path.exists():
         with open(images_path, "r", encoding="utf-8") as f:
             images_data = json.load(f)
@@ -135,6 +139,11 @@ def merge_single(output_dir: Path, *, force: bool = False) -> Optional[dict]:
                 if enriched_lookup:
                     stats.figures_missing += 1
         section["figures"] = new_figures
+
+    # What Stage 5 left without content stands at the document, with why
+    # (owner request 2026-11-19): the database keeps it beside the document,
+    # the harvest reads it and its stamp records it (`docpipe.visuals.holes`).
+    merged["holes"] = holes_of(final_data.get("sections") or [], images_data)
 
     # A table the layout cut in parts is one table (owner decision
     # 2026-11-06): each part the transcription found to continue the table

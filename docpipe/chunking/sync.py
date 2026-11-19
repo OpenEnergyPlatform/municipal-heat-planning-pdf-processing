@@ -63,6 +63,7 @@ from .database import (_FIGURE_TYPES, _SECTION_TYPES, _TABLE_TYPES,
                        _ensure_context_sentence_column, _ensure_table_qa_column,
                        _resolve_document_id, connect,
                        enrich_page_source, image_values, insert_provenance,
+                       note_holes,
                        page_rows, section_content, segment_rows, table_values)
 from .reembed import record_path
 
@@ -535,6 +536,7 @@ def run_sync(data_dir: Path, db_path: Path, index_paths, *,
         for path in paths:
             report.removed[str(path)] += drop_from_index(path, later)
     enrich_page_source(db_path, data_dir)
+    note_holes(db_path, data_dir)
     log.info("sync: %d document(s) written; taken out of the indexes: %s",
              len(to_write), report.removed or "none")
     return report

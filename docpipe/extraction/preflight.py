@@ -556,6 +556,13 @@ def audit(name: str) -> list:
     check("every parameter says what it becomes in the graph", not mute,
           ", ".join(mute), fatal=False)
 
+    # Every field a request carries is named in its instruction (owner
+    # request 2026-11-19): every request of a dry run of the profile's flow
+    # on a plan made of the spec's examples, both ways of answering, built
+    # in full and nothing sent (`docpipe.editor.flowtry`).
+    ok, detail = requests_name_their_fields(profile, spec)
+    check("every request names what it carries", ok, detail)
+
     # What the shapes of the graph hold that nobody asks for. A property a
     # parameter does not read is either left out on purpose, and the profile
     # says so with a reason (the rule `not_extracted`), or nobody decided.
@@ -565,6 +572,38 @@ def audit(name: str) -> list:
     check("every shape property is asked or left out on purpose", ok, detail,
           fatal=False)
     return rows
+
+
+def requests_name_their_fields(profile, spec) -> tuple:
+    """(ok, detail): does every request of a dry run of *profile*'s flow
+    name in its instruction each field it carries (`thread.unnamed`)? The
+    run reads a plan made of the examples of *spec*, once with every answer
+    empty and once with every answer the first line, so that every way of
+    asking is built; the detail names each kind of request with the fields
+    it carried unnamed and how many requests carried each."""
+    from docpipe.editor import flowtry
+    from . import flow as flow_files
+    tree = flow_files.load(profile).tree
+    numbers = flow_files.in_effect(profile)
+    sources = flowtry.example_sources(spec)
+    found: dict = {}
+    built = 0
+    for mode in flowtry.MODES:
+        try:
+            out = flowtry.run(profile, spec, tree, numbers, sources, mode)
+        except flowtry.Refused as exc:
+            return False, f"the dry run could not run: {exc}"
+        built += out["requests"]
+        for kind, keys in out["unnamed"].items():
+            for key, n in keys.items():
+                found.setdefault(kind, {}).setdefault(key, 0)
+                found[kind][key] += n
+    if not found:
+        return True, f"{built} request(s) built"
+    return False, "; ".join(
+        f"{kind}: " + ", ".join(f"{key} ({n} request(s))"
+                                for key, n in sorted(keys.items()))
+        for kind, keys in sorted(found.items()))
 
 
 def report(rows: list) -> int:

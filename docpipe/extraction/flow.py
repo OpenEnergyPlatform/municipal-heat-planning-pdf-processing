@@ -1323,7 +1323,7 @@ def prompt_problems(tree: list, profile) -> list:
             if not isinstance(prompt_id, str):
                 continue        # a text of the step's own
         try:
-            prompts.load(prompt_id, profile)
+            loaded = prompts.load(prompt_id, profile)
         except (FileNotFoundError, LookupError):
             if kind.asks not in addressed.OPTIONAL \
                     and kind.asks != "compute":
@@ -1331,7 +1331,58 @@ def prompt_problems(tree: list, profile) -> list:
                             "message": f"{kind.label} asks {kind.asks}, and "
                             f"the profile writes no prompt for it "
                             f"({prompt_id})"})
+            continue
+        silent = ", ".join(untold_offers(node, loaded))
+        if silent:
+            out.append({"id": node.get("id"),
+                        "message": f"{kind.label}: its prompt {prompt_id} "
+                        f"has no word for {silent}, which its answer may "
+                        f"carry (the model may ask to see more); every field "
+                        f"a request carries is named in its instruction"})
     return out
+
+
+def offers_of(node: dict) -> set:
+    """What the answer of the step *node* may carry besides its answer, as
+    the run builds its reply form (`runner.reply_offers`): "more" where the
+    model may ask to see more (its setting `fetch`, with the rule
+    `fetch_rounds` at least 1 and a way of fetching in the rule `fetches`),
+    and of the ways the figure's picture, a region of it and a section. The
+    step's own rules come first."""
+    from .. import rules
+    from .addressed import GETS, IMAGE, SECTION
+    from .engine import Engine
+
+    def rule(name):
+        own = (node.get("rules") or {})
+        return own[name] if name in own else rules.get(name)
+    try:
+        fetch = bool(Engine.setting(node, "fetch"))
+        picture = bool(Engine.setting(node, "picture"))
+    except StopIteration:            # a box without the setting
+        return set()
+    allowed = rule("fetches")
+    gets = [get for get in GETS + (SECTION,) if get in allowed] \
+        + ([IMAGE] if picture and IMAGE in allowed else [])
+    if not fetch or int(rule("fetch_rounds")) < 1 or not gets:
+        return set()
+    return {"more"} \
+        | ({"get_image"} if IMAGE in gets else set()) \
+        | ({"get_region"} if IMAGE in gets and rule("image_regions")
+           else set()) \
+        | ({"get_section"} if SECTION in gets else set())
+
+
+def untold_offers(node: dict, prompt) -> list:
+    """What the answer of *node* may carry (`offers_of`) that its prompt
+    *prompt* has no word for (`thread.named`), sorted."""
+    from . import thread
+    try:
+        parts = thread.cut(prompt)
+    except LookupError:
+        return []                   # said where the prompt is checked
+    return sorted(key for key in offers_of(node)
+                  if not thread.named(parts, key))
 
 
 # -- the file -----------------------------------------------------------------

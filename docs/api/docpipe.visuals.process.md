@@ -7,10 +7,12 @@ process.py: Core processing logic for table and figure enrichment.
 Sends one table or figure image to the vision model, together with
 its section context, and returns a copy of the item carrying the
 model's markdown or description. A table's transcription passes a
-quality gate and gets one retry with a stronger prompt on failure. An
-image the model could not be read an object for (see vision.call_vision)
-has no content: the item carries no markdown or description, says why in
-`vlm_why`, and is counted by cause. No plain-text request fills in for it.
+quality gate and gets one retry with a stronger prompt on failure. A table
+whose reply does not fit the most room it can be given is read in strips
+(`strips`). An image the model could not be read an object for (see
+vision.call_vision) has no content: the item carries no markdown or
+description, says why in `vlm_why`, and is counted by cause. No plain-text
+request fills in for it.
 
 Author: Felix Vossel
 

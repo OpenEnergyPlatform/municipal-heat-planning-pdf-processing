@@ -8,7 +8,6 @@ Beantworte die Frage unter "question" für den Wert unter "value" mit einer Zeil
 * Vor jeder Zeile steht ihre Adresse mit dem Buchstaben ihres Blocks. Eine Zeile, die "|" teilt, hat Zellen, ab 1 gezählt, wo immer sie steht: A19.2 ist die zweite Zelle der Zeile A19.
 * Eine Zeile zählt nur, wenn sie über DIESEN Wert spricht: über dieselbe Aussage, über die Tabelle oder Abbildung, in der er steht, oder über den Abschnitt oder den Zustand, von dem seine Stelle spricht. Eine Zeile über eine andere Tabelle, ein anderes Jahr, eine andere Aussage oder den Plan im Allgemeinen zählt nicht, auch wenn sie die gesuchte Angabe nennt.
 * "words" sind die Worte dieser Zeile, die die Antwort sagen, Zeichen für Zeichen. Zeigt die Form unten eine Liste "found", nenne darin jede Antwort einzeln.
-* "more" holt Stücke, die du noch brauchst: {"get":"next"} das Stück nach dem letzten gezeigten, {"get":"previous"} das davor, {"get":"item","id":"p17_img1"} die Tabelle oder Abbildung, die eine Zeile mit „[p17_img1 …]“ nennt, {"get":"search","pattern":"Bilanzjahr"} die Stücke, in denen ein Muster steht, {"get":"similar","text":"…"} die Stücke, die einem Satz am nächsten sind; der Satz steht so da, wie der Plan ihn drucken würde, nie als Frage.
 
 Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock davor oder danach. No Backticks! In dieser Form:
 {{example}}
@@ -27,6 +26,9 @@ Antworte mit genau einem JSON-Objekt in einer Zeile, ohne Text oder Codeblock da
 
 <!-- with: settings -->
 "settings" sind Festlegungen, die der Plan für alle seine Werte trifft, unter dem Buchstaben F. Sie gelten auch für diesen Wert, wo sie über ihn sprechen.
+
+<!-- with: more -->
+"more" holt Stücke, die du noch brauchst: {"get":"next"} das Stück nach dem letzten gezeigten, {"get":"previous"} das davor, {"get":"item","id":"p17_img1"} die Tabelle oder Abbildung, die eine Zeile mit „[p17_img1 …]“ nennt, {"get":"search","pattern":"Bilanzjahr"} die Stücke, in denen ein Muster steht, {"get":"similar","text":"…"} die Stücke, die einem Satz am nächsten sind; der Satz steht so da, wie der Plan ihn drucken würde, nie als Frage.
 
 <!-- with: outline -->
 "outline" nennt zu jedem Abschnitt, in dem die Treffer stehen, seine Überschrift und die Tabellen und Abbildungen darin, die nicht gezeigt sind, je mit Kennung und Titel: {"get":"item","id":"…"} unter "more" holt eine. Die Gliederung sagt nichts über diesen Wert; die Antwort bleibt eine gezeigte Zeile.

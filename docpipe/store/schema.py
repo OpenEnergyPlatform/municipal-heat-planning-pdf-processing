@@ -39,10 +39,13 @@ CORE_TABLES = ("Documents", "Pages", "Sections", "SectionPages", "Segments",
 # values, a vector written before reads piece NULL. A reader of format 1 still
 # reads it; its writer, whose upsert names the old uniqueness, cannot write
 # into it.
-FORMAT = 2
+# Format 3 (owner request 2026-11-19): Documents.holes, what an earlier stage
+# left without content.
+FORMAT = 3
 # (table, column, type) of every column a later format added.
 ADDED_COLUMNS = (("Documents", "sha256", "TEXT"),
-                 ("Documents", "bytes", "INTEGER"))
+                 ("Documents", "bytes", "INTEGER"),
+                 ("Documents", "holes", "TEXT"))
 # The columns format 2 gave Embeddings, as schema.sql writes them.
 EMBEDDING_PIECE_COLUMNS = ("piece", "part", "page", "first_line", "last_line")
 

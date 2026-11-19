@@ -1263,6 +1263,28 @@ carry); where its reply may fetch (*shape* offers "more"), the part
 `more`, and `get_image` where it may ask for a figure's picture (owner
 decision 2026-11-12).
 
+### first_shown
+
+```python
+def first_shown(payload: dict) -> dict
+```
+
+*payload* with the fields of the rule `message_first` first, in its
+order, and every other field after them in its own order (owner request
+2026-11-19): what stays the same over the requests of a field or a
+document stands at the beginning a server computes once for requests
+that share it. The same fields, in another order.
+
+### carried_fields
+
+```python
+def carried_fields(payload: dict, shape: Optional[dict] = None) -> list
+```
+
+The fields a request carries that its instruction has to name
+(`thread.unnamed`): the keys of its message, those that go beside it
+aside, and what its reply form offers besides (`reply_offers`).
+
 ### reply_offers
 
 ```python
@@ -1793,8 +1815,10 @@ harvest stale.
 def note_documents(db_path) -> int
 ```
 
-Read which bytes each document of the database is. Returns how many
-documents have that recorded.
+Read which bytes each document of the database is, and what an
+earlier stage left without content in it (Documents.holes, `holes`: the
+stamp records them under `DOCUMENT_KEY`, owner request 2026-11-19).
+Returns how many documents have their bytes recorded.
 
 ### note_index_model
 
@@ -1827,6 +1851,19 @@ The stamp key this run can say about one document, or {}.
 Per document and not part of `_stamp_current`: that is the key set of the
 whole run, which a top-up and a remap carry forward, and neither of them
 reads a PDF. Kept out of it, they neither earn this key nor lose it.
+
+### holes_filled
+
+```python
+def holes_filled(stamp_path: Path, current: dict) -> set
+```
+
+The ids of the tables and figures that had no content when the
+stamp's document was harvested and have content now: the holes the stamp
+records under `DOCUMENT_KEY` that *current* (`document_current`) no
+longer has (owner request 2026-11-19). Empty where the stamp records
+none or cannot be read, and where this run knows nothing of the
+document's holes (a database older than the record).
 
 ### document_moved
 

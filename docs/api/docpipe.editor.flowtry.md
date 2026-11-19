@@ -36,8 +36,10 @@ where asked) or, without one, a plan made up from the examples of the
 profile's spec.
 
 What comes back: per box the requests it asked and the first one in full,
-the states the coordinates of the values ended in, and the pieces the
-document was cut into.
+the states the coordinates of the values ended in, the pieces the document
+was cut into, and per kind of request the fields a request carried that its
+instruction does not name (`thread.unnamed`, owner request 2026-11-19), which
+the profile check refuses.
 
 Author: Felix Vossel
 

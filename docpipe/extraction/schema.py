@@ -822,15 +822,30 @@ def stamp_schema() -> dict:
                 "type": "object",
                 "description": "Which bytes were read: the sha256 and the "
                                "size of the file as the database recorded "
-                               "them. Absent for a database that records "
-                               "none. Another sha256 than this one makes "
-                               "the document stale, as a changed ontology "
-                               "key does. The size is recorded and never "
+                               "them, and the tables and figures an earlier "
+                               "stage had left without content when it was "
+                               "read (holes, owner request 2026-11-19). "
+                               "Absent for a database that records none. "
+                               "Another sha256 than this one makes the "
+                               "document stale, as a changed ontology key "
+                               "does; a hole that has content now makes it "
+                               "work again. The size is recorded and never "
                                "compared, and a stamp without this key is "
                                "not compared at all.",
-                "properties": {"sha256": sha,
-                               "bytes": {"type": ["integer", "null"]}},
-                "required": ["sha256"], "additionalProperties": False},
+                "properties": {
+                    "sha256": sha,
+                    "bytes": {"type": ["integer", "null"]},
+                    "holes": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": ["string", "null"]},
+                                "kind": {"enum": ["table", "figure"]},
+                                "page": {"type": ["integer", "null"]},
+                                "why": {"type": "string"}},
+                            "required": ["id", "kind", "why"]}}},
+                "additionalProperties": False},
             "producers": {
                 "type": "array",
                 "description": "Every pass that wrote into this harvest, in "

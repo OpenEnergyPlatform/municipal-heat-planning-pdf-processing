@@ -348,7 +348,7 @@ def parameter_states(spec, tuples: list, refusals: list, *,
                      harvested: int = 0,
                      answered: Optional[int] = None,
                      sources_of: Optional[dict] = None,
-                     uncombed=()) -> list:
+                     uncombed=(), holes: bool = False) -> list:
     """One state per parameter of the spec, in spec order.
 
     Every state this pipeline writes is a state of a ROW: `apply_derived`,
@@ -371,7 +371,10 @@ def parameter_states(spec, tuples: list, refusals: list, *,
     A field of the document that found nothing while chunks of the
     document were never shown to it (*uncombed*) ends in the state of
     `parameter_uncombed`, not "the plan does not say" (owner decision
-    2026-11-13, point 3).
+    2026-11-13, point 3). In a document in which an earlier stage left a
+    table or figure without content (*holes*) a field with no value and
+    nothing refused ends in the state of `parameter_with_holes` (owner
+    request 2026-11-19).
     """
     ran = bool(harvested)
     failed = [r for r in refusals
@@ -404,6 +407,8 @@ def parameter_states(spec, tuples: list, refusals: list, *,
             state = state_for("parameter_cut")
         elif uri in uncombed:
             state = state_for("parameter_uncombed")
+        elif holes:
+            state = state_for("parameter_with_holes")
         else:
             state = state_for("parameter_silent")
         out.append({"parameter": uri, "state": state,

@@ -284,10 +284,15 @@ RULES = (
          "dimension that is never asked because the answer to another "
          "dimension left its row out of this run; unstated_after_combing "
          "is a dimension whose search found nothing and left no chunk "
-         "unread; exhausted is a dimension whose search ended with chunks "
-         "left unread. The states are read, unstated, unbacked, exhausted, "
-         "unanswered, derived and "
+         "unread; unstated_with_holes is the same in a document in which "
+         "an earlier stage left a table or figure without content, and "
+         "parameter_with_holes a field with no value and nothing refused in "
+         "such a document: what they would be read from may stand in what "
+         "has no content; exhausted is a dimension whose search ended with "
+         "chunks left unread. The states are read, unstated, unbacked, "
+         "exhausted, unanswered, derived and "
          "out_of_slice.", of="text", steps=TAKING + ("each value", "state"),
+         decided="2026-11-19",
          where="pipeline.py, trust.py (parameter_states), verify.py, "
                "engine.py (box_state)"),
     # -- flow: writing --------------------------------------------------------

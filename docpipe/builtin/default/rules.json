@@ -290,6 +290,19 @@
     "schema_dialect": "by_provider",
     "learn_no_temperature": true,
     "show_title_page": "always",
+    "message_first": [
+      "list",
+      "field",
+      "parameter",
+      "label",
+      "description",
+      "names",
+      "holds",
+      "question",
+      "title_page",
+      "settings",
+      "document"
+    ],
     "show_headings": true,
     "show_settled": true,
     "show_known": true,
@@ -485,6 +498,8 @@
       "no_answer": "unanswered",
       "out_of_slice": "out_of_slice",
       "unstated_after_combing": "unstated",
+      "unstated_with_holes": "exhausted",
+      "parameter_with_holes": "exhausted",
       "exhausted": "exhausted"
     },
     "drop_repeats": true,

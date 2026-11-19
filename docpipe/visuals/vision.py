@@ -144,6 +144,7 @@ def call_vision(
     max_tokens: int = VLM_MAX_TOKENS,
     repetition_penalty: float | None = None,
     budget: int | None = None,
+    picture: bytes | None = None,
 ) -> dict | Hole:
     """
     Sends an image + prompt to the vision model and reads the one JSON object
@@ -162,12 +163,18 @@ def call_vision(
     runaway grid is what ends at the limit), without a word about the cut. The
     room is twice *max_tokens* or as much as the served window leaves,
     whichever is smaller (`llm_preflight.further_room`); where it leaves none
-    the item is a hole at once and nothing more is sent. If the further
-    attempt is cut off too, the item is a hole.
+    the request ends at once in the Hole "cut_off" and nothing more is sent,
+    as it does when the further attempt is cut off too. A table is then read
+    in strips (`strips`, by `process.process_table`); a figure has no
+    content.
 
     *budget* is the largest request, in tokens, of the stage this call belongs
     to: the prompt, the largest input and ONE reply of *max_tokens*, which its
     preflight checked the window against. Without it the room is twice.
+
+    *picture*, where given, is the PNG sent instead of the file at
+    *image_path* (a strip of it, `strips`); the file still names the request
+    in the log.
 
     Returns:
         The parsed JSON dict, or a Hole that names why there is none:
@@ -189,7 +196,9 @@ def call_vision(
     shape = providers.grammar(name, schema)
     current_penalty = repetition_penalty
     room = max_tokens
-    image_url = _image_data_url(image_path)
+    image_url = (_image_data_url(image_path) if picture is None else
+                 "data:image/png;base64,"
+                 + base64.b64encode(picture).decode("ascii"))
     base_messages: list[dict] = [
         {"role": "system", "content": system_prompt},
         {

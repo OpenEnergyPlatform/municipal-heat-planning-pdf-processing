@@ -41,6 +41,7 @@ from .config import (
     max_request_tokens,
 )
 from . import continuation, qa, replies
+from .holes import count as count_holes
 from .models import ProcessingStats
 from .vision import create_client, check_model_available
 from .process import process_table, process_figure
@@ -574,6 +575,12 @@ Examples:
         help="vLLM OpenAI-compatible base URL (default: %s)" % VLM_BASE_URL,
     )
     p.add_argument(
+        "--count-holes", action="store_true",
+        help="Print how many tables, figures and documents under the input "
+             "have no content, as three numbers, then exit (what a job "
+             "compares to know whether another pass filled any)",
+    )
+    p.add_argument(
         "--print-context-budget", action="store_true",
         help="Print the worst-case tokens one request needs, then exit "
              "(feed it to the server's --max-model-len)",
@@ -602,6 +609,9 @@ def main() -> None:
 
     if args.input is None:
         args.input = str(profile.processed_dir)
+    if args.count_holes:
+        print(*count_holes(args.input))
+        sys.exit(0)
     # The texts the run shows, measured where it reads them: the documents
     # under --input, in the file --input-json names where it names one.
     budget = max_request_tokens(longest_in(

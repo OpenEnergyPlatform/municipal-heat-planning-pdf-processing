@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Optional
 
 from .. import rules
-from . import archive, fields, trace
+from . import archive, fields, holes, trace
 from . import passflow
 from .pipeline import Row, drop_repeats, row_label
 from .remap import (enter_producer, next_producer, refused_spaces,
@@ -773,7 +773,8 @@ def box_read_parameters(run, doc: Doc, node: dict) -> None:
                               harvested=report.owners_harvested,
                               answered=taken.replies,
                               sources_of=report.sources_of,
-                              uncombed=report.uncombed)
+                              uncombed=report.uncombed,
+                              holes=bool(holes.of(doc.document_id)))
     doc.report = report
     doc.append = {"states": states, "schema": True,
                   "producer": {"parameters": uris, "frame": FRAME_SURVEYED},

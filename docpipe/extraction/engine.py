@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from .. import rules
-from . import addressed, blocks, conditions, fields, general, trace
+from . import addressed, blocks, conditions, fields, general, holes, trace
 from . import flow as flow_map
 from .addressed import (Asking, Counts, Found, Plan, Read,
                         field_shown_of, years_in)
@@ -128,6 +128,16 @@ class Scope:
     def child(self, item: bool = False, **values) -> "Scope":
         return Scope(self, item, **values)
 
+
+
+def combed(plan) -> str:
+    """The case of `state_rules` a search that found nothing ends in: in a
+    document in which an earlier stage left a table or figure without content
+    that is no finding about the document (`holes`, owner request
+    2026-11-19)."""
+    return ("unstated_with_holes" if holes.of(getattr(plan, "document_id",
+                                                      None))
+            else "unstated_after_combing")
 
 @dataclass
 class Doc:
@@ -2107,7 +2117,7 @@ class Engine:
         if mode == "out_of_slice":
             coord.row.claim.setdefault(key, state_for("out_of_slice"))
         elif mode == "unstated":
-            coord.row.claim[key] = state_for("unstated_after_combing")
+            coord.row.claim[key] = state_for(combed(plan))
         elif mode == "unanswered":
             # A request about it got no answer in the expected form (owner
             # decision 2026-11-13, point 1).
@@ -2118,7 +2128,7 @@ class Engine:
             rest = any(c.key not in coord.seen
                        for c in plan.pieces(numbers))
             coord.row.claim[key] = state_for(
-                "exhausted" if rest else "unstated_after_combing")
+                "exhausted" if rest else combed(plan))
 
     # -- the general steps (`general`, owner decision 2026-11-12) ------------
 

@@ -4,10 +4,12 @@ process.py: Core processing logic for table and figure enrichment.
 Sends one table or figure image to the vision model, together with
 its section context, and returns a copy of the item carrying the
 model's markdown or description. A table's transcription passes a
-quality gate and gets one retry with a stronger prompt on failure. An
-image the model could not be read an object for (see vision.call_vision)
-has no content: the item carries no markdown or description, says why in
-`vlm_why`, and is counted by cause. No plain-text request fills in for it.
+quality gate and gets one retry with a stronger prompt on failure. A table
+whose reply does not fit the most room it can be given is read in strips
+(`strips`). An image the model could not be read an object for (see
+vision.call_vision) has no content: the item carries no markdown or
+description, says why in `vlm_why`, and is counted by cause. No plain-text
+request fills in for it.
 
 Author: Felix Vossel
 """
@@ -22,7 +24,7 @@ import openai
 
 from docpipe.reading import Hole
 
-from . import qa, replies
+from . import continuation, qa, replies, strips
 from .config import (
     max_request_tokens,
     shown_bytes,
@@ -164,11 +166,60 @@ def process_table(
     budget = max_request_tokens(shown_bytes(
         section.get("content", ""),
         (before or {}).get("head") or "", (before or {}).get("between") or ""))
-    response = call_vision(
-        client, table_system_prompt(), user_prompt, image_path,
-        temperature=TABLE_VLM_TEMPERATURE, reply=reply,
-        budget=budget, **kwargs
+    own_prompt = user_prompt if before is None else table_user_prompt().format(
+        section_title=section.get("title", "Unknown"),
+        page_number=table.get("page_number", section.get("page_number", "?")),
+        existing_caption=existing_caption or "(none)",
+        section_content=section.get("content", ""),
+        caption_instruction=_caption_instruction(existing_caption, "table"),
     )
+
+    def ask(hint: str = "", temperature: float = TABLE_VLM_TEMPERATURE,
+            penalty: float | None = None):
+        """The table asked once, with *hint* after the prompt; read in
+        strips (`strips`) where its reply does not fit the most room it can
+        be given. Returns the reply or a Hole."""
+        got = call_vision(
+            client, table_system_prompt(), user_prompt + hint, image_path,
+            temperature=temperature, repetition_penalty=penalty,
+            reply=reply, budget=budget, **kwargs)
+        if not (isinstance(got, Hole) and got.cause == "cut_off"):
+            return got
+
+        def strip(png: bytes, first: dict | None):
+            if first is None:
+                return call_vision(
+                    client, table_system_prompt(), user_prompt + hint,
+                    image_path, temperature=temperature,
+                    repetition_penalty=penalty, reply=reply, budget=budget,
+                    picture=png, **kwargs)
+            # A later strip continues the table the first one was read as:
+            # the table before it where the first strip continues that one,
+            # else the first strip itself.
+            if before is not None and first.get("continues") is True:
+                caption, head = before.get("caption") or "", \
+                    before.get("head") or ""
+            else:
+                caption = existing_caption or first.get("caption") or ""
+                head = continuation.head_lines(_table_text(first))
+            shown = table_continued_prompt().format(
+                previous_caption=caption or "(none)",
+                previous_head=head or "(no head)", between="(nothing)")
+            return call_vision(
+                client, table_system_prompt(), own_prompt + shown + hint,
+                image_path, temperature=temperature,
+                repetition_penalty=penalty, reply=replies.TABLE_CONTINUED,
+                budget=max_request_tokens(shown_bytes(
+                    section.get("content", ""), head)),
+                picture=png, **kwargs)
+
+        log.warning("  Table %s: cut off with the most room it can be "
+                    "given, read in strips", table["id"])
+        read, _asked = strips.read(image_path.read_bytes(), strip,
+                                   name=table["id"])
+        return read
+
+    response = ask()
 
     if isinstance(response, Hole):
         with guard:
@@ -182,12 +233,8 @@ def process_table(
     passed, metrics = _assess_table(raw_md, source_text, known_words)
 
     if not passed:
-        retry = call_vision(
-            client, table_system_prompt(), user_prompt + _QA_RETRY_HINT, image_path,
-            temperature=TABLE_QA_RETRY_TEMPERATURE,
-            repetition_penalty=TABLE_QA_RETRY_PENALTY,
-            reply=reply, budget=budget, **kwargs,
-        )
+        retry = ask(_QA_RETRY_HINT, TABLE_QA_RETRY_TEMPERATURE,
+                    TABLE_QA_RETRY_PENALTY)
         # A retry that is a hole keeps the first attempt, which was read.
         if not isinstance(retry, Hole):
             retry_md = _table_text(retry)
@@ -205,6 +252,11 @@ def process_table(
     # legitimately contain identical adjacent rows, so don't touch it.
     result["markdown"] = raw_md if passed else qa.dedup_consecutive_rows(raw_md)
     result["qa"] = {"passed": passed, **metrics}
+    # How many strips the image was read in, where it was (`strips`).
+    if response.get("strips"):
+        result["strips"] = response["strips"]
+    else:
+        result.pop("strips", None)
     if not passed:
         result["qa_warning"] = metrics
     continues = False
@@ -229,6 +281,8 @@ def process_table(
             stats.qa_unreadable_sources += 1
         if continues:
             stats.continued_tables += 1
+        if result.get("strips"):
+            stats.strip_tables += 1
         stats.processed_tables += 1
 
     if passed and metrics["source_unreadable"]:

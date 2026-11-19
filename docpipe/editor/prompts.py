@@ -250,6 +250,19 @@ def problem(profile, prompt_id: str, raw: str, disk: dict) -> Optional[str]:
                 f"the follow-up part for {sorted(had - has)} is gone; the "
                 f"code sends a follow-up with it and would have no words "
                 f"for it")
+        # Every field a request carries is named in its instruction (owner
+        # request 2026-11-19): a part of a field may go where what every
+        # request is told names the field instead.
+        before = thread.cut(old)
+        gone = sorted(key for part in before.of(thread.WITH)
+                      for key in part.keys if not thread.named(cut, key))
+        if gone:
+            raise Refused(
+                f"the part for {gone} is gone, and what every request is "
+                f"told does not name {'it' if len(gone) == 1 else 'them'} "
+                f"either: a request that carries "
+                f"{'it' if len(gone) == 1 else 'them'} would get no word "
+                f"on what {'it is' if len(gone) == 1 else 'they are'}")
         added = sorted(new.placeholders - old.placeholders)
         missing = sorted(old.placeholders - new.placeholders)
         if added or missing:

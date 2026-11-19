@@ -90,6 +90,7 @@ Fields:
 - `qa_failed_tables: int = 0`: extracted but flagged low-quality by the QA gate
 - `qa_unreadable_sources: int = 0`: Tables whose PDF text cannot be read as the table (qa.unreadable), so their coverage was not assessed.
 - `continued_tables: int = 0`: Tables this run transcribed that continue the table before them (continuation.py): the merge joins them there.
+- `strip_tables: int = 0`: Tables this run read in strips (strips.py): their reply did not fit the most room it can be given.
 - `hole_causes: dict = field(default_factory=dict)`: Why the items that ended without content have none, counted in items: {cause: tables and figures}. The causes are those of `reading.Hole`.
 
 #### ProcessingStats.hole

@@ -559,8 +559,17 @@ def _label(req, value, spec):
 
 
 def _description(req, value, spec):
-    return getattr(value, "description", None) if hasattr(
-        value, "description") else OMIT
+    """What a value of the field is, as every request that finds values
+    shows it (`addressed.field_shown`): in short where the spec writes that
+    (`brief`), whole where it does not or the rule `field_text` says so
+    (owner request 2026-11-19: the request of a search sentence showed the
+    whole definition, written for other requests)."""
+    if not hasattr(value, "description"):
+        return OMIT
+    if hasattr(value, "label"):
+        from .addressed import field_shown
+        return field_shown(value)["means"]
+    return getattr(value, "description", None)
 
 
 def _vocabulary(req, value, spec):
@@ -782,7 +791,9 @@ SHOWS: dict = {
               "(rule show_known).", _known),
     "label": ("the field's name", "The name of the field.", _label),
     "description": ("what the field means", "What a value of the field "
-                    "is, as the Spec says.", _description),
+                    "is, as the Spec says: its brief where it writes one, "
+                    "else its description; whole where the rule field_text "
+                    "says so.", _description),
     "vocabulary": ("the names of the field's list",
                    "The names a document prints for the entries of the "
                    "field's list.", _vocabulary),

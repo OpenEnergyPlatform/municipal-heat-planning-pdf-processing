@@ -470,7 +470,10 @@ the file a run loads today, in these cases and no others:
   one (`thread.MARK`): inside a line, with words after it, or spelled another
   way. The run would take it for text and send it, with the part it was meant
   to open, in every request that is told the words before it. What the file on
-  disk has already is not held against the text.
+  disk has already is not held against the text;
+- the text drops the part for a field, and what every request is told does not
+  name that field either (owner request 2026-11-19): the field would be sent
+  with no words for it (`thread.unnamed`).
 
 Where the text is taken, Check shows the diff of the file, the diff by sentence
 of the text that is sent (`sentences.unified`), the size of that text in
@@ -854,7 +857,10 @@ coordinates without a state, a condition that cannot be evaluated where it
 stands, an id used twice, and the order the run needs (the document, the figures,
 the pieces and the lists first, in this order; the writing at the end, only the
 calculation after it). `flow.prompt_problems` adds a box that is on and asks a
-request whose prompt neither the profile nor a profile it extends writes.
+request whose prompt neither the profile nor a profile it extends writes, and
+a step whose answer may carry a field its prompt has no word for, such as `more`
+where the model may ask to see more (`flow.offers_of`, `flow.untold_offers`; owner
+request 2026-11-19).
 
 ### The tab
 
@@ -985,7 +991,11 @@ with a prompt of its own is asked with its inputs written in as the run writes
 them, and the sentence each field's chunks are ordered by is asked from the
 inputs of the step that writes it, once per field and kept at that step.
 No embedder and no reranker are asked, so a search shows its pieces in the
-document's order, which a run never does; the page says so. Per box the Try
+document's order, which a run never does; the page says so. The report also
+gives, for each kind of request, the fields its requests carry that their
+instruction does not name (`thread.unnamed`), which the profile check fails on
+(see [extraction](extraction.md)). Fields are written in the order of the rule
+`message_first`, as in a run. Per box the Try
 gives the number of requests and the first one in full, and it lists the states
 the coordinates of the values ended in, the number of values and the pieces the
 document was cut into.

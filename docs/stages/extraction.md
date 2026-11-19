@@ -794,7 +794,8 @@ place can say, is searched for in the rest of the plan (the box `order` and the 
 `extraction/search`, owner decisions 2026-11-04 to 2026-11-08). Every search runs
 with a sentence in the form of the plan, never with a question (HyDE). The `coord`
 answer writes none: a request of its own, `phrase` (prompt `extraction/phrase`,
-with the parts `with: question` and `with: headings`; target `sentence`:
+with the parts `with: question`, `with: headings` and `with: before`, and words
+for `label` and `description`; target `sentence`:
 `targets.sentence`, `targets.search_sentence`), writes
 it from the field, the question, the value's words and lines, the headings up to
 the value and what the document says of itself, once per document, field,
@@ -1063,6 +1064,28 @@ the prompt, as `spec.load` stops at a broken spec (owner decision 2026-11-04;
 `runner.surveyed_flow`). The prompts are compact, the result first, and none shows a backtick in its
 example, which the prompt says (owner decision 2026-11-06); no test reads a
 prompt (owner decision 2026-11-05).
+
+Every field a request carries is named in its instruction (owner request
+2026-11-19): a field is named by a `<!-- with: key -->` part of the prompt, or by
+its name in quotes in what every request of the kind is told (`thread.unnamed`).
+A model told nothing of a field reads it as it likes. The search-sentence request
+shows the field's brief like the other requests: its `description` input holds the
+brief where the spec writes one, and the whole description where the rule
+`field_text` says "whole". The `search` prompts of kwp and scenarios tell how to
+fetch (`more`) only to a request that may fetch, in a `<!-- with: more -->` part,
+as the built-in profile's does. The check is made before a run, in three places:
+`docpipe preflight` (see The check before a run), the editor's check of a prompt
+and the check of a flow (see [the editor](editor.md)).
+
+The fields of a message are written in a fixed order, the rule `message_first`
+(`runner.first_shown`, used where the runner writes a message and in the editor's
+dry run; owner request 2026-11-19). Its default is `list`, `field`, `parameter`,
+`label`, `description`, `names`, `holds`, `question`, `title_page`, `settings`,
+`document`; every other field follows in the order of the step's inputs. What
+stays the same over the requests of a field or a document stands first, so that a
+server with prefix caching computes that beginning once: a list of a hundred
+entries asked for twenty chunks is read once and not twenty times. The requests
+show the same fields as before, in another order.
 
 A request of the harvest carries no tools: what a search fetches (`more`) is a
 reply key and no tool. The compute step is the one request with the tools of
@@ -1917,7 +1940,17 @@ filled by ingest, or once for a row from before the record). Ingest does not
 refresh it when a file is replaced under the same name: it only warns when the
 size differs. So the comparison can fire when the `Documents` row is made anew,
 after a rebuild of the database from a changed PDF, and not for a file edited
-in place. A top-up and a remap never read a PDF, so they neither earn nor lose
+in place. The stamp also records, under the same `document` key, the holes the document
+had when it was read: the tables and figures stage 5 left without content, which
+the run reads with the document (`runner.note_documents`, registry
+`docpipe/extraction/holes.py`; owner request 2026-11-19). A dimension whose search
+found nothing in such a document ends in the state of the case
+`unstated_with_holes`, and a field with no value and nothing refused in
+`parameter_with_holes`, both `exhausted` by default (see
+[the states](../contract/states.md)): what is not found may stand in what has no
+content. A hole that has content since makes the document work again
+(`runner.holes_filled`, `runner.already_done`): the next harvest reads it without
+`--force-stale`. A top-up and a remap never read a PDF, so they neither earn nor lose
 the key; the pass that appends a parameter holds the stamp against it, leaves a
 document whose PDF moved stale as a whole, and never writes it. `docpipe
 estimate` counts such a document as stale the way the run does. Beside every harvest sits
@@ -2637,6 +2670,11 @@ holds it by `graph.check`; a field the spec does not ask or a brick no code
 has fails `graph drawing`) and, for a profile that has a `vocabulary` module, its
 ontology pin; a module that has `check` but not `load` or `foreign_labels`
 fails `vocabulary module is whole`.
+The line `every request names what it carries` builds every request of a dry run of
+the profile's flow on a plan made of the spec's examples, in both ways of
+answering (`docpipe/editor/flowtry.py`), and fails for a request whose instruction
+does not name a field it carries (`thread.unnamed`); it names the kind and the
+field.
 The keys of a request and of a reply belong to the stage and are checked by
 name. A passage a prompt has to hold belongs to the profile, in the language
 of its prompts, and is declared in `extraction.PROMPT_CHECKS` as entries

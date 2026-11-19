@@ -111,6 +111,7 @@
  "{label}: a dimension is asked at its own place or over the hits",
  "{label}: a text of its own is empty",
  "{label}: each input has key, from and show, and may have when, first_only and several_only",
+ "{label}: its prompt {prompt_id} has no word for {silent}, which its answer may carry (the model may ask to see more); every field a request carries is named in its instruction",
  "{label}: shows as one of {SHOWS}",
  "{label}: the key {one} stands twice",
  "{label}: there is no target {value}",

@@ -964,6 +964,17 @@ def box_document(self, node, scope)
 
 ## Functions
 
+### combed
+
+```python
+def combed(plan) -> str
+```
+
+The case of `state_rules` a search that found nothing ends in: in a
+document in which an earlier stage left a table or figure without content
+that is no finding about the document (`holes`, owner request
+2026-11-19).
+
 ### language_of
 
 ```python

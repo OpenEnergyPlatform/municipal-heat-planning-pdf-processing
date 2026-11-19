@@ -17,6 +17,13 @@ some are told, each opened by a marker line and running to the next one:
   fields, such as what a search fetched; never part of a system prompt
   (`Parts.follow_up`).
 
+Every field a request carries is named in its instruction, by a part for it
+or by its name in quotes in what the request is told (`unnamed`, owner
+request 2026-11-19): the profile check builds every request of a dry run and
+names a field that is not, the page refuses a prompt that drops the part of
+a field, and the check of a flow names a step whose answer may carry a field
+its prompt has no word for.
+
 No request is told what another one may bring (owner decision 2026-11-07:
 "Jede Anfrage sollte genau die Prompt bekommen, die beschreibt, was sie tun
 soll").
@@ -156,6 +163,29 @@ LookupError where a group of ways in *text* names a rule that is
 none of *known* (the rules of the ambient profile where not given) or
 has no choices, or does not hold exactly one way for each choice of its
 rule: a request would be sent words its rule never chooses, or none.
+
+### named
+
+```python
+def named(parts: Parts, key: str, text: Optional[str] = None) -> bool
+```
+
+Does the instruction a request is told name the field *key*: has the
+prompt a part for it (\<!-- with: key -->), or does *text*, the system
+prompt it is told (what every request of the kind is told where none is
+given), have its name in quotes ("key"), as the prompts write the
+fields of a message?
+
+### unnamed
+
+```python
+def unnamed(parts: Parts, carried: Iterable) -> list
+```
+
+The fields of *carried* the instruction of a request that carries
+them does not name (`named`), in their order: told nothing, the model
+reads a field nobody said the meaning of (owner request 2026-11-19:
+every field a request carries is named in its instruction).
 
 ### shown_with
 

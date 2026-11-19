@@ -71,12 +71,12 @@ profile's catalog (`_meta_columns` in `docpipe/builtin/default/catalog.py`).
 
 ### Bringing an older database forward
 
-`FORMAT` (`schema.py:35`, currently 2) counts the shape of the core tables
+`FORMAT` (`schema.py:35`, currently 3) counts the shape of the core tables
 and is raised whenever that shape changes. A database carries it as `PRAGMA
 user_version`, and one made before the counter existed reads 0.
 `ADDED_COLUMNS` (`schema.py:37` to `38`) lists every `(table, column, type)`
-a later format added: `Documents.sha256` and `Documents.bytes`.
-`migrate(connection)` (`schema.py:91` to `102`) reads the version the
+a later format added: `Documents.sha256`, `Documents.bytes` and
+`Documents.holes`. `migrate(connection)` (`schema.py:91` to `102`) reads the version the
 database had, runs `ALTER TABLE ... ADD COLUMN` for each listed column that
 `columns()` does not report, sets `user_version` to `FORMAT` if it was
 lower, commits, and returns the version it found. It only ever adds, a
@@ -220,9 +220,12 @@ versioning and the record of which bytes the file was:
 | `sha256` | `TEXT`, the hex sha256 of the PDF file when file processing first recorded it; `NULL` for a row not met since the record existed; filled by `note_content` through `set_content` (see Method) |
 | `bytes` | `INTEGER`, the size of that file in bytes, the figure `note_content` compares the file on disk with; `NULL` where `sha256` is |
 
-`sha256` and `bytes` are the two columns a later format added, so a database
+`sha256` and `bytes` are two columns a later format added, so a database
 built before them gets both from `migrate` (see Bringing an older database
-forward).
+forward). `holes` is the third (format 3, owner request 2026-11-19): a JSON list
+of the tables and figures the document has without content after Stage 5, each
+`{id, kind, page, why}`, `[]` for none, `NULL` where the document was merged
+before this was recorded. It is written by chunking's `note_holes`.
 
 `Meta` (`docpipe/store/schema.sql:47` to `55`) is the table where a database
 says what it is: one row per fact, `key` primary key and `value` text, a
@@ -355,8 +358,8 @@ Reading the tables back out is not this package's job.
 | `PRAGMA foreign_keys` | fixed connection pragma | `ON` | enables foreign-key enforcement, off by default in SQLite, so `ON DELETE CASCADE`/`SET NULL` fire | `docpipe/store/schema.py:53`; re-set independently by `docpipe/chunking/database.py:101` |
 | `PRAGMA busy_timeout` | fixed pragma, chunking's own `connect()` only | 30000 ms | a reader waits for a write lock instead of failing, needed once embedding began preparing documents while writing batches | `docpipe/chunking/database.py:98` to `108` |
 | `CORE_TABLES` | module constant | the 9 core table names, as a tuple | names which tables belong to the core, not a profile | `docpipe/store/schema.py:27` to `28` |
-| `FORMAT` / `PRAGMA user_version` | module constant / pragma | `2` / `0` on a database made before the counter | the shape of the core tables; `migrate` sets the pragma to `FORMAT` when it is lower | `docpipe/store/schema.py:35`, `91` to `102` |
-| `ADDED_COLUMNS` | module constant | `Documents.sha256` (`TEXT`) and `Documents.bytes` (`INTEGER`) | the columns a later format added, which `migrate` adds to a database that lacks them | `docpipe/store/schema.py:37` to `38` |
+| `FORMAT` / `PRAGMA user_version` | module constant / pragma | `3` / `0` on a database made before the counter | the shape of the core tables; `migrate` sets the pragma to `FORMAT` when it is lower | `docpipe/store/schema.py:35`, `91` to `102` |
+| `ADDED_COLUMNS` | module constant | `Documents.sha256` (`TEXT`), `Documents.bytes` (`INTEGER`) and `Documents.holes` (`TEXT`) | the columns a later format added, which `migrate` adds to a database that lacks them | `docpipe/store/schema.py:37` to `38` |
 
 ## Failure modes
 

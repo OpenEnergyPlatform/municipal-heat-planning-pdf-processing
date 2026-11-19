@@ -57,6 +57,15 @@ names none of its entries (`not_an_option`), and still fail after their follow-u
 Only `read` is final: a later reply for a coordinate already `read` is discarded,
 and the row keeps its first reading.
 
+A document can have holes: tables or figures that stage 5 left without content
+(see [reading the pictures](../stages/visuals.md)), which the harvest reads with
+the document. There a dimension whose search found nothing ends in the case
+`unstated_with_holes` of the rule `state_rules`, and a field with no value and
+nothing refused in the case `parameter_with_holes`. Both are `exhausted` by
+default: what the search would find may stand in what has no content, so the
+empty result is a finding about the run, and `unstated` stays a finding about the
+document (owner request 2026-11-19).
+
 A coordinate whose own place does not state it, and which is not one only that
 place can state, is searched for: the pieces beside the value's, then the pieces a
 search finds for a sentence as the plan would print the answer, five at a time. It

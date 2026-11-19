@@ -168,6 +168,19 @@ def max_request_tokens(shown: int | None = None) -> int:
 RETRY_PENALTIES = [None, 1.1, 1.3]
 
 # ---------------------------------------------------------------------------
+# Strips (strips.py)
+# ---------------------------------------------------------------------------
+# A table whose reply is cut off with the most room it can be given is read in
+# strips, cut at a pixel row without writing (owner request 2026-11-19). A
+# pixel is writing where it is this many grey levels (of 255) darker than
+# what its column and its row hold in most places; a row is blank with at
+# most this many pixels of writing (specks of a scan); a vertical rule a scan
+# tilts by up to this many pixels is still a rule and no writing.
+STRIP_INK_CONTRAST = 64
+STRIP_BLANK_PIXELS = 2
+STRIP_RULE_DRIFT = 2
+
+# ---------------------------------------------------------------------------
 # Table QA gate (see qa.py / process.py)
 # ---------------------------------------------------------------------------
 # Coverage is only assessed when the table has a text layer.

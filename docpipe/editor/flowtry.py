@@ -33,8 +33,10 @@ where asked) or, without one, a plan made up from the examples of the
 profile's spec.
 
 What comes back: per box the requests it asked and the first one in full,
-the states the coordinates of the values ended in, and the pieces the
-document was cut into.
+the states the coordinates of the values ended in, the pieces the document
+was cut into, and per kind of request the fields a request carried that its
+instruction does not name (`thread.unnamed`, owner request 2026-11-19), which
+the profile check refuses.
 
 Author: Felix Vossel
 """
@@ -230,6 +232,9 @@ class Recorder:
         self.own_parts: dict = {}
         self.by_box: dict = collections.OrderedDict()
         self.kinds: collections.Counter = collections.Counter()
+        # {kind: Counter(field: requests)}: the fields a request carried
+        # that its instruction does not name (`thread.unnamed`).
+        self.unnamed: dict = collections.defaultdict(collections.Counter)
 
     def _parts(self, kind: str):
         if kind not in self.parts:
@@ -263,16 +268,24 @@ class Recorder:
         box = addressed.asking_box() or "(no box)"
         entry = self.by_box.setdefault(box, {"requests": 0, "kinds":
                                              collections.Counter(),
-                                             "first": None})
+                                             "first": None,
+                                             "unnamed": collections.Counter()})
         entry["requests"] += 1
         entry["kinds"][follows and "follow" or kind] += 1
         self.kinds[kind] += 1
+        parts = self._parts_of(prompt) if prompt is not None \
+            else self._parts(follows or kind)
+        if parts is not None and not follows:
+            # Every request, not only the first: what it carries that its
+            # instruction does not name (a follow-up without the words for
+            # a field it carries fails on its own, `thread.Parts.words`).
+            for key in self.unnamed_of(parts, payload, shape, prompt):
+                entry["unnamed"][key] += 1
+                self.unnamed[kind][key] += 1
         if entry["first"] is not None:
             return
         sent = {key: value for key, value in payload.items()
-                if key not in ("conversation", addressed.PICTURE)}
-        parts = self._parts_of(prompt) if prompt is not None \
-            else self._parts(follows or kind)
+                if key not in runner.NOT_FIELDS}
         system = ""
         if parts is not None:
             built = runner.request_prompt(parts, sent, shape)
@@ -290,7 +303,23 @@ class Recorder:
         entry["first"] = {
             "kind": kind if not follows else f"follow of {follows}",
             "system": system,
-            "message": json.dumps(sent, ensure_ascii=False, indent=1)}
+            "message": json.dumps(runner.first_shown(sent),
+                                  ensure_ascii=False, indent=1)}
+
+    @staticmethod
+    def unnamed_of(parts, payload: dict, shape, prompt=None) -> list:
+        """The fields a request of *payload* and reply form *shape* carries
+        that its instruction does not name (`thread.unnamed`); a field a
+        step's own prompt (*prompt*) holds in a place of its own
+        ({{key}}, {{key.field}}) is named there."""
+        sent = {key: value for key, value in payload.items()
+                if key not in runner.NOT_FIELDS}
+        if prompt is not None:
+            _text, sent = general.in_prompt(parts.common, sent)
+        raw = parts.common + "".join(part.text for part in parts.parts)
+        return [key for key in thread_map.unnamed(
+                    parts, runner.carried_fields(sent, shape))
+                if "{{" + key not in raw]
 
     def asker(self, kind: str):
         def ask(payload, document_id, /, *, shape, example, **noted):
@@ -427,10 +456,13 @@ def run(profile, spec, tree: list, numbers, sources: list,
     return {"mode": mode, "said": ORDER_SAID,
             "requests": sum(e["requests"] for e in recorder.by_box.values()),
             "boxes": {box: {"requests": e["requests"],
-                            "kinds": dict(e["kinds"]), "first": e["first"]}
+                            "kinds": dict(e["kinds"]), "first": e["first"],
+                            "unnamed": dict(e["unnamed"])}
                       for box, e in recorder.by_box.items()},
             "pieces": len(plan.chunks), "groups": len(plan.groups),
             "values": values,
+            "unnamed": {kind: dict(found) for kind, found
+                        in sorted(recorder.unnamed.items()) if found},
             "states": {name: dict(c) for name, c in sorted(states.items())},
             "refused": dict(counts.failed)}
 

@@ -76,7 +76,10 @@ entry's number, or through a db step with `--force`, which deletes and
 reinserts every plan under the root, so a root holding only that plan's
 directory keeps it to that plan), writing the result to `document.json` through a `.part` file and
 `os.replace` so a killed write leaves no truncated file for the cache to
-accept (`merge.py:71`). `merge_batch` runs this over every candidate and
+accept (`merge.py:71`). It also writes the tables and figures that have no
+content into `document.json` as `"holes"` (`docpipe.visuals.holes`; owner request
+2026-11-19), so that the database, the index and the harvest know the document
+is not whole. `merge_batch` runs this over every candidate and
 reports one success or failure per directory (`merge.py:160`). A
 directory that carries `sections.json` and no `sections_refined.json` is
 not a candidate, and the batch names up to twenty of them in one warning,
@@ -172,7 +175,10 @@ and `--force` is unset, or under `--force` deletes and reinserts, then
 built once per document and shared across all its sections, `database.py:474`)
 and bulk inserts `SectionPages`, `Segments`, `Tables` and `Images`,
 one `executemany` each: four per section, not five (`database.py:329`,
-`393`). `enrich_page_source` and `enrich_caption` then run automatically.
+`393`). `enrich_page_source` and `enrich_caption` then run automatically, and
+`note_holes` writes each document's `holes` from its `document.json` into
+`Documents.holes` (a JSON list, `[]` for none; the row stays as it is where the
+file has none; the sync calls it too).
 
 ### Sync: changed entries only
 
@@ -369,7 +375,9 @@ without touching embeddings, content or the index (`database.py:598`).
 `document.json` has the same shape as `sections_refined.json`: a list of
 sections, each with a title, content, page numbers, segments, tables and
 figures, with every table or figure dict swapped for its `visuals.json`
-counterpart wherever one carries enriched content (`merge.py:5`).
+counterpart wherever one carries enriched content (`merge.py:5`). The merged
+file also carries `holes`, a list of `{id, kind, page, why}` for each table or
+figure without content.
 
 `EmbeddingInput` (`chunking.py:38`) is one vector's input: `embedding_type`,
 `pdf_name`, `section_index`, `item_id` (a table or figure block id, or `None`
@@ -671,10 +679,12 @@ merge.py: Merges the preprocessing and imageprocessing outputs as
 chunking's first step.
 
 Replaces each table and figure in sections_refined.json with its
-enriched counterpart from visuals.json, matched by item id, joins each
-table the transcription found to continue the table before it to the
-table it continues (`docpipe.visuals.continuation.join`), and writes the
-result to document.json with an atomic replace. A directory is cached and
+enriched counterpart from visuals.json, matched by item id, writes the
+tables and figures that have none as the document's "holes"
+(`docpipe.visuals.holes`), joins each table the transcription found to
+continue the table before it to the table it continues
+(`docpipe.visuals.continuation.join`), and writes the result to
+document.json with an atomic replace. A directory is cached and
 skipped on rerun once document.json is newer than both inputs, unless
 force is set.
 

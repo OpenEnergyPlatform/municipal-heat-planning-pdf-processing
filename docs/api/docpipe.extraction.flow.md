@@ -346,6 +346,28 @@ The boxes of *tree* that are on and ask a request whose prompt
 A request a profile may leave unwritten (`addressed.OPTIONAL`) is no
 problem: its box is never taken by that profile.
 
+### offers_of
+
+```python
+def offers_of(node: dict) -> set
+```
+
+What the answer of the step *node* may carry besides its answer, as
+the run builds its reply form (`runner.reply_offers`): "more" where the
+model may ask to see more (its setting `fetch`, with the rule
+`fetch_rounds` at least 1 and a way of fetching in the rule `fetches`),
+and of the ways the figure's picture, a region of it and a section. The
+step's own rules come first.
+
+### untold_offers
+
+```python
+def untold_offers(node: dict, prompt) -> list
+```
+
+What the answer of *node* may carry (`offers_of`) that its prompt
+*prompt* has no word for (`thread.named`), sorted.
+
 ### path_of
 
 ```python

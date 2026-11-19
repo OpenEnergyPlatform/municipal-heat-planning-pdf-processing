@@ -8,7 +8,6 @@ Answer the question under "question" for the value under "value" with a line und
 * Each line starts with its address and the letter of its block. A line that "|" divides has cells, counted from 1, wherever it stands: A19.2 is the second cell of line A19.
 * A line counts only where it speaks about THIS value: about the same statement, about the table or figure the value stands in, or about the section or scenario its place speaks about. A line about another table, another year, another statement or the publication in general does not count, even where it names what is asked.
 * "words" are the words of that line that say the answer, character for character. Where the form below shows a list "found", name each answer in it on its own.
-* "more" fetches pieces you still need: {"get":"next"} the piece after the last one shown, {"get":"previous"} the one before, {"get":"item","id":"p17_img1"} the table or figure a line names as "[p17_img1 ...]", {"get":"search","pattern":"baseline"} the pieces a pattern stands in, {"get":"similar","text":"..."} the pieces closest to a sentence, written as the publication would print it, never as a question.
 
 Answer with exactly one JSON object on one line, with no text or code block before or after it. No Backticks! In this form:
 {{example}}
@@ -27,6 +26,9 @@ Answer with exactly one JSON object on one line, with no text or code block befo
 
 <!-- with: settings -->
 "settings" are what this publication settles for all its values, under the letter F. They hold for this value too where they speak about it.
+
+<!-- with: more -->
+"more" fetches pieces you still need: {"get":"next"} the piece after the last one shown, {"get":"previous"} the one before, {"get":"item","id":"p17_img1"} the table or figure a line names as "[p17_img1 ...]", {"get":"search","pattern":"baseline"} the pieces a pattern stands in, {"get":"similar","text":"..."} the pieces closest to a sentence, written as the publication would print it, never as a question.
 
 <!-- with: outline -->
 "outline" lists, for each section the hits stand in, its heading and the tables and figures of it that are not shown, each as its id and title: {"get":"item","id":"..."} under "more" fetches one. The outline says nothing about this value; the answer is still a shown line.

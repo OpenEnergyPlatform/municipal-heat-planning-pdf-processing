@@ -95,6 +95,9 @@ class ProcessingStats:
     # Tables this run transcribed that continue the table before them
     # (continuation.py): the merge joins them there.
     continued_tables: int = 0
+    # Tables this run read in strips (strips.py): their reply did not fit the
+    # most room it can be given.
+    strip_tables: int = 0
     # Why the items that ended without content have none, counted in items:
     # {cause: tables and figures}. The causes are those of `reading.Hole`.
     hole_causes: dict = field(default_factory=dict)
@@ -119,7 +122,8 @@ class ProcessingStats:
             f"Tables:  {self.processed_tables}/{self.total_tables} succeeded"
             f" ({self.failed_tables} failed, {self.qa_failed_tables} low-QA,"
             f" {self.qa_unreadable_sources} with unreadable PDF text,"
-            f" {self.continued_tables} continue the table before)\n"
+            f" {self.continued_tables} continue the table before,"
+            f" {self.strip_tables} read in strips)\n"
             f"Figures: {self.processed_figures}/{self.total_figures} succeeded"
             f" ({self.failed_figures} failed)\n"
             f"Items without content: {self.failed_tables} table(s), "
